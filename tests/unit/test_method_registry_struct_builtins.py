@@ -1,17 +1,4 @@
-"""The auto-derived struct/enum builtins must be type-inferable (issue #239).
-
-Pass 1.8 auto-derives `.hash()` and `.clone()` for every struct and enum and deposits
-them in the BuiltinMethodRegistry, but METHOD_TYPE_REGISTRY carried no checker for a
-plain StructType/EnumType. So `p.hash()` inferred None, validate_assignment_compatibility
-took its `value_type is None: return` early exit, and a wrong annotation reached codegen
-and crashed it with CE0017 instead of reporting CE2002.
-
-These tests pin the checker itself -- what it claims and, just as importantly, what it
-DECLINES. It must decline for a container receiver (Own/List/HashMap keep their own method
-paths, and List<T> genuinely carries a registered hash that Pass 2 validation rejects), and
-it must decline when a perk implementation of the same name exists, because perk methods
-win at codegen and inference has to agree with dispatch.
-"""
+"""The auto-derived struct/enum builtins must be type-inferable (issue #239)."""
 from __future__ import annotations
 
 import pytest
@@ -135,8 +122,9 @@ def test_enum_clone_infers_the_receiver_type(enum_colour):
 
 
 def test_declines_an_unregistered_method(struct_p):
-    """Only a registered (type, name) may be claimed -- otherwise the extension
-    table and the CE2008 unknown-method path would be shadowed."""
+    """Only a registered (type, name) may be claimed -- otherwise the extension table and the
+    CE2008 unknown-method path would be shadowed.
+    """
     assert check_struct_enum_builtin_methods(
         struct_p, "not_a_builtin", _FakeValidator()
     ) is None
@@ -156,13 +144,7 @@ def test_declines_a_non_struct_receiver():
 
 @pytest.mark.parametrize("name", ["Own<i32>", "List<i32>", "HashMap<i32, i32>"])
 def test_declines_container_receivers(analyze, name):
-    """Own/List/HashMap are named StructTypes but keep their own method paths.
-
-    This matters concretely for `hash`: register_all_struct_hashes walks EVERY
-    hashable struct with no container exclusion, so a List<i32> monomorph really
-    does carry a registered hash -- while Pass 2 validation reports CE2008 for it.
-    Without the prefix guard, inference and validation would disagree.
-    """
+    """Own/List/HashMap are named StructTypes but keep their own method paths."""
     analyze(CONTAINER_SRC)
     assert check_struct_enum_builtin_methods(
         StructType(name=name, fields=()), "hash", _FakeValidator()
@@ -181,9 +163,10 @@ def test_list_monomorph_really_does_carry_a_registered_hash(analyze):
 
 
 def test_declines_when_a_perk_impl_of_that_name_exists(analyze):
-    """Perk methods win at codegen (dispatcher step 12, before step 13), so
-    inference must let them win too -- otherwise Pass 2 would type the call as the
-    auto-derived u64 while the backend emitted the perk body."""
+    """Perk methods win at codegen (dispatcher step 12, before step 13), so inference must let them
+    win too -- otherwise Pass 2 would type the call as the auto-derived u64 while the backend
+    emitted the perk body.
+    """
     analyze(PERK_SRC)
     point = StructType(name="Point", fields=())
     validator = _FakeValidator(_PerkTableWith({"hash"}))
@@ -193,11 +176,7 @@ def test_declines_when_a_perk_impl_of_that_name_exists(analyze):
 
 
 def test_the_inferrer_emits_no_diagnostics(analyze):
-    """infer_expression_type runs many times per node; a diagnostic here duplicates.
-
-    Arity (CE2009) is the BuiltinMethod's own semantic_validator's job, invoked once
-    from passes/types/calls/methods.py.
-    """
+    """infer_expression_type runs many times per node; a diagnostic here duplicates."""
     reporter = analyze("""
 struct P:
     i32 x
@@ -246,15 +225,7 @@ fn main() i32:
 
 
 def test_ce2097_covers_a_primitive_receiver(analyze):
-    """CE2097 reaches every shadowable built-in, not just the struct/enum pair.
-
-    An earlier cut of the check was narrowed to StructType/EnumType because it keyed on
-    get_builtin_method, which for primitives is populated by the BACKEND at import time --
-    so from a semantics pass it answered differently depending on what else the process
-    had imported. The seam (semantics/generics/builtin_methods.py) reads the
-    semantics-side predicates instead, so the narrowing is gone and the answer is
-    deterministic. Asserted with the backend deliberately NOT relied upon.
-    """
+    """CE2097 reaches every shadowable built-in, not just the struct/enum pair."""
     reporter = analyze("""
 extend i32 hash() u64:
     return 1 as u64
@@ -268,8 +239,9 @@ fn main() i32:
 
 
 def test_ce2097_covers_a_monomorphized_generic_extension(analyze):
-    """The ordering hole: these enter the extension table after Pass 1.8, so the check
-    has to run after the merge loop, not immediately after 1.8."""
+    """The ordering hole: these enter the extension table after Pass 1.8, so the check has to run
+    after the merge loop, not immediately after 1.8.
+    """
     reporter = analyze("""
 struct Box@(T):
     T value
@@ -307,8 +279,9 @@ fn main() i32:
 
 
 def test_a_perk_impl_of_hash_is_not_ce2097(analyze):
-    """`extend T with Hashable` is a perk implementation, held in a different table
-    entirely (PerkImplementationTable, never ExtensionTable). Perk impls legitimately
-    override the auto-derived method and must stay legal."""
+    """`extend T with Hashable` is a perk implementation, held in a different table entirely
+    (PerkImplementationTable, never ExtensionTable). Perk impls legitimately override the
+    auto-derived method and must stay legal.
+    """
     reporter = analyze(PERK_SRC)
     assert "CE2097" not in [item.code for item in reporter.items]

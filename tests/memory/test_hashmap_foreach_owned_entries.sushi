@@ -9,7 +9,6 @@
 # the second free is a no-op and the bug is invisible. One interpolated value is enough.
 # This file covers `.entries()`. Iteration order is unspecified, so the stdout assertion is a
 # CONTAINS on the count; the real content is EXPECT_NO_LEAKS + exit 0.
-# MM.md S2 row 4; no upstream issue.
 # EXPECT_STDOUT_CONTAINS: seen=3
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

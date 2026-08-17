@@ -1,28 +1,4 @@
-"""Nothing may bypass the ownership seam. No allowlist.
-
-`backend/ownership.py` is the ONLY module allowed to state that a binding's ownership
-moved. Every consuming position calls `consume()` / `bind()` / `relinquish()` /
-`relinquish_temp()`, and those call the move-mark primitives. A backend module that
-calls a primitive directly is a twelfth derivation of the ownership rule -- the exact
-defect class this branch exists to remove (four point-fixes preceded the seam, and
-each was a shipped bug).
-
-The gate is static, like tests/unit/test_borrow_dispatch_is_total.py: the source IS
-the contract. Two rings are checked:
-
-  1. The NAMED move marks (`mark_struct_as_moved`, `mark_as_moved`, and the dead
-     `mark_list_moved` / `mark_own_moved`, banned so they cannot come back as bypass
-     channels) may be REFERENCED only from backend/ownership.py. Their definitions
-     (plain `def` statements in memory/scopes.py and memory/dynamic_arrays.py) are not
-     attribute references and do not trip the scan.
-  2. The underlying tracker write, `<...>.moves.mark(...)`, may appear only inside the
-     two modules that implement the named primitives (memory/scopes.py,
-     memory/dynamic_arrays.py). `moves.unmark` is NOT banned: it states a
-     re-initialization (a rebind sink's own bookkeeping), not a transfer.
-
-Verified to fail by putting one direct call back (see the Phase 10 record in the
-working log): the gate reported it and the suite went red.
-"""
+"""Nothing may bypass the ownership seam. No allowlist."""
 from __future__ import annotations
 
 import ast

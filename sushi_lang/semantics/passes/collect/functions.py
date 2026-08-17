@@ -1,4 +1,3 @@
-# semantics/passes/collect/functions.py
 """Function and extension method collection for Phase 0."""
 
 from __future__ import annotations
@@ -40,15 +39,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 
 
 def is_explicit_result_type(ty: Optional[Type]) -> bool:
-    """Check if a type is an explicit Result<T, E>.
-
-    Returns True if:
-    - Type is the interned Result<T, E> enum (from semantic analysis)
-    - Type is GenericTypeRef with base_name "Result"
-
-    This is used to detect when a function return type is already wrapped
-    in Result, so we don't double-wrap it.
-    """
+    """Check if a type is an explicit Result<T, E>."""
     if ty is None:
         return False
     from sushi_lang.semantics.generics.results import is_result_enum
@@ -60,16 +51,7 @@ def is_explicit_result_type(ty: Optional[Type]) -> bool:
 
 
 def validate_variadic_params(reporter: 'Reporter', params: List['Param']) -> None:
-    """Validate native variadic '...T' parameter placement and element type.
-
-    Enforces (CE0114):
-    - at most one variadic parameter
-    - the variadic parameter, if present, must be last
-    - the element type must not be a reference type
-
-    Operates on collect `Param`s (whose `ty` is the collected DynamicArrayType(T)
-    for a variadic parameter).
-    """
+    """Validate native variadic '...T' parameter placement and element type."""
     variadic_indices = [i for i, p in enumerate(params) if getattr(p, "is_variadic", False)]
     if not variadic_indices:
         return
@@ -106,19 +88,7 @@ def validate_type_pack_params(
     params: List['Param'],
     fallback_span: Optional[Span],
 ) -> None:
-    """Validate v2 type-pack parameter placement, count, and consistency.
-
-    Enforces:
-    - CE0117: at most one pack TYPE-param, and it must be last among type_params
-    - CE0117: at most one pack VALUE-param (is_pack), and it must be last among params
-    - CE0118: a pack value-param (is_pack) cannot be combined with a v1 native
-      variadic (is_variadic)
-    - CE0117: a pack value-param must name a declared pack type-param
-
-    This is disjoint from `validate_variadic_params` (which keys on `is_variadic`);
-    pack params key on `is_pack`.
-    """
-    # --- Type-pack TYPE-params (BoundedTypeParam.is_pack) ---
+    """Validate v2 type-pack parameter placement, count, and consistency."""
     type_params = type_params_raw if isinstance(type_params_raw, list) else []
     pack_type_param_indices = [
         i for i, tp in enumerate(type_params)
@@ -139,7 +109,6 @@ def validate_type_pack_params(
             er.emit(reporter, ERR.CE0117, getattr(offending, "loc", None) or fallback_span,
                     message=f"a type-pack parameter '...{offending.name}' must be the last type parameter")
 
-    # --- Type-pack VALUE-params (Param.is_pack) ---
     pack_value_indices = [
         i for i, p in enumerate(params) if getattr(p, "is_pack", False)
     ]
@@ -152,7 +121,6 @@ def validate_type_pack_params(
         idx = pack_value_indices[0]
         pack_param = params[idx]
 
-        # Must be the last value parameter.
         if idx != len(params) - 1:
             er.emit(reporter, ERR.CE0117, pack_param.name_span or fallback_span,
                     message=f"a type-pack value parameter '...{pack_param.name}' must be the last parameter")
@@ -162,7 +130,6 @@ def validate_type_pack_params(
             er.emit(reporter, ERR.CE0118, pack_param.name_span or fallback_span,
                     message="a type-pack parameter '...Ts' cannot be combined with a native variadic '...T'")
 
-        # The pack value-param must name a declared pack type-param.
         pack_elem_name = getattr(pack_param.ty, "name", None)
         if pack_elem_name not in pack_type_param_names:
             er.emit(reporter, ERR.CE0117, pack_param.type_span or pack_param.name_span or fallback_span,
@@ -178,19 +145,14 @@ class Param:
     type_span: Optional[Span]
     index: int
     is_variadic: bool = False         # True for a trailing native variadic ...T param;
-                                      # `ty` holds the collected DynamicArrayType(T)
     is_pack: bool = False             # True for a v2 type-pack value-param (...Ts args);
-                                      # `ty` is the bare pack type-param reference (UnknownType)
     is_nom: bool = False              # `nom T name`: the CALLEE takes ownership. Read it
                                       # through semantics/param_modes.py, never directly.
 
 
 @dataclass
 class FuncSig:
-    """Phase 0 function signature.
-
-    Types are Optional to allow defensive collection before full typing.
-    """
+    """Phase 0 function signature."""
     name: str
     loc: Optional[Span] = None
     name_span: Optional[Span] = None
@@ -209,11 +171,7 @@ class FuncSig:
 
 @dataclass
 class GenericFuncDef:
-    """Generic function definition with type parameters.
-
-    Collected in Pass 0 and stored until monomorphization.
-    Similar to GenericStructType/GenericEnumType but for executable functions.
-    """
+    """Generic function definition with type parameters."""
     name: str                                    # Function name (e.g., "compute_hash")
     type_params: tuple[TypeParam, ...]           # Type parameters (TypeParameter or BoundedTypeParam)
     params: List[Param]                          # Parameters (may contain TypeParameter in types)
@@ -232,62 +190,29 @@ class FunctionTable:
     """Table of function signatures collected in Phase 0."""
     by_name: Dict[str, FuncSig] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
-    # Stdlib functions: (module_path, function_name) -> StdlibFunction
     _stdlib_functions: Dict[Tuple[str, str], Any] = field(default_factory=dict)
 
     def register_stdlib_function(self, module_path: str, stdlib_func: Any) -> None:
-        """Register a stdlib function.
-
-        Args:
-            module_path: Module path (e.g., "time", "sys/env")
-            stdlib_func: StdlibFunction metadata from stdlib_registry
-        """
+        """Register a stdlib function."""
         key = (module_path, stdlib_func.name)
         self._stdlib_functions[key] = stdlib_func
 
     def lookup_stdlib_function(self, module_path: str, function_name: str) -> Optional[Any]:
-        """Lookup a stdlib function by module and name.
-
-        Args:
-            module_path: Module path (e.g., "time", "sys/env")
-            function_name: Function name (e.g., "sleep", "getenv")
-
-        Returns:
-            StdlibFunction metadata or None if not found
-        """
+        """Lookup a stdlib function by module and name."""
         return self._stdlib_functions.get((module_path, function_name))
 
     def is_stdlib_function(self, module_path: str, function_name: str) -> bool:
-        """Check if a function is a stdlib function.
-
-        Args:
-            module_path: Module path (e.g., "time", "sys/env")
-            function_name: Function name (e.g., "sleep", "getenv")
-
-        Returns:
-            True if function is stdlib, False otherwise
-        """
+        """Check if a function is a stdlib function."""
         return (module_path, function_name) in self._stdlib_functions
 
     def stdlib_by_name(self) -> Dict[str, Any]:
-        """Every imported stdlib function, keyed by its BARE name.
-
-        A call site writes the bare name (`chdir(p)`), so this is the shape the mode
-        resolver needs to tell a stdlib callee from a user one -- and to find the
-        collecting slot of a stdlib variadic such as `run`.
-        """
+        """Every imported stdlib function, keyed by its BARE name."""
         return {name: func for (_module, name), func in self._stdlib_functions.items()}
 
 
 @dataclass
 class GenericFunctionTable:
-    """Table of generic function definitions collected in Pass 0.
-
-    Generic functions are stored separately from concrete functions because:
-    1. They cannot be called directly (must be instantiated with type arguments)
-    2. They need to be monomorphized before code generation
-    3. Multiple monomorphized versions can coexist (one per instantiation)
-    """
+    """Table of generic function definitions collected in Pass 0."""
     by_name: Dict[str, GenericFuncDef] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
 
@@ -302,10 +227,7 @@ class GenericFunctionTable:
 
 @dataclass
 class ExtensionMethod:
-    """Phase 0 extension method signature.
-
-    Similar to FuncSig but includes target type.
-    """
+    """Phase 0 extension method signature."""
     target_type: Optional[Type]  # Type being extended (i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool, string)
     name: str                    # Method name (add, multiply, etc.)
     loc: Optional[Span] = None
@@ -315,15 +237,11 @@ class ExtensionMethod:
     ret_span: Optional[Span] = None
     params: List[Param] = field(default_factory=list)  # Parameters excluding implicit 'self'
     self_mode: Optional[str] = None  # "peek"/"poke" for a `poke self` receiver (#327);
-                                     # None is the classic read-only-borrow receiver
 
 
 @dataclass
 class ExtensionTable:
-    """Table of extension methods organized by target type.
-
-    by_type[BuiltinType.I32]["add"] = ExtensionMethod(...)
-    """
+    """Table of extension methods organized by target type."""
     by_type: Dict[Type, Dict[str, ExtensionMethod]] = field(default_factory=dict)
 
     def add_method(self, method: ExtensionMethod) -> None:
@@ -340,10 +258,7 @@ class ExtensionTable:
 
 @dataclass
 class GenericExtensionMethod:
-    """Phase 0 generic extension method signature.
-
-    Extension method on a generic type (e.g., extend HashMap<K, V> get(K key) Maybe<V>).
-    """
+    """Phase 0 generic extension method signature."""
     base_type_name: str              # Generic type name (e.g., "HashMap", "Box")
     type_params: Tuple[str, ...]     # Type parameter names (e.g., ("K", "V"))
     name: str                        # Method name (get, insert, etc.)
@@ -359,11 +274,7 @@ class GenericExtensionMethod:
 
 @dataclass
 class GenericExtensionTable:
-    """Table of generic extension methods organized by base type name.
-
-    by_type["HashMap"]["get"] = GenericExtensionMethod(...)
-    by_type["Box"]["unwrap"] = GenericExtensionMethod(...)
-    """
+    """Table of generic extension methods organized by base type name."""
     by_type: Dict[str, Dict[str, GenericExtensionMethod]] = field(default_factory=dict)
 
     def add_method(self, method: GenericExtensionMethod) -> None:
@@ -382,20 +293,7 @@ class GenericExtensionTable:
 
 
 class FunctionCollector:
-    """Collector for function and extension method definitions.
-
-    Collects:
-    - Regular functions (concrete)
-    - Generic functions
-    - Extension methods (regular)
-    - Generic extension methods
-    - Stdlib function registrations
-
-    Validates:
-    - No duplicate names (across all function tables)
-    - Parameter uniqueness
-    - main() return type is integer
-    """
+    """Collector for function and extension method definitions."""
 
     def __init__(
         self,
@@ -409,19 +307,7 @@ class FunctionCollector:
         generic_structs: 'GenericStructTable',
         generic_enums: 'GenericEnumTable'
     ) -> None:
-        """Initialize function collector.
-
-        Args:
-            reporter: Error reporter
-            funcs: Shared function table
-            generic_funcs: Shared generic function table
-            extensions: Shared extension method table
-            generic_extensions: Shared generic extension table
-            structs: Regular struct table (for type resolution)
-            enums: Regular enum table (for type resolution)
-            generic_structs: Generic struct table (for validation)
-            generic_enums: Generic enum table (for validation)
-        """
+        """Initialize function collector."""
         self.r = reporter
         self.current_unit_file: Optional[str] = None  # File of the unit being collected
         self.funcs = funcs
@@ -435,12 +321,7 @@ class FunctionCollector:
 
     def collect_functions(self, root: Program, unit_name: Optional[str] = None,
                           unit_file: Optional[str] = None) -> None:
-        """Collect all function definitions from program AST.
-
-        Args:
-            root: Program AST node
-            unit_name: Optional unit name for multi-file compilation
-        """
+        """Collect all function definitions from program AST."""
         funcs = getattr(root, "functions", None)
         if isinstance(funcs, list):
             for fn in funcs:
@@ -449,19 +330,13 @@ class FunctionCollector:
                     self._collect_function_def(fn, unit_name=unit_name)
 
     def collect_extensions(self, root: Program) -> None:
-        """Collect all extension method definitions from program AST.
-
-        Args:
-            root: Program AST node
-        """
-        # Collect non-generic extension methods
+        """Collect all extension method definitions from program AST."""
         extensions = getattr(root, "extensions", None)
         if isinstance(extensions, list):
             for ext in extensions:
                 if isinstance(ext, ExtendDef):
                     self._collect_extension_def(ext)
 
-        # Collect generic extension methods
         generic_extensions = getattr(root, "generic_extensions", None)
         if isinstance(generic_extensions, list):
             for ext in generic_extensions:
@@ -469,22 +344,11 @@ class FunctionCollector:
                     self._collect_extension_def(ext)
 
     def register_stdlib_functions(self, root: Program) -> None:
-        """Register stdlib functions from imported modules into the function table.
-
-        This method extracts `use <module>` statements from the AST and registers
-        all functions from those stdlib modules in the function table. This allows
-        type validation and code generation to query stdlib function metadata
-        uniformly through the function table.
-
-        Args:
-            root: Program AST with use statements
-        """
+        """Register stdlib functions from imported modules into the function table."""
         from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
 
-        # Get the global stdlib registry
         registry = get_stdlib_registry()
 
-        # Extract stdlib imports from use statements
         uses = getattr(root, "uses", None)
         if not isinstance(uses, list):
             return
@@ -495,40 +359,25 @@ class FunctionCollector:
 
             module_path = use_stmt.path
 
-            # Get the module from registry
             module = registry.get_module(module_path)
             if module is None:
-                # Module not found in registry - might be io/stdio, io/files, etc.
-                # For now, only time, math, and sys/env are in the registry
                 continue
 
-            # Register all functions from this module
             for _func_name, stdlib_func in module.functions.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_func)
 
-            # Register all constants from this module (e.g., PI, E, TAU)
             for _const_name, stdlib_const in module.constants.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_const)
 
     def _emit_duplicate_function(self, name: str, name_span: Optional[Span],
                                  prev: 'FuncSig') -> None:
-        """Report a duplicate function, pointing at the first definition.
-
-        The first definition may live in ANOTHER unit, and Phase 0 collects every
-        unit through one reporter -- so both halves name their file explicitly.
-        Reporter._get_source_lines() re-reads the other file to draw its snippet.
-        """
+        """Report a duplicate function, pointing at the first definition."""
         er.emit_with(self.r, ERR.CE0101, name_span,
                      filename=self.current_unit_file, name=name) \
             .note("first defined here", prev.name_span, prev.filename).emit()
 
     def _collect_function_def(self, fn: FuncDef, unit_name: Optional[str] = None) -> None:
-        """Dispatch function collection based on whether it's generic.
-
-        Args:
-            fn: Function definition AST node
-            unit_name: Optional unit name for multi-file compilation
-        """
+        """Dispatch function collection based on whether it's generic."""
         name = getattr(fn, "name", None)
         if not isinstance(name, str):
             return
@@ -540,24 +389,16 @@ class FunctionCollector:
             er.emit(self.r, ERR.CE2425, fn.self_mode_span or fn.name_span)
             return
 
-        # Check if function has type parameters (generic function)
         type_params_raw = getattr(fn, "type_params", None)
         type_params = extract_type_param_names(type_params_raw)
 
         if type_params and len(type_params) > 0:
-            # Generic function - collect separately
             self._collect_generic_function_def(fn, type_params_raw, unit_name)
         else:
-            # Regular function - collect as concrete
             self._collect_concrete_function_def(fn, unit_name)
 
     def _collect_concrete_function_def(self, fn: FuncDef, unit_name: Optional[str] = None) -> None:
-        """Collect concrete (non-generic) function definition.
-
-        Args:
-            fn: Function definition AST node
-            unit_name: Optional unit name for multi-file compilation
-        """
+        """Collect concrete (non-generic) function definition."""
         name = getattr(fn, "name", None)
         if not isinstance(name, str):
             return
@@ -569,7 +410,6 @@ class FunctionCollector:
         ret_span: Optional[Span] = getattr(fn, "ret_span", None) or name_span
         is_public: bool = getattr(fn, "is_public", False)
 
-        # Check for missing return type
         if ret_ty is None:
             er.emit(self.r, ERR.CE0103, name_span, name=name)
 
@@ -579,7 +419,6 @@ class FunctionCollector:
         # which is built structurally and never passes the enum-payload check.
         reject_reference_in(self.r, ret_ty, ret_span, ERR.CE2417)
 
-        # Check for mixing explicit Result<T, E> with | ErrorType syntax
         err_ty: Optional[Type] = getattr(fn, "err_type", None)
         if is_explicit_result_type(ret_ty) and err_ty is not None:
             # User wrote: fn foo() Result<T, E1> | E2
@@ -592,7 +431,6 @@ class FunctionCollector:
         for idx, p in enumerate(getattr(fn, "params", []) or []):
             param = param_from_node(p, idx)
 
-            # Check for duplicate parameter names
             if param.name in param_names:
                 er.emit(self.r, ERR.CE0102, param.name_span, name=param.name)
             else:
@@ -609,11 +447,9 @@ class FunctionCollector:
         # without a matching type-pack type-param (malformed -> CE0117).
         validate_type_pack_params(self.r, getattr(fn, "type_params", None), params, name_span)
 
-        # Check for duplicates in ALL function tables
         if name in self.funcs.by_name:
             self._emit_duplicate_function(name, name_span, self.funcs.by_name[name])
             return
-
 
         if name in self.generic_funcs.by_name:
             self._emit_duplicate_function(name, name_span, self.generic_funcs.by_name[name])
@@ -631,9 +467,7 @@ class FunctionCollector:
             err_type=fn.err_type,
         )
 
-        # Special validation for main() function - must return integer type
         if name == "main" and ret_ty is not None:
-            # Check if return type is an integer type (i8-i64, u8-u64)
             valid_integer_types = {
                 BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
                 BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64
@@ -650,20 +484,10 @@ class FunctionCollector:
         type_params_raw: List,
         unit_name: Optional[str] = None
     ) -> None:
-        """Collect generic function definition.
-
-        Generic functions are stored separately from concrete functions and
-        will be monomorphized in Pass 1.6 when their instantiations are detected.
-
-        Args:
-            fn: Function definition AST node
-            type_params_raw: Raw type parameters from AST
-            unit_name: Optional unit name for multi-file compilation
-        """
+        """Collect generic function definition."""
         name = fn.name
         name_span = getattr(fn, "name_span", None) or getattr(fn, "loc", None)
 
-        # Check for duplicates in ALL function tables
         if name in self.generic_funcs.by_name:
             prev = self.generic_funcs.by_name[name]
             er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
@@ -676,14 +500,12 @@ class FunctionCollector:
                 .note("first defined here", prev.name_span).emit()
             return
 
-        # Preserve BoundedTypeParam objects for perk constraints
         type_param_instances = tuple(
             tp if isinstance(tp, BoundedTypeParam)
             else BoundedTypeParam(name=tp, constraints=[], loc=None)
             for tp in type_params_raw
         )
 
-        # Collect parameters (may contain TypeParameter in types)
         params = []
         param_names = set()
         for idx, p in enumerate(getattr(fn, "params", []) or []):
@@ -709,7 +531,6 @@ class FunctionCollector:
         # blanket above (which keys on `is_variadic`).
         validate_type_pack_params(self.r, type_params_raw, params, name_span)
 
-        # Get return type
         ret_ty = getattr(fn, "ret", None)
         ret_span = getattr(fn, "ret_span", None) or name_span
 
@@ -718,7 +539,6 @@ class FunctionCollector:
 
         reject_reference_in(self.r, ret_ty, ret_span, ERR.CE2417)
 
-        # Check for mixing explicit Result<T, E> with | ErrorType syntax
         err_ty = getattr(fn, "err_type", None)
         if is_explicit_result_type(ret_ty) and err_ty is not None:
             # User wrote: fn foo<T>() Result<T, E1> | E2
@@ -726,13 +546,10 @@ class FunctionCollector:
             err_type_name = getattr(err_ty, "name", str(err_ty))
             er.emit(self.r, ERR.CE2085, ret_span, err_type=err_type_name)
 
-        # Get body (should always exist if grammar is correct)
         body = getattr(fn, "body", None)
         if body is None:
-            # Defensive: skip if body is missing (shouldn't happen with correct grammar)
             return
 
-        # Create GenericFuncDef
         generic_func = GenericFuncDef(
             name=name,
             type_params=type_param_instances,
@@ -746,16 +563,11 @@ class FunctionCollector:
             err_type=fn.err_type
         )
 
-        # Store in generic function table
         self.generic_funcs.order.append(name)
         self.generic_funcs.by_name[name] = generic_func
 
     def _collect_extension_def(self, ext: ExtendDef) -> None:
-        """Collect extension method definition (both regular and generic).
-
-        Args:
-            ext: Extension definition AST node
-        """
+        """Collect extension method definition (both regular and generic)."""
         name = getattr(ext, "name", None)
         if not isinstance(name, str):
             return
@@ -767,7 +579,6 @@ class FunctionCollector:
         ret_span: Optional[Span] = getattr(ext, "ret_span", None) or name_span
         body = getattr(ext, "body", None)
 
-        # Check for missing return type
         if ret_ty is None:
             er.emit(self.r, ERR.CE0103, name_span, name=f"extension method '{name}'")
 
@@ -778,13 +589,11 @@ class FunctionCollector:
         # is dead code (CE2420, #319).
         reject_reference_in(self.r, target_type, target_type_span or name_span, ERR.CE2420)
 
-        # Collect parameters (excluding implicit 'self')
         params: List[Param] = []
         param_names: Set[str] = set()
         for idx, p in enumerate(getattr(ext, "params", []) or []):
             param = param_from_node(p, idx)
 
-            # Check for duplicate parameter names (and implicit conflict with 'self')
             if param.name == "self":
                 er.emit(self.r, ERR.CE0102, param.name_span, name=param.name)
             elif param.name in param_names:
@@ -800,19 +609,13 @@ class FunctionCollector:
                 er.emit(self.r, ERR.CE0115, p.name_span, context="an extension method")
                 break
 
-        # Branch: Is this a generic extension method?
         if target_type is not None and isinstance(target_type, GenericTypeRef):
-            # Generic extension method (e.g., extend Box<T> unwrap() T)
             base_type_name = target_type.base_name
             type_params_tuple = tuple(str(t) if isinstance(t, TypeParameter) else str(t) for t in target_type.type_args)
 
-            # Check if the target type refers to a known generic struct or enum
             if base_type_name not in self.generic_structs.by_name and base_type_name not in self.generic_enums.by_name:
-                # Unknown generic type - will be validated in Pass 2
                 pass
 
-            # Convert UnknownType to TypeParameter for type parameter names
-            # Build set of type parameter names from target type
             type_param_names = set(type_params_tuple)
 
             def convert_unknown_to_typeparam(ty: Optional[Type]) -> Optional[Type]:
@@ -823,7 +626,6 @@ class FunctionCollector:
                     return TypeParameter(name=ty.name)
                 return ty
 
-            # Convert ret_type and param types
             concrete_ret_ty = convert_unknown_to_typeparam(ret_ty)
             concrete_params = []
             for param in params:
@@ -852,7 +654,6 @@ class FunctionCollector:
                 self_mode=getattr(ext, "self_mode", None),
             )
 
-            # Check for duplicate generic extension methods
             existing = self.generic_extensions.get_method(base_type_name, name)
             if existing is not None:
                 er.emit_with(self.r, ERR.CE0101, name_span,
@@ -862,18 +663,13 @@ class FunctionCollector:
 
             self.generic_extensions.add_method(generic_method)
         else:
-            # Regular extension method (existing behavior)
-            # Resolve UnknownType to StructType/EnumType if possible
             resolved_type = target_type
             if target_type is not None and isinstance(target_type, UnknownType):
                 type_name = target_type.name
-                # Check if it's a struct
                 if type_name in self.structs.by_name:
                     resolved_type = self.structs.by_name[type_name]
-                # Check if it's an enum
                 elif type_name in self.enums.by_name:
                     resolved_type = self.enums.by_name[type_name]
-                # Otherwise, keep as UnknownType and it will be validated in Pass 2
 
             method = ExtensionMethod(
                 target_type=resolved_type,
@@ -887,7 +683,6 @@ class FunctionCollector:
                 self_mode=getattr(ext, "self_mode", None),
             )
 
-            # Check for duplicate extension methods on the same type (only for known types)
             if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, StructType, EnumType)):
                 existing = self.extensions.get_method(resolved_type, name)
                 if existing is not None:
@@ -896,6 +691,5 @@ class FunctionCollector:
                         .note("first defined here", existing.name_span).emit()
                     return
 
-            # Add method to table (skip duplicate checking for unknown types)
             if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, StructType, EnumType)):
                 self.extensions.add_method(method)

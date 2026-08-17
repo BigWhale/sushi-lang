@@ -1,4 +1,4 @@
-# Decision 1 (MM.md S2.F): an FFI string argument NEVER consumes.
+# An FFI string argument NEVER consumes (docs/design/borrow-model.md S5).
 #
 # The callee is C. It cannot own a Sushi string, and the compiler already frees the
 # marshalled buffer at scope exit, so there is no ownership to transfer. Rust passes
@@ -7,7 +7,7 @@
 # declaration -- is illegal today: `_is_c_abi_type` is a strict allowlist, so a reference
 # type is CE5003.
 #
-# MM.md finding F6: NO FFI test used a string after passing it, so the Phase 8 prototype
+# NO FFI test used a string after passing it, so the Phase 8 prototype
 # produced ZERO diagnostics at any FFI site and the green sweep proved nothing about them.
 # This file is the missing evidence. Before the string tier flipped it passes trivially;
 # after the flip it is the only thing keeping every FFI call site from becoming CE2405.

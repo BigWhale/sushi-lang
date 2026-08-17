@@ -1,12 +1,4 @@
-"""Regression tests for #61: local List@(T) variables are freed by RAII.
-
-A local `List@(T)` owns a heap buffer (allocated by `.push()` growth). Before the fix it
-was never registered for automatic cleanup, so the buffer leaked on every path unless the
-programmer called `.free()`/`.destroy()` -- unlike `T[]`, which is auto-freed.
-
-These assert the destructor is emitted by counting `free` calls in the generated IR (the
-leak is silent at runtime), mirroring tests/unit/test_raii_multi_exit.py for `T[]`.
-"""
+"""Regression tests for #61: local List@(T) variables are freed by RAII."""
 from __future__ import annotations
 
 from tests.unit.test_ffi import _emit_ir, _count_in_function
@@ -71,10 +63,6 @@ def test_list_freed_on_if_and_trailing_return(tmp_path):
 
 def test_returned_list_not_freed_by_callee(tmp_path):
     """A List@(T) returned to the caller is moved, not freed by the callee (no use-after-free).
-
-    `make` builds a list and returns it; the caller owns it. The callee must NOT free the
-    returned list's buffer. `make` therefore frees nothing (it has no other heap-owning
-    locals).
     """
     src = (
         "fn make() List@(i32):\n"

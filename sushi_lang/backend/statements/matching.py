@@ -1,9 +1,4 @@
-"""
-Pattern matching statement emission for the Sushi language compiler.
-
-This module handles the generation of LLVM IR for match statements with
-exhaustive pattern matching on enum types.
-"""
+"""Pattern matching statement emission for the Sushi language compiler."""
 from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING
@@ -19,76 +14,46 @@ if TYPE_CHECKING:
 
 
 def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
-    """Emit match statement with exhaustive pattern matching.
-
-    Compiles a match statement by:
-    1. Evaluating the scrutinee
-    2. Extracting the tag (discriminant)
-    3. Comparing tag against each variant
-    4. Extracting associated data and binding to pattern variables
-    5. Executing the matching arm's body
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The match statement node to emit.
-    """
+    """Emit match statement with exhaustive pattern matching."""
 
     builder, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()
 
-    # Emit the scrutinee and get its enum value
     scrutinee_value = codegen.expressions.emit_expr(stmt.scrutinee)
 
-    # Get the scrutinee's type for pattern variable extraction.
-    # Prefer the concrete enum type the type checker already resolved (Pass 2);
-    # only fall back to backend re-derivation when it is absent (older nodes /
-    # non-standard construction). The re-derivation cannot cover every scrutinee
-    # form, so relying on the annotation avoids silently dropping bindings.
+    # Prefer Pass 2's resolved enum type: the backend re-derivation below cannot cover
+    # every scrutinee form, and a miss silently drops the arm's bindings.
     from sushi_lang.semantics.typesys import EnumType
     scrutinee_type = getattr(stmt, 'resolved_scrutinee_type', None)
     if not isinstance(scrutinee_type, EnumType):
         scrutinee_type = _get_scrutinee_type(codegen, stmt.scrutinee)
 
-    # An UNBOUND scrutinee (`match mk():`) is a temporary that nothing owns, and the arm
-    # bindings only BORROW its payload -- so an owning payload was never freed (#159). Give it a
-    # real owner: an ordinary owning enum local in a scope wrapped around the whole match.
-    #
-    # Registering it as a normal local rather than inventing a temp registry means every exit
-    # path that already works keeps working, unchanged: fall-through frees it at pop_scope, an
-    # arm that `return`s frees it via emit_scope_cleanup, an arm that `break`s frees it via
-    # emit_loop_exit_cleanup -- and it inherits the move guard, so an arm that moves the payload
-    # out does not then double-free it. It behaves exactly like the already-correct bound case
-    # (`let Maybe<Box> m = arr.get(0)` then `match m:`).
+    # An UNBOUND scrutinee is a temporary nothing owns, and the arm bindings only BORROW
+    # its payload, so an owning payload was never freed (#159). It becomes an ordinary
+    # owning local in a scope around the whole match -- an ordinary local rather than a new
+    # temp registry, so every exit path and the move guard already work.
     owns_temp_scrutinee = _register_temp_scrutinee(codegen, stmt.scrutinee, scrutinee_value, scrutinee_type)
 
-    # Extract the tag (discriminant) from the enum struct: {i32 tag, [N x i8] data}
     tag = enum_utils.extract_enum_tag(codegen, scrutinee_value, name="match_tag")
 
-    # Create basic blocks for each arm and the merge block
     end_bb = codegen.func.append_basic_block(name="match.end")
     arm_blocks = []
     for i, _arm in enumerate(stmt.arms):
         arm_bb = codegen.func.append_basic_block(name=f"match.arm{i}")
         arm_blocks.append(arm_bb)
 
-    # Find wildcard pattern (if any) to use as default case
     wildcard_bb = _find_wildcard_block(stmt, arm_blocks)
 
-    # Create switch instruction and unreachable block if needed
     switch, unreachable_bb = _create_switch_instruction(codegen, tag, wildcard_bb)
 
-    # Add cases for each arm (skip wildcard - it's the default)
     _add_switch_cases(codegen, stmt, arm_blocks, switch, scrutinee_type)
 
-    # Emit each arm
     _emit_match_arms(codegen, stmt, arm_blocks, scrutinee_value, scrutinee_type, end_bb)
 
-    # Emit unreachable block if no wildcard (after all arms)
     if unreachable_bb is not None:
         codegen.builder.position_at_end(unreachable_bb)
         codegen.builder.unreachable()
 
-    # Position at end block
     codegen.builder.position_at_end(end_bb)
 
     # Close the synthetic scope owning an unbound scrutinee. Emitted at match.end, this is the
@@ -105,10 +70,8 @@ _TEMP_SCRUTINEE_SEQ = itertools.count()
 
 def _register_temp_scrutinee(codegen: 'LLVMCodegen', scrutinee: 'Expr', scrutinee_value: 'ir.Value',
                              scrutinee_type: 'EnumType | None') -> bool:
-    """Own an unbound match scrutinee for the duration of the match. Returns True if a scope was pushed.
-
-    A bound scrutinee (a Name / field read) is already owned by whoever declared it -- taking a
-    second owner here would double-free at scope exit.
+    """Own an unbound match scrutinee for the duration of the match. Returns True if a scope was
+    pushed.
     """
     from sushi_lang.backend.expressions.memory import expression_is_temporary
     from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
@@ -130,38 +93,22 @@ def _register_temp_scrutinee(codegen: 'LLVMCodegen', scrutinee: 'Expr', scrutine
 
 
 def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType | None':
-    """Get the EnumType of the scrutinee expression.
-
-    For match expressions, this function determines the concrete enum type of the
-    scrutinee, which is crucial for proper pattern variable extraction. This is
-    especially important for generic enums like Maybe<T> and Result<T>.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        scrutinee: The scrutinee expression.
-
-    Returns:
-        The monomorphized EnumType of the scrutinee, or None if not found.
-    """
+    """Get the EnumType of the scrutinee expression."""
     from sushi_lang.semantics.ast import Name, DotCall, MethodCall, MemberAccess
     from sushi_lang.semantics.typesys import EnumType, StructType
 
-    # Try to get type from variable table if it's a Name
     if isinstance(scrutinee, Name):
         var_type = codegen.memory.find_semantic_type(scrutinee.id)
 
-        # Handle EnumType directly
         if isinstance(var_type, EnumType):
             return var_type
 
-        # Handle GenericTypeRef("Result", [T, E]) - resolve to Result<T, E> enum
         from sushi_lang.semantics.generics.types import GenericTypeRef
         if isinstance(var_type, GenericTypeRef):
             if var_type.base_name == "Result" and len(var_type.type_args) == 2:
                 from sushi_lang.semantics.generics.results import ensure_result_type_in_table
                 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
-                # Resolve type arguments
                 ok_type = resolve_unknown_type(
                     var_type.type_args[0],
                     codegen.struct_table.by_name,
@@ -173,36 +120,29 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                     codegen.enum_table.by_name
                 )
 
-                # Ensure Result<T, E> exists and return it
                 result_enum = ensure_result_type_in_table(
                     codegen.enum_table,
                     ok_type,
                     err_type, struct_table=codegen.struct_table.by_name)
                 return result_enum
             else:
-                # Other generic type - look up in enum table
                 type_args_str = ", ".join(str(arg) for arg in var_type.type_args)
                 concrete_name = f"{var_type.base_name}<{type_args_str}>"
                 if concrete_name in codegen.enum_table.by_name:
                     return codegen.enum_table.by_name[concrete_name]
 
-    # For MemberAccess (struct field access like op.result), infer the field type
     if isinstance(scrutinee, MemberAccess):
-        # Get the struct type of the receiver
         if isinstance(scrutinee.receiver, Name):
             receiver_type = codegen.memory.find_semantic_type(scrutinee.receiver.id)
             if isinstance(receiver_type, StructType):
-                # Find the field type
                 for field_name, field_type in receiver_type.fields:
                     if field_name == scrutinee.member:
-                        # Handle GenericTypeRef("Result", [T, E]) - resolve to Result<T, E> enum
                         from sushi_lang.semantics.generics.types import GenericTypeRef
                         if isinstance(field_type, GenericTypeRef):
                             if field_type.base_name == "Result" and len(field_type.type_args) == 2:
                                 from sushi_lang.semantics.generics.results import ensure_result_type_in_table
                                 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
-                                # Resolve type arguments
                                 ok_type = resolve_unknown_type(
                                     field_type.type_args[0],
                                     codegen.struct_table.by_name,
@@ -214,14 +154,12 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                                     codegen.enum_table.by_name
                                 )
 
-                                # Ensure Result<T, E> exists and return it
                                 result_enum = ensure_result_type_in_table(
                                     codegen.enum_table,
                                     ok_type,
                                     err_type, struct_table=codegen.struct_table.by_name)
                                 return result_enum
                             else:
-                                # Other generic type - look up in enum table
                                 type_args_str = ", ".join(str(arg) for arg in field_type.type_args)
                                 concrete_name = f"{field_type.base_name}<{type_args_str}>"
                                 if concrete_name in codegen.enum_table.by_name:
@@ -230,20 +168,13 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                             return field_type
         return None
 
-    # A Call scrutinee (`match simple_result():`) needs no branch here: Pass 2 types the
-    # call and stamps resolved_scrutinee_type, which emit_match reads before ever calling
-    # this function. The backend used to re-infer it behind a bare `except Exception: pass`
-    # that silently swallowed a miss and dropped the pattern bindings.
+    # A Call scrutinee needs no branch: Pass 2 stamps `resolved_scrutinee_type`, which
+    # emit_match reads first. Re-inferring it here swallowed misses and dropped bindings.
 
-    # For DotCall or MethodCall (method calls like "hello".find()), check if the type
-    # checker already inferred and annotated the return type (Phase 2)
     if isinstance(scrutinee, (DotCall, MethodCall)):
-        # The type checker annotates these nodes with inferred_return_type during Pass 2
         if hasattr(scrutinee, 'inferred_return_type') and isinstance(scrutinee.inferred_return_type, EnumType):
             return scrutinee.inferred_return_type
 
-    # Try to infer from scrutinee's type annotation if available (generic fallback)
-    # This is set by the type checker in some cases
     if hasattr(scrutinee, 'inferred_type') and isinstance(scrutinee.inferred_type, EnumType):
         return scrutinee.inferred_type
 
@@ -251,15 +182,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
 
 
 def _find_wildcard_block(stmt: 'Match', arm_blocks: list['ir.Block']) -> 'ir.Block | None':
-    """Find the block corresponding to a wildcard pattern, if any.
-
-    Args:
-        stmt: The match statement.
-        arm_blocks: List of basic blocks for each arm.
-
-    Returns:
-        The wildcard block, or None if no wildcard pattern exists.
-    """
+    """Find the block corresponding to a wildcard pattern, if any."""
     from sushi_lang.semantics.ast import WildcardPattern
 
     for i, arm in enumerate(stmt.arms):
@@ -269,29 +192,13 @@ def _find_wildcard_block(stmt: 'Match', arm_blocks: list['ir.Block']) -> 'ir.Blo
 
 
 def _find_next_arm_with_same_tag(codegen: 'LLVMCodegen', stmt: 'Match', arm_blocks: list['ir.Block'], scrutinee_type: 'EnumType | None', current_arm_index: int) -> 'ir.Block | None':
-    """Find the next arm that has the same outer tag as the current arm.
-
-    This is used for nested pattern fallthrough. When a nested pattern doesn't match,
-    we want to fallthrough to the next arm that matches the same outer variant.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The match statement.
-        arm_blocks: List of basic blocks for each arm.
-        scrutinee_type: The EnumType of the scrutinee.
-        current_arm_index: Index of the current arm.
-
-    Returns:
-        The block of the next arm with the same tag, or None if no such arm exists.
-    """
+    """Find the next arm that has the same outer tag as the current arm."""
     from sushi_lang.semantics.ast import Pattern, WildcardPattern
 
-    # Get the current arm's pattern
     current_arm = stmt.arms[current_arm_index]
     if not isinstance(current_arm.pattern, Pattern):
         return None
 
-    # Get the current arm's variant tag
     enum_type = scrutinee_type
     if enum_type is None and hasattr(codegen, 'enum_table'):
         enum_type = codegen.enum_table.by_name.get(current_arm.pattern.enum_name)
@@ -303,15 +210,12 @@ def _find_next_arm_with_same_tag(codegen: 'LLVMCodegen', stmt: 'Match', arm_bloc
     if current_tag is None:
         return None
 
-    # Look for the next arm with the same outer tag
     for i in range(current_arm_index + 1, len(stmt.arms)):
         next_arm = stmt.arms[i]
 
-        # Wildcard pattern matches any tag - use it as fallthrough
         if isinstance(next_arm.pattern, WildcardPattern):
             return arm_blocks[i]
 
-        # Check if it's a pattern with the same outer tag
         if isinstance(next_arm.pattern, Pattern):
             next_enum_type = scrutinee_type
             if next_enum_type is None and hasattr(codegen, 'enum_table'):
@@ -326,17 +230,7 @@ def _find_next_arm_with_same_tag(codegen: 'LLVMCodegen', stmt: 'Match', arm_bloc
 
 
 def _create_switch_instruction(codegen: 'LLVMCodegen', tag: 'ir.Value', wildcard_bb: 'ir.Block | None') -> tuple['ir.Instruction', 'ir.Block | None']:
-    """Create the switch instruction for pattern matching.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        tag: The discriminant tag value.
-        wildcard_bb: The wildcard block (default case), or None.
-
-    Returns:
-        Tuple of (switch instruction, unreachable block or None).
-    """
-    # Default case: wildcard if present, otherwise unreachable
+    """Create the switch instruction for pattern matching."""
     if wildcard_bb is None:
         unreachable_bb = codegen.func.append_basic_block(name="match.unreachable")
         return codegen.builder.switch(tag, unreachable_bb), unreachable_bb
@@ -345,34 +239,18 @@ def _create_switch_instruction(codegen: 'LLVMCodegen', tag: 'ir.Value', wildcard
 
 
 def _add_switch_cases(codegen: 'LLVMCodegen', stmt: 'Match', arm_blocks: list['ir.Block'], switch: 'ir.Instruction', scrutinee_type: 'EnumType | None') -> None:
-    """Add switch cases for each match arm.
-
-    For nested patterns, multiple arms may have the same outer variant tag.
-    In this case, we only add the first arm with that tag to the switch,
-    and the nested pattern checking happens inside the arm via runtime checks.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The match statement.
-        arm_blocks: List of basic blocks for each arm.
-        switch: The switch instruction.
-        scrutinee_type: The EnumType of the scrutinee (monomorphized for generics).
-    """
+    """Add switch cases for each match arm."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import Pattern, WildcardPattern
 
-    # Track which variant indices have already been added to avoid duplicates
-    # (needed for nested patterns where multiple patterns can have the same outer variant)
     added_tags = set()
 
     for _i, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks, strict=True)):
         if isinstance(arm.pattern, WildcardPattern):
-            # Skip wildcard - already set as default
             continue
         if not isinstance(arm.pattern, Pattern):
             continue
 
-        # Use scrutinee_type if available (handles generic enums), otherwise fall back to pattern lookup
         enum_type = scrutinee_type
         if enum_type is None and hasattr(codegen, 'enum_table'):
             enum_type = codegen.enum_table.by_name.get(arm.pattern.enum_name)
@@ -393,32 +271,19 @@ def _emit_match_arms(
     scrutinee_type: 'EnumType | None',
     end_bb: 'ir.Block'
 ) -> None:
-    """Emit all match arms.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The match statement.
-        arm_blocks: List of basic blocks for each arm.
-        scrutinee_value: The scrutinee enum value.
-        scrutinee_type: The EnumType of the scrutinee (monomorphized for generics).
-        end_bb: The end block to branch to.
-    """
+    """Emit all match arms."""
     from sushi_lang.semantics.ast import Pattern, Block
 
     for i, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks, strict=True)):
         codegen.builder.position_at_end(arm_bb)
         codegen.memory.push_scope()
 
-        # Bracket `variable_types` per ARM: pattern bindings write entries into the flat
-        # per-function dict (`memory._types` is scoped; this dict never was), so an arm's
-        # entry used to shadow a same-named outer local for the rest of the function --
-        # wrong TYPE info for a value binding (the structs.py hazard), wrong CODE for a
-        # reference binding (`Own(poke x)`, #300: `is_reference_parameter` keys on this
-        # dict, so a later same-named value binding would be double-dereferenced).
+        # Bracket `variable_types` per ARM: it is a FLAT per-function dict, so an arm's
+        # binding shadowed a same-named outer local for the rest of the function -- wrong
+        # type for a value binding, and a double deref for a reference one (#300).
         saved_variable_types = dict(codegen.variable_types)
 
         if isinstance(arm.pattern, Pattern):
-            # Find the next arm with the same outer tag (for nested pattern fallthrough)
             next_arm_bb = _find_next_arm_with_same_tag(codegen, stmt, arm_blocks, scrutinee_type, i)
 
             # Extract and bind pattern variables. The scrutinee EXPRESSION rides along
@@ -427,12 +292,10 @@ def _emit_match_arms(
             _extract_pattern_bindings(codegen, arm.pattern, scrutinee_value, scrutinee_type, next_arm_bb,
                                       scrutinee_expr=stmt.scrutinee)
 
-        # Emit the arm body
         try:
             if isinstance(arm.body, Block):
                 _emit_block(codegen, arm.body)
             else:
-                # Expression body
                 codegen.expressions.emit_expr(arm.body)
         finally:
             codegen.variable_types.clear()
@@ -440,23 +303,12 @@ def _emit_match_arms(
 
         codegen.memory.pop_scope()
 
-        # Branch to end if not already terminated
         if codegen.builder.block.terminator is None:
             codegen.builder.branch(end_bb)
 
 
 def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scrutinee_value: 'ir.Value', scrutinee_type: 'EnumType | None', next_arm_bb: 'ir.Block | None' = None, scrutinee_expr: 'Expr | None' = None) -> None:
-    """Extract and bind pattern variables from enum data.
-
-    Supports nested patterns by recursively extracting and matching nested enum values.
-    Supports Own<T> patterns by auto-unwrapping via Own<T>.get().
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        pattern: The pattern with bindings.
-        scrutinee_value: The scrutinee enum value.
-        scrutinee_type: The EnumType of the scrutinee (monomorphized for generics).
-    """
+    """Extract and bind pattern variables from enum data."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import Pattern as PatternNode, OwnPattern
     from sushi_lang.semantics.ast import RefBinding as RefBindingNode
@@ -464,12 +316,9 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
     if not pattern.bindings:
         return
 
-    # Use scrutinee_type if available (handles generic enums), otherwise fall back to pattern lookup.
-    # The fallback looks up the pattern's base enum name (e.g. "Result"/"Maybe"), which does NOT
-    # match a monomorphized key like "Result<i32, StdError>" - so for a generic scrutinee it only
-    # succeeds when scrutinee_type was already resolved. If it is still unresolved while the pattern
-    # carries bindings, we must fail loud: silently returning here drops the arm's binding locals and
-    # surfaces later as a confusing CE0055 in the arm body.
+    # The fallback looks up the pattern's BASE enum name, which cannot match a
+    # monomorphized key, so a generic scrutinee needs scrutinee_type. Fail loud if it is
+    # missing while the pattern binds: returning drops the locals and surfaces as CE0055.
     enum_type = scrutinee_type
     if enum_type is None and hasattr(codegen, 'enum_table'):
         enum_type = codegen.enum_table.by_name.get(pattern.enum_name)
@@ -484,15 +333,12 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
     if not variant or not variant.associated_types:
         return
 
-    # Extract the data field: [N x i8] array
     data_array = enum_utils.extract_enum_data(codegen, scrutinee_value, name="match_data")
 
-    # Allocate storage for the data array
     data_array_type = scrutinee_value.type.elements[1]
     temp_alloca = codegen.builder.alloca(data_array_type, name="match_data_storage")
     codegen.builder.store(data_array, temp_alloca)
 
-    # Cast to i8* for accessing fields
     data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 
     # Extract each binding at its offset from the ONE layout authority (#300 phase 2);
@@ -502,15 +348,12 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
     for (binding_item, binding_type), field_offset in zip(
             zip(pattern.bindings, variant.associated_types, strict=True), field_offsets,
             strict=True):
-        # Get the LLVM type for this binding
         binding_llvm_type = codegen.types.ll_type(binding_type)
 
-        # A reference binding (#300 phase 3) points into the SCRUTINEE'S OWN payload
-        # storage, never into this arm's temporary copy -- a pointer into the copy
-        # would make every write through it a silently lost write (#253's class). The
-        # payload base is 8-aligned and the field offset naturally aligned (phase 2),
-        # so the interior pointer is safe to hand to natural-alignment code. Pass 3
-        # guarantees the scrutinee is a bare local/parameter name (CE2404 otherwise).
+        # A reference binding points into the SCRUTINEE'S own payload storage, never this
+        # arm's temporary copy -- a pointer into the copy makes every write silently lost
+        # (#253). The payload base is 8-aligned, so the interior pointer is naturally
+        # aligned; Pass 3 guarantees the scrutinee is a bare name (CE2404).
         if isinstance(binding_item, RefBindingNode):
             from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
             from sushi_lang.backend.statements.loops import bind_element_reference
@@ -529,58 +372,34 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
                                    binding_type, payload_field_typed)
             continue
 
-        # Load the value from the data field
         field_ptr_i8 = codegen.builder.gep(data_ptr, [ir.Constant(codegen.types.i32, field_offset)], name="field_ptr")
         field_ptr_typed = codegen.builder.bitcast(field_ptr_i8, ir.PointerType(binding_llvm_type), name="field_ptr_typed")
         field_value = codegen.builder.load(field_ptr_typed, name="field_value")
 
-        # Handle simple bindings (strings), nested patterns (Pattern), and Own patterns (OwnPattern)
         if isinstance(binding_item, str):
-            # Simple binding: create local variable (skip wildcards "_"). The binding
-            # BORROWS the enum's payload (the enum, its owner, frees it at scope exit), so
-            # it is not registered for its own RAII free -- registering an owning payload
-            # binding too would double-free (#139/#147).
+            # The binding BORROWS the enum's payload, so it is NOT registered for its own
+            # RAII free -- the enum frees it, and registering both double-frees (#139).
             if binding_item != "_":
                 codegen.memory.create_local(binding_item, binding_llvm_type, field_value, binding_type, register_cleanup=False)
-                # Also register in variable_types for member access and other operations
                 codegen.variable_types[binding_item] = binding_type
         elif isinstance(binding_item, PatternNode):
-            # Nested pattern: recursively extract and validate
             _extract_nested_pattern(codegen, binding_item, field_value, binding_type, next_arm_bb)
         elif isinstance(binding_item, OwnPattern):
-            # Own pattern: unwrap Own<T> via .get() and bind inner pattern
             _extract_own_pattern(codegen, binding_item, field_value, binding_type, next_arm_bb)
 
 
 def _extract_nested_pattern(codegen: 'LLVMCodegen', nested_pattern: 'Pattern', enum_value: 'ir.Value', enum_type: 'Type', next_arm_bb: 'ir.Block | None' = None) -> None:
-    """Extract and validate a nested pattern from an enum value.
-
-    This function:
-    1. Extracts the tag from the nested enum
-    2. Validates it matches the expected variant
-    3. Recursively extracts bindings from the nested pattern
-    4. If the tag doesn't match and next_arm_bb is provided, branches to next arm (fallthrough)
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        nested_pattern: The nested pattern to match.
-        enum_value: The enum value to extract from.
-        enum_type: The semantic type of the enum.
-        next_arm_bb: The next arm block to branch to on mismatch (for fallthrough support).
-    """
+    """Extract and validate a nested pattern from an enum value."""
     from sushi_lang.semantics.typesys import EnumType
 
-    # Resolve the enum type (handle generics)
     concrete_enum_type = enum_type
     if not isinstance(concrete_enum_type, EnumType):
-        # Try to resolve from pattern name
         if hasattr(codegen, 'enum_table'):
             concrete_enum_type = codegen.enum_table.by_name.get(nested_pattern.enum_name)
 
     if not isinstance(concrete_enum_type, EnumType):
         return
 
-    # Get the expected variant
     variant = concrete_enum_type.get_variant(nested_pattern.variant_name)
     if not variant:
         return
@@ -589,93 +408,56 @@ def _extract_nested_pattern(codegen: 'LLVMCodegen', nested_pattern: 'Pattern', e
     if expected_tag is None:
         return
 
-    # Extract and validate the tag matches (emit runtime check)
     tag_matches = enum_utils.check_enum_variant(
         codegen, enum_value, expected_tag, signed=True, name="nested_tag_matches"
     )
 
-    # Create blocks for tag match and tag mismatch
     match_bb = codegen.func.append_basic_block(name="nested_pattern_match")
     mismatch_bb = codegen.func.append_basic_block(name="nested_pattern_mismatch")
 
     codegen.builder.cbranch(tag_matches, match_bb, mismatch_bb)
 
-    # Mismatch block: Branch to next arm if available (fallthrough), otherwise emit error
     codegen.builder.position_at_end(mismatch_bb)
     if next_arm_bb is not None:
-        # Fallthrough to next arm with same outer tag
         codegen.builder.branch(next_arm_bb)
     else:
-        # No fallthrough available - this is a runtime error
         codegen.runtime.errors.emit_runtime_error(
             "RE2023",
             pattern=f"{nested_pattern.enum_name}.{nested_pattern.variant_name}",
         )
         codegen.builder.unreachable()
 
-    # Match block: Extract bindings from nested pattern
     codegen.builder.position_at_end(match_bb)
 
-    # Recursively extract bindings from the nested pattern
     _extract_pattern_bindings(codegen, nested_pattern, enum_value, concrete_enum_type)
 
 
 def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_value: 'ir.Value', own_type: 'Type', next_arm_bb: 'ir.Block | None' = None) -> None:
-    """Extract and bind an Own<T> pattern by auto-unwrapping.
-
-    This function:
-    1. Unwraps Own<T> via Own<T>.get() to get the owned value
-    2. Binds the inner pattern to the unwrapped value
-
-    Syntax example:
-        match expr:
-            Expr.BinOp(Own(left), Own(right), op) ->
-                # left and right are auto-unwrapped to Expr
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        own_pattern: The Own pattern node.
-        own_value: The Own<T> struct value to unwrap.
-        own_type: The semantic type Own<T>.
-        next_arm_bb: The next arm block to branch to on mismatch (for fallthrough support).
-    """
+    """Extract and bind an Own<T> pattern by auto-unwrapping."""
     from sushi_lang.semantics.ast import Pattern as PatternNode
     from sushi_lang.semantics.typesys import StructType
     from sushi_lang.backend.generics import own as own_module
     from sushi_lang.semantics.generics.own import get_own_element_type
 
-    # Verify this is actually an Own<T> type
     if not isinstance(own_type, StructType) or not own_type.name.startswith("Own<"):
-        # Type validation should have caught this already
         raise_internal_error("CE0022", type=str(own_type))
 
-    # Get element type T from Own<T>
     element_type = get_own_element_type(own_type)
 
-    # Unwrap Own<T> via .get() to get the owned value
     unwrapped_value = own_module.emit_own_get(codegen, own_value, element_type)
 
-    # Get LLVM type for the unwrapped value
     element_llvm_type = codegen.types.ll_type(element_type)
 
-    # Bind the inner pattern
     inner_pattern = own_pattern.inner_pattern
     if isinstance(inner_pattern, str):
-        # Simple binding: create local variable for the unwrapped value (skip wildcards "_").
-        # The binding BORROWS the Own's pointee -- the Own<T> still owns that heap block and
-        # frees it at scope exit -- so it must NOT be registered for its own RAII free, the
-        # same rule the plain match-arm binding follows above. Registering it double-freed
-        # the pointee. This was latent: the enum destructor used to no-op on an Own payload
-        # (needs_cleanup answered False for Own<T>), so the extra free destroyed nothing.
-        # Fixing that no-op (#162/#183) made the bogus owner real.
+        # The binding BORROWS the Own's pointee, which the Own<T> still owns, so it must
+        # NOT be registered -- the same rule as the plain arm binding above. It was latent
+        # until #162/#183 stopped the enum destructor no-opping on an Own payload.
         if inner_pattern != "_":
             if own_pattern.inner_borrow is not None:
-                # `Own(poke x)` (#300 phase 1): bind the heap POINTER itself, not a
-                # copy of the pointee, so a write through the binding lands in the
-                # allocation the Own owns. Malloc'd storage is naturally aligned, so
-                # the enum-payload alignment wall does not apply. The slot mimics a
-                # reference parameter's (`T**` holding the `T*`), and the
-                # `ReferenceType` in `variable_types` flips every deref/write consumer.
+                # `Own(poke x)` binds the heap POINTER, not a copy of the pointee, so a
+                # write lands in the allocation the Own owns. The slot mimics a reference
+                # parameter's `T**`, and the `ReferenceType` flips every deref consumer.
                 from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
                 pointee_ptr = codegen.builder.extract_value(own_value, 0, name="own_ptr")
                 mode = (BorrowMode.POKE if own_pattern.inner_borrow == "poke"
@@ -688,18 +470,11 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
                 codegen.memory.create_local(inner_pattern, element_llvm_type, unwrapped_value,
                                             element_type, register_cleanup=False)
     elif isinstance(inner_pattern, PatternNode):
-        # Nested pattern: recursively extract and validate the unwrapped value
         _extract_nested_pattern(codegen, inner_pattern, unwrapped_value, element_type, next_arm_bb)
 
 
 def _emit_block(codegen: 'LLVMCodegen', block) -> None:
-    """Helper to emit a block of statements.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        block: The block AST node containing statements.
-    """
-    # Import here to avoid circular dependency
+    """Helper to emit a block of statements."""
     from sushi_lang.backend.statements import StatementEmitter
     emitter = StatementEmitter(codegen)
     emitter.emit_block(block)

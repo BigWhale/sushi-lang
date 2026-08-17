@@ -1,4 +1,3 @@
-# semantics/semantic_analyzer.py
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
@@ -20,19 +19,7 @@ from sushi_lang.semantics.library_templates import deserialize_perk_impl
 
 
 def enum_base_names(*tables) -> set[str]:
-    """The base name of every enum in `tables`, for the borrow checker's sink test.
-
-    `Box.Full(a)` and `xs.push(a)` are the same node shape at Pass 3, and only the first
-    is an ownership sink, so the checker needs the enum type names to tell them apart.
-    A monomorphized generic is interned as `Result<i32, StdError>` while its constructor
-    is written bare, hence the split.
-
-    Each argument is a collector table (which HAS a `by_name` mapping) or a plain mapping
-    (which IS one). The question is PRESENCE, not truthiness: this used to be an
-    `or`-chain, and an EMPTY `by_name` is falsy, so it fell through to the table OBJECT --
-    a dataclass with no `__iter__` -- and raised a bare `TypeError` (F16 of old/BORROW.md).
-    Nothing masked that except Phase 0 always pre-registering `Result` and `Maybe`.
-    """
+    """The base name of every enum in `tables`, for the borrow checker's sink test."""
     names: set[str] = set()
     for table in tables:
         mapping = table.by_name if hasattr(table, 'by_name') else table
@@ -41,21 +28,7 @@ def enum_base_names(*tables) -> set[str]:
 
 
 class SemanticAnalyzer:
-    """
-    Semantic analysis coordinator that runs all semantic analysis passes.
-
-    Pass execution order:
-      - Pass 0: Symbol collection (constants, structs, enums, generics, functions, extensions)
-      - Pass 1.5: Generic instantiation collection (find all Result<T> usages)
-      - Pass 1.6: Monomorphization (generate concrete types from generics)
-      - Pass 1.7: AST transformation (resolve EnumConstructor vs MethodCall ambiguity)
-      - Pass 1.8: Hash registration (auto-derive .hash() for structs)
-      - Pass 1: Scope analysis (variable lifecycle, usage tracking)
-      - Pass 2: Type validation (type checking, inference, compatibility)
-      - Pass 3: Borrow checking (reference safety, ownership validation)
-
-    Supports both single-file and multi-file compilation modes.
-    """
+    """Semantic analysis coordinator that runs all semantic analysis passes."""
 
     def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[object] = None, library_registry: Optional['LibraryRegistry'] = None) -> None:
         self.reporter = reporter
@@ -82,12 +55,7 @@ class SemanticAnalyzer:
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
 
     def check(self, program: Program) -> None:
-        """
-        Entry point for semantic analysis. Runs all semantic analysis passes in sequence.
-
-        The production pipeline always analyzes through a UnitManager (a single
-        file is a one-unit compile), so this delegates to the multi-unit path.
-        """
+        """Entry point for semantic analysis. Runs all semantic analysis passes in sequence."""
         self._check_multi_file()
 
     def _check_multi_file(self) -> None:
@@ -95,23 +63,18 @@ class SemanticAnalyzer:
         if self.unit_manager is None:
             return
 
-        # Get units in compilation order
         compilation_order = self.unit_manager.get_compilation_order()
         if compilation_order is None:
             return  # Error already reported
 
-        # Phase 0: Collect symbols from all units
         collector = CollectorPass(self.reporter)
         from sushi_lang.semantics.tables import SymbolTables
         global_tables = SymbolTables()
 
         symbol_merger = SymbolTableMerger()
 
-        # Seed shipped library perk DEFINITIONS into the shared collector's perk
-        # table BEFORE collecting the consumer's units. Perk-impl collection
-        # (`extend T with Perk`) validates each impl against the visible perk
-        # definitions at collection time (CE4003), so a consumer that supplies
-        # an impl for a library-shipped perk must see that perk's contract here.
+        # BEFORE the consumer's units: perk-impl collection validates each impl against
+        # the visible perk definitions (CE4003), so the contract must already be here.
         if self.library_linker is not None:
             self._seed_library_perks(collector.perks)
 
@@ -119,16 +82,12 @@ class SemanticAnalyzer:
             if unit.ast is None:
                 continue
 
-            # Collect symbols from this unit, passing unit name for visibility tracking
             unit_tables = collector.run(unit.ast, unit_name=unit.name,
                                         unit_file=str(unit.file_path))
 
-            # Merge unit symbols into global tables, considering visibility
             symbol_merger.merge_all(unit, unit_tables, global_tables)
 
         self.tables = global_tables
-        # Individual attributes are views onto the same table objects; the
-        # pipeline and backend read analyzer.structs / .enums / ... directly.
         self.constants = global_tables.constants
         self.structs = global_tables.structs
         self.enums = global_tables.enums
@@ -140,7 +99,6 @@ class SemanticAnalyzer:
         self.extensions = global_tables.extensions
         self.generic_extensions = global_tables.generic_extensions
         self.generic_funcs = global_tables.generic_funcs
-        # FFI externals accumulate across all units in the shared collector table.
         self.externals = collector.externals
         global_tables.externals = collector.externals
 
@@ -154,8 +112,6 @@ class SemanticAnalyzer:
                 validate_external_signatures(self.reporter, unit.ast)
                 validate_ptr_unit_gate(self.reporter, unit.ast)
 
-        # Register library types if any libraries are loaded
-        # Order: structs first, then enums (may reference structs), then functions (may reference both)
         if self.library_linker is not None and self.library_registry is None:
             self._build_library_registry()
         if self.library_registry is not None or self.library_linker is not None:
@@ -167,25 +123,18 @@ class SemanticAnalyzer:
             # what the library's monomorphized bodies call).
             self._register_library_private_functions()
             self._register_library_constants(compilation_order)
-            # NOTE: shipped library perk DEFINITIONS are seeded earlier, before
-            # the consumer's perk-impl collection (see _seed_library_perks call
-            # in the Phase 0 loop above); they are already in self.perks here.
-            # Library perk IMPLEMENTATIONS register here, after the consumer's
-            # own impls (local wins) and before Pass 1.5/1.6 so the constraint
-            # validator sees them at monomorphization.
+            # Library perk IMPLEMENTATIONS register here: after the consumer's own impls
+            # (local wins) and before Pass 1.5/1.6, so the constraint validator sees them.
+            # The DEFINITIONS were seeded earlier, in the Phase 0 loop above.
             self._register_library_perk_impls()
             self._register_library_generic_functions()
-            # Generic struct/enum templates: structs first (enum payloads may
-            # reference structs), then enums. Registered before Pass 1.5 so the
-            # consumer's instantiations of LibBox<i32> etc. are collected and
-            # monomorphized locally.
+            # Structs before enums (an enum payload may reference a struct), and both
+            # before Pass 1.5 so the consumer's instantiations monomorphize locally.
             self._register_library_generic_structs()
             self._register_library_generic_enums()
 
-        # Check if main function expects command line arguments (across all units)
         self._check_main_function_args_multi_file(compilation_order)
 
-        # Pass 1.5: collect generic type instantiations from all units
         from sushi_lang.semantics.generics.instantiate import InstantiationCollector
         instantiation_collector = InstantiationCollector(
             struct_table=self.structs.by_name,
@@ -201,11 +150,9 @@ class SemanticAnalyzer:
         type_instantiations = instantiation_collector.instantiations
         func_instantiations = instantiation_collector.function_instantiations
 
-        # Pass 1.6: monomorphize generic types into concrete types
         from sushi_lang.semantics.generics.monomorphize import Monomorphizer
         from sushi_lang.semantics.generics.constraints import ConstraintValidator
 
-        # Create constraint validator for perk constraint checking (Phase 4)
         constraint_validator = ConstraintValidator(
             perk_table=self.perks,
             perk_impl_table=self.perk_impls,
@@ -224,18 +171,12 @@ class SemanticAnalyzer:
             tables=self.tables,
         )
 
-        # Separate enum and struct instantiations.
-        #
-        # Type arguments are resolved FIRST. A collected instantiation can name a user type as a
-        # bare UnknownType (e.g. Result<Point, StdError> arrives as UnknownType("Point")), and the
-        # monomorphizer builds its concrete EnumType directly -- it does not go through
-        # ensure_*_type_in_table, so nothing else would resolve it. Since `str(UnknownType("Point"))`
-        # and `str(StructType("Point"))` are both "Point", the two mangle to the SAME enum name
-        # while carrying different payloads: EnumType hashes on the name but compares on the
-        # variants, so the unresolved one hash-matches and compares unequal. Resolving here keeps
-        # the monomorphized instance and the on-demand intern byte-identical.
-        # (Abstract instantiations are dropped by the monomorphizer itself, which is the one
-        # choke point every source of instantiations flows through.)
+        # Type arguments are resolved FIRST. `str(UnknownType("Point"))` and
+        # `str(StructType("Point"))` are both "Point", so the two spellings mangle to one
+        # enum name while carrying different payloads -- and EnumType hashes on the name but
+        # compares on the variants, so the unresolved one hash-matches and compares unequal.
+        # Resolving here keeps the monomorphized instance and the on-demand intern
+        # byte-identical.
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
         def _resolve_args(type_args):
@@ -252,58 +193,43 @@ class SemanticAnalyzer:
             elif base_name in self.generic_structs.by_name:
                 struct_instantiations.add((base_name, _resolve_args(type_args)))
 
-        # Phase 3: Monomorphize generic functions
-        # Monomorphize all detected function instantiations (multi-file mode)
         monomorphizer.monomorphize_all_functions(func_instantiations, compilation_order)
 
-        # Monomorphize generic enums
         concrete_enums = monomorphizer.monomorphize_all(self.generic_enums.by_name, enum_instantiations)
 
-        # Merge monomorphized concrete enums into the global enum table. A name may already be
-        # interned on demand (ensure_result_type_in_table / ensure_maybe_type_in_table run during
-        # Pass 2 and codegen), so keep the first entry rather than clobbering it and appending a
-        # duplicate `order` key -- the two paths mangle the same name from the same type args.
+        # A name may already be interned on demand, so keep the first entry rather than
+        # clobbering it and appending a duplicate `order` key.
         for enum_name, enum_type in concrete_enums.items():
             if enum_name in self.enums.by_name:
                 continue
             self.enums.by_name[enum_name] = enum_type
             self.enums.order.append(enum_name)
 
-        # Monomorphize generic structs
         concrete_structs = monomorphizer.monomorphize_all_structs(self.generic_structs.by_name, struct_instantiations)
 
-        # Merge monomorphized concrete structs into the global struct table
         for struct_name, struct_type in concrete_structs.items():
             self.structs.by_name[struct_name] = struct_type
             self.structs.order.append(struct_name)
 
-        # Pass 1.7: Resolve struct field types and enum variant types (UnknownType → concrete types)
-        # This runs AFTER monomorphization so all struct/enum types exist in the tables
-        # Resolves nested struct references (e.g., Rectangle.top_left: Point)
-        # Resolves enum variant associated types (e.g., Response.Success: Status)
+        # Pass 1.7: AFTER monomorphization, so every struct/enum exists in the tables.
         from sushi_lang.semantics.passes.ast_transform import resolve_struct_field_types, resolve_enum_variant_types
         resolve_struct_field_types(self.structs, self.enums)
         resolve_enum_variant_types(self.structs, self.enums)
 
-        # Pass 1.75: reject types that contain themselves by value (CE2095).
-        # Field types are concrete from here, and this must precede Pass 1.8:
-        # hash registration topologically sorts the struct graph, so a cycle would
-        # surface there as an internal error rather than as a user diagnostic.
-        # Stop afterwards -- every later pass assumes finitely-sized types.
+        # Pass 1.75: reject types that contain themselves by value (CE2095). Must precede
+        # Pass 1.8, whose topological sort would report a cycle as an internal error, and
+        # must stop on failure -- every later pass assumes finitely-sized types.
         from sushi_lang.semantics.passes.infinite_types import check_infinite_size_types
         if check_infinite_size_types(self.structs, self.enums, self.reporter):
             return
 
-        # Pass 1.8: Register hash methods for all hashable structs, enums, and arrays
-        # This runs AFTER type resolution so nested struct/enum types are fully resolved
-        # Works for both generic and non-generic types (after monomorphization)
-        # Order matters: structs/enums first (dependencies), then arrays (which may contain them)
+        # Pass 1.8: AFTER type resolution, and structs/enums before arrays, which may
+        # contain them.
         from sushi_lang.semantics.passes.hash_registration import (
             register_all_struct_hashes, register_all_enum_hashes, register_all_array_hashes
         )
         register_all_struct_hashes(self.structs)
 
-        # Register enum hash methods (with proper error reporting for direct recursion)
         register_all_enum_hashes(self.enums, self.reporter)
 
         register_all_array_hashes(self.structs, self.enums)
@@ -319,14 +245,12 @@ class SemanticAnalyzer:
         for enum_type in self.enums.by_name.values():
             register_enum_clone_method(enum_type)
 
-        # Monomorphize generic extension methods
         concrete_extension_defs = monomorphize_all_extension_methods(
             self.generic_extensions.by_type,
             struct_instantiations,
             concrete_structs
         )
 
-        # Store monomorphized ExtendDef nodes for backend codegen
         for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
             self.monomorphized_extensions.append(extend_def)
             # Add to extension table for method lookup during type validation.
@@ -343,24 +267,16 @@ class SemanticAnalyzer:
             )
             self.extensions.add_method(extension_method)
 
-        # An extension method that collides with a BUILT-IN can never run (#239). Every
-        # layer -- validation (passes/types/calls/methods.py), inference
-        # (passes/types/method_registry.py) and codegen (the dispatcher) -- resolves the
-        # built-in before the extension fallback, so such a method is compiled and then
-        # silently dead. That is the hazard class CE4007 exists to prevent, and the
-        # CW3505 rule applies: if it cannot possibly do what the user wrote, it is an
-        # error, not a warning.
+        # An extension method colliding with a BUILT-IN can never run, because all three
+        # layers resolve the built-in first -- so it is CE2097 rather than silent dead code
+        # (#239). See docs/design/method-resolution.md.
         #
-        # Placement is load-bearing at BOTH ends. After Pass 1.8, because that is what
-        # registers the struct/enum hash/clone. After the generic-extension merge loop
-        # just above, because a monomorphized `extend Box@(i32) hash()` only enters the
-        # extension table there -- running earlier is exactly why that shape went
-        # uncovered.
+        # Placement is load-bearing at BOTH ends: after Pass 1.8, which registers the
+        # struct/enum hash/clone, and after the generic-extension merge above, which is
+        # where a monomorphized `extend Box@(i32) hash()` enters the extension table.
         #
-        # Perk implementations are NOT affected, by construction rather than by a
-        # condition: `extend T with Perk` is an ExtendWithDef collected into
-        # PerkImplementationTable and never enters ExtensionTable. They are the sanctioned
-        # way to replace a built-in and win at every layer deliberately.
+        # A perk impl is unaffected by construction: an ExtendWithDef never enters
+        # ExtensionTable. It is the sanctioned way to replace a built-in.
         self._check_extension_shadows_builtin()
 
         # Phase 1 & 2: Run scope and type analysis on all units with global context
@@ -384,7 +300,6 @@ class SemanticAnalyzer:
             if unit.ast is None:
                 continue
 
-            # Create unit-specific reporter with the unit's file path and source
             try:
                 unit_source = unit.file_path.read_text(encoding="utf-8")
             except Exception:
@@ -392,52 +307,31 @@ class SemanticAnalyzer:
 
             unit_reporter = Reporter(source=unit_source, filename=str(unit.file_path))
 
-            # Pass 1: scope analysis with global constants, structs, and enums (unit-specific reporter)
             scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals)
             scope_analyzer.run(unit.ast)
 
-            # Pass 2: type validation with global symbols (unit-specific reporter)
             type_validator = TypeValidator(unit_reporter, self.tables, current_unit_name=unit.name, monomorphized_functions=monomorphizer.monomorphized_functions)
             type_validator.run(unit.ast)
 
-            # Pass 2.5: lambda-lifting (between type and borrow, per unit).
             from sushi_lang.semantics.passes.lambda_lift import LambdaLifter
             LambdaLifter(self.structs, self.funcs, unit.ast,
                          annotate=type_validator._validate_function).run()
 
-            # Pass 3: borrow checking (unit-specific reporter). Enum names let the checker
-            # recognise `Box.Full(a)` as an ownership sink -- it is a DotCall here, the same
-            # node shape as a method call, so it needs the type names to tell them apart.
-            # Base names only: a generic enum is interned as "Result<i32, StdError>" but the
-            # constructor receiver is written bare ("Result").
+            # Pass 3. The enum names let the checker tell `Box.Full(a)` from a method call
+            # -- both are DotCall here. BASE names only: the receiver is written bare.
             borrow_checker = BorrowChecker(unit_reporter, destroy_effects=destroy_effects,
                                            enum_names=enum_names, tables=self.tables)
             borrow_checker.run(unit.ast)
 
-            # Merge unit reporter results into main reporter
             self.reporter.items.extend(unit_reporter.items)
 
-        # Validate monomorphized generic extension methods (use main reporter for now)
         if self.monomorphized_extensions:
-            # Create a type validator with global context
             type_validator = TypeValidator(self.reporter, self.tables)
             for extend_def in self.monomorphized_extensions:
                 type_validator._validate_extension_method(extend_def)
 
-
     def _check_extension_shadows_builtin(self) -> None:
-        """Reject an extension method that collides with a built-in (CE2097).
-
-        Keyed on `builtin_method_exists` for this exact (target type, method name) pair --
-        never on the bare method name -- so a type that carries no such built-in can still
-        be extended with a `hash()` of its own. Must run after Pass 1.8 (which registers
-        the struct/enum pair) AND after the generic-extension merge, or a monomorphized
-        `extend Box@(i32) hash()` is never examined.
-
-        Tier 2: one primary location, at the extension declaration. A built-in has no
-        source span, so the note uses the house idiom for a compiler-predefined name
-        ("defined by the compiler" -- see collect/utils.py:note_first_declaration).
-        """
+        """Reject an extension method that collides with a built-in (CE2097)."""
         if self.extensions is None:
             return
 
@@ -465,11 +359,7 @@ class SemanticAnalyzer:
                 ).emit()
 
     def _build_library_registry(self) -> None:
-        """Build LibraryRegistry from loaded library manifests.
-
-        Creates a LibraryRegistry with pre-parsed type information,
-        eliminating duplicate parsing in codegen.
-        """
+        """Build LibraryRegistry from loaded library manifests."""
         if self.library_linker is None:
             return
 
@@ -487,11 +377,7 @@ class SemanticAnalyzer:
             )
 
     def _register_library_functions(self) -> None:
-        """Register functions from loaded libraries into the function table.
-
-        Uses pre-parsed data from LibraryRegistry if available, otherwise
-        falls back to manual parsing from library_linker manifests.
-        """
+        """Register functions from loaded libraries into the function table."""
         if self.funcs is None:
             return
 
@@ -552,19 +438,7 @@ class SemanticAnalyzer:
                 self.funcs.order.append(func_name)
 
     def _register_library_private_functions(self) -> None:
-        """Register export-closure private helpers from loaded libraries (C4b/C5).
-
-        A library generic's body may call library-private concrete helpers;
-        these ship as signature-only records (``templates.private_functions``)
-        and their definitions link from the library bitcode. Registering the
-        signature here lets the consumer's type checker validate the
-        monomorphized body's call sites.
-
-        Unlike every other registration helper, a name clash is an ERROR
-        (CE5007), not local-wins: the library's monomorphized body calls the
-        symbol by name, so a local function shadowing it would silently change
-        the library's behavior.
-        """
+        """Register export-closure private helpers from loaded libraries (C4b/C5)."""
         if self.funcs is None or self.library_registry is None:
             return
 
@@ -581,17 +455,7 @@ class SemanticAnalyzer:
             self.funcs.order.append(name)
 
     def _register_library_constants(self, compilation_order) -> None:
-        """Register export-closure constants from loaded libraries (C4b/C5).
-
-        Shipped with their source (``templates.constants``) because the
-        consumer needs the VALUE for compile-time evaluation. Each record is
-        re-parsed; its signature merges into the constant table and its
-        ``ConstDef`` is appended to the first unit's AST so both codegen paths
-        emit the global (constants are emitted with internal linkage per
-        module, so re-emission alongside the library bitcode cannot collide).
-
-        Name clashes are CE5007, same rationale as private functions.
-        """
+        """Register export-closure constants from loaded libraries (C4b/C5)."""
         if self.constants is None or self.library_linker is None:
             return
 
@@ -629,8 +493,6 @@ class SemanticAnalyzer:
                 sig = const_table.by_name.get(const_name)
                 const_defs = program.constants or []
                 if sig is None or len(const_defs) != 1:
-                    # The snippet failed to collect as a constant; skip rather
-                    # than crash the consumer build.
                     continue
 
                 self.constants.by_name[const_name] = sig
@@ -638,25 +500,7 @@ class SemanticAnalyzer:
                 host_unit.ast.constants.append(const_defs[0])
 
     def _seed_library_perks(self, perk_table) -> None:
-        """Seed perk DEFINITIONS shipped by loaded libraries into ``perk_table``.
-
-        Each consumed library may ship the perk contracts (method signatures)
-        that its exported generics constrain on, under ``templates.perks``. We
-        rebuild a ``PerkDef`` for each via the canonical collection path
-        (re-parse the source snippet, run a throwaway ``CollectorPass``, pull
-        the ``PerkDef`` out of the resulting ``PerkTable``) so that a consumer
-        no longer has to redeclare a perk it does not author.
-
-        This must run BEFORE the consumer's own units are collected: perk-impl
-        collection (``extend T with Perk``) validates each impl against the
-        visible perk definitions (CE4003), so a consumer that implements a
-        library-shipped perk needs the contract present at collection time.
-
-        Only DEFINITIONS are shipped; the consumer still supplies its own
-        ``extend T with Perk`` implementations. Local definitions win: a perk is
-        only seeded if its name is not already present (mirrors the other
-        library-registration helpers).
-        """
+        """Seed perk DEFINITIONS shipped by loaded libraries into ``perk_table``."""
         if perk_table is None or self.library_linker is None:
             return
 
@@ -684,36 +528,13 @@ class SemanticAnalyzer:
 
                 perk_def = template_perks.by_name.get(perk_name)
                 if perk_def is None:
-                    # The snippet failed to collect as a perk; skip rather than
-                    # crash the consumer build.
                     continue
 
                 perk_table.by_name[perk_name] = perk_def
                 perk_table.order.append(perk_name)
 
     def _register_library_perk_impls(self) -> None:
-        """Register concrete perk IMPLEMENTATIONS shipped by loaded libraries.
-
-        C4a: each library may ship its own concrete ``extend T with Perk``
-        blocks for the perks its exported generics constrain on, under
-        ``templates.perk_impls``. Registering them in the consumer's perk-impl
-        table makes the constraint validator (CE4006) and method dispatch see
-        the impl; the bodies are NOT re-emitted - codegen declares the method
-        symbols and the definitions resolve from the library bitcode at link
-        time (they carry weak linkage there, so a local impl wins).
-
-        Precedence (all silent, mirroring the other registration helpers):
-        - A consumer's own impl of the same (type, perk) wins outright.
-        - Across multiple libraries shipping the same impl, the first
-          registered wins.
-        - If a local extension method on the target type already uses one of
-          the impl's method names, the library impl is skipped entirely:
-          registering it would create exactly the dispatch ambiguity CE4007
-          exists to prevent, but erroring would make adding an impl to a
-          library a breaking change for consumers. (If the consumer then needs
-          the perk, writing its own ``extend`` triggers the normal in-program
-          CE4007 with a proper source span.)
-        """
+        """Register concrete perk IMPLEMENTATIONS shipped by loaded libraries."""
         if self.perk_impls is None or self.perks is None or self.library_linker is None:
             return
 
@@ -724,11 +545,8 @@ class SemanticAnalyzer:
                 perk_name = record.get("perk")
                 if not type_name or not perk_name:
                     continue
-                # Defensive: the shipping rule guarantees the perk definition
-                # ships alongside, but a hand-edited manifest may not honor it.
                 if perk_name not in self.perks.by_name:
                     continue
-                # Local (or earlier-library) impl wins.
                 if self.perk_impls.implements(type_name, perk_name):
                     continue
                 # CE4007 interplay: skip on a method-name clash with a local
@@ -757,20 +575,7 @@ class SemanticAnalyzer:
                     self.library_perk_impls.append(impl)
 
     def _register_library_generic_functions(self) -> None:
-        """Register generic function templates from loaded libraries.
-
-        Each consumed library may ship instantiable generic function bodies in
-        its ``.slib`` manifest under ``templates.generic_functions``. We rebuild
-        a ``GenericFuncDef`` for each via the canonical collection path
-        (re-parse the source snippet, run a throwaway ``CollectorPass``, pull the
-        ``GenericFuncDef`` out of the resulting table) so that the existing
-        instantiation + monomorphization machinery (Pass 1.5/1.6) emits a
-        concrete instance at the consumer's call site.
-
-        Local definitions win: a template is only registered if its name is not
-        already present in the generic function table (mirrors the other
-        library-registration helpers).
-        """
+        """Register generic function templates from loaded libraries."""
         if self.generic_funcs is None or self.library_linker is None:
             return
 
@@ -784,10 +589,9 @@ class SemanticAnalyzer:
             for record in templates.get("generic_functions", []):
                 func_name = record["name"]
                 if func_name in self.generic_funcs.by_name:
-                    # Public templates: local definitions win silently. An
-                    # export-closure PRIVATE template (C4b/C5) must keep its
-                    # name - shadowing it would change what the library's
-                    # other shipped bodies call (CE5007).
+                    # A local definition wins silently, but an export-closure PRIVATE
+                    # template must keep its name: shadowing it would change what the
+                    # library's other bodies call (CE5007).
                     if record.get("private"):
                         existing = self.generic_funcs.by_name[func_name]
                         er.emit(self.reporter, er.ERR.CE5007,
@@ -809,16 +613,12 @@ class SemanticAnalyzer:
 
                 gfd = template_generic_funcs.by_name.get(func_name)
                 if gfd is None:
-                    # The snippet failed to collect as a generic function;
-                    # skip rather than crash the consumer build.
                     continue
 
                 gfd.is_library_template = True
 
-                # Reconcile type-param constraints and the type-pack marker
-                # against the authoritative record (the snippet already carries
-                # them, but the record is the source of truth and guards against
-                # any future divergence).
+                # The snippet already carries these, but the record is the source of
+                # truth.
                 rec_tps = record.get("type_params") or []
                 if len(rec_tps) == len(gfd.type_params):
                     for tp, rec_tp in zip(gfd.type_params, rec_tps, strict=False):
@@ -833,28 +633,7 @@ class SemanticAnalyzer:
     def _register_library_generic_types(
         self, manifest_key: str, table, collected_attr: str
     ) -> None:
-        """Register generic struct/enum templates from loaded libraries.
-
-        Shared by ``_register_library_generic_structs`` /
-        ``_register_library_generic_enums``. Mirrors
-        ``_register_library_generic_functions``: each consumed library may ship
-        instantiable generic struct/enum templates under
-        ``templates.generic_structs`` / ``templates.generic_enums``. We rebuild a
-        ``GenericStructType`` / ``GenericEnumType`` for each via the canonical
-        collection path (re-parse the source snippet, run a throwaway
-        ``CollectorPass``, pull the generic type out of the resulting table) so
-        the existing instantiation + monomorphization machinery (Pass 1.5/1.6)
-        emits a concrete instance at the consumer's call site.
-
-        Local definitions win: a template is only registered if its name is not
-        already present in the target table.
-
-        Args:
-            manifest_key: ``"generic_structs"`` or ``"generic_enums"``.
-            table: the consumer's ``GenericStructTable`` / ``GenericEnumTable``.
-            collected_attr: attribute of the ``SymbolTables`` result holding the
-                matching table (``"generic_structs"`` or ``"generic_enums"``).
-        """
+        """Register generic struct/enum templates from loaded libraries."""
         if table is None or self.library_linker is None:
             return
 
@@ -879,8 +658,6 @@ class SemanticAnalyzer:
 
                 generic_type = template_table.by_name.get(type_name)
                 if generic_type is None:
-                    # The snippet failed to collect as a generic type; skip
-                    # rather than crash the consumer build.
                     continue
 
                 table.by_name[type_name] = generic_type
@@ -897,11 +674,7 @@ class SemanticAnalyzer:
             "generic_enums", self.generic_enums, "generic_enums")
 
     def _register_library_structs(self) -> None:
-        """Register struct definitions from loaded libraries.
-
-        Uses pre-parsed data from LibraryRegistry if available.
-        Local struct definitions take precedence over library definitions.
-        """
+        """Register struct definitions from loaded libraries."""
         if self.structs is None:
             return
 
@@ -938,11 +711,7 @@ class SemanticAnalyzer:
                 self.structs.order.append(struct_name)
 
     def _register_library_enums(self) -> None:
-        """Register enum definitions from loaded libraries.
-
-        Uses pre-parsed data from LibraryRegistry if available.
-        Local enum definitions take precedence over library definitions.
-        """
+        """Register enum definitions from loaded libraries."""
         if self.enums is None:
             return
 
@@ -983,12 +752,7 @@ class SemanticAnalyzer:
                 self.enums.order.append(enum_name)
 
     def _check_main_function_args(self, program: Program) -> None:
-        """
-        Check if the main function has a string[] args parameter.
-
-        Looks for exactly: `fn main(..., string[] args, ...)` where args must be named "args"
-        and have type string[]. Other parameters are ignored.
-        """
+        """Check if the main function has a string[] args parameter."""
         main_func = None
         for func in program.functions:
             if func.name == "main":
@@ -998,13 +762,8 @@ class SemanticAnalyzer:
         self._process_main_function_for_args(main_func)
 
     def _check_main_function_args_multi_file(self, compilation_order: list[Unit]) -> None:
-        """
-        Check if the main function has a string[] args parameter in multi-file mode.
-
-        Searches for main function across all units and checks if it has the args parameter.
-        """
+        """Check if the main function has a string[] args parameter in multi-file mode."""
         main_func = None
-        # Search for main function across all units
         for unit in compilation_order:
             if unit.ast is None:
                 continue
@@ -1018,20 +777,13 @@ class SemanticAnalyzer:
         self._process_main_function_for_args(main_func)
 
     def _process_main_function_for_args(self, main_func) -> None:
-        """
-        Process a main function to check if it has a string[] args parameter.
-
-        Args:
-            main_func: The main function AST node, or None if not found.
-        """
+        """Process a main function to check if it has a string[] args parameter."""
         from sushi_lang.semantics.typesys import DynamicArrayType
 
         if main_func is None:
-            # No main function found, no args processing needed
             self.main_expects_args = False
             return
 
-        # Check if main function has a parameter named "args" of type string[]
         for param in main_func.params:
             if (param.name == "args" and
                 isinstance(param.ty, DynamicArrayType) and
@@ -1039,5 +791,4 @@ class SemanticAnalyzer:
                 self.main_expects_args = True
                 return
 
-        # No string[] args parameter found
         self.main_expects_args = False

@@ -1,26 +1,4 @@
-"""Lambda-lifting pass: turn each lambda literal into a top-level function + env.
-
-Runs between the type pass (which resolved each lambda's param/capture types and
-its FunctionType onto the node) and the borrow pass (which then checks the
-synthesized functions). For each lambda:
-
-  1. Synthesize an environment struct `__closure_env_N { <captured fields> }` and
-     register it in the struct table.
-  2. Synthesize the lifted function
-        fn __lambda_N(peek __closure_env_N __closure_env, <lambda params>) -> ok | err
-     whose body is the lambda body with every captured-name read rewritten to a
-     field read `__closure_env.<name>`.
-  3. Register the lifted function through the shared synthesis helper, then annotate
-     it with the type validator (it was added after the main type pass, so it needs
-     its own resolution for the backend — e.g. Result.Ok concrete types).
-
-The Lambda node stays in place as an expression; the backend (emit_lambda) builds
-the runtime value {&__lambda_N, env_ptr, drop} at that site using `lifted_name`,
-`env_struct`, and `captures`.
-
-Nested closures (a lambda inside another lambda's body) are lifted best-effort in
-T1; the deep capture data-flow is a known limitation.
-"""
+"""Lambda-lifting pass: turn each lambda literal into a top-level function + env."""
 from __future__ import annotations
 import dataclasses
 from typing import Callable, List, Optional
@@ -47,8 +25,6 @@ class LambdaLifter:
             if getattr(fn, "type_params", None):
                 continue  # generic templates: their instantiations carry the lambdas
             self._walk(fn.body)
-        # Annotate the synthesized functions (resolve Result.Ok concrete types, etc.)
-        # so the backend sees the same annotations a normally type-checked fn has.
         if self.annotate is not None:
             for lifted in self._lifted:
                 self.annotate(lifted)
@@ -62,7 +38,6 @@ class LambdaLifter:
             for item in node:
                 self._walk(item)
             return
-        # Only AST nodes can contain a lambda; skip Type objects / params / spans.
         if isinstance(node, Node):
             for f in dataclasses.fields(node):
                 self._walk(getattr(node, f.name))
@@ -74,14 +49,12 @@ class LambdaLifter:
         lifted_name = f"__lambda_{idx}"
         captures = lam.captures or []
 
-        # 1. Environment struct holding the captured values.
         env_struct = StructType(name=env_name,
                                 fields=tuple((c.name, c.ty) for c in captures))
         if env_name not in self.structs.by_name:
             self.structs.by_name[env_name] = env_struct
             self.structs.order.append(env_name)
 
-        # 2. Lifted-function body.
         if lam.is_block_body:
             body = lam.body
         else:
@@ -89,23 +62,17 @@ class LambdaLifter:
                          args=[lam.body], loc=lam.loc)
             body = Block(statements=[Return(value=ok, loc=lam.loc)], loc=lam.loc)
 
-        # Rewrite captured reads to env-field reads.
         cap_names = {c.name for c in captures}
         _rewrite_captures(body, cap_names)
 
-        # Lift any nested lambdas found in the (rewritten) body.
         self._walk(body)
 
-        # 3. Lifted FuncDef: leading env reference param + the lambda's own params.
         ok_type = lam.resolved_type.ok_type if lam.resolved_type is not None else lam.ret
         err_type = lam.resolved_type.err_type if lam.resolved_type is not None else lam.err_type
         # The env borrow is `poke`, and the mode is not decoration: a move-captured
-        # `List@(T)` is MUTABLE inside the body by design (T1.5), so `xs.push(x)` becomes
-        # a mutating method on an env field and the write must persist across calls. The
-        # parameter was spelled `peek` while nothing enforced read-only; once the write
-        # gate became total (R1), that spelling made the language's own closure semantics
-        # a CE2408. The environment is the closure's own storage, not a borrow of the
-        # caller's value.
+        # `List@(T)` is MUTABLE inside the body by design, so the write must persist across
+        # calls. Spelled `peek`, it made the language's own closure semantics a CE2408 once
+        # the write gate became total. The environment is the closure's own storage.
         env_param = Param(
             name=ENV_PARAM_NAME,
             ty=ReferenceType(referenced_type=env_struct, mutability=BorrowMode.POKE),
@@ -128,11 +95,7 @@ class LambdaLifter:
 
 
 def _rewrite_captures(node, cap_names: set) -> None:
-    """Replace `Name(cap)` reads with `MemberAccess(Name(env), cap)` in-place.
-
-    Does not descend into nested Lambda nodes (each lambda's captures are rewritten
-    against its own env when that lambda is lifted).
-    """
+    """Replace `Name(cap)` reads with `MemberAccess(Name(env), cap)` in-place."""
     if isinstance(node, Lambda):
         return
     if isinstance(node, list):

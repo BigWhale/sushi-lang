@@ -1,26 +1,4 @@
-"""P0-TA: consolidated pack-monomorphization verification suite.
-
-An INDEPENDENT, whole-contract check of the Phase-0 "pack-aware
-monomorphization core" (no surface syntax). Authored by the verification
-agent; it reuses the synthetic-fixture patterns from test_p0t1/t2/t3 but
-focuses on the contract-level properties the plan calls out -- with emphasis
-on the cache-identity and mangling-collision invariants:
-
-1. Regression: a regular (non-pack) generic monomorphizes 1:1 with the
-   historical mangled names and unchanged params; no-pack mangling unaffected.
-2. 0/1/3-element packs produce pairwise-distinct mangled names end-to-end
-   through monomorphize_function (not just mangle directly), none == base.
-3. Cache identity: same (name, type_args) -> SAME FuncDef object and exactly
-   one cache entry; two different arities -> two distinct cache entries.
-4. Pairwise-unique mangling across an adversarial collision matrix.
-5. Arity/placement validation raises ValueError (pack-not-last, two packs,
-   no-pack arity mismatch with the historical message).
-6. Scalar-position guard: a pack binding in scalar position raises.
-
-These drive the REAL Monomorphizer.monomorphize_function end-to-end where the
-property is about wiring (2, 3), and call the lower-level helpers directly
-where the property is local (1's substitution, 4, 5, 6).
-"""
+"""P0-TA: consolidated pack-monomorphization verification suite."""
 import pytest
 
 from sushi_lang.semantics.generics.types import TypeParameter, TypePack
@@ -33,16 +11,10 @@ STR = BuiltinType.STRING
 BOOL = BuiltinType.BOOL
 
 
-# ---------------------------------------------------------------------------
 # fixture helpers (mirror test_p0t1/t2/t3)
-# ---------------------------------------------------------------------------
 
 def _param(name, is_pack=False):
-    """A type-PARAMETER; the trailing one may carry the pack marker.
-
-    TypeParameter is a frozen dataclass, so the Phase-0 ``is_pack`` marker is
-    set via object.__setattr__ on synthetic fixtures (ast.py stays untouched).
-    """
+    """A type-PARAMETER; the trailing one may carry the pack marker."""
     tp = TypeParameter(name)
     if is_pack:
         object.__setattr__(tp, "is_pack", True)
@@ -64,11 +36,7 @@ def _identity_generic():
 
 
 def _pack_generic():
-    """``fn f<T, ...Ts>(string prefix, Ts... args)`` synthetic fixture.
-
-    A leading 1:1 type-param ``T``, a trailing pack ``Ts``, and a pack VALUE
-    parameter ``args`` typed as a bare ``UnknownType("Ts")`` so it fans out.
-    """
+    """``fn f<T, ...Ts>(string prefix, Ts... args)`` synthetic fixture."""
     from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
     from sushi_lang.semantics.ast import Block, Param
 
@@ -91,14 +59,12 @@ def _make_mono():
     return Monomorphizer(reporter=Reporter())
 
 
-# ---------------------------------------------------------------------------
 # 1. Regression -- regular generic unchanged
-# ---------------------------------------------------------------------------
 
 def test_regular_generic_monomorphizes_to_historical_names_and_params():
-    """identity<T> at i32/string yields the historical mangled names and a
-    single 1:1 param whose type is the concrete substitution (no fan-out,
-    no pack marker)."""
+    """identity<T> at i32/string yields the historical mangled names and a single 1:1 param whose
+    type is the concrete substitution (no fan-out, no pack marker).
+    """
     mono = _make_mono()
     generic = _identity_generic()
 
@@ -123,13 +89,12 @@ def test_no_pack_mangling_output_unaffected():
     assert mangle_function_name("f", (I32, STR), pack_arity=None) == "f__i32_string"
 
 
-# ---------------------------------------------------------------------------
 # 2. 0/1/3-element packs -> distinct mangled names (end-to-end)
-# ---------------------------------------------------------------------------
 
 def test_pack_arities_yield_distinct_names_end_to_end():
-    """Driving the REAL monomorphize_function at pack arities 0, 1, 3 produces
-    three pairwise-distinct symbols, none equal to the bare base name 'f'."""
+    """Driving the REAL monomorphize_function at pack arities 0, 1, 3 produces three
+    pairwise-distinct symbols, none equal to the bare base name 'f'.
+    """
     mono = _make_mono()
     generic = _pack_generic()  # f<T, ...Ts>: leading T, then the pack
 
@@ -151,13 +116,12 @@ def test_pack_arities_yield_distinct_names_end_to_end():
     assert fn3.name == "f__i32_string_bool_i32.pack3"
 
 
-# ---------------------------------------------------------------------------
 # 3. Cache identity
-# ---------------------------------------------------------------------------
 
 def test_cache_returns_same_object_and_grows_by_one():
-    """Same (name, type_args) twice through ONE Monomorphizer -> the identical
-    FuncDef object, and func_cache grows by exactly one entry."""
+    """Same (name, type_args) twice through ONE Monomorphizer -> the identical FuncDef object, and
+    func_cache grows by exactly one entry.
+    """
     mono = _make_mono()
     generic = _pack_generic()
     cache = mono.func_cache
@@ -175,8 +139,9 @@ def test_cache_returns_same_object_and_grows_by_one():
 
 
 def test_distinct_arities_create_two_cache_entries():
-    """Two DIFFERENT arities of the same function -> two distinct cache entries
-    and two different FuncDef objects with different names."""
+    """Two DIFFERENT arities of the same function -> two distinct cache entries and two different
+    FuncDef objects with different names.
+    """
     mono = _make_mono()
     generic = _pack_generic()
     cache = mono.func_cache
@@ -193,14 +158,12 @@ def test_distinct_arities_create_two_cache_entries():
     assert (generic.name, (I32, STR, BOOL)) in cache
 
 
-# ---------------------------------------------------------------------------
 # 4. Pairwise-unique mangling collision matrix
-# ---------------------------------------------------------------------------
 
 class _NamedType:
-    """A type whose ``str()`` is a plain CNAME-shaped identifier -- models a
-    user type literally named e.g. ``pack2``, the adversarial worst case for
-    the pack marker."""
+    """A type whose ``str()`` is a plain CNAME-shaped identifier -- models a user type literally
+    named e.g. ``pack2``, the adversarial worst case for the pack marker.
+    """
 
     def __init__(self, name):
         self._name = name
@@ -210,10 +173,11 @@ class _NamedType:
 
 
 def test_mangling_matrix_is_pairwise_unique():
-    """A stress matrix mixing: same base + different flat args; same flat args +
-    different pack_arity; pack vs no-pack with the same base+args; and an
-    adversarial type literally named 'pack2' as a no-pack arg vs a real
-    pack_arity=2 instantiation. ALL produced symbols must be pairwise-unique."""
+    """A stress matrix mixing: same base + different flat args; same flat args + different
+    pack_arity; pack vs no-pack with the same base+args; and an adversarial type literally named
+    'pack2' as a no-pack arg vs a real pack_arity=2 instantiation. ALL produced symbols must be
+    pairwise-unique.
+    """
     pack2_named = _NamedType("pack2")
 
     cases = [
@@ -253,13 +217,12 @@ def test_mangling_matrix_is_pairwise_unique():
     assert forged != real
 
 
-# ---------------------------------------------------------------------------
 # 5. Arity / placement validation raises
-# ---------------------------------------------------------------------------
 
 def _generic_with_typeparams(name, type_params):
-    """Minimal GenericFuncDef carrying only the type_params we want to exercise
-    in build_substitution (params/body irrelevant for the substitution check)."""
+    """Minimal GenericFuncDef carrying only the type_params we want to exercise in
+    build_substitution (params/body irrelevant for the substitution check).
+    """
     from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
     from sushi_lang.semantics.ast import Block
 
@@ -298,13 +261,12 @@ def test_no_pack_arity_mismatch_raises_with_historical_message():
     assert str(exc.value).startswith("Type argument count mismatch")
 
 
-# ---------------------------------------------------------------------------
 # 6. Scalar-position guard
-# ---------------------------------------------------------------------------
 
 def test_substitute_type_rejects_pack_in_scalar_position():
-    """A bare pack reference in a scalar type position must raise: a TypePack is
-    not a scalar Type and must never silently flow into substitute_type."""
+    """A bare pack reference in a scalar type position must raise: a TypePack is not a scalar Type
+    and must never silently flow into substitute_type.
+    """
     sub = TypeSubstitutor(_make_mono())
     mapping = {"Ts": TypePack((I32, STR))}
 

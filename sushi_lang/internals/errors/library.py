@@ -1,8 +1,4 @@
-"""Library system and .slib format errors (CE35xx).
-
-This module owns its numeric range: a code may only be added in the file that
-owns it, which is what makes the grouping structural rather than conventional.
-"""
+"""Library system and .slib format errors (CE35xx)."""
 from __future__ import annotations
 
 from sushi_lang.internals.errors.registry import (

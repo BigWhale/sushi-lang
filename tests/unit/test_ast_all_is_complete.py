@@ -1,18 +1,4 @@
-"""`semantics/ast.py`'s `__all__` must name every public AST node. No invisible nodes.
-
-Most semantic passes do `from sushi_lang.semantics.ast import *`. A node class missing
-from `__all__` is therefore **invisible** to them -- referencing it is a `NameError`, so
-the pressure is to quietly not handle that node at all.
-
-That is not hypothetical. `Spread` was missing from `__all__`, and the borrow checker had
-no `Spread` arm -- which is issue #174 (bloom `arr...` never marked its source moved: a
-use-after-free that compiled clean and segfaulted). `Lambda` was missing too, and
-`borrow.py` carried a hand-written `from ...ast import Lambda` to work around it -- a
-symptom nobody traced back to the cause.
-
-Eight classes were missing when this test was written. Adding a node to `ast.py` and
-forgetting `__all__` now turns CI red instead of silently hiding it from every pass.
-"""
+"""`semantics/ast.py`'s `__all__` must name every public AST node. No invisible nodes."""
 from __future__ import annotations
 
 import ast

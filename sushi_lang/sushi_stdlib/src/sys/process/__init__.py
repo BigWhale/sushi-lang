@@ -1,14 +1,4 @@
-"""Process control module for Sushi standard library.
-
-Provides:
-    - getcwd() -> Result<string>: Get current working directory
-    - chdir(string path) -> Result<i32>: Change working directory
-    - exit(i32 code) -> ~: Terminate process with exit code
-    - getpid() -> i32: Get process ID
-    - getuid() -> i32: Get user ID
-    - run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>:
-        Spawn a program by argv (no shell), capturing stdout/stderr + exit code
-"""
+"""Process control module for Sushi standard library."""
 
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src.ir_common import create_stdlib_module
@@ -22,7 +12,6 @@ from sushi_lang.sushi_stdlib.src.sys.process.functions import (
 )
 
 
-# Function registry
 PROCESS_FUNCTIONS = {
     'getcwd',
     'chdir',
@@ -49,7 +38,6 @@ def get_builtin_process_function_return_type(name: str):
     if name == 'getcwd':
         return GenericTypeRef("Result", (BuiltinType.STRING, UnknownType("ProcessError")))
     elif name == 'run':
-        # run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>
         return GenericTypeRef("Result", (UnknownType("ProcessOutput"), UnknownType("ProcessError")))
     elif name == 'chdir':
         return GenericTypeRef("Result", (BuiltinType.I32, UnknownType("ProcessError")))
@@ -105,7 +93,6 @@ def generate_module_ir() -> ir.Module:
     """Generate LLVM IR module for process control functions."""
     module = create_stdlib_module("sys.process")
 
-    # Generate all functions
     generate_getcwd(module)
     generate_chdir(module)
     generate_exit(module)

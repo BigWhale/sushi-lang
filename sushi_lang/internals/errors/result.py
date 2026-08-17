@@ -1,8 +1,4 @@
-"""Result@(T, E) and Maybe@(T) method errors (CE25xx).
-
-This module owns its numeric range: a code may only be added in the file that
-owns it, which is what makes the grouping structural rather than conventional.
-"""
+"""Result@(T, E) and Maybe@(T) method errors (CE25xx)."""
 from __future__ import annotations
 
 from sushi_lang.internals.errors.registry import (

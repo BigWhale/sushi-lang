@@ -7,7 +7,7 @@
 # freed when `make()` returns -- leaving the escaped closure holding a dangling pointer.
 #
 # This fails in the QUIET direction: no crash, exit 0, and `.len()` still reads 3 out of
-# the copied struct header. Indexing is what exposes it. MM.md S3.1; no upstream issue.
+# the copied struct header. Indexing is what exposes it.
 # `docs/design/move-semantics.md:198-201` required an audit of every `is_owning_type`
 # call site before this split shipped; this is the site that audit would have caught.
 # EXPECT_STDOUT_EXACT: "clobber=8 v=222\n"

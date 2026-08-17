@@ -1,12 +1,4 @@
-"""The two invariants that hold `semantics/param_modes.py` together.
-
-1. The mode is PEEK or POKE **if and only if** the parameter's type is a `ReferenceType`
-   with that mutability. One derivation, so the mode and the type can never disagree.
-2. `CalleeKind` is CLOSED: every member has a stated answer here, so a new kind cannot
-   be added without deciding what it does with an unmarked parameter.
-
-See docs/design/borrow-model.md section 6.
-"""
+"""The two invariants that hold `semantics/param_modes.py` together."""
 from __future__ import annotations
 
 import pytest
@@ -35,9 +27,7 @@ I32 = BuiltinType.I32
 STRING = BuiltinType.STRING
 
 
-# --------------------------------------------------------------------------- #
 # Invariant 1: PEEK/POKE iff ReferenceType
-# --------------------------------------------------------------------------- #
 
 NON_REFERENCE_TYPES = [
     I32,
@@ -74,9 +64,7 @@ def test_by_pointer_agrees_with_the_mode_name(mode):
     assert (mode.marker is None) == (mode is ParamMode.BORROW)
 
 
-# --------------------------------------------------------------------------- #
 # Invariant 1, through the real parser: a declaration and its derived mode
-# --------------------------------------------------------------------------- #
 
 DECLARATIONS = [
     ("fn f(string x) ~:\n    return Result.Ok(~)\n", ParamMode.BORROW),
@@ -102,9 +90,7 @@ def test_declared_modes_of_a_mixed_signature():
         ParamMode.BORROW, ParamMode.NOM, ParamMode.PEEK, ParamMode.POKE)
 
 
-# --------------------------------------------------------------------------- #
 # Invariant 1, on a FunctionType: normalization makes the two spellings one type
-# --------------------------------------------------------------------------- #
 
 def test_normalize_reads_peek_poke_off_the_type():
     types = (ReferenceType(referenced_type=I32, mutability=BorrowMode.PEEK), STRING)
@@ -134,9 +120,7 @@ def test_a_nom_parameter_makes_a_different_function_type():
     assert nom != borrow
 
 
-# --------------------------------------------------------------------------- #
 # Invariant 2: CalleeKind is closed
-# --------------------------------------------------------------------------- #
 
 # What an UNMARKED by-value parameter means at each kind of callee. Every member of
 # CalleeKind must appear here; a new one with no row fails the coverage test below.

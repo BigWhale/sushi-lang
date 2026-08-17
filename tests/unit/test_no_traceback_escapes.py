@@ -1,17 +1,4 @@
-"""No Python traceback ever reaches the user, whatever channel the failure took.
-
-One row per failure channel -- grammar, lexer, indenter, AST builder, semantics,
-codegen. Each drives the real compiler as a subprocess over a malformed program
-and asserts the same four things:
-
-  - exit code 2 (an error, not a "warning" -- a crash used to exit 1)
-  - no "Traceback (most recent call last)" anywhere in the output
-  - a [CE####] diagnostic code in stderr
-  - a file:line:col prefix, unless the diagnostic genuinely has no location
-
-Adding a channel later is one row. `--traceback` opts the traceback back IN; the
-last test pins that it appends to, rather than replaces, the diagnostic.
-"""
+"""No Python traceback ever reaches the user, whatever channel the failure took."""
 from __future__ import annotations
 
 import subprocess

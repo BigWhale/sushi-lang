@@ -1,11 +1,4 @@
-# semantics/units.py
-"""
-Unit management system for multi-file compilation.
-
-This module provides classes and utilities for managing compilation units,
-dependency resolution, and topological sorting for the Sushi language
-multi-file system.
-"""
+"""Unit management system for multi-file compilation."""
 
 from __future__ import annotations
 from dataclasses import dataclass
@@ -74,7 +67,6 @@ class Unit:
 
         symbols = {}
 
-        # Extract public functions
         for func in self.ast.functions:
             if func.is_public:
                 symbol = Symbol(
@@ -85,7 +77,6 @@ class Unit:
                 )
                 symbols[func.name] = symbol
 
-        # Extract all constants (constants are always global)
         for const in self.ast.constants:
             symbol = Symbol(
                 name=const.name,
@@ -104,19 +95,11 @@ class Unit:
         self._extract_public_symbols()
 
 
-
-
 class UnitManager:
     """Manages compilation units, dependency resolution, and compilation ordering."""
 
     def __init__(self, root_path: Path = None, reporter: Reporter = None):
-        """
-        Initialize the unit manager.
-
-        Args:
-            root_path: Root directory for resolving unit paths. Defaults to current directory.
-            reporter: Reporter for error/warning collection. Must be provided for error reporting.
-        """
+        """Initialize the unit manager."""
         self.root_path = root_path or Path.cwd()
         self.units: Dict[str, Unit] = {}
         self.global_symbols: Dict[str, Symbol] = {}
@@ -124,37 +107,12 @@ class UnitManager:
         self.err = PassErrorReporter(reporter) if reporter else None
 
     def resolve_unit_path(self, unit_name: str) -> Path:
-        """
-        Resolve a unit name to its file path.
-
-        Args:
-            unit_name: Unit name like "math/integer" or "string/helpers"
-
-        Returns:
-            Absolute path to the .sushi file
-
-        Example:
-            "math/integer" -> ./math/integer.sushi
-            "utils" -> ./utils.sushi
-        """
-        # Convert unit name to file path with .sushi extension
+        """Resolve a unit name to its file path."""
         relative_path = Path(unit_name + ".sushi")
         return self.root_path / relative_path
 
     def load_unit(self, unit_name: str, ast: Program) -> Optional[Unit]:
-        """
-        Load a unit with its parsed AST.
-
-        Args:
-            unit_name: Name of the unit (e.g., "math/integer")
-            ast: Parsed AST for the unit
-
-        Returns:
-            The loaded Unit object if successful, None if failed
-
-        Reports:
-            CE3002: If the unit's file doesn't exist
-        """
+        """Load a unit with its parsed AST."""
         file_path = self.resolve_unit_path(unit_name)
 
         if not file_path.exists():
@@ -170,42 +128,25 @@ class UnitManager:
             public_symbols={}
         )
 
-        # This will trigger __post_init__ which extracts dependencies and symbols
         unit.load_ast(ast)
 
         self.units[unit_name] = unit
         return unit
 
     def build_dependency_graph(self) -> Dict[str, List[str]]:
-        """
-        Build a dependency graph from all loaded units.
-
-        Returns:
-            Dictionary mapping unit names to their dependencies
-        """
+        """Build a dependency graph from all loaded units."""
         return {unit.name: unit.dependencies for unit in self.units.values()}
 
     def topological_sort(self) -> Optional[List[str]]:
-        """
-        Perform topological sorting to determine compilation order.
-
-        Returns:
-            List of unit names in compilation order (dependencies first), or None if failed
-
-        Reports:
-            CE3001: If circular dependencies are detected
-        """
-        # Kahn's algorithm for topological sorting with cycle detection
+        """Perform topological sorting to determine compilation order."""
         dependency_graph = self.build_dependency_graph()
 
-        # Calculate in-degree for each unit
         in_degree = {unit: 0 for unit in dependency_graph}
         for _unit, deps in dependency_graph.items():
             for dep in deps:
                 if dep in in_degree:
                     in_degree[dep] += 1
 
-        # Queue for units with no dependencies
         queue = [unit for unit, degree in in_degree.items() if degree == 0]
         result = []
 
@@ -213,16 +154,13 @@ class UnitManager:
             current = queue.pop(0)
             result.append(current)
 
-            # Remove edges from current unit
             for dep in dependency_graph[current]:
                 if dep in in_degree:
                     in_degree[dep] -= 1
                     if in_degree[dep] == 0:
                         queue.append(dep)
 
-        # Check for cycles
         if len(result) != len(dependency_graph):
-            # Find cycle using DFS
             cycle = self._find_cycle(dependency_graph)
             if self.reporter:
                 cycle_str = " -> ".join(cycle + [cycle[0]])
@@ -247,7 +185,6 @@ class UnitManager:
                     if result:
                         return result
                 elif neighbor in rec_stack:
-                    # Found cycle - return the cycle portion
                     cycle_start = path.index(neighbor)
                     return path[cycle_start:]
 
@@ -263,15 +200,7 @@ class UnitManager:
         return []  # No cycle found
 
     def build_global_symbol_table(self) -> bool:
-        """
-        Build the global symbol table from all loaded units.
-
-        Returns:
-            True if successful, False if there were duplicate symbols
-
-        Reports:
-            CE3003: If the same symbol is defined in multiple units
-        """
+        """Build the global symbol table from all loaded units."""
         symbol_units: Dict[str, List[str]] = {}
         success = True
 
@@ -281,11 +210,9 @@ class UnitManager:
                     symbol_units[symbol_name] = []
                 symbol_units[symbol_name].append(unit.name)
 
-                # Add to global symbols (first occurrence wins for now)
                 if symbol_name not in self.global_symbols:
                     self.global_symbols[symbol_name] = symbol
 
-        # Check for duplicates
         for symbol_name, units in symbol_units.items():
             if len(units) > 1:
                 if self.reporter:
@@ -296,30 +223,14 @@ class UnitManager:
         return success
 
     def get_compilation_order(self) -> Optional[List[Unit]]:
-        """
-        Get units in compilation order, with dependencies compiled first.
-
-        Returns:
-            List of Unit objects in compilation order, or None if failed
-
-        Reports:
-            CE3001: If circular dependencies are detected
-        """
+        """Get units in compilation order, with dependencies compiled first."""
         sorted_names = self.topological_sort()
         if sorted_names is None:
             return None
         return [self.units[name] for name in sorted_names]
 
     def find_symbol(self, symbol_name: str) -> Optional[Symbol]:
-        """
-        Find a symbol in the global symbol table.
-
-        Args:
-            symbol_name: Name of the symbol to find
-
-        Returns:
-            Symbol object if found, None otherwise
-        """
+        """Find a symbol in the global symbol table."""
         return self.global_symbols.get(symbol_name)
 
 

@@ -3,7 +3,7 @@
 #
 # The EMITTER is older than the method: `_clone_hashmap_value` has been the destructor's
 # symmetric partner since issue #181 (fresh buckets, memcpy, then a deep clone of each
-# OCCUPIED entry). Only the method was missing, which is what MM.md F10 recorded as "no clone
+# OCCUPIED entry). Only the method was missing, recorded as "no clone
 # exists by either route" -- true of the method, not of the emitter. This file pins the method.
 #
 # Owning VALUES are load-bearing: an interpolated string owns a buffer, so a shallow copy

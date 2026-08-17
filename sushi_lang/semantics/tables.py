@@ -1,14 +1,4 @@
-# semantics/tables.py
-"""Aggregate container for the whole-program symbol tables.
-
-The collector, merger, type validator, and backend all pass the same set of
-symbol tables around. Before this, they were threaded as an 11-tuple return and
-15-to-23 positional parameters. ``SymbolTables`` bundles them into one object so
-adding a table is a one-line change instead of a multi-file signature sweep.
-
-``externals`` accumulates in the shared collector rather than per unit, so it is
-threaded here for completeness but merged separately from the other eleven.
-"""
+"""Aggregate container for the whole-program symbol tables."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field

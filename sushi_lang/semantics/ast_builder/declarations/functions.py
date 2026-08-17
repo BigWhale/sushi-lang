@@ -11,14 +11,7 @@ from sushi_lang.internals.report import span_of
 
 
 def strip_self_param(params: List[Param], where_span=None):
-    """Lift a `poke self` / `peek self` parameter off a parsed param list (#327).
-
-    Returns (self_mode, self_mode_span, remaining_params). The receiver parameter is
-    legal only as the FIRST parameter -- anywhere else is CE2425 -- and the caller
-    decides whether a receiver is legal AT ALL in its context (a plain top-level
-    function rejects it in collect). One helper for all three method kinds
-    (extension, perk signature, perk impl), so the four AST shapes cannot drift.
-    """
+    """Lift a `poke self` / `peek self` parameter off a parsed param list (#327)."""
     self_mode = None
     self_mode_span = None
     remaining: List[Param] = []
@@ -44,14 +37,12 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     if name_tok is None:
         ice(t, "missing NAME")
 
-    # Check for PUBLIC token
     is_public = False
     for child in t.children:
         if isinstance(child, Token) and child.type == "PUBLIC":
             is_public = True
             break
 
-    # Extract type parameters if present
     type_params_node = first_tree(t.children, "type_params")
     type_params = parse_bounded_type_params(type_params_node) if type_params_node else None
 
@@ -103,28 +94,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
 
 
 def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> List[Param]:
-    """Parse parameters: param ("," param)* where param is typed_param | variadic_param.
-
-    A `variadic_param` (`...T NAME`) is one of two things, disambiguated by
-    `pack_names` (the set of the enclosing function's type-pack type-param names):
-
-    - v2 type-pack value-param (`...Ts args`): when the element type is a bare
-      NAME matching a declared type-pack type-param. The resulting `Param.ty` is
-      the bare pack type-param reference (the same `UnknownType(name="Ts")` a
-      regular `Ts x` param yields), `is_pack` is set, `is_variadic` is False.
-      Phase 0's monomorphizer recognizes this shape and fans it out.
-    - v1 native variadic (`...T values`): any other element type (concrete, or a
-      non-pack generic param). The resulting `Param.ty` holds the collected
-      `DynamicArrayType(T)` and `is_variadic` is set. Last-position / at-most-one
-      / context restrictions are enforced semantically in the collect pass.
-
-    `pack_names` defaults to empty, so callers that do not pass it (e.g. extern
-    params) treat every `variadic_param` as v1 — unchanged.
-
-    Also accepts `extern_params` (which adds an optional trailing ELLIPSIS for
-    untyped C varargs); the ELLIPSIS token is ignored here and handled by the
-    extern declaration parser.
-    """
+    """Parse parameters: param ("," param)* where param is typed_param | variadic_param."""
     t = expect(t, "parameters", "extern_params")
 
     from sushi_lang.semantics.typesys import DynamicArrayType
@@ -132,7 +102,6 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
 
     out: List[Param] = []
     for ch in t.children:
-        # The shared `parameters` rule wraps each entry in a `param` node.
         node = ch
         if isinstance(node, Tree) and node.data == "param":
             inner = next((c for c in node.children if isinstance(c, Tree)), None)
@@ -153,7 +122,6 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
             if mode_tok is None or name_tok is None:
                 ice(node, "malformed self_param")
             if str(name_tok) != "self":
-                # `poke x` in a parameter list is a missing type, not a receiver.
                 raise SyntaxDiagnostic("CE2425", span=span_of(node)) \
                     .help("a reference parameter is written `poke T name`; the bare "
                           "form is only the receiver, spelled `poke self`")

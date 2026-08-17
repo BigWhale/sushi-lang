@@ -1,15 +1,4 @@
-"""Phase 2 of borrow-by-default: the surface syntax of the four parameter modes.
-
-A pure PARSE gate. It proves three grammar changes accept the new surface and
-reject the old one, before any change of meaning lands (phases 3 and 4):
-
-  (a) `peek` / `poke` lose the `&` in every position that carries a borrow mode;
-  (b) `nom` is a new parameter-mode marker on a parameter, inside a function type,
-      on a lambda parameter, and at a call site;
-  (c) `nom` is legal nowhere else.
-
-See docs/design/borrow-model.md sections 2 and 3.
-"""
+"""Phase 2 of borrow-by-default: the surface syntax of the four parameter modes."""
 from __future__ import annotations
 
 import pytest
@@ -37,9 +26,7 @@ def parser() -> Lark:
     return _parser()
 
 
-# --------------------------------------------------------------------------- #
 # ACCEPT: peek / poke without the `&`, in all six positions
-# --------------------------------------------------------------------------- #
 
 ACCEPT_BARE_MODE = [
     # 1. reference parameter
@@ -88,9 +75,7 @@ def test_bare_peek_poke_parses(parser, src):
     parser.parse(src)
 
 
-# --------------------------------------------------------------------------- #
 # REJECT: the `&`-prefixed spelling is gone
-# --------------------------------------------------------------------------- #
 
 REJECT_AMPERSAND = [
     "fn f(&peek i32 x) i32:\n"
@@ -113,9 +98,7 @@ def test_ampersand_spelling_is_gone(parser, src):
         parser.parse(src)
 
 
-# --------------------------------------------------------------------------- #
 # ACCEPT: `nom` in the four positions that carry a parameter mode
-# --------------------------------------------------------------------------- #
 
 ACCEPT_NOM = [
     # a parameter of a plain function
@@ -159,9 +142,7 @@ def test_nom_parses(parser, src):
     parser.parse(src)
 
 
-# --------------------------------------------------------------------------- #
 # REJECT: `nom` is a parameter mode, not a type
-# --------------------------------------------------------------------------- #
 
 REJECT_NOM = [
     # not a generic type argument
@@ -193,9 +174,7 @@ def test_nom_rejected_outside_a_parameter_mode(parser, src):
         parser.parse(src)
 
 
-# --------------------------------------------------------------------------- #
 # The three words are reserved: no identifier may use them
-# --------------------------------------------------------------------------- #
 
 RESERVED = ["peek", "poke", "nom"]
 

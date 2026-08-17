@@ -1,24 +1,4 @@
-"""`find_local_slot` must fail as a registered diagnostic, never as a bare `KeyError`.
-
-A name the semantic passes already accepted must resolve in the backend. When it does
-not, that is an internal-invariant violation and it belongs in the diagnostic channel
-(Tier 4.7) like every other compiler failure. It used to raise a bare
-`KeyError("undefined name: X")`, which the top-level guard rendered as an anonymous
-**CE0000** -- so #248's five missed address sites all reported as "internal compiler
-error: KeyError" with nothing pointing at the actual gap.
-
-Two mechanisms, and this file pins both:
-
-  find_local_slot      -- the assertive form. Raises CE0055 ("unknown variable or
-                          constant"), the code `emit_name`'s own dead end already used.
-  try_find_local_slot  -- the interrogative form, for callers that legitimately ask
-                          "is this a local?" and have a real answer for "no" (a global
-                          constant, a top-level function reference, a struct field).
-
-The source gate is the part that keeps this honest: catching `KeyError` around a
-`find_local_slot` call is how a caller opts out of the diagnostic channel, and the four
-that did so are exactly the callers that should be using `try_find_local_slot`.
-"""
+"""`find_local_slot` must fail as a registered diagnostic, never as a bare `KeyError`."""
 from __future__ import annotations
 
 import ast
@@ -75,12 +55,7 @@ def _handles_keyerror(handler: ast.ExceptHandler) -> bool:
 
 
 def _keyerror_catchers() -> list[tuple[str, int]]:
-    """Return (relpath, lineno) for each `try` that guards find_local_slot with KeyError.
-
-    Read from the AST rather than by line proximity: `borrow.py` and `structs.py` put
-    their `except KeyError` a dozen lines below the call, so a text window silently
-    missed exactly the callers this gate exists to catch.
-    """
+    """Return (relpath, lineno) for each `try` that guards find_local_slot with KeyError."""
     hits = []
     for path in sorted(BACKEND_ROOT.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))

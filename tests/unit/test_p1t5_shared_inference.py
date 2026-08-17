@@ -1,19 +1,5 @@
-"""Pass 1.5 must infer a generic call's argument types for every expression shape
-Pass 2 can (issues #171, #191).
-
-Pass 1.5 (the instantiation collector) kept its own thin type inferrer, parallel to
-Pass 2's. When they disagreed, Pass 1.5 recorded no instantiation, the monomorphizer
-produced no symbol, and Pass 2 -- which *could* infer the call -- mangled a name that
-did not exist and raised CE2061. Any expression shape Pass 2 infers and Pass 1.5 does
-not reproduces this:
-
-- #171: `identity(self)` inside an extension body -- Pass 1.5 never bound `self`.
-- #191: `identity(x.foo())`, `identity(p.field)`, `identity(arr[0])`, `identity(-n)`,
-  `identity(f()??)` -- Pass 1.5's inferrer had no arm for these.
-
-These tests pin the fix at the collector level: the exact instantiation key must fall
-out of `InstantiationCollector.run`. They are the fast, precise counterpart to the
-`.sushi` regression tests in tests/bugs/.
+"""Pass 1.5 must infer a generic call's argument types for every expression shape Pass 2 can
+(issues #171, #191).
 """
 from __future__ import annotations
 
@@ -50,9 +36,7 @@ fn identity@(T)(T value) T:
 """
 
 
-# --------------------------------------------------------------------------
 # #191 -- argument shapes, in a plain function (no self, no extension)
-# --------------------------------------------------------------------------
 
 @pytest.mark.parametrize("body,label", [
     ("let i32 r = identity(p.get_x())??",   "method-call arg"),
@@ -86,9 +70,7 @@ fn main() i32:
     assert ("identity", (I32,)) in _collect(src), f"missing instantiation for {label}"
 
 
-# --------------------------------------------------------------------------
 # #171 -- self as a generic-call argument, in an extension and a perk impl
-# --------------------------------------------------------------------------
 
 def test_self_arg_in_extension_body_is_collected():
     src = _IDENTITY + """
@@ -123,9 +105,7 @@ fn main() i32:
     assert ("identity", (I32,)) in _collect(src)
 
 
-# --------------------------------------------------------------------------
 # Regression guard: the shapes Pass 1.5 already handled must keep working
-# --------------------------------------------------------------------------
 
 @pytest.mark.parametrize("arg", ["1", '"s"', "true", "n", "1 as i64"])
 def test_simple_argument_shapes_still_collected(arg):

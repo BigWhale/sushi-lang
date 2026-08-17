@@ -1,14 +1,4 @@
-"""The primitive-method table in semantics must match what the backend registers.
-
-Pass 2 decides which primitive methods exist (semantics/generics/primitives.py)
-without consulting the builtin-method registry, because the compiler pipeline
-imports the backend lazily -- after semantic analysis. The backend separately
-registers the same methods with their LLVM emitters attached, and dispatches
-emission through the registry.
-
-Two tables, one truth. This test is what keeps them honest: add a primitive
-method to one side only and it goes red.
-"""
+"""The primitive-method table in semantics must match what the backend registers."""
 
 import pytest
 
@@ -64,7 +54,6 @@ def test_to_bits_is_float_only():
     assert get_builtin_method(BuiltinType.I32, "to_bits") is None
 
 
-# ---------------------------------------------------------------------------
 # Return types (#239)
 #
 # The tests above assert method NAMES only, and they warm the registry themselves with the
@@ -72,7 +61,6 @@ def test_to_bits_is_float_only():
 # return-type inference was dead for eight weeks: Pass 2 reads the semantics-side table, and
 # in the real pipeline the registry is still empty when it does. These pin the axis that
 # actually broke, on the table Pass 2 actually reads.
-# ---------------------------------------------------------------------------
 
 
 def test_returns_table_is_the_authority_for_carriers():
@@ -93,10 +81,7 @@ def test_hash_returns_u64_everywhere(prim_type):
 
 
 def test_to_bits_width_follows_the_receiver():
-    """The receiver-dependent case, and the reason the table is keyed per (method, type).
-
-    `let u32 b = f64val.to_bits()` used to compile and silently truncate the 64-bit pattern.
-    """
+    """The receiver-dependent case, and the reason the table is keyed per (method, type)."""
     assert primitive_method_return_type(BuiltinType.F32, "to_bits") is BuiltinType.U32
     assert primitive_method_return_type(BuiltinType.F64, "to_bits") is BuiltinType.U64
     assert primitive_method_return_type(BuiltinType.I32, "to_bits") is None
@@ -115,10 +100,7 @@ def test_unknown_pairs_return_none():
 
 @pytest.mark.parametrize("method_name", sorted(PRIMITIVE_METHOD_TYPES))
 def test_semantics_return_type_matches_the_backend_registration(method_name):
-    """The semantics table and the backend's BuiltinMethod must agree on the return type.
-
-    Same two-tables-one-truth contract the name tests enforce, on the return-type axis.
-    """
+    """The semantics table and the backend's BuiltinMethod must agree on the return type."""
     for prim_type in PRIMITIVE_METHOD_TYPES[method_name]:
         registered = get_builtin_method(prim_type, method_name)
         assert registered is not None, f"{prim_type}.{method_name}() is not registered"

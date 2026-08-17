@@ -240,7 +240,7 @@ for the captured variable's provenance and type class, not a closures-specific r
    owns it and frees it through `drop_ptr` — so the lifted function writing to it is not a write
    to a caller's value.
 
-   It was declared `peek` until the `peek` write rule became total (`FIX.md` R1): nothing
+   It was declared `peek` until the `peek` write rule became total: nothing
    enforced read-only before that, so the untruthful mode had no consequence. Once it was
    enforced, it made two legal shapes a **CE2408** — a mutating method on a capture
    (`tests/closures/test_closure_list_mutate.sushi`) and a `poke` borrow of a capture

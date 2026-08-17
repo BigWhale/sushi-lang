@@ -1,14 +1,4 @@
-"""
-Result<T, E> Err-value construction for the LLVM backend.
-
-Error propagation (`??`) is the one place the backend has to synthesize a Result value
-out of nothing: it must build the enclosing function's Err variant to return on the
-error path. That is this module's whole job.
-
-Type *registration* is not done here -- `semantics.generics.results.ensure_result_type_in_table`
-owns it, and this module calls it. (There used to be a second, byte-for-byte copy of that
-registration behind a per-call instance cache that could never hit.)
-"""
+"""Result<T, E> Err-value construction for the LLVM backend."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -22,12 +12,7 @@ if TYPE_CHECKING:
 
 
 def intern_result(codegen: 'LLVMCodegen', ok_type: Type, err_type: Type) -> Optional[EnumType]:
-    """The interned ``Result<ok, err>`` enum, using this codegen's tables.
-
-    The backend's single way of naming a Result. It exists so no site is tempted to build the
-    type structurally again: ``ensure_result_type_in_table`` resolves the payloads before it
-    mangles the name, and skipping that is what poisons the enum table (CE0126).
-    """
+    """The interned ``Result<ok, err>`` enum, using this codegen's tables."""
     from sushi_lang.semantics.generics.results import ensure_result_type_in_table
     return ensure_result_type_in_table(
         codegen.enum_table, ok_type, err_type,
@@ -36,12 +21,7 @@ def intern_result(codegen: 'LLVMCodegen', ok_type: Type, err_type: Type) -> Opti
 
 
 def implicit_result_of(codegen: 'LLVMCodegen', fn) -> Optional[EnumType]:
-    """The interned Result a function's declared return type implies.
-
-    `fn foo() T` means `Result<T, StdError>`; `fn foo() T | E` means `Result<T, E>`. Pass 2 has
-    already worked this out, but the backend re-derives it in a handful of places (prototype
-    emission, the main wrapper, the `??` error path).
-    """
+    """The interned Result a function's declared return type implies."""
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
     err_type = getattr(fn, 'err_type', None)
@@ -60,19 +40,7 @@ def build_err_from_return_type(
     return_type: Type,
     error_value: Optional[ir.Value] = None
 ) -> ir.Value:
-    """Construct the Err variant of a function's Result return type.
-
-    Accepts the interned Result<T, E> EnumType (what Pass 2 stamps) or a
-    GenericTypeRef("Result", [T, E]).
-
-    Args:
-        codegen: The LLVM code generator instance.
-        return_type: The enclosing function's return type.
-        error_value: The LLVM value for the error payload (optional).
-
-    Returns:
-        LLVM value representing Result.Err(error).
-    """
+    """Construct the Err variant of a function's Result return type."""
     from sushi_lang.semantics.generics.results import (
         ensure_result_type_in_table, is_result_enum,
     )

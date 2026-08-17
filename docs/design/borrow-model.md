@@ -1,7 +1,6 @@
 # The Borrow Model: Four Parameter Modes
 
-**Status: DECIDED.** Ruled 2026-08-16. The working plan is `BORROW.md` in the repository
-root.
+**Status: DECIDED.** Ruled 2026-08-16.
 
 This document is the normative spec for how a value crosses a call boundary. It supersedes
 `docs/design/borrowing.md` sections 1 to 5, and `docs/design/ownership-conventions.md`
@@ -222,10 +221,9 @@ Unchanged: CE2411, CE2408, CE2421, CE2414, CE2426, CE2412, CE2401, CE2403, CE240
 
 ## 10. What this makes possible
 
-The immediate reason for the ruling is `G-STDLIB` in `BUGS.md`, which was blocked on "who
-frees a `string` that a program gives to a stdlib function?". The answer is now in the
-signature, so the question does not have to be re-asked as each stdlib module moves from
-generated IR to Sushi source.
+The immediate reason for the ruling was the stdlib question: "who frees a `string` that a
+program gives to a stdlib function?". The answer is now in the signature, so the question
+does not have to be re-asked as each stdlib module moves from generated IR to Sushi source.
 
 Two more follow:
 

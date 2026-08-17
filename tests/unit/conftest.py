@@ -1,11 +1,4 @@
-"""Shared fixtures for the compiler unit-test layer.
-
-These tests exercise compiler internals directly (parser, semantic analysis,
-fingerprinting, cache) rather than the .sushi behaviour corpus that
-tests/run_tests.py drives. Fixtures here build their inputs by parsing real
-source through the production parser, so they stay faithful to the AST shapes
-the compiler actually produces.
-"""
+"""Shared fixtures for the compiler unit-test layer."""
 from __future__ import annotations
 
 from typing import NamedTuple
@@ -25,12 +18,7 @@ def _ensure_newline(src: str) -> str:
 
 @pytest.fixture
 def make_unit(tmp_path):
-    """Factory that parses `src` into a Unit backed by a real file on disk.
-
-    The file is written under tmp_path because compute_unit_fingerprint() hashes
-    the unit's file_path contents; an in-memory AST alone would not exercise the
-    source-hash component.
-    """
+    """Factory that parses `src` into a Unit backed by a real file on disk."""
     def _make(src: str, name: str = "main") -> Unit:
         file_path = tmp_path / f"{name}.sushi"
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -43,12 +31,7 @@ def make_unit(tmp_path):
 
 
 def _analyze_source(tmp_path, src: str, name: str) -> "Analysis":
-    """Run the production semantic flow over `src` and return everything it produced.
-
-    Mirrors compile_multi_file in compiler/pipeline.py: the real compiler always
-    analyzes through a UnitManager (the multi-file path), even for a single file.
-    (SemanticAnalyzer._check_single_file is not used by the production pipeline.)
-    """
+    """Run the production semantic flow over `src` and return everything it produced."""
     from sushi_lang.semantics.generics.active_generics import reset_active_generics
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
 
@@ -80,14 +63,7 @@ def _analyze_source(tmp_path, src: str, name: str) -> "Analysis":
 
 
 class Analysis(NamedTuple):
-    """What one semantic-analysis run produced.
-
-    `program` is the SAME tree the analyzer mutated -- the passes annotate nodes in
-    place -- so a test may walk it and assert on what a pass stamped. `analyzer`
-    carries the symbol tables (`.structs`, `.enums`, `.tables`), which is what makes
-    a nominal-identity assertion (#240) possible: the stamped type must BE the
-    interned table entry, not merely equal to it.
-    """
+    """What one semantic-analysis run produced."""
     reporter: Reporter
     program: object
     analyzer: object
@@ -95,12 +71,7 @@ class Analysis(NamedTuple):
 
 @pytest.fixture
 def analyze(tmp_path):
-    """Factory that semantically analyzes `src`, returning the Reporter.
-
-    Assert on `reporter.items[*].code`, `reporter.has_errors`, and
-    `reporter.has_warnings`. Use `analyze_program` instead when the assertion is
-    about the annotated tree or the symbol tables rather than the diagnostics.
-    """
+    """Factory that semantically analyzes `src`, returning the Reporter."""
     def _analyze(src: str, name: str = "main") -> Reporter:
         return _analyze_source(tmp_path, src, name).reporter
 
@@ -109,11 +80,7 @@ def analyze(tmp_path):
 
 @pytest.fixture
 def analyze_program(tmp_path):
-    """Factory that semantically analyzes `src`, returning the whole `Analysis`.
-
-    The sibling of `analyze` for tests that assert on what a pass STAMPED on the
-    tree rather than on what it reported.
-    """
+    """Factory that semantically analyzes `src`, returning the whole `Analysis`."""
     def _analyze(src: str, name: str = "main") -> Analysis:
         return _analyze_source(tmp_path, src, name)
 

@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end release test for sushi-lang wheels.
-
-Installs a wheel into a clean venv and compiles+runs test programs
-to verify packaging correctness (entry points, stdlib bundling, linking).
-
-Usage:
-    python tests/e2e/run_release_test.py --wheel dist/sushi_lang-0.6.0-py3-none-any.whl
-    python tests/e2e/run_release_test.py --from-release
-    python tests/e2e/run_release_test.py --from-release v0.6.0
-"""
+"""End-to-end release test for sushi-lang wheels."""
 
 import argparse
 import shutil

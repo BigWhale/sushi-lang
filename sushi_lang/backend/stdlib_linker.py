@@ -1,7 +1,4 @@
-"""Standard library linking utilities.
-
-Handles extraction of stdlib bitcode files and linking into main module.
-"""
+"""Standard library linking utilities."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from pathlib import Path
@@ -16,32 +13,16 @@ if TYPE_CHECKING:
 
 
 class StdlibLinker:
-    """Manages stdlib module linking.
-
-    This class handles platform-specific stdlib bitcode resolution and linking,
-    supporting both individual units (e.g., "io/stdio") and directory imports
-    (e.g., "io" importing all files in io/).
-    """
+    """Manages stdlib module linking."""
 
     def __init__(self, codegen: LLVMCodegen):
-        """Initialize the stdlib linker.
-
-        Args:
-            codegen: The LLVM code generator instance.
-        """
+        """Initialize the stdlib linker."""
         self.codegen = codegen
         self.stdlib_dir = Path(__file__).parent.parent / "sushi_stdlib" / "dist"
         self.platform = self._detect_platform()
 
     def _detect_platform(self) -> str:
-        """Detect current platform for stdlib selection.
-
-        Returns:
-            Platform name: "darwin", "linux", or "unknown".
-
-        Raises:
-            RuntimeError: If platform is unsupported.
-        """
+        """Detect current platform for stdlib selection."""
         from sushi_lang.backend.platform_detect import get_current_platform
 
         platform = get_current_platform()
@@ -54,51 +35,25 @@ class StdlibLinker:
 
     def extract_stdlib_units(self, program: Program) -> None:
         """Extract stdlib unit imports from the program and store them for conditional codegen.
-
-        This enables the backend to conditionally emit code based on which stdlib units
-        are imported. For example, if "core/primitives" is imported, method calls like
-        i32.to_str() will emit external function calls instead of inline IR.
-
-        Also activates generic type providers for stdlib generic types (e.g., HashMap).
-
-        Args:
-            program: The program AST containing use statements.
         """
         stdlib_units = self.codegen.stdlib_units
 
         for use_stmt in program.uses:
             if use_stmt.is_stdlib:
                 stdlib_units.add(use_stmt.path)
-                # Also add parent units for directory imports
-                # e.g., "core/primitives" should also register "core"
                 parts = use_stmt.path.split('/')
                 for i in range(1, len(parts)):
                     stdlib_units.add('/'.join(parts[:i]))
 
-                # A stdlib unit may be what defines a generic type (HashMap<K, V>)
                 activate_generic_unit(use_stmt.path)
 
     def has_stdlib_unit(self, unit_path: str) -> bool:
-        """Check if a stdlib unit has been imported.
-
-        Args:
-            unit_path: Unit path like "core/primitives" or "collections/strings"
-
-        Returns:
-            True if the unit was imported via use <unit> syntax
-
-        Note:
-            Supports directory imports. If "collections" is imported,
-            then has_stdlib_unit("collections/strings") returns True.
-        """
+        """Check if a stdlib unit has been imported."""
         stdlib_units = self.codegen.stdlib_units
 
-        # Check exact match first
         if unit_path in stdlib_units:
             return True
 
-        # Check if any parent directory of this unit was imported
-        # e.g., if "collections" is imported, then "collections/strings" is available
         parts = unit_path.split('/')
         for i in range(1, len(parts)):
             parent = '/'.join(parts[:i])
@@ -108,20 +63,13 @@ class StdlibLinker:
         return False
 
     def link_stdlib_modules(self, llmod: llvm.ModuleRef, program: Program) -> None:
-        """Link stdlib .bc files into the current LLVM IR module.
-
-        Args:
-            llmod: The main LLVM module to link into.
-            program: The program AST containing use statements.
-        """
-        # Collect stdlib units to link
+        """Link stdlib .bc files into the current LLVM IR module."""
         stdlib_units = []
         for use_stmt in program.uses:
             if use_stmt.is_stdlib:
                 bc_paths = self._resolve_stdlib_unit(use_stmt.path)
                 stdlib_units.extend(bc_paths)
 
-        # Link each stdlib unit
         for bc_path in stdlib_units:
             with open(bc_path, 'rb') as f:
                 bc_data = f.read()
@@ -143,40 +91,18 @@ class StdlibLinker:
     _virtual_units = {
         "collections/hashmap",
         "collections/iter",
-        # Future: "collections/list", "collections/set"
     }
 
     def _resolve_stdlib_unit(self, unit_path: str) -> list[Path]:
-        """Resolve stdlib unit path to .bc file(s).
-
-        Supports both individual units and directory imports with platform-specific resolution:
-        - "core/primitives" -> [stdlib/dist/darwin/core/primitives.bc]
-        - "io" -> [stdlib/dist/darwin/io/stdio.bc, stdlib/dist/darwin/io/files.bc]
-        - "collections/hashmap" -> [] (virtual unit, no .bc file)
-
-        Search order:
-        1. Virtual units (no .bc files - emitted inline)
-        2. Platform-specific path (e.g., dist/darwin/io/stdio.bc)
-
-        Args:
-            unit_path: Unit path like "core/primitives" or "io"
-
-        Returns:
-            List of paths to .bc files (empty for virtual units)
-
-        Raises:
-            FileNotFoundError: If the stdlib unit does not exist or is empty
-        """
+        """Resolve stdlib unit path to .bc file(s)."""
         # Virtual units have no .bc files - they're emitted inline during codegen
         if unit_path in self._virtual_units:
             return []
 
         platform_dir = self.stdlib_dir / self.platform
 
-        # Check if it's a directory import (platform-specific)
         dir_path = platform_dir / unit_path
         if dir_path.is_dir():
-            # Return all .bc files in the directory
             bc_files = sorted(dir_path.glob("*.bc"))
             if not bc_files:
                 raise FileNotFoundError(
@@ -186,12 +112,10 @@ class StdlibLinker:
                 )
             return bc_files
 
-        # Check single unit file (platform-specific)
         bc_path = platform_dir / f"{unit_path}.bc"
         if bc_path.exists():
             return [bc_path]
 
-        # Unit not found - provide helpful error message
         available_units = self._list_available_stdlib_units(platform_dir)
         if available_units:
             available_str = ', '.join(f"<{u}>" for u in sorted(available_units))
@@ -209,28 +133,16 @@ class StdlibLinker:
             )
 
     def _list_available_stdlib_units(self, stdlib_dist: Path) -> list[str]:
-        """List all available stdlib units for error messages.
-
-        Args:
-            stdlib_dist: Path to stdlib/dist directory
-
-        Returns:
-            List of available unit paths (e.g., ["core/primitives", "io/stdio"])
-        """
+        """List all available stdlib units for error messages."""
         available = []
 
-        # Include virtual units (generic types without .bc files)
         available.extend(self._virtual_units)
 
-        # Find all .bc files recursively
         for bc_file in stdlib_dist.rglob("*.bc"):
-            # Get relative path from stdlib_dist
             rel_path = bc_file.relative_to(stdlib_dist)
-            # Remove .bc extension and convert to forward slashes
             unit_path = str(rel_path.with_suffix('')).replace('\\', '/')
             available.append(unit_path)
 
-        # Also list directories (for directory imports like "io")
         for subdir in stdlib_dist.iterdir():
             if subdir.is_dir() and list(subdir.glob("*.bc")):
                 available.append(subdir.name)

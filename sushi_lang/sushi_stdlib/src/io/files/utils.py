@@ -31,18 +31,13 @@ def generate_ir(module: ir.Module) -> None:
 
 
 def generate_exists(module: ir.Module) -> None:
-    """Generate sushi_io_files_exists(string path) -> i8.
-
-    Uses POSIX access(path, F_OK) to check existence.
-    Returns: 1 if exists, 0 otherwise
-    """
+    """Generate sushi_io_files_exists(string path) -> i8."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
     platform_files = get_platform_module('files')
     access_func = platform_files.declare_access(module)
 
-    # Declare malloc and memcpy
     malloc_func = _declare_malloc(module, i8_ptr, i64)
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
@@ -56,16 +51,13 @@ def generate_exists(module: ir.Module) -> None:
     path_ptr = builder.extract_value(path_arg, 0, name="path_ptr")
     path_len = builder.extract_value(path_arg, 1, name="path_len")
 
-    # Allocate buffer for null-terminated string (length + 1 for null terminator)
     len_plus_one = builder.add(path_len, ir.Constant(i32, 1), name="len_plus_one")
     buffer_size = builder.zext(len_plus_one, i64, name="buffer_size")
     null_term_path = builder.call(malloc_func, [buffer_size], name="null_term_path")
 
-    # Copy string data to buffer
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
 
-    # Add null terminator
     null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
     builder.store(ir.Constant(i8, 0), null_pos)
 
@@ -80,11 +72,7 @@ def generate_exists(module: ir.Module) -> None:
 
 
 def _generate_stat_mode_check(module: ir.Module, sushi_name: str, s_iftype: int) -> None:
-    """Emit a `stat`-based predicate testing st_mode's file-type bits.
-
-    Shared by is_file (S_IFREG) and is_dir (S_IFDIR): stat the path, and on
-    success compare ``st_mode & S_IFMT`` against ``s_iftype``. Returns i8 (0/1).
-    """
+    """Emit a `stat`-based predicate testing st_mode's file-type bits."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -103,12 +91,10 @@ def _generate_stat_mode_check(module: ir.Module, sushi_name: str, s_iftype: int)
     path_ptr = builder.extract_value(path_arg, 0, name="path_ptr")
     path_len = builder.extract_value(path_arg, 1, name="path_len")
 
-    # Allocate buffer for null-terminated string
     len_plus_one = builder.add(path_len, ir.Constant(i32, 1), name="len_plus_one")
     buffer_size = builder.zext(len_plus_one, i64, name="buffer_size")
     null_term_path = builder.call(malloc_func, [buffer_size], name="null_term_path")
 
-    # Copy string data and add null terminator
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
     null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
@@ -167,21 +153,13 @@ def generate_is_dir(module: ir.Module) -> None:
 
 
 def generate_file_size(module: ir.Module) -> None:
-    """Generate sushi_io_files_file_size(string path) -> Result<i64>.
-
-    Uses POSIX stat() and returns st_size field.
-    Returns: Result.Ok(size) on success, Result.Err() on failure
-
-    Result<i64, FileError> layout (#300 phase 2): {i32 tag, [2 x i64] data}
-    (FileError is a unit enum {i32, [1 x i64]} = 16 bytes, so K = max(8, 16)/8 = 2)
-    """
+    """Generate sushi_io_files_file_size(string path) -> Result<i64>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
     platform_files = get_platform_module('files')
     stat_func = platform_files.declare_stat(module)
 
-    # Declare malloc and memcpy
     malloc_func = _declare_malloc(module, i8_ptr, i64)
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
@@ -199,12 +177,10 @@ def generate_file_size(module: ir.Module) -> None:
     path_ptr = builder.extract_value(path_arg, 0, name="path_ptr")
     path_len = builder.extract_value(path_arg, 1, name="path_len")
 
-    # Allocate buffer for null-terminated string
     len_plus_one = builder.add(path_len, ir.Constant(i32, 1), name="len_plus_one")
     buffer_size = builder.zext(len_plus_one, i64, name="buffer_size")
     null_term_path = builder.call(malloc_func, [buffer_size], name="null_term_path")
 
-    # Copy string data and add null terminator
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
     null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
@@ -242,13 +218,11 @@ def generate_file_size(module: ir.Module) -> None:
     size_ptr = builder.gep(i64_buffer_ptr, [ir.Constant(i32, size_idx)], name="size_ptr")
     st_size = builder.load(size_ptr, name="st_size")
 
-    # Pack i64 into [8 x i8] data array
     i64_alloca = builder.alloca(i64, name="size_value")
     builder.store(st_size, i64_alloca)
     data_alloca = builder.alloca(data_array_type, name="data_array")
     builder.store(ir.Constant(data_array_type, None), data_alloca)
 
-    # Bitcast and memcpy
     src_ptr = builder.bitcast(i64_alloca, i8_ptr)
     dest_ptr = builder.bitcast(data_alloca, i8_ptr)
     size_const = ir.Constant(i32, 8)
@@ -267,11 +241,7 @@ def generate_file_size(module: ir.Module) -> None:
 
 
 def generate_remove(module: ir.Module) -> None:
-    """Generate sushi_io_files_remove(string path) -> Result<i32>.
-
-    Uses POSIX unlink(path) to delete a file.
-    Returns: Result.Ok(0) on success, Result.Err() on failure
-    """
+    """Generate sushi_io_files_remove(string path) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -333,11 +303,7 @@ def generate_remove(module: ir.Module) -> None:
 
 
 def generate_rmdir(module: ir.Module) -> None:
-    """Generate sushi_io_files_rmdir(string path) -> Result<i32>.
-
-    Uses POSIX rmdir(path) to remove an empty directory.
-    Returns: Result.Ok(0) on success, Result.Err() on failure
-    """
+    """Generate sushi_io_files_rmdir(string path) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -399,11 +365,7 @@ def generate_rmdir(module: ir.Module) -> None:
 
 
 def generate_mkdir(module: ir.Module) -> None:
-    """Generate sushi_io_files_mkdir(string path, i32 mode) -> Result<i32>.
-
-    Uses POSIX mkdir(path, mode) to create a directory.
-    Returns: Result.Ok(0) on success, Result.Err() on failure
-    """
+    """Generate sushi_io_files_mkdir(string path, i32 mode) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -467,11 +429,7 @@ def generate_mkdir(module: ir.Module) -> None:
 
 
 def generate_rename(module: ir.Module) -> None:
-    """Generate sushi_io_files_rename(string old_path, string new_path) -> Result<i32>.
-
-    Uses POSIX rename(old, new) to rename/move a file.
-    Returns: Result.Ok(0) on success, Result.Err() on failure
-    """
+    """Generate sushi_io_files_rename(string old_path, string new_path) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -536,11 +494,7 @@ def generate_rename(module: ir.Module) -> None:
 
 
 def generate_copy(module: ir.Module) -> None:
-    """Generate sushi_io_files_copy(string src, string dst) -> Result<i32>.
-
-    Copies file using POSIX open/read/write/close.
-    Returns: Result.Ok(0) on success, Result.Err() on failure
-    """
+    """Generate sushi_io_files_copy(string src, string dst) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 

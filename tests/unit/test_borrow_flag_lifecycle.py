@@ -1,24 +1,4 @@
-"""What each control-flow event does to each `BorrowState` flag. One cell, one assertion.
-
-`BorrowState` carries twenty fields, and a rule that forgets one combination fails
-SILENTLY -- there is no crash, only a diagnostic that is missing or invented. That shape
-shipped five times:
-
-  #294  `is_destroyed` survived a rebind          -> false CE2406 (and, once the checker
-                                                     alone was fixed, a read of freed memory)
-  #287  a `return`'s move joined past its `if`    -> false CE2405
-  --    `owns_no_heap` leaked out of one `if` arm -> a silent use-after-move, wrong output
-  --    `invalidated_at` leaked across `if` arms  -> false CE2412
-  --    the provenance triple survived a rebind   -> false CE2411
-  --    `match` arms shared one mutable state     -> false CE2405
-
-Every one is a cell in a flag x event matrix that nobody had written down. This file IS
-that matrix: each cell is one behavioural case through the real analyzer, so a flag added
-to `FlowFacts` without a restore (or restored without being snapshot) turns a cell red.
-
-The KNOWN-CONSERVATIVE cells are listed as explicitly as the fixed ones. They are
-decisions, not omissions, and changing one should be a deliberate edit to this file.
-"""
+"""What each control-flow event does to each `BorrowState` flag. One cell, one assertion."""
 from __future__ import annotations
 
 import pytest
@@ -30,9 +10,7 @@ def _codes(reporter) -> list[str]:
     return [item.code for item in reporter.items]
 
 
-# ---------------------------------------------------------------------------
 # The join algebra, asserted directly. A field's join rule is the whole design.
-# ---------------------------------------------------------------------------
 
 def test_monotone_facts_join_by_union():
     """Moved / destroyed / invalidated on ANY path hold after the join (conservative)."""
@@ -44,22 +22,14 @@ def test_monotone_facts_join_by_union():
 
 
 def test_permission_facts_join_by_intersection():
-    """`owns_no_heap` GRANTS permission, so it survives only if it held on EVERY path.
-
-    Union here is unsound: it would let the path where the value still owns a buffer be
-    treated as owning nothing, and a consuming use of it would then transfer silently.
-    """
+    """`owns_no_heap` GRANTS permission, so it survives only if it held on EVERY path."""
     left = FlowFacts(owns_no_heap=frozenset({"a", "b"}))
     right = FlowFacts(owns_no_heap=frozenset({"b", "c"}))
     assert (left | right).owns_no_heap == {"b"}
 
 
 def test_join_of_no_surviving_paths_is_blank():
-    """Every arm terminated, so the code after the branch is unreachable.
-
-    The one case where the intersection field may legitimately start blank -- which is
-    why paths are joined with `join()` over a list rather than folded into `FlowFacts()`.
-    """
+    """Every arm terminated, so the code after the branch is unreachable."""
     assert FlowFacts.join([]) == FlowFacts()
 
 
@@ -76,17 +46,11 @@ def test_invalidation_carries_its_span_through_a_join():
     assert joined.invalidation == (("v", "SPAN", ("c", "assign")),)
 
 
-# ---------------------------------------------------------------------------
 # Snapshot / restore must cover the SAME fields. A field in one and not the other
 # is exactly how a fact leaks across arms.
-# ---------------------------------------------------------------------------
 
 def test_every_flow_fact_field_is_restored():
-    """A fact that is snapshot but never restored leaks; the reverse silently drops it.
-
-    Read structurally from the source, in the style of
-    `test_borrow_dispatch_is_total.py`: the two method bodies ARE the contract.
-    """
+    """A fact that is snapshot but never restored leaks; the reverse silently drops it."""
     import ast
     import inspect
     import textwrap
@@ -108,9 +72,7 @@ def test_every_flow_fact_field_is_restored():
     assert restore == fields, f"_restore_flow misses {sorted(fields - restore)}"
 
 
-# ---------------------------------------------------------------------------
 # REBIND. A rebind re-initializes: every fact about the OLD value is stale.
-# ---------------------------------------------------------------------------
 
 _REBIND_CLEARS = [
     ("is_moved", False),
@@ -170,9 +132,7 @@ def test_rebind_of_a_borrowed_binding_makes_it_an_owner(analyze):
     assert "CE2411" not in _codes(analyze(src))
 
 
-# ---------------------------------------------------------------------------
 # BRANCH JOIN. Exclusive paths must not see each other's facts.
-# ---------------------------------------------------------------------------
 
 def test_a_move_in_one_if_arm_does_not_reach_its_sibling(analyze):
     """The original per-arm snapshot fix (Tier 2), pinned here as a matrix cell."""
@@ -232,11 +192,7 @@ def test_a_returning_arm_contributes_no_facts_after_the_branch(analyze):
 
 
 def test_a_move_in_a_non_returning_arm_still_joins(analyze):
-    """The conservative half of #287: a move that CAN reach the code after the branch does.
-
-    This is the cell that keeps the fix from becoming unsound -- an arm that falls through
-    contributes its facts exactly as before.
-    """
+    """The conservative half of #287: a move that CAN reach the code after the branch does."""
     src = (
         "fn eat(nom i32[] a) i32:\n"
         "    return Result.Ok(a.len())\n"
@@ -331,17 +287,10 @@ def test_an_invalidation_still_reaches_a_read_after_the_branch(analyze):
     assert "CE2412" in _codes(analyze(src))
 
 
-# ---------------------------------------------------------------------------
 # KNOWN-CONSERVATIVE cells. Decisions, not omissions.
-# ---------------------------------------------------------------------------
 
 def test_break_does_not_terminate_a_path():
-    """`break` leaves the STATEMENT, not the function, and must not drop its facts.
-
-    `_check_loop_body` has a single exit-fact collector, so excluding a broken arm's facts
-    would drop a pre-`break` move from the post-loop state -- unsound, not conservative.
-    Deliberate: `_terminates` answers False for `Break` and `Continue`.
-    """
+    """`break` leaves the STATEMENT, not the function, and must not drop its facts."""
     from sushi_lang.semantics.ast import Break, Continue
     from sushi_lang.semantics.passes.borrow import BorrowChecker
 
@@ -363,11 +312,7 @@ def test_an_if_without_an_else_never_terminates():
 
 
 def test_a_conditional_rebind_stays_conservative(analyze):
-    """A rebind on ONE branch does not clear the other path's move at the join.
-
-    The flow join re-unions the sibling's facts over the re-initialization, so this stays
-    CE2405 -- the documented conservative cell, not an oversight.
-    """
+    """A rebind on ONE branch does not clear the other path's move at the join."""
     src = (
         "fn eat(nom i32[] a) i32:\n"
         "    return Result.Ok(a.len())\n"

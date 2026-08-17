@@ -1,10 +1,4 @@
-"""
-Constants for runtime operations.
-
-This module defines constants used throughout the runtime system:
-- errno constants from <errno.h>
-- Format string specifications for printf/sprintf
-"""
+"""Constants for runtime operations."""
 from __future__ import annotations
 
 # errno constants (from errno.h)
@@ -33,14 +27,10 @@ ERRNO_TO_FILE_ERROR = {
     ERRNO_EMFILE: 5,        # TooManyOpen
     ERRNO_ENAMETOOLONG: 6,  # InvalidPath
     ERRNO_EIO: 7,           # IOError
-    # Default: 8 (Other) - handled separately
 }
 
-# Default FileError variant for unmapped errno values
 ERRNO_DEFAULT_FILE_ERROR = 8  # Other
 
-# Format string specifications for printf/sprintf operations
-# Maps type name to format string
 FORMAT_STRINGS = {
     "i32": "%d",
     "i64": "%lld",

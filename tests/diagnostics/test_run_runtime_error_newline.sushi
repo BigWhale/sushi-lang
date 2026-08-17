@@ -1,4 +1,4 @@
-# Guards PLAN.md T1.5: runtime_error builds its message with "\\n" inside a
+# Runtime_error builds its message with "\\n" inside a
 # non-raw f-string, so fprintf emits a literal backslash-n instead of a newline.
 # The trailing "\n" below is a REAL newline once the metadata parser unescapes it.
 # The println must never run: the index traps first, so stdout stays empty.

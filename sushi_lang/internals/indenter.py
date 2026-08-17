@@ -13,11 +13,7 @@ class LangIndenter(Indenter):
     tab_len = 8
 
     def handle_NL(self, token):
-        """Delegate to Lark, but give a bad dedent the position Lark drops.
-
-        DedentError carries no location, and this is the only place that knows
-        one: the newline token whose indentation failed to line up.
-        """
+        """Delegate to Lark, but give a bad dedent the position Lark drops."""
         indent_str = token.rsplit('\n', 1)[1]
         indent = indent_str.count(' ') + indent_str.count('\t') * self.tab_len
         try:

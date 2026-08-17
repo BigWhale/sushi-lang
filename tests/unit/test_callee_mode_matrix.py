@@ -1,26 +1,4 @@
-"""Every callee kind agrees with its declared signature.
-
-The gate for borrow by default. Before the flip, the two halves of the compiler each
-derived the parameter convention from the callee's IMPLEMENTATION, and they reached
-different answers for two of the six callee kinds. This file asserts that the two halves
-now read the same declaration, cell by cell.
-
-For each (callee kind, mode) cell:
-
-  1. the resolver returns the declared mode;
-  2. a later use of the argument is CE2405 **if and only if** the mode is `nom`;
-  3. the callee registers cleanup **if and only if** the mode is `nom`.
-
-Assertions 2 and 3 are the two halves that used to disagree. Assertion 3 is checked at
-the decision point (`callee_owns_param`) rather than at its shadow in the emitted IR,
-because the decision is what the two halves must share. Its runtime consequence -- the
-program is leak-clean and double-free-clean -- is the `.sushi` corpus's job; see
-`tests/memory/test_param_mode_matrix.sushi`.
-
-`CalleeKind` is closed, so a kind with no row here fails statically.
-
-See docs/design/borrow-model.md sections 3, 4 and 5.
-"""
+"""Every callee kind agrees with its declared signature."""
 from __future__ import annotations
 
 import pytest
@@ -36,9 +14,7 @@ from sushi_lang.semantics.param_modes import (
 )
 
 
-# --------------------------------------------------------------------------- #
 # 1. The resolver returns the declared mode, for every kind
-# --------------------------------------------------------------------------- #
 
 # The kinds whose parameters are DECLARED in Sushi source. The other three consume by
 # position and declare nothing: a struct field, an enum payload and a container slot.
@@ -87,9 +63,7 @@ def test_a_positional_sink_always_consumes(kind):
     assert modes_for([_param(ParamMode.BORROW)], kind) == (ParamMode.NOM,)
 
 
-# --------------------------------------------------------------------------- #
 # 3. The callee registers cleanup iff the mode is nom
-# --------------------------------------------------------------------------- #
 
 @pytest.mark.parametrize("mode", list(ParamMode))
 def test_the_callee_owns_its_parameter_iff_the_mode_is_nom(mode):
@@ -99,20 +73,13 @@ def test_the_callee_owns_its_parameter_iff_the_mode_is_nom(mode):
 
 
 def test_ownership_does_not_depend_on_the_kind_of_callee():
-    """The whole point: the same declaration means the same thing everywhere.
-
-    `callee_owns_param` takes a parameter and nothing else. It cannot ask whether the
-    body is a method, a generated stdlib body or a library body, which is what the four
-    disagreeing conventions all did.
-    """
+    """The whole point: the same declaration means the same thing everywhere."""
     import inspect
     signature = inspect.signature(callee_owns_param)
     assert list(signature.parameters) == ["param"]
 
 
-# --------------------------------------------------------------------------- #
 # 2. A later use is CE2405 iff the mode is nom -- through the real compiler
-# --------------------------------------------------------------------------- #
 
 CALL_SITES = {
     ParamMode.BORROW: "    f(s)\n",

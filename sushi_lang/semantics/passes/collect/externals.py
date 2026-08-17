@@ -1,12 +1,4 @@
-"""Collection of FFI `unsafe external` declarations into an ExternalTable.
-
-Builds a namespace-keyed table of foreign function signatures and performs the
-collection-time checks that do not require full type information:
-
-- ABI string must be "C" (CE5003, shared with the type pass to keep the budget).
-- No duplicate Sushi-name within a namespace (CE0101).
-- Link-name clash with a reserved built-in extern of a different signature (CE5001).
-"""
+"""Collection of FFI `unsafe external` declarations into an ExternalTable."""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Tuple, TYPE_CHECKING
@@ -86,7 +78,6 @@ class ExternalCollector:
             loc=decl.loc,
         )
 
-        # Duplicate Sushi-name within the namespace.
         existing = self.externals.lookup(block.namespace, decl.name)
         if existing is not None:
             er.emit_with(self.r, er.ERR.CE0101, decl.name_span,
@@ -108,18 +99,10 @@ class ExternalCollector:
             er.emit(self.r, er.ERR.CE5001, decl.name_span or decl.loc, symbol=decl.link_name)
 
     def _abi_compatible(self, sig: ExternalSig, reserved_params, reserved_ret) -> bool:
-        """True if `sig` and the reserved signature lower to the same C declaration.
-
-        LLVM only deduplicates identical declarations, so two Sushi signatures are
-        compatible iff they lower identically: `string` and `ptr` both become i8*.
-        A variadic user binding (e.g. `printf(string fmt, ...)`) is compatible with
-        a reserved variadic family declaration as long as its FIXED params match the
-        reserved fixed params; the trailing `...` matches the built-in's var_arg.
-        """
+        """True if `sig` and the reserved signature lower to the same C declaration."""
         from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
 
         def abi_key(ty):
-            # string and ptr are both i8* at the C boundary.
             if isinstance(ty, ForeignPtrType):
                 return "i8*"
             if isinstance(ty, BuiltinType) and ty == BuiltinType.STRING:

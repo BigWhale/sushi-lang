@@ -1,9 +1,4 @@
-"""
-Enum constructor operations for the Sushi language compiler.
-
-This module handles enum variant construction, including generic enums like Result<T>.
-Creates tagged union structs with discriminant tags and associated data packing.
-"""
+"""Enum constructor operations for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Union
 
@@ -18,50 +13,29 @@ if TYPE_CHECKING:
 
 
 def emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[EnumConstructor, DotCall], is_dotcall: bool = False) -> ir.Value:
-    """Emit enum variant constructor (e.g., Result.Ok(42) or Color.Red()).
-
-    For generic enums like Result<T> and Maybe<T>, the concrete type MUST be resolved by the type checker
-    and stored in expr.resolved_enum_type. For non-generic enums, we look up by name directly.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The EnumConstructor or DotCall expression.
-        is_dotcall: If True, extract fields from DotCall node.
-
-    Returns:
-        The constructed enum value.
-
-    Raises:
-        ValueError: If enum type not found or resolved_enum_type not set for generic enums.
-    """
-    # Extract fields based on node type
+    """Emit enum variant constructor (e.g., Result.Ok(42) or Color.Red())."""
     if is_dotcall:
-        # DotCall: extract enum_name, variant_name, args from DotCall fields
         assert isinstance(expr.receiver, Name), "DotCall receiver must be a Name for enum constructors"
         enum_name = expr.receiver.id
         variant_name = expr.method
         args = expr.args
         resolved_enum_type = getattr(expr, 'resolved_enum_type', None)
     else:
-        # EnumConstructor: use existing fields
         enum_name = expr.enum_name
         variant_name = expr.variant_name
         args = expr.args
         resolved_enum_type = expr.resolved_enum_type
 
-    # Priority 1: Use resolved enum type from type checker (for ALL generic enums like Result<T> and Maybe<T>)
     if resolved_enum_type is not None:
         return emit_enum_constructor_from_method_call(
             codegen, resolved_enum_type, variant_name, args
         )
 
-    # Priority 2: For non-generic enums, look up directly by name
     if enum_name not in codegen.enum_table.by_name:
         raise_internal_error("CE0033", name=enum_name)
 
     enum_type = codegen.enum_table.by_name[enum_name]
 
-    # Delegate to existing enum constructor emission
     return emit_enum_constructor_from_method_call(codegen, enum_type, variant_name, args)
 
 
@@ -71,45 +45,25 @@ def emit_enum_constructor_from_method_call(
     variant_name: str,
     args: list
 ) -> ir.Value:
-    """Emit enum constructor for method call syntax (e.g., Color.Red()).
+    """Emit enum constructor for method call syntax (e.g., Color.Red())."""
 
-    Creates a tagged union struct: {i32 tag, [N x i8] data}
-
-    Args:
-        codegen: The LLVM codegen instance.
-        enum_type: The enum type being constructed.
-        variant_name: The variant name (e.g., "Red").
-        args: List of argument expressions for the variant.
-
-    Returns:
-        The constructed enum value.
-
-    Raises:
-        ValueError: If variant not found or argument count mismatch.
-    """
-
-    # Find the variant and get its index (discriminant/tag)
     variant_index = enum_type.get_variant_index(variant_name)
     if variant_index is None:
         raise_internal_error("CE0034", variant=variant_name, enum=enum_type.name)
 
     variant = enum_type.get_variant(variant_name)
 
-    # Check argument count
     if len(args) != len(variant.associated_types):
         raise_internal_error("CE0096", operation="Variant {enum_type.name}.{variant_name} expects {len(variant.associated_types)} arguments, got {len(args)}"
         )
 
-    # Get the LLVM type for this enum: {i32 tag, [N x i8] data}
     llvm_enum_type = codegen.types.get_enum_type(enum_type)
 
-    # Create enum value with tag set
     enum_value = enum_utils.construct_enum_variant(
         codegen, llvm_enum_type, variant_index,
         data=None, name_prefix=f"{enum_type.name}_{variant_name}"
     )
 
-    # If there are associated values, pack them into the data field
     if args:
         # Allocate temporary storage for the data. The [K x i64] member type makes the
         # alloca 8-aligned (#300 phase 2), so the naturally aligned field offsets below
@@ -117,7 +71,6 @@ def emit_enum_constructor_from_method_call(
         data_array_type = llvm_enum_type.elements[1]  # [K x i64] array
         temp_alloca = codegen.builder.alloca(data_array_type, name="enum_data_temp")
 
-        # Cast to i8* for bitcasting
         data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 
         # Pack each argument at its offset from the ONE layout authority -- extraction,
@@ -125,18 +78,13 @@ def emit_enum_constructor_from_method_call(
         # cannot disagree (they used to derive offsets from two different size walks).
         field_offsets = codegen.types.payload_field_offsets(variant.associated_types)
         for i, (arg_expr, arg_type) in enumerate(zip(args, variant.associated_types, strict=True)):
-            # Special handling for dynamic arrays to ensure proper ownership
-            # Similar to how struct constructors handle dynamic arrays
             from sushi_lang.semantics.ast import DynamicArrayFrom
             from sushi_lang.semantics.typesys import DynamicArrayType
 
             if isinstance(arg_type, DynamicArrayType) and isinstance(arg_expr, DynamicArrayFrom):
-                # Create a fresh dynamic array with its own heap allocation. A heap-owning
-                # element that aliases a live local (a bare Name / member access) is
-                # deep-copied so the array and the source each own independent buffers --
-                # otherwise the enum local (now RAII-owned, #139) and the source both free
-                # the shared element buffer at scope exit (double-free). A fresh temp
-                # element is the sole owner and moved in unchanged.
+                # An owning element that aliases a live local is deep-copied, or the enum
+                # local and the source both free the shared buffer (#139). A fresh temp is
+                # already the sole owner and moves in unchanged.
                 from sushi_lang.backend.types import arrays
                 elements = arrays.emit_array_literal_elements(
                     codegen, arg_expr.elements.elements, arg_type.base_type
@@ -146,15 +94,11 @@ def emit_enum_constructor_from_method_call(
                     codegen, arg_type.base_type, element_llvm_type, elements
                 )
             else:
-                # Regular argument - emit normally
                 arg_value = codegen.expressions.emit_expr(arg_expr)
 
-                # Some expressions hand back a POINTER to the value rather than the value
-                # itself -- notably an array `.clone()`, which is the documented escape
-                # hatch for keeping an owning value past a move. The payload is stored into
-                # the variant's byte blob verbatim, so an unnormalized pointer was written
-                # as if it were the {len, cap, data} struct and read back a garbage length.
-                # Struct constructors already do this (structs.py:93); enums did not.
+                # Some expressions hand back a POINTER rather than the value -- an array
+                # `.clone()`, for one. The payload goes into the variant's byte blob
+                # verbatim, so an unnormalized pointer read back a garbage length.
                 if (isinstance(arg_value.type, ir.PointerType)
                         and arg_value.type.pointee == codegen.types.ll_type(arg_type)):
                     arg_value = codegen.builder.load(arg_value, name="enum_payload_by_value")
@@ -176,10 +120,8 @@ def emit_enum_constructor_from_method_call(
             arg_ptr_typed = codegen.builder.bitcast(arg_ptr_i8, ir.PointerType(arg_llvm_type), name=f"arg{i}_ptr_typed")
             codegen.builder.store(arg_value, arg_ptr_typed)
 
-        # Load the packed data array
         packed_data = codegen.builder.load(temp_alloca, name="packed_data")
 
-        # Insert the data into the enum struct
         enum_value = enum_utils.set_enum_data(
             codegen, enum_value, packed_data,
             name=f"{enum_type.name}_{variant_name}_data"

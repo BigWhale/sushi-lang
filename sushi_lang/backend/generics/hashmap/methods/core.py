@@ -1,10 +1,4 @@
-"""
-HashMap<K, V> core method implementations.
-
-This module contains the core HashMap methods for basic operations and lookups:
-- new, len, is_empty, tombstone_count (simple operations)
-- get, contains_key (lookup operations)
-"""
+"""HashMap<K, V> core method implementations."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
@@ -29,55 +23,31 @@ from sushi_lang.backend.expressions.memory import get_element_size_constant
 
 
 def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
-    """Emit HashMap<K, V>.new() -> HashMap<K, V>
-
-    Creates an empty HashMap with initial capacity of 16 buckets.
-
-    Implementation:
-    1. Allocate Entry<K, V>[] array with 16 elements
-    2. Initialize all entries to Empty state (state = 0)
-    3. Create HashMap struct: {buckets, size=0, capacity=16, tombstones=0}
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        HashMap<K, V> struct value.
-    """
-    # Extract K and V types
+    """Emit HashMap<K, V>.new() -> HashMap<K, V>"""
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
-    # Get LLVM types
     entry_type = get_entry_type(codegen, key_type, value_type)
-    # Use cached type from type system to ensure consistency
     hashmap_llvm_type = codegen.types.ll_type(hashmap_type)
 
-    # Initial capacity
     initial_capacity = 16
     capacity_const = ir.Constant(codegen.types.i32, initial_capacity)
 
-    # Allocate buckets array: malloc(sizeof(Entry<K,V>) * capacity)
     entry_size = get_element_size_constant(codegen, entry_type)
     total_bytes = codegen.builder.mul(entry_size, capacity_const, name="bucket_bytes")
 
-    # Call malloc (extend i32 to i64 for malloc parameter)
     total_bytes_i64 = codegen.builder.zext(total_bytes, ir.IntType(64), name="total_bytes_i64")
     bucket_ptr_i8 = emit_malloc(codegen, codegen.builder, total_bytes_i64)
     bucket_ptr = codegen.builder.bitcast(bucket_ptr_i8, ir.PointerType(entry_type), name="buckets_ptr")
 
-    # Fresh malloc'd storage holds garbage, so every slot must be marked EMPTY.
     zero_i32 = ir.Constant(codegen.types.i32, 0)
     emit_init_buckets_empty(codegen, bucket_ptr, capacity_const)
 
-    # Create dynamic array struct for buckets: {len, cap, data}
     buckets_array_type = ir.LiteralStructType([codegen.types.i32, codegen.types.i32, ir.PointerType(entry_type)])
     buckets_array = ir.Constant(buckets_array_type, ir.Undefined)
     buckets_array = codegen.builder.insert_value(buckets_array, capacity_const, 0, name="buckets_len")
     buckets_array = codegen.builder.insert_value(buckets_array, capacity_const, 1, name="buckets_cap")
     buckets_array = codegen.builder.insert_value(buckets_array, bucket_ptr, 2, name="buckets_data")
 
-    # Create HashMap struct: {buckets, size, capacity, tombstones}
     result = ir.Constant(hashmap_llvm_type, ir.Undefined)
     result = codegen.builder.insert_value(result, buckets_array, 0, name="hm_buckets")
     result = codegen.builder.insert_value(result, zero_i32, 1, name="hm_size")
@@ -88,63 +58,21 @@ def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
 
 
 def emit_hashmap_len(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
-    """Emit HashMap<K, V>.len() -> i32
-
-    Returns the number of occupied entries (excludes tombstones).
-
-    Implementation:
-    1. Load size field from HashMap struct
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_value: The HashMap struct pointer.
-
-    Returns:
-        i32 size value.
-    """
-    # Get pointer to size field (index 1: buckets at 0, size at 1)
+    """Emit HashMap<K, V>.len() -> i32"""
     builder = codegen.builder
     size_ptr = builder.gep(hashmap_value, HASHMAP_SIZE_INDICES, name="size_ptr")
     return builder.load(size_ptr, name="hashmap_size")
 
 
 def emit_hashmap_is_empty(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
-    """Emit HashMap<K, V>.is_empty() -> bool
-
-    Returns true if size == 0.
-
-    Implementation:
-    1. Extract size field
-    2. Compare size == 0
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_value: The HashMap struct value.
-
-    Returns:
-        bool value (i1 or i32 depending on context).
-    """
+    """Emit HashMap<K, V>.is_empty() -> bool"""
     size = emit_hashmap_len(codegen, hashmap_value)
     zero = ir.Constant(codegen.types.i32, 0)
     return codegen.builder.icmp_signed("==", size, zero, name="is_empty")
 
 
 def emit_hashmap_tombstone_count(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
-    """Emit HashMap<K, V>.tombstone_count() -> i32
-
-    Returns the number of deleted entries.
-
-    Implementation:
-    1. Load tombstones field from HashMap struct
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_value: The HashMap struct pointer.
-
-    Returns:
-        i32 tombstones value.
-    """
-    # Get pointer to tombstones field (index 3: buckets at 0, size at 1, capacity at 2, tombstones at 3)
+    """Emit HashMap<K, V>.tombstone_count() -> i32"""
     builder = codegen.builder
     tombstones_ptr = builder.gep(hashmap_value, HASHMAP_TOMBSTONES_INDICES, name="tombstones_ptr")
     return builder.load(tombstones_ptr, name="hashmap_tombstones")
@@ -156,56 +84,28 @@ def emit_hashmap_get(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.get(K key) -> Maybe<V>
-
-    Retrieves a value from the HashMap by key.
-
-    Algorithm:
-    1. Hash the key to get hash value
-    2. Linear probe to find slot:
-       - If Occupied with matching key: return Maybe.Some(value)
-       - If Empty: return Maybe.None() (not found)
-       - If Tombstone or occupied with different key: continue probing
-    3. Return Maybe<V>
-
-    Args:
-        codegen: LLVM codegen instance.
-        expr: The method call expression with key argument.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        Maybe<V> struct value.
-    """
+    """Emit HashMap<K, V>.get(K key) -> Maybe<V>"""
     from sushi_lang.semantics.ast import MethodCall
     import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 
     builder = codegen.builder
 
-    # Extract K and V types
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
-    # Get LLVM types
     value_llvm = codegen.types.ll_type(value_type)
 
-    # Constants
-
-    # Emit the key argument
     if len(expr.args) != 1:
         raise_internal_error("CE0023", method="get", expected=1, got=len(expr.args))
 
     key_value = codegen.expressions.emit_expr(expr.args[0])
 
-    # Get HashMap fields
     capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
     capacity = builder.load(capacity_ptr, name="capacity")
 
-    # Get buckets array pointer
     buckets_ptr = builder.gep(hashmap_value, HASHMAP_BUCKETS_INDICES, name="buckets_ptr")
     buckets_data_ptr = builder.gep(buckets_ptr, BUCKETS_DATA_INDICES, name="buckets_data_ptr")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
-    # Hash the key (register on-demand if needed for array types)
     from ..types import get_key_hash_method
     hash_method = get_key_hash_method(key_type)
     if hash_method is None:
@@ -221,7 +121,6 @@ def emit_hashmap_get(
     hash_value = hash_method.llvm_emitter(codegen, fake_call, key_value, codegen.types.ll_type(key_type), False)
     hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
 
-    # Linear probing loop
     found_bb = builder.append_basic_block(name="get_found")
     not_found_bb = builder.append_basic_block(name="get_not_found")
     get_done_bb = builder.append_basic_block(name="get_done")
@@ -247,7 +146,6 @@ def emit_hashmap_get(
         exhausted_bb=not_found_bb, prefix="get_probe",
     )
 
-    # Found: return Maybe.Some(value)
     builder.position_at_end(found_bb)
     entry_ptr = matched["entry_ptr"]
     entry_value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
@@ -259,12 +157,6 @@ def emit_hashmap_get(
     # takes ownership rejects it (CE2411) with `.clone()` as the escape. The deep copy
     # that used to happen here was the compiler inserting one the user did not ask for.
 
-    # Create Maybe<V> enum for return
-    # Get the Maybe<V> enum type from the generic enum table
-
-    # Get the Maybe<V> monomorphized enum type
-    # We need to look it up in the codegen.enum_table
-    # Format the type name properly
     if isinstance(value_type, BuiltinType):
         type_str = str(value_type).lower()
     else:
@@ -274,24 +166,17 @@ def emit_hashmap_get(
     maybe_enum_type = codegen.enum_table.by_name.get(maybe_enum_name)
 
     if maybe_enum_type is None:
-        # Maybe<V> not monomorphized - create it on the fly
-        # This happens when HashMap.get() is used but Maybe<V> wasn't used elsewhere
         from sushi_lang.backend.generics.maybe import ensure_maybe_type_exists
         maybe_enum_type = ensure_maybe_type_exists(codegen, value_type)
         if maybe_enum_type is None:
-            # Still couldn't create it - this shouldn't happen
             raise_internal_error("CE0047", type=type_str)
 
-    # Get LLVM type for Maybe<V> enum: {i32 tag, [N x i8] data}
     maybe_llvm_type = codegen.types.get_enum_type(maybe_enum_type)
 
-    # Create Maybe.Some(value)
-    # Tag 0 = Some, Tag 1 = None (based on variant order in Maybe definition)
     maybe_some = ir.Constant(maybe_llvm_type, ir.Undefined)
     some_tag = ir.Constant(codegen.types.i32, 0)  # Some is first variant
     maybe_some = builder.insert_value(maybe_some, some_tag, 0, name="maybe_some_tag")
 
-    # Pack the value into the data field [N x i8]
     data_array_type = maybe_llvm_type.elements[1]  # [N x i8]
     data_ptr = builder.alloca(data_array_type, name="some_data_alloc")
     value_ptr = builder.bitcast(data_ptr, ir.PointerType(value_llvm), name="value_ptr")
@@ -299,22 +184,17 @@ def emit_hashmap_get(
     data_value = builder.load(data_ptr, name="some_data")
     maybe_some = builder.insert_value(maybe_some, data_value, 1, name="maybe_some_value")
 
-    # emit_value_clone (for enum/Own/List/string V) may have appended basic blocks, so the
-    # predecessor that reaches get_done_bb is the current block, not necessarily found_bb.
     some_pred_bb = builder.block
     builder.branch(get_done_bb)
 
-    # Not found: return Maybe.None()
     builder.position_at_end(not_found_bb)
     maybe_none = ir.Constant(maybe_llvm_type, ir.Undefined)
     none_tag = ir.Constant(codegen.types.i32, 1)  # None is second variant
     maybe_none = builder.insert_value(maybe_none, none_tag, 0, name="maybe_none_tag")
-    # Data field is undefined for None
     undef_data = ir.Constant(data_array_type, ir.Undefined)
     maybe_none = builder.insert_value(maybe_none, undef_data, 1, name="maybe_none_data")
     builder.branch(get_done_bb)
 
-    # Done: merge results
     builder.position_at_end(get_done_bb)
     result_phi = builder.phi(maybe_llvm_type, name="get_result")
     result_phi.add_incoming(maybe_some, some_pred_bb)
@@ -329,57 +209,29 @@ def emit_hashmap_contains_key(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.contains_key(K key) -> bool
-
-    Checks if a key exists in the HashMap.
-
-    Algorithm:
-    1. Hash the key to get hash value
-    2. Linear probe to find slot:
-       - If Occupied with matching key: return true
-       - If Empty: return false (not found)
-       - If Tombstone or occupied with different key: continue probing
-    3. Return bool
-
-    Args:
-        codegen: LLVM codegen instance.
-        expr: The method call expression with key argument.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        bool value (i32 0 or 1).
-    """
+    """Emit HashMap<K, V>.contains_key(K key) -> bool"""
     from sushi_lang.semantics.ast import MethodCall
     import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 
     builder = codegen.builder
 
-    # Extract K and V types
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
-    # Get LLVM types
-
-    # Constants
     true_val = ir.Constant(codegen.types.i32, 1)
     false_val = ir.Constant(codegen.types.i32, 0)
 
-    # Emit the key argument
     if len(expr.args) != 1:
         raise_internal_error("CE0023", method="contains_key", expected=1, got=len(expr.args))
 
     key_value = codegen.expressions.emit_expr(expr.args[0])
 
-    # Get HashMap fields
     capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
     capacity = builder.load(capacity_ptr, name="capacity")
 
-    # Get buckets array pointer
     buckets_ptr = builder.gep(hashmap_value, HASHMAP_BUCKETS_INDICES, name="buckets_ptr")
     buckets_data_ptr = builder.gep(buckets_ptr, BUCKETS_DATA_INDICES, name="buckets_data_ptr")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
-    # Hash the key (register on-demand if needed for array types)
     from ..types import get_key_hash_method
     hash_method = get_key_hash_method(key_type)
     if hash_method is None:
@@ -395,7 +247,6 @@ def emit_hashmap_contains_key(
     hash_value = hash_method.llvm_emitter(codegen, fake_call, key_value, codegen.types.ll_type(key_type), False)
     hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
 
-    # Linear probing loop
     found_bb = builder.append_basic_block(name="contains_found")
     not_found_bb = builder.append_basic_block(name="contains_not_found")
     contains_done_bb = builder.append_basic_block(name="contains_done")
@@ -415,15 +266,12 @@ def emit_hashmap_contains_key(
         exhausted_bb=not_found_bb, prefix="contains_probe",
     )
 
-    # Found: return true
     builder.position_at_end(found_bb)
     builder.branch(contains_done_bb)
 
-    # Not found: return false
     builder.position_at_end(not_found_bb)
     builder.branch(contains_done_bb)
 
-    # Done: merge results
     builder.position_at_end(contains_done_bb)
     result_phi = builder.phi(codegen.types.i32, name="contains_result")
     result_phi.add_incoming(true_val, found_bb)

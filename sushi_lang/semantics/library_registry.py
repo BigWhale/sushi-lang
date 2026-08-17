@@ -1,8 +1,4 @@
-"""Unified library registry for managing library metadata.
-
-This module eliminates duplication between semantic analysis and codegen
-by pre-parsing library manifests into typed objects once.
-"""
+"""Unified library registry for managing library metadata."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -36,11 +32,7 @@ class LibraryMetadata:
 
 
 class LibraryRegistry:
-    """Central registry for loaded library metadata.
-
-    Provides pre-parsed type information to both semantic analyzer and codegen,
-    eliminating duplicate manifest parsing.
-    """
+    """Central registry for loaded library metadata."""
 
     def __init__(self):
         self._libraries: dict[str, LibraryMetadata] = {}
@@ -54,17 +46,7 @@ class LibraryRegistry:
         struct_table: dict[str, StructType] | None = None,
         enum_table: dict[str, EnumType] | None = None,
     ) -> LibraryMetadata:
-        """Register a library and pre-parse its metadata.
-
-        Args:
-            lib_path: Path to the .slib file.
-            manifest: Raw manifest dictionary from library format.
-            struct_table: Current struct table for type resolution.
-            enum_table: Current enum table for type resolution.
-
-        Returns:
-            Pre-parsed LibraryMetadata.
-        """
+        """Register a library and pre-parse its metadata."""
         lib_name = manifest.get("library_name", lib_path.stem)
 
         if lib_name in self._libraries:
@@ -201,10 +183,7 @@ class LibraryRegistry:
         return result
 
     def get_all_private_functions(self) -> dict[str, tuple[str, 'FuncSig']]:
-        """Get all export-closure private functions (name -> (lib_name, FuncSig)).
-
-        The library name rides along for the consumer's CE5007 diagnostic.
-        """
+        """Get all export-closure private functions (name -> (lib_name, FuncSig))."""
         result = {}
         for lib in self._libraries.values():
             for name, sig in lib.private_functions.items():

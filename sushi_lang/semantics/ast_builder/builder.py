@@ -1,20 +1,4 @@
-"""Main ASTBuilder orchestrator for Sushi language compiler.
-
-This module contains the core ASTBuilder class that coordinates parsing of Lark
-parse trees into typed AST nodes. The builder delegates to specialized parsers:
-
-- Type parsing: semantics.ast_builder.types
-- Expression parsing: semantics.ast_builder.expressions
-- Statement parsing: semantics.ast_builder.statements
-- Declaration parsing: semantics.ast_builder.declarations
-- Utilities: semantics.ast_builder.utils
-
-Architecture:
-    - Strategy pattern for type/expression/statement parsing
-    - Direct delegation for declaration parsing
-    - Lazy initialization of parser instances
-    - Zero runtime overhead through static dispatch
-"""
+"""Main ASTBuilder orchestrator for Sushi language compiler."""
 from __future__ import annotations
 from typing import List, Optional
 
@@ -30,27 +14,12 @@ from sushi_lang.semantics.ast import (
 from sushi_lang.internals.report import span_of
 
 
-# ------------------------
-# Import utilities from new locations
-# ------------------------
-
-# Tree navigation utilities
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_tree as _first_tree,
     find_tree_recursive as _find_tree_recursive,
     expect,
 )
 
-# Expression discovery utilities
-
-# String processing utilities
-
-
-
-
-# ------------------------
-# AST Builder
-# ------------------------
 
 class ASTBuilder:
     def __init__(self):
@@ -84,10 +53,7 @@ class ASTBuilder:
         return self._stmt_parser
 
     def build(self, tree: Tree) -> Program:
-        """Build Program AST from parse tree.
-
-        Orchestrates parsing of all top-level declarations using specialized parsers.
-        """
+        """Build Program AST from parse tree."""
         from sushi_lang.semantics.ast_builder.declarations import imports, functions, constants, structs, enums, perks, extensions, externals
 
         tree = expect(tree, "program")
@@ -107,54 +73,44 @@ class ASTBuilder:
                 continue
             node = ch
             if node.data == "toplevel":
-                # Look for use statement
                 use = _first_tree(node.children, "use_stmt") or _find_tree_recursive(node, "use_stmt")
                 if use is not None:
                     uses.append(imports.parse_usestatement(use, self))
                     continue
 
-                # Look for constant definition
                 const = _first_tree(node.children, "const_def") or _find_tree_recursive(node, "const_def")
                 if const is not None:
                     constants_list.append(constants.parse_constdef(const, self))
                     continue
 
-                # Look for struct definition
                 struct = _first_tree(node.children, "struct_def") or _find_tree_recursive(node, "struct_def")
                 if struct is not None:
                     structs_list.append(structs.parse_structdef(struct, self))
                     continue
 
-                # Look for enum definition
                 enum = _first_tree(node.children, "enum_def") or _find_tree_recursive(node, "enum_def")
                 if enum is not None:
                     enums_list.append(enums.parse_enumdef(enum, self))
                     continue
 
-                # Look for perk definition
                 perk = _first_tree(node.children, "perk_def") or _find_tree_recursive(node, "perk_def")
                 if perk is not None:
                     perks_list.append(perks.parse_perkdef(perk, self))
                     continue
 
-                # Look for external block (FFI)
                 external = _first_tree(node.children, "external_block") or _find_tree_recursive(node, "external_block")
                 if external is not None:
                     externals_list.append(externals.parse_external_block(external, self))
                     continue
 
-                # Look for extend_stmt BEFORE function_def (to avoid matching nested functions)
                 extend_stmt = _first_tree(node.children, "extend_stmt") or _find_tree_recursive(node, "extend_stmt")
                 if extend_stmt is not None:
-                    # Check which type of extension it is
                     for child in extend_stmt.children:
                         if isinstance(child, Tree):
                             if child.data == "extend_with_def":
-                                # Perk implementation
                                 perk_impls.append(perks.parse_handle_extend_stmt_with(extend_stmt, self))
                                 break
                             elif child.data == "extend_def":
-                                # Regular extension method
                                 ext_def = extensions.parse_handle_extend_stmt_def(extend_stmt, self)
                                 if ext_def.target_type is not None and isinstance(ext_def.target_type, GenericTypeRef):
                                     generic_extensions.append(ext_def)
@@ -163,24 +119,20 @@ class ASTBuilder:
                                 break
                     continue
 
-                # Look for function definition
                 fn = _first_tree(node.children, "function_def") or _find_tree_recursive(node, "function_def")
                 if fn is not None:
                     funcs.append(functions.parse_funcdef(fn, self))
                     continue
 
-                # Legacy handlers for extend_def and extend_with_def (if they appear standalone)
                 ext = _first_tree(node.children, "extend_def") or _find_tree_recursive(node, "extend_def")
                 if ext is not None:
                     ext_def = extensions.parse_extenddef(ext, self)
-                    # Separate generic and non-generic extensions
                     if ext_def.target_type is not None and isinstance(ext_def.target_type, GenericTypeRef):
                         generic_extensions.append(ext_def)
                     else:
                         extensions_list.append(ext_def)
                     continue
 
-                # Look for perk implementation (extend...with) - legacy
                 ext_with = _first_tree(node.children, "extend_with_def") or _find_tree_recursive(node, "extend_with_def")
                 if ext_with is not None:
                     perk_impls.append(perks.parse_extendwithdef(ext_with, self))
@@ -201,16 +153,12 @@ class ASTBuilder:
             elif node.data == "function_def":
                 funcs.append(functions.parse_funcdef(node, self))
             elif node.data == "extend_stmt":
-                # Handle unified extend statement (not in toplevel section)
-                # The extend_suffix child will be aliased to either "extend_def" or "extend_with_def"
                 for child in node.children:
                     if isinstance(child, Tree):
                         if child.data == "extend_with_def":
-                            # Perk implementation
                             perk_impls.append(perks.parse_handle_extend_stmt_with(node, self))
                             break  # Only process one suffix per extend_stmt
                         elif child.data == "extend_def":
-                            # Regular extension method
                             ext_def = extensions.parse_handle_extend_stmt_def(node, self)
                             if ext_def.target_type is not None and isinstance(ext_def.target_type, GenericTypeRef):
                                 generic_extensions.append(ext_def)
@@ -219,7 +167,6 @@ class ASTBuilder:
                             break  # Only process one suffix per extend_stmt
             elif node.data == "extend_def":
                 ext_def = extensions.parse_extenddef(node, self)
-                # Separate generic and non-generic extensions
                 if ext_def.target_type is not None and isinstance(ext_def.target_type, GenericTypeRef):
                     generic_extensions.append(ext_def)
                 else:
@@ -229,33 +176,16 @@ class ASTBuilder:
 
         return Program(uses=uses, constants=constants_list, structs=structs_list, enums=enums_list, perks=perks_list, functions=funcs, extensions=extensions_list, generic_extensions=generic_extensions, perk_impls=perk_impls, externals=externals_list, loc=span_of(tree))
 
-    # --- type parsing ---
-
     def _parse_type(self, type_node: Tree) -> Optional[Type]:
-        """Parse a type node into a Type object.
-
-        Delegates to TypeParser for all type parsing logic.
-        """
+        """Parse a type node into a Type object."""
         return self.type_parser.parse_type(type_node)
 
-
-    # --- blocks & statements ---
-
     def _block(self, t: Tree) -> Block:
-        """Parse block with dispatch to statement handlers.
-
-        Delegates to blocks.parse_block for all block parsing logic.
-        """
+        """Parse block with dispatch to statement handlers."""
         from sushi_lang.semantics.ast_builder.statements.blocks import parse_block
         return parse_block(t, self)
 
-
-    # --- expressions ---
-
     def _expr(self, t: Tree | Token) -> Expr:
-        """Parse an expression node into an Expr object.
-
-        Delegates to ExpressionParser for all expression parsing logic.
-        """
+        """Parse an expression node into an Expr object."""
         return self.expr_parser.parse_expr(t)
 

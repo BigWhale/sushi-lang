@@ -1,4 +1,4 @@
-# FFI: the FFI.md section 9 worked example. A safe wrapper calls libc.strlen and
+# FFI: a safe wrapper calls libc.strlen and
 # folds the raw i64 back into Sushi's Result world.
 # EXPECT_STDOUT_EXACT: "len = 15\n"
 unsafe external "C" as libc because "string length via libc strlen":

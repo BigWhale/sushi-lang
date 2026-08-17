@@ -1,18 +1,4 @@
-"""
-LLVM emission for the auto-derived array hash() method.
-
-Hash is computed using FNV-1a by combining element hashes with the array length:
-    hash = FNV_OFFSET_BASIS
-    for each element in array:
-        hash = (hash XOR element.hash()) * FNV_PRIME
-    # Mix in array length for collision resistance
-    hash = (hash XOR length) * FNV_PRIME
-
-Whether an array *may* be hashed, and the registration of the method itself, are
-semantic concerns and live in semantics/generics/hashing.py. This module only
-supplies the emitter, which it deposits in the shared factory registry at import
-time.
-"""
+"""LLVM emission for the auto-derived array hash() method."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
@@ -27,17 +13,7 @@ from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_comb
 
 
 def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
-    """Create a hash() emitter function for fixed array types.
-
-    This generates code that combines all element hashes using FNV-1a,
-    then mixes in the array length.
-
-    Args:
-        array_type: The fixed array type (ArrayType)
-
-    Returns:
-        An emitter function that computes the array hash
-    """
+    """Create a hash() emitter function for fixed array types."""
     def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Emit LLVM IR for fixed_array.hash() method."""
@@ -48,35 +24,25 @@ def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
         builder = codegen.builder
         u64 = ir.IntType(INT64_BIT_WIDTH)
 
-        # Initialize hash with FNV offset basis
         hash_value = emit_fnv1a_init(codegen)
 
-        # receiver_value is the array value (either a pointer or direct value)
-        # For fixed arrays, it's typically a pointer to the array
         if isinstance(receiver_value.type, ir.PointerType):
             array_ptr = receiver_value
         else:
-            # If it's a value, we need to allocate and store it
             array_ptr = builder.alloca(receiver_type, name="array_temp")
             builder.store(receiver_value, array_ptr)
 
-        # Iterate through all elements
         for i in range(array_type.size):
-            # Get pointer to element i using GEP
             zero = ZERO_I32
             index = make_i32_const(i)
             element_ptr = builder.gep(array_ptr, [zero, index], name=f"elem_{i}_ptr")
 
-            # Load element value
             element_value = builder.load(element_ptr, name=f"elem_{i}")
 
-            # Get hash of this element
             element_hash = _emit_element_hash(codegen, element_value, array_type.base_type)
 
-            # Combine using FNV-1a: hash = (hash XOR element_hash) * FNV_PRIME
             hash_value = emit_fnv1a_combine(codegen, hash_value, element_hash)
 
-        # Mix in array length for collision resistance
         length_u64 = ir.Constant(u64, array_type.size)
         hash_value = emit_fnv1a_combine(codegen, hash_value, length_u64)
 
@@ -86,17 +52,7 @@ def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
 
 
 def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
-    """Create a hash() emitter function for dynamic array types.
-
-    This generates code that combines all element hashes using FNV-1a,
-    then mixes in the array length.
-
-    Args:
-        array_type: The dynamic array type (DynamicArrayType)
-
-    Returns:
-        An emitter function that computes the array hash
-    """
+    """Create a hash() emitter function for dynamic array types."""
     def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Emit LLVM IR for dynamic_array.hash() method."""
@@ -108,30 +64,22 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
         i32 = ir.IntType(INT32_BIT_WIDTH)
         u64 = ir.IntType(INT64_BIT_WIDTH)
 
-        # Initialize hash with FNV offset basis
         hash_value_alloca = builder.alloca(u64, name="hash_value")
         initial_hash = emit_fnv1a_init(codegen)
         builder.store(initial_hash, hash_value_alloca)
 
-        # receiver_value is the dynamic array struct value (either a pointer or direct value)
-        # The get_dynamic_array_*_ptr functions expect a pointer to the struct
         if isinstance(receiver_value.type, ir.PointerType):
             array_struct_ptr = receiver_value
         else:
-            # If it's a value (e.g., from extract_value), allocate temp space
             array_struct_ptr = builder.alloca(receiver_type, name="array_struct_temp")
             builder.store(receiver_value, array_struct_ptr)
 
-        # Get array length and data pointer
-        # Extract length field (first field, index 0)
         len_ptr = codegen.types.get_dynamic_array_len_ptr(builder, array_struct_ptr)
         current_len = builder.load(len_ptr, name="array_len")
 
-        # Extract data pointer (third field, index 2)
         data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(builder, array_struct_ptr)
         data_ptr = builder.load(data_ptr_ptr, name="array_data")
 
-        # Create loop: for i in 0..len
         counter = builder.alloca(i32, name="counter")
         zero_i32 = ZERO_I32
         builder.store(zero_i32, counter)
@@ -140,43 +88,33 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
         loop_body = builder.append_basic_block(name="hash_loop_body")
         loop_exit = builder.append_basic_block(name="hash_loop_exit")
 
-        # Jump to loop header
         builder.branch(loop_header)
 
-        # Loop header: check if counter < length
         builder.position_at_end(loop_header)
         current_counter = builder.load(counter)
         cond = builder.icmp_unsigned('<', current_counter, current_len)
         builder.cbranch(cond, loop_body, loop_exit)
 
-        # Loop body: hash element at current index
         builder.position_at_end(loop_body)
 
-        # Get pointer to element at current_counter
         element_ptr = builder.gep(data_ptr, [current_counter], name="element_ptr")
         element_value = builder.load(element_ptr, name="element")
 
-        # Get hash of this element
         element_hash = _emit_element_hash(codegen, element_value, array_type.base_type)
 
-        # Combine using FNV-1a
         current_hash = builder.load(hash_value_alloca)
         new_hash = emit_fnv1a_combine(codegen, current_hash, element_hash)
         builder.store(new_hash, hash_value_alloca)
 
-        # Increment counter
         one_i32 = make_i32_const(1)
         next_counter = builder.add(current_counter, one_i32)
         builder.store(next_counter, counter)
 
-        # Loop back to header
         builder.branch(loop_header)
 
-        # Loop exit: mix in array length
         builder.position_at_end(loop_exit)
         final_hash = builder.load(hash_value_alloca)
 
-        # Mix in length for collision resistance
         length_u64 = builder.zext(current_len, u64)
         final_hash = emit_fnv1a_combine(codegen, final_hash, length_u64)
 
@@ -186,35 +124,20 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
 
 
 def _emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type) -> ir.Value:
-    """Emit code to get the hash of an array element.
-
-    This recursively calls the appropriate .hash() method based on the element type.
-
-    Args:
-        codegen: The LLVM code generator
-        element_value: LLVM value of the element
-        element_type: Semantic type of the element
-
-    Returns:
-        Hash value as u64
-    """
+    """Emit code to get the hash of an array element."""
     require_builder(codegen)
 
-    # For primitive types, call their hash() method inline
     if isinstance(element_type, BuiltinType):
-        # Special handling for strings - call string hash directly
         if element_type == BuiltinType.STRING:
             from sushi_lang.backend.types.primitives.hashing import _emit_string_hash_fnv1a
             return _emit_string_hash_fnv1a(codegen, element_value)
 
-        # Ensure hash methods are registered
         import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 
         hash_method = get_builtin_method(element_type, "hash")
         if hash_method is None:
             raise_internal_error("CE0051", type=str(element_type))
 
-        # Create a fake MethodCall for the emitter
         fake_call = MethodCall(
             receiver=Name(id="element", loc=(0, 0)),
             method="hash",
@@ -222,12 +145,10 @@ def _emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type
             loc=(0, 0)
         )
 
-        # Call the builtin hash emitter directly
         return hash_method.llvm_emitter(
             codegen, fake_call, element_value, element_value.type, False
         )
 
-    # For structs, call their hash() method
     elif isinstance(element_type, StructType):
         hash_method = get_builtin_method(element_type, "hash")
         if hash_method is None:
@@ -244,7 +165,6 @@ def _emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type
             codegen, fake_call, element_value, element_value.type, False
         )
 
-    # For enums, call their hash() method
     elif isinstance(element_type, EnumType):
         hash_method = get_builtin_method(element_type, "hash")
         if hash_method is None:
@@ -267,20 +187,7 @@ def _emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type
 
 def emit_fixed_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Value,
                                  receiver_type: ir.Type, to_i1: bool) -> ir.Value:
-    """Direct emitter for fixed array hash (called from backend/expressions/calls.py).
-
-    This is a wrapper that adapts the signature to match the array method calling convention.
-
-    Args:
-        codegen: The LLVM code generator
-        expr: The method call expression (MethodCall)
-        receiver_value: LLVM value of the array
-        receiver_type: LLVM type of the array (ir.ArrayType)
-        to_i1: Whether to convert result to i1
-
-    Returns:
-        Hash value as u64
-    """
+    """Direct emitter for fixed array hash (called from backend/expressions/calls.py)."""
     from sushi_lang.semantics.ast import Name
 
     # Get the semantic type of the receiver -- a local or a global constant (#248).
@@ -295,31 +202,15 @@ def emit_fixed_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Val
     else:
         raise_internal_error("CE0056", name=f"<{type(expr.receiver).__name__}>")
 
-    # Create emitter and call it
     emitter = _emit_fixed_array_hash(array_type)
     return emitter(codegen, expr, receiver_value, receiver_type, to_i1)
 
 
 def emit_dynamic_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Value,
                                    receiver_type: ir.Type, to_i1: bool) -> ir.Value:
-    """Direct emitter for dynamic array hash (called from backend/expressions/calls.py).
-
-    This is a wrapper that adapts the signature to match the array method calling convention.
-
-    Args:
-        codegen: The LLVM code generator
-        expr: The method call expression (MethodCall)
-        receiver_value: LLVM value of the array struct
-        receiver_type: LLVM type of the array struct (ir.LiteralStructType)
-        to_i1: Whether to convert result to i1
-
-    Returns:
-        Hash value as u64
-    """
+    """Direct emitter for dynamic array hash (called from backend/expressions/calls.py)."""
     from sushi_lang.semantics.ast import Name
 
-    # Get the semantic type from the variable table.
-    # As above: a missing receiver type is a compiler bug, not an i32[] fallback.
     if isinstance(expr.receiver, Name):
         array_type = codegen.variable_types.get(expr.receiver.id)
         if array_type is None:
@@ -327,11 +218,8 @@ def emit_dynamic_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.V
     else:
         raise_internal_error("CE0056", name=f"<{type(expr.receiver).__name__}>")
 
-    # Create emitter and call it
     emitter = _emit_dynamic_array_hash(array_type)
     return emitter(codegen, expr, receiver_value, receiver_type, to_i1)
-
-
 
 
 def _make_array_hash_emitter(array_type: Type) -> Any:
@@ -343,6 +231,4 @@ def _make_array_hash_emitter(array_type: Type) -> Any:
     raise_internal_error("CE0041", type=type(array_type).__name__)
 
 
-# Supply the array hash() emitter to semantics/generics/hashing.py, which owns
-# hashability analysis and the registration itself.
 register_hash_emitter_factory("array", _make_array_hash_emitter)

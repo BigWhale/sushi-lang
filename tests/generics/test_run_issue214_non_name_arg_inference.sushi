@@ -7,7 +7,7 @@
 #
 # `pick` returns `val` from ONE place. It used to return it from two exclusive branches, which
 # the move checker reads as a second use of a moved value because it is not path-sensitive
-# (MM.md finding F4). That shape was incidental to what this file tests -- the inferrer must
+# That shape was incidental to what this file tests -- the inferrer must
 # not abort on the first non-Name argument -- and it went red the moment Phase 9 made a string
 # move. The limitation itself is pinned by test_err_move_not_path_sensitive.sushi, which is
 # where it belongs; changing it here would have hidden it instead.

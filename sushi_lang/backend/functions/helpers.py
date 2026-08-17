@@ -1,9 +1,4 @@
-"""
-Helper functions for LLVM function management.
-
-This module contains utility functions used across function declaration
-and definition: parameter validation, scope management, default returns, etc.
-"""
+"""Helper functions for LLVM function management."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Tuple
 
@@ -19,17 +14,7 @@ if TYPE_CHECKING:
 
 
 def callee_owns_param(param) -> bool:
-    """Does the CALLEE own this parameter, and therefore free it at scope exit?
-
-    One question, asked of the DECLARATION and of nothing else. It deliberately takes
-    no callee, no `fn_def` and no flag: the convention used to be derived from the
-    callee's implementation ("is this body a method?"), which is how one language
-    feature came to free its parameters in a `.slib` build and not in a generated
-    stdlib one (docs/design/borrow-model.md S1).
-
-    `tests/unit/test_callee_mode_matrix.py` pins the answer for all four modes, and
-    pins that the signature stays this narrow.
-    """
+    """Does the CALLEE own this parameter, and therefore free it at scope exit?"""
     from sushi_lang.semantics.param_modes import param_mode
     return param_mode(param).consumes
 
@@ -38,26 +23,12 @@ class FunctionHelpers:
     """Utility functions for function emission."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
-        """Initialize helpers with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance.
-        """
+        """Initialize helpers with reference to main codegen instance."""
         self.codegen = codegen
-        # One entry per open `begin_function`, holding the name -> semantic-type map that
-        # was live when it started. See `begin_function` for why the map is per-function.
         self._variable_types_stack: list[dict] = []
 
     def is_valid_param_type(self, param_type: Ty) -> bool:
-        """Check if a type is valid for function parameters.
-
-        Args:
-            param_type: The type to validate.
-
-        Returns:
-            True if the type can be used as a function parameter.
-        """
-        # Check for builtin types
+        """Check if a type is valid for function parameters."""
         if param_type in (
             BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
             BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
@@ -65,60 +36,39 @@ class FunctionHelpers:
         ):
             return True
 
-        # Check for array types
         if isinstance(param_type, (ArrayType, DynamicArrayType)):
             return True
 
-        # Check for struct types
         if isinstance(param_type, StructType):
             return True
 
-        # Check for enum types
         if isinstance(param_type, EnumType):
             return True
 
-        # Check for reference types
         if isinstance(param_type, ReferenceType):
             return True
 
-        # Opaque foreign pointer (FFI handle) - valid in non-public signatures
         if isinstance(param_type, ForeignPtrType):
             return True
 
-        # First-class function value (bare function pointer)
         from sushi_lang.semantics.typesys import FunctionType
         if isinstance(param_type, FunctionType):
             return True
 
-        # Check for UnknownType that could be a struct or enum
         if isinstance(param_type, UnknownType):
-            # Check if this unknown type is in the struct table
             if hasattr(self.codegen, 'struct_table') and param_type.name in self.codegen.struct_table.by_name:
                 return True
-            # Check if this unknown type is in the enum table
             if hasattr(self.codegen, 'enum_table') and param_type.name in self.codegen.enum_table.by_name:
                 return True
 
-        # Check for generic type references (should be monomorphized by type checker)
         from sushi_lang.semantics.generics.types import GenericTypeRef
         if isinstance(param_type, GenericTypeRef):
-            # GenericTypeRef is valid - ll_type() will resolve it to monomorphized enum
             return True
 
         return False
 
     def params_of(self, fn: FuncDef) -> List[Tuple[str, Ty]]:
-        """Extract parameter information from function definition.
-
-        Args:
-            fn: The function definition AST node.
-
-        Returns:
-            List of (name, type) tuples for function parameters.
-
-        Raises:
-            TypeError: If parameter format is invalid or type is missing.
-        """
+        """Extract parameter information from function definition."""
         out: List[Tuple[str, Ty]] = []
         for idx, p in enumerate(getattr(fn, "params", ())):
             if not isinstance(p, Param):
@@ -137,60 +87,29 @@ class FunctionHelpers:
         return out
 
     def get_extension_method_name(self, ext: ExtendDef) -> str:
-        """Generate unique function name for extension method.
-
-        Args:
-            ext: The extension method definition.
-
-        Returns:
-            The mangled function name.
-
-        Examples:
-            - extend i32 add() → "i32_add"
-            - extend Box<i32> unwrap() → "Box__i32_unwrap"
-            - extend HashMap<string, i32> get() → "HashMap__string_i32_get"
-
-        Mirrored by ``semantics/library_templates.py:impl_method_symbol`` for
-        the symbols recorded in shipped perk-impl manifest records (C4a).
-        """
+        """Generate unique function name for extension method."""
         if ext.target_type and isinstance(ext.target_type, BuiltinType):
             target_type_name = ext.target_type.value
         else:
             target_type_name = str(ext.target_type) if ext.target_type else "unknown"
 
-        # Sanitize generic type names for valid LLVM identifiers
-        # Replace < with __, > with nothing, and ", " with _
         target_type_name = target_type_name.replace("<", "__").replace(">", "").replace(", ", "_")
 
         return f"{target_type_name}_{ext.name}"
 
     def emit_default_return(self, ret_type: Ty | None) -> None:
-        """Emit default return value for function without explicit return.
-
-        With Result<T>, all functions now return Result structs. The default
-        return is Err() which is {0, zero_value}.
-
-        Args:
-            ret_type: The function's return type.
-
-        Raises:
-            TypeError: If the return type is not supported.
-        """
+        """Emit default return value for function without explicit return."""
         if ret_type is None:
             return
 
-        # RAII: Emit cleanup for all resources before returning
         from sushi_lang.backend.statements import utils
         utils.emit_scope_cleanup(self.codegen, cleanup_type='all')
 
-        # With Result<T, E>, create an Err(error) result using enum constructor logic
-        # Get the monomorphized Result<T, E> enum type
         from sushi_lang.backend.generics.result_builder import intern_result
         std_error = self.codegen.enum_table.by_name.get("StdError")
         result_type = intern_result(self.codegen, ret_type, std_error if std_error else ret_type)
         result_llvm_type = self.codegen.types.ll_type(result_type)
 
-        # Look up the Result<T, E> enum in the enum table
         result_enum_name = str(result_type)
         if result_enum_name in self.codegen.enum_table.by_name:
             result_enum = self.codegen.enum_table.by_name[result_enum_name]
@@ -198,16 +117,13 @@ class FunctionHelpers:
             # Result.Err() has no arguments, variant index is 1 (Ok=0, Err=1)
             variant_index = result_enum.get_variant_index("Err")
 
-            # Create enum value with Err tag
             err_result = enum_utils.construct_enum_variant(
                 self.codegen, result_llvm_type, variant_index=variant_index,
                 data=None, name_prefix="Result_Err"
             )
 
-            # No data for Err variant, just return with tag set
             self.codegen.builder.ret(err_result)
         else:
-            # Fallback to old Result struct format
             value_llvm_type = self.codegen.types.ll_type(ret_type)
             zero_value = self.codegen.utils.get_zero_value(value_llvm_type)
             err_result = ir.Constant(result_llvm_type, [
@@ -217,50 +133,26 @@ class FunctionHelpers:
             self.codegen.builder.ret(err_result)
 
     def emit_default_return_for_extension(self, ret_type: Ty | None) -> None:
-        """Emit default return value for extension method without explicit return.
-
-        Extension methods return bare types (not Result<T>), so we return
-        a zero/default value directly.
-
-        Args:
-            ret_type: The extension method's return type.
-
-        Raises:
-            TypeError: If the return type is not supported.
-        """
+        """Emit default return value for extension method without explicit return."""
         if ret_type is None:
             return
 
-        # RAII: Emit cleanup for all resources before returning
         from sushi_lang.backend.statements import utils
         utils.emit_scope_cleanup(self.codegen, cleanup_type='all')
 
-        # Extension methods return bare types - return zero/default value
         value_llvm_type = self.codegen.types.ll_type(ret_type)
         zero_value = self.codegen.utils.get_zero_value(value_llvm_type)
         self.codegen.builder.ret(zero_value)
 
     def begin_function(self, llvm_fn: ir.Function, fn_def: FuncDef | None = None) -> None:
-        """Initialize function emission context.
-
-        Sets up entry and start blocks, alloca builder, fresh scope,
-        and parameter handling for the function.
-
-        Args:
-            llvm_fn: The LLVM function to begin emitting.
-            fn_def: Optional function definition for parameter semantic type registration.
-        """
+        """Initialize function emission context."""
         self.codegen.func = llvm_fn
         self.codegen.entry_branch = None
 
-        # `variable_types` is per-FUNCTION state, like the scope stack below it, and it
-        # used to be per-MODULE: created once and never cleared, so an entry a function
-        # wrote stayed readable by every function emitted afterwards. For a value type
-        # that is wrong DATA; for a `ReferenceType` entry it is wrong CODE, because
-        # `is_reference_parameter` keys on it and a later function's plain local of the
-        # same name would be dereferenced (old/BORROW.md 3.5). Save and restore rather than
-        # clear: nothing nests today, but an out-of-line destructor body emitted lazily
-        # mid-function would, and restoring is correct either way.
+        # `variable_types` is per-FUNCTION state. Per-module, an entry one function wrote
+        # stayed readable by every later one -- wrong DATA for a value type, wrong CODE for
+        # a `ReferenceType`, since `is_reference_parameter` keys on it. Save and restore
+        # rather than clear: an out-of-line destructor body emitted mid-function nests.
         self._variable_types_stack.append(self.codegen.variable_types)
         self.codegen.variable_types = {}
 
@@ -275,14 +167,12 @@ class FunctionHelpers:
         self.codegen.memory.reset_scope_stack()
         self.codegen.memory.push_scope()
 
-        # Initialize dynamic array memory manager with the builder
         from sushi_lang.backend.memory.dynamic_arrays import DynamicArrayManager
         self.codegen.dynamic_arrays = DynamicArrayManager(self.codegen.builder, self.codegen)
         self.codegen.dynamic_arrays.push_scope()
 
         self.codegen.entry_branch = self.codegen.alloca_builder.branch(start)
 
-        # Build parameter name -> semantic type mapping if fn_def is provided
         param_semantic_types = {}
         if fn_def is not None:
             for param in fn_def.params:
@@ -293,7 +183,6 @@ class FunctionHelpers:
         for i, arg in enumerate(llvm_fn.args):
             pname = arg.name or f"arg{i}"
 
-            # Get semantic type for this parameter
             semantic_type = param_semantic_types.get(pname)
 
             # For reference parameters, the arg is already a pointer, so we store the pointer itself
@@ -303,26 +192,20 @@ class FunctionHelpers:
             current_scope_level = self.codegen.memory._scope_depth
             self.codegen.memory._scope_vars[current_scope_level].add(pname)
 
-            # Update flat cache for O(1) lookup
             if pname not in self.codegen.memory._locals:
                 self.codegen.memory._locals[pname] = []
             self.codegen.memory._locals[pname].append((current_scope_level, slot))
 
-            # IMPORTANT: Register semantic type for pattern matching support
             if semantic_type is not None:
-                # Update flat cache for semantic types
                 if pname not in self.codegen.memory._types:
                     self.codegen.memory._types[pname] = []
                 self.codegen.memory._types[pname].append((current_scope_level, semantic_type))
 
             param_slots.append((arg, slot))
 
-        # A `nom` parameter TAKES OWNERSHIP: the caller transferred the value (the seam
-        # marked a Name source moved, a temp adopted in), so the callee owns the buffer
-        # and its owned bit must survive. Every other mode is a BORROW: the caller keeps
-        # the value, so clear the callee's copy's owned bit to 0 and the body can never
-        # free the caller's buffer, whatever it does with it (#145). Consuming a borrow
-        # is CE2411 in Pass 3, so the cleared bit guards the read paths only.
+        # A `nom` parameter TAKES OWNERSHIP, so its owned bit must survive. Every other
+        # mode is a BORROW: clearing the copy's owned bit means the body can never free the
+        # caller's buffer (#145). Consuming a borrow is CE2411, so this guards reads only.
         owning_params: set[str] = set()
         if fn_def is not None:
             for param in fn_def.params:
@@ -336,14 +219,12 @@ class FunctionHelpers:
                 val = self.codegen.builder.insert_value(arg, ir.Constant(self.codegen.i8, 0), 2)
             self.codegen.builder.store(val, slot)
 
-        # Register the parameters the callee OWNS for RAII cleanup. One question, asked
-        # of the declaration: `callee_owns_param`. It used to be asked of the callee's
-        # implementation instead -- "is `fn_def` None, i.e. is this a method body?" --
-        # which is how the same language feature came to free its parameters in a
-        # `.slib` build and not in a generated stdlib one.
+        # One question, asked of the DECLARATION: `callee_owns_param`. Asking the
+        # implementation instead is how one feature came to free its parameters in a `.slib`
+        # build and not in a generated stdlib one.
         #
-        # A native variadic `...T` array is the one parameter the CALLER synthesizes: it
-        # has no other owner, so the callee adopts it whatever the mode says.
+        # A native variadic `...T` array is the one parameter the CALLER synthesizes, so the
+        # callee adopts it whatever the mode says.
         if fn_def is not None:
             slot_by_name = {arg.name or f"arg{i}": slot
                             for i, (arg, slot) in enumerate(param_slots)}
@@ -358,23 +239,15 @@ class FunctionHelpers:
                     self.codegen.memory.register_owning_value(param.name, param.ty, slot)
                     continue
 
-                # A BORROW parameter is registered and immediately RELINQUISHED. The
-                # registration is what a REBIND needs -- `s := "new"` re-initializes the
-                # callee's local copy, and the new value has no other owner, so without a
-                # registry entry it leaks. The relinquish is what the caller needs: the
-                # value that arrives belongs to the caller, so no exit path may free it,
-                # and the rebind's destroy-the-old-value step must skip it too. A rebind
-                # then `unmark`s the slot, and scope exit frees the value the callee
-                # itself put there. Two facts, one slot, in the right order.
+                # Registered and immediately RELINQUISHED. The registration is what a
+                # REBIND needs -- the value it puts there has no other owner and would leak.
+                # The relinquish is what the CALLER needs -- the value that arrives is
+                # theirs, so no exit path may free it. Two facts, one slot, in that order.
                 self.codegen.memory.register_owning_value(param.name, param.ty, slot)
                 relinquish(self.codegen, param.name)
 
     def end_function(self) -> None:
-        """Clean up function emission context.
-
-        Clears per-function state including builders, scopes, references, and the
-        name -> semantic-type map `begin_function` saved.
-        """
+        """Clean up function emission context."""
         self.codegen.func = None
         self.codegen.builder = None
         self.codegen.alloca_builder = None
@@ -392,28 +265,12 @@ def declare_stdlib_function(
     return_type: ir.Type,
     param_types: list[ir.Type]
 ) -> ir.Function:
-    """Declare an external stdlib function.
-
-    This declares a function that will be linked from a stdlib .bc file.
-    If the function already exists in the module, returns the existing declaration.
-
-    Args:
-        module: The LLVM module to declare the function in.
-        func_name: Name of the stdlib function (e.g., "sushi_i32_to_str")
-        return_type: LLVM return type
-        param_types: List of LLVM parameter types
-
-    Returns:
-        The declared function (or existing if already declared)
-    """
-    # Check if already declared
+    """Declare an external stdlib function."""
     if func_name in module.globals:
         existing = module.globals[func_name]
         if isinstance(existing, ir.Function):
             return existing
 
-    # Declare new external function
     fn_type = ir.FunctionType(return_type, param_types)
     func = ir.Function(module, fn_type, name=func_name)
-    # External linkage is default, no need to set explicitly
     return func

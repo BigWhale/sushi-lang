@@ -7,7 +7,7 @@
 # already installed when the FIRST use is checked.
 #
 # Result: a single by-value use is rejected with CE2405 whose "moved here" note points at
-# the SAME span as the use. This file must COMPILE and run. MM.md S2 row 9; no issue.
+# the SAME span as the use. This file must COMPILE and run.
 # EXPECT_ERROR_CODE: CE2411
 
 struct Holder:

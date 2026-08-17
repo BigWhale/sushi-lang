@@ -1,10 +1,4 @@
-"""
-External declarations for C standard library process control functions.
-
-This module provides declarations for process control and system functions:
-- exit: Program termination
-- __error/__errno_location: Thread-local errno access (platform-specific)
-"""
+"""External declarations for C standard library process control functions."""
 from __future__ import annotations
 
 import typing
@@ -19,14 +13,9 @@ class LibCProcess:
     """Manages external declarations for C process control functions."""
 
     def __init__(self, codegen: LLVMCodegen) -> None:
-        """Initialize with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context and module.
-        """
+        """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
-        # Function references - declared immediately for type safety
         self.exit: ir.Function
         self.errno_location: ir.Function
 
@@ -36,10 +25,7 @@ class LibCProcess:
         self._declare_errno_location()
 
     def _declare_exit(self) -> None:
-        """Declare exit: void exit(int status)
-
-        Terminates the program with the given exit status.
-        """
+        """Declare exit: void exit(int status)"""
         fn_ty = ir.FunctionType(
             ir.VoidType(),  # void return
             [self.codegen.i32]  # int status
@@ -51,21 +37,12 @@ class LibCProcess:
             self.exit = ir.Function(self.codegen.module, fn_ty, name="exit")
 
     def _declare_errno_location(self) -> None:
-        """Declare errno access function: int* __error() or int* __errno_location()
-
-        Platform-specific function to get thread-local errno:
-        - macOS: __error()
-        - Linux: __errno_location()
-
-        Returns a pointer to the thread-local errno variable.
-        """
+        """Declare errno access function: int* __error() or int* __errno_location()"""
         fn_ty = ir.FunctionType(
             self.codegen.i32.as_pointer(),  # Returns int* (pointer to errno)
             []  # No parameters
         )
 
-        # Platform-specific errno location function
-        # Check if already declared
         existing = self.codegen.module.globals.get("__error")
         if isinstance(existing, ir.Function):
             self.errno_location = existing
@@ -76,7 +53,6 @@ class LibCProcess:
             self.errno_location = existing
             return
 
-        # Declare based on platform
         from sushi_lang.backend.platform_detect import get_current_platform
         platform = get_current_platform()
 

@@ -1,32 +1,11 @@
-"""POSIX process control function declarations.
-
-Provides declarations for standard POSIX process management functions:
-- getcwd(): Get current working directory
-- chdir(): Change working directory
-- exit(): Terminate process
-- getpid(): Get process ID
-- getuid(): Get user ID
-"""
+"""POSIX process control function declarations."""
 
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
 
 
 def declare_getcwd(module: ir.Module) -> ir.Function:
-    """Declare getcwd: char* getcwd(char *buf, size_t size)
-
-    POSIX Signature:
-        char *getcwd(char *buf, size_t size);
-
-    Returns:
-        Pointer to the buffer containing the current working directory path.
-        NULL on error (sets errno).
-
-    Portability:
-        ✅ macOS (via libSystem)
-        ✅ Linux (via glibc, musl)
-        ✅ Any POSIX.1-2001 compliant system
-    """
+    """Declare getcwd: char* getcwd(char *buf, size_t size)"""
     if "getcwd" in module.globals:
         return module.globals["getcwd"]
 
@@ -37,19 +16,7 @@ def declare_getcwd(module: ir.Module) -> ir.Function:
 
 
 def declare_chdir(module: ir.Module) -> ir.Function:
-    """Declare chdir: int chdir(const char *path)
-
-    POSIX Signature:
-        int chdir(const char *path);
-
-    Returns:
-        0 on success, -1 on error (sets errno).
-
-    Portability:
-        ✅ macOS (via libSystem)
-        ✅ Linux (via glibc, musl)
-        ✅ Any POSIX.1-2001 compliant system
-    """
+    """Declare chdir: int chdir(const char *path)"""
     if "chdir" in module.globals:
         return module.globals["chdir"]
 
@@ -60,19 +27,7 @@ def declare_chdir(module: ir.Module) -> ir.Function:
 
 
 def declare_exit(module: ir.Module) -> ir.Function:
-    """Declare exit: void exit(int status)
-
-    C Standard Library Signature:
-        void exit(int status);
-
-    Terminates the process immediately with the given exit code.
-    Never returns.
-
-    Portability:
-        ✅ macOS (via libSystem)
-        ✅ Linux (via glibc, musl)
-        ✅ Any C standard library
-    """
+    """Declare exit: void exit(int status)"""
     if "exit" in module.globals:
         return module.globals["exit"]
 
@@ -84,22 +39,7 @@ def declare_exit(module: ir.Module) -> ir.Function:
 
 
 def declare_getpid(module: ir.Module) -> ir.Function:
-    """Declare getpid: pid_t getpid(void)
-
-    POSIX Signature:
-        pid_t getpid(void);
-
-    Returns:
-        The process ID of the calling process (always successful).
-
-    Note:
-        pid_t is typically int (i32) on all platforms.
-
-    Portability:
-        ✅ macOS (via libSystem)
-        ✅ Linux (via glibc, musl)
-        ✅ Any POSIX.1-2001 compliant system
-    """
+    """Declare getpid: pid_t getpid(void)"""
     if "getpid" in module.globals:
         return module.globals["getpid"]
 
@@ -110,22 +50,7 @@ def declare_getpid(module: ir.Module) -> ir.Function:
 
 
 def declare_getuid(module: ir.Module) -> ir.Function:
-    """Declare getuid: uid_t getuid(void)
-
-    POSIX Signature:
-        uid_t getuid(void);
-
-    Returns:
-        The real user ID of the calling process (always successful).
-
-    Note:
-        uid_t is typically unsigned int (u32), but we use i32 for simplicity.
-
-    Portability:
-        ✅ macOS (via libSystem)
-        ✅ Linux (via glibc, musl)
-        ✅ Any POSIX.1-2001 compliant system
-    """
+    """Declare getuid: uid_t getuid(void)"""
     if "getuid" in module.globals:
         return module.globals["getuid"]
 
@@ -174,16 +99,7 @@ def declare_waitpid(module: ir.Module) -> ir.Function:
 
 
 def declare_posix_spawnp(module: ir.Module) -> ir.Function:
-    """Declare posix_spawnp:
-
-        int posix_spawnp(pid_t *pid, const char *file,
-                         const posix_spawn_file_actions_t *file_actions,
-                         const posix_spawnattr_t *attrp,
-                         char *const argv[], char *const envp[]);
-
-    The opaque file_actions/attr pointers are passed as i8*. Returns 0 on success
-    (and sets *pid); an errno on failure (e.g. ENOENT).
-    """
+    """Declare posix_spawnp:"""
     if "posix_spawnp" in module.globals:
         return module.globals["posix_spawnp"]
     i8, i8_ptr, i32, i64 = get_basic_types()
@@ -220,11 +136,7 @@ def declare_posix_spawn_file_actions_destroy(module: ir.Module) -> ir.Function:
 
 
 def get_environ(module: ir.Module) -> ir.GlobalVariable:
-    """Get the external `char **environ` global (the process environment).
-
-    Needed so posix_spawnp inherits PATH etc. for the child. Links against the
-    always-present libc/libSystem symbol on both macOS and Linux.
-    """
+    """Get the external `char **environ` global (the process environment)."""
     if "environ" in module.globals:
         return module.globals["environ"]
     i8_ptr = ir.IntType(8).as_pointer()

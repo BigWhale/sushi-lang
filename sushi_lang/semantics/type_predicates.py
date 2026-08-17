@@ -1,15 +1,8 @@
-"""Type checking predicates and type sets for semantic analysis.
-
-This module centralizes type predicates and type sets that were previously
-scattered across types.py and type_visitor.py. Extracted as part of the
-semantics directory refactoring (Phase 1, Task 1.4).
-"""
+"""Type checking predicates and type sets for semantic analysis."""
 
 from typing import Optional, Set
 from sushi_lang.semantics.typesys import Type, BuiltinType
 
-
-# === Type Sets ===
 
 BUILTIN_INTEGER_TYPES: Set[BuiltinType] = {
     BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
@@ -31,144 +24,37 @@ BUILTIN_STRING_CONVERTIBLE_TYPES: Set[BuiltinType] = BUILTIN_NUMERIC_TYPES | {
 }
 
 
-# === Type Predicates ===
-
 def is_numeric_type(ty: Type) -> bool:
-    """Check if a type is numeric (integer or floating-point).
-
-    Args:
-        ty: The type to check.
-
-    Returns:
-        True if the type is a numeric type (integer or float), False otherwise.
-
-    Examples:
-        >>> is_numeric_type(BuiltinType.I32)
-        True
-        >>> is_numeric_type(BuiltinType.F64)
-        True
-        >>> is_numeric_type(BuiltinType.STRING)
-        False
-    """
+    """Check if a type is numeric (integer or floating-point)."""
     return ty in BUILTIN_NUMERIC_TYPES
 
 
 def is_integer_type(ty: Type) -> bool:
-    """Check if a type is an integer type (signed or unsigned).
-
-    Args:
-        ty: The type to check.
-
-    Returns:
-        True if the type is an integer type, False otherwise.
-
-    Examples:
-        >>> is_integer_type(BuiltinType.I32)
-        True
-        >>> is_integer_type(BuiltinType.U8)
-        True
-        >>> is_integer_type(BuiltinType.F32)
-        False
-    """
+    """Check if a type is an integer type (signed or unsigned)."""
     return ty in BUILTIN_INTEGER_TYPES
 
 
 def is_float_type(ty: Type) -> bool:
-    """Check if a type is a floating-point type.
-
-    Args:
-        ty: The type to check.
-
-    Returns:
-        True if the type is a floating-point type, False otherwise.
-
-    Examples:
-        >>> is_float_type(BuiltinType.F32)
-        True
-        >>> is_float_type(BuiltinType.F64)
-        True
-        >>> is_float_type(BuiltinType.I32)
-        False
-    """
+    """Check if a type is a floating-point type."""
     return ty in BUILTIN_FLOAT_TYPES
 
 
 def is_unsigned_int(ty: Optional[Type]) -> bool:
-    """Check if a type is an unsigned integer type (u8/u16/u32/u64).
-
-    Args:
-        ty: The type to check (None-safe).
-
-    Returns:
-        True if the type is an unsigned integer type, False otherwise.
-    """
+    """Check if a type is an unsigned integer type (u8/u16/u32/u64)."""
     return ty in BUILTIN_UNSIGNED_INTEGER_TYPES
 
 
 def is_string_convertible(ty: Type) -> bool:
-    """Check if a type can be converted to string in string interpolation.
-
-    Supported types for string interpolation:
-    - All numeric types (integers and floats)
-    - Boolean type
-    - String type
-
-    Not supported:
-    - Arrays (fixed or dynamic)
-    - Structs
-    - Enums (including Result<T>, Maybe<T>)
-    - Iterator<T>
-    - Blank type (~)
-    - Special types (stdin, stdout, stderr, file)
-
-    Args:
-        ty: The type to check.
-
-    Returns:
-        True if the type can be converted to string, False otherwise.
-
-    Examples:
-        >>> is_string_convertible(BuiltinType.I32)
-        True
-        >>> is_string_convertible(BuiltinType.BOOL)
-        True
-        >>> is_string_convertible(BuiltinType.STRING)
-        True
-        >>> is_string_convertible(BuiltinType.BLANK)
-        False
-    """
+    """Check if a type can be converted to string in string interpolation."""
     if isinstance(ty, BuiltinType):
         return ty in BUILTIN_STRING_CONVERTIBLE_TYPES
-    # Arrays, structs, enums, iterators are not supported
     return False
 
 
 def is_abstract_type(ty: Type, struct_table: Optional[dict] = None,
                      enum_table: Optional[dict] = None,
                      _visited: Optional[Set[str]] = None) -> bool:
-    """Whether a type still mentions an unbound type parameter.
-
-    An abstract type is a template artifact, not a real type: it exists only while a generic
-    body is analysed with its own `<T, U>` still unbound. It must never be monomorphized and
-    must never be interned into the enum table -- `Result<Either<U, T>, StdError>` would sit
-    there depending on an `Either<U, T>` that is never itself interned, which strands the
-    enum topological sort and gets misreported as a recursive enum (CE2052).
-
-    A type parameter is not always spelled `TypeParameter`. By the time a generic function's
-    signature reaches the monomorphizer its params survive as bare `UnknownType("U")` -- a name
-    that resolves to no struct and no enum. That is what makes the tables load-bearing here:
-    WITHOUT them an `UnknownType` cannot be told apart from a not-yet-resolved user type, so it
-    is conservatively treated as concrete.
-
-    Args:
-        ty: The type to inspect (None-safe).
-        struct_table: Optional name -> StructType mapping, to tell a user type from a type param.
-        enum_table: Optional name -> EnumType mapping, likewise.
-        _visited: Internal cycle guard over struct/enum names.
-
-    Returns:
-        True if the type transitively mentions an unbound type parameter.
-    """
+    """Whether a type still mentions an unbound type parameter."""
     from sushi_lang.semantics.typesys import (
         ArrayType, DynamicArrayType, ReferenceType, PointerType,
         IteratorType, StructType, EnumType, UnknownType,
@@ -224,27 +110,7 @@ def is_abstract_type(ty: Type, struct_table: Optional[dict] = None,
 def contains_foreign_ptr(ty: Type, struct_table: Optional[dict] = None,
                          enum_table: Optional[dict] = None,
                          _visited: Optional[Set[str]] = None) -> bool:
-    """Recursively check whether a type exposes a foreign `ptr` (ForeignPtrType).
-
-    Single source of truth for the ptr-exposure walk, shared by the CE5008 unit
-    fence (Pass 2) and the CE5002 .slib manifest check. Beyond the concrete type
-    shapes it also handles the Pass 2-era representations:
-    - GenericTypeRef: walks type arguments (a `Result<ptr, E>` return is still a
-      GenericTypeRef at validation time, before monomorphization rewrites it).
-    - UnknownType: resolved through the optional struct/enum tables (dicts keyed
-      by name); unresolvable names are treated as ptr-free, because struct fields
-      are deliberately allowed to carry `ptr` across units (the wrapper-struct
-      pattern) and the concrete shapes are checked where they are used.
-
-    Args:
-        ty: The type to inspect (None-safe).
-        struct_table: Optional name -> StructType mapping for UnknownType resolution.
-        enum_table: Optional name -> EnumType mapping for UnknownType resolution.
-        _visited: Internal cycle guard over struct/enum names.
-
-    Returns:
-        True if the type transitively contains a ForeignPtrType.
-    """
+    """Recursively check whether a type exposes a foreign `ptr` (ForeignPtrType)."""
     from sushi_lang.semantics.typesys import (
         ForeignPtrType, ArrayType, DynamicArrayType, ReferenceType,
         PointerType, IteratorType, StructType, EnumType, UnknownType,
@@ -295,26 +161,7 @@ def contains_foreign_ptr(ty: Type, struct_table: Optional[dict] = None,
 
 
 def contains_reference(ty: Optional[Type]) -> bool:
-    """Does this declared type contain a `peek` / `poke` anywhere it is not supported?
-
-    The single walk behind the six position rejections (CE2415-CE2420). The grammar's
-    `?type` rule is recursive and universal, so a reference parses in EVERY type position;
-    semantics defines it for exactly one, the PARAMETER. Each other position is rejected at
-    its declaration until it is designed, and each asks this one question.
-
-    Structural only, and deliberately so: it never resolves a named type against the
-    tables. A reference is written in the declaration being checked, so it is visible in
-    the spelling; descending into an already-collected struct or enum would re-report the
-    field the struct's own declaration already rejected.
-
-    **The `FunctionType` carve-out is load-bearing.** A reference PARAMETER inside a
-    function type -- `fn(peek i32) -> i32` -- is legal and works, and so is the lambda
-    that satisfies it (`|peek i32 x| ...`). A function type is a parameter list, so its
-    parameters are the supported position, wherever the function type itself appears: as a
-    struct field, a generic argument, a variable. The RETURN of a function type is not
-    exempt -- returning a borrow is the same unsound shape as a plain reference return
-    type (#314), by the same reasoning.
-    """
+    """Does this declared type contain a `peek` / `poke` anywhere it is not supported?"""
     from sushi_lang.semantics.typesys import (
         ArrayType, DynamicArrayType, FunctionType, IteratorType, PointerType,
         ReferenceType,

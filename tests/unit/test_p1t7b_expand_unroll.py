@@ -1,21 +1,4 @@
-"""P1-T7b: compile-time unrolling of ``expand(...)`` over parameter packs.
-
-Drives the dedicated unroll post-pass run during monomorphization. The contract:
-
-* ``expand(a in args): BODY`` is replaced, in place, by N independent deep copies
-  of BODY spliced in pack order, with every free reference to the binding var
-  renamed to the fan-out parameter ``args_i`` (0-based).
-* No ``Expand`` node survives.
-* Arity 0 -> zero copies (the Expand vanishes).
-* Each copy is an independent object (no shared AST nodes across copies).
-* Nesting and shadowing behave as documented.
-
-These mirror the synthetic-fixture style of test_p1t3_builder_pack /
-test_monomorphize_pack: a pack ``GenericFuncDef`` is driven end-to-end through
-the REAL ``monomorphize_function`` (so the wiring of fan-out-name derivation +
-unroll is exercised), plus a few direct calls to ``unroll_expands`` for the
-local properties (rename, nesting, shadowing).
-"""
+"""P1-T7b: compile-time unrolling of ``expand(...)`` over parameter packs."""
 import copy
 
 import pytest
@@ -33,9 +16,7 @@ STR = BuiltinType.STRING
 BOOL = BuiltinType.BOOL
 
 
-# ---------------------------------------------------------------------------
 # fixtures
-# ---------------------------------------------------------------------------
 
 def _param(name, is_pack=False):
     tp = TypeParameter(name)
@@ -123,9 +104,7 @@ def _expands_in(node):
     return out
 
 
-# ---------------------------------------------------------------------------
 # direct unroll_expands properties
-# ---------------------------------------------------------------------------
 
 def test_unroll_arity_2_produces_two_renamed_copies():
     body = _expand_body()
@@ -218,9 +197,7 @@ def test_shadowing_let_suppresses_rename_in_tail():
     assert print_stmt.value.id != "args_0"
 
 
-# ---------------------------------------------------------------------------
 # hygienic per-copy local renaming (the P1-T7b local-collision fix)
-# ---------------------------------------------------------------------------
 
 def _expand_body_with_local(var="a", pack="args"):
     """expand(a in args): let string s = a.display(); println(s)"""
@@ -305,9 +282,7 @@ def test_unroll_nested_block_locals_left_alone():
         assert let_stmt.value.id == fanout
 
 
-# ---------------------------------------------------------------------------
 # end-to-end through monomorphize_function
-# ---------------------------------------------------------------------------
 
 def test_monomorphize_unrolls_expand_end_to_end():
     mono = _make_mono()

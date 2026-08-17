@@ -1,17 +1,4 @@
-"""Cross-library generic dedup guarantee (P2-5 Phase 3 / C2).
-
-Two consumer *units* instantiating the same library generic at the same type
-must produce exactly ONE monomorphized definition in the build. Instances
-centralize in ``compilation_order[0]`` and dedupe via ``func_cache``
-(``semantics/generics/monomorphize/functions.py``); until now that guarantee
-was only ever verified by hand with ``nm``. This test regression-protects it:
-it fails if a duplicate definition is ever emitted.
-
-Drives the real compiler (``sushic``): builds a ``.slib`` exporting a
-constrained generic, then a two-unit consumer (which forces the incremental
-per-unit ``.o`` path), and counts definitions of the mangled instance across
-every object file in the build cache.
-"""
+"""Cross-library generic dedup guarantee (P2-5 Phase 3 / C2)."""
 from __future__ import annotations
 
 import os
@@ -98,12 +85,7 @@ def _build_project(tmp_path: Path) -> tuple[Path, dict[str, str]]:
 
 
 def _defined_symbol_count(obj_path: Path, symbol: str) -> int:
-    """Count *definitions* of ``symbol`` in an object file via ``nm``.
-
-    Any symbol-type letter other than ``U`` (undefined) counts as a
-    definition. Darwin prefixes symbols with an underscore, so the match
-    tolerates one leading ``_``.
-    """
+    """Count *definitions* of ``symbol`` in an object file via ``nm``."""
     result = subprocess.run(
         ["nm", str(obj_path)], capture_output=True, text=True,
     )

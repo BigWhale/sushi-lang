@@ -1,5 +1,5 @@
 # A borrow takes the address of storage a frame owns, so a constant cannot be borrowed --
-# CE2400, which had ZERO tests until now (section 7 of old/BORROW.md).
+# CE2400, which had ZERO tests until now.
 #
 # This used to report CE1001, "use of undeclared identifier 'LIMIT'", about a constant
 # declared two lines above, AND CE2400 for the same token: the borrow arm of the scope pass

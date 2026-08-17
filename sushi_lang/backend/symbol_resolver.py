@@ -1,8 +1,4 @@
-"""Symbol resolution and deduplication for two-phase linking.
-
-This module resolves symbol conflicts when multiple modules define the same symbol.
-It applies priority rules: main program > user libraries > stdlib > runtime.
-"""
+"""Symbol resolution and deduplication for two-phase linking."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -14,25 +10,13 @@ class SymbolResolver:
     """Resolves symbol conflicts and selects which definitions to use."""
 
     def __init__(self, symbol_tables: list['SymbolTable']):
-        """Initialize resolver with all symbol tables.
-
-        Args:
-            symbol_tables: List of tables from main, libraries, stdlib, runtime.
-        """
+        """Initialize resolver with all symbol tables."""
         self.symbol_tables = symbol_tables
         self.resolution_map: dict[str, 'SymbolInfo'] = {}  # Final symbol choices
         self.conflicts: list[tuple[str, list['SymbolInfo']]] = []  # Track conflicts
 
     def resolve(self, reachable_symbols: set[str]) -> dict[str, 'SymbolInfo']:
-        """Resolve all reachable symbols, handling duplicates.
-
-        Args:
-            reachable_symbols: Set of symbol names that are actually used.
-
-        Returns:
-            Mapping of symbol_name -> chosen SymbolInfo.
-        """
-        # Build index of all available definitions per symbol
+        """Resolve all reachable symbols, handling duplicates."""
         definitions: dict[str, list['SymbolInfo']] = {}
         declarations: dict[str, list['SymbolInfo']] = {}
 
@@ -50,22 +34,16 @@ class SymbolResolver:
                         declarations[name] = []
                     declarations[name].append(symbol)
 
-        # Resolve each symbol using priority rules
         for symbol_name in reachable_symbols:
             defs = definitions.get(symbol_name, [])
 
             if len(defs) == 0:
-                # No definition found - must be external (libc, etc.)
-                # Keep as declaration from any table that has it
                 decls = declarations.get(symbol_name, [])
                 if decls:
                     self.resolution_map[symbol_name] = decls[0]
-                # If no declaration either, it's truly external - skip
             elif len(defs) == 1:
-                # Unique definition - use it
                 self.resolution_map[symbol_name] = defs[0]
             else:
-                # Multiple definitions - apply priority rules
                 chosen = self._choose_definition(symbol_name, defs)
                 self.resolution_map[symbol_name] = chosen
                 self.conflicts.append((symbol_name, defs))
@@ -77,42 +55,17 @@ class SymbolResolver:
         symbol_name: str,
         candidates: list['SymbolInfo']
     ) -> 'SymbolInfo':
-        """Choose which definition to use when multiple exist.
-
-        Priority order:
-        1. MAIN (main program) - highest priority
-        2. LIBRARY (user libraries)
-        3. STDLIB (standard library)
-        4. RUNTIME (runtime functions)
-
-        If same priority, choose first occurrence (deterministic).
-
-        Args:
-            symbol_name: Name of the conflicting symbol.
-            candidates: List of competing definitions.
-
-        Returns:
-            The chosen SymbolInfo.
-        """
-        # Sort by priority (lower enum value = higher priority)
+        """Choose which definition to use when multiple exist."""
         candidates_sorted = sorted(candidates, key=lambda s: s.source.value)
 
         return candidates_sorted[0]
 
     def get_conflicts(self) -> list[tuple[str, list['SymbolInfo']]]:
-        """Get list of all symbol conflicts that were resolved.
-
-        Returns:
-            List of (symbol_name, list_of_competing_definitions) tuples.
-        """
+        """Get list of all symbol conflicts that were resolved."""
         return self.conflicts
 
     def get_conflict_summary(self) -> str:
-        """Get a human-readable summary of resolved conflicts.
-
-        Returns:
-            Multi-line string summarizing all conflicts.
-        """
+        """Get a human-readable summary of resolved conflicts."""
         if not self.conflicts:
             return "No symbol conflicts detected."
 

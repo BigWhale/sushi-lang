@@ -1,19 +1,4 @@
-# semantics/generics/cloning.py
-"""
-Auto-derived clone() method registration (#134).
-
-Every struct and enum gets a `clone() -> Self` method that deep-copies the
-receiver, mirroring the hash auto-derivation pipeline (semantics/generics/hashing.py):
-Pass 1.8 registers the BuiltinMethod here so Pass 2 can validate `.clone()` calls,
-and the LLVM emitter -- backend code that semantics must not import -- is resolved at
-emission time through a factory the backend deposits in sushi_stdlib/src/common.py.
-
-Unlike hash there is no can-be-cloned exclusion: emit_value_clone handles every shape
-the destructor handles, including recursive types (via out-of-line emission), so a
-plain-data clone is trivially the value itself and every composite is cloneable. The
-generic containers Own<T>/List<T>/HashMap<K,V> keep their own method paths and are
-excluded here (they are named StructTypes but dispatch through their own machinery).
-"""
+"""Auto-derived clone() method registration (#134)."""
 from __future__ import annotations
 
 from typing import Any
@@ -53,11 +38,7 @@ def _validate_enum_clone(call: MethodCall, target_type: Type, reporter: Any) -> 
 
 
 def _lazy_clone_emitter(kind: str, target_type: Type):
-    """Build a clone() emitter that resolves its backend factory on first emission.
-
-    Deferring the lookup keeps Pass 1.8 free of any backend import and any
-    dependency on when the backend's types modules happen to be imported.
-    """
+    """Build a clone() emitter that resolves its backend factory on first emission."""
     def emit(codegen, call, receiver_value, receiver_type, to_i1):
         factory = get_clone_emitter_factory(kind)
         if factory is None:
@@ -68,11 +49,7 @@ def _lazy_clone_emitter(kind: str, target_type: Type):
 
 
 def _register_clone_method(target_type: Type, kind: str, validator, description: str) -> None:
-    """Register the auto-derived clone() method for a type.
-
-    Called from Pass 1.8 only; a duplicate registration is a no-op guard (the pass
-    may see the same type through several tables).
-    """
+    """Register the auto-derived clone() method for a type."""
     if get_builtin_method(target_type, "clone") is not None:
         return  # Already registered
 

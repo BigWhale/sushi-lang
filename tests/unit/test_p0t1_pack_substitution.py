@@ -1,14 +1,4 @@
-"""P0-T1: pack-capable monomorphization substitution model.
-
-Focused TDD-style checks for the frozen pack-representation contract:
-
-- a regular 1:1 generic still builds a 1:1 substitution (unchanged);
-- a synthetic generic whose last type_param has ``is_pack=True`` binds a
-  ``TypePack`` of the trailing types into the substitution;
-- ``substitute_type`` raises when a pack binding is hit in scalar position.
-
-A comprehensive suite is authored separately (P0-TA); these are minimal.
-"""
+"""P0-T1: pack-capable monomorphization substitution model."""
 import types as _pytypes
 
 import pytest
@@ -20,12 +10,7 @@ from sushi_lang.semantics.typesys import BuiltinType, UnknownType
 
 
 class _FakeMono:
-    """Minimal stand-in for Monomorphizer.
-
-    ``build_substitution`` only reaches back into the parent for
-    ``_validate_type_constraints``; record its calls so we can assert the
-    no-pack path is unchanged and the pack path only validates leading params.
-    """
+    """Minimal stand-in for Monomorphizer."""
 
     def __init__(self):
         self.constraint_calls = []
@@ -51,9 +36,7 @@ def _param(name, is_pack=False):
     return tp
 
 
-# ---------------------------------------------------------------------------
 # (a) regular 1:1 generic: unchanged behavior
-# ---------------------------------------------------------------------------
 
 def test_regular_generic_builds_1to1_substitution():
     mono = _FakeMono()
@@ -77,9 +60,7 @@ def test_regular_generic_arity_mismatch_raises():
         fm.build_substitution(generic, (BuiltinType.I32,))
 
 
-# ---------------------------------------------------------------------------
 # (b) trailing pack param absorbs trailing args into a TypePack
-# ---------------------------------------------------------------------------
 
 def test_trailing_pack_absorbs_all_trailing_args():
     mono = _FakeMono()
@@ -138,9 +119,7 @@ def test_too_few_args_for_leading_params_raises():
         fm.build_substitution(generic, (BuiltinType.I32,))
 
 
-# ---------------------------------------------------------------------------
 # (c) scalar-position guard
-# ---------------------------------------------------------------------------
 
 def test_substitute_type_rejects_pack_in_scalar_position_typeparam():
     sub = TypeSubstitutor(_FakeMono())
@@ -163,9 +142,7 @@ def test_substitute_type_scalar_binding_unchanged():
     assert sub.substitute_type(UnknownType("T"), mapping) == BuiltinType.I32
 
 
-# ---------------------------------------------------------------------------
 # TypePack public shape
-# ---------------------------------------------------------------------------
 
 def test_typepack_str_and_hash():
     p = TypePack((BuiltinType.I32, BuiltinType.STRING))

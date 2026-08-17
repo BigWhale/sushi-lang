@@ -16,11 +16,9 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
     children = node.children
     idx = 0
 
-    # Skip the FOREACH token (first child)
     if idx < len(children) and isinstance(children[idx], Token) and children[idx].type == "FOREACH":
         idx += 1
 
-    # Check if next child is a type
     item_type: Optional[Type] = None
     item_type_span: Optional[Span] = None
     if idx < len(children) and isinstance(children[idx], Tree) and children[idx].data in TYPE_NODE_NAMES:
@@ -29,7 +27,6 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
         item_type_span = span_of(type_tree)
         idx += 1
 
-    # Next is NAME
     if idx >= len(children) or not isinstance(children[idx], Token) or children[idx].type != "NAME":
         ice(node, f"foreach_stmt expects NAME at index {idx}, got {children[idx] if idx < len(children) else 'nothing'}")
     name_tok = children[idx]
@@ -37,7 +34,6 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
     item_name_span = span_of(name_tok)
     idx += 1
 
-    # Next is the iterable expression (skip any "in" tokens if present)
     while idx < len(children) and isinstance(children[idx], Token) and children[idx].value == "in":
         idx += 1
 
@@ -45,7 +41,6 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
     iterable = ast_builder._expr(iterable_tree)
     idx += 1
 
-    # Last is the block
     block_tree = children[idx]
     body = ast_builder._block(block_tree)
 
@@ -73,12 +68,7 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
 
 
 def parse_foreach_ref(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
-    """Parse foreach_ref: FOREACH "(" BORROW_MODE NAME "in" expr ")" ":" block
-
-    The reference-binding marker form (#300 phase 1): `foreach(poke r in rows.iter())`
-    binds `r` as a pointer into the container's element storage. The element type is
-    inferred from the iterable, exactly like the untyped plain form.
-    """
+    """Parse foreach_ref: FOREACH "(" BORROW_MODE NAME "in" expr ")" ":" block"""
     children = node.children
     idx = 0
 
@@ -122,20 +112,13 @@ def parse_foreach_ref(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
 
 
 def parse_expand_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Expand:
-    """Parse expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
-
-    Compile-time analog of `foreach`: the body is unrolled once per element of a
-    value pack. Mirrors `parse_foreach_stmt`'s extraction of loop var, iterable,
-    and block.
-    """
+    """Parse expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block"""
     children = node.children
     idx = 0
 
-    # Skip the EXPAND token (first child)
     if idx < len(children) and isinstance(children[idx], Token) and children[idx].type == "EXPAND":
         idx += 1
 
-    # Next is the binding NAME
     if idx >= len(children) or not isinstance(children[idx], Token) or children[idx].type != "NAME":
         ice(node, f"expand_stmt expects NAME at index {idx}, got {children[idx] if idx < len(children) else 'nothing'}")
     name_tok = children[idx]
@@ -143,7 +126,6 @@ def parse_expand_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Expand:
     var_span = span_of(name_tok)
     idx += 1
 
-    # Next is the iterable expression (skip any "in" tokens if present)
     while idx < len(children) and isinstance(children[idx], Token) and children[idx].value == "in":
         idx += 1
 
@@ -151,7 +133,6 @@ def parse_expand_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Expand:
     iterable = ast_builder._expr(iterable_tree)
     idx += 1
 
-    # Last is the block
     block_tree = children[idx]
     body = ast_builder._block(block_tree)
 

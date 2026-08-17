@@ -1,32 +1,11 @@
-"""
-AST Visitor Pattern implementation for the Sushi language compiler.
-
-This module provides base visitor classes for traversing and processing AST nodes
-using the Visitor Pattern, eliminating the need for large match/isinstance chains.
-
-Usage:
-    1. Subclass NodeVisitor[T] for visitors that return values
-    2. Subclass RecursiveVisitor for analysis passes (void return)
-
-Example:
-    class MyAnalyzer(RecursiveVisitor):
-        def visit_let(self, node: Let) -> None:
-            # Custom handling for let statements
-            print(f"Found let statement: {node.name}")
-            super().visit_let(node)  # Continue traversal
-
-    analyzer = MyAnalyzer()
-    analyzer.visit(ast_node)
-"""
+"""AST Visitor Pattern implementation for the Sushi language compiler."""
 from __future__ import annotations
 from abc import ABC
 from typing import TypeVar, Generic, TYPE_CHECKING
 
 from sushi_lang.semantics.ast import Node, Block
 from sushi_lang.semantics.ast import (
-    # Statements
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
-    # Expressions
     Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor,
     DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread
@@ -38,30 +17,17 @@ if TYPE_CHECKING:
 T = TypeVar('T')
 
 class NodeVisitor(ABC, Generic[T]):
-    """
-    Abstract base class for AST node visitors.
-
-    Uses the Visitor Pattern with dynamic dispatch to eliminate large
-    match/isinstance chains. Subclasses implement visit_* methods for
-    each node type they need to handle.
-    """
+    """Abstract base class for AST node visitors."""
 
     def visit(self, node: Node) -> T:
-        """
-        Main entry point for visiting a node.
-
-        Uses dynamic method dispatch to automatically route to the
-        appropriate visit_* method based on the node's actual type.
-        """
+        """Main entry point for visiting a node."""
         method_name = f'visit_{type(node).__name__.lower()}'
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
     def generic_visit(self, node: Node) -> T:
-        """
-        Default visitor that raises an error.
-        Subclasses should either implement specific visit_* methods
-        or override this to provide default behavior.
+        """Default visitor that raises an error. Subclasses should either implement specific
+        visit_* methods or override this to provide default behavior.
         """
         raise NotImplementedError(
             f"Visitor {self.__class__.__name__} doesn't handle {type(node).__name__}"
@@ -69,21 +35,11 @@ class NodeVisitor(ABC, Generic[T]):
 
 
 class RecursiveVisitor(NodeVisitor[None]):
-    """
-    Base class for visitors that recursively traverse the entire AST.
-
-    Automatically visits all child nodes unless a specific visit_* method
-    provides different behavior. Useful for analysis passes.
-
-    Subclasses should override the visit_* methods they care about.
-    The default implementations handle recursive traversal.
-    """
+    """Base class for visitors that recursively traverse the entire AST."""
 
     def generic_visit(self, node: Node) -> None:
         """Default behavior: no action for unknown nodes."""
         pass
-
-    # === Statement visitors ===
 
     def visit_let(self, node: Let) -> None:
         """Visit a let statement. Default: visit the value expression."""
@@ -150,8 +106,6 @@ class RecursiveVisitor(NodeVisitor[None]):
         """Visit a block. Default: visit all statements."""
         for stmt in node.statements:
             self.visit(stmt)
-
-    # === Expression visitors ===
 
     def visit_name(self, node: Name) -> None:
         """Visit a name expression. Default: no action."""

@@ -1,8 +1,4 @@
-"""Type mapping from Sushi semantic types to LLVM IR types.
-
-This module handles the conversion from Sushi language types to their
-LLVM IR representations used in code generation.
-"""
+"""Type mapping from Sushi semantic types to LLVM IR types."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -41,56 +37,37 @@ class TypeMapper:
         enum_table: EnumTable,
         context: 'ir.Context | None' = None,
     ):
-        """Initialize type mapper with caching and type tables.
-
-        Args:
-            cache: TypeCache for struct/enum caching
-            struct_table: Struct table for resolving struct types
-            enum_table: Enum table for resolving enum types
-            context: LLVM context owning the identified struct types (#257). Must be the
-                context of the modules this compilation emits.
-        """
+        """Initialize type mapper with caching and type tables."""
         self.cache = cache
         self.struct_table = struct_table
         self.enum_table = enum_table
         self.context = context if context is not None else ir.Context()
 
-        # LLVM primitive types
         self.i8: ir.IntType = ir.IntType(INT8_BIT_WIDTH)
         self.i16: ir.IntType = ir.IntType(16)
         self.i32: ir.IntType = ir.IntType(INT32_BIT_WIDTH)
         self.i64: ir.IntType = ir.IntType(INT64_BIT_WIDTH)
 
-        # Unsigned types (same LLVM representation as signed)
         self.u8: ir.IntType = ir.IntType(INT8_BIT_WIDTH)
         self.u16: ir.IntType = ir.IntType(16)
         self.u32: ir.IntType = ir.IntType(INT32_BIT_WIDTH)
         self.u64: ir.IntType = ir.IntType(INT64_BIT_WIDTH)
 
-        # Floating-point types
         self.f32: ir.Type = ir.FloatType()
         self.f64: ir.Type = ir.DoubleType()
 
-        # Utility types
         self.i1: ir.IntType = ir.IntType(1)
         self.str_ptr: ir.PointerType = ir.PointerType(self.i8)
         self.void: ir.VoidType = ir.VoidType()
 
-        # String fat pointer type: {i8* data, i32 size, i8 owned}
-        # `owned` is the runtime ownership discriminator (issue #145): 0 = literal/borrow
-        # (backed by a global or aliased, never freed), 1 = heap (malloc'd, freed by RAII).
-        # Same role as the closure fat value's drop_ptr slot. LLVM sizeof stays 16 (already
-        # alignment-padded), so enum/struct/Result layouts are byte-identical to the old
-        # {i8*, i32} and FAT_POINTER_SIZE_BYTES stays 12.
+        # `{i8* data, i32 size, i8 owned}`. `owned` is the runtime discriminator (#145):
+        # 0 = literal or borrow, never freed; 1 = heap, freed by RAII. LLVM sizeof stays 16,
+        # so every embedding layout is byte-identical to the old `{i8*, i32}`.
         self.string_struct: ir.LiteralStructType = self._create_string_struct_type()
 
-        # Closure/function-value fat pointer type:
-        # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr}
-        # `clone_ptr` is `drop_ptr`'s twin and exists for the same reason: capture is
-        # erased from the `fn(...)` type, so a value cloned through a struct field or a
-        # container has no compile-time way to learn its own environment layout. Carrying
-        # a type-erased env duplicator alongside the type-erased env destructor is what
-        # lets a closure be deep-copied at all. Slots 0-2 keep their indices.
+        # `{i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr}`. `clone_ptr` is
+        # `drop_ptr`'s twin: capture is erased from the `fn(...)` type, so a value cloned
+        # through a field or container has no compile-time way to learn its env layout.
         self.closure_struct: ir.LiteralStructType = ir.LiteralStructType([
             self.str_ptr,  # fn_ptr  (opaque; bitcast to the real signature at call site)
             self.str_ptr,  # env_ptr (null when non-capturing)
@@ -98,7 +75,6 @@ class TypeMapper:
             self.str_ptr,  # clone_ptr (null when non-capturing)
         ])
 
-        # Type mapping dictionary for O(1) lookups
         self._builtin_type_map: dict[BuiltinType, ir.Type] = {
             BuiltinType.I8: self.i8,
             BuiltinType.I16: self.i16,
@@ -128,71 +104,40 @@ class TypeMapper:
         ])
 
     def ll_type(self, t: Ty) -> ir.Type:
-        """Map language type to corresponding LLVM IR type.
-
-        Provides the mapping from Sushi language types to their LLVM IR
-        representations used in code generation. Uses dictionary lookup for
-        builtin types (O(1)) and match for complex types.
-
-        Args:
-            t: The language type to convert.
-
-        Returns:
-            The corresponding LLVM IR type.
-
-        Raises:
-            TypeError: If the language type is not supported.
-        """
-        # Fast path: O(1) lookup for builtin types
+        """Map language type to corresponding LLVM IR type."""
         if isinstance(t, BuiltinType):
             llvm_type = self._builtin_type_map.get(t)
             if llvm_type is not None:
                 return llvm_type
             raise_internal_error("CE0018", type=str(t))
 
-        # Complex types require special handling
         match t:
             case ArrayType():
-                # Map ArrayType to LLVM array: [N x element_type]
                 element_type = self.ll_type(t.base_type)
                 return ir.ArrayType(element_type, t.size)
             case DynamicArrayType():
-                # Map DynamicArrayType to LLVM struct: {i32 len, i32 cap, T* data}
                 element_type = self.ll_type(t.base_type)
                 return self._create_dynamic_array_struct_type(element_type)
             case StructType():
-                # Map StructType to LLVM struct: {field1_type, field2_type, ...}
                 return self._get_struct_type(t)
             case EnumType():
-                # Map EnumType to LLVM tagged union struct: {i32 tag, [union of variant data]}
                 return self._get_enum_type(t)
             case IteratorType():
-                # Map IteratorType to LLVM struct based on underlying collection type
                 return self._create_iterator_struct_type(t)
             case ReferenceType():
-                # Map ReferenceType to LLVM pointer: T*
-                # References are zero-cost abstractions that compile to pointers
                 referenced_llvm_type = self.ll_type(t.referenced_type)
                 return ir.PointerType(referenced_llvm_type)
             case PointerType():
-                # Map PointerType to LLVM pointer: T*
-                # Pointers are heap-allocated memory used by Own<T>
                 pointee_llvm_type = self.ll_type(t.pointee_type)
                 return ir.PointerType(pointee_llvm_type)
             case ForeignPtrType():
-                # Map ForeignPtrType (`ptr`) to opaque LLVM i8* for the C ABI.
                 return ir.PointerType(self.i8)
             case FunctionType():
-                # Map a first-class function value to the 4-word fat pointer
-                # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr}. Capture is
-                # erased: a non-capturing value carries null env/drop/clone; a closure
-                # carries a heap env plus a type-erased destructor and duplicator. The
-                # real callee signature
-                # (Result<T,E>(i8* env, params)) is recovered from the semantic
-                # FunctionType at the call site, not from this opaque LLVM type.
+                # The 4-word fat pointer. Capture is erased, so a non-capturing value
+                # carries null env/drop/clone. The real callee signature is recovered from
+                # the semantic FunctionType at the call site, not from this opaque type.
                 return self.closure_struct
             case UnknownType():
-                # UnknownType might be a struct or enum type that needs resolution
                 resolved = resolve_unknown_type(
                     t, self.struct_table.by_name, self.enum_table.by_name
                 )
@@ -200,12 +145,10 @@ class TypeMapper:
                     return self._get_struct_type(resolved)
                 return self._get_enum_type(resolved)
             case _:
-                # Check if this is a TypeParameter (should not reach codegen)
                 from sushi_lang.semantics.generics.types import TypeParameter
                 if isinstance(t, TypeParameter):
                     raise_internal_error("CE0045", type=t.name)
 
-                # Check if this is a GenericTypeRef using shared helper
                 resolved = resolve_generic_type_ref(
                     t, self.struct_table.by_name, self.enum_table.by_name
                 )
@@ -224,10 +167,7 @@ class TypeMapper:
         ])
 
     def _create_iterator_struct_type(self, iterator_type: IteratorType) -> ir.LiteralStructType:
-        """Create LLVM struct type for Iterator<T>.
-
-        The structure: {i32 current_index, i32 length, T* data_ptr}
-        """
+        """Create LLVM struct type for Iterator<T>."""
         element_type = self.ll_type(iterator_type.element_type)
         return ir.LiteralStructType([
             self.i32,
@@ -237,17 +177,13 @@ class TypeMapper:
 
     def _get_struct_type(self, struct_type: StructType) -> ir.LiteralStructType:
         """Create LLVM struct type for user-defined structs with caching."""
-        # Check cache first
         cached = self.cache.get_struct(struct_type.name)
         if cached is not None:
             return cached
 
-        # The generic BUILTIN containers are anonymous LAYOUT DESCRIPTORS, not nominal
-        # types, and each has a hand-written LLVM shape that other backend code builds
-        # directly (`{T*}` in generics/own.py, `{K, V, u8}` in generics/hashmap/types.py).
-        # They must keep matching those, so they stay literal and never take the identified
-        # path below (#257) -- an identified `%Own<i32>` would not equal the `{i32*}` that
-        # emit_own_alloc constructs, which is exactly the CE0017 wall this hit.
+        # The builtin containers are anonymous LAYOUT DESCRIPTORS whose LLVM shape other
+        # backend code builds directly, so they stay LITERAL and never take the identified
+        # path below: an identified `%Own<i32>` would not equal `{i32*}` (#257).
         if struct_type.name.startswith("HashMap<"):
             return self._create_hashmap_struct_type(struct_type)
 
@@ -257,27 +193,18 @@ class TypeMapper:
         if struct_type.name.startswith("Own<") or struct_type.name.startswith("Entry<"):
             return self._create_builtin_literal_struct_type(struct_type)
 
-        # A user struct is an LLVM *identified* type: `%Name = type {...}`. That is what
-        # makes a self-reference expressible (#257) -- `set_body` fills the type IN PLACE,
-        # so a pointer taken to it during the field walk below stays valid and resolves to
-        # the finished layout.
+        # A user struct is an LLVM IDENTIFIED type, which is what makes a self-reference
+        # expressible (#257): `set_body` fills it IN PLACE, so a pointer taken during the
+        # field walk below stays valid. A literal struct type is a structural VALUE with
+        # nothing to fill in, so an embedded `{}` stayed empty and every element GEP
+        # through it had stride ZERO.
         #
-        # This used to cache an empty `ir.LiteralStructType([])` placeholder, walk the
-        # fields, then cache a NEW literal built from them. A literal struct type is a
-        # structural VALUE, so there is nothing to fill in: re-caching replaced the cache
-        # entry, but the `{}` the walk had already embedded into `{i32, i32, {}*}` stayed
-        # empty forever. `struct Tree: List@(Tree) kids` came out as
-        # `{i32, {i32, i32, {}*}}`, so every element GEP through it had stride ZERO and a
-        # freshly computed `Tree[]` disagreed with the struct's own field type.
-        #
-        # `struct_type.name` is used verbatim, including the `<...>` of an interned generic
-        # name (`Pair<i32, bool>`). It must NOT be sanitised or shortened: the name is the
-        # identity, so two monomorphizations that collided on one identified type would
-        # silently share a layout.
+        # `struct_type.name` is used VERBATIM, `<...>` included. It must not be sanitised:
+        # the name is the identity, so two monomorphizations colliding on one identified
+        # type would silently share a layout.
         llvm_struct = self.context.get_identified_type(struct_type.name)
         self.cache.cache_struct(struct_type.name, llvm_struct)
 
-        # Compute field types (a self-reference resolves to the opaque handle above)
         field_types = []
         for _field_name, field_type in struct_type.fields:
             field_types.append(self.ll_type(field_type))
@@ -290,14 +217,12 @@ class TypeMapper:
         from sushi_lang.backend.generics.hashmap.types import get_entry_type
         from sushi_lang.semantics.generics.hashmap import extract_key_value_types
 
-        # Need TypeSystemWrapper for generic helpers
         from sushi_lang.backend.llvm_types import TypeSystemWrapper
         wrapper = TypeSystemWrapper(self, self.struct_table, self.enum_table)
 
         key_type, value_type = extract_key_value_types(struct_type, wrapper)
         entry_type = get_entry_type(wrapper, key_type, value_type)
 
-        # HashMap LLVM struct: {Entry<K,V>[], i32 size, i32 capacity, i32 tombstones}
         buckets_type = ir.LiteralStructType([
             self.i32,
             self.i32,
@@ -317,7 +242,6 @@ class TypeMapper:
         """Create LLVM struct type for List<T>."""
         from sushi_lang.backend.generics.list.types import extract_element_type, get_list_llvm_type
 
-        # Need TypeSystemWrapper for generic helpers
         from sushi_lang.backend.llvm_types import TypeSystemWrapper
         wrapper = TypeSystemWrapper(self, self.struct_table, self.enum_table)
 
@@ -328,19 +252,7 @@ class TypeMapper:
         return llvm_struct
 
     def _create_builtin_literal_struct_type(self, struct_type: StructType) -> ir.LiteralStructType:
-        """Map a generic BUILTIN container's declared fields to a literal LLVM struct.
-
-        Used for `Own<T>` (`{T*}` -- its single field is already a semantic PointerType) and
-        the user-facing `Entry<K, V>` (`{K, V}`). Both have a hand-written LLVM shape that
-        other backend code constructs directly -- generics/own.py's emit_own_alloc and
-        generics/hashmap/types.py's get_user_entry_type -- so they must stay LITERAL and
-        keep matching it. Promoting them to identified types (#257) made every
-        `Own<T>` construction a CE0017: `{i32*}` is not `%"Own<i32>"`.
-
-        This is the pre-#257 behaviour of the generic path, minus the placeholder dance:
-        these types are never self-referential (`Own<T>` names its pointee only through the
-        pointer), so they never needed a tie-the-knot handle in the first place.
-        """
+        """Map a generic BUILTIN container's declared fields to a literal LLVM struct."""
         field_types = [self.ll_type(field_type) for _name, field_type in struct_type.fields]
         llvm_struct = ir.LiteralStructType(field_types)
 
@@ -348,18 +260,7 @@ class TypeMapper:
         return llvm_struct
 
     def _get_enum_type(self, enum_type: EnumType) -> ir.LiteralStructType:
-        """Create LLVM struct type for enum (tagged union) with caching.
-
-        The shape is `{i32 tag, [K x i64] data}` (#300 phase 2). The data member is an
-        i64 array ON PURPOSE: it gives the struct 8-alignment, so the payload starts at
-        offset 8 from an 8-aligned base and every naturally aligned field offset inside
-        it is naturally aligned absolutely. A byte-array data member has alignment 1,
-        which left the whole struct 4-aligned and every wide payload field under-aligned
-        -- the #145/#149 crash class the `align=1` workaround family papered over.
-        Payload accesses still go through an `i8*` bitcast of the data pointer; only the
-        member's TYPE carries the alignment.
-        """
-        # Check cache first
+        """Create LLVM struct type for enum (tagged union) with caching."""
         cached = self.cache.get_enum(enum_type.name)
         if cached is not None:
             return cached
@@ -375,6 +276,5 @@ class TypeMapper:
             ir.ArrayType(self.i64, word_count),
         ])
 
-        # Cache for reuse
         self.cache.cache_enum(enum_type.name, llvm_enum)
         return llvm_enum

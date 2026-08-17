@@ -5,7 +5,7 @@
 # So the closure local is NOT recognised as an owner, is not marked moved, and both the
 # List's element destructor and the local's scope-exit cleanup free the same heap
 # environment. Its docstring claims to cover "every owning local kind"; it names five and
-# covers four. MM.md S2 row 6 / S6.1(2); no upstream issue.
+# covers four.
 # EXPECT_STDOUT_EXACT: "n=1\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

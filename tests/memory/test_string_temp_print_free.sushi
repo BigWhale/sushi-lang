@@ -1,4 +1,4 @@
-# X9 (MM.md F9) and B2: an owned `string` that no binding names must be freed.
+# An owned `string` that no binding names must be freed.
 # Four shapes, all through the print-arg frame's owned-bit-guarded value free:
 #   1. a method result consumed straight as a print argument (`.realise()`),
 #   2. the same through `??` in a helper function,

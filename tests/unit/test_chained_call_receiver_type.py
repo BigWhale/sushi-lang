@@ -1,34 +1,4 @@
-"""Pass 2 stamps the return type of a method call, and the backend may rely on it.
-
-This is the premise the chained-receiver fix stands on. `o.get().clone()` used to be
-**CE0019 -- cannot determine language type for LLVM type**, because
-`emit_receiver_value` (backend/expressions/calls/utils.py) resolved a semantic type
-for a `Name` receiver and a `MemberAccess` receiver and for nothing else. The answer
-was never missing; the backend was reading the wrong place. Pass 2 already computes it
-and writes it onto the node as `inferred_return_type`
-(semantics/passes/types/visitor.py, `visit_methodcall` / `visit_dotcall`).
-
-Two properties matter, and only the second is obvious:
-
-1. the stamp EXISTS on the receiver node after analysis, and
-2. it IS the interned table entry, not a structurally equal rebuild.
-
-(2) is the nominal-identity rule (#240): a `StructType`/`EnumType` is identified by its
-name, the table is the sole authority for what that name means, and a rebuilt type is
-the bug class that produced `CE2002: cannot assign Own@(T) to Own@(T)`. The backend
-hands this stamp straight to `try_emit_struct_clone` / `try_emit_enum_clone`, which look
-the builtin method up on the type object they are given, so a lookalike would silently
-find nothing.
-
-This test pins both properties so a later Pass 2 refactor cannot quietly drop the stamp
-and reintroduce CE0019 in the backend, far from the cause. The `.sushi` corpus covers the
-end-to-end behaviour (`tests/memory/test_own_get_*.sushi`,
-`tests/memory/test_chained_clone_on_getout.sushi`).
-
-`HashMap` is deliberately absent here: it is a virtual unit registered by
-compiler/pipeline.py, which the semantics-only fixture does not replicate (the same
-reason test_docs_stdlib_smoke.py skips it). `List` exercises the identical path.
-"""
+"""Pass 2 stamps the return type of a method call, and the backend may rely on it."""
 from __future__ import annotations
 
 import dataclasses
@@ -114,12 +84,7 @@ def test_own_get_receiver_carries_its_struct_type(analyze_program):
 
 
 def test_list_get_receiver_carries_its_interned_maybe(analyze_program):
-    """`xs.get(0)` on a `List@(i32)` stamps the interned `Maybe<i32>`.
-
-    The enum half of the same rule. `try_emit_enum_clone` requires a real `EnumType`,
-    so a `GenericTypeRef` spelling here would leave the backend with nothing to look a
-    builtin `clone` up on.
-    """
+    """`xs.get(0)` on a `List@(i32)` stamps the interned `Maybe<i32>`."""
     analysis = analyze_program(LIST_GET)
     _assert_clean(analysis)
 
@@ -133,23 +98,14 @@ def test_list_get_receiver_carries_its_interned_maybe(analyze_program):
 
 @pytest.mark.parametrize("src", [OWN_GET, LIST_GET], ids=["own", "list"])
 def test_stamp_survives_to_the_end_of_analysis(analyze_program, src):
-    """The stamp is on the tree the BACKEND receives, not on a discarded copy.
-
-    Monomorphization (Pass 1.6) runs before Pass 2 and deep-copies expression nodes
-    precisely so that later-pass annotations survive
-    (semantics/generics/monomorphize/transformer.py). If that order ever inverts, the
-    backend would read a stamp the monomorphizer had already thrown away, and the
-    symptom would be CE0019 again.
-    """
+    """The stamp is on the tree the BACKEND receives, not on a discarded copy."""
     analysis = analyze_program(src)
     _assert_clean(analysis)
     assert _find_get_call(analysis.program).inferred_return_type is not None
 
 
-# ---------------------------------------------------------------------------
 # The INDEXED receiver (#286). The same premise, one node type over: the backend
 # reads a stamp rather than re-deriving, so the stamp has to be there.
-# ---------------------------------------------------------------------------
 
 INDEX_STRUCT = """\
 struct Row:
@@ -187,14 +143,7 @@ def _find_index_access(program):
 
 
 def test_indexed_struct_receiver_carries_its_element_type(analyze_program):
-    """`rows[0]` on a `Row[]` stamps the interned `Row`.
-
-    Without the stamp this receiver reached `emit_receiver_value`'s fallback with no
-    semantic type, and the backend fell through to mapping the LLVM layout back to a
-    language type -- CE0019 for every struct and enum element (#286). A primitive
-    element never failed, because its LLVM type maps back to exactly one language type,
-    which is what made the defect look narrower than it was.
-    """
+    """`rows[0]` on a `Row[]` stamps the interned `Row`."""
     analysis = analyze_program(INDEX_STRUCT)
     _assert_clean(analysis)
 

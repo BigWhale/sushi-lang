@@ -1,19 +1,4 @@
-"""A diagnostic inside a method body carries the same evidence as one inside a function.
-
-There were TWO Pass 3 entry points for one concept -- `_check_function` for plain
-functions and perk methods, `_check_extension` for extension methods -- and they set up
-the borrow state differently (old/BORROW.md section 7). The divergence was unpinned by any
-test, and it showed as missing evidence: an extension-method parameter was registered
-WITHOUT its declaration span, so every relational diagnostic raised in an extension body
-rendered at tier 2 -- the primary location and nothing else -- while the identical
-program written as a plain function rendered at tier 3 with the note that explains it.
-
-The second location is the half the user cannot deduce: CE2411 says "another owner keeps
-this value", and the note is what says WHICH declaration made it a borrow.
-
-Both entry points are now one `_check_callable`, so this file asserts the two forms
-produce the same shape rather than asserting the extension form alone.
-"""
+"""A diagnostic inside a method body carries the same evidence as one inside a function."""
 from __future__ import annotations
 
 import pytest
@@ -85,12 +70,7 @@ def test_consuming_a_reference_param_is_relational_in_every_callable(analyze, fo
 
 
 def test_writing_through_self_names_the_future_feature(analyze):
-    """CE2421's help must name `poke self` (#327) -- the spelling that works.
-
-    The receiver of a modeless method stays a read-only borrow, and the help points at
-    the mutable-receiver spelling the language now has: declare the method
-    `(poke self, ...)` and the write reaches the caller.
-    """
+    """CE2421's help must name `poke self` (#327) -- the spelling that works."""
     src = (
         "struct Counter:\n"
         "    i32 n\n"
@@ -113,13 +93,7 @@ def test_writing_through_self_names_the_future_feature(analyze):
 
 
 def test_bare_forwarding_of_a_reference_param_explains_the_spelling(analyze):
-    """CE2092 named a type the user DID write (found in PR 4).
-
-    Pass 2 unwraps a reference-typed name at every mention, so forwarding `v` into a
-    `fn(peek i32)` call reports "expected 'peek i32', got 'i32'" for a parameter
-    declared `peek i32`. The rule is right -- a borrow is created at the USE site -- so
-    the fix is the message: say how to spell it.
-    """
+    """CE2092 named a type the user DID write (found in PR 4)."""
     src = (
         "fn apply(fn(peek i32) -> i32 g, peek i32 v) i32:\n"
         "    return Result.Ok(g(v)??)\n"

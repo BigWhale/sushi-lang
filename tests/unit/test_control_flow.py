@@ -1,11 +1,4 @@
-"""Direct unit tests for return-reachability analysis (passes/types/control_flow).
-
-block_always_returns / statement_always_returns decide whether every code path
-through a block or statement ends in a return; the CE0107 "missing return" check
-relies on them. The analysis is pure (it inspects AST node shapes only and never
-touches the validator), so these tests parse real source through the production
-parser and call the functions with a None validator.
-"""
+"""Direct unit tests for return-reachability analysis (passes/types/control_flow)."""
 from __future__ import annotations
 
 from sushi_lang.internals.parser import parse_to_ast

@@ -1,21 +1,4 @@
-"""Regression tests for #141: println / print must not leak heap memory.
-
-Two distinct leak sources were confirmed by isolating with `leaks --atExit`:
-
-1. Print-path C-string temporaries. `emit_print_value` converted the fat-pointer
-   string to a null-terminated C string via `emit_to_cstr` (a malloc) for printf,
-   and built a "\\n" C string the same way for println -- neither was ever freed.
-   Present in EVERY string print (literal or variable), ~32 bytes. The fix prints
-   the fat pointer directly with `printf("%.*s", size, data)` (and a "\\n" format for
-   the newline): zero allocation, nothing to free.
-
-2. Interpolation temporaries. Building "x={x}" allocates an int-to-string buffer and
-   a concatenation buffer; both leaked (independent of println, ~80 bytes). The fix
-   frees the interpolation temporaries once the printed value has been consumed.
-
-These assert behaviour by counting malloc/free in the generated IR (mirroring the
-#59/#60 approach in test_raii_multi_exit.py / test_struct_raii.py).
-"""
+"""Regression tests for #141: println / print must not leak heap memory."""
 from __future__ import annotations
 
 from tests.unit.test_ffi import _emit_ir, _count_in_function
@@ -25,12 +8,7 @@ _FREE = 'call void @"free"'
 
 
 def test_println_string_var_allocates_nothing(tmp_path):
-    """`println(s)` for a string variable emits no malloc (no C-string copy for printf).
-
-    Before the fix the print path malloc'd twice (the value's C-string copy and the
-    "\\n" C-string copy). `%.*s` prints the fat pointer in place, so the print of a
-    global-backed string variable allocates nothing at all.
-    """
+    """`println(s)` for a string variable emits no malloc (no C-string copy for printf)."""
     src = (
         "fn emit_line(string s) i32:\n"
         "    println(s)\n"
@@ -46,11 +24,7 @@ def test_println_string_var_allocates_nothing(tmp_path):
 
 
 def test_println_interpolation_frees_temporaries(tmp_path):
-    """`println("x={x}")` frees every heap temporary it allocates (malloc == free).
-
-    The interpolation builds an int-to-string buffer and a concat buffer; both must be
-    freed once printed. Before the fix the function had unbalanced malloc/free (frees=0).
-    """
+    """`println("x={x}")` frees every heap temporary it allocates (malloc == free)."""
     src = (
         "fn emit_interp(i32 x) i32:\n"
         '    println("x={x}")\n'

@@ -1,12 +1,4 @@
-"""Unit tests for the .slib generic-template codec (Phase 2, P2-T1 + P2-T2).
-
-The locked design reconstructs an imported generic at the consumer by
-**re-parsing its source text** through the existing frontend. These tests are
-the spike that proves the producer-side source slice is self-contained and
-re-parses into a structurally-identical generic, and that the producer's
-export-closure walk ships the library-private symbols a generic references
-(rejecting only genuinely un-shippable ones with CE5006).
-"""
+"""Unit tests for the .slib generic-template codec (Phase 2, P2-T1 + P2-T2)."""
 from __future__ import annotations
 
 import pytest
@@ -111,12 +103,7 @@ def test_slice_survives_surrounding_declarations():
 
 
 def test_round_trip_structural_equality():
-    """A serialized + re-parsed generic collects identically to the original.
-
-    This is the spike: it proves the source slice is self-contained and rebuilds
-    a structurally-equal GenericFuncDef (name, type-params, params, return type,
-    body shape).
-    """
+    """A serialized + re-parsed generic collects identically to the original."""
     orig_program, _ = parse_to_ast(MAX_SRC)
     direct = _collect_generic(orig_program, "max")
 
@@ -173,13 +160,7 @@ def test_closure_check_accepts_self_contained_generic(tmp_path):
 
 
 def test_generics_route_to_templates_only(tmp_path):
-    """E3: a public generic ships ONLY as a template, never in public_functions.
-
-    The producer must keep concrete publics (area) in public_functions while a
-    generic (first_of) lands solely in templates.generic_functions. No leaked
-    public_functions entry, and no residual `is_generic` flag on any concrete
-    function record.
-    """
+    """E3: a public generic ships ONLY as a template, never in public_functions."""
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
 
     src = (
@@ -217,12 +198,7 @@ PACK_SRC = (
 
 
 def test_pack_type_param_carries_is_pack_across_round_trip():
-    """Phase 3 (G2): a '...Ts' type-pack survives serialize -> deserialize.
-
-    The decl source re-parses the '...' marker on its own, but the record also
-    records `is_pack` explicitly. Both the type-param and the value parameter
-    must come back as packs.
-    """
+    """Phase 3 (G2): a '...Ts' type-pack survives serialize -> deserialize."""
     program, _ = parse_to_ast(PACK_SRC)
     func = next(f for f in program.functions if f.name == "show_all")
 
@@ -238,12 +214,7 @@ def test_pack_type_param_carries_is_pack_across_round_trip():
 
 
 def test_v2_pack_public_function_allowed_as_template(tmp_path):
-    """Phase 3 (G1): a public '...Ts' pack exports as a template, not CE0116.
-
-    CE0116 blocks only v1 native '...T' (is_variadic). A v2 type pack carries
-    type_params, so it is routed to templates.generic_functions and never hits
-    the CE0116 check -- the producer must NOT raise.
-    """
+    """Phase 3 (G1): a public '...Ts' pack exports as a template, not CE0116."""
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
 
     unit = _make_unit(tmp_path, PACK_SRC)
@@ -259,8 +230,9 @@ def test_v2_pack_public_function_allowed_as_template(tmp_path):
 
 
 def test_closure_ships_private_helper_reference(tmp_path):
-    """C4b/C5: a public generic calling a private helper SHIPS the helper as
-    a signature record instead of rejecting the export (the old CE5006)."""
+    """C4b/C5: a public generic calling a private helper SHIPS the helper as a signature record
+    instead of rejecting the export (the old CE5006).
+    """
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
 
     src = (
@@ -287,9 +259,7 @@ def test_closure_ships_private_helper_reference(tmp_path):
     assert templates["closure_summary"]["private_functions"] == ["secret"]
 
 
-# ---------------------------------------------------------------------------
 # P2-T4: consumer-side registration of library generic templates.
-# ---------------------------------------------------------------------------
 
 from types import SimpleNamespace
 
@@ -298,12 +268,7 @@ from sushi_lang.semantics.passes.collect import GenericFunctionTable
 
 
 def _analyzer_with_loaded_libraries(loaded: dict) -> SemanticAnalyzer:
-    """Build a bare analyzer wired with a fake library_linker + empty tables.
-
-    Exercises _register_library_generic_functions in isolation: the analyzer
-    only needs a generic_funcs table and a library_linker exposing
-    loaded_libraries.
-    """
+    """Build a bare analyzer wired with a fake library_linker + empty tables."""
     reporter = Reporter(source="", filename="consumer")
     fake_linker = SimpleNamespace(loaded_libraries=loaded)
     analyzer = SemanticAnalyzer(reporter, filename="consumer", library_linker=fake_linker)
@@ -375,9 +340,7 @@ def test_register_library_generic_function_guards_missing_templates():
     assert analyzer.generic_funcs.by_name == {}
 
 
-# ---------------------------------------------------------------------------
 # Phase 2 Step A: perk DEFINITION shipping (definitions only, no impls).
-# ---------------------------------------------------------------------------
 
 PERK_SRC = (
     "perk Ord:\n"
@@ -524,9 +487,7 @@ def test_seed_library_perks_guards_missing_templates():
     assert table.by_name == {}
 
 
-# ---------------------------------------------------------------------------
 # P2-5 Phase 1 (C3): generic STRUCT / ENUM templates.
-# ---------------------------------------------------------------------------
 
 from sushi_lang.semantics.library_templates import (
     serialize_generic_struct,
@@ -595,11 +556,7 @@ def test_generic_enum_round_trip_structural_equality():
 
 
 def test_generic_types_route_to_templates_only(tmp_path):
-    """A generic struct/enum ships ONLY as a template, never as a concrete entry.
-
-    Concrete structs/enums still populate the concrete section; the generic ones
-    land solely in templates.generic_structs / generic_enums.
-    """
+    """A generic struct/enum ships ONLY as a template, never as a concrete entry."""
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
 
     src = (
@@ -655,9 +612,10 @@ def test_closure_check_allows_co_shipped_generic_type_field(tmp_path):
 
 
 def test_closure_allows_concrete_type_field(tmp_path):
-    """C4b/C5: a generic struct with a concrete-type field exports fine - the
-    concrete struct already ships in the manifest's type sections and is
-    registered at the consumer (the old behavior rejected this with CE5006)."""
+    """C4b/C5: a generic struct with a concrete-type field exports fine - the concrete struct
+    already ships in the manifest's type sections and is registered at the consumer (the old
+    behavior rejected this with CE5006).
+    """
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
 
     src = (
@@ -731,9 +689,7 @@ def test_register_library_generic_struct_respects_local_definition():
     assert analyzer.generic_structs.order.count("Box") == 1
 
 
-# ---------------------------------------------------------------------------
 # C4a: concrete perk-impl shipping (templates.perk_impls)
-# ---------------------------------------------------------------------------
 
 from sushi_lang.semantics.library_templates import (
     serialize_perk_impl,
@@ -789,7 +745,8 @@ def test_perk_impl_round_trip():
 
 def test_impl_method_symbol_matches_extension_naming():
     """The manifest symbol matches the backend's extension-method mangling
-    (get_extension_method_name): sanitized type name + "_" + method name."""
+    (get_extension_method_name): sanitized type name + "_" + method name.
+    """
     assert impl_method_symbol("i32", "doubled") == "i32_doubled"
     assert impl_method_symbol("Box<i32>", "unwrap") == "Box__i32_unwrap"
     assert impl_method_symbol("HashMap<string, i32>", "get") == "HashMap__string_i32_get"
@@ -888,8 +845,9 @@ def test_register_library_perk_impl_respects_local_impl():
 
 
 def test_register_library_perk_impl_skips_on_extension_clash():
-    """A local extension method named like an impl method skips the library
-    impl entirely (the CE4007 ambiguity is never created)."""
+    """A local extension method named like an impl method skips the library impl entirely (the
+    CE4007 ambiguity is never created).
+    """
     impl_record, perk_record = _impl_records()
     analyzer = _impl_consumer_analyzer(impl_record, perk_record)
     analyzer.extensions.by_type.setdefault("i32", {})["doubled"] = object()

@@ -1,20 +1,5 @@
-"""P1-T7b: ``expand(...)`` unroll robustness around frozen Type nodes and
-``match`` arm pattern-binding shadowing.
-
-Two regressions are covered here:
-
-BUG 1 (frozen Type nodes): ``_rename_walk`` used to ``setattr`` unconditionally
-for every dataclass field it reached. The ``typesys`` Type nodes
-(``StructType``, ``EnumType``, ...) are ``@dataclass(frozen=True)``; when the
-walk descended into one (e.g. a resolved type carried on a ``let`` or a ``match``
-scrutinee) the write-back raised ``FrozenInstanceError`` -- an uncaught compiler
-crash. The fix makes the rename write-only-if-changed and skip frozen
-dataclasses entirely.
-
-BUG 2 (match-arm shadowing): a ``match`` arm whose pattern binds the loop var
-introduces a shadow scope for THAT arm's body; occurrences of the var inside the
-arm body refer to the pattern binding (a distinct variable) and must NOT be
-renamed to a fan-out param. The scrutinee and other arms are renamed normally.
+"""P1-T7b: ``expand(...)`` unroll robustness around frozen Type nodes and ``match`` arm
+pattern-binding shadowing.
 """
 from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands
 from sushi_lang.semantics.typesys import BuiltinType, StructType
@@ -30,9 +15,7 @@ def _frozen_struct():
     return StructType(name="Box", fields=(("v", I32),))
 
 
-# ---------------------------------------------------------------------------
 # BUG 1: frozen Type nodes reachable from the expand body must not crash
-# ---------------------------------------------------------------------------
 
 def test_rename_does_not_crash_on_frozen_type_on_let():
     # expand(a in args): let b: Box = a   (the `let` carries a FROZEN StructType
@@ -94,9 +77,7 @@ def test_rename_does_not_crash_on_frozen_scrutinee_type():
     assert match_stmt.arms[0].body.statements[0].value.id == "x"
 
 
-# ---------------------------------------------------------------------------
 # BUG 2: a match arm whose pattern binds the loop var shadows it in the arm body
-# ---------------------------------------------------------------------------
 
 def test_match_arm_pattern_binding_shadows_loop_var():
     # expand(a in args):

@@ -1,26 +1,4 @@
-"""Performance-regression harness -- REPORT MODE (P1-5, phase 1).
-
-Measures end-to-end ``sushic`` compile time over a small, committed corpus and
-compares the medians against a per-platform baseline. In this phase the harness
-is **non-gating**: a timing delta (even a large one) is reported, never failed.
-The only hard failure is a corpus program that stops *compiling* -- a real
-correctness signal, not a perf one.
-
-Metrics
-  - ``cold_compile:<prog>`` -- end-to-end compile of each single-file program
-    with ``--no-incremental`` (pure compile cost, no cache effects).
-  - ``cold_build:project`` / ``warm_build:project`` -- a multi-unit build with a
-    wiped vs. populated ``__sushi_cache__``. The warm/cold ratio is the headline
-    guard on the incremental-compilation feature: warm should be far cheaper.
-
-Knobs (env)
-  - ``SUSHI_PERF_SKIP=1``    -- skip the measurement entirely.
-  - ``SUSHI_PERF_SAMPLES=N`` -- samples per metric (median-of-N; default 5).
-
-Refreshing the baseline is deliberate: ``pytest tests/perf --update-baseline``
-rewrites the current platform's section of ``baselines/baseline.json``; commit
-the diff. See ``README.md`` for the documented flip-to-gating criterion.
-"""
+"""Performance-regression harness -- REPORT MODE (P1-5, phase 1)."""
 from __future__ import annotations
 
 import os
@@ -55,11 +33,7 @@ def _timed_run(cmd: List[str], cwd: Path) -> Tuple[float, subprocess.CompletedPr
 
 def _measure(cmd: List[str], cwd: Path, samples: int,
              reset=None) -> Tuple[List[float], subprocess.CompletedProcess]:
-    """Time *cmd* *samples* times. *reset* (optional) runs before each sample.
-
-    Stops early on the first non-zero exit so a broken corpus surfaces fast; the
-    returned process lets the caller report the failure.
-    """
+    """Time *cmd* *samples* times. *reset* (optional) runs before each sample."""
     times: List[float] = []
     last = None
     for _ in range(samples):

@@ -1,13 +1,4 @@
-# semantics/passes/types/compatibility.py
-"""
-Type compatibility checking for type validation.
-
-This module contains functions for checking type compatibility:
-- Assignment compatibility validation
-- Return type compatibility validation
-- Generic type compatibility checking
-- Cast validity checking
-"""
+"""Type compatibility checking for type validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -28,10 +19,8 @@ def validate_assignment_compatibility(validator: 'TypeValidator', declared_type:
     if declared_type is None:
         return  # Can't validate without declared type
 
-    # First validate the expression (this will catch undefined functions, etc.)
     validator.validate_expression(value_expr)
 
-    # Special validation for array literals assigned to array types
     if isinstance(declared_type, ArrayType) and isinstance(value_expr, ArrayLiteral):
         # Check array literal size matches declared size (CE2011)
         if len(value_expr.elements) != declared_type.size:
@@ -44,14 +33,10 @@ def validate_assignment_compatibility(validator: 'TypeValidator', declared_type:
         for element in value_expr.elements:
             propagate_types_to_value(validator, element, declared_type.base_type)
 
-    # Special validation for dynamic array constructors
     if isinstance(declared_type, DynamicArrayType):
         if isinstance(value_expr, DynamicArrayNew):
-            # new() constructor - type matches by definition
             return
         elif isinstance(value_expr, DynamicArrayFrom):
-            # from(array_literal) - validate element types match
-            # Pass expected type for contextual type inference
             inferred_type = infer_dynamic_array_from_type(validator, value_expr, expected_type=declared_type)
             if inferred_type is None:
                 return  # Error already reported or empty array
@@ -62,14 +47,11 @@ def validate_assignment_compatibility(validator: 'TypeValidator', declared_type:
                     b.note("declared here", declared_span)
                 b.emit()
             return
-        # For other expressions (function calls, ??, etc.), fall through to general validation
 
-    # Infer the type of the value expression
     value_type = validator.infer_expression_type(value_expr)
     if value_type is None:
         return  # Can't validate without inferred type
 
-    # Check for type mismatch (using types_compatible to handle struct types)
     if not types_compatible(validator, value_type, declared_type):
         b = er.emit_with(validator.reporter, er.ERR.CE2002, value_span,
                got=display_type(value_type), expected=display_type(declared_type))
@@ -80,73 +62,41 @@ def validate_assignment_compatibility(validator: 'TypeValidator', declared_type:
 
 def validate_return_compatibility(validator: 'TypeValidator', expected_type: Type, return_expr: Expr, return_span: Optional[Span]) -> None:
     """Validate that return expression type matches function return type (CE2003)."""
-    # First validate the expression (this will catch undefined functions, etc.)
     validator.validate_expression(return_expr)
 
-    # Infer the type of the return expression
     actual_type = validator.infer_expression_type(return_expr)
     if actual_type is None:
         return  # Can't validate without inferred type
 
-    # Check for type mismatch
     if not types_compatible(validator, actual_type, expected_type):
         er.emit(validator.reporter, er.ERR.CE2003, return_span,
                got=display_type(actual_type), expected=display_type(expected_type))
 
 
 def resolve_generic_type_ref(validator: 'TypeValidator', ty: Type) -> Type:
-    """Resolve GenericTypeRef to monomorphized EnumType or StructType.
-
-    Uses the centralized TypeResolver for consistent resolution logic.
-
-    Args:
-        validator: The TypeValidator instance.
-        ty: The type to resolve (may be GenericTypeRef or any other type).
-
-    Returns:
-        The resolved EnumType or StructType if ty is a GenericTypeRef with a monomorphized version,
-        otherwise returns ty unchanged.
-    """
+    """Resolve GenericTypeRef to monomorphized EnumType or StructType."""
     resolver = TypeResolver(validator.struct_table.by_name, validator.enum_table.by_name)
     return resolver.resolve_generic_type_ref(ty)
 
 
 def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
-    """Compare two resolved types (no GenericTypeRef or UnknownType resolution).
-
-    This method assumes both types have been through resolution and performs
-    direct comparison with recursive handling for container types.
-
-    Args:
-        validator: The TypeValidator instance.
-        actual: The actual type (already resolved).
-        expected: The expected type (already resolved).
-
-    Returns:
-        True if types are compatible, False otherwise.
-    """
+    """Compare two resolved types (no GenericTypeRef or UnknownType resolution)."""
     from sushi_lang.semantics.typesys import DynamicArrayType, ArrayType
 
-    # Direct equality check
     if actual == expected:
         return True
 
-    # Handle UnknownType -> StructType/EnumType resolution
     if isinstance(actual, UnknownType) and isinstance(expected, UnknownType):
-        # Both are unknown types - check if they refer to the same struct or enum
         return actual.name == expected.name
 
     if isinstance(actual, UnknownType):
-        # Try to resolve actual to struct or enum and compare
         resolved = resolve_unknown_type(actual, validator.struct_table.by_name, validator.enum_table.by_name)
         return resolved == expected
 
     if isinstance(expected, UnknownType):
-        # Try to resolve expected to struct or enum and compare
         resolved = resolve_unknown_type(expected, validator.struct_table.by_name, validator.enum_table.by_name)
         return actual == resolved
 
-    # Handle array types with recursive comparison
     if isinstance(actual, DynamicArrayType) and isinstance(expected, DynamicArrayType):
         return types_compatible(validator, actual.base_type, expected.base_type)
 
@@ -157,22 +107,7 @@ def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: T
 
 
 def _params_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
-    """Compatibility for one parameter INSIDE a function type: no borrow coercion.
-
-    `poke T` may be handed to a place that only reads, so it coerces to `peek T` at a
-    call site. That coercion is a property of the POSITION -- a value being passed once,
-    now -- and it must not travel into a function type, where it would make parameters
-    covariant in mutability:
-
-        fn poker(poke i32 x) i32: x := 999 ...
-        let fn(peek i32) -> i32 g = poker      # accepted before this check
-        g(peek n)                              # writes 999 through a `peek`
-
-    That compiled clean and defeated the entire `peek` write gate (CE2408) through one
-    indirection. The function-type arm recursed through `types_compatible`, which applies
-    the coercion, although its own comment said parameters are invariant. They are: the
-    mutability is part of what the value promises its callers.
-    """
+    """Compatibility for one parameter INSIDE a function type: no borrow coercion."""
     if isinstance(actual, ReferenceType) or isinstance(expected, ReferenceType):
         return (isinstance(actual, ReferenceType) and isinstance(expected, ReferenceType)
                 and actual.mutability == expected.mutability
@@ -183,17 +118,9 @@ def _params_compatible(validator: 'TypeValidator', actual: Type, expected: Type)
 
 def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
     """Check if two types are compatible (handles UnknownType resolution to StructType/EnumType).
-
-    This is a recursive comparison that handles:
-    - Direct type equality
-    - UnknownType -> StructType/EnumType resolution
-    - GenericTypeRef -> EnumType/StructType resolution (for generic types like Result<T>, Box<T>)
-    - ReferenceType compatibility with coercion (poke T -> peek T allowed)
-    - Recursive comparison for container types (arrays, etc.)
     """
     from sushi_lang.semantics.typesys import FunctionType
 
-    # Quick check for direct equality
     if actual == expected:
         return True
 
@@ -212,11 +139,9 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
     # - poke T can be passed where peek T is expected (safe downgrade)
     # - peek T cannot be passed where poke T is expected
     if isinstance(actual, ReferenceType) and isinstance(expected, ReferenceType):
-        # First check if referenced types are compatible
         if not types_compatible(validator, actual.referenced_type, expected.referenced_type):
             return False
 
-        # Check mutability compatibility
         if actual.mutability == expected.mutability:
             return True  # Same mutability
         elif actual.mutability == BorrowMode.POKE and expected.mutability == BorrowMode.PEEK:
@@ -224,25 +149,14 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
         else:
             return False  # peek -> poke not allowed
 
-    # Step 1: Resolve GenericTypeRef to monomorphized EnumType or StructType (if applicable)
     resolved_actual = resolve_generic_type_ref(validator, actual)
     resolved_expected = resolve_generic_type_ref(validator, expected)
 
-    # Step 2: Compare the resolved types (handles UnknownType and recursive array comparison)
     return compare_resolved_types(validator, resolved_actual, resolved_expected)
 
 
 def is_valid_cast(source_type: Type, target_type: Type) -> bool:
-    """Check if a cast from source_type to target_type is valid.
-
-    Args:
-        source_type: The type being cast from.
-        target_type: The type being cast to.
-
-    Returns:
-        True if the cast is valid, False otherwise.
-    """
-    # Same type is always valid (no-op cast)
+    """Check if a cast from source_type to target_type is valid."""
     if source_type == target_type:
         return True
 
@@ -254,9 +168,7 @@ def is_valid_cast(source_type: Type, target_type: Type) -> bool:
         BuiltinType.F32, BuiltinType.F64
     }
 
-    # Both source and target must be numeric types
     if source_type in numeric_types and target_type in numeric_types:
         return True
 
-    # No other casts are allowed (strings, arrays, etc.)
     return False

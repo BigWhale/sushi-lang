@@ -1,10 +1,4 @@
-"""Backend utilities package.
-
-This package contains reusable utility functions for the LLVM backend,
-organized by concern:
-
-- validation: Common precondition checks (builder, function, non-empty)
-"""
+"""Backend utilities package."""
 
 from .validation import (
     require_both_initialized,

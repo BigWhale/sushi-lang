@@ -1,9 +1,4 @@
-"""Validation and element-type parsing for the built-in List<T> methods.
-
-The ir-free half of ``backend/generics/list/``: method recognition, Pass-2
-argument validation, and List<T> element-type resolution. LLVM emission stays in
-``backend/generics/list/``.
-"""
+"""Validation and element-type parsing for the built-in List<T> methods."""
 from typing import Any, Optional
 
 from sushi_lang.semantics.ast import MethodCall
@@ -13,7 +8,6 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
 
 
-# All supported List<T> methods
 BUILTIN_LIST_METHODS = {
     "new",           # List.new() -> List<T>
     "with_capacity", # List.with_capacity(i32) -> List<T>
@@ -52,13 +46,10 @@ def validate_list_method_with_validator(
     num_args = len(call.args)
 
     expected_args = {
-        # 0 arguments
         "new": 0, "len": 0, "capacity": 0, "is_empty": 0,
         "pop": 0, "clear": 0, "shrink_to_fit": 0, "destroy": 0, "free": 0, "debug": 0, "iter": 0,
         "clone": 0,
-        # 1 argument
         "with_capacity": 1, "push": 1, "get": 1, "reserve": 1, "remove": 1,
-        # 2 arguments
         "insert": 2,
     }
 
@@ -89,7 +80,6 @@ def _validate_list_element_type(
     arg = call.args[arg_index]
     element_type = parse_list_types(list_type, validator)
     if element_type is None:
-        # T could not be resolved; still validate the argument expression itself.
         validator.validate_expression(arg)
         return
 
@@ -116,7 +106,6 @@ def parse_list_types(list_type: StructType, validator: Any) -> Optional[Type]:
 
     type_param_str = list_type.name[5:-1]  # strip "List<" and ">"
 
-    # First-class function element type (e.g. List<fn(i32) -> i32>).
     if type_param_str.startswith("fn(") or type_param_str.startswith("fn ("):
         from sushi_lang.semantics.generics.type_strings import resolve_type_from_string
         try:

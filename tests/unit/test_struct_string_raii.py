@@ -1,23 +1,11 @@
-"""Regression tests for #147: string RAII for struct string fields.
-
-A heap `string` stored in a struct field must be freed when the struct goes out of
-scope, and every path that copies such a struct must clone the string field (clone-if-
-owned) so exactly one owner frees each heap buffer -- no leak, no double-free.
-
-Like test_struct_raii.py (#60), these assert behaviour by counting `malloc`/`free` in the
-generated IR: the bug is a silent leak (missing free) / latent double-free (missing clone).
-"""
+"""Regression tests for #147: string RAII for struct string fields."""
 from __future__ import annotations
 
 from tests.unit.test_ffi import _emit_ir, _count_in_function, _ensure_newline
 
 
 def _analysis_codes(tmp_path, src: str) -> list[str]:
-    """Run the front end + semantic analysis and return the diagnostic codes.
-
-    `_emit_ir` asserts the program is clean, so it cannot be used to check a program that is
-    MEANT to be rejected. This stops one step earlier and hands back what was reported.
-    """
+    """Run the front end + semantic analysis and return the diagnostic codes."""
     from sushi_lang.internals.report import Reporter
     from sushi_lang.semantics.generics.active_generics import reset_active_generics
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
@@ -54,13 +42,7 @@ _FREE = '@"free"'
 
 
 def test_struct_string_field_freed_at_scope_exit(tmp_path):
-    """A struct local whose only owning field is a heap `string` frees it at scope exit.
-
-    `"x".upper()` mallocs one heap buffer; it is stored in `p.name`. When `p` leaves
-    `make`'s scope its string field must be freed. Before the fix the struct was never
-    registered for cleanup (`struct_needs_cleanup` ignored strings) so `make` emitted
-    zero frees and leaked the buffer.
-    """
+    """A struct local whose only owning field is a heap `string` frees it at scope exit."""
     src = _STRUCT + (
         "fn make() i32:\n"
         "    let P p = P(name: \"x\".upper())\n"
@@ -76,24 +58,7 @@ def test_struct_string_field_freed_at_scope_exit(tmp_path):
 
 
 def test_byvalue_struct_string_arg_moves_at_call_site(tmp_path):
-    """Passing a struct{string} by value MOVES it. The call site inserts no clone.
-
-    **Inverted by Phase 9.** This test used to assert the opposite -- that the call site
-    CLONED the string field, so the caller and callee each owned an independent buffer and
-    the caller could keep using its value. That was the COPY tier, and the tier is gone: a
-    struct whose only owning content is a string now MOVES like any other owning value.
-
-    So `main` is back to ZERO mallocs, which is what it emitted before #147 added the
-    call-site clone -- but for the opposite reason. Then there was no clone because the
-    struct copy path ignored string fields (a latent double free). Now there is no clone
-    because nothing is copied at all: the callee takes ownership and frees it once.
-
-    The `.upper()` buffer malloc lives inside the string runtime fn, not inlined here, so it
-    does not show up in this count either way.
-
-    The user-visible half of the change is the companion test below: reusing the value after
-    the call is now CE2405.
-    """
+    """Passing a struct{string} by value MOVES it. The call site inserts no clone."""
     src = _STRUCT + (
         "fn consume(P d) i32:\n"
         "    return Result.Ok(d.name.len())\n"
@@ -111,14 +76,7 @@ def test_byvalue_struct_string_arg_moves_at_call_site(tmp_path):
 
 
 def test_nom_struct_string_arg_is_use_after_move(tmp_path):
-    """The user-visible half of `nom`: reusing the value after the call is CE2405.
-
-    This is the whole point of deleting the COPY tier. Before Phase 9 this program compiled,
-    because the call site cloned `x`'s string field and the caller kept an independent buffer.
-    A `nom` parameter takes ownership, so reading `x.name` afterwards is a use-after-move.
-
-    `.clone()` at the call site is the escape, which is what the diagnostic says.
-    """
+    """The user-visible half of `nom`: reusing the value after the call is CE2405."""
     src = _STRUCT + (
         "fn consume(nom P d) i32:\n"
         "    return Result.Ok(d.name.len())\n"
@@ -132,11 +90,7 @@ def test_nom_struct_string_arg_is_use_after_move(tmp_path):
 
 
 def test_borrow_struct_string_arg_stays_usable(tmp_path):
-    """The twin: an UNMARKED parameter borrows, so the same program is clean.
-
-    One word separates the two files' programs, and it is the word the reader can see at
-    the call site (docs/design/borrow-model.md S3).
-    """
+    """The twin: an UNMARKED parameter borrows, so the same program is clean."""
     src = _STRUCT + (
         "fn look(P d) i32:\n"
         "    return Result.Ok(d.name.len())\n"
@@ -150,13 +104,7 @@ def test_borrow_struct_string_arg_stays_usable(tmp_path):
 
 
 def test_ffi_char_return_copied_to_owned(tmp_path):
-    """An FFI `char*` return is copied into a Sushi-owned buffer and freed at scope exit.
-
-    Sushi never frees the foreign pointer, so the marshalling copies it (malloc + memcpy)
-    and marks the result owned=1; the copy is then RAII-freed (`@"free"`) at scope exit, so
-    there is no leak and the foreign buffer is left untouched. Before the fix the foreign
-    pointer was wrapped in place (owned=0) and leaked.
-    """
+    """An FFI `char*` return is copied into a Sushi-owned buffer and freed at scope exit."""
     src = (
         'unsafe external "C" as libc because "getenv returns a borrowed char*":\n'
         '    fn getenv(string name) string = "getenv"\n'

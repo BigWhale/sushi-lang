@@ -1,21 +1,4 @@
-"""Benchmark corpus for the perf harness (P1-5).
-
-Defines the deterministic inputs the harness measures:
-
-  - **single-file programs** under ``programs/`` -- pure-compute, stdlib-free,
-    each stressing a different compiler surface (arithmetic/codegen,
-    generic monomorphization, enum+match). Compiled with ``--no-incremental`` so
-    the metric is pure end-to-end compile cost, free of cache effects.
-
-  - **a multi-unit project** -- written fresh into a tmp dir, used for the
-    cold-vs-warm-build metric. Warm rebuild exercising the ``__sushi_cache__``
-    incremental path should be dramatically faster than the cold build; that
-    ratio is the highest-signal guard on the incremental-compilation feature.
-
-The corpus is intentionally small and stable: a handful of programs keeps the
-CI cost low, and committing the exact sources (rather than sampling the live
-test suite) means the baseline measures the same code every run.
-"""
+"""Benchmark corpus for the perf harness (P1-5)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -41,14 +24,7 @@ def _write(path: Path, content: str) -> None:
 
 
 def make_project(project_dir: Path) -> str:
-    """Write a small two-unit project into *project_dir*; return the entry file.
-
-    Mirrors the fixture shape used by ``tests/unit/test_incremental.py``: a
-    ``helpers/helper`` unit plus a ``main`` that imports it. Stdlib-free and
-    enum-free (multi-unit fingerprinting still trips on enums, issue #26), so the
-    project builds on a bare toolchain. The entry filename (``main.sushi``) is
-    returned for the caller to pass to ``sushic``.
-    """
+    """Write a small two-unit project into *project_dir*; return the entry file."""
     _write(project_dir / "helpers" / "helper.sushi", """\
 const i32 BASE = 10
 

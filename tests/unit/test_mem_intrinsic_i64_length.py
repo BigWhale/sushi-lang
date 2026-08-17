@@ -1,18 +1,5 @@
-"""Guardrail for issues #149 / #151 / #152: ``llvm.memcpy`` / ``llvm.memmove`` /
-``llvm.memset`` intrinsics must be declared with an ``i64`` (size_t) length, never
-``i32``.
-
-Background: a ``string`` is a 3-field fat pointer ``{i8* data, i32 size, i8 owned}``
-(see ``docs/design/string-representation.md``). Passing that raw ``i32`` size field --
-which sits next to the ``owned`` byte and padding -- as a ``mem*`` length lets garbage
-upper bits reach glibc's SIMD routines on x86-64, producing an out-of-bounds access
-(#149). The fix is the ``i64``-length intrinsic with the size zero-extended at the call
-site (#149/#151). The 3-field representation is deliberate (#152 closed), so the
-recurrence surface is guarded here instead: this test fails if a new ``i32``-length
-``mem*`` intrinsic is introduced.
-
-(The ``memcmp`` extern length is covered separately by the ``RESERVED_EXTERNS`` sync in
-``sushi_lang/backend/runtime/core.py``.)
+"""Guardrail for issues #149 / #151 / #152: ``llvm.memcpy`` / ``llvm.memmove`` / ``llvm.memset``
+intrinsics must be declared with an ``i64`` (size_t) length, never ``i32``.
 """
 from __future__ import annotations
 
@@ -32,7 +19,8 @@ _DECL_RE = re.compile(
 
 def _split_top_level(arglist: str) -> list[str]:
     """Split a comma-separated argument list on top-level commas only (respecting
-    parentheses/brackets), so ``ir.PointerType(i8)`` is not split mid-call."""
+    parentheses/brackets), so ``ir.PointerType(i8)`` is not split mid-call.
+    """
     parts: list[str] = []
     depth = 0
     cur: list[str] = []

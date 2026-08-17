@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-Enhanced test runner for the Sushi language compiler.
-
-Provides two-phase testing:
-1. Compilation phase: Validates compilation success/failure/warnings
-2. Runtime phase: Executes compiled binaries and validates runtime behavior
-
-Supports test metadata for specifying expected runtime behavior.
-"""
+"""Enhanced test runner for the Sushi language compiler."""
 
 import atexit
 import io
@@ -56,12 +48,7 @@ SKIP_NO_REPORT = "no interposer report"
 # against, or written to a log file ever carries an escape code.
 
 def _color_enabled() -> bool:
-    """Whether to emit SGR codes.
-
-    Honours NO_COLOR (no-color.org) and FORCE_COLOR, and defaults to off when
-    stdout is not a TTY. The last part matters here: suite output is routinely
-    piped through grep while triaging, and a piped run has to stay greppable.
-    """
+    """Whether to emit SGR codes."""
     if os.environ.get("NO_COLOR"):
         return False
     if os.environ.get("FORCE_COLOR"):
@@ -103,38 +90,7 @@ def _clock(seconds: float) -> str:
 
 
 class StickyBar:
-    """A progress bar pinned in place, with results scrolling upward beneath it.
-
-    Layout, established once at startup:
-
-        rows 1..bar_row-1     earlier output, left alone
-        row  bar_row          the bar -- OUTSIDE the scroll region, so it never moves
-        rows bar_row+1..end   the scroll region: the whole lower screen. Results
-                              appear here and scroll up, vanishing under the bar
-
-    The bar is placed where the cursor already is, and the screen is scrolled ONLY
-    when that would leave too little room:
-
-    - >= MIN_VIEWPORT rows free below the cursor: the bar goes on the current row and
-      nothing scrolls. Whatever is on screen stays exactly where it is.
-    - fewer than that: emit MIN_VIEWPORT newlines, which scrolls the content up by
-      just enough and lands the bar on the row the text had reached. (The arithmetic
-      works out to exactly MIN_VIEWPORT newlines whatever the starting row: to reach
-      the bottom takes `rows - cur`, and the further `cur - (rows - MIN_VIEWPORT)`
-      scrolls the screen, and those sum to MIN_VIEWPORT.)
-
-    Either way the viewport is everything below the bar, so it grows with the window.
-
-    Placing the bar requires knowing where the cursor is, which only the terminal
-    knows -- hence the DSR query in `_cursor_row`. If it fails or times out, the
-    conservative branch (scroll) is taken, which is always safe.
-
-    The scroll region is terminal state, not process state: leaving it set breaks the
-    user's shell until `reset`. Every exit path restores it -- the context manager, an
-    atexit hook, and SIGINT/SIGTERM -- and restoring twice is harmless.
-
-    Only used on a TTY. Everything else (CI, pipes, --json, --verbose) keeps tqdm.
-    """
+    """A progress bar pinned in place, with results scrolling upward beneath it."""
 
     MIN_VIEWPORT = 15    # rows of results wanted below the bar before scrolling
 
@@ -153,14 +109,7 @@ class StickyBar:
         self._prev_handlers: Dict[int, object] = {}
 
     def _cursor_row(self) -> Optional[int]:
-        """Current cursor row via DSR (`ESC[6n`), or None if the terminal won't say.
-
-        The terminal replies `ESC[{row};{col}R` on stdin, so stdin has to be put in
-        raw mode to read it before a newline arrives. Guarded three ways, because a
-        terminal that never answers would otherwise hang the whole run: stdin must be
-        a TTY, the read is on a short select() timeout, and the reply length is
-        capped. Any failure returns None and the caller scrolls instead.
-        """
+        """Current cursor row via DSR (`ESC[6n`), or None if the terminal won't say."""
         try:
             fd = sys.stdin.fileno()
             if not sys.stdin.isatty():
@@ -199,12 +148,7 @@ class StickyBar:
                 pass
 
     def _size(self) -> Tuple[int, int]:
-        """Terminal size, asked of the stream's own fd.
-
-        NOT shutil.get_terminal_size: that consults $COLUMNS first and silently falls
-        back to 80x24, which is why the bar rendered 80 columns wide in a much wider
-        window. os.get_terminal_size(fd) asks the device.
-        """
+        """Terminal size, asked of the stream's own fd."""
         try:
             size = os.get_terminal_size(self.out.fileno())
             return size.lines, size.columns
@@ -313,15 +257,7 @@ class StickyBar:
 
 
 def stdout_contains(stdout: str, expected: str) -> bool:
-    """
-    Substring match for EXPECT_STDOUT_CONTAINS, with one exception.
-
-    A bare number must match as a whole token. Plain `in` lets `42` be satisfied by
-    `420`, `-42` or `1425`, so an assertion can survive the very change it exists to
-    catch -- the Tier 1 cast fixes alter the width of printed integers on purpose.
-    Anchoring on digit/./- boundaries makes the 101 bare-numeric assertions in the
-    suite mean what they say. Non-numeric expectations keep plain substring semantics.
-    """
+    """Substring match for EXPECT_STDOUT_CONTAINS, with one exception."""
     if not _NUMERIC.fullmatch(expected.strip()):
         return expected in stdout
 
@@ -356,18 +292,7 @@ class TestRunner:
     """Enhanced test runner with compilation and runtime testing."""
 
     def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False, parallel_jobs: int = 4, json_output: bool = False, leaks_only: bool = False):
-        """
-        Initialize the test runner.
-
-        Args:
-            tests_dir: Directory containing test files
-            mode: Testing mode ("compile", "runtime", "full")
-            verbose: Enable verbose output
-            parallel_jobs: Number of parallel test jobs
-            json_output: Output results in JSON format
-            leaks_only: Run only the tests that declare EXPECT_NO_LEAKS. A pure
-                selector -- EXPECT_NO_LEAKS is enforced on every run either way.
-        """
+        """Initialize the test runner."""
         self.tests_dir = tests_dir
         self.mode = mode
         self.verbose = verbose
@@ -396,15 +321,7 @@ class TestRunner:
             shutil.rmtree(self.temp_dir)
 
     def run_all_tests(self, filter_pattern: str = None) -> Dict[str, TestResult]:
-        """
-        Run all tests in the test directory.
-
-        Args:
-            filter_pattern: Optional pattern to filter tests by path
-
-        Returns:
-            Dictionary mapping test names to TestResult objects
-        """
+        """Run all tests in the test directory."""
         test_files = sorted(self.tests_dir.rglob("test_*.sushi"))
 
         # Exclude files in helpers or bin subdirectories
@@ -487,15 +404,7 @@ class TestRunner:
         return results
 
     def run_single_test(self, test_file: Path) -> TestResult:
-        """
-        Run a single test file through compilation and optionally runtime phases.
-
-        Args:
-            test_file: Path to the .sushi test file
-
-        Returns:
-            TestResult object with compilation and runtime results
-        """
+        """Run a single test file through compilation and optionally runtime phases."""
         test_name = test_file.name
         category = get_test_category(test_file)
         metadata = parse_test_metadata(test_file)
@@ -541,18 +450,7 @@ class TestRunner:
         return result
 
     def _run_compilation_test(self, test_file: Path, category: str, metadata: TestMetadata) -> Tuple[bool, str]:
-        """
-        Run compilation phase for a test.
-
-        Args:
-            test_file: Path to the test file
-            category: Test category (error/warning/success/runtime)
-            metadata: Parsed test metadata (drives diagnostic assertions on the
-                      compilation path: EXPECT_ERROR_CODE / EXPECT_STDERR_CONTAINS)
-
-        Returns:
-            (success, message) tuple
-        """
+        """Run compilation phase for a test."""
         # Determine expected exit code based on category
         expected_exit_codes = {
             'error': 2,      # Should fail compilation
@@ -610,16 +508,7 @@ class TestRunner:
             return False, f"✗ Compilation: Exception: {e}"
 
     def _check_compilation_diagnostics(self, stderr: str, metadata: TestMetadata) -> Tuple[bool, str]:
-        """
-        Assert expected diagnostics appear in the compiler's stderr.
-
-        Checks EXPECT_ERROR_CODE tokens (e.g. "CE2007") and EXPECT_STDERR_CONTAINS
-        substrings. Both use plain substring matching against stderr.
-
-        Returns:
-            (ok, message) tuple. ok is True when every expectation is met (or none
-            were declared). message describes the first failure.
-        """
+        """Assert expected diagnostics appear in the compiler's stderr."""
         missing = []
         for code in metadata.expect_error_code:
             if code not in stderr:
@@ -637,17 +526,7 @@ class TestRunner:
         return True, "✓ Compilation: diagnostics matched"
 
     def _run_runtime_test(self, test_name: str, test_file: Path, metadata: TestMetadata) -> Tuple[bool, str]:
-        """
-        Run runtime phase for a test.
-
-        Args:
-            test_name: Test file name, used to attribute a skipped leak check
-            test_file: Path to the test file
-            metadata: Test metadata with runtime expectations
-
-        Returns:
-            (success, message) tuple
-        """
+        """Run runtime phase for a test."""
         try:
             # Find the compiled binary
             binary_name = f"test_{test_file.stem}_{os.getpid()}"
@@ -708,37 +587,13 @@ class TestRunner:
             return False, f"✗ Runtime: Exception: {e}"
 
     def _skip_leak_check(self, test_name: str, reason: str) -> Tuple[None, str]:
-        """Record a leak assertion that could not be evaluated, and describe it.
-
-        The single place a skip is produced, so the recorded reason and the reported
-        one are the same string by construction.
-        """
+        """Record a leak assertion that could not be evaluated, and describe it."""
         self.leaks_skipped.append((test_name, reason))
         return None, f"- Leak check skipped: {reason}"
 
     def _check_leaks(self, test_name: str, binary_path: Path,
                      metadata: TestMetadata) -> Tuple[Optional[bool], str]:
-        """
-        Re-run a binary under the malloc-interposer and assert it leaks nothing.
-
-        The interposer (tests/leakcheck/leakcheck.c) is preloaded via LD_PRELOAD
-        (Linux) / DYLD_INSERT_LIBRARIES (macOS). At exit it prints
-        `SUSHI_LEAKCHECK: leaked=<bytes> blocks=<n>` to stderr, counting only
-        allocations made by the program's own code (backend + merged stdlib), so it
-        works identically on both platforms and in hosted CI.
-
-        Args:
-            test_name: Test file name, recorded when the assertion has to be skipped
-            binary_path: The already-compiled binary to re-run
-            metadata: Test metadata (args / stdin / env / cwd / timeout)
-
-        Returns:
-            (True, msg)  no leaks
-            (False, msg) leaks found -- the test fails
-            (None, msg)  interposer unavailable / no report -- the assertion is
-                         SKIPPED, recorded against test_name, and reported. Never a
-                         silent pass.
-        """
+        """Re-run a binary under the malloc-interposer and assert it leaks nothing."""
         shim = leakcheck_lib_path(self.tests_dir.parent)
         if not shim.exists():
             return self._skip_leak_check(test_name, SKIP_NOT_BUILT)
@@ -821,16 +676,7 @@ class TestRunner:
         return False, f"✗ Leak check: leaked {leaked} bytes in {blocks} blocks"
 
     def _validate_runtime_result(self, result: subprocess.CompletedProcess, metadata: TestMetadata) -> Tuple[bool, str]:
-        """
-        Validate runtime execution result against metadata expectations.
-
-        Args:
-            result: subprocess result from binary execution
-            metadata: Test metadata with expectations
-
-        Returns:
-            (success, message) tuple
-        """
+        """Validate runtime execution result against metadata expectations."""
         messages = []
         success = True
 
@@ -890,24 +736,14 @@ class TestRunner:
         return success, full_message
 
     def _emit(self, block: str) -> None:
-        """Write a block of output without corrupting a live progress bar.
-
-        tqdm draws its bar with a carriage return and no trailing newline, so a plain
-        print lands in the middle of it -- the bar stays on screen and the message is
-        appended to it. `tqdm.write` erases the bar, writes, and redraws it below.
-        """
+        """Write a block of output without corrupting a live progress bar."""
         if self._pbar is not None:
             self._pbar.write(block)
         else:
             print(block)
 
     def _print_test_result(self, result: TestResult) -> None:
-        """Print result for a single test.
-
-        Composed into ONE block and emitted once. Results arrive from a thread pool,
-        so emitting line by line would let two failing tests interleave, and would
-        make tqdm tear down and redraw the bar between every line.
-        """
+        """Print result for a single test."""
         status = tint("PASS", GREEN) if result.total_success else tint("FAIL", RED, BOLD)
         lines = [f"[{status}] {result.name}"]
 

@@ -1,36 +1,4 @@
-"""Serialization codec for public generic templates shipped in .slib files.
-
-Phase 2 of the cross-library generics feature ships *instantiable* generic
-function bodies inside the .slib manifest so the consumer can monomorphize them
-locally. The chosen (locked) design reconstructs an imported generic by
-**re-parsing its source text** through the existing frontend - not by a typed-AST
-node codec and not by IR. This keeps the serialized form trivially stable and
-sidesteps the cycles/spans/type-ref hazards of pickling a typed AST.
-
-This module is the producer/consumer codec for a single generic function record:
-
-    serialize_generic_function(func, source_text) -> dict   (producer side)
-    deserialize_generic_function(record) -> FuncDef          (consumer side)
-
-The record schema (one entry in manifest["templates"]["generic_functions"]):
-
-    {
-        "name": str,                       # function name
-        "type_params": [                   # ordered, authoritative for constraints
-            {"name": str, "constraints": [str, ...]},
-            ...
-        ],
-        "source": str,                     # self-contained, re-parsable decl text
-        "free_perks": [str, ...],          # sorted perk names from type-param bounds
-    }
-
-The ``source`` slice is the crux: it covers the WHOLE declaration, from the
-``fn`` / ``public fn`` keyword through the end of the indented body, and ends in
-a trailing newline so it re-parses on its own.
-
-Parser/AST imports are done lazily inside functions to keep this module
-dependency-light and avoid import cycles with the frontend.
-"""
+"""Serialization codec for public generic templates shipped in .slib files."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, List
@@ -42,11 +10,9 @@ if TYPE_CHECKING:
 
 
 def _free_perks_of(node) -> List[str]:
-    """Collect the sorted, de-duplicated set of perk names named in the
-    type-parameter constraints of ``node``.
-
-    Duck-typed on ``type_params``: works for any declaration carrying bounded
-    type parameters (functions, generic structs, generic enums)."""
+    """Collect the sorted, de-duplicated set of perk names named in the type-parameter constraints
+    of ``node``.
+    """
     perks: set[str] = set()
     for tp in (node.type_params or []):
         for c in (getattr(tp, "constraints", None) or []):
@@ -55,11 +21,7 @@ def _free_perks_of(node) -> List[str]:
 
 
 def _type_param_records(node) -> List[dict]:
-    """Serialize a declaration's bounded type parameters to msgpack-safe dicts.
-
-    Shared by the function/struct/enum codecs so the type-param schema stays
-    uniform. ``is_pack`` is carried for every kind even though packs only apply
-    to functions (it stays ``False`` for structs/enums)."""
+    """Serialize a declaration's bounded type parameters to msgpack-safe dicts."""
     return [
         {
             "name": tp.name,
@@ -71,8 +33,9 @@ def _type_param_records(node) -> List[dict]:
 
 
 def _reconcile_type_params(parsed_node, record: dict) -> None:
-    """Reconcile a re-parsed declaration's type-param constraints / pack marker
-    against the authoritative manifest record (the source of truth)."""
+    """Reconcile a re-parsed declaration's type-param constraints / pack marker against the
+    authoritative manifest record (the source of truth).
+    """
     rec_tps = record.get("type_params") or []
     parsed_tps = parsed_node.type_params or []
     if len(rec_tps) == len(parsed_tps):
@@ -83,29 +46,7 @@ def _reconcile_type_params(parsed_node, record: dict) -> None:
 
 
 def slice_decl_source(node, source_text: str) -> str:
-    """Slice the full, self-contained source text of one top-level declaration.
-
-    Works for any node carrying a line-based ``loc`` ``Span`` (functions AND
-    perks - both are top-level decls whose body is the last thing they contain).
-
-    Strategy (verified empirically against the Lark frontend with
-    ``propagate_positions=True``):
-
-    - ``node.loc`` is a line/column ``Span`` (NOT a character offset). Its
-      ``line`` is the line of the ``fn`` / ``public fn`` / ``perk`` keyword
-      (always at column 1 for a top-level declaration) and its ``end_line`` is
-      the line on which the *next* token begins. Because the body is the last
-      thing in the decl, ``end_line`` overshoots into the blank-line gap before
-      the next declaration (or one line past EOF for the final declaration).
-
-    - We therefore take the 1-based inclusive line range
-      ``[loc.line, loc.end_line)`` (i.e. up to but excluding ``end_line``),
-      then strip trailing blank lines and guarantee a single trailing newline.
-
-    This yields exactly the declaration header plus its indented body, with no
-    leading indentation (top-level decls start at column 1), so the slice
-    re-parses as a standalone program.
-    """
+    """Slice the full, self-contained source text of one top-level declaration."""
     loc = getattr(node, "loc", None)
     name = getattr(node, "name", "<decl>")
     if loc is None:
@@ -128,7 +69,6 @@ def slice_decl_source(node, source_text: str) -> str:
 
     decl_lines = lines[start:end]
 
-    # Strip trailing blank lines that the span overshot into.
     while decl_lines and decl_lines[-1].strip() == "":
         decl_lines.pop()
 
@@ -144,15 +84,7 @@ def slice_decl_source(node, source_text: str) -> str:
 
 
 def serialize_generic_function(func: "FuncDef", source_text: str) -> dict:
-    """Produce the manifest record for a single public generic function.
-
-    Args:
-        func: The generic ``FuncDef`` to export (must have non-empty type_params).
-        source_text: Full source text of the unit the function lives in.
-
-    Returns:
-        A msgpack-safe dict matching the record schema documented above.
-    """
+    """Produce the manifest record for a single public generic function."""
     return {
         "name": func.name,
         "type_params": _type_param_records(func),
@@ -162,21 +94,7 @@ def serialize_generic_function(func: "FuncDef", source_text: str) -> dict:
 
 
 def deserialize_generic_function(record: dict) -> "FuncDef":
-    """Reconstruct a ``FuncDef`` from a manifest record by re-parsing its source.
-
-    The record's ``type_params`` are authoritative for constraints and the
-    type-pack marker: after parsing, each rebuilt ``BoundedTypeParam``'s
-    constraints and ``is_pack`` flag are reconciled against the record (the
-    parsed source already carries them, but the record is the source of truth
-    and guards against any future divergence).
-
-    Args:
-        record: A record produced by ``serialize_generic_function``.
-
-    Returns:
-        The single ``FuncDef`` parsed from ``record["source"]``.
-    """
-    # Lazy import to avoid frontend import cycles.
+    """Reconstruct a ``FuncDef`` from a manifest record by re-parsing its source."""
     from sushi_lang.internals.parser import parse_to_ast
 
     program, _tree = parse_to_ast(record["source"])
@@ -193,19 +111,7 @@ def deserialize_generic_function(record: dict) -> "FuncDef":
 
 
 def serialize_generic_struct(struct: "StructDef", source_text: str) -> dict:
-    """Produce the manifest record for a single public generic struct.
-
-    Mirrors ``serialize_generic_function``. The ``source`` slice covers the
-    whole ``struct Name<...>:`` declaration plus its indented fields, so it
-    re-parses on its own at the consumer.
-
-    Args:
-        struct: The generic ``StructDef`` to export (must have type_params).
-        source_text: Full source text of the unit the struct lives in.
-
-    Returns:
-        A msgpack-safe dict matching the generic-template record schema.
-    """
+    """Produce the manifest record for a single public generic struct."""
     return {
         "name": struct.name,
         "type_params": _type_param_records(struct),
@@ -215,10 +121,7 @@ def serialize_generic_struct(struct: "StructDef", source_text: str) -> dict:
 
 
 def deserialize_generic_struct(record: dict) -> "StructDef":
-    """Reconstruct a ``StructDef`` from a manifest record by re-parsing source.
-
-    Mirrors ``deserialize_generic_function``.
-    """
+    """Reconstruct a ``StructDef`` from a manifest record by re-parsing source."""
     from sushi_lang.internals.parser import parse_to_ast
 
     program, _tree = parse_to_ast(record["source"])
@@ -235,18 +138,7 @@ def deserialize_generic_struct(record: dict) -> "StructDef":
 
 
 def serialize_generic_enum(enum: "EnumDef", source_text: str) -> dict:
-    """Produce the manifest record for a single public generic enum.
-
-    Mirrors ``serialize_generic_function``. The ``source`` slice covers the
-    whole ``enum Name<...>:`` declaration plus its indented variants.
-
-    Args:
-        enum: The generic ``EnumDef`` to export (must have type_params).
-        source_text: Full source text of the unit the enum lives in.
-
-    Returns:
-        A msgpack-safe dict matching the generic-template record schema.
-    """
+    """Produce the manifest record for a single public generic enum."""
     return {
         "name": enum.name,
         "type_params": _type_param_records(enum),
@@ -256,10 +148,7 @@ def serialize_generic_enum(enum: "EnumDef", source_text: str) -> dict:
 
 
 def deserialize_generic_enum(record: dict) -> "EnumDef":
-    """Reconstruct an ``EnumDef`` from a manifest record by re-parsing source.
-
-    Mirrors ``deserialize_generic_function``.
-    """
+    """Reconstruct an ``EnumDef`` from a manifest record by re-parsing source."""
     from sushi_lang.internals.parser import parse_to_ast
 
     program, _tree = parse_to_ast(record["source"])
@@ -276,38 +165,13 @@ def deserialize_generic_enum(record: dict) -> "EnumDef":
 
 
 def impl_method_symbol(type_name: str, method_name: str) -> str:
-    """Compute the LLVM symbol name of a perk-impl method.
-
-    Mirrors the sanitization in
-    ``backend/functions/helpers.py:get_extension_method_name`` (perk impls are
-    emitted as synthetic extension methods): ``<`` becomes ``__``, ``>`` is
-    dropped, ``", "`` becomes ``_``. Recording the symbol explicitly in the
-    manifest lets the producer's linkage pass and the consumer's tests key off
-    the manifest instead of re-deriving the scheme.
-    """
+    """Compute the LLVM symbol name of a perk-impl method."""
     sanitized = type_name.replace("<", "__").replace(">", "").replace(", ", "_")
     return f"{sanitized}_{method_name}"
 
 
 def serialize_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
-    """Produce the manifest record for one concrete perk IMPLEMENTATION.
-
-    C4a: a concrete ``extend <Type> with <Perk>:`` block compiles to concrete
-    symbols in the library bitcode, so the consumer never re-emits the bodies -
-    it only needs (i) the method signatures, to register the impl for
-    constraint checking and dispatch, and (ii) the symbol names, to declare and
-    link. The ``source`` slice (the established re-parse idiom) provides the
-    signatures; ``methods[].symbol`` provides the names.
-
-    Args:
-        impl: The concrete ``ExtendWithDef`` to export.
-        source_text: Full source text of the unit the impl lives in.
-
-    Returns:
-        A msgpack-safe dict:
-        ``{"type": str, "perk": str, "source": str,
-           "methods": [{"name": str, "symbol": str}, ...]}``.
-    """
+    """Produce the manifest record for one concrete perk IMPLEMENTATION."""
     from sushi_lang.semantics.passes.collect.perks import _get_type_name
 
     type_name = _get_type_name(impl.target_type)
@@ -323,12 +187,7 @@ def serialize_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
 
 
 def deserialize_perk_impl(record: dict) -> "ExtendWithDef":
-    """Reconstruct an ``ExtendWithDef`` from a manifest record by re-parsing.
-
-    Mirrors ``deserialize_perk``. The consumer registers the result in its
-    perk-impl table (signatures drive type-check and dispatch) and declares the
-    method symbols; the bodies resolve from the library bitcode at link time.
-    """
+    """Reconstruct an ``ExtendWithDef`` from a manifest record by re-parsing."""
     from sushi_lang.internals.parser import parse_to_ast
 
     program, _tree = parse_to_ast(record["source"])
@@ -343,21 +202,7 @@ def deserialize_perk_impl(record: dict) -> "ExtendWithDef":
 
 
 def serialize_perk(perk: "PerkDef", source_text: str) -> dict:
-    """Produce the manifest record for a single perk DEFINITION (the contract).
-
-    Only the perk's definition (its method signatures) is shipped - never its
-    implementations (``extend T with Perk``). The consumer still provides impls
-    for its own instantiation types; shipping the definition merely frees the
-    consumer from having to redeclare a perk a library's exported generic
-    constrains on.
-
-    Args:
-        perk: The ``PerkDef`` to export.
-        source_text: Full source text of the unit the perk lives in.
-
-    Returns:
-        A msgpack-safe dict: ``{"name": str, "source": str}``.
-    """
+    """Produce the manifest record for a single perk DEFINITION (the contract)."""
     return {
         "name": perk.name,
         "source": slice_decl_source(perk, source_text),
@@ -365,17 +210,7 @@ def serialize_perk(perk: "PerkDef", source_text: str) -> dict:
 
 
 def deserialize_perk(record: dict) -> "PerkDef":
-    """Reconstruct a ``PerkDef`` from a manifest record by re-parsing its source.
-
-    Mirrors ``deserialize_generic_function``.
-
-    Args:
-        record: A record produced by ``serialize_perk``.
-
-    Returns:
-        The single ``PerkDef`` parsed from ``record["source"]``.
-    """
-    # Lazy import to avoid frontend import cycles.
+    """Reconstruct a ``PerkDef`` from a manifest record by re-parsing its source."""
     from sushi_lang.internals.parser import parse_to_ast
 
     program, _tree = parse_to_ast(record["source"])

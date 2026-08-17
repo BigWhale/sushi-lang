@@ -1,10 +1,4 @@
-"""
-Array method dispatcher.
-
-This module handles dispatching of built-in array method calls for both
-fixed and dynamic arrays. It serves as the central entry point for all
-array method calls from the expression emission layer.
-"""
+"""Array method dispatcher."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -20,16 +14,7 @@ from .methods import core, iterators, hashing
 
 
 def is_builtin_array_method(method_name: str) -> bool:
-    """Check if a method name is a built-in array method.
-
-    Arrays are a CORE language feature, not stdlib.
-
-    Args:
-        method_name: The method name to check.
-
-    Returns:
-        True if the method is a built-in array method.
-    """
+    """Check if a method name is a built-in array method."""
     # Fixed array methods: len, get, iter, hash, fill, reverse
     # Dynamic array methods: len, get, push, pop, capacity, destroy, free, iter, clone, hash, fill, reverse
     # u8[] specific methods: to_string
@@ -47,39 +32,17 @@ def emit_array_method(
     semantic_type: 'Type',
     to_i1: bool
 ) -> ir.Value:
-    """Emit LLVM IR for built-in array method calls.
-
-    Arrays are a CORE language feature that use inline emission.
-    This function dispatches to specialized emitters based on method name
-    and array type (fixed vs dynamic).
-
-    Args:
-        codegen: The LLVM code generator.
-        expr: The method call expression.
-        receiver_value: The LLVM value of the array.
-        receiver_type: The LLVM type of the array.
-        semantic_type: The semantic type of the array (DynamicArrayType or FixedArrayType).
-        to_i1: Whether to convert result to i1.
-
-    Returns:
-        The result of the array method call.
-
-    Raises:
-        NotImplementedError: If the method is not implemented for the array type.
-    """
+    """Emit LLVM IR for built-in array method calls."""
     method_name = expr.method
 
-    # Fixed array methods
     if isinstance(receiver_type, ir.ArrayType):
         match method_name:
             case "len":
-                # Fixed array len: return array size as constant
                 array_size = receiver_type.count
                 len_value = ir.Constant(codegen.types.i32, array_size)
                 return codegen.utils.as_i1(len_value) if to_i1 else len_value
 
             case "get":
-                # Fixed array get: return Maybe<T> with bounds checking
                 from .methods.safe_access import emit_fixed_array_get_maybe
                 index_arg = expr.args[0]
                 index_value = codegen.expressions.emit_expr(index_arg)
@@ -89,11 +52,9 @@ def emit_array_method(
                 return emit_fixed_array_get_maybe(codegen, receiver_value, receiver_type, index_value, semantic_type, to_i1)
 
             case "iter":
-                # Fixed array iter: create iterator
                 return iterators.emit_fixed_array_iter(codegen, expr, receiver_value, receiver_type, to_i1)
 
             case "hash":
-                # Fixed array hash: compute hash of all elements
                 return hashing.emit_fixed_array_hash_direct(codegen, expr, receiver_value, receiver_type, to_i1)
 
             case "clone":
@@ -105,22 +66,15 @@ def emit_array_method(
                 return emit_value_clone(codegen, receiver_value, semantic_type)
 
             case "fill":
-                # Fixed array fill: fill all elements with a value
-                # Need to get pointer to the array variable for in-place modification
-                #
-                # Deliberately NOT routed through resolve_name_slot (#248), unlike every
-                # other address site. fill/reverse WRITE through the pointer, and a
-                # constant's global carries `global_constant = true` -- i.e. .rodata, so
-                # the store would be undefined behaviour (a likely SIGBUS) rather than a
-                # diagnostic. Pass 2 rejects a mutating method on a constant receiver
-                # with CE2096, so a constant never reaches here; keeping this on the
-                # locals-only lookup means it cannot start writing to .rodata even if
-                # that check is ever bypassed.
+                # Deliberately NOT through resolve_name_slot (#248), unlike every other
+                # address site: fill/reverse WRITE through the pointer, and a constant's
+                # global is .rodata, where a store is undefined behaviour rather than a
+                # diagnostic. CE2096 rejects it in Pass 2; the locals-only lookup here
+                # means no such binary can be produced even if that check is bypassed.
                 from sushi_lang.semantics.ast import Name
                 if isinstance(expr.receiver, Name):
                     array_ptr = codegen.memory.find_local_slot(expr.receiver.id)
                 else:
-                    # For other cases, allocate temp and store
                     array_ptr = codegen.builder.alloca(receiver_type, name="temp_array")
                     codegen.builder.store(receiver_value, array_ptr)
                 fill_value = codegen.expressions.emit_expr(expr.args[0])
@@ -134,7 +88,6 @@ def emit_array_method(
                 if isinstance(expr.receiver, Name):
                     array_ptr = codegen.memory.find_local_slot(expr.receiver.id)
                 else:
-                    # For other cases, allocate temp and store
                     array_ptr = codegen.builder.alloca(receiver_type, name="temp_array")
                     codegen.builder.store(receiver_value, array_ptr)
                 return core.emit_fixed_array_reverse(codegen, array_ptr, receiver_type)
@@ -142,18 +95,14 @@ def emit_array_method(
             case _:
                 raise NotImplementedError(f"Fixed array method not implemented: {method_name}")
 
-    # Dynamic array methods - unwrap pointer if needed
     if isinstance(receiver_type, ir.PointerType):
         array_struct_type = receiver_type.pointee
     else:
         array_struct_type = receiver_type
 
-    # The methods on `&T` are the methods on `T`. The receiver may be a `peek`/`poke`
-    # array parameter, and the arms below read `semantic_type.base_type` for the element
-    # type -- `.free()` and `.clone()` raise CE0042 on a miss, which is what made
-    # `a.clone()` on a reference receiver unusable as CE2411's documented escape (#301).
-    # Unwrapped ONCE here, where the dynamic-array section starts, rather than per arm:
-    # `push` used to carry its own copy of this unwrap.
+    # The methods on `&T` are the methods on `T`. The arms below read
+    # `semantic_type.base_type`, so a reference receiver raised CE0042 and made `a.clone()`
+    # unusable as CE2411's escape (#301). Unwrapped ONCE here, not per arm.
     semantic_type = deref_type(semantic_type)
 
     match method_name:
@@ -164,12 +113,9 @@ def emit_array_method(
             return core.emit_dynamic_array_capacity(codegen, receiver_value, to_i1)
 
         case "get":
-            # Dynamic array get: return Maybe<T> with bounds checking
             from .methods.safe_access import emit_dynamic_array_get_maybe
             index_value = codegen.expressions.emit_expr(expr.args[0])
-            # Cast index to i32 if it's a different integer type
             if index_value.type != codegen.types.i32:
-                # Determine signedness based on type
                 is_signed = index_value.type in (codegen.types.i8, codegen.types.i16, codegen.types.i64)
                 index_value = codegen.utils.convert_int_to_i32(index_value, is_signed=is_signed)
             return emit_dynamic_array_get_maybe(codegen, receiver_value, array_struct_type, index_value, semantic_type, to_i1)
@@ -190,7 +136,6 @@ def emit_array_method(
             return core.emit_dynamic_array_pop(codegen, receiver_value, array_struct_type, to_i1)
 
         case "free":
-            # Extract element type from semantic type
             if isinstance(semantic_type, DynamicArrayType):
                 element_semantic_type = semantic_type.base_type
             else:
@@ -201,7 +146,6 @@ def emit_array_method(
             return core.emit_dynamic_array_destroy(codegen, receiver_value, array_struct_type, semantic_type)
 
         case "iter":
-            # Dynamic array iter: create iterator
             return iterators.emit_dynamic_array_iter(codegen, expr, receiver_value, array_struct_type, to_i1)
 
         case "clone":
@@ -221,16 +165,13 @@ def emit_array_method(
             return emit_byte_array_to_string_checked(codegen, expr, receiver_value, array_struct_type, to_i1)
 
         case "hash":
-            # Dynamic array hash: compute hash of all elements
             return hashing.emit_dynamic_array_hash_direct(codegen, expr, receiver_value, array_struct_type, to_i1)
 
         case "fill":
-            # Dynamic array fill: fill all elements with a value
             fill_value = codegen.expressions.emit_expr(expr.args[0])
             return core.emit_dynamic_array_fill(codegen, receiver_value, array_struct_type, fill_value)
 
         case "reverse":
-            # Dynamic array reverse: reverse in-place
             return core.emit_dynamic_array_reverse(codegen, receiver_value, array_struct_type)
 
         case _:

@@ -18,7 +18,6 @@ def parse_let_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Let:
     if nm is None:
         ice(node, "NAME missing")
 
-    # Extract type annotation
     type_node = None
     for child in node.children:
         if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
@@ -27,8 +26,6 @@ def parse_let_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Let:
 
     ty = ast_builder._parse_type(type_node) if type_node else None
 
-    # A block-body lambda RHS (`let h = |x|: <block>`) is admitted only here, not as
-    # a general expression (it ends in a _DEDENT, not a _NEWLINE). Build it directly.
     lambda_block_node = first_tree(node.children, "lambda_block")
     if lambda_block_node is not None:
         from sushi_lang.semantics.ast_builder.expressions import lambdas
@@ -51,7 +48,6 @@ def parse_let_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Let:
 
 def parse_rebind_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Rebind:
     """Parse rebind_stmt: postfix ":=" expr"""
-    # Find the target (postfix expression - can be Name or MemberAccess)
     target_node = first_tree(node.children, "maybe_call")
     if target_node is None:
         ice(node, "target missing")

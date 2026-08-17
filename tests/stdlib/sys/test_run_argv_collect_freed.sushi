@@ -1,5 +1,4 @@
 # `run()` collects its trailing arguments into an argv `string[]` that the CALLER owns
-# (BORROW.md bug 2).
 #
 # The collected array used to be relinquished to the callee, exactly as a Sushi `...T`
 # call does -- but `run`'s body is generated IR that frees nothing, so the whole argv had

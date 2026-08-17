@@ -1,4 +1,3 @@
-# semantics/passes/collect/enums.py
 """Enum definition collection for Phase 0."""
 
 from __future__ import annotations
@@ -28,34 +27,19 @@ class EnumTable:
     """Table of enum types collected in Phase 0."""
     by_name: Dict[str, EnumType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
-    # Where each name was declared; see StructTable.spans. A name present in by_name
-    # but absent here was predefined by the compiler.
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
 
 
 @dataclass
 class GenericEnumTable:
-    """Table of generic enum types collected in Phase 0.
-
-    Generic enums are enum definitions with type parameters (e.g., Result<T>).
-    They are stored separately from concrete enums because they need to be
-    instantiated with concrete type arguments during monomorphization.
-    """
+    """Table of generic enum types collected in Phase 0."""
     by_name: Dict[str, GenericEnumType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
 
 
 class EnumCollector:
-    """Collector for enum definitions.
-
-    Collects both regular and generic enum definitions during Phase 0, validating:
-    - No duplicate names (across regular, generic, and struct namespaces)
-    - No duplicate variant names within an enum
-    - No dynamic array fields in enum variants (unsupported)
-
-    Also registers predefined enums (FileMode, FileResult, FileError, SeekFrom).
-    """
+    """Collector for enum definitions."""
 
     def __init__(
         self,
@@ -66,16 +50,7 @@ class EnumCollector:
         generic_structs: 'GenericStructTable',
         known_types: Set[Type]
     ) -> None:
-        """Initialize enum collector.
-
-        Args:
-            reporter: Error reporter
-            enums: Shared regular enum table to populate
-            generic_enums: Shared generic enum table to populate
-            structs: Regular struct table for duplicate checking
-            generic_structs: Generic struct table for duplicate checking
-            known_types: Set of known types for registration
-        """
+        """Initialize enum collector."""
         self.r = reporter
         self.enums = enums
         self.generic_enums = generic_enums
@@ -84,11 +59,7 @@ class EnumCollector:
         self.known_types = known_types
 
     def collect(self, root: Program) -> None:
-        """Collect all enum definitions from program AST.
-
-        Args:
-            root: Program AST node
-        """
+        """Collect all enum definitions from program AST."""
         enums = getattr(root, "enums", None)
         if isinstance(enums, list):
             for enum in enums:
@@ -96,24 +67,7 @@ class EnumCollector:
                     self._collect_enum_def(enum)
 
     def register_predefined_enums(self) -> None:
-        """Register predefined enums for file operations and error handling.
-
-        These enums are built into the language and available globally:
-        - FileMode: File open modes (Read, Write, Append, ReadB, WriteB, AppendB)
-        - SeekFrom: Seek origins (Start, Current, End)
-        - FileError: File error types (NotFound, PermissionDenied, etc.)
-        - FileResult: Result type for open() with Ok(file) and Err() variants
-        - StdError: Generic standard library errors
-        - IoError: I/O operation errors
-        - ProcessError: Process control errors
-        - EnvError: Environment variable errors
-        - MathError: Mathematical operation errors
-
-        Note: FileResult uses Ok/Err variant names (not Success/Error) which is
-        consistent with Result<T, E> naming. There is no token conflict because
-        variants are always qualified with the enum name (FileResult.Ok vs Result.Ok).
-        """
-        # FileMode enum - file open modes
+        """Register predefined enums for file operations and error handling."""
         file_mode_enum = EnumType(
             name="FileMode",
             variants=(
@@ -129,7 +83,6 @@ class EnumCollector:
         self.enums.order.append("FileMode")
         self.known_types.add(file_mode_enum)
 
-        # SeekFrom enum - seek origins
         seek_from_enum = EnumType(
             name="SeekFrom",
             variants=(
@@ -142,8 +95,6 @@ class EnumCollector:
         self.enums.order.append("SeekFrom")
         self.known_types.add(seek_from_enum)
 
-        # FileError enum - file error types
-        # Maps errno values to user-friendly error variants
         file_error_enum = EnumType(
             name="FileError",
             variants=(
@@ -178,7 +129,6 @@ class EnumCollector:
         self.enums.order.append("FileResult")
         self.known_types.add(file_result_enum)
 
-        # StdError enum - Generic standard library errors
         std_error_enum = EnumType(
             name="StdError",
             variants=(
@@ -189,7 +139,6 @@ class EnumCollector:
         self.enums.order.append("StdError")
         self.known_types.add(std_error_enum)
 
-        # IoError enum - I/O operation errors
         io_error_enum = EnumType(
             name="IoError",
             variants=(
@@ -202,7 +151,6 @@ class EnumCollector:
         self.enums.order.append("IoError")
         self.known_types.add(io_error_enum)
 
-        # ProcessError enum - Process control errors
         process_error_enum = EnumType(
             name="ProcessError",
             variants=(
@@ -215,7 +163,6 @@ class EnumCollector:
         self.enums.order.append("ProcessError")
         self.known_types.add(process_error_enum)
 
-        # EnvError enum - Environment variable errors
         env_error_enum = EnumType(
             name="EnvError",
             variants=(
@@ -228,7 +175,6 @@ class EnumCollector:
         self.enums.order.append("EnvError")
         self.known_types.add(env_error_enum)
 
-        # MathError enum - Mathematical operation errors
         math_error_enum = EnumType(
             name="MathError",
             variants=(
@@ -243,19 +189,7 @@ class EnumCollector:
         self.known_types.add(math_error_enum)
 
     def _collect_enum_def(self, enum: EnumDef) -> None:
-        """Collect enum definition and create EnumType or GenericEnumType.
-
-        If the enum has type_params (e.g., enum Result<T>:), it is stored as a
-        GenericEnumType in the generic_enums table. Otherwise, it is stored as
-        a regular EnumType in the enums table.
-
-        Note: For Phase 0, the grammar does not support user-defined generic enums yet.
-        This code is defensive and prepares for future phases when the grammar will
-        support enum Result<T>: syntax.
-
-        Args:
-            enum: Enum definition AST node
-        """
+        """Collect enum definition and create EnumType or GenericEnumType."""
         name = getattr(enum, "name", None)
         if not isinstance(name, str):
             return
@@ -267,7 +201,6 @@ class EnumCollector:
         type_params_raw = getattr(enum, "type_params", None)
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
-        # Check for duplicate enum names (both regular and generic namespaces)
         if name in self.enums.by_name:
             note_first_declaration(
                 er.emit_with(self.r, ERR.CE2046, name_span, name=name),
@@ -299,7 +232,6 @@ class EnumCollector:
             ).emit()
             return
 
-        # Collect enum variants
         variants_list: List[EnumVariantInfo] = []
         variant_names: Set[str] = set()
 
@@ -312,21 +244,17 @@ class EnumCollector:
             if not isinstance(variant_name, str):
                 continue
 
-            # Check for duplicate variant names
             if variant_name in variant_names:
                 er.emit(self.r, ERR.CE2047, variant_loc, name=variant_name, enum_name=name)
                 continue
 
-            # Convert associated types list to tuple
             if variant_types is None:
                 variant_types = []
 
             # A reference payload has no semantics -- the enum may outlive what it borrows
-            # (CE2416, #316) -- and `Result@(peek T, E)` is exactly how a returned borrow
-            # escapes into a `match` (#314). Reported, then kept, for the same
-            # error-recovery reason as a struct field: dropping the payload would report a
-            # spurious arity error at every construction. There is no per-payload span, so
-            # the variant's own span carries it.
+            # (CE2416, #316). Reported, then KEPT: dropping it would report a spurious arity
+            # error at every construction. The variant's span carries it, there being no
+            # per-payload one.
             for assoc_type in variant_types:
                 reject_reference_in(self.r, assoc_type, variant_loc, ERR.CE2416)
 
@@ -336,7 +264,6 @@ class EnumCollector:
                 associated_types=tuple(variant_types)
             ))
 
-        # Branch based on whether this is a generic enum or regular enum
         if type_params and len(type_params) > 0:
             # Generic enum - store in generic_enums table
             # Preserve BoundedTypeParam objects (Phase 4: constraint validation)
@@ -360,7 +287,6 @@ class EnumCollector:
 
             # Note: Generic enums are not added to known_types until instantiated
         else:
-            # Regular enum - store in enums table (existing behavior)
             enum_type = EnumType(
                 name=name,
                 variants=tuple(variants_list)
@@ -370,5 +296,4 @@ class EnumCollector:
             self.enums.by_name[name] = enum_type
             self.enums.spans[name] = name_span
 
-            # Register enum type as known type for future lookups
             self.known_types.add(enum_type)

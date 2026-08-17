@@ -1,12 +1,4 @@
-"""
-Linux-specific stdio handle declarations.
-
-On Linux (glibc and musl), the C standard library exposes stdin/stdout/stderr
-as direct global symbols without the double-underscore prefix:
-- stdin  (not __stdinp)
-- stdout (not __stdoutp)
-- stderr (not __stderrp)
-"""
+"""Linux-specific stdio handle declarations."""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src._platform.posix import stdio as posix_stdio

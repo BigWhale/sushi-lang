@@ -12,13 +12,11 @@ from sushi_lang.sushi_stdlib.src._platform.posix.files import (
     declare_rmdir,
 )
 
-# macOS-specific constants for open() flags
 O_RDONLY = 0
 O_WRONLY = 1
 O_CREAT = 0x0200
 O_TRUNC = 0x0400
 
-# Re-exported for the platform dispatcher (get_platform_module); referenced dynamically.
 __all__ = [
     "declare_stat",
     "declare_access",

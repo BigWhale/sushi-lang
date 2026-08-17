@@ -1,27 +1,4 @@
-"""One counted walk over contiguous elements, for the containers that all do it.
-
-List and HashMap each walk `data[0..count)` to destroy elements, to initialise
-slots, or to print them. The loop is the same every time -- a counter alloca, a
-`i < count` header, a GEP, a body, an increment -- and it was written out by hand
-at nine sites, which is how HashMap.free and HashMap.destroy ended up as
-byte-identical copies of each other.
-
-The body is a callback so the caller keeps ownership of what happens per element,
-and of the value it computes: this helper emits blocks, it does not produce a
-result. Callbacks may append blocks of their own (emit_value_destructor does), so
-the loop always branches from `codegen.builder.block` as it stands *after* a
-callback returns, never from the block it positioned at before.
-
-This emits through the AMBIENT `codegen.builder`, never a builder passed in. A caller
-emitting an out-of-line function body must therefore SWAP `codegen.builder` (and
-`codegen.func`) for the duration, the way `_get_or_emit_dtor_func`,
-`_get_or_emit_clone_func` and the closure env destructor in runtime/closures.py do --
-not thread its own builder down. Threading it was #257's second defect: the loop
-blocks went to the caller's function while the callback's body went to the
-out-of-line one, so the IR referenced a value defined in another function. Threading
-a builder here would not have been enough either, since the element GEP goes through
-`gep_utils`, which reaches for the ambient builder as well.
-"""
+"""One counted walk over contiguous elements, for the containers that all do it."""
 
 from typing import Any, Callable, Optional
 
@@ -30,10 +7,8 @@ import llvmlite.ir as ir
 from sushi_lang.backend import gep_utils
 
 
-# (element_ptr, index) -> None. Emits the per-element body.
 ElementFn = Callable[[ir.Value, ir.Value], None]
 
-# (element_ptr, index) -> i1. True means "run the body for this element".
 PredicateFn = Callable[[ir.Value, ir.Value], ir.Value]
 
 
@@ -47,22 +22,7 @@ def emit_container_walk(
     null_guard: bool = False,
     prefix: str = "walk",
 ) -> None:
-    """Walk `data_ptr[0..count)`, calling `on_element` for each element.
-
-    Leaves the builder positioned after the loop.
-
-    Args:
-        codegen: LLVM codegen instance.
-        data_ptr: Pointer to the first element (T*).
-        count: How many elements to walk (i32).
-        on_element: Emits the body for one element. Must not terminate its block.
-        should_visit: Optional filter. Given the element, returns an i1; the body
-            runs only when it is true. HashMap uses this to visit occupied slots
-            only. May emit instructions (the state load, the comparison).
-        null_guard: Wrap the whole loop in `if data_ptr != null`. Needed where the
-            container may already have been emptied.
-        prefix: Block-name prefix, so nested walks stay readable in the IR.
-    """
+    """Walk `data_ptr[0..count)`, calling `on_element` for each element."""
     builder = codegen.builder
 
     if null_guard:
@@ -98,7 +58,6 @@ def _emit_walk(
 
     builder.branch(cond_bb)
 
-    # i < count
     builder.position_at_end(cond_bb)
     index = builder.load(index_slot, name=f"{prefix}_i_val")
     builder.cbranch(
@@ -113,7 +72,6 @@ def _emit_walk(
 
     if should_visit is None:
         on_element(element_ptr, index)
-        # The body may have appended blocks; branch from wherever we now are.
         builder.branch(next_bb)
     else:
         visit = should_visit(element_ptr, index)
@@ -124,7 +82,6 @@ def _emit_walk(
         on_element(element_ptr, index)
         builder.branch(next_bb)
 
-    # i += 1
     builder.position_at_end(next_bb)
     index = builder.load(index_slot, name=f"{prefix}_i_val")
     builder.store(builder.add(index, one, name=f"{prefix}_i_next"), index_slot)

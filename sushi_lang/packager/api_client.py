@@ -20,21 +20,7 @@ def api_request(
     token: str | None = None,
     method: str = "GET",
 ) -> dict:
-    """Make an authenticated JSON request to the Omakase API.
-
-    Args:
-        repository: Repository hostname (e.g. "omakase.lubica.net").
-        path: API path (e.g. "/users/me").
-        token: Bearer token (optional).
-        method: HTTP method.
-
-    Returns:
-        Parsed JSON response dict.
-
-    Raises:
-        ApiError: On HTTP error responses.
-        ConnectionError: On network failures.
-    """
+    """Make an authenticated JSON request to the Omakase API."""
     url = f"https://{repository}/api/v1{path}"
     headers = {
         "Accept": "application/json",
@@ -66,18 +52,7 @@ def api_upload_multipart(
     parts: list[tuple[str, str, str, bytes]],
     extra_headers: dict[str, str] | None = None,
 ) -> dict:
-    """Upload multipart/form-data to the Omakase API.
-
-    Args:
-        repository: Repository hostname.
-        path: API path.
-        token: Bearer token (required).
-        parts: List of (field_name, filename, content_type, data) tuples.
-        extra_headers: Additional headers (e.g. X-Sha256).
-
-    Returns:
-        Parsed JSON response dict.
-    """
+    """Upload multipart/form-data to the Omakase API."""
     boundary = f"----NoriBoundary{os.urandom(16).hex()}"
     body = b""
     for field_name, filename, content_type, data in parts:

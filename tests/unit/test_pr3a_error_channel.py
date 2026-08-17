@@ -1,11 +1,4 @@
-"""PR3a: false ICEs become real diagnostics; the error channel loses its swallows.
-
-Each condition below used to reach the user as a generic CE0000 ("this is a bug in
-the Sushi compiler"), a raw traceback, or nothing at all. They now render as a
-specific, registered code. The registry-completeness test (test_error_registry.py)
-guards that these codes are registered and no longer dead; these tests guard that the
-conditions actually PRODUCE them.
-"""
+"""PR3a: false ICEs become real diagnostics; the error channel loses its swallows."""
 from __future__ import annotations
 
 import io
@@ -22,16 +15,10 @@ REPO = Path(__file__).resolve().parents[2]
 _HAS_SUSHIC = shutil.which("sushic") is not None
 
 
-# --------------------------------------------------------------------------
 # The bare-except sweep -- an acceptance criterion, made a permanent gate
-# --------------------------------------------------------------------------
 
 def test_no_bare_except_in_sushi_lang():
-    """A bare `except:` catches KeyboardInterrupt/SystemExit/MemoryError.
-
-    PR3a removed the last one (backend/expressions/calls/utils.py). This keeps it gone:
-    a new bare except anywhere under sushi_lang/ turns CI red.
-    """
+    """A bare `except:` catches KeyboardInterrupt/SystemExit/MemoryError."""
     bare = re.compile(r"except\s*:")
     offenders = []
     for path in (REPO / "sushi_lang").rglob("*.py"):
@@ -44,9 +31,7 @@ def test_no_bare_except_in_sushi_lang():
     assert not offenders, f"bare `except:` found (narrow it): {offenders}"
 
 
-# --------------------------------------------------------------------------
 # CE3504 -- cross-platform .slib rejected at load
-# --------------------------------------------------------------------------
 
 def _host_platform() -> str:
     from sushi_lang.backend.platform_detect import current_platform_name
@@ -73,9 +58,7 @@ def test_check_library_platform_allows_the_host_and_unknown():
     _check_library_platform({}, "lib")
 
 
-# --------------------------------------------------------------------------
 # CE3510 / CE3511 -- truncation, raised with a LITERAL code so the gate sees it
-# --------------------------------------------------------------------------
 
 def test_truncated_metadata_section_is_ce3510():
     from sushi_lang.backend.library_errors import LibraryError
@@ -108,9 +91,7 @@ def test_library_error_renders_through_the_reporter_path():
     assert "platform mismatch" in err.message
 
 
-# --------------------------------------------------------------------------
 # CE3501 -- main() rejected in --lib mode (end to end)
-# --------------------------------------------------------------------------
 
 @pytest.mark.skipif(not _HAS_SUSHIC, reason="sushic not on PATH")
 def test_lib_mode_rejects_main(tmp_path):
@@ -145,9 +126,7 @@ def test_lib_mode_without_main_succeeds(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-# --------------------------------------------------------------------------
 # CE3507 -- a .slib whose bitcode payload is corrupt (end to end)
-# --------------------------------------------------------------------------
 
 @pytest.mark.skipif(not _HAS_SUSHIC, reason="sushic not on PATH")
 def test_corrupt_library_bitcode_is_ce3507(tmp_path):

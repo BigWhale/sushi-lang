@@ -1,9 +1,4 @@
-"""
-Control flow statement emission for the Sushi language compiler.
-
-This module handles the generation of LLVM IR for control flow statements
-including if/elif/else and while loops.
-"""
+"""Control flow statement emission for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from sushi_lang.internals.errors import raise_internal_error
@@ -16,15 +11,7 @@ if TYPE_CHECKING:
 
 
 def emit_if(codegen: 'LLVMCodegen', node: 'If') -> None:
-    """Emit if statement with proper basic block structure.
-
-    Handles multiple elif branches and optional else clause with proper
-    phi node merging at the end.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        node: The if statement node to emit.
-    """
+    """Emit if statement with proper basic block structure."""
     builder, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()
 
@@ -68,15 +55,7 @@ def emit_if(codegen: 'LLVMCodegen', node: 'If') -> None:
 
 
 def emit_while(codegen: 'LLVMCodegen', node: 'While') -> None:
-    """Emit while loop with proper basic block structure.
-
-    Creates condition, body, and end blocks with proper loop context
-    for break/continue statements.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        node: The while statement node to emit.
-    """
+    """Emit while loop with proper basic block structure."""
     builder, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()
 
@@ -91,8 +70,6 @@ def emit_while(codegen: 'LLVMCodegen', node: 'While') -> None:
     codegen.builder.cbranch(cond_val, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)
-    # The loop-body scope is pushed next, so it will occupy index _scope_depth + 1;
-    # record that boundary so break/continue clean only the loop's own scopes.
     codegen.loop_stack.append((cond_bb, end_bb, codegen.memory._scope_depth + 1))
     codegen.memory.push_scope()
     _emit_block(codegen, node.body)
@@ -105,13 +82,7 @@ def emit_while(codegen: 'LLVMCodegen', node: 'While') -> None:
 
 
 def _emit_block(codegen: 'LLVMCodegen', block) -> None:
-    """Helper to emit a block of statements.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        block: The block AST node containing statements.
-    """
-    # Import here to avoid circular dependency
+    """Helper to emit a block of statements."""
     from sushi_lang.backend.statements import StatementEmitter
     emitter = StatementEmitter(codegen)
     emitter.emit_block(block)

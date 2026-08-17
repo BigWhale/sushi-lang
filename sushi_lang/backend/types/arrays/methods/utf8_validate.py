@@ -1,15 +1,4 @@
-"""
-UTF-8 well-formedness validation for the checked byte-array -> string conversion.
-
-Emits a single cached, module-internal function
-
-    i1 sushi_utf8_validate(i8* data, i32 len)
-
-that returns 1 iff `data[0..len)` is well-formed UTF-8 per the Unicode standard's
-Table 3-7. It rejects overlong encodings, UTF-16 surrogate code points
-(U+D800..U+DFFF), and code points above U+10FFFF -- not merely continuation-byte
-shape. Used by u8[].to_string_checked() (see transforms.py).
-"""
+"""UTF-8 well-formedness validation for the checked byte-array -> string conversion."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -23,11 +12,7 @@ _VALIDATE_FN_NAME = "sushi_utf8_validate"
 
 
 def get_or_emit_utf8_validate(codegen: "LLVMCodegen") -> ir.Function:
-    """Get or emit the `i1 sushi_utf8_validate(i8* data, i32 len)` helper.
-
-    The function is emitted once per module (cached via module globals) and reused
-    by every to_string_checked() call site.
-    """
+    """Get or emit the `i1 sushi_utf8_validate(i8* data, i32 len)` helper."""
     module = codegen.module
     existing = module.globals.get(_VALIDATE_FN_NAME)
     if isinstance(existing, ir.Function):
@@ -53,12 +38,10 @@ def get_or_emit_utf8_validate(codegen: "LLVMCodegen") -> ir.Function:
     ret_false = fn.append_basic_block("ret_false")
     b.branch(head)
 
-    # head: continue while i < len
     b.position_at_end(head)
     i_head = b.load(idx)
     b.cbranch(b.icmp_unsigned("<", i_head, length), body, ret_true)
 
-    # body: classify the lead byte
     b.position_at_end(body)
     i_cur = b.load(idx)
     b0 = b.load(b.gep(data, [i_cur]), name="b0")
@@ -67,13 +50,10 @@ def get_or_emit_utf8_validate(codegen: "LLVMCodegen") -> ir.Function:
     multi_bb = fn.append_basic_block("multi")
     b.cbranch(b.icmp_unsigned("<", b0, ir.Constant(i8, 0x80)), ascii_bb, multi_bb)
 
-    # ASCII (0x00..0x7F): advance one byte
     b.position_at_end(ascii_bb)
     b.store(b.add(i_cur, ir.Constant(i32, 1)), idx)
     b.branch(head)
 
-    # Multi-byte lead: valid leads are 0xC2..0xF4 (rejects continuation bytes as
-    # leads, the overlong 0xC0/0xC1, and 0xF5..0xFF).
     b.position_at_end(multi_bb)
     bad_lead = b.or_(
         b.icmp_unsigned("<", b0, ir.Constant(i8, 0xC2)),
@@ -83,14 +63,11 @@ def get_or_emit_utf8_validate(codegen: "LLVMCodegen") -> ir.Function:
     b.cbranch(bad_lead, ret_false, ok_lead_bb)
 
     b.position_at_end(ok_lead_bb)
-    # Number of trailing continuation bytes: 1 (0xC2..0xDF), 2 (0xE0..0xEF), 3 (0xF0..0xF4).
     need = b.select(
         b.icmp_unsigned("<", b0, ir.Constant(i8, 0xE0)), ir.Constant(i32, 1),
         b.select(b.icmp_unsigned("<", b0, ir.Constant(i8, 0xF0)),
                  ir.Constant(i32, 2), ir.Constant(i32, 3)),
     )
-    # Allowed range for the FIRST continuation byte encodes the overlong/surrogate/
-    # range constraints (Table 3-7); all later continuations are plain 0x80..0xBF.
     lo2 = b.select(b.icmp_unsigned("==", b0, ir.Constant(i8, 0xE0)), ir.Constant(i8, 0xA0),
                    b.select(b.icmp_unsigned("==", b0, ir.Constant(i8, 0xF0)),
                             ir.Constant(i8, 0x90), ir.Constant(i8, 0x80)))
@@ -98,7 +75,6 @@ def get_or_emit_utf8_validate(codegen: "LLVMCodegen") -> ir.Function:
                    b.select(b.icmp_unsigned("==", b0, ir.Constant(i8, 0xF4)),
                             ir.Constant(i8, 0x8F), ir.Constant(i8, 0xBF)))
 
-    # Require `need` continuation bytes to exist: indices i+1..i+need must be < len.
     room = b.icmp_unsigned("<", b.add(i_cur, need), length)
     room_ok_bb = fn.append_basic_block("room_ok")
     b.cbranch(room, room_ok_bb, ret_false)
@@ -109,7 +85,6 @@ def get_or_emit_utf8_validate(codegen: "LLVMCodegen") -> ir.Function:
     cont_bb = fn.append_basic_block("cont_loop")
     b.cbranch(c1_ok, cont_bb, ret_false)
 
-    # Remaining continuations j = 2..need: each must match 0b10xxxxxx.
     b.position_at_end(cont_bb)
     j = b.alloca(i32, name="j")
     b.store(ir.Constant(i32, 2), j)
@@ -132,7 +107,6 @@ def get_or_emit_utf8_validate(codegen: "LLVMCodegen") -> ir.Function:
     b.store(b.add(j_cur, ir.Constant(i32, 1)), j)
     b.branch(cl_head)
 
-    # Whole sequence valid: advance past lead + continuations.
     b.position_at_end(cl_done)
     b.store(b.add(i_cur, b.add(need, ir.Constant(i32, 1))), idx)
     b.branch(head)

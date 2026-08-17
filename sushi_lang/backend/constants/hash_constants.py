@@ -1,8 +1,4 @@
-"""Hash algorithm constants.
-
-This module provides constants for the FNV-1a hash algorithm
-used for consistent hashing across all types.
-"""
+"""Hash algorithm constants."""
 
 # ============================================================================
 # FNV-1a Hash Algorithm Constants

@@ -1,17 +1,4 @@
-"""Regression tests for #248: using an array constant directly is a CE0000 ICE.
-
-`emit_name` knows about global constants -- it looks up `codegen.constants[name]` and
-loads it -- but every backend path that needs a constant's ADDRESS rather than its value
-went straight to `MemoryManager.find_local_slot`, which knows only local allocas. So
-`let i32[3] copy = PRIMES` worked (the only shape that never asks for the address) while
-`PRIMES[0]`, `PRIMES.len()`, `PRIMES.get(0)??`, `PRIMES.iter()` and `PRIMES.hash()` all
-died with `KeyError: 'undefined name: PRIMES'` rendered as CE0000.
-
-These assert at the IR level, because the failure was a compile-time crash: reaching IR
-at all is most of the proof. The two that assert more than "it compiled" are the ones
-that pin a DECISION rather than a fix -- that a local shadowing a constant still wins,
-and that the read GEPs the global instead of materialising a hidden local copy.
-"""
+"""Regression tests for #248: using an array constant directly is a CE0000 ICE."""
 from __future__ import annotations
 
 from tests.unit.test_ffi import _emit_ir, _function_body
@@ -55,12 +42,7 @@ def test_index_in_non_main_function(tmp_path):
 
 
 def test_len(tmp_path):
-    """`PRIMES.len()`.
-
-    `len` is also a builtin List/HashMap method name, so `calls/generics.py`'s List and
-    HashMap probes run first and asked for the receiver's address before the array
-    dispatcher was ever reached.
-    """
+    """`PRIMES.len()`."""
     src = _PRIMES + (
         "fn main() i32:\n"
         "    println(PRIMES.len())\n"
@@ -70,12 +52,7 @@ def test_len(tmp_path):
 
 
 def test_get_maybe(tmp_path):
-    """`PRIMES.get(0)??` -- needs the constant's SEMANTIC type, not just its address.
-
-    `emit_fixed_array_get_maybe` is the one fixed-array method that consumes
-    `semantic_type`, and a constant has no entry in the memory manager's semantic-type
-    cache; it has to come from the const table.
-    """
+    """`PRIMES.get(0)??` -- needs the constant's SEMANTIC type, not just its address."""
     src = _PRIMES + (
         "fn first() i32:\n"
         "    return Result.Ok(PRIMES.get(0)??)\n"
@@ -109,12 +86,7 @@ def test_hash(tmp_path):
 
 
 def test_local_shadows_constant(tmp_path):
-    """A local named like the constant WINS -- the read must not reach the global.
-
-    This is the regression risk of the whole fix: resolving constants before locals
-    would read the global and silently produce wrong values rather than crash. `emit_name`
-    already resolves locals first, and the shared resolver must keep that order.
-    """
+    """A local named like the constant WINS -- the read must not reach the global."""
     src = _PRIMES + (
         "fn shadowed() i32:\n"
         "    let i32[3] PRIMES = [7, 8, 9]\n"
@@ -130,12 +102,7 @@ def test_local_shadows_constant(tmp_path):
 
 
 def test_read_is_zero_copy(tmp_path):
-    """Reading a constant GEPs the global -- it does NOT materialise a local copy.
-
-    Constants are meant to be zero-cost: one `.rodata` object, no per-use stack copy.
-    Pins the design against the alternative fix (alloca + store the loaded global on
-    first use), which would compile just as well and be silently more expensive.
-    """
+    """Reading a constant GEPs the global -- it does NOT materialise a local copy."""
     src = _PRIMES + (
         "fn read() i32:\n"
         "    return Result.Ok(PRIMES[1])\n"

@@ -1,12 +1,4 @@
-"""
-Perk (trait) validation for Sushi compiler.
-
-Validates:
-- Perk method signatures match implementations
-- All required methods are implemented
-- No naming conflicts between regular methods and perk methods
-- Generic perk constraints are satisfied
-"""
+"""Perk (trait) validation for Sushi compiler."""
 
 from sushi_lang.semantics.ast import ExtendWithDef, PerkDef, FuncDef, PerkMethodSignature
 from sushi_lang.semantics.typesys import Type
@@ -20,20 +12,10 @@ def validate_perk_implementation(
     perk_def: PerkDef,
     reporter: Reporter
 ) -> bool:
-    """Validate that an implementation satisfies a perk's requirements.
-
-    Checks:
-    1. All required methods are present
-    2. Method signatures match exactly
-    3. No extra methods that aren't in the perk
-
-    Returns:
-        True if valid, False otherwise (errors emitted to reporter)
-    """
+    """Validate that an implementation satisfies a perk's requirements."""
     implemented_methods = {m.name: m for m in impl.methods}
     required_methods = {m.name: m for m in perk_def.methods}
 
-    # Check for missing methods
     missing = set(required_methods.keys()) - set(implemented_methods.keys())
     if missing:
         for method_name in missing:
@@ -41,11 +23,9 @@ def validate_perk_implementation(
                    method=method_name, perk=perk_def.name)
         return False
 
-    # Check method signatures match
     valid = True
     for method_name, impl_method in implemented_methods.items():
         if method_name not in required_methods:
-            # Extra method not in perk - this is okay (implementation can have additional methods)
             continue
 
         required_sig = required_methods[method_name]
@@ -58,30 +38,18 @@ def validate_perk_implementation(
 
 
 def _signatures_match(impl: FuncDef, required: PerkMethodSignature) -> bool:
-    """Check if implementation signature matches requirement.
-
-    Compares:
-    - Receiver mode (#327): a perk that declares `(poke self)` needs an impl that
-      writes through the receiver, and a by-value impl would silently lose the writes
-      -- the #326 bug reintroduced through the perk door. Mismatch either way is CE4004.
-    - Parameter count (excluding implicit self)
-    - Parameter types
-    - Return type
-    """
+    """Check if implementation signature matches requirement."""
     # Check receiver mode (#327)
     if getattr(impl, "self_mode", None) != getattr(required, "self_mode", None):
         return False
 
-    # Check parameter count (excluding implicit self)
     if len(impl.params) != len(required.params):
         return False
 
-    # Check parameter types
     for impl_param, req_param in zip(impl.params, required.params, strict=False):
         if impl_param.ty != req_param.ty:
             return False
 
-    # Check return type
     if impl.ret != required.ret:
         return False
 
@@ -94,14 +62,7 @@ def check_no_conflicts_with_regular_methods(
     extension_table: ExtensionTable,
     reporter: Reporter
 ) -> bool:
-    """Ensure perk methods don't conflict with regular extension methods.
-
-    In Sushi, you can't have both:
-    - extend T method() ~:  (regular extension)
-    - extend T with Perk:   (if Perk requires method())
-
-    This prevents ambiguity about which method gets called.
-    """
+    """Ensure perk methods don't conflict with regular extension methods."""
     existing_methods = extension_table.by_type.get(resolved_type, {})
     if not existing_methods:
         return True

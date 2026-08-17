@@ -1,9 +1,4 @@
-"""Translate Lark's exceptions into Sushi's diagnostic channel.
-
-Every parse failure becomes a spanned CE6xxx `SyntaxDiagnostic`, so a syntax
-error renders with a code, a location and caret art exactly like a type error --
-instead of Lark's raw dump on stderr, which bypassed the reporter entirely.
-"""
+"""Translate Lark's exceptions into Sushi's diagnostic channel."""
 from __future__ import annotations
 
 from typing import Optional

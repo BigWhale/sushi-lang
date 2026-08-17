@@ -1,18 +1,4 @@
-"""End-to-end tests for incremental-compilation cache (P0-5).
-
-Drives the real compiler (``sushic``) over a real multi-unit project written
-to a tmp_path directory and asserts cache behaviour via:
-  - stdout markers: ``[rebuilt]`` / ``[cached]`` printed per unit
-  - cache artefacts under ``<project>/__sushi_cache__/units/``
-  - executable output (for the correctness-under-caching guard)
-
-Constraints honoured:
-  - No compiler/language source is modified.
-  - All fixtures are stdlib-free (builtin println only; no ``use <...>``).
-  - All fixtures are enum-free (issue #26: compute_unit_fingerprint crashes on
-    enums in multi-unit builds).
-  - Local imports use quoted path syntax: ``use "helper"``.
-"""
+"""End-to-end tests for incremental-compilation cache (P0-5)."""
 from __future__ import annotations
 
 import subprocess
@@ -22,18 +8,10 @@ from pathlib import Path
 import pytest
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 def _compile(project_dir: Path, extra_args: list[str] | None = None) -> subprocess.CompletedProcess:
-    """Invoke ``sushic main.sushi -o out`` in *project_dir* and return the result.
-
-    The compiler is invoked via the ``sushic`` console-script entry point so
-    that it is on PATH under ``uv run pytest`` without requiring ``chmod +x``.
-    Stdout and stderr are captured; the CWD is set to the project directory so
-    that the default cache (``__sushi_cache__/``) lands there.
-    """
+    """Invoke ``sushic main.sushi -o out`` in *project_dir* and return the result."""
     cmd = ["sushic", "main.sushi", "-o", "out"]
     if extra_args:
         cmd.extend(extra_args)
@@ -67,8 +45,8 @@ def _cached(stdout: str) -> set[str]:
 
 
 def _write(path: Path, content: str) -> None:
-    """Write *content* to *path*, creating parent directories as needed.
-    Ensures a trailing newline (avoids Sushi compilation warning).
+    """Write *content* to *path*, creating parent directories as needed. Ensures a trailing newline
+    (avoids Sushi compilation warning).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     text = content if content.endswith("\n") else content + "\n"
@@ -76,16 +54,7 @@ def _write(path: Path, content: str) -> None:
 
 
 def _make_project(project_dir: Path) -> tuple[Path, Path]:
-    """Create a minimal two-unit project under *project_dir*.
-
-    Returns (main_path, helper_path).
-
-    helper.sushi exports:
-      - const BASE = 10
-      - public fn doubled(i32 x) i32 -> x * 2
-
-    main.sushi imports helper and prints doubled(21) == 42.
-    """
+    """Create a minimal two-unit project under *project_dir*."""
     helper = project_dir / "helpers" / "helper.sushi"
     main = project_dir / "main.sushi"
 
@@ -106,9 +75,7 @@ fn main() i32:
     return main, helper
 
 
-# ---------------------------------------------------------------------------
 # Scenario 1 — Cold build
-# ---------------------------------------------------------------------------
 
 def test_cold_build_all_units_rebuilt(tmp_path):
     """Fresh project: every unit reports [rebuilt]; cache artefacts are created."""
@@ -133,9 +100,7 @@ def test_cold_build_all_units_rebuilt(tmp_path):
     assert "42" in out.stdout
 
 
-# ---------------------------------------------------------------------------
 # Scenario 2 — No-op rebuild
-# ---------------------------------------------------------------------------
 
 def test_noop_rebuild_all_units_cached(tmp_path):
     """Second build with no source changes: every unit reports [cached]."""
@@ -149,9 +114,7 @@ def test_noop_rebuild_all_units_cached(tmp_path):
     assert _rebuilt(second.stdout) == set()
 
 
-# ---------------------------------------------------------------------------
 # Scenario 3 — Leaf-body change
-# ---------------------------------------------------------------------------
 
 def test_leaf_body_change_rebuilds_only_that_unit(tmp_path):
     """Editing the helper's function body rebuilds the helper; main stays cached."""
@@ -173,9 +136,7 @@ public fn doubled(i32 x) i32:
     assert "main" in _cached(second.stdout)
 
 
-# ---------------------------------------------------------------------------
 # Scenario 4 — Dependency signature change
-# ---------------------------------------------------------------------------
 
 def test_signature_change_rebuilds_dependent(tmp_path):
     """Adding a new public function to the helper invalidates main's fingerprint."""
@@ -202,16 +163,10 @@ public fn tripled(i32 x) i32:
     assert "main" in _rebuilt(second.stdout)
 
 
-# ---------------------------------------------------------------------------
 # Scenario 5 — Comment/whitespace-only change
-# ---------------------------------------------------------------------------
 
 def test_whitespace_only_change_rebuilds_unit(tmp_path):
-    """Whitespace-only change rebuilds that unit (fingerprint hashes raw source bytes).
-
-    This documents current behaviour: the fingerprint includes raw source bytes,
-    so even a trailing-newline addition or comment change forces a rebuild.
-    """
+    """Whitespace-only change rebuilds that unit (fingerprint hashes raw source bytes)."""
     main, helper = _make_project(tmp_path)
     first = _compile(tmp_path)
     assert first.returncode == 0
@@ -228,9 +183,7 @@ def test_whitespace_only_change_rebuilds_unit(tmp_path):
     assert "main" in _cached(second.stdout)
 
 
-# ---------------------------------------------------------------------------
 # Scenario 6 — Global-parameter change (opt level)
-# ---------------------------------------------------------------------------
 
 def test_opt_level_change_invalidates_entire_cache(tmp_path):
     """Changing --opt level rebuilds every unit."""
@@ -248,16 +201,10 @@ def test_opt_level_change_invalidates_entire_cache(tmp_path):
     assert _cached(second.stdout) == set()
 
 
-# ---------------------------------------------------------------------------
 # Scenario 7 — Correctness under caching (stale-cache false-hit guard)
-# ---------------------------------------------------------------------------
 
 def test_correctness_under_caching_no_stale_output(tmp_path):
-    """Critical false-hit guard: a rebuild after a leaf change must reflect new code.
-
-    If the cache ever incorrectly reuses stale object code, the output B would
-    still equal A even though the source was changed.
-    """
+    """Critical false-hit guard: a rebuild after a leaf change must reflect new code."""
     main, helper = _make_project(tmp_path)
 
     # Cold build — doubled(21) == 42
@@ -294,9 +241,7 @@ public fn doubled(i32 x) i32:
     assert output_b != output_a, "Output did not change after source edit — stale cache hit?"
 
 
-# ---------------------------------------------------------------------------
 # Scenario 8 — --no-incremental forces full rebuild
-# ---------------------------------------------------------------------------
 
 def test_no_incremental_flag_forces_full_rebuild(tmp_path):
     """--no-incremental bypasses cache; every unit is rebuilt even with no source change."""

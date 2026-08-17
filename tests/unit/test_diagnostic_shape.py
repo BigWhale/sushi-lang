@@ -1,25 +1,9 @@
-"""Every diagnostic follows the same patterns -- one test per rung of the ladder.
-
-"The same structure" does not mean one rigid layout. Diagnostics differ in how
-much location evidence they carry, and the ladder is:
-
-    tier 1  text only                      -- no meaningful source position
-    tier 2  text + one primary location    -- the common case
-    tier 3  tier 2 + secondary locations   -- a relational error ("this conflicts
-                                              with that"), each note carrying its
-                                              own file:line:col and its own snippet
-
-A single golden test of one error would prove nothing about the ladder, so there
-is one per tier. They assert the SKELETON -- severity word, [CE####] token,
-presence or absence of a location, gutter and caret, the note's independent
-location block -- not the prose. It is a structural contract, not a message tax.
-"""
+"""Every diagnostic follows the same patterns -- one test per rung of the ladder."""
 from __future__ import annotations
 
 import re
 import subprocess
 from pathlib import Path
-
 
 
 HEAD_RE = re.compile(r"^(?P<loc>\S*?):?\s*(?P<severity>error|warning) \[(?P<code>[A-Z]{2}\d{4})\]: (?P<message>.+)$")
@@ -108,11 +92,7 @@ def test_tier3_two_locations(tmp_path):
 
 
 def test_tier3_secondary_location_can_live_in_another_file(tmp_path):
-    """A note carries its OWN filename, so a conflict can span two files.
-
-    Reporter._get_source_lines() re-reads the other file from disk to draw its
-    snippet. This capability was built and unused before 4.7.
-    """
+    """A note carries its OWN filename, so a conflict can span two files."""
     import os
 
     (tmp_path / "helper.sushi").write_text(

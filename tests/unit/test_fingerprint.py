@@ -1,13 +1,4 @@
-"""Unit tests for semantic fingerprinting (compiler/fingerprint.py).
-
-Fingerprints decide cache reuse, so the contract is: identical inputs produce
-identical fingerprints, and anything that affects codegen changes them.
-
-Note on isolation: compute_unit_fingerprint() always hashes the unit's source
-bytes, so any source edit flips the fingerprint regardless of the AST-structure
-hashing. To verify the _hash_ast_structure branches specifically, the AST tests
-below hold the on-disk file bytes constant and vary only the parsed AST.
-"""
+"""Unit tests for semantic fingerprinting (compiler/fingerprint.py)."""
 from __future__ import annotations
 
 from sushi_lang.internals.parser import parse_to_ast
@@ -35,9 +26,7 @@ def _unit_with_ast(tmp_path, src, name="main"):
     return Unit(name=name, file_path=fp, ast=program, dependencies=[], public_symbols={})
 
 
-# --------------------------------------------------------------------------
 # Determinism and source sensitivity
-# --------------------------------------------------------------------------
 
 def test_fingerprint_is_deterministic(make_unit):
     unit = make_unit(CLEAN)
@@ -53,9 +42,7 @@ def test_fingerprint_changes_with_source(make_unit):
     assert compute_unit_fingerprint(a) != compute_unit_fingerprint(b)
 
 
-# --------------------------------------------------------------------------
 # AST-structure sensitivity (file bytes held constant, only AST varies)
-# --------------------------------------------------------------------------
 
 def test_fingerprint_changes_with_struct_field(tmp_path):
     a = _unit_with_ast(tmp_path, "struct P:\n    i32 x\n" + CLEAN)
@@ -83,9 +70,7 @@ def test_fingerprint_changes_with_use_statement(tmp_path):
     assert compute_unit_fingerprint(a) != compute_unit_fingerprint(b)
 
 
-# --------------------------------------------------------------------------
 # Cross-unit visibility (a dependency's public signature affects dependents)
-# --------------------------------------------------------------------------
 
 def test_fingerprint_changes_when_dependency_signature_changes(make_unit, tmp_path):
     dependent = make_unit(CLEAN, name="dependent")
@@ -104,9 +89,7 @@ def test_fingerprint_changes_when_dependency_signature_changes(make_unit, tmp_pa
     assert fp1 != fp2
 
 
-# --------------------------------------------------------------------------
 # stdlib / library fingerprints
-# --------------------------------------------------------------------------
 
 def test_stdlib_fingerprint_is_order_independent(tmp_path):
     a = tmp_path / "a.bc"; a.write_bytes(b"AAA")
@@ -130,14 +113,13 @@ def test_lib_fingerprint_changes_with_content(tmp_path):
     assert compute_lib_fingerprint(slib) != fp1
 
 
-# --------------------------------------------------------------------------
 # Imported-library template sensitivity (Phase 2 cross-library generics)
-# --------------------------------------------------------------------------
 
 def test_unit_fingerprint_changes_with_imported_library_digest(make_unit):
-    """A consumer unit's fingerprint must change when an imported library's
-    digest changes, so a library generic-template edit invalidates the
-    consumer's cached .o (otherwise a monomorphized instance would be stale)."""
+    """A consumer unit's fingerprint must change when an imported library's digest changes, so a
+    library generic-template edit invalidates the consumer's cached .o (otherwise a
+    monomorphized instance would be stale).
+    """
     unit = make_unit(CLEAN)
     fp_a = compute_unit_fingerprint(unit, library_fingerprints={"lib/math": "DIGEST_A"})
     fp_b = compute_unit_fingerprint(unit, library_fingerprints={"lib/math": "DIGEST_B"})
@@ -145,8 +127,8 @@ def test_unit_fingerprint_changes_with_imported_library_digest(make_unit):
 
 
 def test_unit_fingerprint_stable_for_same_library_digest(make_unit):
-    """Identical library digests must produce identical fingerprints (no
-    spurious cache misses)."""
+    """Identical library digests must produce identical fingerprints (no spurious cache misses).
+    """
     unit = make_unit(CLEAN)
     digests = {"lib/math": "DIGEST_A", "lib/strings": "DIGEST_X"}
     assert (
@@ -156,8 +138,9 @@ def test_unit_fingerprint_stable_for_same_library_digest(make_unit):
 
 
 def test_unit_fingerprint_no_library_matches_empty_mapping(make_unit):
-    """Passing no library digests and an empty mapping are equivalent (the
-    section is skipped when there is nothing to fold in)."""
+    """Passing no library digests and an empty mapping are equivalent (the section is skipped when
+    there is nothing to fold in).
+    """
     unit = make_unit(CLEAN)
     assert (
         compute_unit_fingerprint(unit)
@@ -165,14 +148,13 @@ def test_unit_fingerprint_no_library_matches_empty_mapping(make_unit):
     )
 
 
-# --------------------------------------------------------------------------
 # Generic exporters (regression: BoundedTypeParam join TypeError)
-# --------------------------------------------------------------------------
 
 def test_definition_signature_with_generic_type_params():
-    """A FuncDef whose type_params are BoundedTypeParam objects must produce a
-    signature, not a TypeError. Before the fix, ",".join(defn.type_params) made
-    every incremental build exporting a generic function a CE0000 ICE."""
+    """A FuncDef whose type_params are BoundedTypeParam objects must produce a signature, not a
+    TypeError. Before the fix, ",".join(defn.type_params) made every incremental build exporting
+    a generic function a CE0000 ICE.
+    """
     from sushi_lang.compiler.fingerprint import _definition_signature
     from sushi_lang.semantics.ast import BoundedTypeParam
     program, _ = parse_to_ast("public fn identity@(T)(T x) T:\n    return Result.Ok(x)\n")
@@ -200,9 +182,7 @@ def test_fingerprint_generic_struct_and_enum_do_not_crash(tmp_path):
     assert compute_unit_fingerprint(unit) != compute_unit_fingerprint(plain)
 
 
-# --------------------------------------------------------------------------
 # Monomorphized-extension key: signature AND body, span-insensitive
-# --------------------------------------------------------------------------
 
 def _parse_extension(src):
     program, _ = parse_to_ast(src)
@@ -230,8 +210,9 @@ def test_mono_ext_fingerprint_covers_signature(make_unit):
 
 
 def test_mono_ext_fingerprint_ignores_source_position(make_unit):
-    """Shifting an extension down a line must NOT invalidate (span-insensitive):
-    otherwise every unrelated edit above it would rebuild all consumers."""
+    """Shifting an extension down a line must NOT invalidate (span-insensitive): otherwise every
+    unrelated edit above it would rebuild all consumers.
+    """
     unit = make_unit(CLEAN)
     ext_a = _parse_extension("extend i32 squared() i32:\n    return Result.Ok(self * self)\n")
     ext_b = _parse_extension("# shifted\n\n\nextend i32 squared() i32:\n    return Result.Ok(self * self)\n")
@@ -241,15 +222,14 @@ def test_mono_ext_fingerprint_ignores_source_position(make_unit):
     )
 
 
-# --------------------------------------------------------------------------
 # Stdlib generator-source coverage (regression: silently-skipped dead path)
-# --------------------------------------------------------------------------
 
 def test_stdlib_generator_sources_all_exist():
-    """Every path the stdlib source fingerprint hashes must exist. The hasher
-    silently skips missing paths, so a generator that moves (types/primitives.py
-    became the types/primitives/ package) drops out of the digest without a
-    trace - and editing it no longer invalidates the shipped .bc."""
+    """Every path the stdlib source fingerprint hashes must exist. The hasher silently skips
+    missing paths, so a generator that moves (types/primitives.py became the types/primitives/
+    package) drops out of the digest without a trace - and editing it no longer invalidates the
+    shipped .bc.
+    """
     from sushi_lang.compiler.fingerprint import _stdlib_generator_sources
 
     sources = _stdlib_generator_sources()
@@ -258,8 +238,9 @@ def test_stdlib_generator_sources_all_exist():
 
 
 def test_stdlib_generator_sources_cover_primitives_package():
-    """build.py generates core/primitives from backend/types/primitives/ (a
-    package); its files must be part of the stdlib source digest."""
+    """build.py generates core/primitives from backend/types/primitives/ (a package); its files
+    must be part of the stdlib source digest.
+    """
     from sushi_lang.compiler.fingerprint import _stdlib_generator_sources
 
     sources = _stdlib_generator_sources()

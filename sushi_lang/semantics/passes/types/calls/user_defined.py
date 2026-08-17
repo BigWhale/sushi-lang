@@ -1,13 +1,4 @@
-# semantics/passes/types/calls/user_defined.py
-"""
-User-defined and stdlib function call validation.
-
-Handles validation for:
-- User-defined function calls
-- Stdlib function calls (time, io, etc.)
-- Built-in global functions (open)
-- Cross-unit function visibility
-"""
+"""User-defined and stdlib function call validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -24,18 +15,7 @@ if TYPE_CHECKING:
 
 def emit_argument_mismatch(validator: 'TypeValidator', arg, index: int,
                            expected_ty, actual_ty) -> None:
-    """Report CE2006, and say how to borrow when the parameter wants a borrow.
-
-    A borrow reads exactly like the value it refers to, so `infer_expression_type`
-    dereferences one: `v + 1` must see `i32`, not `peek i32`. At an argument position
-    that dereference makes the message read `expected peek string, got string`, which
-    describes two types the user never wrote and names no fix.
-
-    A borrow is always created AT the call site in Sushi, whether the place is owned or
-    already borrowed, so the fix is the same `peek x` the caller writes everywhere else.
-    Say so. This matters most where a function forwards its own borrowed parameter to
-    another function, which is the shape every `peek string` signature produces.
-    """
+    """Report CE2006, and say how to borrow when the parameter wants a borrow."""
     from sushi_lang.semantics.ast import MemberAccess
     from sushi_lang.semantics.typesys import ReferenceType
 
@@ -49,9 +29,9 @@ def emit_argument_mismatch(validator: 'TypeValidator', arg, index: int,
 
 
 def _reject_misplaced_spread(validator: 'TypeValidator', arg) -> bool:
-    """Emit CE0120 if `arg` is a bloom spread `arr...` in a position where one is not
-    allowed (a non-variadic call, or a fixed/non-last argument). Still validates the
-    inner expression so downstream inference does not crash. Returns True if rejected.
+    """Emit CE0120 if `arg` is a bloom spread `arr...` in a position where one is not allowed (a
+    non-variadic call, or a fixed/non-last argument). Still validates the inner expression so
+    downstream inference does not crash. Returns True if rejected.
     """
     if isinstance(arg, Spread):
         er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
@@ -64,14 +44,7 @@ def _reject_misplaced_spread(validator: 'TypeValidator', arg) -> bool:
 
 def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
                                     fixed_count: int, array_ty, element_ty) -> None:
-    """Validate the trailing arguments of a variadic call (native '...T' or stdlib).
-
-    Two accepted forms:
-      - individual values, each checked against the element type T;
-      - a single bloom spread `arr...`, checked against the whole array type T[].
-    A spread that is not the sole trailing argument is CE0120; a type mismatch is CE2006.
-    Shared by user-function and stdlib (run) variadic validation.
-    """
+    """Validate the trailing arguments of a variadic call (native '...T' or stdlib)."""
     for offset, arg in enumerate(trailing):
         index = fixed_count + offset + 1
         if isinstance(arg, Spread):
@@ -105,17 +78,7 @@ def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
 
 def validate_fn_value_call_args(validator: 'TypeValidator', args, fn_ty,
                                 span) -> None:
-    """Arity and per-argument check for a call through a function VALUE (CE2092).
-
-    Function types are invariant, so each argument must match its parameter type exactly.
-
-    One implementation for both spellings of the call: through a local of `FunctionType`
-    (`g(x)`) and through a fn-typed struct field (`obj.handler(x)`). They were two copies
-    of this loop, which is how the missing help below stayed missing in one of them.
-
-    `span` is the fallback location -- the callee for an indirect call, the call node for
-    a field call -- used for the arity error and for any argument that carries none.
-    """
+    """Arity and per-argument check for a call through a function VALUE (CE2092)."""
     expected = fn_ty.param_types
     if len(args) != len(expected):
         er.emit(validator.reporter, er.ERR.CE2092, span,
@@ -136,18 +99,7 @@ def validate_fn_value_call_args(validator: 'TypeValidator', args, fn_ty,
 
 
 def _explain_missing_borrow(diag, arg, arg_ty, param_ty) -> None:
-    """Add the "you meant `peek x`" help where the mismatch is a missing borrow.
-
-    A `fn(peek i32) -> i32` parameter reports "expected 'peek i32', got 'i32'" for an
-    argument the user declared `peek i32` -- naming a type they DID write. Pass 2 unwraps
-    a reference-typed name at every mention, deliberately: a borrow is created at the USE
-    site, not carried by the name. The rule is right; only the message was unhelpful.
-
-    Keyed on the shape of the mismatch (the expected type is a reference to exactly the
-    type the argument has), so it also fires for a plain local, where the answer is the
-    same spelling. Only for a bare NAME: a borrow needs a place, and anything else is
-    CE2404 rather than a missing `&`.
-    """
+    """Add the "you meant `peek x`" help where the mismatch is a missing borrow."""
     from sushi_lang.semantics.typesys import ReferenceType
     if not isinstance(arg, Name) or isinstance(arg_ty, ReferenceType):
         return
@@ -187,38 +139,29 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
                     actual=display_type(callee_ty) if callee_ty is not None else "a non-function expression")
         return
 
-    # Check if function exists
     function_name = call.callee.id
 
-    # Indirect call through a first-class function value held in a local variable.
-    # A local shadows any same-named top-level function, so this is checked first.
     callee_var_ty = validator.variable_types.get(function_name)
     if isinstance(callee_var_ty, FunctionType):
         validate_indirect_call(validator, call, callee_var_ty)
         return
 
-    # Check if this is a generic function call (handled by generics module)
     if function_name in validator.generic_func_table.by_name:
         from .generics import validate_generic_function_call
         validate_generic_function_call(validator, call, function_name)
         return
 
-    # Check if this is a struct constructor instead of a function call (handled by structs module)
     if function_name in validator.struct_table.by_name:
         from .structs import validate_struct_constructor
         validate_struct_constructor(validator, call)
         return
 
-    # Check for built-in global functions
     if function_name == "open":
         validate_open_function(validator, call)
         return
 
-    # Check if this is a stdlib function call
-    # Stdlib functions are registered during Pass 0 in FunctionTable
     stdlib_func = check_stdlib_function(validator, call)
     if stdlib_func is not None:
-        # Stdlib function found - validate using its registered validator
         validate_stdlib_function(validator, call, stdlib_func)
         return
 
@@ -234,14 +177,11 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         diag.emit()
         return
 
-    # Get function signature
     func_sig = validator.func_table.by_name[function_name]
 
-    # Check function visibility for cross-unit calls (multi-file compilation only)
     if (validator.current_unit_name is not None and
         func_sig.unit_name is not None and
         func_sig.unit_name != validator.current_unit_name):
-        # This is a cross-unit function call - check if function is public
         if not func_sig.is_public:
             er.emit(validator.reporter, er.ERR.CE3005, call.callee.loc,
                    name=function_name,
@@ -268,7 +208,6 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
             er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
                    name=function_name, expected=fixed_count, got=len(actual_args))
 
-        # Validate fixed (non-variadic) arguments. A bloom spread is illegal here.
         for i, (arg, param) in enumerate(zip(actual_args[:fixed_count], expected_params[:fixed_count], strict=False)):
             if _reject_misplaced_spread(validator, arg):
                 continue
@@ -293,44 +232,29 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
             variadic_param.ty, element_ty)
         return
 
-    # Check argument count
     if len(actual_args) != len(expected_params):
         er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
                name=function_name, expected=len(expected_params), got=len(actual_args))
-        # Still continue with validation of provided arguments
 
-    # Validate each argument type against corresponding parameter type
     for i, (arg, param) in enumerate(zip(actual_args, expected_params, strict=False)):
-        # A bloom spread `arr...` is illegal in a call to a non-variadic function.
         if _reject_misplaced_spread(validator, arg):
             continue
-        # Propagate expected types to DotCall nodes for generic enums (before validation)
-        # This allows Maybe.None(), Result.Ok(), etc. to work as function arguments
         propagate_enum_type_to_dotcall(validator, arg, param.ty)
 
-        # Propagate expected types to DotCall nodes for generic structs (before validation)
-        # This allows Own.alloc(42) to work as function arguments
         propagate_struct_type_to_dotcall(validator, arg, param.ty)
 
-        # Propagate expected types to Call nodes for generic struct constructors
-        # This allows Box(42) to work when parameter expects Box<i32>
         if isinstance(arg, Call) and hasattr(arg.callee, 'id') and isinstance(param.ty, StructType):
             struct_name = arg.callee.id
-            # Check if this is a generic struct constructor
             if struct_name in validator.generic_struct_table.by_name:
-                # Update the Call node's callee id to use the concrete type name
                 arg.callee.id = param.ty.name
 
-        # Recursively validate the argument expression
         validator.validate_expression(arg)
 
-        # Check type compatibility
         if param.ty is not None:  # Skip if parameter has unknown type
             arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
                 emit_argument_mismatch(validator, arg, i + 1, param.ty, arg_type)
 
-    # Validate any excess arguments (if more args than params)
     for i in range(len(expected_params), len(actual_args)):
         if _reject_misplaced_spread(validator, actual_args[i]):
             continue
@@ -338,34 +262,25 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
 
 
 def validate_open_function(validator: 'TypeValidator', call: Call) -> None:
-    """Validate open() built-in function call.
-
-    Signature: open(string path, FileMode mode) FileResult
-    Returns: FileResult enum (Ok(file) or Err())
-    """
+    """Validate open() built-in function call."""
     actual_args = call.args
 
-    # Check argument count (must be exactly 2)
     if len(actual_args) != 2:
         er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
                name="open", expected=2, got=len(actual_args))
         return
 
-    # Validate first argument: path (must be string)
     validator.validate_expression(actual_args[0])
     path_type = validator.infer_expression_type(actual_args[0])
     if path_type is not None and path_type != BuiltinType.STRING:
         er.emit(validator.reporter, er.ERR.CE2006, actual_args[0].loc,
                index=1, expected="string", got=display_type(path_type))
 
-    # Validate second argument: mode (must be FileMode enum variant)
     validator.validate_expression(actual_args[1])
     mode_type = validator.infer_expression_type(actual_args[1])
 
-    # Check if it's the FileMode enum type
     file_mode_enum = validator.enum_table.by_name.get("FileMode")
     if file_mode_enum is None:
-        # FileMode enum not registered - this shouldn't happen
         return
 
     if mode_type is not None and mode_type != file_mode_enum:
@@ -374,21 +289,9 @@ def validate_open_function(validator: 'TypeValidator', call: Call) -> None:
 
 
 def check_stdlib_function(validator: 'TypeValidator', call: Call) -> Optional[any]:
-    """
-    Check if a function call is to a stdlib function.
-
-    Looks up the function in the FunctionTable's stdlib function registry.
-
-    Args:
-        validator: Type validator instance
-        call: Function call AST node
-
-    Returns:
-        Tuple of (module_path, StdlibFunction) if found, None otherwise
-    """
+    """Check if a function call is to a stdlib function."""
     function_name = call.callee.id
 
-    # Try common module paths to find the function
     possible_modules = ["time", "sys/env", "sys/process", "math", "random", "io/files"]
 
     for module_path in possible_modules:
@@ -406,9 +309,7 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
     function_name = call.callee.id
     args = call.args if hasattr(call, 'args') else []
 
-    # Polymorphic functions need special handling
     if stdlib_func.params is None:
-        # Validate all argument expressions first
         for arg in args:
             validator.validate_expression(arg)
         _validate_polymorphic_math(validator, call, function_name)
@@ -440,17 +341,14 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
             validator, args[fixed_count:], fixed_count, array_ty, element_ty)
         return
 
-    # Validate all argument expressions first
     for arg in args:
         validator.validate_expression(arg)
 
-    # Check argument count
     if len(args) != len(expected_params):
         er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
                name=function_name, expected=len(expected_params), got=len(args))
         return
 
-    # Check each argument type
     for i, (arg, expected_type) in enumerate(zip(args, expected_params, strict=False)):
         arg_type = validator.infer_expression_type(arg)
         if arg_type is not None and not types_compatible(validator, arg_type, expected_type):

@@ -12,12 +12,7 @@ TOKEN_PREFIX = "nori_"
 
 
 def _read_api_key() -> str:
-    """Read the API key without it touching argv.
-
-    Interactive: a no-echo prompt. Piped (scripts, CI): one line from stdin,
-    e.g. ``nori login < keyfile`` -- so the key never appears in shell history
-    or ``ps`` output either way.
-    """
+    """Read the API key without it touching argv."""
     if sys.stdin.isatty():
         return getpass.getpass("API key: ").strip()
     return sys.stdin.readline().strip()

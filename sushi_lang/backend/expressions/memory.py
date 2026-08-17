@@ -1,9 +1,4 @@
-"""
-Memory management operations for the Sushi language compiler.
-
-This module handles memory allocation, deallocation, cloning, and size calculations
-for dynamic arrays and structs. Includes malloc/realloc/free wrappers with error checking.
-"""
+"""Memory management operations for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -20,22 +15,7 @@ if TYPE_CHECKING:
 
 
 def get_element_size_constant(codegen: 'LLVMCodegen', element_type: ir.Type) -> ir.Value:
-    """Get the size in bytes of an element type as an LLVM constant.
-
-    Uses dispatch table for common types, falls back to LLVM's GEP trick
-    for complex types like structs (which accounts for padding).
-
-    Args:
-        codegen: The LLVM codegen instance.
-        element_type: The LLVM element type.
-
-    Returns:
-        The size as i32 constant.
-
-    Raises:
-        ValueError: If element type is not supported.
-    """
-    # Fast path: Check common types
+    """Get the size in bytes of an element type as an LLVM constant."""
     if element_type == codegen.types.i32:
         return ir.Constant(codegen.types.i32, 4)  # i32 = 4 bytes
     elif element_type == codegen.types.i8:
@@ -47,25 +27,18 @@ def get_element_size_constant(codegen: 'LLVMCodegen', element_type: ir.Type) -> 
     elif isinstance(element_type, ir.DoubleType):
         return ir.Constant(codegen.types.i32, 8)  # f64 = 8 bytes
 
-    # Struct types: Use LLVM's GEP trick to get actual size with padding
-    # getelementptr(null, 1) gives offset of second element = size of one element
-    #
-    # BaseStructType, not LiteralStructType: a user struct is an *identified* type
-    # (`%Tree`, #257), which is a SIBLING of LiteralStructType rather than a subclass. The
-    # narrower check sent every user-struct element to the CE0079 below -- and this is the
-    # element-size path for `T[]`, so it fired on the first recursive `Node[]`.
+    # `getelementptr(null, 1)` is the offset of the second element, i.e. one element's
+    # padded size. BaseStructType, not LiteralStructType: a user struct is an IDENTIFIED
+    # type and a SIBLING rather than a subclass, so the narrower check sent every one to
+    # the CE0079 below (#257).
     elif isinstance(element_type, ir.types.BaseStructType):
-        # Create a null pointer of type element_type*
         null_ptr = ir.Constant(ir.PointerType(element_type), None)
-        # GEP to get pointer to element [1]
         size_gep = codegen.builder.gep(
             null_ptr,
             [ir.Constant(codegen.types.i64, 1)],
             name="size_gep"
         )
-        # Convert pointer to integer to get the size
         size_i64 = codegen.builder.ptrtoint(size_gep, codegen.types.i64, name="size_i64")
-        # Truncate to i32 (sizes should fit in 32 bits)
         size_i32 = codegen.builder.trunc(size_i64, codegen.types.i32, name="size_i32")
         return size_i32
 
@@ -74,18 +47,7 @@ def get_element_size_constant(codegen: 'LLVMCodegen', element_type: ir.Type) -> 
 
 
 def calculate_llvm_type_size(llvm_type: 'ir.Type') -> int:
-    """Calculate the size in bytes of an LLVM type for offset calculations.
-
-    Recursively handles complex types including structs and arrays.
-    This function provides accurate size calculations for all LLVM types,
-    including nested structures.
-
-    Args:
-        llvm_type: The LLVM type to calculate size for.
-
-    Returns:
-        Size in bytes.
-    """
+    """Calculate the size in bytes of an LLVM type for offset calculations."""
     if isinstance(llvm_type, ir.IntType):
         return llvm_type.width // 8
     elif isinstance(llvm_type, ir.PointerType):
@@ -95,124 +57,74 @@ def calculate_llvm_type_size(llvm_type: 'ir.Type') -> int:
     elif isinstance(llvm_type, ir.DoubleType):
         return 8
     elif isinstance(llvm_type, ir.types.BaseStructType):
-        # String fat pointer {i8*, i32, i8 owned}: use the ALIGNED sizeof (16), not the raw
-        # field sum (13). The owned byte at offset 12 must survive a round-trip through an
-        # enum/Result/Maybe payload, whose data array is sized from this (#145).
+        # The ALIGNED sizeof (16), not the field sum (13): the owned byte at offset 12 must
+        # survive a round-trip through an enum payload sized from this (#145).
         #
-        # This sniff stays on the LITERAL type deliberately: a string is an anonymous fat
-        # pointer, never a named one, so a user struct that happens to be shaped
-        # {i8*, i32, i8} must NOT be mistaken for one. The general field-sum below covers
-        # every struct, identified (#257) or literal.
+        # The sniff stays on the LITERAL type deliberately -- a string is an anonymous fat
+        # pointer, so a user struct shaped `{i8*, i32, i8}` must not be mistaken for one.
         els = llvm_type.elements
         if (isinstance(llvm_type, ir.LiteralStructType)
                 and len(els) == 3 and isinstance(els[0], ir.PointerType)
                 and isinstance(els[1], ir.IntType) and els[1].width == 32
                 and isinstance(els[2], ir.IntType) and els[2].width == 8):
             return 16
-        # For structs (including enums), calculate total size
         total_size = 0
         for element_type in llvm_type.elements:
             total_size += calculate_llvm_type_size(element_type)
         return total_size
     elif isinstance(llvm_type, ir.ArrayType):
-        # For arrays, multiply element size by count
         element_size = calculate_llvm_type_size(llvm_type.element)
         return element_size * llvm_type.count
     else:
-        # Conservative estimate for unknown types
         return 16
 
 
 def emit_realloc_call(codegen: 'LLVMCodegen', old_ptr: ir.Value, new_size: ir.Value) -> ir.Value:
-    """Emit realloc() call with error checking.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        old_ptr: Previous pointer (may be null for initial allocation).
-        new_size: New size in bytes (will be converted to i64 if needed).
-
-    Returns:
-        New allocated pointer (i8*).
-
-    Note:
-        Emits runtime error RE2021 and exits if realloc returns NULL.
-    """
+    """Emit realloc() call with error checking."""
     realloc_func = codegen.get_realloc_func()
 
-    # Cast old pointer to void* if needed
     if old_ptr.type != ir.PointerType(codegen.types.i8):
         old_ptr = codegen.builder.bitcast(old_ptr, ir.PointerType(codegen.types.i8), name="old_void_ptr")
 
-    # Convert size to i64 for realloc (size_t)
     if new_size.type != ir.IntType(INT64_BIT_WIDTH):
         new_size = codegen.builder.zext(new_size, ir.IntType(INT64_BIT_WIDTH), name="size_i64")
 
-    # Call realloc
     new_void_ptr = codegen.builder.call(realloc_func, [old_ptr, new_size], name="realloc_result")
 
-    # Check if realloc returned NULL (allocation failure)
     null_ptr = ir.Constant(ir.PointerType(codegen.types.i8), None)
     is_null = codegen.builder.icmp_unsigned('==', new_void_ptr, null_ptr, name="is_null")
 
-    # Create basic blocks for null check
     null_block = codegen.builder.append_basic_block(name="realloc_null")
     success_block = codegen.builder.append_basic_block(name="realloc_success")
 
-    # Branch based on null check
     codegen.builder.cbranch(is_null, null_block, success_block)
 
-    # Null block: emit runtime error and exit
     codegen.builder.position_at_end(null_block)
     codegen.runtime.errors.emit_runtime_error("RE2021")
     codegen.builder.unreachable()
 
-    # Success block: continue normal execution
     codegen.builder.position_at_end(success_block)
 
     return new_void_ptr
 
 
 def emit_free_call(codegen: 'LLVMCodegen', ptr: ir.Value) -> None:
-    """Emit free() call to deallocate memory.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        ptr: Pointer to free (should be i8*/void*).
-    """
+    """Emit free() call to deallocate memory."""
     free_func = codegen.get_free_func()
     codegen.builder.call(free_func, [ptr])
 
 
 def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, element_type: Type) -> ir.Value:
-    """Clone a dynamic array struct value (creates deep copy with independent memory).
-
-    This performs a full deep copy of the array, allocating new memory and copying
-    all elements. The cloned array has its own heap allocation and can be safely
-    modified without affecting the original.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_struct: The array struct value {len, cap, data*} to clone.
-        element_type: The semantic element type of the array.
-
-    Returns:
-        A new array struct value with cloned data.
-
-    Note:
-        Empty arrays (len=0) return {0, 0, null} without allocating memory.
-    """
+    """Clone a dynamic array struct value (creates deep copy with independent memory)."""
     zero = ir.Constant(codegen.types.i32, 0)
 
-    # Extract fields from source array
     source_len = codegen.builder.extract_value(array_struct, 0)
     source_cap = codegen.builder.extract_value(array_struct, 1)
     source_data_ptr = codegen.builder.extract_value(array_struct, 2)
 
-    # Get LLVM element type
     element_llvm_type = codegen.types.ll_type(element_type)
     array_struct_type = array_struct.type
 
-    # Check if source array is empty (len == 0)
     len_is_zero = codegen.builder.icmp_unsigned('==', source_len, zero)
 
     empty_clone_bb = codegen.builder.append_basic_block('clone_empty')
@@ -221,7 +133,6 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
 
     codegen.builder.cbranch(len_is_zero, empty_clone_bb, non_empty_clone_bb)
 
-    # Empty clone path: return {0, 0, null}
     codegen.builder.position_at_end(empty_clone_bb)
     null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
     empty_array = ir.Constant(array_struct_type, ir.Undefined)
@@ -230,21 +141,16 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     empty_array = codegen.builder.insert_value(empty_array, null_ptr, 2)
     codegen.builder.branch(clone_merge_bb)
 
-    # Non-empty clone path: allocate and copy
     codegen.builder.position_at_end(non_empty_clone_bb)
 
-    # Allocate new memory (capacity * sizeof(element))
-    # Use centralized size calculation with semantic type
     sizeof_element_i32 = codegen.types.get_type_size_constant(element_type)
     cap_i64 = codegen.builder.zext(source_cap, codegen.types.i64)
     sizeof_element_i64 = codegen.builder.zext(sizeof_element_i32, codegen.types.i64)
     total_bytes = codegen.builder.mul(cap_i64, sizeof_element_i64)
 
-    # Use our malloc wrapper with error checking
     new_data_ptr_i8 = emit_malloc(codegen, codegen.builder, total_bytes)
     new_data_ptr = codegen.builder.bitcast(new_data_ptr_i8, ir.PointerType(element_llvm_type))
 
-    # Copy elements (manual loop for portability)
     copy_index = codegen.builder.alloca(codegen.types.i32, name="copy_idx")
     codegen.builder.store(zero, copy_index)
 
@@ -254,17 +160,14 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
 
     codegen.builder.branch(copy_loop_head)
 
-    # Loop head: check if index < len
     codegen.builder.position_at_end(copy_loop_head)
     idx = codegen.builder.load(copy_index)
     cond = codegen.builder.icmp_unsigned('<', idx, source_len)
     codegen.builder.cbranch(cond, copy_loop_body, copy_loop_exit)
 
-    # Loop body: deep-copy element. An owning element (a string / nested array / owning
-    # struct / enum with heap payload) must get its OWN buffers, else the clone and the
-    # source share element buffers and both free them at scope exit (double-free on a
-    # nested container). emit_value_clone is a runtime no-op for a non-owning element type,
-    # and is recursion-safe for a self-referential element type (out-of-line clone fn).
+    # An owning element must get its OWN buffers, or the clone and the source share them
+    # and both free at scope exit. `emit_value_clone` is a no-op for a non-owning element
+    # and recursion-safe for a self-referential one.
     codegen.builder.position_at_end(copy_loop_body)
     src_elem_ptr = codegen.builder.gep(source_data_ptr, [idx])
     elem = codegen.builder.load(src_elem_ptr)
@@ -272,12 +175,10 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     dst_elem_ptr = codegen.builder.gep(new_data_ptr, [idx])
     codegen.builder.store(elem, dst_elem_ptr)
 
-    # Increment index
     next_idx = codegen.builder.add(idx, ir.Constant(codegen.types.i32, 1))
     codegen.builder.store(next_idx, copy_index)
     codegen.builder.branch(copy_loop_head)
 
-    # Loop exit: create new array struct
     codegen.builder.position_at_end(copy_loop_exit)
     new_array = ir.Constant(array_struct_type, ir.Undefined)
     new_array = codegen.builder.insert_value(new_array, source_len, 0)
@@ -285,7 +186,6 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     new_array = codegen.builder.insert_value(new_array, new_data_ptr, 2)
     codegen.builder.branch(clone_merge_bb)
 
-    # Merge: phi node to select result
     codegen.builder.position_at_end(clone_merge_bb)
     result_phi = codegen.builder.phi(array_struct_type, name="cloned_array")
     result_phi.add_incoming(empty_array, empty_clone_bb)
@@ -295,31 +195,7 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
 
 
 def is_container_get_call(codegen: 'LLVMCodegen', expr) -> bool:
-    """Is `expr` a `.get()` that READS OUT of storage its receiver still owns?
-
-    True for an array, a `List@(T)`, a `HashMap@(K, V)` and an `Own@(T)`. Every one of them
-    keeps the element and still frees it, so the value `get()` hands back is a borrow.
-
-    The ir-side twin of `semantics/ownership.py::is_get_out_container`, which it calls, so
-    the two cannot disagree about what a container is. Only the receiver's TYPE is resolved
-    here; the rule itself stays in the one module that owns it.
-
-    Until #242 this asked about `Own@(T)` alone, because every other container deep-copied
-    at the read and so really did return a value nobody else owned. Phase 7 deleted those
-    copies, so all four now read the same way.
-
-    A receiver that does not resolve (`f().get()`) answers False. The temporary in that
-    shape has no owner either way, so it is a pre-existing gap rather than one this
-    predicate introduces.
-
-    **`??` is unwrapped first.** `c.get(0)??` is the same borrow as `c.get(0)` -- the
-    operator moves the payload out of the `Maybe`, it does not move the element out of the
-    container. Without the unwrap this answered False, `expression_is_temporary` concluded
-    nobody owned the value, and `match c.get(0)??:` freed an element the container still
-    frees: a double free that leaves the exit code at 0 and is visible only under the
-    interposer. `_reads_through_owner` (semantics/passes/borrow.py) unwraps first and always
-    did; the two are one rule and must not disagree.
-    """
+    """Is `expr` a `.get()` that READS OUT of storage its receiver still owns?"""
     from sushi_lang.semantics.ast import TryExpr
     while isinstance(expr, TryExpr):
         expr = expr.expr
@@ -348,24 +224,7 @@ def is_container_get_call(codegen: 'LLVMCodegen', expr) -> bool:
 
 
 def expression_is_temporary(codegen: 'LLVMCodegen', expr) -> bool:
-    """Does `expr` produce a value that NO other owner will free?
-
-    A bare name, a struct-field read and a container get-out all hand back a shallow view of
-    storage some other owner still frees; anything else (a constructor, a call return,
-    `List.pop()`) is a temporary that nobody owns.
-
-    This is the single definition, and it must stay single. `.realise()` reads it as "the
-    receiver is a temporary, so I ADOPT its payload"; the non-extracting consumers below read
-    it as "the receiver is a temporary, so I DESTROY it". If the two ever disagreed about a
-    given AST node, the payload would be adopted *and* freed -- a double free.
-
-    It rests on an invariant about what a get-out returns, and #242 REVERSED that invariant.
-    Every container used to deep-copy an owning element before wrapping it, so a get-out
-    returned a value nobody else owned; `Own@(T)` was the single exception and had to be
-    named here, which is what #256 and #203 were about. Phase 7 deleted the reader-side
-    copies, so now NO container detaches and all four are the exception. `List.pop()` is the
-    one reader that still moves, because it removes the element outright.
-    """
+    """Does `expr` produce a value that NO other owner will free?"""
     from sushi_lang.semantics.ast import Name, MemberAccess, IndexAccess
     if isinstance(expr, (Name, MemberAccess, IndexAccess)):
         return False
@@ -374,21 +233,7 @@ def expression_is_temporary(codegen: 'LLVMCodegen', expr) -> bool:
 
 def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,
                       enum_type: Type) -> None:
-    """Free an unbound Result/Maybe temporary whose payload is never extracted (#159).
-
-    `match`, an `if`/`while` condition, and `is_ok()`/`is_err()`/`is_some()`/`is_none()` read
-    only the discriminant tag, or bind the payload as a BORROW. None of them takes ownership,
-    so an owning payload behind a temporary had no owner at all and was never freed.
-
-    Called ONLY from those non-extracting sites. `??` moves the payload out to a new owner and
-    `.realise()`/`.expect()` adopt it, so those temporaries already have exactly one owner --
-    destroying them here as well would double-free. That is why this is driven by the
-    consumption site rather than by a registry filled at production: a missed site leaks (the
-    status quo), while a missed de-registration would corrupt the heap.
-
-    The destructor switches on the runtime tag, so the live variant is freed and the others are
-    not -- no reasoning about which payload is present is needed here.
-    """
+    """Free an unbound Result/Maybe temporary whose payload is never extracted (#159)."""
     from sushi_lang.backend.destructors import (
         emit_value_destructor, needs_cleanup, resolve_named_type
     )
@@ -411,25 +256,7 @@ def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,
 
 
 def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> ir.Value:
-    """Return a deep copy of `value` that owns independent heap buffers.
-
-    Exact structural inverse of `destructors.emit_value_destructor`: it duplicates
-    precisely the set of heap buffers that destructor would free for the same
-    `value_type`. Clone fewer buffers -> double-free; clone more -> leak. It is a
-    no-op passthrough for non-owning shapes, so callers invoke it unconditionally,
-    mirroring how the free site calls the destructor unconditionally on the value.
-
-    Value-in / value-out SSA (takes and returns the value, not a pointer), so it
-    composes with a freshly loaded value such as a HashMap entry (#140).
-
-    Args:
-        codegen: The LLVM codegen instance.
-        value: The emitted SSA value to clone.
-        value_type: The value's semantic type (may be an UnknownType struct name).
-
-    Returns:
-        A deep copy with independent buffers, or `value` unchanged when non-owning.
-    """
+    """Return a deep copy of `value` that owns independent heap buffers."""
     from sushi_lang.semantics.typesys import (
         UnknownType, BuiltinType, ForeignPtrType, EnumType, FunctionType
     )
@@ -442,7 +269,6 @@ def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) 
                       or codegen.enum_table.by_name.get(value_type.name)
                       or value_type)
 
-    # Foreign ptr: an opaque unmanaged handle, nothing to duplicate.
     if isinstance(value_type, ForeignPtrType):
         return value
 
@@ -465,11 +291,7 @@ def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) 
 
 def _clone_struct_value_dispatch(codegen: 'LLVMCodegen', value: ir.Value,
                                  value_type: Type) -> ir.Value:
-    """The struct kind's clone handler: containers first, then the field-walk clone.
-
-    The container subdispatch keys on the shared CONTAINER_PREFIXES (the interned
-    `<...>` names are the identity, #240), not on hand-spelled prefixes.
-    """
+    """The struct kind's clone handler: containers first, then the field-walk clone."""
     from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
     if value_type.name.startswith(CONTAINER_PREFIXES):
         if value_type.name.startswith("Own<"):
@@ -481,19 +303,7 @@ def _clone_struct_value_dispatch(codegen: 'LLVMCodegen', value: ir.Value,
 
 
 def _emit_composite_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> ir.Value:
-    """Deep-clone a composite type, breaking self-referential cycles.
-
-    Structural inverse of ``destructors._emit_composite_destructor``: a non-recursive type
-    is cloned inline (unchanged behaviour), but when cloning re-enters a type already in
-    progress (a self-referential type such as ``enum MsgValue: Arr(MsgValue[])`` or
-    ``Own<Tree>``), an out-of-line per-type clone function is called at that position so the
-    deep copy recurses at runtime over the actual data and terminates -- instead of
-    recursing unbounded at compile time.
-
-    Identity key, symbol, kind dispatch and the out-of-line emitter are the SHARED
-    lifecycle machinery (backend/lifecycle.py) -- the same pieces the destructor half
-    uses, so the two cannot drift apart again.
-    """
+    """Deep-clone a composite type, breaking self-referential cycles."""
     from sushi_lang.backend import lifecycle
     key = lifecycle.composite_type_key(value_type)
     stack = getattr(codegen, "_clone_inprogress", None)
@@ -521,19 +331,7 @@ def _declare_memcpy(codegen: 'LLVMCodegen'):
 
 
 def _clone_string_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
-    """Deep-copy a string's buffer, UNCONDITIONALLY.
-
-    Fat layout is `{i8* data@0, i32 size@1, i8 owned@2}`. Malloc a fresh copy (i64-length
-    memcpy -- the raw i32 size is unsafe on ARM64, #149) and set owned=1, whatever the
-    source's owned bit says. The destructor's owned-bit guard must NOT be mirrored here:
-    `owned == 0` means "this binding does not own the buffer", never "the buffer is
-    immortal". Two owned=0 strings exist -- a literal (rodata, immortal) and a VIEW of
-    another owner's heap buffer (a method's `string` parameter after the #145 owned-bit
-    clear, an argv element). A pass-through clone of a view dangles the moment the owner
-    dies, which is what made `return self.clone()` -- the escape CE2411 names -- return
-    the same dangling view as `return self` (#338). A copy is always safe; it can only
-    cost an allocation on a literal.
-    """
+    """Deep-copy a string's buffer, UNCONDITIONALLY."""
     b = codegen.builder
     size = b.extract_value(fat, 1, name="clone_str_size")
     data = b.extract_value(fat, 0, name="clone_str_data")
@@ -548,14 +346,7 @@ def _clone_string_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
 
 
 def _clone_function_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
-    """Duplicate a closure's heap environment through its `clone_ptr` slot.
-
-    Structural inverse of `destructors.emit_function_value_destructor`, and guarded the
-    same runtime way: `if (clone_ptr != null) env = clone_ptr(env)`. Capture is erased
-    from the `fn(...)` type, so the env layout is not knowable here -- the fat value
-    carries its own duplicator, exactly as it carries its own destructor. A non-capturing
-    value has a null clone_ptr and is returned unchanged (there is nothing to own).
-    """
+    """Duplicate a closure's heap environment through its `clone_ptr` slot."""
     b = codegen.builder
     clone_ptr = b.extract_value(fat, 3, name="closure_clone")
     env_ptr = b.extract_value(fat, 1, name="closure_env")
@@ -574,12 +365,7 @@ def _clone_function_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
 
 
 def _clone_own_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
-    """Deep-copy an Own<T>: mirror the destructor's Own path (recurse pointee, own ptr).
-
-    Own<T> is `{T* value@0}`. Null-guard the pointer, recursively clone the pointee (so
-    nested Own<Own<T>> descends), malloc a fresh pointee slot, and store the clone -- the
-    returned Own owns an independent allocation that its destructor frees exactly once.
-    """
+    """Deep-copy an Own<T>: mirror the destructor's Own path (recurse pointee, own ptr)."""
     from sushi_lang.semantics.generics.own import get_own_element_type
 
     b = codegen.builder
@@ -603,17 +389,7 @@ def _clone_own_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struct
 
 
 def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
-    """Deep-copy a List<T>: allocate a fresh buffer and copy the elements.
-
-    List<T> is `{i32 len@0, i32 cap@1, T* data@2}`. Null-data passes through unchanged
-    (empty list). Otherwise malloc cap*sizeof(T) and memcpy the `len` live elements. When
-    the element type OWNS heap (a string / nested container), the shallow memcpy leaves the
-    copy aliasing the source's element buffers, so each live element is then deep-cloned in
-    place -- exactly what `clone_dynamic_array_value` does per element, and the symmetric
-    partner of the List destructor's per-element walk. Without it a `List<string>` copy and
-    its source both free the same buffers (double-free). The new buffer is freed exactly
-    once by the symmetric List branch added to the destructor (issue #140/#181).
-    """
+    """Deep-copy a List<T>: allocate a fresh buffer and copy the elements."""
     from sushi_lang.backend.generics.list.types import extract_element_type
     from sushi_lang.backend.destructors import field_needs_cleanup
     from sushi_lang.backend.generics.container_walk import emit_container_walk
@@ -643,8 +419,6 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
         b.call(_declare_memcpy(codegen),
                [new_raw, old_i8, bytes_to_copy, ir.Constant(ir.IntType(1), 0)])
 
-        # Deep-clone each live element when the element type owns heap, so the copy owns
-        # independent buffers (a no-op walk for a non-owning element type).
         if field_needs_cleanup(codegen, elem_ty):
             def clone_element(element_ptr: ir.Value, _index: ir.Value) -> None:
                 loaded = codegen.builder.load(element_ptr, name="list_clone_elem")
@@ -660,21 +434,7 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
 
 
 def _clone_hashmap_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
-    """Deep-copy a HashMap<K, V>: fresh bucket buffer, deep-cloned owning keys/values.
-
-    HashMap<K, V> is `{ {i32 len, i32 cap, Entry<K,V>* data} buckets, i32 size,
-    i32 capacity, i32 tombstones }`. Its semantic `buckets` field is only an `i32[]`
-    placeholder (the real element is the LLVM-only `Entry<K, V>`), so the generic struct
-    clone mis-handles it -- this branch, like the `Own<`/`List<` ones, bypasses the
-    field walk and works off the real layout via the HashMap type helpers.
-
-    Null bucket storage passes through unchanged. Otherwise malloc `capacity`
-    Entry slots, memcpy the whole buffer (states + shallow keys/values), then walk the
-    OCCUPIED slots and deep-clone each Entry key and value in place so the copy owns
-    independent buffers -- the symmetric partner of the destructor's `emit_destroy_all_entries`
-    (issue #181). Empty/tombstone slots hold garbage and must NOT be cloned, hence the
-    occupied filter.
-    """
+    """Deep-copy a HashMap<K, V>: fresh bucket buffer, deep-cloned owning keys/values."""
     from sushi_lang.semantics.generics.hashmap import extract_key_value_types
     from sushi_lang.backend.generics.hashmap.types import get_entry_type, ENTRY_OCCUPIED
     from sushi_lang.backend.generics.hashmap.utils import emit_entry_state_check
@@ -730,17 +490,7 @@ def _clone_hashmap_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: St
 
 def _clone_fixed_array_value(codegen: 'LLVMCodegen', value: ir.Value,
                              value_type: 'ArrayType') -> ir.Value:
-    """Deep-copy a fixed array `T[N]` element by element.
-
-    Structural inverse of `_emit_fixed_array_destructor`: there is no buffer to
-    duplicate (the storage is inline), so the whole job is cloning each element the
-    destructor would free. `N` is a compile-time constant, so the walk is unrolled with
-    extract/insert rather than a runtime loop -- the same value-in/value-out SSA shape
-    `_clone_struct_value` uses.
-
-    Gated on the destructor's own `field_needs_cleanup`, so a `i32[3]` returns unchanged
-    and only an owning element type (`string`, `Buffer` with an `i32[]`, ...) allocates.
-    """
+    """Deep-copy a fixed array `T[N]` element by element."""
     from sushi_lang.backend.destructors import field_needs_cleanup
 
     if not field_needs_cleanup(codegen, value_type.base_type):
@@ -756,15 +506,7 @@ def _clone_fixed_array_value(codegen: 'LLVMCodegen', value: ir.Value,
 
 
 def _clone_struct_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
-    """Deep-copy a regular struct field-by-field, recursing through emit_value_clone.
-
-    Gated on `field_needs_cleanup(field_type)` -- the SAME predicate `_emit_struct_destructor`
-    uses -- so exactly the fields the destructor frees get cloned, at full depth (a struct
-    holding an enum/List/Own field is handled, unlike the retired field walk that covered
-    array and nested-struct fields; that helper's other call sites are left untouched).
-    The gate must RESOLVE a named/generic field type, exactly as the destructor does: clone
-    fewer buffers than the destructor frees and the shared buffer is freed twice (#183).
-    """
+    """Deep-copy a regular struct field-by-field, recursing through emit_value_clone."""
     from sushi_lang.backend.destructors import field_needs_cleanup
 
     b = codegen.builder
@@ -778,13 +520,7 @@ def _clone_struct_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Str
 
 
 def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir.Value:
-    """Deep-copy an enum by cloning the active variant's owning associated data.
-
-    Mirrors `_emit_enum_destructor`: switch on the tag and walk the same byte offsets into
-    the `[N x i8]` data blob -- but CLONE each owning field in place (load, clone, store
-    back) instead of destroying. Materialised through an alloca so the byte-offset GEPs
-    have an address; the mutated value is reloaded as a single dominating SSA result.
-    """
+    """Deep-copy an enum by cloning the active variant's owning associated data."""
     from sushi_lang.backend.destructors import field_needs_cleanup
     from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
 
@@ -835,12 +571,9 @@ def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir
     return b.load(slot, name="cloned_enum")
 
 
-# ---------------------------------------------------------------------------
-# Lifecycle registration: the CLONE half of every composite kind's handler.
-# The DESTROY half registers in backend/destructors.py; the pairing is asserted
-# by tests/unit/test_lifecycle_handlers.py. A kind registered on one side only
-# is a double free or a leak by construction (see backend/lifecycle.py).
-# ---------------------------------------------------------------------------
+# The CLONE half of every composite kind's handler; the DESTROY half registers in
+# backend/destructors.py. A kind registered on one side only is a double free or a leak by
+# construction, so tests/unit/test_lifecycle_handlers.py asserts the pairing.
 from sushi_lang.backend.lifecycle import register_lifecycle as _register_lifecycle  # noqa: E402
 
 _register_lifecycle(

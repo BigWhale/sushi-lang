@@ -1,8 +1,4 @@
-"""Unified LLVM type system facade for the Sushi compiler.
-
-This module provides a clean interface to the type system components,
-hiding the internal organization and providing a single entry point.
-"""
+"""Unified LLVM type system facade for the Sushi compiler."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -20,14 +16,7 @@ from sushi_lang.backend.types.core.inference import TypeInference
 
 
 class LLVMTypeSystem:
-    """Unified interface to LLVM type system.
-
-    This facade provides access to all type system operations:
-    - Type mapping (Sushi -> LLVM)
-    - Type inference (LLVM -> Sushi)
-    - Type sizing and alignment
-    - Struct/enum type caching
-    """
+    """Unified interface to LLVM type system."""
 
     def __init__(
         self,
@@ -35,22 +24,12 @@ class LLVMTypeSystem:
         enum_table: EnumTable | None = None,
         context: 'ir.Context | None' = None,
     ):
-        """Initialize the unified type system.
-
-        Args:
-            struct_table: Optional struct table for resolving struct types
-            enum_table: Optional enum table for resolving enum types
-            context: LLVM context that owns the identified struct types (#257). Should be
-                the context of every module this compilation emits. Defaults to a fresh
-                one rather than llvmlite's process-wide global_context, so two compilations
-                in one process cannot see each other's struct layouts.
-        """
+        """Initialize the unified type system."""
         from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 
         self.struct_table = struct_table or StructTable()
         self.enum_table = enum_table or EnumTable()
 
-        # Initialize subsystems
         self.cache = TypeCache()
         self.sizing = TypeSizing(self.struct_table, self.enum_table)
         self.mapper = TypeMapper(self.cache, self.struct_table, self.enum_table,
@@ -61,7 +40,6 @@ class LLVMTypeSystem:
             self.mapper.string_struct,
         )
 
-        # Expose LLVM primitive types from mapper for direct access
         self.i1 = self.mapper.i1
         self.i8 = self.mapper.i8
         self.i16 = self.mapper.i16
@@ -78,42 +56,18 @@ class LLVMTypeSystem:
         self.string_struct = self.mapper.string_struct
         self.closure_struct = self.mapper.closure_struct
 
-    # Type mapping interface
     def ll_type(self, semantic_type: Ty) -> ir.Type:
-        """Convert Sushi type to LLVM type.
-
-        Args:
-            semantic_type: The Sushi language type
-
-        Returns:
-            Corresponding LLVM IR type
-        """
+        """Convert Sushi type to LLVM type."""
         return self.mapper.ll_type(semantic_type)
 
-    # Type inference interface
     def infer_llvm_type_from_value(self, value: ir.Value) -> ir.Type:
-        """Infer LLVM type from runtime value.
-
-        Args:
-            value: LLVM value to analyze
-
-        Returns:
-            LLVM type of the value
-        """
+        """Infer LLVM type from runtime value."""
         return self.inference.infer_llvm_type_from_value(value)
 
     def map_llvm_to_language_type(self, llvm_type: ir.Type) -> str:
-        """Map LLVM type back to language type name.
-
-        Args:
-            llvm_type: LLVM IR type
-
-        Returns:
-            Sushi language type name
-        """
+        """Map LLVM type back to language type name."""
         return self.inference.map_llvm_to_language_type(llvm_type)
 
-    # Type checking utilities
     def is_string_type(self, llvm_type: ir.Type) -> bool:
         """Check if LLVM type represents a string."""
         return self.inference.is_string_type(llvm_type)
@@ -126,27 +80,12 @@ class LLVMTypeSystem:
         """Check if LLVM type represents a dynamic array."""
         return self.inference.is_dynamic_array_type(llvm_type)
 
-    # Type sizing interface
     def get_type_size_bytes(self, semantic_type: Ty) -> int:
-        """Get size in bytes of a Sushi type.
-
-        Args:
-            semantic_type: The Sushi language type
-
-        Returns:
-            Size in bytes
-        """
+        """Get size in bytes of a Sushi type."""
         return self.sizing.get_type_size_bytes(semantic_type)
 
     def get_type_size_constant(self, semantic_type: Ty) -> ir.Value:
-        """Get size in bytes as an LLVM i32 constant.
-
-        Args:
-            semantic_type: The Sushi language type
-
-        Returns:
-            LLVM i32 constant with size in bytes
-        """
+        """Get size in bytes as an LLVM i32 constant."""
         from llvmlite import ir
         size_bytes = self.sizing.get_type_size_bytes(semantic_type)
         return ir.Constant(self.i32, size_bytes)
@@ -156,22 +95,15 @@ class LLVMTypeSystem:
         return self.sizing.get_type_alignment(semantic_type)
 
     def payload_field_offsets(self, associated_types) -> list[int]:
-        """Naturally aligned enum payload field offsets -- the ONE layout authority
-        (#300 phase 2, see TypeSizing.payload_field_offsets)."""
+        """Naturally aligned enum payload field offsets -- the ONE layout authority (#300 phase 2,
+        see TypeSizing.payload_field_offsets).
+        """
         return self.sizing.payload_field_offsets(associated_types)
 
     def _get_type_alignment(self, semantic_type: Ty) -> int:
-        """Get alignment requirement for a Sushi type.
-
-        Args:
-            semantic_type: The Sushi language type
-
-        Returns:
-            Alignment in bytes
-        """
+        """Get alignment requirement for a Sushi type."""
         return self.sizing.get_type_alignment(semantic_type)
 
-    # Struct/enum type helpers (delegated to mapper)
     def get_string_struct_type(self) -> ir.LiteralStructType:
         """Get LLVM struct type for strings: {i8* data, i32 size, i8 owned}."""
         return self.mapper.string_struct
@@ -192,7 +124,6 @@ class LLVMTypeSystem:
         """Get LLVM struct type for Iterator<T>."""
         return self.mapper._create_iterator_struct_type(iterator_type)
 
-    # GEP helpers for dynamic arrays
     def get_dynamic_array_len_ptr(self, builder: ir.IRBuilder, array_ptr: ir.Value) -> ir.Value:
         """Get pointer to 'len' field of dynamic array struct."""
         from llvmlite import ir

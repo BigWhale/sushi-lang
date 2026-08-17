@@ -1,27 +1,4 @@
-"""
-Built-in extension methods for Own<T> generic struct.
-
-INLINE EMISSION ONLY. Own<T> methods work on-demand for all types.
-
-Implemented methods:
-- alloc(value: T) -> Own<T>: Allocate heap memory and store value. Takes ownership of
-  an owning argument (the source variable is moved, so RAII will not double-free it).
-- get() -> T: Dereference. Loads the payload UNCOPIED, so the value is a view of storage
-  this Own still frees -- the pointer analogue of a MemberAccess field read. So the seam
-  classifies it THROUGH_OWNER and every consuming use deep-copies it, which is what keeps
-  a nested Own<Own<T>> from being double-freed (#106) and what #256 was missing at the five
-  positions the #106 guard never reached.
-- destroy() -> ~: Free the allocated memory (RAII), recursing into the payload.
-
-The Own<T> type is a generic struct for unique ownership of heap data:
-    struct Own<T>:
-        T* value  # Pointer to heap-allocated data
-
-This module provides heap allocation and RAII cleanup for recursive types.
-
-Note: We use "alloc" instead of "new" because "new" is a reserved keyword
-in Sushi (used for dynamic array creation).
-"""
+"""Built-in extension methods for Own<T> generic struct."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
@@ -33,42 +10,21 @@ from sushi_lang.semantics.generics.own import get_own_element_type
 
 
 def emit_own_alloc(codegen: Any, element_type: Type, value: ir.Value) -> ir.Value:
-    """Emit Own<T>.alloc(value) -> Own<T>
-
-    Implementation:
-    1. Calculate sizeof(T)
-    2. Call malloc(sizeof(T))
-    3. Cast void* to T*
-    4. Store value at pointer
-    5. Create Own<T> struct with pointer
-    6. Return Own<T>
-
-    Args:
-        codegen: LLVM codegen instance
-        element_type: The type T
-        value: The value to store (already emitted)
-
-    Returns:
-        Own<T> struct value containing pointer
-    """
+    """Emit Own<T>.alloc(value) -> Own<T>"""
     element_llvm_type = codegen.types.ll_type(element_type)
     size_bytes = codegen.types.get_type_size_bytes(element_type)
 
-    # Call malloc(size)
     size_i64 = ir.Constant(codegen.types.i64, size_bytes)
     void_ptr = emit_malloc(codegen, codegen.builder, size_i64)
 
-    # Cast void* (i8*) to T*
     typed_ptr = codegen.builder.bitcast(
         void_ptr,
         ir.PointerType(element_llvm_type),
         name="own_ptr"
     )
 
-    # Store value at pointer
     codegen.builder.store(value, typed_ptr)
 
-    # Create Own<T> struct: {T* value}
     own_struct_type = ir.LiteralStructType([ir.PointerType(element_llvm_type)])
     own_value = ir.Constant(own_struct_type, ir.Undefined)
     own_value = codegen.builder.insert_value(own_value, typed_ptr, 0, name="own_struct")
@@ -77,56 +33,21 @@ def emit_own_alloc(codegen: Any, element_type: Type, value: ir.Value) -> ir.Valu
 
 
 def emit_own_get(codegen: Any, own_value: ir.Value, element_type: Type) -> ir.Value:
-    """Emit Own<T>.get() -> T
-
-    Implementation:
-    1. Extract pointer from Own<T> struct
-    2. Load value from pointer
-    3. Return the value
-
-    The load is deliberately SHALLOW. Copying here would fix every ownership sink at a
-    stroke and break the one shape that has always been correct: `o.get().field` takes no
-    owner, so the copy would belong to nobody and leak (#256, pinned by
-    `tests/memory/test_own_get_field_read_no_leak.sushi`). The other container get-outs can
-    copy at the access site because they return `Maybe@(T)` and cannot be chained; `Own`
-    returns bare `T`. So the copy lives at the consuming uses instead -- the seam reads the
-    THROUGH_OWNER provenance that `semantics/passes/borrow.py` stamps for this shape.
-
-    Args:
-        codegen: LLVM codegen instance
-        own_value: The Own<T> struct value
-        element_type: The type T
-
-    Returns:
-        The owned value of type T -- a VIEW of the pointee, not a copy
-    """
-    # Extract pointer from struct field 0
+    """Emit Own<T>.get() -> T"""
     ptr = codegen.builder.extract_value(own_value, 0, name="own_ptr")
 
-    # Load and return the value
     return codegen.builder.load(ptr, name="own_value")
 
 
 def emit_own_destroy(codegen: Any, own_value: ir.Value) -> ir.Value:
-    """Emit Own<T>.destroy() -> ~ for a TEMPORARY (non-Name) receiver.
-
-    A shallow single free of the loaded value: extract the pointer, cast to void*,
-    free it, return the blank value. A NAME receiver goes through the deep
-    `emit_value_destructor` path in emit_builtin_own_method instead, which also
-    marks the binding destroyed -- so this function has no binding to mark (its
-    former `var_name` parameter was never passed by its one caller; 11b).
-    """
-    # Extract pointer from struct
+    """Emit Own<T>.destroy() -> ~ for a TEMPORARY (non-Name) receiver."""
     ptr = codegen.builder.extract_value(own_value, 0, name="own_ptr_to_free")
 
-    # Cast T* to void* (i8*)
     void_ptr = codegen.builder.bitcast(ptr, ir.PointerType(codegen.types.i8))
 
-    # Call free(void*)
     free_func = codegen.get_free_func()
     codegen.builder.call(free_func, [void_ptr])
 
-    # Return blank value (~)
     return ir.Constant(codegen.types.i32, 0)
 
 
@@ -136,26 +57,10 @@ def emit_builtin_own_method(
     own_value: ir.Value,
     own_type: StructType
 ) -> ir.Value:
-    """Emit LLVM code for Own<T> built-in methods.
-
-    Args:
-        codegen: The LLVM code generator instance.
-        call: The method call AST node.
-        own_value: The LLVM value of the Own<T> receiver (for get/destroy).
-        own_type: The Own<T> struct type (after monomorphization).
-
-    Returns:
-        The LLVM value representing the method call result.
-
-    Raises:
-        ValueError: If the method is not recognized or has invalid arguments.
-    """
-    # Extract element type T from Own<T>
-    # own_type.name is like "Own<i32>", "Own<string>", etc.
+    """Emit LLVM code for Own<T> built-in methods."""
     element_type = get_own_element_type(own_type)
 
     if call.method == "alloc":
-        # Emit the argument value
         arg = call.args[0]
         arg_value = codegen.expressions.emit_expr(arg)
         # `Own.alloc` takes ownership: the new Own becomes the sole owner of the pointee.
@@ -167,16 +72,12 @@ def emit_builtin_own_method(
     elif call.method == "get":
         return emit_own_get(codegen, own_value, element_type)
     elif call.method == "clone":
-        # The explicit escape from CE2411 (#242). An `Own@(T).get()` deref BORROWS -- the
-        # receiver keeps the pointee and still frees it -- so a position that takes
-        # ownership rejects it, and this is what the diagnostic tells the user to write.
-        # Routed through the seam's `copy_out`, the ONE deep clone in the backend, so
-        # `.clone()` duplicates exactly what `emit_own_destroy` frees: a fresh allocation
-        # holding a deep copy of the pointee.
+        # The escape from CE2411 (#242): an `Own@(T).get()` deref BORROWS. Routed through
+        # the seam's `copy_out`, so a clone duplicates exactly what `emit_own_destroy`
+        # frees.
         from sushi_lang.backend.ownership import copy_out
         return copy_out(codegen, own_value, own_type)
     elif call.method == "destroy":
-        # Extract variable name from receiver (if it's a Name node)
         from sushi_lang.semantics.ast import Name
         if isinstance(call.receiver, Name):
             var_name = call.receiver.id
@@ -184,13 +85,10 @@ def emit_builtin_own_method(
             # (the semantic passes already accepted the name), so there is no
             # not-found branch here (11b).
             slot = codegen.memory.find_local_slot(var_name)
-            # Deep teardown via the general recursive destructor (same as the RAII
-            # path), so manual destroy of a nested Own<Own<T>> frees every level.
             from sushi_lang.backend.destructors import emit_value_destructor
             emit_value_destructor(codegen, slot, own_type)
             codegen.dynamic_arrays.mark_own_destroyed(var_name)
             return ir.Constant(codegen.types.i32, 0)
-        # Temporary / non-Name receiver: shallow single free of the loaded value.
         return emit_own_destroy(codegen, own_value)
     else:
         raise_internal_error("CE0080", method=call.method)

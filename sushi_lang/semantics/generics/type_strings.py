@@ -1,14 +1,4 @@
-"""Resolve a `Type` from its string representation.
-
-Monomorphized generics carry their type arguments in their *name*
-("HashMap<string, i32>", "List<fn(i32) -> i32>"), so recovering the concrete
-argument types means parsing that name back into `Type` objects. This module is
-the single place that does it.
-
-The `tables` argument is duck-typed: anything exposing `.struct_table.by_name`
-and `.enum_table.by_name` works, which is why a Pass-2 `TypeValidator`, a
-`TypeSystemWrapper`, and `LLVMCodegen` can all be passed.
-"""
+"""Resolve a `Type` from its string representation."""
 
 from typing import Any
 import re
@@ -34,16 +24,7 @@ _BUILTIN_TYPES = {
 
 
 def split_type_arguments(type_args_str: str) -> list[str]:
-    """Split comma-separated type arguments while respecting angle brackets.
-
-    Handles nested generics like "Box<i32>, string" -> ["Box<i32>", "string"]
-
-    Args:
-        type_args_str: Comma-separated type arguments string.
-
-    Returns:
-        List of type argument strings.
-    """
+    """Split comma-separated type arguments while respecting angle brackets."""
     parts = []
     current: list[str] = []
     depth = 0
@@ -56,13 +37,11 @@ def split_type_arguments(type_args_str: str) -> list[str]:
             depth -= 1
             current.append(char)
         elif char == ',' and depth == 0:
-            # Top-level comma - split here
             parts.append(''.join(current).strip())
             current = []
         else:
             current.append(char)
 
-    # Add the last part
     if current:
         parts.append(''.join(current).strip())
 
@@ -124,24 +103,7 @@ def _resolve_function_type_from_string(type_str: str, tables: Any) -> Type:
 
 
 def resolve_type_from_string(type_str: str, tables: Any) -> Type:
-    """Resolve a type from its string representation.
-
-    Handles:
-    - Builtin types (i32, string, bool, etc.)
-    - Struct types (Point, Person, etc.)
-    - Enum types (Color, FileError, etc.)
-    - Generic types (Maybe<i32>, Box<string>, etc.)
-    - Function types (fn(i32) -> i32, fn(i32) -> i32 | MathError)
-    - Fixed arrays (i32[10], string[3], etc.)
-    - Dynamic arrays (i32[], string[], etc.)
-
-    Args:
-        type_str: Type name string (e.g., "i32", "Point", "Maybe<i32>", "string[3]").
-        tables: Anything exposing `struct_table.by_name` and `enum_table.by_name`.
-
-    Returns:
-        Resolved Type object.
-    """
+    """Resolve a type from its string representation."""
     type_str = type_str.strip()
 
     # First-class function type: must be handled before the array branch (its return
@@ -149,7 +111,6 @@ def resolve_type_from_string(type_str: str, tables: Any) -> Type:
     if type_str.startswith("fn(") or type_str.startswith("fn ("):
         return _resolve_function_type_from_string(type_str, tables)
 
-    # Check for array types first (fixed: "type[N]" or dynamic: "type[]")
     if '[' in type_str and type_str.endswith(']'):
         match = re.match(r'^(.+)\[(\d*)\]$', type_str)
         if match:
@@ -165,8 +126,6 @@ def resolve_type_from_string(type_str: str, tables: Any) -> Type:
     if type_str in _BUILTIN_TYPES:
         return _BUILTIN_TYPES[type_str]
 
-    # A generic type ("Maybe<i32>", "Box<Point>") is already monomorphized by the
-    # time we get here, so it is present in one of the tables under its full name.
     if '<' in type_str and type_str.endswith('>'):
         if type_str in tables.enum_table.by_name:
             return tables.enum_table.by_name[type_str]

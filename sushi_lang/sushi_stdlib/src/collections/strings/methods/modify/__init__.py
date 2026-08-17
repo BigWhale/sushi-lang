@@ -1,8 +1,4 @@
-"""
-String Modification Operations
-
-Facade module that re-exports all string modification methods for backward compatibility.
-"""
+"""String Modification Operations"""
 
 from .replace import emit_string_replace
 from .reverse import emit_string_reverse

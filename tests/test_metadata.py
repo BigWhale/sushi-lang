@@ -1,9 +1,4 @@
-"""
-Test metadata parsing for the Sushi language test framework.
-
-Provides functionality to parse test metadata from Sushi source files
-to specify expected runtime behavior, exit codes, and output validation.
-"""
+"""Test metadata parsing for the Sushi language test framework."""
 
 import re
 from dataclasses import dataclass
@@ -63,11 +58,7 @@ class TestMetadata:
 
 
 def header_block(lines: List[str]) -> List[str]:
-    """The leading comment block: every line before the first line of CODE.
-
-    Comments and blank lines only. Shared with the guard test, so "where a directive may
-    live" has one definition rather than one here and one in whatever checks it.
-    """
+    """The leading comment block: every line before the first line of CODE."""
     header = []
     for line in lines:
         stripped = line.strip()
@@ -78,36 +69,7 @@ def header_block(lines: List[str]) -> List[str]:
 
 
 def parse_test_metadata(test_file: Path) -> TestMetadata:
-    """
-    Parse test metadata from a Sushi source file.
-
-    Looks for special comments at the top of the file:
-    # EXPECT_RUNTIME_EXIT: 42
-    # EXPECT_STDOUT_CONTAINS: "Result: 17"
-    # EXPECT_STDOUT_EXACT: "Hello World\\nDone\\n"
-    # EXPECT_STDERR_EMPTY: true
-    # EXPECT_NO_LEAKS: true
-    # EXPECT_ERROR_CODE: CE2007
-    # TIMEOUT_SECONDS: 10
-    # TEST_TYPE: runtime
-    # CMD_ARGS: arg1 arg2 arg3
-    # STDIN_INPUT: "line1\\nline2\\nline3\\n"
-    # TEST_ENV: HOME=/home/trillian     (repeatable, one KEY=VALUE per line)
-    # TEST_CWD: /
-
-    Directives are read from the file's LEADING COMMENT BLOCK -- every comment and blank
-    line before the first line of code. This used to be the first 20 lines regardless of
-    what was there, which silently dropped a directive out of any test that explained
-    itself at length: 23 of them, over six files, including four `EXPECT_NO_LEAKS` on
-    memory tests. A dropped directive does not fail; the test simply stops asserting, and
-    the suite still reports it as passed. `tests/unit/test_test_directives.py` is the guard.
-
-    Args:
-        test_file: Path to the .sushi test file
-
-    Returns:
-        TestMetadata object with parsed expectations
-    """
+    """Parse test metadata from a Sushi source file."""
     metadata = TestMetadata()
 
     try:
@@ -232,18 +194,7 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
 
 
 def _apply_category_defaults(test_file: Path, metadata: TestMetadata) -> None:
-    """
-    Fill in the runtime contract implied by a test's filename category.
-
-    A runnable test (anything that is not test_err_* / test_warn_*) is executed after
-    compilation and is expected to exit 0 unless it declares otherwise. Making that
-    default explicit here -- rather than inferring intent from the source text -- is
-    what lets the runner treat an undeclared non-zero exit as a failure.
-
-    Args:
-        test_file: Path to the test file
-        metadata: TestMetadata object to update
-    """
+    """Fill in the runtime contract implied by a test's filename category."""
     filename = test_file.name
 
     # test_err_* never produces a binary, so there is nothing to run.
@@ -282,15 +233,7 @@ def _apply_category_defaults(test_file: Path, metadata: TestMetadata) -> None:
 
 
 def get_test_category(test_file: Path) -> str:
-    """
-    Determine test category based on filename pattern.
-
-    Returns:
-        'error': Should fail compilation (test_err_*)
-        'warning': Should succeed with warnings (test_warn_*)
-        'success': Should succeed without warnings (test_*)
-        'runtime': Should succeed and be executed (test_run_*)
-    """
+    """Determine test category based on filename pattern."""
     filename = test_file.name
 
     if filename.startswith('test_err_'):
@@ -304,26 +247,7 @@ def get_test_category(test_file: Path) -> str:
 
 
 def should_run_runtime_test(test_file: Path, metadata: TestMetadata) -> bool:
-    """
-    Determine if a test should have its compiled binary executed.
-
-    Reduces to "run everything that is not test_err_ / test_warn_", because
-    _apply_category_defaults marks every runnable test as requires_runtime.
-
-    The one exception is a warning test that declares EXPECT_NO_LEAKS: it compiles
-    successfully and does produce a binary, and executing that binary is the only way
-    to leak-check a warned-but-legal construct such as shadowing an owning binding.
-    This used to be additionally gated on a leaks_mode argument, back when leak
-    assertions were enforced only under --leaks; enforcement is now unconditional, so
-    the declaration alone decides.
-
-    Args:
-        test_file: Path to the test file
-        metadata: Parsed test metadata
-
-    Returns:
-        True if the test should be executed after compilation
-    """
+    """Determine if a test should have its compiled binary executed."""
     category = get_test_category(test_file)
 
     if category == 'error':

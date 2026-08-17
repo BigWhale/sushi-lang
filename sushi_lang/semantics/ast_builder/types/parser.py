@@ -17,19 +17,9 @@ class TypeParser:
         self.ast_builder = ast_builder
 
     def parse_type(self, type_node: Tree) -> Optional[Type]:
-        """Parse a type node into a Type object, handling all type syntax.
-
-        Dispatches to specialized parsers based on the type syntax.
-
-        Args:
-            type_node: Tree node representing a type
-
-        Returns:
-            Type object or None if parsing fails
-        """
+        """Parse a type node into a Type object, handling all type syntax."""
         tag = type_node.data
 
-        # Dispatch to type-specific parser
         if tag == "name_t":
             return user_defined.parse_unknown_type(type_node)
         elif tag == "generic_type_t":
@@ -43,5 +33,4 @@ class TypeParser:
         elif tag == "fn_type_t":
             return functions.parse_function_type(type_node, self.ast_builder)
         else:
-            # Built-in type (int_t, bool_t, string_t, etc.)
             return type_from_rule_name(tag)

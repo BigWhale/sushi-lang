@@ -1,18 +1,7 @@
-"""
-C Library Function Declarations
-
-All declarations for external C functions (libc) used by the stdlib.
-This module provides LLVM IR function declarations for C standard library functions.
-
-Design: Single Responsibility - only C function declarations, no logic.
-"""
+"""C Library Function Declarations"""
 
 import llvmlite.ir as ir
 
-
-# ==============================================================================
-# Memory Management
-# ==============================================================================
 
 def declare_malloc(module: ir.Module) -> ir.Function:
     """Declare malloc: void* malloc(size_t size)"""
@@ -48,40 +37,18 @@ def declare_realloc(module: ir.Module) -> ir.Function:
 
 
 def declare_memcpy(module: ir.Module) -> ir.Function:
-    """Declare LLVM memcpy intrinsic (replaces libc memcpy).
-
-    Returns the llvm.memcpy.p0.p0.i64 intrinsic for platform-independent memory
-    copying. The length is i64 (size_t), NOT i32: callers pass string sizes taken
-    from the fat pointer's i32 size field, and passing that raw i32 lets adjacent
-    bytes (the `owned` byte and padding) leak into the 64-bit length register that
-    glibc's memcpy reads on x86-64, producing a garbage huge length and an
-    out-of-bounds read. Callers must zero-extend their i32 size to i64 (issue #151,
-    same class as #149).
-
-    Note: The intrinsic takes 4 parameters (dest, src, len, is_volatile),
-    so callers must pass is_volatile=0 as the 4th argument.
-    """
+    """Declare LLVM memcpy intrinsic (replaces libc memcpy)."""
     i8 = ir.IntType(8)
     i64 = ir.IntType(64)
 
-    # Declare llvm.memcpy intrinsic
-    # Signature: void @llvm.memcpy.p0.p0.i64(i8* dest, i8* src, i64 len, i1 is_volatile)
     return module.declare_intrinsic(
         'llvm.memcpy',
         [ir.PointerType(i8), ir.PointerType(i8), i64]
     )
 
 
-# ==============================================================================
-# String Operations
-# ==============================================================================
-
 def declare_strlen(module: ir.Module) -> ir.Function:
-    """Declare strlen as external (implementation emitted during final compilation).
-
-    Returns:
-        The llvm_strlen function declaration: i32 llvm_strlen(i8* s)
-    """
+    """Declare strlen as external (implementation emitted during final compilation)."""
     func_name = "llvm_strlen"
     if func_name in module.globals:
         return module.globals[func_name]
@@ -104,10 +71,7 @@ def declare_strcmp(module: ir.Module) -> ir.Function:
 
 
 def declare_strtol(module: ir.Module) -> ir.Function:
-    """Declare strtol: long strtol(const char* str, char** endptr, int base)
-
-    Converts string to long integer. Returns 0 on error, sets endptr to str if no conversion.
-    """
+    """Declare strtol: long strtol(const char* str, char** endptr, int base)"""
     if "strtol" in module.globals:
         return module.globals["strtol"]
 
@@ -120,10 +84,7 @@ def declare_strtol(module: ir.Module) -> ir.Function:
 
 
 def declare_strtoll(module: ir.Module) -> ir.Function:
-    """Declare strtoll: long long strtoll(const char* str, char** endptr, int base)
-
-    Converts string to long long integer. Returns 0 on error, sets endptr to str if no conversion.
-    """
+    """Declare strtoll: long long strtoll(const char* str, char** endptr, int base)"""
     if "strtoll" in module.globals:
         return module.globals["strtoll"]
 
@@ -136,10 +97,7 @@ def declare_strtoll(module: ir.Module) -> ir.Function:
 
 
 def declare_strtod(module: ir.Module) -> ir.Function:
-    """Declare strtod: double strtod(const char* str, char** endptr)
-
-    Converts string to double. Returns 0.0 on error, sets endptr to str if no conversion.
-    """
+    """Declare strtod: double strtod(const char* str, char** endptr)"""
     if "strtod" in module.globals:
         return module.globals["strtod"]
 
@@ -149,10 +107,6 @@ def declare_strtod(module: ir.Module) -> ir.Function:
     fn_ty = ir.FunctionType(f64, [i8_ptr, i8_ptr_ptr])
     return ir.Function(module, fn_ty, name="strtod")
 
-
-# ==============================================================================
-# Character Operations
-# ==============================================================================
 
 def declare_toupper(module: ir.Module) -> ir.Function:
     """Declare toupper: int toupper(int c)"""
@@ -194,15 +148,8 @@ def declare_isalpha(module: ir.Module) -> ir.Function:
     return ir.Function(module, fn_ty, name="isalpha")
 
 
-# ==============================================================================
-# UTF-8 Helpers (from backend/c_utils/string.c)
-# ==============================================================================
-
 def declare_utf8_count(module: ir.Module) -> ir.Function:
-    """Declare utf8_count: size_t utf8_count(const char* s)
-
-    C helper function that counts UTF-8 characters.
-    """
+    """Declare utf8_count: size_t utf8_count(const char* s)"""
     if "utf8_count" in module.globals:
         return module.globals["utf8_count"]
 
@@ -213,10 +160,7 @@ def declare_utf8_count(module: ir.Module) -> ir.Function:
 
 
 def declare_utf8_byte_offset(module: ir.Module) -> ir.Function:
-    """Declare utf8_byte_offset: size_t utf8_byte_offset(const char* s, size_t n)
-
-    C helper function that finds the byte offset of the nth UTF-8 character.
-    """
+    """Declare utf8_byte_offset: size_t utf8_byte_offset(const char* s, size_t n)"""
     if "utf8_byte_offset" in module.globals:
         return module.globals["utf8_byte_offset"]
 
@@ -225,10 +169,6 @@ def declare_utf8_byte_offset(module: ir.Module) -> ir.Function:
     fn_ty = ir.FunctionType(i64, [i8_ptr, i64])
     return ir.Function(module, fn_ty, name="utf8_byte_offset")
 
-
-# ==============================================================================
-# Formatted I/O
-# ==============================================================================
 
 def declare_sprintf(module: ir.Module) -> ir.Function:
     """Declare sprintf: int sprintf(char* str, const char* format, ...)"""
@@ -251,10 +191,6 @@ def declare_fprintf(module: ir.Module) -> ir.Function:
     fn_ty = ir.FunctionType(i32, [i8_ptr, i8_ptr], var_arg=True)
     return ir.Function(module, fn_ty, name="fprintf")
 
-
-# ==============================================================================
-# File I/O
-# ==============================================================================
 
 def declare_getline(module: ir.Module) -> ir.Function:
     """Declare getline: ssize_t getline(char **lineptr, size_t *n, FILE *stream)"""
@@ -355,10 +291,6 @@ def declare_feof(module: ir.Module) -> ir.Function:
     fn_ty = ir.FunctionType(i32, [i8_ptr])
     return ir.Function(module, fn_ty, name="feof")
 
-
-# ==============================================================================
-# Process Control
-# ==============================================================================
 
 def declare_exit(module: ir.Module) -> ir.Function:
     """Declare exit: void exit(int status)"""

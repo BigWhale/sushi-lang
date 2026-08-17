@@ -1,4 +1,4 @@
-# Guards PLAN.md T2.1: the borrow checker walks a loop body exactly once and ignores
+# The borrow checker walks a loop body exactly once and ignores
 # the back edge, so a move whose source is declared OUTSIDE the loop is never reported.
 # Today this compiles with no diagnostic and double-frees at runtime (exit 133).
 # EXPECT_ERROR_CODE: CE2405

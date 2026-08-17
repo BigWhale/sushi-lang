@@ -1,28 +1,4 @@
-# semantics/passes/types/__init__.py
-"""
-Pass 2: Type validation and inference.
-
-Validates:
-- Unknown type names (CE2001)
-- Type compatibility in assignments (CE2002)
-- Return type matching (CE2003)
-- Boolean conditions in control flow (CE2005)
-- Extension method calls and resolution
-
-Depends on:
-- Pass 0: Function signatures, extension methods, and known types
-- Pass 1: Scope information (if needed)
-
-Architecture:
-The TypeValidator class coordinates type validation by delegating to specialized modules:
-- utils: Shared utilities (type name validation, parameter validation, array destruction tracking)
-- inference: Type inference helpers
-- compatibility: Type compatibility checking
-- expressions: Expression validation
-- matching: Pattern matching validation
-- calls: Function and method call validation
-- statements: Statement validation
-"""
+"""Pass 2: Type validation and inference."""
 from __future__ import annotations
 from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
@@ -39,7 +15,6 @@ from sushi_lang.semantics.ast import (
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.types.visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
 
-# Import validation functions from specialized modules
 from .compatibility import types_compatible
 from .constants import validate_constant
 from .signatures import (
@@ -81,11 +56,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 
 
 class TypeValidator:
-    """
-    Pass 2: Type validation and inference.
-
-    This is the main coordinator class that delegates validation logic to specialized modules.
-    """
+    """Pass 2: Type validation and inference."""
 
     def __init__(self, reporter: Reporter, tables: 'SymbolTables', current_unit_name: Optional[str] = None, monomorphized_functions: Optional[Dict[str, tuple]] = None) -> None:
         self.reporter = reporter
@@ -96,16 +67,13 @@ class TypeValidator:
         self.func_table = tables.funcs
         self.external_table = tables.externals
         self.extension_table = tables.extensions
-        # Generic tables for checking generic type/function names (Result, Box, Pair, identity, ...)
         self.generic_enum_table = tables.generic_enums
         self.generic_struct_table = tables.generic_structs
         self.generic_extension_table = tables.generic_extensions
         self.generic_func_table = tables.generic_funcs
-        # Perk tables for validation
         self.perk_table = tables.perks
         self.perk_impl_table = tables.perk_impls
         self.current_unit_name = current_unit_name  # Track which unit is being validated (for visibility checking)
-        # Store monomorphized functions map (mangled_name -> (generic_name, type_args))
         self.monomorphized_functions = monomorphized_functions or {}
         self.known_types: Set[BuiltinType] = {
             BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
@@ -115,47 +83,35 @@ class TypeValidator:
             BuiltinType.FILE
         }  # Built-in types
         self.current_function: Optional[FuncDef] = None
-        # Track variable types within current function
         self.variable_types: Dict[str, Type] = {}
-        # Track destroyed arrays per scope
         self.destroyed_arrays: List[set[str]] = []
 
-        # Initialize visitor pattern components
         self.statement_validator = StatementValidator(self)
         self.expression_validator = ExpressionValidator(self)
         self.type_inference_visitor = TypeInferenceVisitor(self)
 
     def run(self, program: Program) -> None:
         """Entry point for type validation."""
-        # Build AST constant map for constant evaluator
         self.ast_constants = {const.name: const for const in program.constants}
 
-        # Validate constants first (they're global and may be referenced in functions)
         for const in program.constants:
             self._validate_constant(const)
 
-        # Validate regular functions
         for func in program.functions:
-            # Skip generic functions in Phase 1 (no type validation yet - will be handled in Pass 2 after monomorphization)
             if hasattr(func, 'type_params') and func.type_params:
                 continue
             self._validate_function(func)
 
-        # Validate non-generic extension methods
-        # Generic extension methods are validated after monomorphization
         for ext in program.extensions:
             self._validate_extension_method(ext)
 
-        # Validate perk implementations
         for impl in program.perk_impls:
             self._validate_perk_implementation(impl)
 
     def validate_expression(self, expr: Expr) -> Optional[Type]:
         """Validate an expression and its subexpressions using the Visitor Pattern."""
-        # Recursively validate subexpressions using visitor
         self.expression_validator.visit(expr)
 
-        # After validation, return the inferred type
         return self.infer_expression_type(expr)
 
     def infer_expression_type(self, expr: Expr) -> Optional[Type]:
@@ -163,19 +119,12 @@ class TypeValidator:
         return self.type_inference_visitor.visit(expr)
 
     def _resolve_external_call(self, node) -> Optional['ExternalSig']:
-        """Resolve a DotCall to a foreign function signature, if applicable.
-
-        Returns the ExternalSig when `node` is `<ns>.<name>(args)` where <ns> is a
-        registered external namespace AND not a bound local (shadowing guard).
-        Annotates the node with `external_ref = (ns, name)` for the backend.
-        Returns None otherwise (the call falls through to normal handling).
-        """
+        """Resolve a DotCall to a foreign function signature, if applicable."""
         from sushi_lang.semantics.ast import Name
         receiver = node.receiver
         if not isinstance(receiver, Name):
             return None
         ns = receiver.id
-        # Locals shadow namespaces.
         if ns in self.variable_types:
             return None
         if not self.external_table.is_namespace(ns):
@@ -196,8 +145,6 @@ class TypeValidator:
         expected = sig.param_types
         is_variadic = getattr(sig, "is_variadic", False)
         fq_name = f"{node.external_ref[0]}.{node.external_ref[1]}"
-        # Variadic externs relax the arity check: only too FEW fixed args is an
-        # error; extra trailing args are the varargs and are checked below.
         if is_variadic:
             if len(node.args) < len(expected):
                 er.emit(self.reporter, er.ERR.CE2009, node.loc,
@@ -258,9 +205,6 @@ class TypeValidator:
     def _validate_statement(self, stmt: Stmt) -> None:
         """Validate a statement using the Visitor Pattern."""
         self.statement_validator.visit(stmt)
-
-    # Delegate validation methods to specialized modules
-    # These methods are called by the visitor pattern components
 
     def _validate_let_statement(self, stmt: Let) -> None:
         """Delegate to statements module."""
@@ -334,9 +278,6 @@ class TypeValidator:
         """Delegate to calls module."""
         validate_method_call(self, call)
 
-    # Type inference delegation methods
-    # These methods are called by the type inference visitor
-
     def _infer_array_literal_type(self, expr) -> Optional[Type]:
         """Delegate to inference module."""
         return infer_array_literal_type(self, expr)
@@ -349,13 +290,9 @@ class TypeValidator:
         """Delegate to inference module."""
         return infer_dynamic_array_from_type(self, expr, expected_type)
 
-    # Type compatibility delegation method
-    # This is called by backend extension modules for type checking
-
     def _types_compatible(self, actual: Type, expected: Type) -> bool:
         """Delegate to compatibility module."""
         return types_compatible(self, actual, expected)
 
 
-# Re-export TypeValidator for backwards compatibility
 __all__ = ['TypeValidator']

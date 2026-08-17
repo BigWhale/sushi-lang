@@ -1,15 +1,4 @@
-"""
-External declarations for C standard library I/O functions.
-
-This module provides declarations for file and stream I/O functions from <stdio.h>:
-- printf, fprintf: Formatted output
-- fopen, fclose: File open/close
-- fgets, fputs, fgetc, fputc: Text I/O
-- fread, fwrite: Binary I/O
-- fseek, ftell, rewind: File positioning
-- feof, ferror: Status checking
-- stdin, stdout, stderr: Standard stream handles (platform-specific names)
-"""
+"""External declarations for C standard library I/O functions."""
 from __future__ import annotations
 
 import typing
@@ -26,14 +15,9 @@ class LibCStdio:
     """Manages external declarations for C stdio functions."""
 
     def __init__(self, codegen: LLVMCodegen) -> None:
-        """Initialize with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context and module.
-        """
+        """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
-        # Function references - declared immediately for type safety
         self.printf: ir.Function
         self.fprintf: ir.Function
         self.fopen: ir.Function
@@ -50,7 +34,6 @@ class LibCStdio:
         self.feof: ir.Function
         self.ferror: ir.Function
 
-        # Global variable references (FILE* handles) - declared immediately for type safety
         self.stdin_handle: ir.GlobalVariable
         self.stdout_handle: ir.GlobalVariable
         self.stderr_handle: ir.GlobalVariable
@@ -274,14 +257,7 @@ class LibCStdio:
             self.ferror = ir.Function(self.codegen.module, fn_ty, name="ferror")
 
     def _declare_stdio_handles(self) -> None:
-        """Declare global variables for stdin, stdout, stderr FILE* handles.
-
-        These are external globals provided by the C standard library.
-        Names are platform-specific:
-        - macOS/Darwin: __stdinp, __stdoutp, __stderrp
-        - Linux: stdin, stdout, stderr
-        """
-        # Detect platform and get correct handle names
+        """Declare global variables for stdin, stdout, stderr FILE* handles."""
         platform = get_current_platform()
 
         if platform.is_darwin:
@@ -293,7 +269,6 @@ class LibCStdio:
             stdout_name = "stdout"
             stderr_name = "stderr"
         else:
-            # Default to POSIX names (Linux-style) for other Unix-like systems
             stdin_name = "stdin"
             stdout_name = "stdout"
             stderr_name = "stderr"

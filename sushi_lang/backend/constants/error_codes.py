@@ -1,10 +1,4 @@
-"""Error codes and enum tag values.
-
-This module provides constants for:
-- Result<T> enum tags
-- Maybe<T> enum tags
-- Runtime error codes (RExxxx)
-"""
+"""Error codes and enum tag values."""
 
 # ============================================================================
 # Result<T> Enum Tags

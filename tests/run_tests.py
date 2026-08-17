@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""
-Comprehensive test runner for Sushi language compiler.
-
-This script runs all test files in the tests/ directory and verifies
-that they return the expected exit codes:
-- 0: Success (no errors, no warnings)
-- 1: Success with warnings
-- 2: Compilation failed with errors
-
-Usage:
-    python tests/run_tests.py
-    python tests/run_tests.py --verbose
-    python tests/run_tests.py --help
-"""
+"""Comprehensive test runner for Sushi language compiler."""
 
 import argparse
 import subprocess
@@ -107,13 +94,7 @@ def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
 
 
 def purge_unit_caches(project_root: Path, verbose: bool = False) -> None:
-    """Delete every tests/**/__sushi_cache__ before a run.
-
-    Multi-unit tests reuse per-unit .o files keyed by a semantic fingerprint of the
-    source. The fingerprint does not cover the compiler's own source, so a warm cache
-    survives a change to codegen and the multifile tests would then pass against
-    stale objects emitted by the previous compiler.
-    """
+    """Delete every tests/**/__sushi_cache__ before a run."""
     for cache in (project_root / "tests").rglob("__sushi_cache__"):
         if cache.is_dir():
             if verbose:
@@ -129,11 +110,7 @@ def leakcheck_lib_path(project_root: Path) -> Path:
 
 
 def build_leakcheck(project_root: Path, verbose: bool = False) -> bool:
-    """Compile the malloc-interposer the leak gate preloads (macOS + Linux).
-
-    Built from committed C source at setup so it matches the host arch/libc;
-    skipped when the output is already newer than the source.
-    """
+    """Compile the malloc-interposer the leak gate preloads (macOS + Linux)."""
     src = project_root / "tests" / "leakcheck" / "leakcheck.c"
     if not src.exists():
         print(f"Leak-check source not found: {src}")
@@ -177,13 +154,7 @@ COMPILATION_QUARANTINE: set[str] = set()
 
 
 def get_expected_exit_code(test_file: Path) -> int:
-    """Determine expected exit code based on filename convention.
-
-    Convention:
-    - test_*.sushi: expect 0 (success, no warnings)
-    - test_warn_*.sushi: expect 1 (success with warnings)
-    - test_err_*.sushi: expect 2 (compilation failed)
-    """
+    """Determine expected exit code based on filename convention."""
     test_name = test_file.name
 
     if test_name.startswith("test_warn_"):

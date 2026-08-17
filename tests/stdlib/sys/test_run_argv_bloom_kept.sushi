@@ -1,4 +1,4 @@
-# The bloom half of BORROW.md bug 2: `run("cmd", argv...)` leaves the source array with
+# The bloom half: `run("cmd", argv...)` leaves the source array with
 # the CALLER.
 #
 # `run` frees nothing, so consuming the source would leave the array with no owner at

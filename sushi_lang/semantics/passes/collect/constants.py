@@ -1,4 +1,3 @@
-# semantics/passes/collect/constants.py
 """Constant definition collection for Phase 0."""
 
 from __future__ import annotations
@@ -12,13 +11,9 @@ from sushi_lang.semantics.ast import ConstDef, Program
 from sushi_lang.semantics.typesys import Type
 
 
-
 @dataclass
 class ConstSig:
-    """Phase 0 constant signature.
-
-    Types are Optional to allow defensive collection before full typing.
-    """
+    """Phase 0 constant signature."""
     name: str
     loc: Optional[Span] = None
     name_span: Optional[Span] = None
@@ -35,31 +30,15 @@ class ConstantTable:
 
 
 class ConstantCollector:
-    """Collector for constant definitions.
-
-    Collects constant signatures during Phase 0, validating:
-    - Explicit type annotations (constants must be typed)
-    - No duplicate names
-
-    Value validation is deferred to type checking pass.
-    """
+    """Collector for constant definitions."""
 
     def __init__(self, reporter: Reporter, constants: ConstantTable) -> None:
-        """Initialize constant collector.
-
-        Args:
-            reporter: Error reporter
-            constants: Shared constant table to populate
-        """
+        """Initialize constant collector."""
         self.r = reporter
         self.constants = constants
 
     def collect(self, root: Program) -> None:
-        """Collect all constant definitions from program AST.
-
-        Args:
-            root: Program AST node
-        """
+        """Collect all constant definitions from program AST."""
         constants = getattr(root, "constants", None)
         if isinstance(constants, list):
             for const in constants:
@@ -67,11 +46,7 @@ class ConstantCollector:
                     self._collect_constant_def(const)
 
     def _collect_constant_def(self, const: ConstDef) -> None:
-        """Collect a single constant definition.
-
-        Args:
-            const: Constant definition AST node
-        """
+        """Collect a single constant definition."""
         name = getattr(const, "name", None)
         if not isinstance(name, str):
             return
@@ -82,7 +57,6 @@ class ConstantCollector:
         const_type: Optional[Type] = getattr(const, "ty", None)
         type_span: Optional[Span] = getattr(const, "type_span", None) or name_span
 
-        # Check for missing type annotation (constants must be explicitly typed)
         if const_type is None:
             er.emit(self.r, ERR.CE0104, name_span, name=name)
 
@@ -93,7 +67,6 @@ class ConstantCollector:
             type_span=type_span,
         )
 
-        # Check for duplicate constant names
         if name in self.constants.by_name:
             prev = self.constants.by_name[name]
             er.emit_with(self.r, ERR.CE0105, name_span, name=name) \

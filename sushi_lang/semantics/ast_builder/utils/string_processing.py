@@ -11,21 +11,7 @@ if TYPE_CHECKING:
 
 
 def process_string_escapes(raw_string: str) -> str:
-    r"""Process escape sequences in a string literal.
-
-    Handles standard C-style escape sequences:
-    - \n (newline), \t (tab), \r (carriage return)
-    - \\ (backslash), \" (double quote), \' (single quote)
-    - \0 (null character)
-    - \xNN (hexadecimal escape, e.g., \x41 = 'A')
-    - \uNNNN (Unicode escape, e.g., \u0041 = 'A')
-
-    Args:
-        raw_string: The raw string with potential escape sequences
-
-    Returns:
-        The processed string with escape sequences converted to actual characters
-    """
+    r"""Process escape sequences in a string literal."""
     simple_escapes = {
         'n': '\n',
         't': '\t',
@@ -72,20 +58,7 @@ def process_string_escapes(raw_string: str) -> str:
 
 
 def parse_interpolated_string(raw_string: str, span: 'Span') -> Tuple[List[Union[str, str]], List['Span']]:
-    """Parse a string with {expression} interpolations.
-
-    Args:
-        raw_string: The raw string content (without quotes)
-        span: Source span for error reporting
-
-    Returns:
-        Tuple of (parts_list, expression_spans) where:
-        - parts_list alternates between string literals and expression strings
-        - expression_spans contains spans for each expression for parsing
-
-    Raises:
-        Exception with CE2026 error code for unterminated braces
-    """
+    """Parse a string with {expression} interpolations."""
     from sushi_lang.internals.diagnostics import SyntaxDiagnostic
     from sushi_lang.internals.report import Span
 
@@ -139,17 +112,11 @@ def parse_interpolated_string(raw_string: str, span: 'Span') -> Tuple[List[Union
     return parts, expr_spans
 
 
-# Cached parser for interpolation expressions (lazy initialized)
 _interpolation_parser: Optional[Lark] = None
 
 
 def get_interpolation_parser() -> Lark:
-    """Get or create a Lark parser for parsing interpolation expressions.
-
-    This parser is specifically for parsing expression strings inside {braces}
-    in interpolated strings. It uses the same grammar as the main parser but
-    starts from the 'expr' rule instead of 'start'.
-    """
+    """Get or create a Lark parser for parsing interpolation expressions."""
     global _interpolation_parser
     if _interpolation_parser is None:
         grammar_path = Path(__file__).parent.parent.parent.parent / "grammar.lark"
@@ -167,18 +134,7 @@ def get_interpolation_parser() -> Lark:
 
 
 def apply_location_offset(node: object, base_span: 'Span', visited: set = None) -> None:
-    """Recursively adjust locations in AST nodes parsed from interpolation expressions.
-
-    When we parse interpolation expressions like {varname}, the Lark parser
-    creates AST nodes with locations relative to the expression string (e.g., 1:1).
-    This function walks the AST and adjusts those locations by adding the offset
-    from base_span to get the actual file position.
-
-    Args:
-        node: An AST node (Expr, Stmt, or any other AST object)
-        base_span: The span indicating where the expression starts in the file
-        visited: Set of visited object ids to prevent infinite recursion
-    """
+    """Recursively adjust locations in AST nodes parsed from interpolation expressions."""
     from sushi_lang.semantics.ast import Node
     from sushi_lang.internals.report import Span
 
@@ -218,19 +174,7 @@ def apply_location_offset(node: object, base_span: 'Span', visited: set = None) 
 
 
 def parse_interpolation_expr(expr_text: str, ast_builder: 'ASTBuilder', fallback_span: 'Span') -> 'Expr':
-    """Parse an interpolation expression string into an AST expression node.
-
-    Args:
-        expr_text: The expression text from inside {braces}
-        ast_builder: The AST builder instance for converting parse trees to AST
-        fallback_span: Span to use for fixing locations of nodes without proper locations
-
-    Returns:
-        An Expr AST node representing the parsed expression
-
-    Raises:
-        SyntaxDiagnostic: CE6010, spanned at the interpolation, if it cannot be parsed.
-    """
+    """Parse an interpolation expression string into an AST expression node."""
     from lark.exceptions import LarkError
 
     from sushi_lang.internals.diagnostics import SushiError, SyntaxDiagnostic
@@ -256,20 +200,7 @@ def parse_interpolation_expr(expr_text: str, ast_builder: 'ASTBuilder', fallback
 
 
 def parse_string_token(tok: Token, ast_builder: 'ASTBuilder') -> Union['StringLit', 'InterpolatedString']:
-    """Parse a STRING or CHAR_STRING token into either StringLit or InterpolatedString.
-
-    Behavior:
-    - STRING (double quotes): Supports interpolation with {expr} syntax
-    - CHAR_STRING (single quotes): Plain string literals, no interpolation
-    - Both support identical escape sequences
-
-    Args:
-        tok: Lark token of type STRING or CHAR_STRING
-        ast_builder: AST builder instance for parsing interpolation expressions
-
-    Returns:
-        StringLit for plain strings or InterpolatedString for double-quote strings with {expr}
-    """
+    """Parse a STRING or CHAR_STRING token into either StringLit or InterpolatedString."""
     from sushi_lang.semantics.ast import StringLit, InterpolatedString, Name
     from sushi_lang.internals.report import span_of
 
@@ -277,11 +208,9 @@ def parse_string_token(tok: Token, ast_builder: 'ASTBuilder') -> Union['StringLi
     unquoted_value = raw_value[1:-1]  # Strip opening and closing quotes
     span = span_of(tok)
 
-    # Only STRING (double-quote) tokens support interpolation
     is_interpolation_capable = (tok.type == 'STRING')
 
     if is_interpolation_capable and '{' in unquoted_value:
-        # Double-quote string with interpolation expressions
         parts, expr_spans = parse_interpolated_string(unquoted_value, span)
 
         ast_parts: List[Union[str, Expr]] = []
@@ -289,11 +218,9 @@ def parse_string_token(tok: Token, ast_builder: 'ASTBuilder') -> Union['StringLi
 
         for i, part in enumerate(parts):
             if i % 2 == 0:
-                # String literal part
                 processed_string = process_string_escapes(part)
                 ast_parts.append(processed_string)
             else:
-                # Expression part
                 expr_text = part
                 expr_span = expr_spans[expr_index]
                 expr_index += 1
@@ -306,7 +233,5 @@ def parse_string_token(tok: Token, ast_builder: 'ASTBuilder') -> Union['StringLi
 
         return InterpolatedString(parts=ast_parts, loc=span)
     else:
-        # Plain string literal (no interpolation)
-        # Apply escape sequence processing for both STRING and CHAR_STRING
         string_value = process_string_escapes(unquoted_value)
         return StringLit(value=string_value, loc=span)

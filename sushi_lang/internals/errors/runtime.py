@@ -1,19 +1,4 @@
-"""Runtime errors (RExxxx) -- trapped at run time, not compile time.
-
-This module owns its numeric range: a code may only be added in the file that
-owns it, which is what makes the grouping structural rather than conventional.
-
-A runtime diagnostic is a C string baked into the binary, so `text` here IS what
-the program prints -- the emitters take it from this registry rather than carrying
-hand-written strings of their own. Two consequences:
-
-  - For `emit_runtime_error_with_values`, the text IS the printf format string:
-    its `%d` / `%s` conversions must match the values the call site passes.
-  - For `emit_runtime_error`, the text may carry `{}` placeholders, formatted at
-    codegen time.
-
-A text should therefore use `%` conversions or `{}` placeholders, never both.
-"""
+"""Runtime errors (RExxxx) -- trapped at run time, not compile time."""
 from __future__ import annotations
 
 from sushi_lang.internals.errors.registry import (

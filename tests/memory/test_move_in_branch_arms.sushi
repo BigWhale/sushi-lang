@@ -1,4 +1,4 @@
-# Guards PLAN.md T2.1, the opposite symptom: `If` arms share one mutable borrow_state
+# The opposite symptom: `If` arms share one mutable borrow_state
 # with no save/restore, so a move in the then-arm leaks into the else-arm and produces
 # a SPURIOUS CE2405. Exactly one arm ever executes, so this program is sound.
 # EXPECT_RUNTIME_EXIT: 0

@@ -1,17 +1,4 @@
-# semantics/generics/instantiate/__init__.py
-"""
-Pass 1.5: Generic Type Instantiation Collector
-
-This pass scans the entire AST and collects all generic type instantiations
-(e.g., Result<i32>, Result<MyStruct>) that are used in the program.
-
-This enables monomorphization - generating concrete types only for
-instantiations that are actually used, avoiding unnecessary code bloat.
-
-This module provides a facade that maintains the original API while delegating
-to specialized submodules for type inference, expression scanning, and function-level
-collection.
-"""
+"""Pass 1.5: Generic Type Instantiation Collector"""
 from __future__ import annotations
 from typing import Set, Tuple, TYPE_CHECKING
 from dataclasses import dataclass, field
@@ -27,19 +14,7 @@ from sushi_lang.semantics.generics.instantiate.functions import FunctionCollecto
 
 @dataclass
 class InstantiationCollector:
-    """Collects all generic type instantiations used in a program.
-
-    Scans function signatures, variable declarations, constants, and all type
-    annotations to find generic type references like Result<i32> and Pair<i32, string>.
-
-    The collected instantiations are used by the Monomorphizer to generate
-    concrete EnumType and StructType instances for each unique instantiation.
-
-    This is a facade that delegates to specialized submodules:
-    - TypeInferrer: Simple type inference for literals and expressions
-    - ExpressionScanner: Recursive expression traversal
-    - FunctionCollector: Function-level instantiation collection
-    """
+    """Collects all generic type instantiations used in a program."""
 
     # Set of (base_name, type_args) tuples representing unique instantiations
     # Examples:
@@ -54,17 +29,14 @@ class InstantiationCollector:
     #   - ("swap", (BuiltinType.I32, BuiltinType.STRING)) for swap<i32, string>
     function_instantiations: Set[Tuple[str, Tuple["Type", ...]]] = field(default_factory=set)
 
-    # Struct table for resolving UnknownType to StructType
     struct_table: dict | None = field(default=None)
 
-    # Enum table for resolving UnknownType to EnumType
     enum_table: dict | None = field(default=None)
 
     # Generic struct table for checking if a base_name refers to a generic struct
     # This is used to distinguish generic struct instantiations from generic enum instantiations
     generic_structs: dict | None = field(default=None)
 
-    # NEW: Generic function table for checking if a function name refers to a generic function
     generic_funcs: dict | None = field(default=None)
 
     # Plain (non-generic) top-level function table (name -> FuncSig), used to present a
@@ -77,25 +49,12 @@ class InstantiationCollector:
     # Pass 1.5 did not dropped an instantiation on the floor (CE2061; issues #171/#191).
     tables: object | None = field(default=None)
 
-    # Simple variable type table for tracking explicitly typed variables in current scope
-    # Maps variable name -> type for variables with explicit type annotations
     variable_types: dict[str, "Type"] = field(default_factory=dict)
 
-    # Track visited types to prevent infinite recursion on recursive types (e.g., Own<Expr> in Expr)
     visited_types: Set[str] = field(default_factory=set)
 
     def run(self, program: "Program") -> Tuple[Set[Tuple[str, Tuple["Type", ...]]], Set[Tuple[str, Tuple["Type", ...]]]]:
-        """Entry point for instantiation collection.
-
-        Args:
-            program: The program AST to scan
-
-        Returns:
-            Tuple of (type instantiations, function instantiations)
-            - type instantiations: Set of (base_name, type_args) for generic types
-            - function instantiations: Set of (function_name, type_args) for generic functions
-        """
-        # Initialize specialized helpers
+        """Entry point for instantiation collection."""
         type_inferrer = TypeInferrer(
             variable_types=self.variable_types,
             struct_table=self.struct_table or {},
@@ -125,11 +84,8 @@ class InstantiationCollector:
             visited_types=self.visited_types,
         )
 
-        # Wire the block scanner so a lambda's block body (a `let` RHS) is walked for
-        # nested generic instantiations, reusing the collector's statement walker.
         expression_scanner.scan_block = function_collector._collect_from_block
 
-        # Collect from constants
         for const in program.constants:
             function_collector.collect_from_const(const)
 
@@ -145,36 +101,26 @@ class InstantiationCollector:
         for enum in program.enums:
             function_collector.collect_from_enum(enum)
 
-        # Collect from function signatures
         for func in program.functions:
             function_collector.collect_from_function(func)
 
-        # Collect from extension method signatures
         for ext in program.extensions:
             function_collector.collect_from_extension(ext)
 
-        # Collect from perk implementation methods
-        # Perk methods return bare types (like extensions), but we still need to
-        # collect generic instantiations from their parameters and bodies
+        # A perk method returns a bare type like an extension, but its parameters and
+        # body still carry generic instantiations.
         for perk_impl in program.perk_impls:
             function_collector.collect_from_perk_impl(perk_impl)
 
         return self.instantiations, self.function_instantiations
 
     def _build_shared_inferrer(self):
-        """Pass 2's TypeValidator over the same tables, wired to discard diagnostics.
-
-        Returns None when the full SymbolTables was not supplied (some unit tests
-        construct the collector from loose dicts), in which case the scanner falls back
-        to the thin inferrer.
-        """
+        """Pass 2's TypeValidator over the same tables, wired to discard diagnostics."""
         if self.tables is None:
             return None
         from sushi_lang.internals.report import Reporter
         from sushi_lang.semantics.passes.types import TypeValidator
 
         validator = TypeValidator(Reporter(), self.tables)
-        # Share the scope dict: the collector populates it (params, locals, self) as it
-        # walks, and the inferrer reads from the same object.
         validator.variable_types = self.variable_types
         return validator

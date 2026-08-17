@@ -1,9 +1,4 @@
-"""
-User-facing string methods compiled into stdlib .bc file.
-
-These methods are precompiled into stdlib/dist/collections/strings.bc
-and require `use <collections/strings>` to use.
-"""
+"""User-facing string methods compiled into stdlib .bc file."""
 
 from .basic import (
     emit_string_size,

@@ -12,7 +12,7 @@
 # `peek string` had ZERO coverage before this file. Every `peek string` in the
 # repository was `peek string[]`, an array borrow, which works by accident: a dynamic
 # array is passed by pointer anyway, so the borrow and the value have the same shape.
-# A string does not. MM.md section 2; no upstream issue.
+# A string does not.
 #
 # That measurement is history, not current state: borrowed scalar strings exist now, and
 # this file is where the first of them came from.

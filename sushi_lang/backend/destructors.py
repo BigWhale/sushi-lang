@@ -1,14 +1,8 @@
-"""
-Unified value destruction logic for all Sushi types.
+"""Unified value destruction logic for all Sushi types.
 
-This module provides the canonical implementation of recursive cleanup for:
-- Dynamic arrays (with recursive element cleanup)
-- Structs (with recursive field cleanup)
-- Enums (with variant-based cleanup)
-- Own<T> (heap-allocated owned values)
-
-This code was previously duplicated in both memory_manager.py and llvm_memory.py.
-Now both modules delegate to these functions for consistency.
+Every emitter here reads the AMBIENT `codegen.builder` rather than taking one: an
+out-of-line destructor body swaps it for its own function, and reading it is what keeps a
+body and the loop helpers it calls emitting into the SAME function (#257).
 """
 from __future__ import annotations
 
@@ -29,26 +23,9 @@ def emit_value_destructor(
     value_ptr: ir.Value,
     value_type: Type
 ) -> None:
-    """Recursively destroy a value of any type.
-
-    This is the central cleanup mechanism for all Sushi types:
-    - Primitives (i8-i64, u8-u64, f32, f64, bool): no-op
-    - Strings: owned-bit-guarded free of the heap buffer (a literal/borrow
-      carries owned=0, making the free a runtime no-op)
-    - Dynamic arrays: free data pointer, recursively destroy elements if needed
-    - Structs: recursively destroy each field
-    - Enums: switch on discriminant tag, destroy variant data
-    - Own<T>: free owned pointer, recursively destroy owned value
-
-    Args:
-        codegen: The main codegen instance (for accessing types, free, etc.)
-        value_ptr: Pointer to the value to destroy (not the value itself)
-        value_type: The Sushi type of the value
-    """
-    # Resolve a named / generic reference -- UnknownType('Box'), GenericTypeRef('List', (i32,)),
-    # or GenericTypeRef('Result', (T, E)) -- to the concrete struct/enum it names, so the
-    # dispatch below lands on a real class. A Result IS an enum now, so it needs no special
-    # resolution of its own: it is interned under exactly the name str() spells for it.
+    """Recursively destroy a value of any type."""
+    # Resolve a named / generic reference to the concrete struct/enum it names, so the
+    # dispatch below lands on a real class. A Result is an ordinary interned enum.
     value_type = resolve_named_type(codegen, value_type)
 
     # Strings: runtime-guarded free of the heap buffer via the owned bit (#145). A literal /
@@ -60,17 +37,12 @@ def emit_value_destructor(
             return
         if value_type in (BuiltinType.STDIN, BuiltinType.STDOUT,
                           BuiltinType.STDERR, BuiltinType.FILE):
-            # I/O handle types don't need cleanup
             return
-        # All numeric types and bool: no cleanup
         return
 
-    # Composite owning types (dynamic arrays, structs/List/Own, enums): routed through
-    # the recursion-safe wrapper. It inlines the destructor for a non-recursive type
-    # (zero behaviour change) but, when a type transitively contains itself (e.g.
-    # `enum MsgValue: Arr(MsgValue[])` or `Own<Tree>`), emits an out-of-line per-type
-    # destructor function and calls it at the self-referential position, so cleanup
-    # terminates via runtime recursion instead of unbounded compile-time inlining (#139).
+    # Through the recursion-safe wrapper: it inlines for a non-recursive type, but a
+    # self-referential one gets an out-of-line per-type function, so cleanup terminates
+    # by runtime recursion instead of unbounded compile-time inlining (#139).
     elif isinstance(value_type, (DynamicArrayType, ArrayType, StructType, EnumType)):
         _emit_composite_destructor(codegen, value_ptr, value_type)
 
@@ -86,19 +58,7 @@ def _emit_composite_destructor(
     value_ptr: ir.Value,
     value_type: Type,
 ) -> None:
-    """Emit a composite type's destructor, breaking self-referential cycles.
-
-    A non-recursive type is inlined exactly as before. When emission re-enters a
-    type already on the in-progress stack (a self-referential type such as
-    `enum MsgValue: Arr(MsgValue[])` or `Own<Tree>`), a call to an out-of-line
-    per-type destructor is emitted at that position instead of inlining the body
-    again -- so the cleanup recurses at runtime over the actual data and terminates,
-    rather than recursing unbounded at compile time (the original #139 crash).
-    """
-    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
-    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
-    # for its own function, so reading it is what keeps this body and the loop helpers
-    # it calls emitting into the SAME function (#257).
+    """Emit a composite type's destructor, breaking self-referential cycles."""
     from sushi_lang.backend import lifecycle
     builder = codegen.builder
     key = lifecycle.composite_type_key(value_type)
@@ -121,17 +81,7 @@ def emit_function_value_destructor(
     codegen: LLVMCodegen,
     value_ptr: ir.Value
 ) -> None:
-    """Free a closure's heap environment via its type-erased drop pointer.
-
-    `value_ptr` points at the `{i8* fn_ptr, i8* env_ptr, i8* drop_ptr}` fat value. The
-    free is `if (drop_ptr != null) drop_ptr(env_ptr)` -- a non-capturing function value
-    stores a null drop, so this is a guarded no-op for it (the whole point of the
-    data-driven drop slot: ownership cannot be told from the `fn(...)` type alone).
-    """
-    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
-    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
-    # for its own function, so reading it is what keeps this body and the loop helpers
-    # it calls emitting into the SAME function (#257).
+    """Free a closure's heap environment via its type-erased drop pointer."""
     builder = codegen.builder
     fat = builder.load(value_ptr, name="closure_val")
     emit_function_value_destructor_from_value(codegen, fat)
@@ -141,19 +91,7 @@ def emit_function_value_destructor_from_value(
     codegen: LLVMCodegen,
     fat: ir.Value
 ) -> None:
-    """Free a closure's heap environment given the SSA fat value directly.
-
-    Same guarded `if (drop_ptr != null) drop_ptr(env_ptr)` as
-    emit_function_value_destructor, but operates on an already-materialised
-    `{i8* fn_ptr, i8* env_ptr, i8* drop_ptr}` value rather than loading it from a
-    slot. Used to free an unnamed inline-closure argument temporary (#123), which has
-    no alloca -- only the SSA fat value produced by emit_lambda. The value is produced
-    before any branch, so it dominates every early-exit block.
-    """
-    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
-    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
-    # for its own function, so reading it is what keeps this body and the loop helpers
-    # it calls emitting into the SAME function (#257).
+    """Free a closure's heap environment given the SSA fat value directly."""
     builder = codegen.builder
     drop_ptr = builder.extract_value(fat, 2, name="closure_drop")
     env_ptr = builder.extract_value(fat, 1, name="closure_env")
@@ -171,18 +109,7 @@ def emit_string_destructor(
     codegen: LLVMCodegen,
     value_ptr: ir.Value
 ) -> None:
-    """Runtime-guarded free of a string's heap buffer via the owned bit (#145).
-
-    `value_ptr` points at the `{i8* data, i32 size, i8 owned}` fat pointer. The free is
-    `if (owned != 0) free(data)` -- a literal/borrow carries owned=0, so this is a guarded
-    no-op for it. This makes strings inside structs / arrays / List / HashMap / enum
-    variants free correctly through the ordinary recursive destructor, with no per-container
-    special-casing (the bit travels with the value).
-    """
-    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
-    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
-    # for its own function, so reading it is what keeps this body and the loop helpers
-    # it calls emitting into the SAME function (#257).
+    """Runtime-guarded free of a string's heap buffer via the owned bit (#145)."""
     builder = codegen.builder
     fat = builder.load(value_ptr, name="string_val")
     emit_string_destructor_from_value(codegen, fat)
@@ -193,16 +120,7 @@ def emit_string_destructor_from_value(
     fat: ir.Value
 ) -> None:
     """Owned-bit-guarded free given the SSA fat value directly (`if owned: free(data)`) (#145).
-
-    Used to free an unnamed fresh string temporary that has no alloca -- e.g. an
-    interpolation intermediate (a to-string or intermediate-concat buffer) consumed by the
-    next concat. A borrowed part (owned bit set but aliasing another owner) must NOT be
-    passed here; only genuinely fresh temporaries.
     """
-    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
-    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
-    # for its own function, so reading it is what keeps this body and the loop helpers
-    # it calls emitting into the SAME function (#257).
     builder = codegen.builder
     owned = builder.extract_value(fat, 2, name="string_owned")
     is_owned = builder.icmp_unsigned("!=", owned, ir.Constant(owned.type, 0))
@@ -217,15 +135,8 @@ def _emit_dynamic_array_destructor(
     value_ptr: ir.Value,
     value_type: DynamicArrayType
 ) -> None:
-    """Emit destructor code for a dynamic array.
-
-    Frees the data pointer and recursively destroys elements if needed.
-    """
+    """Emit destructor code for a dynamic array."""
     # Load the dynamic array struct
-    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
-    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
-    # for its own function, so reading it is what keeps this body and the loop helpers
-    # it calls emitting into the SAME function (#257).
     builder = codegen.builder
     data_ptr_ptr = builder.gep(value_ptr, [
         ZERO_I32,
@@ -233,7 +144,6 @@ def _emit_dynamic_array_destructor(
     ], name="array_data_ptr")
     data_ptr = builder.load(data_ptr_ptr, name="array_data")
 
-    # Check if data is not null before freeing
     is_not_null = builder.icmp_unsigned(
         "!=", data_ptr,
         ir.Constant(data_ptr.type, None)
@@ -243,14 +153,12 @@ def _emit_dynamic_array_destructor(
         # Check if element type needs cleanup (resolving a named/generic element first --
         # an unresolved name answers False and the elements are silently leaked)
         if field_needs_cleanup(codegen, value_type.base_type):
-            # Load array length
             len_ptr = builder.gep(value_ptr, [
                 ZERO_I32,
                 ZERO_I32  # len is first field
             ], name="array_len_ptr")
             array_len = builder.load(len_ptr, name="array_len")
 
-            # Iterate through array elements and destroy each one
             loop_i = builder.alloca(ZERO_I32.type, name="cleanup_i")
             builder.store(ZERO_I32, loop_i)
 
@@ -260,29 +168,23 @@ def _emit_dynamic_array_destructor(
 
             builder.branch(loop_cond_bb)
 
-            # Loop condition: i < len
             builder.position_at_end(loop_cond_bb)
             i_val = builder.load(loop_i, name="i_val")
             cond = builder.icmp_unsigned("<", i_val, array_len, name="cleanup_cond")
             builder.cbranch(cond, loop_body_bb, loop_end_bb)
 
-            # Loop body: destroy element[i]
             builder.position_at_end(loop_body_bb)
             i_val = builder.load(loop_i, name="i_val")
             element_ptr = builder.gep(data_ptr, [i_val], name="element_ptr")
 
-            # Recursively destroy this element
             emit_value_destructor(codegen, element_ptr, value_type.base_type)
 
-            # Increment loop counter
             i_next = builder.add(i_val, ONE_I32, name="i_next")
             builder.store(i_next, loop_i)
             builder.branch(loop_cond_bb)
 
-            # After loop, free the array data
             builder.position_at_end(loop_end_bb)
 
-        # Free the array data pointer
         void_ptr = builder.bitcast(data_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
         free_func = codegen.get_free_func()
         builder.call(free_func, [void_ptr])
@@ -293,21 +195,7 @@ def _emit_fixed_array_destructor(
     value_ptr: ir.Value,
     value_type: 'ArrayType'
 ) -> None:
-    """Emit destructor code for a fixed-size array `T[N]` (#185).
-
-    Unlike a dynamic array there is NO buffer to free: the storage is inline, in the alloca or in
-    the enclosing struct. Only the ELEMENTS can own heap, so this walks them and destroys each.
-    A non-owning element type is a no-op, so `i32[3]` emits nothing.
-
-    The count is the compile-time `size` rather than a loaded length field, and the elements are
-    reached by GEPing to the first and stepping -- llvmlite requires a constant index to GEP into
-    an array type, so a runtime index cannot be used directly. Kept a loop rather than unrolled so
-    a large N does not blow up the IR.
-    """
-    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
-    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
-    # for its own function, so reading it is what keeps this body and the loop helpers
-    # it calls emitting into the SAME function (#257).
+    """Emit destructor code for a fixed-size array `T[N]` (#185)."""
     builder = codegen.builder
     if not field_needs_cleanup(codegen, value_type.base_type):
         return
@@ -344,61 +232,43 @@ def _emit_struct_destructor(
     value_ptr: ir.Value,
     value_type: StructType
 ) -> None:
-    """Emit destructor code for a struct.
-
-    Handles Own<T> specially, otherwise recursively destroys each field.
-    """
+    """Emit destructor code for a struct."""
     # Check if this is Own<T> which needs special handling
-    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
-    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
-    # for its own function, so reading it is what keeps this body and the loop helpers
-    # it calls emitting into the SAME function (#257).
     builder = codegen.builder
     if value_type.name.startswith("Own<"):
-        # Own<T> has a single pointer field - free it and destroy the value
         ptr_field_ptr = builder.gep(value_ptr, [
             ZERO_I32,
             ZERO_I32
         ], name="own_ptr_field")
         owned_ptr = builder.load(ptr_field_ptr, name="owned_ptr")
 
-        # Check if not null
         is_not_null = builder.icmp_unsigned(
             "!=", owned_ptr,
             ir.Constant(owned_ptr.type, None)
         )
 
         with builder.if_then(is_not_null):
-            # Get the owned element type T from Own<T>. NOTE: fields[0][1] is the raw
-            # POINTER type (T*), not T - recursing with it would be a silent no-op and
-            # leak the payload of a nested Own<Own<T>>. Use the pointee element type so
-            # the recursion actually descends (owned_ptr already IS the T* address).
+            # `fields[0][1]` is the raw POINTER type (T*), not T: recursing with it is a
+            # silent no-op that leaks a nested `Own<Own<T>>`. Use the pointee.
             if value_type.fields:
                 from sushi_lang.semantics.generics.own import get_own_element_type
                 owned_type = get_own_element_type(value_type)
-                # Recursively destroy the owned value
                 emit_value_destructor(codegen, owned_ptr, owned_type)
 
-            # Free the pointer itself
             void_ptr = builder.bitcast(owned_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
             free_func = codegen.get_free_func()
             builder.call(free_func, [void_ptr])
     elif value_type.name.startswith("List<"):
-        # List<T> owns a single heap buffer at field 2 (data), like a dynamic array but
-        # with a raw T* rather than a DynamicArrayType field -- so the generic field loop
-        # below would free nothing. Destroy live elements then free the buffer, keeping
-        # this in lockstep with _clone_list_value (issue #140).
+        # List<T>'s data field is a raw T*, not a DynamicArrayType, so the generic field
+        # loop below frees nothing. Keep in lockstep with _clone_list_value (#140).
         _emit_list_value_destructor(codegen, value_ptr, value_type)
     elif value_type.name.startswith("HashMap<"):
-        # HashMap<K, V> keeps its owning keys/values in an LLVM-only Entry<K, V> buffer
-        # that the generic field loop cannot see (the semantic `buckets` field is an i32[]
-        # placeholder). Destroy every occupied Entry then free the bucket buffer, in
-        # lockstep with _clone_hashmap_value (issue #181).
+        # The owning keys/values live in an LLVM-only Entry<K, V> buffer the generic field
+        # loop cannot see -- `buckets` is an i32[] placeholder. In lockstep with
+        # _clone_hashmap_value (#181).
         _emit_hashmap_value_destructor(codegen, value_ptr, value_type)
     else:
-        # Regular struct: recursively destroy each field
         for i, (field_name, field_type) in enumerate(value_type.fields):
-            # Check if field needs cleanup (resolving a named/generic field type first)
             if field_needs_cleanup(codegen, field_type):
                 field_ptr = builder.gep(value_ptr, [
                     ZERO_I32,
@@ -412,24 +282,12 @@ def _emit_list_value_destructor(
     value_ptr: ir.Value,
     value_type: StructType
 ) -> None:
-    """Free a List<T> value's heap buffer, destroying live elements first.
-
-    List<T> is `{i32 len@0, i32 cap@1, T* data@2}`. This mirrors the dynamic-array
-    destructor (null-guard, per-element recursive cleanup when the element needs it,
-    then free the buffer) so a List stored as a HashMap value -- reached through the
-    generic emit_value_destructor rather than the by-name scope destructor -- is freed
-    exactly once, symmetric with _clone_list_value (issue #140).
-    """
-    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
-    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
-    # for its own function, so reading it is what keeps this body and the loop helpers
-    # it calls emitting into the SAME function (#257).
+    """Free a List<T> value's heap buffer, destroying live elements first."""
     builder = codegen.builder
     from sushi_lang.backend.generics.list.types import extract_element_type
 
     element_type = extract_element_type(value_type, codegen)
 
-    # data is field index 2 (DA_DATA_INDEX == 2 happens to match List's data slot)
     data_ptr_ptr = builder.gep(value_ptr, [ZERO_I32, make_i32_const(2)], name="list_data_field")
     data_ptr = builder.load(data_ptr_ptr, name="list_data")
 
@@ -457,18 +315,7 @@ def _emit_hashmap_value_destructor(
     value_ptr: ir.Value,
     value_type: StructType
 ) -> None:
-    """Free a HashMap<K, V> value's bucket buffer, destroying every occupied Entry first.
-
-    The owning keys/values live in an LLVM-only Entry<K, V> buffer the generic field walk
-    cannot reach (the semantic `buckets` field is an i32[] placeholder), so -- like the
-    List branch -- this works off the real layout via the HashMap helpers and reuses
-    emit_destroy_all_entries, symmetric with _clone_hashmap_value (issue #181). null_guard
-    on the entry walk handles an already-emptied map.
-    """
-    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
-    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
-    # for its own function, so reading it is what keeps this body and the loop helpers
-    # it calls emitting into the SAME function (#257).
+    """Free a HashMap<K, V> value's bucket buffer, destroying every occupied Entry first."""
     builder = codegen.builder
     from sushi_lang.backend.generics.hashmap.types import (
         get_hashmap_field_ptrs, get_entry_type
@@ -500,33 +347,20 @@ def _emit_enum_destructor(
     value_ptr: ir.Value,
     value_type: EnumType
 ) -> None:
-    """Emit destructor code for an enum.
-
-    Creates a switch statement to handle cleanup for each variant with associated data.
-    """
+    """Emit destructor code for an enum."""
     # Load discriminant tag (first field of enum struct)
-    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
-    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
-    # for its own function, so reading it is what keeps this body and the loop helpers
-    # it calls emitting into the SAME function (#257).
     builder = codegen.builder
     tag_ptr = builder.gep(value_ptr, [ZERO_I32, ZERO_I32], name="enum_tag_ptr")
     tag = builder.load(tag_ptr, name="enum_tag")
 
-    # Get data field pointer (second field: [N x i8] byte array)
     data_ptr = builder.gep(value_ptr, [ZERO_I32, ONE_I32], name="enum_data_ptr")
 
-    # Create switch statement for each variant
-    # We need to check which variants have associated data that needs cleanup
     variants_needing_cleanup = []
     for i, variant in enumerate(value_type.variants):
         if variant.associated_types:
-            # Resolve named payloads FIRST. A variant payload can arrive as a bare
-            # UnknownType -- e.g. the Ok payload of `Result<Box, StdError>` is
-            # UnknownType('Box') -- and needs_cleanup() is documented to answer False for
-            # an unresolved name. That silently dropped the variant from the switch below,
-            # so its heap was never freed (#179). Maybe<Box> escaped this only because its
-            # payload happens to reach us already resolved.
+            # Resolve named payloads FIRST: `needs_cleanup()` answers False for an
+            # unresolved name, which silently dropped the variant from the switch and
+            # leaked its heap (#179).
             resolved_types = tuple(
                 resolve_named_type(codegen, assoc_type)
                 for assoc_type in variant.associated_types)
@@ -534,22 +368,18 @@ def _emit_enum_destructor(
                 variants_needing_cleanup.append((i, variant, resolved_types))
 
     if variants_needing_cleanup:
-        # Create basic blocks for each variant that needs cleanup
         cleanup_blocks = {}
         for tag_val, variant, _resolved in variants_needing_cleanup:
             cleanup_blocks[tag_val] = builder.append_basic_block(name=f"cleanup_variant_{variant.name}")
 
         end_block = builder.append_basic_block(name="enum_cleanup_end")
 
-        # Create switch instruction
         switch = builder.switch(tag, end_block)
 
-        # Add cases for each variant that needs cleanup
         for tag_val, _variant, _resolved in variants_needing_cleanup:
             tag_const = make_i32_const(tag_val)
             switch.add_case(tag_const, cleanup_blocks[tag_val])
 
-        # Emit cleanup code for each variant
         for tag_val, _variant, resolved_types in variants_needing_cleanup:
             builder.position_at_end(cleanup_blocks[tag_val])
 
@@ -558,41 +388,23 @@ def _emit_enum_destructor(
             field_offsets = codegen.types.payload_field_offsets(resolved_types)
             for j, (assoc_type, field_offset) in enumerate(zip(resolved_types, field_offsets, strict=True)):
                 if needs_cleanup(assoc_type):
-                    # Get pointer to this field within the data array
-                    # Cast the data array pointer to i8* first
                     data_i8_ptr = builder.bitcast(data_ptr, ir.PointerType(ir.IntType(8)), name=f"data_i8_ptr_{j}")
 
-                    # Add offset to get to this field
                     offset_const = make_i32_const(field_offset)
                     field_i8_ptr = builder.gep(data_i8_ptr, [offset_const], name=f"field_{j}_i8_ptr")
 
-                    # Cast to the actual field type pointer
                     field_llvm_type = codegen.types.ll_type(assoc_type)
                     field_ptr = builder.bitcast(field_i8_ptr, ir.PointerType(field_llvm_type), name=f"field_{j}_ptr")
 
-                    # Recursively destroy this field
                     emit_value_destructor(codegen, field_ptr, assoc_type)
 
             builder.branch(end_block)
 
-        # Position at end block for continuation
         builder.position_at_end(end_block)
 
 
 def resolve_named_type(codegen: LLVMCodegen, value_type: Type) -> Type:
-    """Resolve a named or generic type reference against the struct and enum tables.
-
-    A named type may be a struct OR an enum. `needs_cleanup` and
-    `emit_value_destructor` both dispatch on the resolved class, so an unresolved
-    name silently reports "no cleanup needed" and destroys nothing.
-
-    Handles two unresolved spellings:
-      - `UnknownType('Box')`      -- a bare named struct/enum
-      - `GenericTypeRef('List', (i32,))` -- e.g. the Ok payload of `Result<List<i32>, E>`
-
-    A monomorphized generic is interned under its mangled name ("List<i32>"), which is
-    exactly what `str()` spells for a GenericTypeRef.
-    """
+    """Resolve a named or generic type reference against the struct and enum tables."""
     from sushi_lang.semantics.typesys import UnknownType
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(value_type, UnknownType):
@@ -600,10 +412,8 @@ def resolve_named_type(codegen: LLVMCodegen, value_type: Type) -> Type:
     elif isinstance(value_type, GenericTypeRef):
         name = str(value_type)
     elif isinstance(value_type, ArrayType):
-        # Resolve THROUGH a fixed array to its element. `Box[2]` arrives as
-        # ArrayType(base=UnknownType('Box')), and `needs_cleanup` is table-free -- so an
-        # unresolved element answers False and the whole array is silently treated as owning
-        # nothing (#185, and the same shape as #179).
+        # Resolve THROUGH a fixed array to its element: `needs_cleanup` is table-free, so
+        # an unresolved element makes the whole array look like it owns nothing (#185).
         base = resolve_named_type(codegen, value_type.base_type)
         return value_type if base is value_type.base_type else ArrayType(base, value_type.size)
     else:
@@ -614,50 +424,19 @@ def resolve_named_type(codegen: LLVMCodegen, value_type: Type) -> Type:
 
 
 def field_needs_cleanup(codegen: LLVMCodegen, value_type: Type) -> bool:
-    """`needs_cleanup`, but resolving a named/generic reference first.
-
-    `needs_cleanup` is deliberately table-free (it is called from contexts with no
-    codegen), so it answers False for any unresolved name. Every recursion gate that
-    reads a payload type off a struct field, array element, List element or enum variant
-    must therefore resolve first, or the member is silently skipped and leaked.
-    """
+    """`needs_cleanup`, but resolving a named/generic reference first."""
     return needs_cleanup(resolve_named_type(codegen, value_type))
 
 
 def needs_cleanup(value_type: Type) -> bool:
-    """Does a value of this type own heap that RAII must free?
-
-    **A thin alias of `semantics.typesys.owns_heap`, which is THE ownership predicate.**
-
-    Until Phase 9 this was a second, independently maintained implementation, and it differed
-    from the semantics side on exactly one type: a `string` needed cleanup here but did not
-    move there. That single disagreement WAS the COPY tier. Phase 9 made a string move, so
-    the two questions became one question, and leaving this as a separate implementation
-    would only let them drift apart again -- the defect class this branch is named after.
-
-    The NAME is kept deliberately. 71 call sites across the backend read as "does this need
-    freeing?" at the point of use, which is the right question to ask there; only the answer
-    was ever duplicated.
-
-    Named types must be resolved (see `resolve_named_type`) before calling this: a bare
-    `UnknownType` falls through to False, exactly as before.
-
-    Args:
-        value_type: The type to check
-
-    Returns:
-        True if the type needs cleanup, False otherwise
-    """
+    """Does a value of this type own heap that RAII must free?"""
     from sushi_lang.semantics.typesys import owns_heap
     return owns_heap(value_type)
 
 
-# ---------------------------------------------------------------------------
-# Lifecycle registration: the DESTROY half of every composite kind's handler.
-# The CLONE half registers in backend/expressions/memory.py; the pairing is
-# asserted by tests/unit/test_lifecycle_handlers.py. A kind registered on one
-# side only is a double free or a leak by construction (see backend/lifecycle.py).
-# ---------------------------------------------------------------------------
+# The DESTROY half of every composite kind's handler; the CLONE half registers in
+# backend/expressions/memory.py. A kind registered on one side only is a double free or a
+# leak by construction, so tests/unit/test_lifecycle_handlers.py asserts the pairing.
 from sushi_lang.backend.lifecycle import register_lifecycle as _register_lifecycle  # noqa: E402
 
 _register_lifecycle("dynamic_array", destroy=_emit_dynamic_array_destructor)

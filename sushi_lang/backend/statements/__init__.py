@@ -1,12 +1,4 @@
-"""
-Statement emission module for the Sushi language compiler.
-
-This module provides a refactored, modular approach to LLVM IR generation
-for statements. The code is organized by statement category for better
-maintainability and clarity.
-
-Main entry point: StatementEmitter.emit_stmt()
-"""
+"""Statement emission module for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -23,13 +15,7 @@ _EXPR_TEMP_SEQ = itertools.count()
 
 
 def _register_discarded_owning_temp(codegen: 'LLVMCodegen', expr, value) -> None:
-    """Own a discarded expression-statement result that owns heap (#134).
-
-    A bare `a.clone()` (or any owning temporary used as a statement) produces a value NO
-    other owner will free -- register it as a scope temp so scope-exit RAII frees it exactly
-    once. A bound source (Name / field read) is not a temporary and is skipped (its declared
-    owner frees it), so this never double-frees.
-    """
+    """Own a discarded expression-statement result that owns heap (#134)."""
     if value is None:
         return
     from sushi_lang.backend.expressions.memory import expression_is_temporary
@@ -39,8 +25,6 @@ def _register_discarded_owning_temp(codegen: 'LLVMCodegen', expr, value) -> None
     from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
     ty = infer_expr_semantic_type(codegen, expr)
     if ty is None and getattr(expr, 'method', None) == 'clone':
-        # clone() returns the receiver's type; its inference is annotation-driven and may be
-        # absent on the call node, so fall back to the receiver.
         ty = infer_expr_semantic_type(codegen, expr.receiver)
     ty = resolve_named_type(codegen, ty) if ty is not None else None
     if ty is None or not needs_cleanup(ty):
@@ -53,39 +37,21 @@ class StatementEmitter:
     """Main statement emitter that delegates to specialized submodules."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
-        """Initialize statement emitter with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context and builders.
-        """
+        """Initialize statement emitter with reference to main codegen instance."""
         self.codegen = codegen
 
     def emit_stmt(self, stmt: Stmt) -> None:
-        """Emit LLVM IR for a statement.
-
-        Dispatches to the appropriate emission method based on statement type.
-        Ensures the current block is not terminated before emission.
-
-        Args:
-            stmt: The statement AST node to emit.
-
-        Raises:
-            NotImplementedError: If the statement type is not supported.
-            RuntimeError: If attempting to emit after a terminator.
-        """
+        """Emit LLVM IR for a statement."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
         self.codegen.utils.ensure_open_block()
 
-        # Import statement types
         from sushi_lang.semantics.ast import (
             Let, Print, PrintLn, Return, If, While, Foreach, Match,
             Break, Continue, Rebind, ExprStmt
         )
 
-        # Delegate to appropriate specialized emitter based on statement type
         match stmt:
-            # I/O statements - MIGRATED in Phase 2
             case Print():
                 from sushi_lang.backend.statements import io
                 return io.emit_print(self.codegen, stmt)
@@ -93,7 +59,6 @@ class StatementEmitter:
                 from sushi_lang.backend.statements import io
                 return io.emit_println(self.codegen, stmt)
 
-            # Loop control - MIGRATED in Phase 2
             case Break():
                 from sushi_lang.backend.statements import loops
                 return loops.emit_break(self.codegen)
@@ -101,7 +66,6 @@ class StatementEmitter:
                 from sushi_lang.backend.statements import loops
                 return loops.emit_continue(self.codegen)
 
-            # Control flow - MIGRATED in Phase 3
             case If():
                 from sushi_lang.backend.statements import control_flow
                 return control_flow.emit_if(self.codegen, stmt)
@@ -109,12 +73,10 @@ class StatementEmitter:
                 from sushi_lang.backend.statements import control_flow
                 return control_flow.emit_while(self.codegen, stmt)
 
-            # Return statements - MIGRATED in Phase 3
             case Return():
                 from sushi_lang.backend.statements import returns
                 return returns.emit_return(self.codegen, stmt)
 
-            # Variable lifecycle - MIGRATED in Phase 4
             case Let():
                 from sushi_lang.backend.statements import variables
                 return variables.emit_let(self.codegen, stmt)
@@ -122,35 +84,24 @@ class StatementEmitter:
                 from sushi_lang.backend.statements import variables
                 return variables.emit_rebind(self.codegen, stmt)
 
-            # Expression statements - MIGRATED in Phase 4 (trivial inline)
             case ExprStmt():
                 value = self.codegen.expressions.emit_expr(stmt.expr)
                 _register_discarded_owning_temp(self.codegen, stmt.expr, value)
                 return
 
-            # Complex loops - MIGRATED in Phase 5
             case Foreach():
                 from sushi_lang.backend.statements import loops
                 return loops.emit_foreach(self.codegen, stmt)
 
-            # Pattern matching - MIGRATED in Phase 5
             case Match():
                 from sushi_lang.backend.statements import matching
                 return matching.emit_match(self.codegen, stmt)
 
-            # Unknown statement type
             case _:
                 raise NotImplementedError(f"statement not supported yet: {type(stmt).__name__}")
 
     def emit_block(self, block) -> None:
-        """Emit all statements in a block.
-
-        Iterates through statements and emits each one, stopping if a
-        terminator is encountered.
-
-        Args:
-            block: The block AST node containing statements.
-        """
+        """Emit all statements in a block."""
         for stmt in self.codegen.utils.block_statements(block):
             if self.codegen.builder.block.terminator is not None:
                 break

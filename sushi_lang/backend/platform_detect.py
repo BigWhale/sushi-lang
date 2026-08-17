@@ -1,9 +1,4 @@
-"""
-Platform detection and target triple parsing for Sushi compiler.
-
-Provides utilities to determine the current compilation target and make
-platform-specific code generation decisions.
-"""
+"""Platform detection and target triple parsing for Sushi compiler."""
 from __future__ import annotations
 from dataclasses import dataclass
 from llvmlite import binding as llvm
@@ -47,21 +42,12 @@ class TargetPlatform:
 
 
 def parse_triple(triple: str) -> TargetPlatform:
-    """
-    Parse an LLVM target triple into components.
-
-    Examples:
-        arm64-apple-darwin25.0.0 -> TargetPlatform(arm64, apple, darwin, '')
-        x86_64-pc-linux-gnu -> TargetPlatform(x86_64, pc, linux, gnu)
-        x86_64-w64-windows-msvc -> TargetPlatform(x86_64, w64, windows, msvc)
-    """
+    """Parse an LLVM target triple into components."""
     parts = triple.split('-')
 
-    # Handle version numbers in OS (e.g., darwin25.0.0)
     os_part = parts[2] if len(parts) > 2 else 'unknown'
     if '.' in os_part:
         os_part = os_part.split('.')[0]  # darwin25.0.0 -> darwin25
-        # Further normalize darwin25 -> darwin
         if os_part.startswith('darwin'):
             os_part = 'darwin'
 
@@ -79,10 +65,6 @@ def get_current_platform() -> TargetPlatform:
 
 
 def current_platform_name() -> str:
-    """The host platform as the short name a `.slib` records in its metadata.
-
-    The single source of truth for that string: the library manifest writes it and
-    the load-time platform check (CE3504) compares against it, so they must agree.
-    """
+    """The host platform as the short name a `.slib` records in its metadata."""
     platform = get_current_platform()
     return "darwin" if platform.is_darwin else "linux" if platform.is_linux else "unknown"

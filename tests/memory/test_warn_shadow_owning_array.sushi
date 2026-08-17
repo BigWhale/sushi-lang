@@ -1,4 +1,4 @@
-# Guards PLAN.md T2.2: the ownership registries (DynamicArrayManager.arrays et al.) are
+# The ownership registries (DynamicArrayManager.arrays et al.) are
 # flat dicts keyed by bare NAME, not by slot identity. A nested shadow of an owning
 # dynamic array overwrites the outer descriptor; the outer scope pop then cannot find
 # it. Today the compiler dies with CE0015 "Instruction does not dominate all uses".

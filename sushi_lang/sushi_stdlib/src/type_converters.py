@@ -1,36 +1,11 @@
-"""
-Type Converters
-
-Utilities for converting between semantic types and LLVM IR types.
-
-Design: Single Responsibility - only type conversion logic.
-"""
+"""Type Converters"""
 
 import llvmlite.ir as ir
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType, ArrayType, DynamicArrayType
 
 
-# ==============================================================================
-# Semantic Type to LLVM Type Conversion
-# ==============================================================================
-
 def semantic_type_to_llvm(sem_type: Type) -> ir.Type:
-    """Convert a semantic type to an LLVM IR type (standalone version).
-
-    This is a simplified version that handles basic types needed for stdlib.
-    Does NOT handle complex types (structs, enums, generics) - those require
-    the full compiler infrastructure.
-
-    Args:
-        sem_type: The semantic type to convert.
-
-    Returns:
-        The corresponding LLVM IR type.
-
-    Raises:
-        TypeError: If the type is not supported in standalone mode.
-    """
-    # Basic integer types
+    """Convert a semantic type to an LLVM IR type (standalone version)."""
     if sem_type == BuiltinType.I8:
         return ir.IntType(8)
     elif sem_type == BuiltinType.I16:
@@ -47,45 +22,24 @@ def semantic_type_to_llvm(sem_type: Type) -> ir.Type:
         return ir.IntType(32)
     elif sem_type == BuiltinType.U64:
         return ir.IntType(64)
-    # Floating-point types
     elif sem_type == BuiltinType.F32:
         return ir.FloatType()
     elif sem_type == BuiltinType.F64:
         return ir.DoubleType()
-    # Boolean and string
     elif sem_type == BuiltinType.BOOL:
         return ir.IntType(8)
     elif sem_type == BuiltinType.STRING:
         return ir.IntType(8).as_pointer()
-    # Blank type
     elif sem_type == BuiltinType.BLANK:
         return ir.IntType(32)  # Represented as i32 (dummy value)
-    # I/O handles
     elif sem_type in (BuiltinType.STDIN, BuiltinType.STDOUT, BuiltinType.STDERR, BuiltinType.FILE):
         return ir.IntType(8).as_pointer()  # FILE* as opaque pointer
     else:
         raise TypeError(f"Unsupported semantic type in standalone mode: {sem_type}")
 
 
-# ==============================================================================
-# Name Mangling for Generic Types
-# ==============================================================================
-
 def mangle_generic_name(base_name: str, type_params: list[Type]) -> str:
-    """Generate a mangled name for a generic type instantiation.
-
-    Examples:
-        Result<i32> -> "result_i32"
-        Maybe<string> -> "maybe_string"
-        Pair<i32, f64> -> "pair_i32_f64"
-
-    Args:
-        base_name: The base name of the generic type (e.g., "Result", "Maybe").
-        type_params: List of type parameters.
-
-    Returns:
-        The mangled name suitable for use in LLVM function names.
-    """
+    """Generate a mangled name for a generic type instantiation."""
     mangled = base_name.lower()
     for param in type_params:
         mangled += "_" + _type_to_mangled_string(param)
@@ -93,15 +47,7 @@ def mangle_generic_name(base_name: str, type_params: list[Type]) -> str:
 
 
 def _type_to_mangled_string(t: Type) -> str:
-    """Convert a type to a string suitable for name mangling.
-
-    Args:
-        t: The type to convert.
-
-    Returns:
-        A mangled string representation of the type.
-    """
-    # Basic types
+    """Convert a type to a string suitable for name mangling."""
     if t == BuiltinType.I8:
         return "i8"
     elif t == BuiltinType.I16:
@@ -128,7 +74,6 @@ def _type_to_mangled_string(t: Type) -> str:
         return "string"
     elif t == BuiltinType.BLANK:
         return "blank"
-    # Complex types (simplified - expand as needed)
     elif isinstance(t, StructType):
         return t.name.lower()
     elif isinstance(t, EnumType):
@@ -138,5 +83,4 @@ def _type_to_mangled_string(t: Type) -> str:
     elif isinstance(t, DynamicArrayType):
         return f"dynarray_{_type_to_mangled_string(t.base_type)}"
     else:
-        # Fallback: use string representation
         return str(t).replace("<", "_").replace(">", "_").replace("[", "_").replace("]", "_").lower()

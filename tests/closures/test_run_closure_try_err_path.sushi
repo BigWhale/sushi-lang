@@ -1,4 +1,4 @@
-# Guards PLAN.md T1.4: when `??` takes the error path, the propagation block emits
+# When `??` takes the error path, the propagation block emits
 # RAII cleanup for a closure variable whose fat-pointer alloca was never stored.
 # Cleanup loads garbage, extracts slot 2 (drop_ptr) and CALLS it -> SIGBUS (exit 138).
 # EXPECT_RUNTIME_EXIT: 0

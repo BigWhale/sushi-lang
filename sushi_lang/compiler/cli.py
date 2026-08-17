@@ -17,11 +17,7 @@ from sushi_lang.internals.version import print_banner
 
 
 def print_library_info(library_path: Path) -> int:
-    """Print formatted metadata from a .slib library file.
-
-    Returns:
-        0 on success, 2 on error.
-    """
+    """Print formatted metadata from a .slib library file."""
     from sushi_lang.backend.library_format import LibraryFormat
     from sushi_lang.backend.library_errors import LibraryError
 
@@ -39,7 +35,6 @@ def print_library_info(library_path: Path) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 2
 
-    # Header
     print(f"Library: {metadata['library_name']}")
     print(f"Platform: {metadata['platform']}")
     print(f"Compiler: {metadata['compiler_version']}")
@@ -47,7 +42,6 @@ def print_library_info(library_path: Path) -> int:
     print(f"Protocol: {metadata['sushi_lib_version']}")
     print()
 
-    # Public functions
     funcs = metadata.get('public_functions', [])
     if funcs:
         print(f"Public Functions ({len(funcs)}):")
@@ -56,7 +50,6 @@ def print_library_info(library_path: Path) -> int:
             print(f"  fn {func['name']}({params}) {func['return_type']}")
         print()
 
-    # Generic Functions (shipped as instantiable templates, not concrete callables)
     generic_funcs = metadata.get('templates', {}).get('generic_functions', [])
     if generic_funcs:
         print(f"Generic Functions ({len(generic_funcs)}):")
@@ -76,7 +69,6 @@ def print_library_info(library_path: Path) -> int:
             print(f"  fn {gf['name']}{generic} (template)")
         print()
 
-    # Public constants
     consts = metadata.get('public_constants', [])
     if consts:
         print(f"Public Constants ({len(consts)}):")
@@ -84,7 +76,6 @@ def print_library_info(library_path: Path) -> int:
             print(f"  const {const['type']} {const['name']}")
         print()
 
-    # Structs
     structs = metadata.get('structs', [])
     if structs:
         print(f"Structs ({len(structs)}):")
@@ -98,7 +89,6 @@ def print_library_info(library_path: Path) -> int:
                 print(f"    {field['type']} {field['name']}")
         print()
 
-    # Enums
     enums = metadata.get('enums', [])
     if enums:
         print(f"Enums ({len(enums)}):")
@@ -115,7 +105,6 @@ def print_library_info(library_path: Path) -> int:
                     print(f"    {variant['name']}")
         print()
 
-    # Dependencies
     deps = metadata.get('dependencies', [])
     if deps:
         print(f"Dependencies ({len(deps)}):")
@@ -123,7 +112,6 @@ def print_library_info(library_path: Path) -> int:
             print(f"  <{dep}>")
         print()
 
-    # Size info
     print(f"Bitcode: {len(bitcode):,} bytes")
 
     return 0
@@ -131,11 +119,7 @@ def print_library_info(library_path: Path) -> int:
 
 @dataclass
 class Session:
-    """Everything the top-level guard needs to render whatever went wrong.
-
-    The reporter is the one `_run` has been filling in, so diagnostics collected
-    before a crash still print, with the crash appended.
-    """
+    """Everything the top-level guard needs to render whatever went wrong."""
     args: argparse.Namespace
     reporter: Reporter = field(default_factory=Reporter)
     src_path: Optional[Path] = None

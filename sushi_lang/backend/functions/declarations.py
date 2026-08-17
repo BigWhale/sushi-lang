@@ -1,10 +1,4 @@
-"""
-Function declaration handling for LLVM code generation.
-
-This module handles the creation of LLVM function prototypes (signatures)
-for both regular Sushi functions and extension methods, without emitting
-function bodies.
-"""
+"""Function declaration handling for LLVM code generation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -19,24 +13,11 @@ class FunctionDeclarations:
     """Handles LLVM function prototype generation."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
-        """Initialize declarations handler with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance.
-        """
+        """Initialize declarations handler with reference to main codegen instance."""
         self.codegen = codegen
 
     def emit_func_decl(self, fn: FuncDef, params_of_fn, helpers) -> ir.Function:
-        """Create LLVM function prototype for regular function.
-
-        Args:
-            fn: The function definition AST node.
-            params_of_fn: Function to extract parameters.
-            helpers: FunctionHelpers instance.
-
-        Returns:
-            The LLVM function with declared signature (no body).
-        """
+        """Create LLVM function prototype for regular function."""
         existing = self.codegen.funcs.get(fn.name)
         if existing is not None:
             return existing
@@ -47,13 +28,11 @@ class FunctionDeclarations:
         # Skip wrapper in library mode (main is just a regular function)
         if fn.name == 'main' and not getattr(self.codegen, 'is_library_mode', False):
             if self.codegen.main_expects_args:
-                # Generate C-style main signature: int main(int argc, char** argv)
                 ll_param_tys = [
                     self.codegen.types.i32,                                    # argc: int
                     ir.PointerType(ir.PointerType(self.codegen.types.i8))     # argv: char**
                 ]
             else:
-                # Generate C-style main signature: int main()
                 ll_param_tys = []
 
             ll_ret = self.codegen.types.i32  # main always returns int in C
@@ -61,17 +40,13 @@ class FunctionDeclarations:
             llvm_fn = ir.Function(self.codegen.module, fnty, name=fn.name)
 
             if self.codegen.main_expects_args:
-                # Set parameter names for clarity
                 llvm_fn.args[0].name = "argc"
                 llvm_fn.args[1].name = "argv"
         else:
-            # Normal Sushi function signature
-            # All functions now return Result<T> where T is fn.ret
             params = params_of_fn(fn)
             ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
             from sushi_lang.semantics.typesys import GenericTypeRef
 
-            # Check if return type is already explicit Result<T, E>
             from sushi_lang.semantics.generics.results import is_result_enum
             from sushi_lang.backend.generics.result_builder import implicit_result_of
 
@@ -89,7 +64,6 @@ class FunctionDeclarations:
             fnty = ir.FunctionType(ll_ret, ll_param_tys)
             llvm_fn = ir.Function(self.codegen.module, fnty, name=fn.name)
 
-            # Set Sushi parameter names
             for i, (pname, _) in enumerate(params):
                 llvm_fn.args[i].name = pname
 
@@ -105,8 +79,6 @@ class FunctionDeclarations:
 
         self.codegen.funcs[fn.name] = llvm_fn
 
-        # Store the semantic return type for Result<T, E> type inference
-        # This helps when inferring Result<T, E> types from function call expressions
         if fn.name != 'main' and fn.ret is not None:
             is_explicit_result = (
                 is_result_enum(fn.ret) or
@@ -119,15 +91,7 @@ class FunctionDeclarations:
         return llvm_fn
 
     def emit_extension_method_decl(self, ext: ExtendDef, get_name_fn) -> ir.Function:
-        """Create LLVM function prototype for extension method.
-
-        Args:
-            ext: The extension method definition AST node.
-            get_name_fn: Function to get extension method name.
-
-        Returns:
-            The LLVM function with declared signature (no body).
-        """
+        """Create LLVM function prototype for extension method."""
         func_name = get_name_fn(ext)
 
         param_types = []
@@ -147,8 +111,6 @@ class FunctionDeclarations:
                 param_types.append(self.codegen.types.ll_type(param.ty))
                 param_names.append(param.name)
 
-        # Extension methods return bare types (not Result<T>)
-        # This matches built-in extension methods and provides zero-cost abstraction
         if ext.ret:
             ret_type = self.codegen.types.ll_type(ext.ret)
         else:

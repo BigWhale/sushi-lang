@@ -1,19 +1,4 @@
-"""Diagnostics: the catalog, and the ways to emit one.
-
-The catalog is split by family, one module per numeric range:
-
-    internal.py  CE0xxx      borrow.py   CE24xx      ffi.py       CE5xxx
-    func.py      CE01xx      result.py   CE25xx      syntax.py    CE6xxx
-    scope.py     CE1xxx      unit.py     CE3xxx      warnings.py  CWxxxx
-    types.py     CE2xxx      library.py  CE35xx      runtime.py   RExxxx
-                             perk.py     CE4xxx
-
-Each module owns its range, so a code can only be added in the file that owns it.
-Importing this package imports them all, which is what populates REGISTRY.
-
-Callers do `from sushi_lang.internals import errors as er` and reach everything
-through `er.ERR.CE2002`, `er.emit(...)`, `er.emit_with(...)`.
-"""
+"""Diagnostics: the catalog, and the ways to emit one."""
 from __future__ import annotations
 
 from typing import Optional
@@ -64,22 +49,13 @@ __all__ = [
 
 
 def message_for(code: str, **kwargs) -> str:
-    """The registry text for a code, formatted.
-
-    The runtime-error emitters use this instead of carrying their own hand-written
-    strings, so a code says the same thing wherever it fires.
-    """
+    """The registry text for a code, formatted."""
     return _fmt(code, **kwargs)
 
 
 def emit(r: Reporter, em: ErrorMessage, span: Optional[Span],
          filename: Optional[str] = None, **kwargs) -> None:
-    """Emit a diagnostic. `filename` overrides the reporter's file.
-
-    Pass it when the span belongs to a DIFFERENT file than the one the reporter is
-    reporting against -- e.g. a symbol collected from a dependency unit. No registry
-    text uses {filename}, so this cannot collide with a format parameter.
-    """
+    """Emit a diagnostic. `filename` overrides the reporter's file."""
     text = _fmt(em.code, **kwargs)
     if em.severity == Severity.ERROR:
         r.error(em.code, text, span, filename=filename)
@@ -96,12 +72,7 @@ def emit_with(r: Reporter, em: ErrorMessage, span: Optional[Span],
 
 
 def emit_exception(r: Reporter, exc: SushiError) -> None:
-    """Render a diagnostic that arrived as an exception.
-
-    The single choke point where an exception-borne diagnostic joins the reporter,
-    so it lands at the same tier -- text, one location, or one location plus located
-    notes -- as an equivalent `emit_with(...)`.
-    """
+    """Render a diagnostic that arrived as an exception."""
     em = _get(exc.code)
     text = _fmt(exc.code, **exc.params)
     if em.severity == Severity.ERROR:
@@ -116,14 +87,5 @@ def emit_exception(r: Reporter, exc: SushiError) -> None:
 
 
 def raise_internal_error(code: str, **kwargs) -> None:
-    """Raise an InternalCompilerError -- a compiler bug, not a user code issue.
-
-    Args:
-        code: Error code (e.g., "CE0013")
-        **kwargs: Format parameters for the error message
-
-    Raises:
-        InternalCompilerError: always. It subclasses RuntimeError, which is what
-            this used to raise.
-    """
+    """Raise an InternalCompilerError -- a compiler bug, not a user code issue."""
     raise InternalCompilerError(code, **kwargs)

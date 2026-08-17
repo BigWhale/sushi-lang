@@ -1,17 +1,4 @@
-"""
-Guard: a test_err_ / test_warn_ test must assert WHICH diagnostic it expects.
-
-The compilation phase only checks the exit code implied by the filename: 2 for
-test_err_, 1 for test_warn_. An exit of 2 says some error happened, not the error the
-test was written for. Four tests relied on that, and one of them had never tested the
-thing it named: test_err_hash_nested_arrays declared `i32[2][2]`, which the parser
-rejects, so the compiler never reached the hash check it existed to exercise -- and
-CE0052 was asserted nowhere in the tree.
-
-Most diagnostics carry a CE/CW code and should use EXPECT_ERROR_CODE. A raw parse
-error carries no code, so those tests assert the message text with
-EXPECT_STDERR_CONTAINS instead. Either is enough; neither is optional.
-"""
+"""Guard: a test_err_ / test_warn_ test must assert WHICH diagnostic it expects."""
 
 import re
 from pathlib import Path

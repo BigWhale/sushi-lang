@@ -1,14 +1,4 @@
-"""The linear-probe loop, once.
-
-insert, remove, get, contains_key and the resize rehash all walk the bucket array
-the same way: start at `hash & (capacity - 1)`, step forward one slot at a time,
-and dispatch on the slot's state. That skeleton was written out five times.
-
-What the five do *with* a slot is genuinely different -- get clones the value out,
-remove leaves a tombstone, insert may reuse a tombstone it passed earlier, the
-rehash exits into the loop above it -- so the callbacks own the slot bodies, and
-the exit. This emits the walk, not the decision.
-"""
+"""The linear-probe loop, once."""
 
 from typing import Any, Callable, NamedTuple, Optional
 
@@ -25,8 +15,6 @@ class ProbeSlot(NamedTuple):
     continue_bb: ir.Block  # branch here to probe the next slot
 
 
-# A slot handler. It may terminate its block (to leave the loop); if it does not,
-# the loop continues probing.
 SlotFn = Callable[[ProbeSlot], None]
 
 
@@ -42,29 +30,7 @@ def emit_probe_loop(
     exhausted_bb: Optional[ir.Block] = None,
     prefix: str = "probe",
 ) -> None:
-    """Linear-probe the buckets from `hash_i32`, dispatching on each slot's state.
-
-    The loop has no natural exit: a handler either terminates its block (branching
-    to one of the caller's blocks) or falls through and the next slot is probed.
-    So the caller owns every exit, and any result phi. On return the builder sits
-    on a terminated block -- position it at your own exit before emitting more.
-
-    Args:
-        codegen: LLVM codegen instance.
-        buckets_data: Pointer to the bucket storage (Entry<K, V>*). Passed in
-            rather than read from the map, because the rehash probes storage that
-            is not in the map yet.
-        capacity: Bucket count. Must be a power of two: the index is masked with
-            `capacity - 1` rather than reduced modulo it.
-        hash_i32: The key's hash, truncated to i32.
-        on_occupied: Slot holds a live entry. Typically compares keys.
-        on_empty: Slot was never used. Terminates the probe for a lookup.
-        on_tombstone: Slot held an entry that was removed. Defaults to probing on,
-            which is what keeps a removed key's probe chain intact.
-        exhausted_bb: Where to go once every slot has been probed. Without it a
-            full table would probe forever.
-        prefix: Block-name prefix, so nested probes stay readable in the IR.
-    """
+    """Linear-probe the buckets from `hash_i32`, dispatching on each slot's state."""
     builder = codegen.builder
     i32 = codegen.types.i32
     i8 = codegen.types.i8
@@ -130,10 +96,6 @@ def emit_probe_loop(
 
 
 def _probe_on(builder: ir.IRBuilder, continue_bb: ir.Block) -> None:
-    """Probe the next slot, unless the handler already left the loop.
-
-    Branches from wherever the builder ended up: a handler may append blocks of
-    its own (emit_key_equality_check and emit_value_destructor both do).
-    """
+    """Probe the next slot, unless the handler already left the loop."""
     if builder.block.terminator is None:
         builder.branch(continue_bb)

@@ -10,20 +10,7 @@ if TYPE_CHECKING:
 
 
 def parse_function_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
-    """Parse a function type (fn_type_t).
-
-    Syntax: fn "(" [fn_param_types] ")" "->" type ["|" type]
-    Examples: fn(i32) -> i32, fn() -> ~, fn(i32, string) -> bool | MathError,
-              fn(nom string) -> i32, fn(peek i32) -> i32
-
-    Tree children (anonymous string terminals are filtered out by Lark):
-      [FN token, fn_param_types?, return_type_tree, error_type_tree?]
-    The optional error type defaults to UnknownType("StdError"), which the normal
-    type-resolution pass binds to the StdError enum (mirroring fn declarations).
-
-    A parameter list carries a MODE per parameter: `peek`/`poke` ride on the type as a
-    ReferenceType, and `nom` arrives as its own token (docs/design/borrow-model.md S6).
-    """
+    """Parse a function type (fn_type_t)."""
     param_types = []
     nom_flags = []
     direct_type_trees = []  # return type, then optional error type
@@ -47,7 +34,6 @@ def parse_function_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]
             direct_type_trees.append(child)
 
     if not direct_type_trees:
-        # Return type is mandatory in the grammar; should not happen.
         return None
 
     ok_type = ast_builder._parse_type(direct_type_trees[0])

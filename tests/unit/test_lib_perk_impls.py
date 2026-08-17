@@ -1,11 +1,4 @@
-"""Cross-library concrete perk-impl shipping (P2-5 Phase 2 / C4a).
-
-Covers the incremental (multi-unit consumer) link path the single-file golden
-harness cannot reach: there the whole library bitcode becomes one ``.o``
-linked by plain ``cc``, so a consumer's local override of a shipped impl is a
-duplicate-symbol hard error unless the library's perk-impl symbols carry weak
-linkage. These tests gate that linkage and the end-to-end behavior.
-"""
+"""Cross-library concrete perk-impl shipping (P2-5 Phase 2 / C4a)."""
 from __future__ import annotations
 
 import os
@@ -107,8 +100,9 @@ def _run(project: Path) -> str:
 
 @pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
 def test_shipped_impl_links_and_runs_multi_unit(tmp_path):
-    """No consumer extend: the library's i32_doubled is registered, declared,
-    and linked from the library .o across two consumer units."""
+    """No consumer extend: the library's i32_doubled is registered, declared, and linked from the
+    library .o across two consumer units.
+    """
     env = _build_lib(tmp_path)
     project = _build_consumer(tmp_path, MAIN_SHIPPED, env)
     assert _run(project) == "5"
@@ -116,21 +110,17 @@ def test_shipped_impl_links_and_runs_multi_unit(tmp_path):
 
 @pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
 def test_local_override_links_and_wins_multi_unit(tmp_path):
-    """Local extend + shipped impl: must LINK (the library symbol is weak; a
-    duplicate-symbol cc error here means the linkage regressed) and the local
-    negating impl must win at runtime (picks 3, not 5)."""
+    """Local extend + shipped impl: must LINK (the library symbol is weak; a duplicate-symbol cc
+    error here means the linkage regressed) and the local negating impl must win at runtime
+    (picks 3, not 5).
+    """
     env = _build_lib(tmp_path)
     project = _build_consumer(tmp_path, MAIN_OVERRIDE, env)
     assert _run(project) == "3"
 
 
 def _is_weak_definition(obj: Path, symbol: str) -> bool | None:
-    """Return True/False for a found definition's weakness, None if absent.
-
-    Mach-O's classic ``nm`` letters show weak definitions as plain ``T``, so
-    on darwin the ``nm -m`` long form is consulted ("weak external <sym>");
-    on ELF the standard W/w/V/v letters apply.
-    """
+    """Return True/False for a found definition's weakness, None if absent."""
     if sys.platform == "darwin":
         nm_out = subprocess.run(["nm", "-m", str(obj)], capture_output=True, text=True)
         assert nm_out.returncode == 0, f"nm -m failed on {obj}:\n{nm_out.stderr}"
@@ -155,12 +145,7 @@ def _is_weak_definition(obj: Path, symbol: str) -> bool | None:
 @pytest.mark.skipif(shutil.which("nm") is None, reason="nm not available")
 @pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
 def test_shipped_impl_symbol_is_weak_in_library_object(tmp_path):
-    """i32_doubled must be present in the library-derived .o and weak.
-
-    Presence gates against module-level optimization dropping the unreferenced
-    definition (the reason for weak_odr over linkonce_odr); weakness gates the
-    override behavior of the previous test.
-    """
+    """i32_doubled must be present in the library-derived .o and weak."""
     env = _build_lib(tmp_path)
     project = _build_consumer(tmp_path, MAIN_SHIPPED, env)
 

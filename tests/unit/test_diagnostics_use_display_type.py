@@ -1,22 +1,4 @@
-"""Diagnostics must render types through the `@(...)` display layer.
-
-Types are interned under their `<...>` identity name (`StructType.name ==
-"List<i32>"`), which mangling and the ~60 `startswith("List<")` predicates depend
-on. That name must never reach the user: the language spells generics `List@(i32)`,
-so a diagnostic showing `List<i32>` displays a syntax that no longer exists.
-
-`semantics/generics/type_display.py` is the boundary. This test is the gate that
-keeps every emit site behind it, in two parts:
-
-  * no message template in `internals/errors/` hardcodes a `<...>` generic;
-  * no `er.emit`/`emit_with`/`raise_internal_error`/`message_for` keyword argument
-    interpolates a value (via `str(...)` or an f-string) that is not wrapped in
-    `display_type` / `display_type_name`.
-
-The second half is the one that regressed historically: `registry.py` formats with
-`format_map`, so a bare `ty=`, `str(ty)`, and `f"{ty}"` all leak the identity name
-identically, and nothing else in the pipeline would notice.
-"""
+"""Diagnostics must render types through the `@(...)` display layer."""
 from __future__ import annotations
 
 import ast
@@ -68,13 +50,7 @@ def _renders_via_display(node: ast.AST) -> bool:
 
 
 def _is_type_valued(node: ast.AST) -> bool:
-    """True if `node` names something that holds a `Type`.
-
-    Naming convention, not inference: the compiler consistently calls these
-    `*_type` / `*_ty` / `.ty`. Most f-string interpolations in diagnostics are
-    plain strings (`method_name`, `op`, `block.abi`) -- flagging those too would
-    bury the real signal under ~40 false positives.
-    """
+    """True if `node` names something that holds a `Type`."""
     if isinstance(node, ast.Name):
         tail = node.id
     elif isinstance(node, ast.Attribute):
@@ -85,12 +61,7 @@ def _is_type_valued(node: ast.AST) -> bool:
 
 
 def _leaks(value: ast.AST) -> bool:
-    """True if `value` interpolates a type not routed through the display layer.
-
-    Two shapes leak the interned name: `str(ty)` -- always suspect, since a type is
-    the only reason to stringify into a diagnostic -- and an f-string embedding a
-    type-valued name.
-    """
+    """True if `value` interpolates a type not routed through the display layer."""
     if _renders_via_display(value):
         return False
     if isinstance(value, ast.Call):

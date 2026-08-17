@@ -1,20 +1,4 @@
-"""P1-T3 AST-builder gate: type-pack params, v2 pack value-params, expand nodes.
-
-This task makes the parsed surface produce CORRECT AST nodes for variadic
-generics (the front-end freeze). It does NOT make a pack program compile end to
-end -- downstream passes (T4-T7) do not yet handle packs and will reject a real
-pack program. We therefore assert purely at the AST level by driving the real
-parser + ASTBuilder via ``parse_to_ast``.
-
-What is pinned here for downstream consumers:
-  - a type-pack type-param builds to ``BoundedTypeParam(is_pack=True)``;
-  - a v2 pack value-param (``...Ts args`` where ``Ts`` is a declared type pack)
-    builds to ``Param(is_pack=True, is_variadic=False)`` whose ``ty`` is the
-    bare pack-name reference (``UnknownType("Ts")``), NOT a ``DynamicArrayType``;
-  - a v1 native variadic (``...i32 values``) is unchanged: ``Param(
-    is_variadic=True, is_pack=False)`` with ``ty == DynamicArrayType(i32)``;
-  - ``expand(a in args): ...`` builds an ``Expand`` node.
-"""
+"""P1-T3 AST-builder gate: type-pack params, v2 pack value-params, expand nodes."""
 from __future__ import annotations
 
 from sushi_lang.internals.parser import parse_to_ast

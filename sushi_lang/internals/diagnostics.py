@@ -1,20 +1,4 @@
-"""Diagnostics that travel as exceptions.
-
-This module imports only `internals/report.py` (for `Span`). It must NOT import
-`internals/errors.py`: the catalog imports *this* module in order to render these
-exceptions, and `semantics/ast_builder/**` raises them without dragging the
-1200-line catalog into the AST builder.
-
-A `SushiError` carries the same ladder as a diagnostic emitted through
-`errors.emit_with(...)`:
-
-    tier 1  no span               -> text only
-    tier 2  span                  -> text + one primary location
-    tier 3  span + located notes  -> text + primary + secondary locations
-
-A note carries its own `filename`, so a secondary location may point into a
-different file than the primary one.
-"""
+"""Diagnostics that travel as exceptions."""
 from __future__ import annotations
 
 from typing import List, Optional, Tuple
@@ -60,11 +44,7 @@ class SyntaxDiagnostic(SushiError):
 
 
 class InternalCompilerError(SushiError, RuntimeError):
-    """A compiler bug: the user's program cannot be blamed for this.
-
-    Inherits `RuntimeError` so that `raise_internal_error()` keeps raising something
-    every existing handler already recognises.
-    """
+    """A compiler bug: the user's program cannot be blamed for this."""
 
     code = "CE0000"
 

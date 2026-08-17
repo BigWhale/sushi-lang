@@ -1,16 +1,4 @@
-"""
-String Library Main Coordinator
-
-This module coordinates the generation of all string operations as a single LLVM module.
-It orchestrates intrinsics and string methods, generating precompiled .bc files.
-
-Architecture:
-1. Intrinsics layer: Low-level LLVM IR building blocks
-2. Method layer: Higher-level string operations using intrinsics
-3. Module generation: Combines all into stdlib/dist/collections/strings.bc
-
-String representation: { i8* data, i32 size } (fat pointer)
-"""
+"""String Library Main Coordinator"""
 
 from typing import Any
 from dataclasses import dataclass
@@ -21,7 +9,6 @@ from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.internals import errors as er
 
-# Import intrinsic implementations (for .bc compilation)
 from .intrinsics.utf8_count import emit_utf8_count_intrinsic
 from .intrinsics.utf8_byte_offset import emit_utf8_byte_offset_intrinsic
 from .intrinsics.char_ops import (
@@ -30,7 +17,6 @@ from .intrinsics.char_ops import (
     emit_isspace_intrinsic,
 )
 
-# Import method implementations (for .bc compilation)
 from .methods.basic import (
     emit_string_size,
     emit_string_len,
@@ -83,10 +69,6 @@ from .methods.parse import (
 from sushi_lang.semantics.generics.type_display import display_type
 
 
-# ==============================================================================
-# Semantic Validation (Pass 2)
-# ==============================================================================
-
 @dataclass
 class MethodSpec:
     """Specification for a string method's signature."""
@@ -98,7 +80,6 @@ class MethodSpec:
 # Method specification registry - single source of truth for all string method signatures
 # Note: is_empty is NOT included here as it's an inline intrinsic, not a stdlib method
 METHOD_SPECS = {
-    # No-argument methods
     "len": MethodSpec("string.len", 0, []),
     "size": MethodSpec("string.size", 0, []),
     "upper": MethodSpec("string.upper", 0, []),
@@ -110,7 +91,6 @@ METHOD_SPECS = {
     "to_bytes": MethodSpec("string.to_bytes", 0, []),
     "reverse": MethodSpec("string.reverse", 0, []),
 
-    # Single string argument methods
     "concat": MethodSpec("string.concat", 1, [BuiltinType.STRING]),
     "contains": MethodSpec("string.contains", 1, [BuiltinType.STRING]),
     "find": MethodSpec("string.find", 1, [BuiltinType.STRING]),
@@ -121,26 +101,21 @@ METHOD_SPECS = {
     "strip_prefix": MethodSpec("string.strip_prefix", 1, [BuiltinType.STRING]),
     "strip_suffix": MethodSpec("string.strip_suffix", 1, [BuiltinType.STRING]),
 
-    # Single int argument methods
     "sleft": MethodSpec("string.sleft", 1, [BuiltinType.I32]),
     "sright": MethodSpec("string.sright", 1, [BuiltinType.I32]),
     "char_at": MethodSpec("string.char_at", 1, [BuiltinType.I32]),
     "repeat": MethodSpec("string.repeat", 1, [BuiltinType.I32]),
 
-    # Two int arguments methods
     "s": MethodSpec("string.s", 2, [BuiltinType.I32, BuiltinType.I32]),
     "ss": MethodSpec("string.ss", 2, [BuiltinType.I32, BuiltinType.I32]),
 
-    # String splitting and joining
     "split": MethodSpec("string.split", 1, [BuiltinType.STRING]),
     "join": MethodSpec("string.join", 1, []),
 
-    # String modification
     "replace": MethodSpec("string.replace", 2, [BuiltinType.STRING, BuiltinType.STRING]),
     "pad_left": MethodSpec("string.pad_left", 2, [BuiltinType.I32, BuiltinType.STRING]),
     "pad_right": MethodSpec("string.pad_right", 2, [BuiltinType.I32, BuiltinType.STRING]),
 
-    # String parsing (return Maybe<T>)
     "to_i32": MethodSpec("string.to_i32", 0, []),
     "to_i64": MethodSpec("string.to_i64", 0, []),
     "to_f64": MethodSpec("string.to_f64", 0, []),
@@ -149,7 +124,6 @@ METHOD_SPECS = {
 
 def _validate_method_signature(call: MethodCall, spec: MethodSpec, reporter: Any, validator: Any = None) -> None:
     """Generic validation for string method signatures."""
-    # Validate argument count
     if len(call.args) != spec.arg_count:
         er.emit(reporter, er.ERR.CE2009, call.loc,
                name=spec.name, expected=spec.arg_count, got=len(call.args))
@@ -169,11 +143,7 @@ def _validate_method_signature(call: MethodCall, spec: MethodSpec, reporter: Any
 
 
 def is_builtin_string_method(method_name: str) -> bool:
-    """Check if a method name is a built-in string method.
-
-    Note: Includes both stdlib methods (in METHOD_SPECS) and the inline intrinsics
-    (`is_empty`, `clone`), which need no `use <collections/strings>`.
-    """
+    """Check if a method name is a built-in string method."""
     return method_name in METHOD_SPECS or method_name in ("is_empty", "clone")
 
 
@@ -182,7 +152,7 @@ def validate_builtin_string_method_with_validator(call: MethodCall, string_type:
     method_name = call.method
 
     # Inline intrinsics, not in METHOD_SPECS. `clone` is the explicit deep copy and the
-    # escape from CE2411; it must not need `use <collections/strings>` (#242, MM.md B4).
+    # escape from CE2411; it must not need `use <collections/strings>` (#242).
     if method_name in ("is_empty", "clone"):
         if len(call.args) != 0:
             er.emit(reporter, er.ERR.CE2009, call.loc,
@@ -195,30 +165,20 @@ def validate_builtin_string_method_with_validator(call: MethodCall, string_type:
 
 
 def get_builtin_string_method_return_type(method_name: str, string_type: BuiltinType) -> Type | None:
-    """Get the return type of a built-in string method.
-
-    Note: is_empty is included here even though it's an inline intrinsic,
-    because type checking happens before code generation.
-    """
+    """Get the return type of a built-in string method."""
     from sushi_lang.semantics.typesys import DynamicArrayType
-    # Methods returning int
     if method_name in {"len", "size"}:
         return BuiltinType.I32
-    # Methods returning bool (includes inline intrinsic is_empty)
     elif method_name in {"is_empty", "contains", "starts_with", "ends_with"}:
         return BuiltinType.BOOL
-    # Methods returning string
     elif method_name in {"clone", "concat", "s", "sleft", "sright", "char_at", "ss",
                          "upper", "lower", "cap", "trim", "tleft", "tright", "replace",
                          "join", "pad_left", "pad_right", "strip_prefix", "strip_suffix"}:
         return BuiltinType.STRING
-    # Methods returning u8[]
     elif method_name == "to_bytes":
         return DynamicArrayType(BuiltinType.U8)
-    # Methods returning string[]
     elif method_name == "split":
         return DynamicArrayType(BuiltinType.STRING)
-    # Methods returning Maybe<T> (parsing methods)
     elif method_name == "to_i32":
         # Return Maybe<i32> - note we need access to enum_table for this
         # This will be handled specially in type_visitor.py
@@ -231,48 +191,30 @@ def get_builtin_string_method_return_type(method_name: str, string_type: Builtin
     return None
 
 
-# ==============================================================================
-# LLVM IR Generation
-# ==============================================================================
-
-
 def generate_module_ir() -> ir.Module:
-    """Generate complete strings module as LLVM IR module.
-
-    This function emits all intrinsics and string methods into a single module.
-    This is the interface called by stdlib/build.py.
-
-    Returns:
-        LLVM IR Module containing all string method implementations.
-    """
-    # Create module
+    """Generate complete strings module as LLVM IR module."""
     from sushi_lang.sushi_stdlib.src.ir_common import create_stdlib_module
     module = create_stdlib_module("collections.strings")
 
-    # === Emit intrinsics ===
     emit_utf8_count_intrinsic(module)
     emit_utf8_byte_offset_intrinsic(module)
     emit_toupper_intrinsic(module)
     emit_tolower_intrinsic(module)
     emit_isspace_intrinsic(module)
 
-    # === Emit basic methods ===
     emit_string_size(module)
     emit_string_len(module)
     # Note: is_empty is NOT included - it's an inline intrinsic in compiler/is_empty.py
     emit_string_concat(module)
 
-    # === Emit conversion methods ===
     emit_string_to_bytes(module)
     emit_string_split(module)
     emit_string_join(module)
 
-    # === Emit case conversion methods ===
     emit_string_upper(module)
     emit_string_lower(module)
     emit_string_cap(module)
 
-    # === Emit search methods ===
     emit_string_starts_with(module)
     emit_string_ends_with(module)
     emit_string_contains(module)
@@ -280,19 +222,16 @@ def generate_module_ir() -> ir.Module:
     emit_string_find_last(module)
     emit_string_count(module)
 
-    # === Emit trim methods ===
     emit_string_trim(module)
     emit_string_tleft(module)
     emit_string_tright(module)
 
-    # === Emit slice methods ===
     emit_string_ss(module)
     emit_string_sleft(module)
     emit_string_sright(module)
     emit_string_char_at(module)
     emit_string_s(module)
 
-    # === Emit modification methods ===
     emit_string_replace(module)
     emit_string_reverse(module)
     emit_string_repeat(module)
@@ -301,7 +240,6 @@ def generate_module_ir() -> ir.Module:
     emit_string_strip_prefix(module)
     emit_string_strip_suffix(module)
 
-    # === Emit parsing methods ===
     emit_string_to_i32(module)
     emit_string_to_i64(module)
     emit_string_to_f64(module)
@@ -310,30 +248,17 @@ def generate_module_ir() -> ir.Module:
 
 
 def generate_strings_module() -> str:
-    """Generate complete strings module as LLVM IR string.
-
-    Convenience wrapper for debugging and direct IR inspection.
-
-    Returns:
-        LLVM IR string for the complete strings module.
-    """
+    """Generate complete strings module as LLVM IR string."""
     return str(generate_module_ir())
 
 
 def compile_to_bitcode(output_path: str = "stdlib/dist/collections/strings.bc"):
-    """Compile the strings module to LLVM bitcode.
-
-    Args:
-        output_path: Path to write the .bc file (default: stdlib/dist/collections/strings.bc)
-    """
-    # Generate IR
+    """Compile the strings module to LLVM bitcode."""
     ir_code = generate_strings_module()
 
-    # Parse IR and create module
     llvm_module = llvm.parse_assembly(ir_code)
     llvm_module.verify()
 
-    # Write bitcode
     with open(output_path, "wb") as f:
         f.write(llvm_module.as_bitcode())
 
@@ -341,10 +266,8 @@ def compile_to_bitcode(output_path: str = "stdlib/dist/collections/strings.bc"):
 
 
 if __name__ == "__main__":
-    # Generate and print IR for debugging
     ir_code = generate_strings_module()
     print(ir_code)
     print("\n" + "=" * 80 + "\n")
 
-    # Compile to bitcode
     compile_to_bitcode()

@@ -1,4 +1,4 @@
-# Guards PLAN.md T1.6: the generic lexer keeps one angle_bracket_depth counter and
+# The generic lexer keeps one angle_bracket_depth counter and
 # increments it on every LT, so an unbalanced comparison `a < b` leaves depth at 1
 # and a later `>>` is split into `> >`, breaking the parse.
 # EXPECT_RUNTIME_EXIT: 0

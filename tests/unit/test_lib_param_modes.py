@@ -1,15 +1,4 @@
-"""A parameter MODE survives a `.slib` boundary.
-
-Before the mode became a declared field, a library could not state a borrow. The
-manifest serialized `peek string` into the type string correctly, but the consumer's
-`parse_type_string` had no reference arm, so it read back `UnknownType("peek string")`
-and the mode was lost. A `nom` had nowhere to be written at all.
-
-The format version is 3 because of this field. A v2 library states no mode, so its
-parameters cannot be told apart from unmarked ones; CE3509 rejects it rather than guess.
-
-See docs/design/borrow-model.md sections 5 and 10.
-"""
+"""A parameter MODE survives a `.slib` boundary."""
 from __future__ import annotations
 
 import struct
@@ -23,9 +12,7 @@ from sushi_lang.semantics.type_resolution import parse_type_string
 from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, ReferenceType
 
 
-# --------------------------------------------------------------------------- #
 # The type-string parser learned peek and poke
-# --------------------------------------------------------------------------- #
 
 @pytest.mark.parametrize("text,mode,referent", [
     ("peek string", BorrowMode.PEEK, BuiltinType.STRING),
@@ -50,9 +37,7 @@ def test_a_dynamic_array_referent_round_trips():
     assert str(ty) == "peek i32[]"
 
 
-# --------------------------------------------------------------------------- #
 # The manifest carries the mode as its own field
-# --------------------------------------------------------------------------- #
 
 MODE_LIB = """\
 use <collections/strings>
@@ -115,9 +100,7 @@ def test_the_consumer_reads_the_same_mode_back(mode_manifest, fn_name):
     assert [param_mode(p) for p in sig.params] == EXPECTED_MODES[fn_name]
 
 
-# --------------------------------------------------------------------------- #
 # A v2 library is rejected, not guessed at
-# --------------------------------------------------------------------------- #
 
 def test_a_v2_library_is_rejected(tmp_path):
     from sushi_lang.backend.library_errors import LibraryError

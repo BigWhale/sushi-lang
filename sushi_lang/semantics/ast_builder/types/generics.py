@@ -13,12 +13,7 @@ if TYPE_CHECKING:
 
 
 def parse_type_list(type_list_node: Tree, ast_builder: 'ASTBuilder') -> List[Type]:
-    """Turn a `type_list` parse node into a list of resolved Types.
-
-    Shared by generic type instantiations (`List@(i32)`) and call-site explicit
-    type arguments (`identity@(i32)(5)`), so both positions interpret a type list
-    identically.
-    """
+    """Turn a `type_list` parse node into a list of resolved Types."""
     type_args: List[Type] = []
     for child in type_list_node.children:
         if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t" or child.data == "generic_type_t"):
@@ -29,18 +24,13 @@ def parse_type_list(type_list_node: Tree, ast_builder: 'ASTBuilder') -> List[Typ
 
 
 def parse_generic_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
-    """Parse generic type instantiation (generic_type_t).
-
-    Syntax: NAME "@" "(" type_list ")". Examples: Result@(i32), Maybe@(string).
-    """
-    # Extract base name
+    """Parse generic type instantiation (generic_type_t)."""
     name_token = first_name(node.children)
     if name_token is None:
         return None
 
     base_name = str(name_token)
 
-    # Extract type arguments from type_list
     type_list_node = first_tree(node.children, "type_list")
     if type_list_node is None:
         return None
@@ -61,14 +51,7 @@ def parse_generic_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
 
 
 def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List[BoundedTypeParam]]:
-    """Parse type_params node and extract bounded type parameters with constraints.
-
-    Grammar: type_params: "@" "(" type_param_list ")"
-             type_param_list: type_param ("," type_param)*
-             type_param: NAME [perk_constraints]
-             perk_constraints: ":" perk_constraint_list
-             perk_constraint_list: NAME ("+" NAME)*
-    """
+    """Parse type_params node and extract bounded type parameters with constraints."""
     if type_params_node is None:
         return None
 
@@ -87,19 +70,15 @@ def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List
                 for c in child.children
             )
 
-            # Extract the parameter name (first_name finds the NAME regardless of
-            # whether an ELLIPSIS prefix is present).
             param_name = first_name(child.children)
             if param_name is None:
                 continue
 
-            # Extract constraints if present
             constraints: List[str] = []
             perk_constraints_node = first_tree(child.children, "perk_constraints")
             if perk_constraints_node is not None:
                 constraint_list_node = first_tree(perk_constraints_node.children, "perk_constraint_list")
                 if constraint_list_node is not None:
-                    # Extract all NAME tokens from constraint list
                     for constraint_child in constraint_list_node.children:
                         if isinstance(constraint_child, Token) and constraint_child.type == "NAME":
                             constraints.append(str(constraint_child))
@@ -111,7 +90,6 @@ def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List
                 is_pack=is_pack,
             ))
         elif isinstance(child, Token) and child.type == "NAME":
-            # Backwards compatibility: direct NAME tokens without constraints
             bounded_params.append(BoundedTypeParam(
                 name=str(child),
                 constraints=[],

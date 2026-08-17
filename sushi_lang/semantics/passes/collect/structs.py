@@ -1,4 +1,3 @@
-# semantics/passes/collect/structs.py
 """Struct definition collection for Phase 0."""
 
 from __future__ import annotations
@@ -29,27 +28,14 @@ class StructTable:
 
 @dataclass
 class GenericStructTable:
-    """Table of generic struct types collected in Phase 0.
-
-    Generic structs are struct definitions with type parameters (e.g., Pair<T, U>).
-    They are stored separately from concrete structs because they need to be
-    instantiated with concrete type arguments during monomorphization.
-    """
+    """Table of generic struct types collected in Phase 0."""
     by_name: Dict[str, GenericStructType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
 
 
 class StructCollector:
-    """Collector for struct definitions.
-
-    Collects both regular and generic struct definitions during Phase 0, validating:
-    - No duplicate names (across regular and generic namespaces)
-    - No duplicate field names within a struct
-    - All fields have explicit type annotations
-
-    Generic structs are stored separately for later monomorphization.
-    """
+    """Collector for struct definitions."""
 
     def __init__(
         self,
@@ -58,25 +44,14 @@ class StructCollector:
         generic_structs: GenericStructTable,
         known_types: Set[Type]
     ) -> None:
-        """Initialize struct collector.
-
-        Args:
-            reporter: Error reporter
-            structs: Shared regular struct table to populate
-            generic_structs: Shared generic struct table to populate
-            known_types: Set of known types for registration
-        """
+        """Initialize struct collector."""
         self.r = reporter
         self.structs = structs
         self.generic_structs = generic_structs
         self.known_types = known_types
 
     def collect(self, root: Program) -> None:
-        """Collect all struct definitions from program AST.
-
-        Args:
-            root: Program AST node
-        """
+        """Collect all struct definitions from program AST."""
         structs = getattr(root, "structs", None)
         if isinstance(structs, list):
             for struct in structs:
@@ -84,16 +59,7 @@ class StructCollector:
                     self._collect_struct_def(struct)
 
     def register_predefined_structs(self) -> None:
-        """Register stdlib-provided structs that are built into the language.
-
-        These are visible to user code globally, independent of any `use` statement
-        (mirroring how EnumCollector.register_predefined_enums registers ProcessError,
-        FileError, etc.). Only stdlib *functions* are gated by `use <...>`.
-
-        Currently:
-            - ProcessOutput { i32 exit_code, string stdout, string stderr }
-              (the success payload of sys/process `run()`).
-        """
+        """Register stdlib-provided structs that are built into the language."""
         from sushi_lang.semantics.typesys import BuiltinType
 
         # Note: fields are named *_text (not stdout/stderr) because `stdin`/`stdout`/
@@ -112,22 +78,16 @@ class StructCollector:
             self.known_types.add(process_output)
 
     def _collect_struct_def(self, struct: StructDef) -> None:
-        """Collect struct definition and create StructType or GenericStructType.
-
-        Args:
-            struct: Struct definition AST node
-        """
+        """Collect struct definition and create StructType or GenericStructType."""
         name = getattr(struct, "name", None)
         if not isinstance(name, str):
             return
 
         name_span: Optional[Span] = getattr(struct, "name_span", None) or getattr(struct, "loc", None)
 
-        # Check if this struct has type parameters (e.g., struct Pair<T, U>:)
         type_params_raw = getattr(struct, "type_params", None)
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
-        # Check for duplicate struct names (both regular and generic namespaces)
         if name in self.structs.by_name:
             note_first_declaration(
                 er.emit_with(self.r, ERR.CE0004, name_span, name=name),
@@ -143,7 +103,6 @@ class StructCollector:
             ).emit()
             return
 
-        # Collect struct fields
         fields_list: List[Tuple[str, Type]] = []
         field_spans: Dict[str, Optional[Span]] = {}
 
@@ -156,7 +115,6 @@ class StructCollector:
             if not isinstance(field_name, str):
                 continue
 
-            # Check for duplicate field names
             if field_name in field_spans:
                 note_first_declaration(
                     er.emit_with(self.r, ERR.CE0005, field_loc,
@@ -166,18 +124,14 @@ class StructCollector:
                 ).emit()
                 continue
 
-            # Check for missing field type
             if field_type is None:
                 er.emit(self.r, ERR.CE0104, field_loc, name=f"field '{field_name}'")
                 continue
 
-            # A reference field has no semantics: nothing relates its borrow to the value
-            # it points at, and reading one is an internal error (CE2415, #315).
-            #
-            # Reported, then KEPT. Dropping the field from the table is error recovery that
-            # makes things worse: every construction of the struct then reports a spurious
-            # CE2027 arity error about a field the user did write. The report already stops
-            # the compile before codegen, which is what the ICE needed protecting from.
+            # A reference field has no semantics, and reading one is an internal error
+            # (CE2415, #315). Reported, then KEPT: dropping it makes every construction
+            # report a spurious CE2027 about a field the user did write, and the report
+            # already stops the compile before codegen.
             reject_reference_in(self.r, field_type, field_loc, ERR.CE2415)
 
             # NOTE: Field types may be TypeParameter instances (e.g., T, U) for generic structs
@@ -185,12 +139,8 @@ class StructCollector:
             field_spans[field_name] = field_loc
             fields_list.append((field_name, field_type))
 
-        # Branch based on whether this is a generic struct or regular struct
         if type_params and len(type_params) > 0:
-            # Generic struct - store in generic_structs table
 
-            # Preserve BoundedTypeParam objects (Phase 4: constraint validation)
-            # Convert to tuple, handling both BoundedTypeParam and legacy string formats
             type_param_instances = tuple(
                 tp if isinstance(tp, BoundedTypeParam)
                 else TypeParameter(name=tp) if isinstance(tp, TypeParameter)
@@ -210,7 +160,6 @@ class StructCollector:
 
             # Note: Generic structs are not added to known_types until instantiated
         else:
-            # Regular struct - store in structs table (existing behavior)
             struct_type = StructType(
                 name=name,
                 fields=tuple(fields_list)
@@ -220,7 +169,6 @@ class StructCollector:
             self.structs.by_name[name] = struct_type
             self.structs.spans[name] = name_span
 
-            # Register struct type as known type for future lookups
             self.known_types.add(struct_type)
 
             # Hash registration is deferred to Pass 1.8 (hash_registration.py)

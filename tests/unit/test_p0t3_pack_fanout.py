@@ -1,20 +1,4 @@
-"""P0-T3: pack value-parameter fan-out in the monomorphizer.
-
-Phase 0 infrastructure (no surface syntax). A variadic-generic function
-conceptually looks like ``fn f<...Ts>(Ts... args)``: a single value-parameter
-whose type is a pack type-param. When monomorphized with a concrete pack
-``(i32, string, bool)``, that ONE value-parameter fans out into N concrete
-value-parameters -- one per pack element. Arity 0 makes the parameter vanish.
-
-These checks drive the real ``Monomorphizer.monomorphize_function`` end-to-end
-(so the functions.py wiring is exercised) and also unit-test
-``TypeSubstitutor.expand_pack_param`` directly for the empty-pack and non-pack
-branches.
-
-Synthetic-fixture pattern mirrors test_p0t1/test_p0t2: the trailing
-``TypeParameter`` carries ``is_pack=True`` set via ``object.__setattr__`` (frozen
-dataclass); param types are concrete and the body is empty.
-"""
+"""P0-T3: pack value-parameter fan-out in the monomorphizer."""
 import pytest
 
 from sushi_lang.semantics.generics.types import TypeParameter, TypePack
@@ -34,12 +18,7 @@ def _param(name, is_pack=False):
 
 
 def _variadic_generic():
-    """``fn log_all<...Ts>(string prefix, Ts... args)`` synthetic fixture.
-
-    The pack VALUE-parameter ``args`` has a bare ``UnknownType("Ts")`` type --
-    the AST-builder shape for a type-parameter reference -- so it is detected
-    as pack-typed once ``Ts`` binds to a ``TypePack``.
-    """
+    """``fn log_all<...Ts>(string prefix, Ts... args)`` synthetic fixture."""
     from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
     from sushi_lang.semantics.ast import Block, Param
 
@@ -62,9 +41,7 @@ def _make_mono():
     return Monomorphizer(reporter=Reporter())
 
 
-# ---------------------------------------------------------------------------
 # end-to-end fan-out via monomorphize_function
-# ---------------------------------------------------------------------------
 
 def test_fanout_arity3():
     mono = _make_mono()
@@ -127,9 +104,7 @@ def test_fanout_preserves_spans():
         assert p.loc is loc
 
 
-# ---------------------------------------------------------------------------
 # regular (non-pack) generic still 1:1 with identical fields
-# ---------------------------------------------------------------------------
 
 def test_regular_generic_one_param_per_param():
     from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
@@ -152,9 +127,7 @@ def test_regular_generic_one_param_per_param():
     assert fn.params[0].is_variadic is False
 
 
-# ---------------------------------------------------------------------------
 # direct expand_pack_param unit tests (empty-pack and non-pack branches)
-# ---------------------------------------------------------------------------
 
 def test_expand_pack_param_empty_pack_returns_empty_list():
     from sushi_lang.semantics.ast import Param

@@ -1,9 +1,4 @@
-"""Validation and table-building for the built-in Result<T, E> methods.
-
-The ir-free half of the former ``backend/generics/results.py``: method
-recognition, Pass-2 argument validation, and on-the-fly ``Result<T, E>``
-enum-table construction. LLVM emission stays in the backend module.
-"""
+"""Validation and table-building for the built-in Result<T, E> methods."""
 from typing import Any, Optional
 
 from sushi_lang.semantics.ast import MethodCall
@@ -15,14 +10,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 
 
 def is_builtin_result_method(method_name: str) -> bool:
-    """Check if a method name is a builtin Result<T, E> method.
-
-    Args:
-        method_name: The name of the method to check.
-
-    Returns:
-        True if this is a recognized Result<T, E> method, False otherwise.
-    """
+    """Check if a method name is a builtin Result<T, E> method."""
     return method_name in ("is_ok", "is_err", "realise", "expect", "err")
 
 
@@ -32,16 +20,7 @@ def validate_result_method_with_validator(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate Result<T, E> method calls.
-
-    Routes to specific validation functions based on method name.
-
-    Args:
-        call: The method call AST node.
-        result_type: The Result<T, E> enum type (after monomorphization).
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-    """
+    """Validate Result<T, E> method calls."""
     # CRITICAL: Annotate the MethodCall with the resolved Result<T, E> type
     # This allows the backend to use the correct type during code generation
     # instead of relying on unreliable LLVM type matching
@@ -58,7 +37,6 @@ def validate_result_method_with_validator(
     elif call.method == "err":
         _validate_result_err(call, result_type, reporter)
     else:
-        # Unknown method - should not happen if is_builtin_result_method was called first
         raise_internal_error("CE0094", method=call.method)
 
 
@@ -67,16 +45,7 @@ def _validate_result_is_ok(
     result_type: EnumType,
     reporter: Any
 ) -> None:
-    """Validate Result<T, E>.is_ok() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        result_type: The Result<T, E> enum type.
-        reporter: Error reporter for emitting validation errors.
-    """
-    # Validate argument count
+    """Validate Result<T, E>.is_ok() method call."""
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="is_ok", expected=0, got=len(call.args))
 
@@ -86,16 +55,7 @@ def _validate_result_is_err(
     result_type: EnumType,
     reporter: Any
 ) -> None:
-    """Validate Result<T, E>.is_err() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        result_type: The Result<T, E> enum type.
-        reporter: Error reporter for emitting validation errors.
-    """
-    # Validate argument count
+    """Validate Result<T, E>.is_err() method call."""
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="is_err", expected=0, got=len(call.args))
 
@@ -105,16 +65,7 @@ def _validate_result_err(
     result_type: EnumType,
     reporter: Any
 ) -> None:
-    """Validate Result<T, E>.err() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        result_type: The Result<T, E> enum type.
-        reporter: Error reporter for emitting validation errors.
-    """
-    # Validate argument count
+    """Validate Result<T, E>.err() method call."""
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="err", expected=0, got=len(call.args))
 
@@ -125,34 +76,15 @@ def _validate_result_expect(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate Result<T, E>.expect(message) method call.
-
-    Validates that:
-    1. Exactly one argument is provided (the error message)
-    2. The message is a string type
-
-    Args:
-        call: The method call AST node.
-        result_type: The Result<T, E> enum type (after monomorphization).
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-
-    Emits:
-        CE2016: If argument count is not exactly 1
-        CE2503: If message is not a string
-    """
-    # Validate argument count
+    """Validate Result<T, E>.expect(message) method call."""
     if len(call.args) != 1:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="expect", expected=1, got=len(call.args))
         return
 
-    # Validate the message argument is a string
     message_arg = call.args[0]
 
-    # First validate the argument expression
     validator.validate_expression(message_arg)
 
-    # Then check it's a string
     from sushi_lang.semantics.typesys import BuiltinType
     arg_type = validator.infer_expression_type(message_arg)
     if arg_type is not None and arg_type != BuiltinType.STRING:
@@ -166,23 +98,7 @@ def validate_result_realise_method_with_validator(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate Result<T>.realise(default) method call.
-
-    Validates that:
-    1. Exactly one argument is provided (the default value)
-    2. The default value type matches T in Result<T>
-
-    Args:
-        call: The method call AST node.
-        result_type: The Result<T> enum type (after monomorphization).
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-
-    Emits:
-        CE2502: If argument count is not exactly 1
-        CE2503: If default value type doesn't match T
-    """
-    # Validate argument count
+    """Validate Result<T>.realise(default) method call."""
     if len(call.args) != 1:
         er.emit(reporter, er.ERR.CE2502, call.loc, got=len(call.args))
         return
@@ -192,7 +108,6 @@ def validate_result_realise_method_with_validator(
     # We need to find the Ok variant and extract its associated type
     ok_variant = result_type.get_variant("Ok")
     if ok_variant is None:
-        # This shouldn't happen for a valid Result<T> enum
         raise_internal_error("CE0089", enum=result_type.name)
 
     if len(ok_variant.associated_types) != 1:
@@ -201,36 +116,26 @@ def validate_result_realise_method_with_validator(
 
     t_type = ok_variant.associated_types[0]
 
-    # Check if T is blank type - if's an error
     from sushi_lang.semantics.typesys import BuiltinType
     if t_type == BuiltinType.BLANK:
         er.emit(reporter, er.ERR.CE2506, call.loc)
         return
 
-    # Validate the default argument's type matches T
     default_arg = call.args[0]
 
-    # Resolve GenericTypeRef to concrete type for propagation
-    # This handles cases like HashMap<i32, string> which may be stored as GenericTypeRef
     from sushi_lang.semantics.type_resolution import TypeResolver
     from sushi_lang.semantics.typesys import StructType
     type_resolver = TypeResolver(validator.struct_table.by_name, validator.enum_table.by_name)
     resolved_t_type = type_resolver.resolve_generic_type_ref(t_type)
 
-    # Propagate expected type to DotCall nodes for generic enums (before validation)
-    # This allows result.realise(Maybe.None()) to work correctly
     from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
     propagate_enum_type_to_dotcall(validator, default_arg, resolved_t_type)
 
-    # Propagate expected type to DotCall nodes for generic structs (before validation)
-    # This allows result.realise(HashMap.new()) to work correctly
     if isinstance(resolved_t_type, StructType):
         propagate_struct_type_to_dotcall(validator, default_arg, resolved_t_type)
 
-    # First validate the argument expression
     validator.validate_expression(default_arg)
 
-    # Then check type compatibility
     arg_type = validator.infer_expression_type(default_arg)
     if arg_type is not None and not validator._types_compatible(arg_type, t_type):
         er.emit(reporter, er.ERR.CE2503, default_arg.loc,
@@ -238,12 +143,7 @@ def validate_result_realise_method_with_validator(
 
 
 def is_result_enum(t: Any) -> bool:
-    """Whether ``t`` is a concrete ``Result<T, E>`` enum.
-
-    Keyed on the interned NAME, not on ``generic_base``: an on-demand intern and a
-    monomorphized instance both spell the name the same way, and the ~15 sites that
-    already ask this question spell it this way too.
-    """
+    """Whether ``t`` is a concrete ``Result<T, E>`` enum."""
     return isinstance(t, EnumType) and t.name.startswith("Result<")
 
 
@@ -272,21 +172,7 @@ def ensure_result_type_in_table(
     err_type: Type,
     struct_table: Optional[dict] = None,
 ) -> Optional[EnumType]:
-    """Ensure ``Result<ok_type, err_type>`` exists in ``enum_table``, creating it if needed.
-
-    Works with just an enum table so both semantic analysis and codegen can call it.
-
-    THE INVARIANT. ``str(UnknownType("StdError"))`` and ``str(EnumType(name="StdError"))`` are
-    both ``"StdError"``, so a Result carrying an *unresolved* payload mangles to the same name
-    as the same Result carrying the resolved one. ``EnumType`` hashes on the name alone but
-    compares on the variants, so a table poisoned with an unresolved payload would hash-match
-    and compare unequal -- a silent cache miss and a duplicate monomorphization, never a crash.
-    That is the failure mode that hides.
-
-    So the payloads are resolved HERE, before the name is built, rather than at the call sites:
-    it must be impossible to intern a Result without resolving it first. The guard below then
-    catches any entry that got in some other way.
-    """
+    """Ensure ``Result<ok_type, err_type>`` exists in ``enum_table``, creating it if needed."""
     from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
     from sushi_lang.semantics.type_predicates import is_abstract_type
@@ -302,12 +188,9 @@ def ensure_result_type_in_table(
     err_variant = EnumVariantInfo(name="Err", associated_types=(err_type,))
     variants = (ok_variant, err_variant)
 
-    # An abstract Result -- `Result<Either<U, T>, StdError>` from inside a generic body, whose
-    # payloads still name the enclosing template's own type params -- is not a real type. Hand
-    # the caller the enum it asked for, but keep it OUT of the table: interning it would strand
-    # the enum topological sort on an `Either<U, T>` that is never itself interned, which is
-    # then misreported as a recursive enum (CE2052). The concrete instantiations are interned
-    # separately, at the call sites that bind the parameters.
+    # An abstract Result, whose payloads still name an enclosing template's type params, is
+    # not a real type: hand it back but keep it OUT of the table. Interning it strands the
+    # topological sort on a type never interned, misreported as CE2052.
     if (is_abstract_type(ok_type, structs, enums)
             or is_abstract_type(err_type, structs, enums)):
         return EnumType(
@@ -319,8 +202,6 @@ def ensure_result_type_in_table(
 
     existing = enums.get(result_enum_name)
     if existing is not None:
-        # Same name, different payloads: one of the two was interned unresolved. Fail loudly
-        # at the moment of corruption rather than let it decay into a cache miss.
         if existing.variants and existing.variants != variants:
             raise_internal_error(
                 "CE0126",
@@ -340,7 +221,6 @@ def ensure_result_type_in_table(
     enums[result_enum_name] = result_enum
     enum_table.order.append(result_enum_name)
 
-    # Register the auto-derived hash() for the on-demand type (mirrors Pass 1.8).
     can_hash, _ = can_enum_be_hashed(result_enum)
     if can_hash:
         register_enum_hash_method(result_enum)

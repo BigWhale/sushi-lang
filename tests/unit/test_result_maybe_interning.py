@@ -1,10 +1,4 @@
-"""`Result<T, E>` and `Maybe<T>` must intern into the enum table on identical terms.
-
-`Maybe<T>` has always been an ordinary interned `EnumType`. `Result<T, E>` additionally has a
-bespoke `ResultType` dataclass, and that dual representation is the root of #179 (RAII leak)
-and #184 (type identity). These tests pin the properties the consolidation depends on, so a
-regression turns the suite red rather than decaying into a silent cache miss.
-"""
+"""`Result<T, E>` and `Maybe<T>` must intern into the enum table on identical terms."""
 from __future__ import annotations
 
 import pytest
@@ -46,13 +40,7 @@ def table_with_std_error() -> FakeEnumTable:
 # --- the invariant -------------------------------------------------------------------
 
 def test_unresolved_error_payload_is_resolved_before_interning():
-    """`UnknownType("StdError")` must not reach the table as a payload.
-
-    `str(UnknownType("StdError")) == str(EnumType("StdError")) == "StdError"`, so both spellings
-    mangle to the SAME enum name. `EnumType` hashes on the name but compares on the variants, so
-    an unresolved payload would hash-match and compare unequal -- a silent cache miss. The
-    resolution happens inside ensure_result_type_in_table so a caller cannot opt out.
-    """
+    """`UnknownType("StdError")` must not reach the table as a payload."""
     table = table_with_std_error()
 
     interned = ensure_result_type_in_table(table, BuiltinType.STRING, UnknownType("StdError"))
@@ -104,13 +92,7 @@ def test_interning_is_idempotent():
 
 
 def test_maybe_unresolved_payload_is_resolved_before_interning():
-    """The invariant is not Result-specific: Maybe<T> mangles its name the same way.
-
-    `str(UnknownType("Point"))` and `str(StructType(name="Point"))` are both "Point", so a Maybe
-    interned with an unresolved payload lands under the SAME name as the monomorphized one while
-    carrying different variants -- it hash-matches and compares unequal. Silent, exactly like the
-    Result case (CE0126).
-    """
+    """The invariant is not Result-specific: Maybe<T> mangles its name the same way."""
     point = StructType(name="Point", fields=(("x", BuiltinType.I32),))
     table = FakeEnumTable({"Point": point})
 
@@ -143,11 +125,7 @@ def test_maybe_poisoned_intern_raises_rather_than_silently_missing():
 # --- generic metadata (the CE2060 hole) ----------------------------------------------
 
 def test_on_demand_maybe_carries_generic_metadata():
-    """`unify.py` matches a `Maybe<T>` parameter by reading generic_base/generic_args.
-
-    Without them an on-demand `Maybe` (the return of `List.get` and friends) unified against
-    nothing and generic inference died with CE2060.
-    """
+    """`unify.py` matches a `Maybe<T>` parameter by reading generic_base/generic_args."""
     table = FakeEnumTable()
 
     maybe_i32 = ensure_maybe_type_in_table(table, BuiltinType.I32)

@@ -1,6 +1,5 @@
 # #344: `.destroy()` through the binding releases the OWNER's storage, which the owner
-# then releases again at scope exit -- a double free that compiled clean. This is F4 of
-# the reference-seam review (`old/BORROW.md`) one mechanism over.
+# then releases again at scope exit -- a double free that compiled clean.
 # EXPECT_ERROR_CODE: CE2426
 struct Holder:
     i32[] items

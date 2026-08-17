@@ -3,7 +3,7 @@
 # value is never destroyed. So `a` and `h.data` alias one buffer and both free it, while
 # the buffer `h.data` used to hold is leaked. The borrow checker cannot help either --
 # `borrow.py` gates move marking on `isinstance(stmt.target, Name)`, so a field target is
-# never considered a sink at all. MM.md S2 row 2; no upstream issue.
+# never considered a sink at all.
 # EXPECT_STDOUT_EXACT: "h=3\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

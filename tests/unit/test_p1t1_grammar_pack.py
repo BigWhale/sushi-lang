@@ -1,14 +1,4 @@
-"""P1-T1 parse spike: grammar for variadic-generic type packs + ``expand(...)``.
-
-This task is a pure PARSE gate. It proves the two grammar additions
-
-  (a) ``type_param: ELLIPSIS? NAME [perk_constraints]``  -- ``<...Ts>`` packs
-  (b) ``expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block``
-
-parse unambiguously and without regressing any existing surface, BEFORE any
-AST builder / semantic support exists (those are P1-T2/T3). We therefore drive
-the raw Lark parser directly and never run the ASTBuilder over the new syntax.
-"""
+"""P1-T1 parse spike: grammar for variadic-generic type packs + ``expand(...)``."""
 from __future__ import annotations
 
 import pytest
@@ -36,9 +26,7 @@ def parser() -> Lark:
     return _parser()
 
 
-# --------------------------------------------------------------------------- #
 # ACCEPT: new surface (type-pack decls + value pack param + expand statement)
-# --------------------------------------------------------------------------- #
 
 ACCEPT_NEW = [
     # Constrained type-pack, value pack param, expand statement together.
@@ -62,9 +50,7 @@ def test_accepts_new_pack_and_expand_surface(parser: Lark, src: str) -> None:
     parser.parse(src)  # must not raise
 
 
-# --------------------------------------------------------------------------- #
 # ACCEPT: regression -- pre-existing surface must keep parsing unchanged
-# --------------------------------------------------------------------------- #
 
 ACCEPT_REGRESSION = [
     # v1 native variadic ``...T`` (reuses the untouched variadic_param rule).
@@ -86,9 +72,7 @@ def test_accepts_existing_surface(parser: Lark, src: str) -> None:
     parser.parse(src)  # must not raise
 
 
-# --------------------------------------------------------------------------- #
 # REJECT: malformed forms must raise a parse error
-# --------------------------------------------------------------------------- #
 
 REJECT = [
     # expand with no iterable expression.
@@ -113,9 +97,7 @@ def test_rejects_malformed(parser: Lark, src: str) -> None:
         parser.parse(src)
 
 
-# --------------------------------------------------------------------------- #
 # Tree-shape pins for downstream P1-T2/T3 (loud failure if shapes drift)
-# --------------------------------------------------------------------------- #
 
 def test_type_pack_tree_shape(parser: Lark) -> None:
     """type_param of a pack carries the ELLIPSIS token as its first child."""

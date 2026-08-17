@@ -1,9 +1,4 @@
-"""
-Core runtime coordinator for LLVM code generation.
-
-This module provides the main LLVMRuntime class that coordinates all runtime
-operations by delegating to specialized sub-modules.
-"""
+"""Core runtime coordinator for LLVM code generation."""
 from __future__ import annotations
 
 import typing
@@ -22,22 +17,12 @@ if typing.TYPE_CHECKING:
 
 
 class LLVMRuntime:
-    """Main runtime coordinator that manages all runtime support operations.
-
-    This class delegates to specialized sub-modules for different categories
-    of runtime operations, providing a unified interface while maintaining
-    clean separation of concerns.
-    """
+    """Main runtime coordinator that manages all runtime support operations."""
 
     def __init__(self, codegen: LLVMCodegen) -> None:
-        """Initialize runtime support with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context and module.
-        """
+        """Initialize runtime support with reference to main codegen instance."""
         self.codegen = codegen
 
-        # Initialize sub-modules
         self.libc_strings = LibCStrings(codegen)
         self.libc_ctype = LibCCType(codegen)
         self.libc_process = LibCProcess(codegen)
@@ -47,23 +32,12 @@ class LLVMRuntime:
         self.errors = RuntimeErrors(codegen)
 
     def declare_externs(self) -> None:
-        """Declare all external runtime functions and global constants.
-
-        Orchestrates the declaration of all external C library functions
-        and global constants needed for runtime support.
-
-        The symbols declared here are mirrored by RESERVED_EXTERNS in
-        semantics/externs_manifest.py, which Pass 0 uses for CE5001 clash
-        detection. tests/unit/test_ffi.py keeps the two in sync.
-        """
-        # Declare external C library functions
+        """Declare all external runtime functions and global constants."""
         self.libc_strings.declare_all()
         self.libc_ctype.declare_all()
         self.libc_process.declare_all()
         self.libc_stdio.declare_all()
 
-        # Declare UTF-8 support functions
         self.strings.declare_utf8_functions()
 
-        # Declare format strings
         self.formatting.declare_format_strings()

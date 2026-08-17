@@ -1,21 +1,11 @@
-"""On-the-fly stdlib bitcode builder.
-
-The precompiled stdlib `.bc` under `sushi_stdlib/dist/{platform}/` are build
-artifacts (not tracked in git). This module keeps the current platform's `.bc`
-present and fresh: it compares a content fingerprint of the generator sources
-against a per-platform marker and rebuilds via `build.py` when they diverge, so
-editing an IR-generator is picked up on the next compile instead of silently
-linking stale bitcode.
-"""
+"""On-the-fly stdlib bitcode builder."""
 from __future__ import annotations
 
 from pathlib import Path
 
-# sushi_lang/backend/stdlib_builder.py -> sushi_lang/sushi_stdlib/dist
 _DIST_DIR = Path(__file__).resolve().parent.parent / "sushi_stdlib" / "dist"
 _MARKER_NAME = ".build_fingerprint"
 
-# Run the freshness check at most once per process (per platform).
 _checked: set[str] = set()
 
 
@@ -61,12 +51,7 @@ def _is_fresh(platform_name: str) -> bool:
 
 
 def ensure_stdlib_built(platform_name: str | None = None) -> None:
-    """Auto-build the current platform's stdlib `.bc` if missing or stale.
-
-    Memoized per process, so it runs at most once per compile. On a fingerprint
-    mismatch (or a missing dist dir/marker) it prints a one-line notice, rebuilds
-    via `build_all`, and refreshes the marker.
-    """
+    """Auto-build the current platform's stdlib `.bc` if missing or stale."""
     if platform_name is None:
         platform_name = detect_platform()
 

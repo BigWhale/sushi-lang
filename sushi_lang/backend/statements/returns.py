@@ -1,9 +1,4 @@
-"""
-Return statement emission for the Sushi language compiler.
-
-This module handles the generation of LLVM IR for return statements with
-proper RAII cleanup of resources before exiting functions.
-"""
+"""Return statement emission for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -14,102 +9,42 @@ if TYPE_CHECKING:
 
 
 def _extract_return_variables(expr: 'Expr') -> set[str]:
-    """Extract variable names from return expression.
-
-    Returns the names of variables that are being returned, so they
-    can be excluded from RAII cleanup (move semantics).
-
-    Examples:
-        return Result.Ok(container)  → {'container'}
-        return Result.Ok(x)          → {'x'}
-        return Result.Ok(~)          → {}
-        return Result.Err()          → {}
-
-    Args:
-        expr: The return expression to analyze.
-
-    Returns:
-        Set of variable names being returned.
-    """
+    """Extract variable names from return expression."""
     from sushi_lang.semantics.ast import EnumConstructor, DotCall, Name
 
     if isinstance(expr, EnumConstructor):
-        # Result.Ok(value) or Result.Err()
         if expr.args:
-            # Recursively extract from the first argument
             return _extract_return_variables(expr.args[0])
     elif isinstance(expr, DotCall):
-        # DotCall node (unified X.Y(args)) - check if it's an enum constructor
-        # For returns, this is typically Result.Ok(value) or Result.Err()
         if expr.args:
-            # Recursively extract from the first argument
             return _extract_return_variables(expr.args[0])
     elif isinstance(expr, Name):
-        # Simple variable reference
         return {expr.id}
 
-    # Other expressions (literals, method calls, etc.) don't have variables to move
     return set()
 
 
 def emit_return(codegen: 'LLVMCodegen', stmt: 'Return') -> None:
-    """Emit return statement with Result<T> value or bare value for extension methods.
-
-    For regular functions: stmt.value is Ok(expr) or Err(), which emit_expr
-    will convert to a Result struct {i1 is_ok, T value}.
-
-    For extension methods: stmt.value is a bare expression (e.g., self + value),
-    which emit_expr will evaluate directly.
-
-    RAII: Generates cleanup code for all active scopes before the return instruction.
-    Move semantics: Variables being returned are marked as moved to prevent cleanup.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The return statement to emit.
-
-    Raises:
-        TypeError: If the return type is not supported.
-    """
-    # A `return` hands the value to the caller, so the local that produced it must stop
-    # owning it -- but this position must NOT decide that on its own. It used to: six
-    # ad-hoc type branches that marked the source moved BEFORE the value was emitted. Once
-    # the payload position started deciding too (`return Result.Ok(cwd)` consumes `cwd` at
-    # ENUM_PAYLOAD), the two derivations fought: the pre-move said "moved, skip cleanup"
-    # and the seam said "copy type, clone it", so the original was cloned AND never freed.
-    #
-    # `Result.Ok(x)` / `Maybe.Some(x)` is already an ENUM_PAYLOAD consuming use, so the
-    # whole job here is the shapes that are not: an extension method's bare `return value`.
-    # A wrapped return reaches the seam as a FRESH constructor and is a no-op.
-    # An extension method returns the bare value; a regular function returns the
-    # `Result.Ok(...)` / `Result.Err(...)` the source wrote. Both are just this expression.
+    """Emit return statement with Result<T> value or bare value for extension methods."""
+    # `Result.Ok(x)` is already an ENUM_PAYLOAD consuming use, so the job here is the
+    # shapes that are not: an extension method's bare `return value`. This position must
+    # NOT decide ownership on its own -- marking the source moved before the value was
+    # emitted fought the payload position, and the original was cloned AND never freed.
     value = codegen.expressions.emit_expr(stmt.value)
     value = _consume_returned_value(codegen, stmt, value)
 
-    # RAII: cleanup for all resources. Ordering is the whole reason RETURN is its own
-    # position: the value is emitted and consumed BEFORE cleanup runs, so a MOVE has
-    # already flagged the source (cleanup skips it) and a COPY has already taken its
-    # independent buffer (cleanup frees the original). Cleaning up first would hand the
-    # caller a freed buffer, which is what #256 was.
+    # ORDERING is the whole reason RETURN is its own position: the value is emitted and
+    # consumed BEFORE cleanup, so a MOVE has already flagged the source. Cleaning up first
+    # hands the caller a freed buffer (#256).
     from sushi_lang.backend.statements import utils
     utils.emit_scope_cleanup(codegen, cleanup_type='all')
 
-    # Return the value (Result struct for functions, bare value for extension methods)
     codegen.builder.ret(value)
 
 
 def _consume_returned_value(codegen: 'LLVMCodegen', stmt: 'Return',
                             value: 'ir.Value') -> 'ir.Value':
-    """Route a bare returned value through the ownership seam.
-
-    Only the shapes that are not already a consuming use reach a decision here. A
-    `return Result.Ok(x)` consumed `x` at ENUM_PAYLOAD while emitting, and the
-    constructor itself is FRESH, so this is a no-op for it -- the common case.
-
-    The type comes from the source local, not from the function signature: an extension
-    method's declared return type and the local's type agree by Pass 2, and the local is
-    what has to stop owning the value.
-    """
+    """Route a bare returned value through the ownership seam."""
     from sushi_lang.semantics.ast import Name
     from sushi_lang.backend.ownership import ConsumingUse, consume
 

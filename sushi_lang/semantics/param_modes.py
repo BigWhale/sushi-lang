@@ -1,23 +1,4 @@
-"""Parameter modes: the declared convention for one value crossing a call boundary.
-
-THE authority for "who frees this argument?". Before this module the compiler read the
-convention off the callee's *implementation*, so six kinds of callee gave four different
-answers and two of them disagreed with each other -- a false CE2405 at every stdlib call
-site that passed an owning value. The mode is now a property of the DECLARATION, and both
-Pass 3 and the backend read it from here.
-
-The normative spec is `docs/design/borrow-model.md`.
-
-Two invariants hold this together, and both are pinned by
-`tests/unit/test_param_mode_invariant.py`:
-
-1. **The mode is `PEEK` or `POKE` if and only if the parameter's type is a
-   `ReferenceType` with that mutability.** There is one derivation (`mode_of_type`) and
-   nothing else may compute a mode. Two spellings of one fact drift; one does not.
-2. **`CalleeKind` is CLOSED.** A member with no row in the coverage test is a red test,
-   the same property that makes `ConsumingUse` work
-   (`docs/design/ownership-conventions.md` S3.1).
-"""
+"""Parameter modes: the declared convention for one value crossing a call boundary."""
 from __future__ import annotations
 
 from enum import Enum
@@ -27,11 +8,7 @@ from sushi_lang.semantics.typesys import ReferenceType, Type
 
 
 class ParamMode(Enum):
-    """How ONE parameter takes its argument.
-
-    `BORROW` is the unmarked mode: the caller keeps the value and frees it. It is
-    written at neither end.
-    """
+    """How ONE parameter takes its argument."""
 
     BORROW = "borrow"   # unmarked      -- caller frees; the argument stays usable
     NOM = "nom"         # `nom T x`     -- callee frees; a later use is CE2405
@@ -80,12 +57,7 @@ _UNMARKED_STILL_CONSUMES: frozenset[CalleeKind] = frozenset()
 
 
 def mode_of_type(ty: Optional[Type], is_nom: bool = False) -> ParamMode:
-    """THE derivation of a declared mode. Nothing else may compute one.
-
-    `peek` / `poke` ride on the type as a `ReferenceType`, so they are read off it and
-    can never disagree with it. `nom` is the one mode bit a type cannot carry, so it
-    arrives as a flag.
-    """
+    """THE derivation of a declared mode. Nothing else may compute one."""
     if isinstance(ty, ReferenceType):
         return ParamMode.POKE if ty.is_poke() else ParamMode.PEEK
     return ParamMode.NOM if is_nom else ParamMode.BORROW
@@ -104,12 +76,7 @@ def declared_modes(params: Optional[Iterable]) -> Tuple[ParamMode, ...]:
 
 def normalize_modes(param_types: Sequence[Type],
                     param_modes: Optional[Sequence[ParamMode]]) -> Tuple[ParamMode, ...]:
-    """The modes of a `FunctionType`, with invariant 1 enforced by construction.
-
-    A function type built with no modes and one built with all-default modes are the
-    same type, which is what keeps `FunctionType.__eq__` from splitting on how the type
-    happened to be constructed.
-    """
+    """The modes of a `FunctionType`, with invariant 1 enforced by construction."""
     raw = tuple(param_modes) if param_modes is not None else ()
     out = []
     for i, ty in enumerate(param_types):
@@ -119,11 +86,7 @@ def normalize_modes(param_types: Sequence[Type],
 
 
 def effective_modes(modes: Sequence[ParamMode], kind: CalleeKind) -> Tuple[ParamMode, ...]:
-    """What the declared modes MEAN at a call to this kind of callee.
-
-    The identity function, except for the two kinds that consume by POSITION and have
-    nothing declared: a struct/enum field and a container slot.
-    """
+    """What the declared modes MEAN at a call to this kind of callee."""
     if kind in _ALWAYS_CONSUMES or kind in _UNMARKED_STILL_CONSUMES:
         # Only the UNMARKED mode is reinterpreted. A by-pointer mode is never turned
         # into a consume -- it does not even pass the value -- and an explicit `nom` is
@@ -138,13 +101,7 @@ def modes_for(params: Optional[Iterable], kind: CalleeKind) -> Tuple[ParamMode, 
 
 
 class CalleeModes:
-    """THE resolver: "what are the modes of the callee named here?".
-
-    A `Call` node is one shape for six different things, and only this class knows which
-    is which. It is built from tables, not from AST, so both halves of the compiler can
-    hold one and reach the same answer -- which is the property the six-conventions bug
-    did not have.
-    """
+    """THE resolver: "what are the modes of the callee named here?"."""
 
     def __init__(self, *, func_sigs=None, struct_names=None, stdlib_sigs=None):
         self._func_sigs = func_sigs or {}
@@ -152,11 +109,7 @@ class CalleeModes:
         self._stdlib_sigs = stdlib_sigs or {}
 
     def kind_of(self, name: str, local_type: Optional[Type] = None) -> CalleeKind:
-        """Which kind of callee `name` denotes at a call site.
-
-        `local_type` is the type of a LOCAL of that name, if one is in scope; a local
-        function value shadows a same-named top-level function, so it is asked first.
-        """
+        """Which kind of callee `name` denotes at a call site."""
         from sushi_lang.semantics.typesys import FunctionType
         if isinstance(local_type, FunctionType):
             return CalleeKind.INDIRECT
@@ -176,13 +129,7 @@ class CalleeModes:
         return self._func_sigs.get(name) or self._stdlib_sigs.get(name)
 
     def variadic_from(self, name: str) -> Optional[int]:
-        """The index at which trailing arguments collect into a `...T` array, or None.
-
-        A trailing variadic argument is not a call argument at all: it becomes an
-        ELEMENT of the array the CALLER synthesizes, which the callee then owns. So it
-        transfers whatever the parameter's own mode is. Both a user variadic and a
-        stdlib one (`run`) answer here -- the caller-side collection is the same code.
-        """
+        """The index at which trailing arguments collect into a `...T` array, or None."""
         sig = self._func_sigs.get(name)
         params = getattr(sig, "params", None) if sig is not None else None
         if params and getattr(params[-1], "is_variadic", False):
@@ -194,15 +141,7 @@ class CalleeModes:
         return None
 
     def variadic_callee_owns(self, name: str) -> bool:
-        """Does the CALLEE free the collected `...T` array, or does the caller keep it?
-
-        A Sushi `...T` body registers the array (`begin_function`), so the callee owns
-        it. A stdlib variadic -- `run` is the only one -- is generated IR that frees
-        nothing, so the caller keeps it. That is the one place the collected array's
-        owner still depends on the callee's implementation, and it is stated HERE rather
-        than derived at each of the three sites that need it (docs/design/borrow-model.md
-        S7 defers a consuming variadic).
-        """
+        """Does the CALLEE free the collected `...T` array, or does the caller keep it?"""
         return name not in self._stdlib_sigs
 
     def for_name(self, name: str, local_type: Optional[Type] = None
@@ -217,12 +156,7 @@ class CalleeModes:
 
     def mode_at(self, modes: Sequence[ParamMode], index: int,
                 kind: CalleeKind) -> ParamMode:
-        """The mode of argument `index`, for a callee whose arity may not be known.
-
-        An argument past the declared list belongs to a callee this resolver could not
-        find. Answering with the kind's unmarked meaning keeps such a call behaving the
-        way it did before the mode existed.
-        """
+        """The mode of argument `index`, for a callee whose arity may not be known."""
         if index < len(modes):
             return modes[index]
         return effective_modes((ParamMode.BORROW,), kind)[0]

@@ -1,10 +1,4 @@
-"""Unit tests for native variadic '...T' internals the .sushi corpus cannot pin.
-
-Covers:
-- The move handshake / no-leak property: the synthesized variadic T[] is freed
-  exactly once -- inside the callee (RAII), and NOT in the caller (which moved it).
-- CE0116: a public variadic function aborts the .slib manifest.
-"""
+"""Unit tests for native variadic '...T' internals the .sushi corpus cannot pin."""
 from __future__ import annotations
 
 import pytest
@@ -24,16 +18,7 @@ from tests.unit.test_ffi import (
 
 
 def test_variadic_array_freed_exactly_once_in_callee(tmp_path):
-    """The synthesized variadic T[] is freed exactly once, inside the callee.
-
-    The caller synthesizes an owned i32[] from the trailing args and *moves* it into
-    the callee, marking its temp moved so the caller does NOT free it. The callee owns
-    the array and frees it via the normal dynamic-array RAII drain at scope exit.
-
-    Guards the move handshake: exactly one free total, and it lives in `sum`, not in
-    `main`/`user_main`. A double-free (caller also freeing) or a leak (no free) both
-    break this.
-    """
+    """The synthesized variadic T[] is freed exactly once, inside the callee."""
     src = (
         "fn sum(...i32 nums) i32:\n"
         "    let i32 total = 0\n"

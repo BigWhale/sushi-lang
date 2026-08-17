@@ -1,4 +1,4 @@
-# Guards PLAN.md T1.1: a float-to-unsigned cast must emit `fptoui`, not `fptosi`.
+# A float-to-unsigned cast must emit `fptoui`, not `fptosi`.
 # 3000000000.0 exceeds i32::MAX, so fptosi saturates to 2147483647.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "3000000000\n"
