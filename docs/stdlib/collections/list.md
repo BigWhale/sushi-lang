@@ -19,10 +19,11 @@ Generic growable array with automatic memory management.
 - **Iterator support**: Works with foreach loops
 - **RAII cleanup**: Automatic recursive element destruction
 
-`List@(T)` is an owning type: assigning it, or passing it by value to a function, **moves**
-it (the source binding can no longer be used; the destination now owns and frees it). Borrow
-it with `peek List@(T)` / `poke List@(T)` to use it without transferring ownership. There is no
-direct `list[i]` indexing operator (unlike `T[]` arrays) — use `.get(i)` for safe access.
+`List@(T)` is an owning type: assigning it, or handing it to a `nom` parameter, **moves**
+it (the source binding can no longer be used; the destination now owns and frees it). An
+ordinary parameter borrows, so `f(list)` leaves the list yours; `peek List@(T)` /
+`poke List@(T)` borrow by pointer, which is what lets a callee mutate it in place. There is
+no direct `list[i]` indexing operator (unlike `T[]` arrays) — use `.get(i)` for safe access.
 
 ## Construction
 

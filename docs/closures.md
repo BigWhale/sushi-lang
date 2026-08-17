@@ -141,11 +141,23 @@ Function types stay **invariant and capture-agnostic**: `fn(i32) -> i32` names b
 and any closure of that shape — capture is not part of the type. A mismatch is still **CE2002**
 (assignment) or **CE2092** (call-through), exactly as in v1.
 
+A function type DOES carry each parameter's **mode**, and is invariant on it:
+`fn(nom string) -> i32` and `fn(string) -> i32` are different types in both directions, and so
+are `fn(peek T)` and `fn(poke T)`. Without that, one indirection would defeat the mode rule —
+which is exactly what issue #335 showed for the borrow modes. See
+[docs/design/borrow-model.md](design/borrow-model.md).
+
+**A closure VALUE is an owning value like any other.** Passing one to an unmarked parameter
+borrows it, so the caller keeps and frees the environment; passing it to a `nom` parameter hands
+the environment over. `compose(nom g, nom f)` in `<collections/iter>` is the shape that needs
+`nom`: the closure it returns captures both arguments, so it becomes their owner.
+
 ## Error codes
 
 | Code | Meaning |
 | --- | --- |
 | **CE2094** | illegal closure capture — a `peek`/`poke` borrow, or an owning lambda-parameter type |
+| **CE2427** | a `nom` marker on a function-value argument that disagrees with the callee's declared mode |
 | **CE2092** | function value type mismatch at call-through (reused, unchanged from v1) |
 | **CE2002** | function value assigned to an incompatible function-typed variable (reused, unchanged from v1) |
 

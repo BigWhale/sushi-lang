@@ -24,7 +24,7 @@ of `size` (the 2-field / 12-byte alternative).
 String-value RAII (#145) has to free heap strings (interpolation, string methods,
 `to_string*`, int/float formatting) but must never free a global-backed literal. The
 two are the **same `string` type** and flow indistinguishably through generics,
-containers, `Result`/`Maybe` payloads, and by-value parameters. Ownership therefore
+containers, `Result`/`Maybe` payloads, and `nom` parameters. Ownership therefore
 cannot be recovered from the static type.
 
 The considered alternative was **compile-time ownership tracking** (mark each binding
@@ -92,7 +92,7 @@ changed is a different question entirely: whether a `string` *value* is copied o
 ownership sink. See `docs/design/ownership-conventions.md` for the full model; the short version:
 
 A `string` now **moves** by value like every other type that owns heap (`T[]`, `List@(T)`,
-`Own@(T)`, `HashMap@(K, V)`, a capturing closure). Passing a `string` local to a by-value parameter,
+`Own@(T)`, `HashMap@(K, V)`, a capturing closure). Passing a `string` local to a `nom` parameter,
 rebinding it, or putting it in a constructor field moves it — reusing the source afterward is
 **CE2405**. The one exception: a `string` bound directly from a string literal (`let string s =
 "hi"`) owns nothing (it points into `.rodata` with `owned = 0`), so *that binding* classifies as

@@ -71,7 +71,8 @@ and LLVM-powered code generation.
 - Generic functions with automatic type inference and perk constraints
 - Perks (traits/interfaces) for polymorphic behavior with static dispatch
 - Error propagation operator (`??`) for ergonomic error handling
-- References (`peek`/`poke`) with compile-time borrow checking
+- Parameter modes: a parameter borrows by default, `nom` hands the value over, and
+  `peek`/`poke` borrow by pointer, all with compile-time borrow checking
 - `Own@(T)` heap allocation for recursive types (linked lists, trees)
 - Extension methods for zero-cost method chaining
 - Closures / lambdas (`|x| expr`) with RAII-managed, move-semantics captures
@@ -212,17 +213,25 @@ fn main() i32:
 
 ### Memory Safety
 
-Compile-time borrow checking and RAII:
+Compile-time borrow checking and RAII. A parameter borrows unless it says `nom`, and a
+marked mode is written at both ends:
 
 ```sushi
 fn increment(poke i32 counter) ~:
     counter := counter + 1
     return Result.Ok(~)
 
+fn eat(nom i32[] items) i32:
+    return Result.Ok(items.len())   # items is freed here
+
 fn main() i32:
     let i32 count = 0
     increment(poke count)
-    println("Count: {count}")  # 1
+    println("Count: {count}")       # 1
+
+    let i32[] data = from([1, 2, 3])
+    println(eat(nom data).realise(-1))
+    # println(data.len())           # CE2405: data was handed over
     return Result.Ok(0)
 ```
 
@@ -267,7 +276,7 @@ extend i32 with Display:
 
 extend string with Display:
     fn display() string:
-        return self
+        return self.clone()
 
 fn print_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):          # compile-time unrolled, not a runtime loop

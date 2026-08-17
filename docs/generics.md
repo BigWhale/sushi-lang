@@ -134,12 +134,12 @@ Sushi supports generic functions with automatic type inference from call sites. 
 ### Type Parameter Syntax
 
 ```sushi
-fn identity@(T)(T value) T:
+fn identity@(T)(nom T value) T:
     return Result.Ok(value)
 
 fn main() i32:
-    let i32 x = identity(42).realise(0)          # T inferred as i32
-    let string s = identity("Ford").realise("")  # T inferred as string
+    let i32 x = identity(nom 42).realise(0)          # T inferred as i32
+    let string s = identity(nom "Ford").realise("")  # T inferred as string
 
     println("x={x}, s={s}")
 
@@ -149,7 +149,14 @@ fn main() i32:
 !!! note
     These examples use `.realise(default)` to unwrap the returned `Result` because the `??`
     operator is discouraged inside `main()` (it produces warning CW2511). Inside other
-    functions, `let i32 x = identity(42)??` is the idiomatic form.
+    functions, `let i32 x = identity(nom 42)??` is the idiomatic form.
+
+!!! note "Why `nom`"
+    `identity` HANDS ITS ARGUMENT ONWARD -- it returns it -- so the parameter declares `nom`
+    and the call site says so too. A parameter borrows by default, and a borrow cannot be
+    returned (`CE2411`). The mode is part of the signature, so it is the same for every
+    instantiation: `nom T` even where `T` is an `i32` that owns nothing. See
+    [docs/design/borrow-model.md](design/borrow-model.md).
 
 ### Multiple Type Parameters
 
@@ -158,12 +165,12 @@ struct Pair@(T, U):
     T first
     U second
 
-fn make_pair@(T, U)(T first, U second) Pair@(T, U):
+fn make_pair@(T, U)(nom T first, nom U second) Pair@(T, U):
     return Result.Ok(Pair(first: first, second: second))
 
 fn main() i32:
     # T=i32, U=string inferred from arguments
-    let Pair@(i32, string) p = make_pair(42, "answer").realise(Pair(first: 0, second: ""))
+    let Pair@(i32, string) p = make_pair(nom 42, nom "answer").realise(Pair(first: 0, second: ""))
     println("Pair: {p.first}, {p.second}")
 
     return Result.Ok(0)
@@ -178,12 +185,12 @@ caller, so the variable still needs an explicit type annotation:
 struct Box@(T):
     T value
 
-fn wrap@(T)(T value) Box@(T):
-    return Result.Ok(Box(value: value))
+fn wrap@(T)(nom T value) Box@(T):
+    return Result.Ok(Box(value: value))   # a struct field takes ownership, so `nom`
 
 fn main() i32:
-    let Box@(i32) b1 = wrap(42).realise(Box(value: 0))
-    let Box@(string) b2 = wrap("hello").realise(Box(value: ""))
+    let Box@(i32) b1 = wrap(nom 42).realise(Box(value: 0))
+    let Box@(string) b2 = wrap(nom "hello").realise(Box(value: ""))
 
     println("Wrapped int: {b1.value}")
     println("Wrapped string: {b2.value}")
@@ -578,7 +585,7 @@ extend Robot with Describable:
     fn describe() string:
         return "Robot {self.name}"
 
-fn make_pair@(T, U)(T first, U second) Pair@(T, U):
+fn make_pair@(T, U)(nom T first, nom U second) Pair@(T, U):
     return Result.Ok(Pair(first: first, second: second))
 
 fn announce@(T: Describable)(T item) ~:
@@ -586,7 +593,7 @@ fn announce@(T: Describable)(T item) ~:
     return Result.Ok(~)
 
 fn main() i32:
-    let Pair@(i32, string) p = make_pair(42, "answer").realise(Pair(first: 0, second: ""))
+    let Pair@(i32, string) p = make_pair(nom 42, nom "answer").realise(Pair(first: 0, second: ""))
     println("Pair: {p.first}, {p.second}")
 
     let Robot marvin = Robot(name: "Marvin")
@@ -620,8 +627,8 @@ struct Box@(T):
 
 ```sushi
 # Document with concrete types
-# Example: make_pair(42, "answer") returns Pair@(i32, string)
-fn make_pair@(T, U)(T first, U second) Pair@(T, U):
+# Example: make_pair(nom 42, nom "answer") returns Pair@(i32, string)
+fn make_pair@(T, U)(nom T first, nom U second) Pair@(T, U):
     return Result.Ok(Pair(first: first, second: second))
 ```
 

@@ -7,7 +7,8 @@ fn improbability(i32 x) i32:
     return Result.Ok(x * 2)
 
 fn main() i32:
-    # compose(g, f) runs g first, then f -- here babel, then improbability.
-    let fn(i32) -> i32 pipeline = compose(babel, improbability).realise(improbability)
+    # compose(g, f) runs g first, then f -- here babel, then improbability. Both are `nom`:
+    # the returned closure captures them, so it becomes their owner.
+    let fn(i32) -> i32 pipeline = compose(nom babel, nom improbability).realise(improbability)
     println(pipeline(20).realise(-1))
     return Result.Ok(0)

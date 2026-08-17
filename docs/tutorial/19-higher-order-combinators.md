@@ -83,7 +83,7 @@ Output:
 
 ## compose — glue two functions together
 
-`compose(g, f)` builds a new function that runs `g` first, then feeds the result to `f`:
+`compose(nom g, nom f)` builds a new function that runs `g` first, then feeds the result to `f`:
 
 ```sushi
 --8<-- "docs/tutorial/examples/19-higher-order-combinators/compose.sushi"
@@ -95,10 +95,14 @@ Output:
 42
 ```
 
-`compose(babel, improbability)` returns a `fn(i32) -> i32` that computes
+`compose(nom babel, nom improbability)` returns a `fn(i32) -> i32` that computes
 `improbability(babel(20))` = `(20 + 1) * 2`. The returned function is a closure that captures both
 `babel` and `improbability` — exactly the capture-and-call machinery from Chapter 18, now packaged
 for you.
+
+The two `nom` markers are why: the closure captures both functions, so it becomes their owner,
+and `compose` declares that. `map`, `filter` and `fold` only *call* their function argument, so
+they borrow it and take no marker.
 
 ## Two things to know
 

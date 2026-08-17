@@ -173,7 +173,7 @@ match open("output.txt", FileMode.Write()):
 - UTF-8 aware where needed
 
 **Iter combinators** - higher-order functions over `List@(T)` (`use <collections/iter>`):
-- `map(xs, f)`, `filter(xs, pred)`, `fold(xs, init, f)`, `compose(g, f)`
+- `map(xs, f)`, `filter(xs, pred)`, `fold(xs, init, f)`, `compose(nom g, nom f)`
 - Ordinary generic free functions (the first Sushi-source stdlib module, no bitcode)
 - Copy/primitive element types; pass a typed-param lambda (`|i32 x| ...`) or a function reference
 

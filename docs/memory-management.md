@@ -95,9 +95,13 @@ fn build_tree() ~:
 Move-ness is **compositional** and answers one question: **does this type own heap that RAII must
 free?** A value moves iff it does -- a **dynamic array (`T[]`), `List@(T)`, `Own@(T)`,
 `HashMap@(K, V)`, a `string`, a capturing closure, or any struct/enum/fixed array holding one of
-those**. Passing such a value by value, binding it to a new name, putting it in a constructor field
-or array literal, or capturing it in a closure transfers ownership; the source is consumed and using
-it afterward is a use-after-move error (`CE2405`).
+those**. Putting such a value in a constructor field or array literal, inserting it into a
+container, binding it to a new name, capturing it in a closure, or handing it to a **`nom`**
+parameter transfers ownership; the source is consumed and using it afterward is a use-after-move
+error (`CE2405`).
+
+**A plain call argument does NOT transfer.** A parameter is a borrow unless it says otherwise, so
+`f(x)` leaves `x` yours. See [Function Arguments](#function-arguments) for the four modes.
 
 Everything else **copies**: primitives, and *plain-data* composites built only from those. This is
 Rust's `Copy` tier, derived automatically from a type's shape rather than opted into.
@@ -118,7 +122,8 @@ owning field moves. `.clone()` exists on both fixed and dynamic arrays, since ei
 independent copy.
 
 Every struct and enum also gets an auto-derived **`.clone()`** -- the single explicit way to copy an
-owning value: `consume(buf.clone())` hands the callee an independent copy while `buf` stays yours.
+owning value: `consume(nom buf.clone())` hands the callee an independent copy while `buf` stays
+yours.
 
 ### What Moves
 
@@ -161,20 +166,20 @@ fn main() i32:
 
 **A non-literal `string` moves on its own, with no struct involved:**
 ```sushi
-fn consume(string s) ~:
+fn consume(nom string s) ~:
     println(s)
     return Result.Ok(~)
 
 fn main() i32:
     let string name = "world"
     let string greeting = "Hello, {name}!"  # interpolation heap-allocates: greeting owns heap
-    consume(greeting)  # greeting moved into consume
+    consume(nom greeting)  # greeting handed over
 
     # ERROR CE2405: cannot borrow moved variable 'greeting'
     # println(greeting)
 
     println(name)  # OK: name is bound from a literal, so it owns nothing and never moves
-    consume(name)
+    consume(nom name)
     println(name)  # still OK -- consume() got an independent, ownerless value
 
     return Result.Ok(0)
@@ -216,7 +221,7 @@ fn main() i32:
 
 A field read, an index, and a container get-out -- `s.field`, `arr[i]`, `list.get(i)??` -- do not
 copy. They hand back a **borrow**: a read-only view of storage the owner keeps and still frees.
-Reading it is free. **Consuming** it -- passing it to a by-value parameter, returning it, storing it
+Reading it is free. **Consuming** it -- handing it to a `nom` parameter, returning it, storing it
 in a constructor -- is `CE2411`, because that would require ownership the borrow does not have.
 `.clone()` is the escape:
 
@@ -224,7 +229,7 @@ in a constructor -- is `CE2411`, because that would require ownership the borrow
 struct Wrapper:
     string inner
 
-fn take(string s) ~:
+fn take(nom string s) ~:
     println(s)
     return Result.Ok(~)
 
@@ -232,10 +237,10 @@ fn main() i32:
     let Wrapper w = Wrapper(inner: "Hello, world!")
 
     # ERROR CE2411: cannot consume 'w.inner': another owner keeps this value
-    # take(w.inner)
+    # take(nom w.inner)
 
-    take(w.inner.clone())  # OK: an independent copy
-    println(w.inner)       # OK: w still owns and still has its value
+    take(nom w.inner.clone())  # OK: an independent copy
+    println(w.inner)           # OK: w still owns and still has its value
 
     return Result.Ok(0)
 ```
@@ -247,15 +252,31 @@ via `.clone()`, duplicated). A `let` behaves the same way for a source that read
 
 ### Function Arguments
 
+**A parameter is a borrow unless it says otherwise.** The caller keeps the value and frees it, so a
+plain call leaves the argument usable:
+
 ```sushi
-fn consume(i32[] arr) ~:
-    println("Length: {arr.len()}")
-    # arr automatically freed here (the callee now owns it)
-    return Result.Ok(~)
+fn total(i32[] arr) i32:
+    return Result.Ok(arr.len())
 
 fn main() i32:
     let i32[] data = from([1, 2, 3])
-    consume(data)  # data moved into function
+    println(total(data).realise(-1))
+
+    println(data.len())  # OK: data is still yours
+    return Result.Ok(0)
+```
+
+To hand the value over, write **`nom`** on the parameter and again at the call site:
+
+```sushi
+fn eat(nom i32[] arr) i32:
+    return Result.Ok(arr.len())
+    # arr is freed here -- the callee is the owner
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3])
+    println(eat(nom data).realise(-1))
 
     # ERROR CE2405: cannot borrow moved variable 'data'
     # println(data.len())
@@ -263,21 +284,54 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-The same holds for `List@(T)`, `Own@(T)`, and **owning struct/enum** value parameters: a bare owning
-argument is moved into the callee, which frees it exactly once at scope exit. To pass an owning value
-without giving it up, borrow it (`peek` / `poke`) or pass an explicit `.clone()`.
+The marker is written at **both** ends, or at neither. That is what keeps a consume visible where
+the value is handed over: reading `f(s)` you know `s` survives, and reading `f(nom s)` you know it
+does not. A marker on one end only is `CE2427`.
+
+`.clone()` is how a caller hands over a value it wants to keep: `eat(nom data.clone())` gives the
+callee an independent copy.
 
 > **`main`'s `args`.** The `string[] args` parameter of `main` is a borrowed view of the process
-> argument vector (its strings alias C `argv` memory), not a heap-owned array. Do not move it by
-> value into a helper -- borrow it (`fn run(peek string[] args)`), or the callee would try to free
-> `argv` and crash.
+> argument vector (its strings alias C `argv` memory), not a heap-owned array. It passes to an
+> ordinary borrow parameter like anything else; handing it to a `nom` one is `CE2410`, because the
+> callee would try to free `argv` and crash.
 
-### Solution: Use References
+### The Four Modes
+
+```sushi
+fn f(string name) ~:          # borrow            -- caller frees; name stays usable
+fn f(nom string name) ~:      # consume           -- callee frees; CE2405 after
+fn f(peek string name) ~:     # borrow by pointer -- read only; caller frees
+fn f(poke string name) ~:     # borrow by pointer -- read/write; caller frees
+```
+
+| | `string x` | `nom string x` | `peek string x` | `poke string x` |
+|---|---|---|---|---|
+| what crosses | the value | the value | a pointer | a pointer |
+| who frees | caller | **callee** | caller | caller |
+| callee may read | yes | yes | yes | yes |
+| callee may write through it | no — `CE2422` | yes (its own copy) | no — `CE2408` | **yes, caller sees it** |
+| callee may keep it | no — `CE2411` | **yes** | no — `CE2411` | no — `CE2411` |
+| caller may use it after | yes | no — `CE2405` | yes | yes |
+| how many at once | many | one | many | one, exclusive |
+
+The default mode has no name of its own. It is *a borrow*: it does not pass the value.
+
+A borrow and a `nom` cross the boundary as the same bytes -- for an owning type that is a small
+descriptor whose data pointer aliases the caller's buffer. What differs is only who frees it. That
+is why the mode has to be written down: nothing in the value itself says which side owns it.
+
+`peek` and `poke` pass a **pointer** instead, which is what makes `poke` able to write back to the
+caller's value, and what makes either one free for a large fixed array or plain struct.
+
+The rule and its reasoning are [docs/design/borrow-model.md](design/borrow-model.md).
+
+### Solution: Borrow by Pointer
 
 ```sushi
 fn borrow(peek i32[] arr) ~:
     println("Length: {arr.len()}")
-    # arr not owned, so not freed
+    # arr is not owned here, so it is not freed
     return Result.Ok(~)
 
 fn main() i32:
@@ -296,7 +350,7 @@ fn main() i32:
     let i32[] original = from([1, 2, 3])
     let i32[] copy = original.clone()  # Deep copy
 
-    consume(copy)  # Move copy
+    eat(nom copy)  # hand the copy over
 
     println(original.len())  # OK: original still valid
 
@@ -305,10 +359,16 @@ fn main() i32:
 
 ## References and Borrowing
 
-References allow temporary access without transferring ownership. Sushi has two borrow modes:
+References pass a **pointer** instead of the value, so the callee reads and writes the caller's
+storage directly. Sushi has two by-pointer modes:
 
 - **`peek T`** - Read-only borrow (multiple allowed)
 - **`poke T`** - Read-write borrow (exclusive access)
+
+An unmarked parameter is *also* a borrow -- see [The Four Modes](#the-four-modes) -- but it passes
+the value rather than a pointer, so the callee cannot write back through it. Reach for `peek` or
+`poke` when the callee must write (`poke`), or when the value is a large fixed array or plain struct
+that would be expensive to copy.
 
 The design document for the borrow mechanisms — where a reference type may appear, the six
 ways a borrow is created, and the diagnostic for each rule — is
@@ -669,7 +729,7 @@ fn main() i32:
   returns a *view* of the payload, which the `Own` keeps owning and still frees. Reading it is
   free -- a `let x = own.get()` binds `x` as a borrow of `own`, exactly like a struct-field read
   (see [Borrowed `let` Bindings](#borrowed-let-bindings)). *Consuming* that view at a real
-  ownership sink -- a by-value argument, a constructor field, an enum payload, a `return` -- is
+  ownership sink -- a `nom` argument, a constructor field, an enum payload, a `return` -- is
   **`CE2411`**, with `.clone()` as the escape.
 
 ```sushi
@@ -684,10 +744,10 @@ fn main() i32:
 
   `copied` above does not own an independent copy of `inner` -- it is a live borrow of `outer`, so
   mutating or freeing `outer` while `copied` is in scope would be `CE2412`, and handing `copied`
-  itself to a by-value parameter would be `CE2411`:
+  itself to a `nom` parameter would be `CE2411`:
 
 ```sushi
-fn sink(Own@(i32) x) ~:
+fn sink(nom Own@(i32) x) ~:
     println(x.get())
     return Result.Ok(~)
 
@@ -697,9 +757,9 @@ fn main() i32:
     let Own@(i32) copied = outer.get()
 
     # ERROR CE2411: cannot consume 'copied': another owner keeps this value
-    # sink(copied)
+    # sink(nom copied)
 
-    sink(copied.clone())  # OK: an independent copy
+    sink(nom copied.clone())  # OK: an independent copy
     return Result.Ok(0)
 ```
 
@@ -824,12 +884,13 @@ fn create_array() i32[]:
     return Result.Ok(arr)  # Ownership moved to caller
 ```
 
-### 5. Document Ownership Transfer
+### 5. Let the Signature Document the Transfer
+
+The mode says who frees, so there is nothing left for a comment to claim:
 
 ```sushi
-# Takes ownership of input array
-fn consume(i32[] arr) ~:
-    # arr freed at end of function
+fn consume(nom i32[] arr) ~:
+    # arr is freed at the end of this function -- `nom` says so, at both ends
     return Result.Ok(~)
 ```
 

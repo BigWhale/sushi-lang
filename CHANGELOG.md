@@ -8,12 +8,43 @@ Two breaking language changes (generic syntax, ownership), the Tier 0-6 remediat
 the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-07-07.
 
 ### Breaking
+- **Borrow by default: a parameter mode is DECLARED, not derived from the callee** (#354;
+  normative spec: `docs/design/borrow-model.md`). The compiler used to read the convention off the
+  callee's implementation, so six kinds of callee gave four different answers -- and a stdlib call
+  and its Sushi-source twin gave OPPOSITE ones. Four modes now, marked at both ends or at neither:
+
+  | declaration | call site | who frees |
+  |---|---|---|
+  | `fn f(string x)` | `f(s)` | caller -- the default |
+  | `fn f(nom string x)` | `f(nom s)` | **callee**; a later use of `s` is `CE2405` |
+  | `fn f(peek string x)` | `f(peek s)` | caller; by pointer, read only |
+  | `fn f(poke string x)` | `f(poke s)` | caller; by pointer, read/write |
+
+  The user-visible consequences:
+  - **`peek` and `poke` lose the `&`.** `&peek T` is now `peek T`, in every position: a parameter,
+    a receiver (`poke self`), a call site, a `foreach` binding, a match binding, a function type.
+    The three words are reserved
+  - **A plain call no longer consumes.** `f(x)` leaves `x` yours, so the `.clone()` that used to be
+    mandatory at ~20 call sites is not. Handing a value over is `nom` at both ends: missing or extra
+    is **CE2427**
+  - **The #298 method rule became the general rule.** Every parameter of every callable is a borrow
+    unless it says `nom`, so writing through one is `CE2422` and consuming one is `CE2411` in a plain
+    function too. `nom` works on a method parameter; `nom self` does not exist
+  - **A pass-through needs `nom`.** `fn identity@(T)(nom T x) T` -- the mode is declared, so it does
+    not vary per instantiation
+  - **`nom` on an FFI extern parameter is CE2428.** A C callee never receives a Sushi value
+  - **`.slib` format version 2 to 3.** A parameter record carries its `mode`, so a library can
+    declare a borrow; an older container is rejected with `CE3509` rather than read with a guess
+  - Fixed: the false `CE2405` at every stdlib call site that passed an owning value (#355); a method
+    rebinding an owning parameter freed the caller's value (#356); `run()` leaked its collected argv
+    (#357); an owning temporary passed to a method leaked (#358)
 - **The ownership model is unified** (the ownership-refactor branch; normative spec:
   `docs/design/ownership-conventions.md`). One predicate answers "does this type own heap"
   (`typesys.owns_heap`), the compiler inserts NO implicit deep copy, and `.clone()` is the only
   deep copy in a program. The user-visible consequences:
-  - **`string` moves.** `f(s)` then a use of `s` is `CE2405`. The read-only parameter idiom is
-    `peek string`. A string bound directly from a literal owns no heap and still copies freely
+  - **`string` moves.** A `string` owns heap and transfers at every ownership sink. A string bound
+    directly from a literal owns no heap and still copies freely.
+    *(Superseded within this release: `f(s)` does not move it -- `f(nom s)` does.)*
   - **A field read, an index and a container get-out are BORROWS.** Consuming one -- a call
     argument, a constructor field, a container insert, a return, a capture -- is `CE2411`; the
     escape is `.clone()`. `HashMap.get()` / `List.get()` / `arr[i]` no longer return independent
@@ -22,7 +53,9 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
     mutating, freeing, rebinding or moving its owner while that binding is live is `CE2412`
   - **A by-value parameter is owned by the callee**, which frees it at scope exit -- uniformly for
     strings, function values, arrays, structs and enums, over direct, variadic and indirect calls.
-    Extension/perk-method parameters stay borrows
+    Extension/perk-method parameters stay borrows.
+    *(Superseded within this release by borrow by default, above: the parameter is a borrow unless
+    it says `nom`, and the method exception became the rule.)*
   - **A reference-typed `let` is rejected** (`let peek T x = ...`, `CE2413`, #252). It used to
     compile as an unchecked alias
 - **Generic syntax is now `@(...)`, not `<...>`** (#235). This applies to every user-facing position:

@@ -512,7 +512,11 @@ class LibraryManifestGenerator:
             {
                 "name": fn.name,
                 "params": [
-                    {"name": p.name, "type": self._type_to_string(p.ty)}
+                    # The mode travels with a private helper too: the consumer calls it
+                    # from a monomorphized template body, so it needs the same answer to
+                    # "who frees this argument?" the public records carry.
+                    {"name": p.name, "type": self._type_to_string(p.ty),
+                     "mode": param_mode(p).value}
                     for p in fn.params
                 ],
                 "return_type": self._type_to_string(fn.ret),
