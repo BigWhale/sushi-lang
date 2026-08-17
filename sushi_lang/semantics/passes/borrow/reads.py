@@ -1,4 +1,10 @@
-"""Walkers over the shapes that read a value out of storage something else owns."""
+"""Expression shape probes, and the walkers over what reads out of a live owner.
+
+The three walkers below answer three different questions about the SAME shapes -- is this
+a read through an owner (bool), what type does it produce (Type), which local does it
+bottom out in (str). They live together and share `unwrap_try` because a fourth, narrower
+copy that forgot the `??` is exactly how `outer.get(0)??.push(5)` went unstamped.
+"""
 
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
@@ -19,6 +25,24 @@ if TYPE_CHECKING:
     from . import BorrowChecker
 
 
+def unwrap_try(expr: Optional[Expr]) -> Optional[Expr]:
+    """Strip every `??` from an expression, leaving what it actually evaluates."""
+    while isinstance(expr, TryExpr):
+        expr = expr.expr
+    return expr
+
+
+def called_on(expr: Optional[Expr], *methods: str) -> Optional[Expr]:
+    """The receiver of `expr` if it calls one of `methods`, else None.
+
+    `MethodCall` and `DotCall` are separate nodes with the same three fields, and a
+    caller here holds a bare `Expr` that may be neither.
+    """
+    if not isinstance(expr, (MethodCall, DotCall)) or expr.method not in methods:
+        return None
+    return expr.receiver
+
+
 def member_access_base(expr: MemberAccess) -> Expr:
     """Get the base variable of a member access chain."""
     current = expr
@@ -30,24 +54,22 @@ def member_access_base(expr: MemberAccess) -> Expr:
 def root_owner(expr: Optional[Expr]) -> Optional[str]:
     """The named local a read-through-an-owner expression ultimately reads out of."""
     while True:
-        if isinstance(expr, TryExpr):
-            expr = expr.expr
-        elif isinstance(expr, MemberAccess):
-            expr = expr.receiver
-        elif isinstance(expr, IndexAccess):
-            expr = expr.array
-        elif isinstance(expr, (MethodCall, DotCall)):
-            expr = expr.receiver
-        elif isinstance(expr, Name):
-            return expr.id
-        else:
-            return None
+        match expr:
+            case Name():
+                return expr.id
+            case TryExpr():
+                expr = expr.expr
+            case MemberAccess() | MethodCall() | DotCall():
+                expr = expr.receiver
+            case IndexAccess():
+                expr = expr.array
+            case _:
+                return None
 
 
 def reads_through_owner(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
     """Does `expr` read a value out of storage something else still owns?"""
-    while isinstance(expr, TryExpr):
-        expr = expr.expr
+    expr = unwrap_try(expr)
 
     if is_bare_enum_constant(checker, expr):
         # `Shape.Empty` parses as a MemberAccess but CONSTRUCTS a payload-free
@@ -58,8 +80,8 @@ def reads_through_owner(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
     if isinstance(expr, (MemberAccess, IndexAccess)):
         return True
 
-    if getattr(expr, "method", None) == "get":
-        receiver = getattr(expr, "receiver", None)
+    receiver = called_on(expr, "get")
+    if receiver is not None:
         if isinstance(receiver, Name):
             state = checker.borrow_state.get(receiver.id)
             return state is not None and is_get_out_container(state.var_type)
@@ -83,29 +105,31 @@ def is_bare_enum_constant(checker: 'BorrowChecker', expr: Optional[Expr]) -> boo
 
 def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
     """The type a read-through-an-owner expression produces."""
-    while isinstance(expr, TryExpr):
-        expr = expr.expr
+    expr = unwrap_try(expr)
 
-    if isinstance(expr, Name):
-        state = checker.borrow_state.get(expr.id)
-        return state.var_type if state is not None else None
+    match expr:
+        case Name():
+            state = checker.borrow_state.get(expr.id)
+            return state.var_type if state is not None else None
+        case MemberAccess():
+            return _field_type(checker, expr)
+        case IndexAccess():
+            return checker.types.element_type(read_type(checker, expr.array))
 
-    if isinstance(expr, MemberAccess):
-        receiver = checker.types.resolve_named(read_type(checker, expr.receiver))
-        if isinstance(receiver, ReferenceType):
-            receiver = checker.types.resolve_named(receiver.referenced_type)
-        if isinstance(receiver, StructType):
-            return receiver.get_field_type(expr.member)
+    receiver = called_on(expr, "get")
+    if receiver is None:
         return None
+    # A container `.get()` returns `Maybe@(T)`, and every use of it reaches here through
+    # the `??` already unwrapped, so the interesting type is the element. `Own@(T).get()`
+    # hands back the bare `T`.
+    return checker.types.element_type(read_type(checker, receiver))
 
-    if isinstance(expr, IndexAccess):
-        return checker.types.element_type(read_type(checker, expr.array))
 
-    if getattr(expr, "method", None) == "get":
-        receiver_type = read_type(checker, getattr(expr, "receiver", None))
-        # A container `.get()` returns `Maybe@(T)`, and every use of it reaches here
-        # through the `??` this method already unwrapped, so the interesting type is
-        # the element. `Own@(T).get()` hands back the bare `T`.
-        return checker.types.element_type(receiver_type)
-
+def _field_type(checker: 'BorrowChecker', expr: MemberAccess) -> Optional[Type]:
+    """The declared type of the field a `MemberAccess` names."""
+    receiver = checker.types.resolve_named(read_type(checker, expr.receiver))
+    if isinstance(receiver, ReferenceType):
+        receiver = checker.types.resolve_named(receiver.referenced_type)
+    if isinstance(receiver, StructType):
+        return receiver.get_field_type(expr.member)
     return None

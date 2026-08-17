@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from sushi_lang.semantics.ast import Block, If, Match, Return
 
 from .state import BorrowState
+
+if TYPE_CHECKING:
+    from . import BorrowChecker
 
 
 @dataclass(frozen=True)
@@ -64,18 +68,44 @@ def reinitialize(state: BorrowState) -> None:
 
 def terminates(node) -> bool:
     """Does every path through this statement (or block) leave the function?"""
-    if isinstance(node, Return):
-        return True
-    if isinstance(node, Block):
-        # Any terminating statement terminates the block. Later statements are
-        # unreachable; they are still checked, which over-checks and never under-checks.
-        return any(terminates(stmt) for stmt in node.statements)
-    if isinstance(node, If):
-        if not node.else_block:
-            return False
-        return (all(terminates(arm) for _cond, arm in node.arms)
+    match node:
+        case Return():
+            return True
+        case Block():
+            # Any terminating statement terminates the block. Later statements are
+            # unreachable; they are still checked, which over-checks and never
+            # under-checks.
+            return any(terminates(stmt) for stmt in node.statements)
+        case If():
+            return bool(node.else_block) and (
+                all(terminates(arm) for _cond, arm in node.arms)
                 and terminates(node.else_block))
-    if isinstance(node, Match):
-        arms = getattr(node, "arms", ())
-        return bool(arms) and all(terminates(arm.body) for arm in arms)
-    return False
+        case Match():
+            arms = getattr(node, "arms", ())
+            return bool(arms) and all(terminates(arm.body) for arm in arms)
+        case _:
+            return False
+
+
+def snapshot_flow(checker: 'BorrowChecker') -> FlowFacts:
+    """Every path-sensitive fact (for branch and loop control-flow joins)."""
+    states = checker.borrow_state.items()
+    return FlowFacts(
+        moved=frozenset(n for n, s in states if s.is_moved),
+        destroyed=frozenset(n for n, s in states if s.is_destroyed),
+        owns_no_heap=frozenset(n for n, s in states if s.owns_no_heap),
+        invalidation=tuple((n, s.invalidated_at, s.invalidated_by)
+                           for n, s in states if s.invalidated_at is not None),
+    )
+
+
+def restore_flow(checker: 'BorrowChecker', facts: FlowFacts) -> None:
+    """Set every path-sensitive flag to exactly what `facts` says."""
+    invalidation = {name: (span, by) for name, span, by in facts.invalidation}
+    for name, state in checker.borrow_state.items():
+        state.is_moved = name in facts.moved
+        state.is_destroyed = name in facts.destroyed
+        state.owns_no_heap = name in facts.owns_no_heap
+        span, by = invalidation.get(name, (None, ()))
+        state.invalidated_at = span
+        state.invalidated_by = by

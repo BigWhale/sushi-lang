@@ -8,6 +8,7 @@ import typing
 
 from sushi_lang.semantics import ast as sushi_ast
 from sushi_lang.semantics.passes.borrow import BorrowChecker, INERT_EXPRS
+from sushi_lang.semantics.passes.borrow import expressions as borrow_expressions
 
 
 def _expr_union_members() -> set[str]:
@@ -16,21 +17,28 @@ def _expr_union_members() -> set[str]:
 
 
 def _dispatched_names() -> set[str]:
-    """Every class name `_check_expr` tests with isinstance(), plus the inert tuple."""
-    src = inspect.getsource(BorrowChecker._check_expr)
+    """Every class name `check_expr` dispatches on, plus the inert tuple.
+
+    Reads both idioms: a `case Name():` class pattern (a `MatchOr` alternative is walked
+    like any other) and an `isinstance()` call, which is how the `INERT_EXPRS` guard arm
+    and the arms' inner shape tests are spelled.
+    """
+    src = inspect.getsource(borrow_expressions.check_expr)
     tree = ast.parse(textwrap.dedent(src))
 
     names: set[str] = set()
     for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "isinstance"):
-            continue
-        target = node.args[1]
-        if isinstance(target, ast.Name):
-            names.add(target.id)          # isinstance(expr, Name)
-        elif isinstance(target, ast.Tuple):
-            for elt in target.elts:        # isinstance(expr, (A, B))
-                if isinstance(elt, ast.Name):
-                    names.add(elt.id)
+        if isinstance(node, ast.MatchClass):
+            if isinstance(node.cls, ast.Name):     # case Name():
+                names.add(node.cls.id)
+        elif isinstance(node, ast.Call) and getattr(node.func, "id", None) == "isinstance":
+            target = node.args[1]
+            if isinstance(target, ast.Name):
+                names.add(target.id)               # isinstance(expr, Name)
+            elif isinstance(target, ast.Tuple):
+                for elt in target.elts:            # isinstance(expr, (A, B))
+                    if isinstance(elt, ast.Name):
+                        names.add(elt.id)
 
     # `INERT_EXPRS` is referenced by name in the source; resolve it to its members.
     if "INERT_EXPRS" in names:

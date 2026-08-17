@@ -104,6 +104,12 @@ def consume(checker: 'BorrowChecker', expr: Expr, use) -> None:
         emit_consume_of_read(checker, expr)
 
 
+def consume_each(checker: 'BorrowChecker', args, use) -> None:
+    """Consume every argument of an ownership sink at `use`."""
+    for arg in args:
+        consume(checker, arg, use)
+
+
 def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
                   use_span: Optional[Span]) -> None:
     """Apply the ownership decision to a source that is a bare name."""
