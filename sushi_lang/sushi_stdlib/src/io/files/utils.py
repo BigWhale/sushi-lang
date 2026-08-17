@@ -1,11 +1,10 @@
 """File utility functions for <io/files> module."""
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src.type_definitions import (
-    get_basic_types, get_string_type, get_result_type, get_unit_enum_type,
+    get_basic_types, get_result_type, get_unit_enum_type,
 )
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.backend.platform_detect import get_current_platform
-from sushi_lang.sushi_stdlib.src.string_helpers import fat_pointer_to_cstr
 
 
 def _declare_malloc(module: ir.Module, i8_ptr: ir.Type, i64: ir.Type) -> ir.Function:
@@ -33,33 +32,20 @@ def generate_ir(module: ir.Module) -> None:
 def generate_exists(module: ir.Module) -> None:
     """Generate sushi_io_files_exists(string path) -> i8."""
     i8, i8_ptr, i32, i64 = get_basic_types()
-    string_type = get_string_type()
 
     platform_files = get_platform_module('files')
     access_func = platform_files.declare_access(module)
 
-    malloc_func = _declare_malloc(module, i8_ptr, i64)
 
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
-    func_type = ir.FunctionType(i8, [string_type])
+    # The path arrives already marshalled as a C string, and the CALLER frees it
+    # (#292). The body used to malloc a copy here and free nothing.
+    func_type = ir.FunctionType(i8, [i8_ptr])
     func = ir.Function(module, func_type, name="sushi_io_files_exists")
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    path_arg = func.args[0]
-    path_ptr = builder.extract_value(path_arg, 0, name="path_ptr")
-    path_len = builder.extract_value(path_arg, 1, name="path_len")
-
-    len_plus_one = builder.add(path_len, ir.Constant(i32, 1), name="len_plus_one")
-    buffer_size = builder.zext(len_plus_one, i64, name="buffer_size")
-    null_term_path = builder.call(malloc_func, [buffer_size], name="null_term_path")
-
-    is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
-
-    null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
-    builder.store(ir.Constant(i8, 0), null_pos)
+    null_term_path = func.args[0]
 
     f_ok = ir.Constant(i32, 0)
     result = builder.call(access_func, [null_term_path, f_ok], name="access_result")
@@ -74,31 +60,19 @@ def generate_exists(module: ir.Module) -> None:
 def _generate_stat_mode_check(module: ir.Module, sushi_name: str, s_iftype: int) -> None:
     """Emit a `stat`-based predicate testing st_mode's file-type bits."""
     i8, i8_ptr, i32, i64 = get_basic_types()
-    string_type = get_string_type()
 
     platform_files = get_platform_module('files')
     stat_func = platform_files.declare_stat(module)
 
-    malloc_func = _declare_malloc(module, i8_ptr, i64)
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
-    func_type = ir.FunctionType(i8, [string_type])
+    # The path arrives already marshalled as a C string, and the CALLER frees it
+    # (#292). The body used to malloc a copy here and free nothing.
+    func_type = ir.FunctionType(i8, [i8_ptr])
     func = ir.Function(module, func_type, name=sushi_name)
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    path_arg = func.args[0]
-    path_ptr = builder.extract_value(path_arg, 0, name="path_ptr")
-    path_len = builder.extract_value(path_arg, 1, name="path_len")
-
-    len_plus_one = builder.add(path_len, ir.Constant(i32, 1), name="len_plus_one")
-    buffer_size = builder.zext(len_plus_one, i64, name="buffer_size")
-    null_term_path = builder.call(malloc_func, [buffer_size], name="null_term_path")
-
-    is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
-    null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
-    builder.store(ir.Constant(i8, 0), null_pos)
+    null_term_path = func.args[0]
 
     stat_buffer_type = ir.ArrayType(i8, 144)
     stat_buffer = builder.alloca(stat_buffer_type, name="stat_buffer")
@@ -155,12 +129,10 @@ def generate_is_dir(module: ir.Module) -> None:
 def generate_file_size(module: ir.Module) -> None:
     """Generate sushi_io_files_file_size(string path) -> Result<i64>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
-    string_type = get_string_type()
 
     platform_files = get_platform_module('files')
     stat_func = platform_files.declare_stat(module)
 
-    malloc_func = _declare_malloc(module, i8_ptr, i64)
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
@@ -168,23 +140,14 @@ def generate_file_size(module: ir.Module) -> None:
     result_type = get_result_type(i64, get_unit_enum_type())
     data_array_type = result_type.elements[1]
 
-    func_type = ir.FunctionType(result_type, [string_type])
+    # The path arrives already marshalled as a C string, and the CALLER frees it
+    # (#292). The body used to malloc a copy here and free nothing.
+    func_type = ir.FunctionType(result_type, [i8_ptr])
     func = ir.Function(module, func_type, name="sushi_io_files_file_size")
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    path_arg = func.args[0]
-    path_ptr = builder.extract_value(path_arg, 0, name="path_ptr")
-    path_len = builder.extract_value(path_arg, 1, name="path_len")
-
-    len_plus_one = builder.add(path_len, ir.Constant(i32, 1), name="len_plus_one")
-    buffer_size = builder.zext(len_plus_one, i64, name="buffer_size")
-    null_term_path = builder.call(malloc_func, [buffer_size], name="null_term_path")
-
-    is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
-    null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
-    builder.store(ir.Constant(i8, 0), null_pos)
+    null_term_path = func.args[0]
 
     stat_buffer_type = ir.ArrayType(i8, 144)
     stat_buffer = builder.alloca(stat_buffer_type, name="stat_buffer")
@@ -243,7 +206,6 @@ def generate_file_size(module: ir.Module) -> None:
 def generate_remove(module: ir.Module) -> None:
     """Generate sushi_io_files_remove(string path) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
-    string_type = get_string_type()
 
     platform_files = get_platform_module('files')
     unlink_func = platform_files.declare_unlink(module)
@@ -255,13 +217,14 @@ def generate_remove(module: ir.Module) -> None:
     result_type = get_result_type(i32, get_unit_enum_type())
     data_array_type = result_type.elements[1]
 
-    func_type = ir.FunctionType(result_type, [string_type])
+    # The path arrives already marshalled as a C string, and the CALLER frees it
+    # (#292). The body used to malloc a copy here and free nothing.
+    func_type = ir.FunctionType(result_type, [i8_ptr])
     func = ir.Function(module, func_type, name="sushi_io_files_remove")
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    path_arg = func.args[0]
-    null_term_path = fat_pointer_to_cstr(module, builder, path_arg)
+    null_term_path = func.args[0]
 
     result = builder.call(unlink_func, [null_term_path], name="unlink_result")
 
@@ -305,7 +268,6 @@ def generate_remove(module: ir.Module) -> None:
 def generate_rmdir(module: ir.Module) -> None:
     """Generate sushi_io_files_rmdir(string path) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
-    string_type = get_string_type()
 
     platform_files = get_platform_module('files')
     rmdir_func = platform_files.declare_rmdir(module)
@@ -317,13 +279,14 @@ def generate_rmdir(module: ir.Module) -> None:
     result_type = get_result_type(i32, get_unit_enum_type())
     data_array_type = result_type.elements[1]
 
-    func_type = ir.FunctionType(result_type, [string_type])
+    # The path arrives already marshalled as a C string, and the CALLER frees it
+    # (#292). The body used to malloc a copy here and free nothing.
+    func_type = ir.FunctionType(result_type, [i8_ptr])
     func = ir.Function(module, func_type, name="sushi_io_files_rmdir")
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    path_arg = func.args[0]
-    null_term_path = fat_pointer_to_cstr(module, builder, path_arg)
+    null_term_path = func.args[0]
 
     result = builder.call(rmdir_func, [null_term_path], name="rmdir_result")
 
@@ -367,7 +330,6 @@ def generate_rmdir(module: ir.Module) -> None:
 def generate_mkdir(module: ir.Module) -> None:
     """Generate sushi_io_files_mkdir(string path, i32 mode) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
-    string_type = get_string_type()
 
     platform_files = get_platform_module('files')
     mkdir_func = platform_files.declare_mkdir(module)
@@ -379,15 +341,15 @@ def generate_mkdir(module: ir.Module) -> None:
     result_type = get_result_type(i32, get_unit_enum_type())
     data_array_type = result_type.elements[1]
 
-    func_type = ir.FunctionType(result_type, [string_type, i32])
+    # The path arrives already marshalled as a C string, and the CALLER frees it
+    # (#292). The body used to malloc a copy here and free nothing.
+    func_type = ir.FunctionType(result_type, [i8_ptr, i32])
     func = ir.Function(module, func_type, name="sushi_io_files_mkdir")
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    path_arg = func.args[0]
+    null_term_path = func.args[0]
     mode_arg = func.args[1]
-
-    null_term_path = fat_pointer_to_cstr(module, builder, path_arg)
 
     result = builder.call(mkdir_func, [null_term_path, mode_arg], name="mkdir_result")
 
@@ -431,7 +393,6 @@ def generate_mkdir(module: ir.Module) -> None:
 def generate_rename(module: ir.Module) -> None:
     """Generate sushi_io_files_rename(string old_path, string new_path) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
-    string_type = get_string_type()
 
     platform_files = get_platform_module('files')
     rename_func = platform_files.declare_rename(module)
@@ -443,16 +404,15 @@ def generate_rename(module: ir.Module) -> None:
     result_type = get_result_type(i32, get_unit_enum_type())
     data_array_type = result_type.elements[1]
 
-    func_type = ir.FunctionType(result_type, [string_type, string_type])
+    # The path arrives already marshalled as a C string, and the CALLER frees it
+    # (#292). The body used to malloc a copy here and free nothing.
+    func_type = ir.FunctionType(result_type, [i8_ptr, i8_ptr])
     func = ir.Function(module, func_type, name="sushi_io_files_rename")
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    old_path_arg = func.args[0]
-    new_path_arg = func.args[1]
-
-    old_null_term = fat_pointer_to_cstr(module, builder, old_path_arg)
-    new_null_term = fat_pointer_to_cstr(module, builder, new_path_arg)
+    old_null_term = func.args[0]
+    new_null_term = func.args[1]
 
     result = builder.call(rename_func, [old_null_term, new_null_term], name="rename_result")
 
@@ -496,7 +456,6 @@ def generate_rename(module: ir.Module) -> None:
 def generate_copy(module: ir.Module) -> None:
     """Generate sushi_io_files_copy(string src, string dst) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
-    string_type = get_string_type()
 
     platform_files = get_platform_module('files')
     open_func = platform_files.declare_open(module)
@@ -516,26 +475,31 @@ def generate_copy(module: ir.Module) -> None:
         O_CREAT = 0x40
         O_TRUNC = 0x200
 
-    from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc
-    malloc_func = declare_malloc(module)
-
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
+
+    COPY_BUFFER_BYTES = 4096
 
     # Result<i32, FileError> = {i32 tag, [2 x i64] data} (#300 phase 2):
     # FileError is a unit enum {i32, [1 x i64]} = 16 bytes, so K = max(4, 16)/8 = 2
     result_type = get_result_type(i32, get_unit_enum_type())
     data_array_type = result_type.elements[1]
 
-    func_type = ir.FunctionType(result_type, [string_type, string_type])
+    # The path arrives already marshalled as a C string, and the CALLER frees it
+    # (#292). The body used to malloc a copy here and free nothing.
+    func_type = ir.FunctionType(result_type, [i8_ptr, i8_ptr])
     func = ir.Function(module, func_type, name="sushi_io_files_copy")
     entry_block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(entry_block)
 
-    src_arg = func.args[0]
-    dst_arg = func.args[1]
+    src_null_term = func.args[0]
+    dst_null_term = func.args[1]
 
-    src_null_term = fat_pointer_to_cstr(module, builder, src_arg)
-    dst_null_term = fat_pointer_to_cstr(module, builder, dst_arg)
+    # The transfer buffer has purely local lifetime, so it is a LOCAL. It used to be a
+    # malloc that no exit path freed, and this function has two `ret` instructions reached
+    # by four routes -- a per-exit free is one missed branch away from a leak and one
+    # doubled branch away from a double free (#291).
+    copy_buffer = builder.alloca(ir.ArrayType(i8, COPY_BUFFER_BYTES), name="copy_buffer_local")
+    copy_buffer = builder.bitcast(copy_buffer, i8_ptr, name="copy_buffer")
 
     src_fd = builder.call(open_func, [
         src_null_term,
@@ -567,8 +531,7 @@ def generate_copy(module: ir.Module) -> None:
 
     builder.position_at_end(dst_open_ok_bb)
 
-    buffer_size_i64 = ir.Constant(i64, 4096)
-    copy_buffer = builder.call(malloc_func, [buffer_size_i64], name="copy_buffer")
+    buffer_size_i64 = ir.Constant(i64, COPY_BUFFER_BYTES)
 
     loop_bb = func.append_basic_block(name="copy_loop")
     builder.branch(loop_bb)

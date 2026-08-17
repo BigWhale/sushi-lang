@@ -1,0 +1,25 @@
+# The mutating io/files functions free the C string they marshal (#292).
+#
+# `mkdir`, `rmdir`, `remove` leaked 1 block per call and `rename` leaked 2. An interpolated
+# path is included so the caller's own buffer is freed exactly once as well.
+# EXPECT_STDOUT_EXACT: "md=0 rn=0 rm=0 rd=0\n"
+# EXPECT_NO_LEAKS
+use <io/files>
+
+fn main() i32:
+    let string root = "/tmp"
+    let string dir = "{root}/sushi_leak_mutate_dir"
+    let i32 md = mkdir(dir, 0o755).realise(-1)
+
+    match open('/tmp/sushi_leak_mutate_a.txt', FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("x")
+            f.close()
+        FileResult.Err(_) ->
+            return Result.Ok(1)
+
+    let i32 rn = rename('/tmp/sushi_leak_mutate_a.txt', '/tmp/sushi_leak_mutate_b.txt').realise(-1)
+    let i32 rm = remove('/tmp/sushi_leak_mutate_b.txt').realise(-1)
+    let i32 rd = rmdir(dir).realise(-1)
+    println("md={md} rn={rn} rm={rm} rd={rd}")
+    return Result.Ok(0)

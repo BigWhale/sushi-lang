@@ -9,13 +9,14 @@
 #
 # The mode is declared now, and a stdlib function declares a borrow: the caller keeps the
 # value and frees it exactly once (docs/design/borrow-model.md S5).
-# There is no EXPECT_NO_LEAKS here, and the reason is a SEPARATE defect: `chdir` and
-# `setenv` marshal their argument into a C string that the generated body never frees
-# (issue #292, and #291 for `copy`). That leak is about marshalling, not about ownership.
-# Adding the directive here would fail for a reason this
-# file does not test.
+# The leak directive is the acceptance test for the marshalling half (#292): `chdir` and
+# `setenv` used to copy their argument into a C string that the generated body never freed,
+# which is a separate defect from ownership and had to be fixed before this file could
+# assert anything about leaks. Both halves hold now -- the caller keeps the Sushi string and
+# frees it once, and the marshalled C copy is freed at scope exit.
 # EXPECT_STDOUT_EXACT: "/nowhere-Zaphod\n/nowhere-Zaphod\n"
 # EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
 
 use <sys/process>
 use <sys/env>

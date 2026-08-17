@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 from sushi_lang.backend.constants.llvm_values import make_i32_const
 from sushi_lang.backend import enum_utils
+from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -88,9 +89,9 @@ def construct_file_result_err(codegen: 'LLVMCodegen', file_error: ir.Value) -> i
 
 def emit_open_function(codegen: 'LLVMCodegen', expr: 'Call', to_i1: bool) -> ir.Value:
     """Emit open() built-in function call with FileMode mapping and error handling."""
-    path_fat_ptr = codegen.expressions.emit_expr(expr.args[0])
-
-    path_value = codegen.runtime.strings.emit_to_cstr(path_fat_ptr)
+    # Path C of #292: this marshalled without registering the copy, so `open()` leaked one
+    # block per call while the FFI arm two files away did the same marshal and registered it.
+    path_value = emit_cstr_arg(codegen, expr.args[0])
 
     mode_enum_value = codegen.expressions.emit_expr(expr.args[1])
 

@@ -1,0 +1,24 @@
+# The read-only io/files functions free the C string they marshal (#292).
+#
+# `exists`, `is_file` and `is_dir` each leaked 1 block per call; `file_size` the same. Every
+# argument here is a literal, which owns no heap -- so the leak was never about ownership.
+# EXPECT_STDOUT_EXACT: "e=1 f=1 d=1 size=15\n"
+# EXPECT_NO_LEAKS
+use <io/files>
+
+fn main() i32:
+    match open('/tmp/sushi_leak_query.txt', FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("Mostly Harmless")
+            f.close()
+        FileResult.Err(_) ->
+            return Result.Ok(1)
+
+    let bool e = exists('/tmp/sushi_leak_query.txt')
+    let bool f = is_file('/tmp/sushi_leak_query.txt')
+    let bool d = is_dir('/tmp')
+    let i64 size = file_size('/tmp/sushi_leak_query.txt').realise(-1 as i64)
+    println("e={e} f={f} d={d} size={size}")
+
+    remove('/tmp/sushi_leak_query.txt').realise(-1)
+    return Result.Ok(0)

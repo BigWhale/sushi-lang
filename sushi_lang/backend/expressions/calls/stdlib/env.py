@@ -8,6 +8,7 @@ from sushi_lang.backend.constants.llvm_values import FALSE_I1
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.backend.utils import require_builder
+from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -24,20 +25,23 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
     from sushi_lang.backend.functions import declare_stdlib_function
 
     string_type = codegen.types.ll_type(BuiltinType.STRING)
+    i8_ptr = codegen.types.i8.as_pointer()
 
     if func_name == "getenv":
         if len(expr.args) != 1:
             raise_internal_error("CE0023", method="getenv", expected=1, got=len(expr.args))
 
-        key_value = codegen.expressions.emit_expr(expr.args[0])
+        # The C string is marshalled HERE and freed at scope exit, like an FFI argument
+        # (#292). The callee takes `i8*` and frees nothing.
+        key_cstr = emit_cstr_arg(codegen, expr.args[0])
 
         # Maybe<string> type (#300 phase 2): {i32 tag, [2 x i64] data}
         # (string fat pointer = 16 bytes -> K=2). Shared helper byte-matches the .bc.
         from sushi_lang.sushi_stdlib.src.type_definitions import get_maybe_type
         maybe_string_type = get_maybe_type(string_type)
 
-        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, maybe_string_type, [string_type])
-        result = codegen.builder.call(stdlib_func, [key_value], name="getenv_result")
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, maybe_string_type, [i8_ptr])
+        result = codegen.builder.call(stdlib_func, [key_cstr], name="getenv_result")
 
         return codegen.utils.as_i1(result) if to_i1 else result
 
@@ -45,11 +49,11 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
         if len(expr.args) != 2:
             raise_internal_error("CE0023", method="setenv", expected=2, got=len(expr.args))
 
-        key_value = codegen.expressions.emit_expr(expr.args[0])
-        value_value = codegen.expressions.emit_expr(expr.args[1])
+        key_cstr = emit_cstr_arg(codegen, expr.args[0])
+        value_cstr = emit_cstr_arg(codegen, expr.args[1])
 
-        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, i32, [string_type, string_type])
-        result = codegen.builder.call(stdlib_func, [key_value, value_value], name="setenv_result")
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, i32, [i8_ptr, i8_ptr])
+        result = codegen.builder.call(stdlib_func, [key_cstr, value_cstr], name="setenv_result")
 
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.semantics.generics.results import ensure_result_type_in_table

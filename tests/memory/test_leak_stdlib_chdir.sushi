@@ -1,0 +1,14 @@
+# `chdir` frees the C string it marshals (#292).
+#
+# It leaked 1 block per call, with a literal argument as much as with an interpolated one.
+# EXPECT_STDOUT_EXACT: "rc=0 rc=0\n"
+# EXPECT_NO_LEAKS
+use <sys/process>
+
+fn main() i32:
+    let i32 a = chdir("/tmp").realise(-1)
+    let string base = "/"
+    let string path = "{base}tmp"
+    let i32 b = chdir(path).realise(-1)
+    println("rc={a} rc={b}")
+    return Result.Ok(0)
