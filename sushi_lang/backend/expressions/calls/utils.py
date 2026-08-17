@@ -69,10 +69,9 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
             if type_name.startswith(prefix) and type_name in codegen.struct_table.by_name:
                 return codegen.struct_table.by_name[type_name]
 
-    # Strategy 2: Receiver is a struct-field member access (e.g. a captured List<T> read
-    # as `__closure_env.<name>` inside a lifted lambda body). Resolve the field's semantic
-    # type so List/Own methods claim the call instead of falling through to the raw
-    # dynamic-array dispatch (which crashes on a List backing struct).
+    # Strategy 2: a struct-field member access. Resolving the field's semantic type is
+    # what lets List/Own methods claim the call instead of the dynamic-array dispatch,
+    # which crashes on a List backing struct.
     if isinstance(receiver, MemberAccess):
         from sushi_lang.backend.expressions.structs import infer_struct_type
         try:
@@ -92,10 +91,9 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
             if type_name.startswith(prefix) and type_name in codegen.struct_table.by_name:
                 return codegen.struct_table.by_name[type_name]
 
-    # Strategy 3: the receiver is a chained method call (`outer.get().clone()`), so it is
-    # neither a Name nor a MemberAccess and neither strategy above can see it. Pass 2
-    # already typed it. The three strategies are disjoint by node type, so this one being
-    # last is a matter of diff size, not of priority.
+    # Strategy 3: a chained method call, which neither strategy above can see. Pass 2
+    # already typed it. The three are disjoint by node type, so the order is not a
+    # priority.
     stamped = _stamped_semantic_type(codegen, receiver)
     if isinstance(stamped, ReferenceType):
         stamped = stamped.referenced_type
@@ -154,11 +152,9 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
         if isinstance(semantic_type, ReferenceType):
             semantic_type = semantic_type.referenced_type
 
-        # A known concrete enum type is authoritative for the receiver: only the
-        # generic handler whose prefix matches may claim it. Return None (rather than
-        # falling through to the Strategy 3 LLVM-layout heuristic) when it does not
-        # match, so a same-layout enum of the other family is never mis-selected --
-        # e.g. Maybe<Color> and Result<i32, StdError> can share {i32, [N x i8]}.
+        # A known concrete enum is AUTHORITATIVE: answer None rather than falling through
+        # to the layout heuristic, which cannot tell `Maybe<Color>` from
+        # `Result<i32, StdError>` -- they share one LLVM type.
         if isinstance(semantic_type, EnumType):
             return semantic_type if semantic_type.name.startswith(prefix) else None
 
@@ -167,24 +163,17 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
             if type_name in codegen.enum_table.by_name:
                 return codegen.enum_table.by_name[type_name] if type_name.startswith(prefix) else None
 
-    # Strategy 1b: a method-call (or `??`) receiver carries the type Pass 2 stamped
-    # on the node (`inferred_return_type` / `inferred_unwrapped_type`, the chained-
-    # receiver support). Authoritative like Strategy 1: a stamped enum of the other
-    # family answers None instead of falling through to the layout heuristic, which
-    # cannot tell same-shaped enums apart under the #300 phase 2 uniform layout
-    # (e.g. `args.get(1).realise(d)` -- Maybe<string> == Result<i32, StdError> in LLVM).
+    # Strategy 1b: a method-call or `??` receiver carries Pass 2's stamp. Authoritative
+    # like Strategy 1 -- the uniform enum layout (#300) makes the fallback heuristic unable
+    # to tell `Maybe<string>` from `Result<i32, StdError>`.
     for stamp_attr in ('inferred_return_type', 'inferred_unwrapped_type'):
         stamped = getattr(receiver, stamp_attr, None)
         if isinstance(stamped, EnumType):
             return stamped if stamped.name.startswith(prefix) else None
 
-    # Strategy 2: Infer from function call return type (for Call expressions).
-    #
-    # Both lookups here used to build a ONE-argument name -- f"Result<{ok}>" -- which can never
-    # match the two-argument name a Result is interned under ("Result<i32, StdError>"). So they
-    # always missed, and every call fell through to Strategy 3's LLVM-type matching, which picks
-    # the first enum with a matching layout. Two Results with the same layout but different type
-    # arguments are indistinguishable there. Both now look up the interned enum directly.
+    # Strategy 2: from the call's return type. Both lookups build the TWO-argument interned
+    # name -- a one-argument `Result<T>` can never match, so they always missed and fell
+    # through to layout matching, which cannot tell two same-shaped Results apart.
     if isinstance(receiver, Call):
         from sushi_lang.semantics.typesys import FunctionType
         if not isinstance(receiver.callee, Name):
@@ -201,15 +190,10 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
                 if isinstance(result_type, EnumType) and result_type.name.startswith(prefix):
                     return result_type
 
-            # Stdlib module functions (getenv, file_size, getcwd, ...) are in no
-            # function table, so they used to fall through to Strategy 3. Under the
-            # #300 phase 2 uniform {i32, [K x i64]} enum layout that is no longer
-            # safe: Maybe<string> and Result<i32, StdError> share ONE LLVM type, so
-            # the layout heuristic let the wrong family claim the receiver of
-            # `getenv(x).realise(d)`. Resolve these calls from the same facts Pass
-            # 1.5 registers (semantics/generics/instantiate/expressions.py); a
-            # known stdlib return is authoritative, so a non-matching prefix
-            # answers None rather than falling through.
+            # Stdlib module functions are in no function table. Under the uniform enum
+            # layout (#300) the fallback heuristic let the wrong family claim
+            # `getenv(x).realise(d)`, so these resolve from the facts Pass 1.5 registers
+            # and a non-matching prefix answers None.
             stdlib_ret = _stdlib_call_return_enum(codegen, func_name)
             if stdlib_ret is not None:
                 return stdlib_ret if stdlib_ret.name.startswith(prefix) else None
@@ -246,10 +230,9 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
     semantic_type = None
 
     if isinstance(receiver, Name):
-        # Local alloca, or the global backing a constant (#248): `PRIMES.hash()` and
-        # `PRIMES.iter()` reached here and died on a constant receiver. The semantic
-        # type has to come from the const table too -- a constant was never declared as
-        # a local, so the memory manager has no type recorded for it.
+        # Local alloca, or the global backing a constant (#248). The semantic type comes
+        # from the const table too: a constant is not a local, so the memory manager has no
+        # type for it.
         from sushi_lang.backend.expressions.names import (
             resolve_name_semantic_type, resolve_name_slot)
         slot = resolve_name_slot(codegen, receiver.id)
@@ -281,22 +264,15 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
     else:
         receiver_value = codegen.expressions.emit_expr(receiver)
         receiver_type = codegen.types.infer_llvm_type_from_value(receiver_value)
-        # Recover the enum type for an inline variant construction receiver
-        # (e.g. Suit.Hearts().hash()). Without this, semantic_type stays None and
-        # downstream handlers fall back to mapping the enum's LLVM layout
-        # ({i32, [N x i8]}) back to a language type, which fails with CE0019.
+        # An inline variant-construction receiver (`Suit.Hearts().hash()`). Without this
+        # the handlers map the LLVM layout back to a language type and fail as CE0019.
         semantic_type = _infer_enum_construction_type(codegen, receiver)
         if semantic_type is None:
-            # Any other chained receiver -- `o.get().clone()`, `map.get(1).clone()`,
-            # `make()??.clone()`. Enum construction keeps first place because it is the
-            # narrower question and this stays purely additive.
-            #
-            # The order is only safe because the probe above now answers the question it
-            # is named for. It used to claim ANY node carrying `resolved_enum_type`, which
-            # Pass 2 also stamps on a Result/Maybe METHOD call -- so `go().realise("err")`
-            # was typed as its receiver's enum instead of the `string` it produces, this
-            # branch never ran, and the string temporary was registered nowhere and leaked
-            # (#293). A non-variant method falls through to the stamp now.
+            # Any other chained receiver. Enum construction keeps first place as the
+            # narrower question, and the order is only safe because the probe above answers
+            # the question it is named for -- claiming any node with `resolved_enum_type`
+            # typed `go().realise("err")` as its receiver's enum and leaked the string
+            # (#293).
             semantic_type = _stamped_semantic_type(codegen, receiver)
             _own_receiver_temp(codegen, receiver, receiver_value, semantic_type)
 
@@ -333,17 +309,10 @@ def _infer_enum_construction_type(codegen: 'LLVMCodegen', receiver: Expr) -> Opt
     if not isinstance(receiver, DotCall):
         return None
 
-    # A DotCall is `X.Y(args)`, and only SOME of those construct a variant. Pass 2 stamps
-    # `resolved_enum_type` on a Result/Maybe METHOD call too, where it names the enum the
-    # method was called ON rather than what the call RETURNS -- so claiming every node
-    # that carries the annotation typed `go().realise("err")` as `Result<string, StdError>`
-    # when its value is a `string`. That wrong answer then reached `_own_receiver_temp`'s
-    # caller as a non-None semantic type, which skipped the temp registration entirely and
-    # leaked the string (#293).
-    #
-    # The question this function is for is "does this node construct a variant", so ask it:
-    # `Ok` and `Err` are variants of Result, `realise` is not. A method that is not a
-    # variant falls through to the stamp, which carries the type of the VALUE.
+    # Only SOME `X.Y(args)` construct a variant, but Pass 2 stamps `resolved_enum_type` on
+    # a Result/Maybe METHOD call too, where it names the enum called ON rather than what is
+    # RETURNED. Claiming every stamped node skipped the temp registration and leaked (#293).
+    # So ask the question this function is named for: `Ok` is a variant, `realise` is not.
     enum_type = getattr(receiver, 'resolved_enum_type', None)
     if enum_type is None and isinstance(receiver.receiver, Name):
         enum_type = codegen.enum_table.by_name.get(receiver.receiver.id)
@@ -396,12 +365,9 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr,
     from sushi_lang.backend.expressions import type_utils
 
     if isinstance(receiver, Name):
-        # Local alloca, or the global backing a constant (#248). `len` and `get` are
-        # also builtin List/HashMap method names, so the List/HashMap probes in
-        # calls/generics.py run first and asked for the address of `PRIMES` before the
-        # array dispatcher was ever reached. Handing them a constant's global is safe:
-        # both gate on the receiver's semantic type being a `List<`/`HashMap<`, so an
-        # array constant falls through to the array dispatcher untouched.
+        # Local alloca, or the global backing a constant (#248). The List/HashMap probes
+        # share the names `len` and `get`, so they ask for the address first -- safe,
+        # because both gate on a `List<`/`HashMap<` semantic type.
         from sushi_lang.backend.expressions.names import resolve_name_slot
         slot = resolve_name_slot(codegen, receiver.id)
         if slot is None:

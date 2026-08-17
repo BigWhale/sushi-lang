@@ -49,11 +49,7 @@ class MethodTypeRegistry:
 METHOD_TYPE_REGISTRY = MethodTypeRegistry()
 
 
-# ==============================================================================
-# Built-in Type Inference Handlers
-# ==============================================================================
-# These should eventually be moved to their respective type modules,
-# but for now we keep them here for a smooth migration.
+# Built-in type inference handlers. Belong in their respective type modules eventually.
 
 from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType  # noqa: E402
 
@@ -361,12 +357,9 @@ def check_array_methods(receiver_type, method_name, validator):
 
 @METHOD_TYPE_REGISTRY.register_checker
 def check_string_methods(receiver_type, method_name, validator):
-    # Claim only the names this family actually handles. Matching on the receiver type
-    # alone used to claim EVERY method name on a string -- and because infer_method_type
-    # is first-match-wins, a claim whose inferrer then returns None ends the chain rather
-    # than falling through. That is why `string.to_str()` and `string.hash()` stayed
-    # un-inferred even with a warm registry: they are primitive methods, they are not in
-    # METHOD_SPECS, and check_primitive_methods never got a turn (#239).
+    # Claim only the NAMES this family handles. `infer_method_type` is first-match-wins,
+    # so a claim whose inferrer returns None ends the chain instead of falling through --
+    # which is how `string.hash()` stayed un-inferred (#239).
     from sushi_lang.sushi_stdlib.src.collections.strings import is_builtin_string_method
     if receiver_type == BuiltinType.STRING and is_builtin_string_method(method_name):
         return StringMethodInferrer(method_name, validator)
@@ -375,17 +368,13 @@ def check_string_methods(receiver_type, method_name, validator):
 
 @METHOD_TYPE_REGISTRY.register_checker
 def check_primitive_methods(receiver_type, method_name, validator):
-    # Every primitive INCLUDING string: to_str/hash exist on string too, and
-    # check_string_methods (registered earlier) now declines the names it cannot type.
-    # Claim only a (receiver, method) pair the semantics-side table actually carries, so
-    # unrelated names fall through to the extension lookup.
+    # Every primitive INCLUDING string. Claim only a (receiver, method) pair the
+    # semantics table carries, so unrelated names reach the extension lookup.
     from sushi_lang.semantics.generics.primitives import has_primitive_method
     if not has_primitive_method(receiver_type, method_name):
         return None
-    # Perk implementations win at validation (calls/methods.py resolves perks before
-    # primitives) and at codegen (dispatcher step 12 before step 15), so inference must
-    # let them win too -- otherwise Pass 2 types the call as the built-in's return type
-    # while the backend calls the perk body. Same guard the struct/enum checker carries.
+    # A perk impl wins at validation and at codegen, so inference must let it win too, or
+    # Pass 2 types the call as the built-in's return while the backend calls the perk.
     if validator.perk_impl_table.get_method(receiver_type, method_name) is not None:
         return None
     return PrimitiveMethodInferrer(receiver_type, method_name, validator)
@@ -405,27 +394,19 @@ def check_file_methods(receiver_type, method_name, validator):
     return None
 
 
-# Registration ORDER is load-bearing here, twice over.
-#
-# It must sit BEFORE the container checkers below: infer_method_type returns as soon as a
-# checker yields an inferrer, even if that inferrer then returns None. check_result_methods
-# claims ANY method name on a `Result<` receiver, so from a later position this checker
-# would be unreachable for Result/Maybe -- and those DO carry an auto-derived clone
-# (register_enum_clone_method has no container exclusion).
-#
-# It must also use check_primitive_methods' guard shape -- claim only a (type, name) that
-# is genuinely registered -- so it never swallows List<i32>.get, HashMap<..>.insert, etc.
+# Registration ORDER is load-bearing. BEFORE the container checkers, because
+# check_result_methods claims ANY name on a `Result<` receiver and would make this
+# unreachable for the auto-derived clone. And it must claim only a genuinely registered
+# (type, name), so it never swallows `List<i32>.get`.
 @METHOD_TYPE_REGISTRY.register_checker
 def check_struct_enum_builtin_methods(receiver_type, method_name, validator):
     """Claim the auto-derived struct/enum builtins (hash, clone) -- and nothing else."""
     if not isinstance(receiver_type, (StructType, EnumType)):
         return None
 
-    # Own/List/HashMap are named StructTypes that keep their own method paths. This
-    # matters concretely for `hash`: register_all_struct_hashes walks EVERY hashable
-    # struct with no container exclusion, so a List<i32> monomorph really does carry a
-    # registered hash -- while Pass 2 validation reports CE2008 for it. Without this
-    # guard, inference and validation would disagree.
+    # Own/List/HashMap keep their own method paths. A List<i32> monomorph really does
+    # carry a registered `hash` while validation reports CE2008 for it, so without this
+    # guard inference and validation disagree.
     from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
     if receiver_type.name.startswith(CONTAINER_PREFIXES):
         return None

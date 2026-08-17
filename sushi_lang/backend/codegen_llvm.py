@@ -59,14 +59,10 @@ class LLVMCodegen:
 
     def __init__(self, module_name: str = "lang_module", struct_table: Optional[StructTable] = None, enum_table: Optional[EnumTable] = None, func_table: Optional['FunctionTable'] = None, perk_impl_table: Optional['PerkImplementationTable'] = None, const_table: Optional['ConstantTable'] = None) -> None:
         """Initialize the LLVM code generator with all specialized subsystems."""
-        # A context of our OWN, not llvmlite's process-wide global_context. User structs
-        # are emitted as LLVM *identified* types (#257), and identified types are registered
-        # per Context -- on the global one they would leak between compilations in a single
-        # process (which the test suite does constantly), so a second `struct Tree` would
-        # find the first one's type already non-opaque and silently inherit its layout.
-        # Every module this codegen creates shares this context: the type cache is
-        # whole-program and is deliberately NOT reset per unit, so a per-unit module must be
-        # able to declare the same identified types.
+        # Our OWN context, not llvmlite's process-wide global_context: identified types
+        # (#257) register per Context, so on the global one a second `struct Tree` would
+        # find the first compilation's type and inherit its layout. Every module shares
+        # this one, because the type cache is whole-program and not reset per unit.
         self.llvm_context: ir.Context = ir.Context()
         self.module: ir.Module = ir.Module(name=module_name, context=self.llvm_context)
         self.struct_table = struct_table or StructTable()
@@ -121,22 +117,15 @@ class LLVMCodegen:
         self._free_func: Optional[ir.Function] = None
         self._realloc_func: Optional[ir.Function] = None
 
-        # Print-argument string-temp registry (#141): a stack of lists of heap data
-        # pointers allocated while a print/println argument is being emitted (concat
-        # buffers, int/float to-string buffers). The print statement pushes a frame,
-        # emits+prints the argument, then frees the frame -- so the formatted temporary
-        # string and its intermediates are released after output. Only real allocations
-        # register, so a literal (global), a bool-select (globals), or a plain variable
-        # load registers nothing and is never freed.
+        # Print-argument string-temp registry (#141): heap data pointers allocated while a
+        # print argument is emitted. The statement pushes a frame, prints, then frees it.
+        # Only real allocations register, so a literal or a plain load registers nothing.
         self._string_temp_stack: List[List[ir.Value]] = []
 
-        # Parallel print-arg frame for whole string fat VALUES (not raw data pointers) that
-        # need an owned-bit-guarded free after output -- e.g. a string cloned out of an array
-        # element (`println(words[0])`). Unlike _string_temp_stack (unconditional free of a
-        # known-heap buffer), these are freed via the string destructor, so a literal element
-        # (owned=0) is a no-op and a heap element (owned=1) is freed exactly once. A `let`/
-        # container store happens outside any print frame, so its clone is not registered here
-        # and its new owner frees it instead (#145 / N1).
+        # The same frame for whole string fat VALUES, freed through the string destructor
+        # rather than unconditionally -- so a literal element (owned=0) is a no-op and a
+        # heap one is freed once. A `let` store happens outside any print frame, so its new
+        # owner frees it instead (#145).
         self._string_value_temp_stack: List[List[ir.Value]] = []
 
         self.main_expects_args: bool = False
@@ -166,13 +155,9 @@ class LLVMCodegen:
 
         self.ast_constants: Dict[str, ConstDef] = {}
 
-        # Recursive-destructor emission state (backend/destructors.py). Declared here
-        # rather than conjured onto the instance with getattr-or-init at first use:
-        # the types the destructors need are not discoverable from the read sites.
-        # _dtor_inprogress is the stack of type keys currently being inlined (a
-        # re-entry means the type is self-referential, so emit a call to the
-        # out-of-line destructor instead of inlining forever). _dtor_funcs caches
-        # those out-of-line destructors by type key.
+        # Recursive-destructor state, declared here rather than conjured on at first use:
+        # `_dtor_inprogress` is the stack of type keys being inlined, so a re-entry means
+        # the type is self-referential and gets a call to its out-of-line destructor.
         self._dtor_inprogress: list[str] = []
         self._dtor_funcs: Dict[str, ir.Function] = {}
 
@@ -436,19 +421,13 @@ class LLVMCodegen:
 
         mod_ir: ir.Module = self.build_module_multi_unit(units)
 
-        # Perk-impl methods may also ship through the manifest (C4a) and be
-        # overridden by a consumer's local impl. weak_odr (not linkonce_odr:
-        # it must survive module-level optimization even when unreferenced
-        # inside the library) makes the consumer's strong definition win at
-        # link time instead of producing a duplicate-symbol error on the
-        # incremental cc path.
+        # A perk impl may ship through the manifest and be overridden locally. weak_odr,
+        # not linkonce_odr: it must survive optimization while unreferenced in the library,
+        # and it lets the consumer's strong definition win at link time.
         _set_weak_odr_on_perk_impls(mod_ir, units)
 
-        # Export-closure private functions (C4b/C5) are emitted with internal
-        # linkage like any private function, but their definitions must
-        # resolve consumer call sites at link time - promote them to external.
-        # (Consumer same-name definitions are rejected with CE5007, so no
-        # collision is possible.)
+        # An export-closure private function must resolve consumer call sites at link
+        # time, so promote it to external. A same-name consumer definition is CE5007.
         for name in exported_private_functions:
             fn = mod_ir.globals.get(name)
             if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
@@ -919,11 +898,8 @@ class LLVMCodegen:
 
         global_const = ir.GlobalVariable(self.module, llvm_type, name=const.name)
 
-        # For single-module compilation (our current approach), all constants use internal linkage
-        # Cross-unit visibility is already handled by being in the same LLVM module
-        # Future consideration: True separate compilation (compiling units to separate .o files)
-        #   would require external linkage for public constants. However, current single-module
-        #   approach works perfectly for multi-file projects and simplifies the compilation model.
+        # Internal linkage: cross-unit visibility comes from sharing one LLVM module. True
+        # separate compilation would need external linkage for a public constant.
         global_const.linkage = 'internal'
 
         global_const.global_constant = True

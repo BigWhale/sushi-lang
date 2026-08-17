@@ -15,48 +15,24 @@ _ALL_PRIMITIVES = frozenset({
     BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING,
 })
 
-# The primitives whose clone() this module owns.
-#
-# DECIDED: `string` is absent, and the split between the two tables STAYS.
-#
-# Two tables answer "does this primitive carry clone?" -- `string` from the string method
-# table, the other eleven from this one. That looks like the two-spellings-of-one-rule
-# defect the ownership work exists to remove, so the split was re-examined and kept. Three
-# reasons, in order of weight:
-#
-# 1. The two rows are not the same rule. A `string` clone is a real deep copy of a heap
-#    buffer. Every other primitive owns no heap, so its clone is the identity -- the value
-#    IS its own deep copy. Merging them would put one name over two mechanisms, which is
-#    the defect, not the cure.
-# 2. A STRING row here would be dead code. Pass 2 consults the string method table BEFORE
-#    the primitive path, so the row could never be reached, and a dead table row is how a
-#    table starts lying.
-# 3. The split is already invisible to every caller. `builtin_method_exists` ORs both
-#    families for a STRING receiver, and `tests/unit/test_clone_totality.py` -- the gate on
-#    clone being total over types -- asks only through that seam. So there is one answer at
-#    the boundary even though there are two tables behind it.
-#
-# The rule to hold: one SEAM, not one table. Unifying the tables is only worth doing if it
-# does not resurrect row 2.
+# The primitives whose clone() this module owns. `string` is absent, and the split from
+# the string method table STAYS: a string clone deep-copies a heap buffer while every
+# other primitive's clone is the identity, so one name would cover two mechanisms. A
+# STRING row here would also be unreachable, because Pass 2 consults the string table
+# first. The rule is one SEAM, not one table -- `builtin_method_exists` ORs both families,
+# and tests/unit/test_clone_totality.py asks only through it.
 _CLONE_PRIMITIVES = _ALL_PRIMITIVES - {BuiltinType.STRING}
 
-# method name -> {receiver type: return type}.
-#
-# Keyed per (method, RECEIVER) because to_bits() is receiver-dependent: it exposes the raw
-# IEEE-754 encoding, so f32 yields u32 and f64 yields u64. A method-keyed table could not
-# express that, and the width is the whole point of the method -- `let u32 b = f64val.to_bits()`
-# used to compile and silently truncate the pattern to 32 bits.
-#
-# This is the sole authority for both questions ("which types carry it" and "what does it
-# return"); PRIMITIVE_METHOD_TYPES below is a derived view, so the two cannot drift.
+# method name -> {receiver type: return type}. Keyed per (method, RECEIVER) because
+# to_bits() is receiver-dependent -- f32 yields u32, f64 yields u64 -- and the width is
+# the whole point. Sole authority for both questions; PRIMITIVE_METHOD_TYPES is a derived
+# view, so the two cannot drift.
 PRIMITIVE_METHOD_RETURNS: dict[str, dict[BuiltinType, BuiltinType]] = {
     "to_str": dict.fromkeys(sorted(_ALL_PRIMITIVES, key=str), BuiltinType.STRING),
     "hash": dict.fromkeys(sorted(_ALL_PRIMITIVES, key=str), BuiltinType.U64),
     "to_bits": {BuiltinType.F32: BuiltinType.U32, BuiltinType.F64: BuiltinType.U64},
-    # clone() returns the receiver's own type, so this row is the identity. A primitive
-    # owns no heap, so the copy is the value itself -- but the method must EXIST, because
-    # one monomorphized body has to satisfy both `T = i32` and `T = string` and only the
-    # string instantiation needs a deep copy. Rust makes `Copy: Clone` for this reason.
+    # The identity: a primitive owns no heap. It must still EXIST, because one
+    # monomorphized body has to satisfy `T = i32` and `T = string` alike.
     "clone": {t: t for t in sorted(_CLONE_PRIMITIVES, key=str)},
 }
 

@@ -19,10 +19,8 @@ if TYPE_CHECKING:
 
 def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Value:
     """Emit function call with argument type casting."""
-    # Call-through an arbitrary expression that evaluates to a function value:
-    # `env.f(x)` (a captured closure in a lifted lambda body), `obj.handler()`,
-    # `arr[0]()`, `(e)()`. The type checker annotated the resolved FunctionType on the
-    # node; emit the callee expr to a fat value and dispatch through the indirect path.
+    # Call-through any expression yielding a function value. Pass 2 annotated the resolved
+    # FunctionType, so emit the callee to a fat value and dispatch indirectly.
     if not isinstance(expr.callee, Name):
         from sushi_lang.semantics.typesys import FunctionType
         fn_type = expr.callee_fn_type
@@ -71,10 +69,8 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if variadic_param is not None:
         fixed_count = len(func_sig.params) - 1
         fixed_args = [codegen.expressions.emit_expr(a) for a in expr.args[:fixed_count]]
-        # The FIXED parameters of a variadic function follow their declared modes
-        # exactly like a non-variadic call's. The trailing arguments are consumed by
-        # build_variadic_array into the synthesized T[], which the callee owns whole --
-        # the caller made it, so nothing else can.
+        # The FIXED parameters follow their declared modes like any call's. The trailing
+        # arguments go into the synthesized T[], which the callee owns whole.
         _settle_named_call_arguments(codegen, expr.args[:fixed_count], fixed_args, func_sig)
         array_struct = build_variadic_array(
             codegen, expr.args[fixed_count:], variadic_param.ty, callee)
@@ -87,13 +83,10 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if len(args) != len(params):
         raise_internal_error("CE0026", expected=len(params), got=len(args))
 
-    # Normalize a by-pointer owning argument (e.g. an inline `from([...])`, which lowers
-    # to the array-struct POINTER) against a by-value struct parameter, so cast_for_param
-    # does not raise CE0017 (issue #131). Mirrors the self-by-value reconcile in
-    # emit_method_call; fires only on an exact pointer-to-value-struct mismatch, so a
-    # peek/poke pointer param (PointerType != struct) never triggers it.
-    # BaseStructType so a user struct's identified type (#257) still reconciles here; it is
-    # a sibling of LiteralStructType, not a subclass.
+    # Normalize a by-pointer owning argument against a by-value struct parameter, or
+    # cast_for_param raises CE0017 (#131). Fires only on an exact pointer-to-value-struct
+    # mismatch, so a peek/poke pointer param never triggers it. BaseStructType, because a
+    # user struct's identified type is a SIBLING of LiteralStructType (#257).
     args = [
         codegen.builder.load(v, name="arg_by_value")
         if isinstance(p.type, ir.types.BaseStructType) and v.type == ir.PointerType(p.type)
@@ -313,10 +306,8 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if result is not None:
         return result
 
-    # ========================================================================
-    # Fallback: User-defined extension methods
-    # ========================================================================
-    # Use semantic type if available to distinguish bool from i8
+    # Fallback: user-defined extension methods. The semantic type distinguishes bool
+    # from i8.
     if semantic_type is not None:
         from sushi_lang.semantics.typesys import deref_type
         actual_type = deref_type(semantic_type)

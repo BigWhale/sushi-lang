@@ -91,10 +91,7 @@ def _propagate_to_enum_args(validator: 'TypeValidator', node: Expr,
     if not variant or not variant.associated_types:
         return
 
-    # Propagate the variant's associated types to the arguments
-    # For Result.Ok(x), associated_types[0] is T
-    # For Result.Err(x), associated_types[0] is E
-    # For Maybe.Some(x), associated_types[0] is T
+    # The variant's associated types ARE the expected argument types.
     for i, arg in enumerate(node.args):
         if i < len(variant.associated_types):
             propagate_types_to_value(validator, arg, variant.associated_types[i])
@@ -145,21 +142,12 @@ def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
 
         _propagate_to_enum_args(validator, node, enum_type)
 
-    # A PLAIN enum still has to propagate to its arguments. Only the
-    # `resolved_enum_type` stamp above is generic-specific -- a plain enum needs no
-    # monomorphized identity, but its variant payload types are just as much the
-    # expected type of each argument, and `_propagate_to_enum_args` reads them off the
-    # variant either way.
+    # A PLAIN enum still propagates to its arguments: only the `resolved_enum_type` stamp
+    # above is generic-specific, while the variant payload types are the expected argument
+    # types either way. Without this, `Boxed.Wrap(Own.alloc(l))` died as CE0055 (#265).
     #
-    # Without this, `Boxed.Wrap(Own.alloc(l))` never stamped `resolved_struct_type` on
-    # the `Own.alloc`, so the backend's Own probe declined the call, the receiver `Own`
-    # was emitted as an ordinary name, and it died as CE0055 -- for a static constructor
-    # in the one argument position that had no propagation (#265). The struct-constructor
-    # twin `Box(Own.alloc(l))` and the generic-enum twin `Maybe.Some(Own.alloc(l))` both
-    # worked, which is what made the gap look arbitrary.
-    #
-    # Keyed on an EXACT name match, so a constructor for some other enum -- a type error
-    # validation reports on its own -- cannot be handed this enum's payload types.
+    # Keyed on an EXACT name match, so a constructor for another enum cannot be handed
+    # this enum's payload types.
     elif enum_name == enum_type.name:
         _propagate_to_enum_args(validator, node, enum_type)
 
@@ -174,12 +162,9 @@ def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
             isinstance(struct_type, StructType)):
             node.resolved_struct_type = struct_type
 
-            # Own<T>'s only field is T* (a PointerType), which propagate_types_to_value has
-            # no branch for -- so the generic field walk below would pass the pointer-wrapped
-            # element type, drop it, and never stamp resolved_enum_type / resolved_struct_type
-            # on an inline `Own.alloc(<constructor>)` argument (#135: CE0113 for a generic-enum
-            # element, CE0000 for a generic-struct element). Propagate the UNWRAPPED element
-            # type instead, mirroring the normal-call argument path.
+            # Own<T>'s only field is a PointerType, which the generic field walk below has
+            # no branch for, so it would drop the type and stamp nothing (#135). Propagate
+            # the UNWRAPPED element type instead.
             if struct_name == "Own" and node.args:
                 from sushi_lang.semantics.generics.own import get_own_element_type
                 propagate_types_to_value(
@@ -202,11 +187,8 @@ def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
 
             _propagate_to_struct_args(validator, node, struct_type)
 
-        # A CONCRETE struct constructor still has to hand its field types down.
-        # This branch used to cover generic structs only, so a constructor nested
-        # inside a propagating context -- `Own.alloc(Holder(0, Maybe.None()))` --
-        # stopped here, and the `Maybe.None()` never learned its enum type. The
-        # backend then reported its own missing annotation as CE0113.
+        # A CONCRETE struct constructor hands its field types down too. Covering only
+        # generic ones stopped propagation at `Own.alloc(Holder(0, Maybe.None()))`.
         elif struct_name == struct_type.name:
             _propagate_to_struct_args(validator, node, struct_type)
 
@@ -219,10 +201,8 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
         _propagate_numeric_type(validator, value_expr, expected_type)
         return
 
-    # Function-typed context: hand a lambda its expected FunctionType so bare-name
-    # params (`|x|`) infer their types from the binding/argument context; likewise hand
-    # a bare Name its expected fn type so a generic-fn reference (`let fn(i32)->i32 g =
-    # identity`) can solve its type args (T2.3).
+    # Hand a lambda its expected FunctionType so bare-name params (`|x|`) infer, and a
+    # bare Name its expected fn type so a generic-fn reference can solve its type args.
     from sushi_lang.semantics.typesys import FunctionType as _FunctionType
     from sushi_lang.semantics.ast import Lambda as _Lambda, Name as _Name
     if isinstance(expected_type, _FunctionType) and isinstance(value_expr, (_Lambda, _Name)):

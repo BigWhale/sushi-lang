@@ -103,10 +103,8 @@ class FunctionMonomorphizer:
             generic.ret, substitution
         ) if generic.ret else None
 
-        # Generate mangled name. If the generic has a trailing pack type-param
-        # (T1 convention: at most one, always last), pass its arity so the
-        # symbol is distinct per pack size and never collides with a regular
-        # generic of the same base. Non-pack generics call exactly as before.
+        # A trailing pack type-param passes its arity, so the symbol is distinct per pack
+        # size and cannot collide with a regular generic of the same base.
         type_params = generic.type_params or []
         has_pack = bool(type_params) and getattr(type_params[-1], 'is_pack', False)
         if has_pack:
@@ -123,11 +121,8 @@ class FunctionMonomorphizer:
 
         concrete_body = self.monomorphizer.substitutor.substitute_body(generic.body, substitution)
 
-        # Build the pack value-parameter fan-out map and unroll any expand(...)
-        # statements in the now-concrete body into ordinary statements. After
-        # this, no later pass (scope/types/borrow/backend) ever sees an Expand:
-        # each pack element's body copy is straight-line, per-element-typed, and
-        # references the owned fan-out parameter args_i directly.
+        # Unroll `expand(...)` into ordinary statements, so no later pass ever sees an
+        # Expand: each element's copy is straight-line and references args_i directly.
         substitutor = self.monomorphizer.substitutor
         pack_param_fanout: Dict[str, list] = {}
         for param in generic.params:
@@ -250,11 +245,8 @@ class FunctionMonomorphizer:
         var_types = {}
         for param in generic_func.params:
             if param.ty:
-                # A pack-typed value-parameter has no single scalar type: it
-                # fans out into N concrete params at the signature level. Its
-                # body usage (expand(...)) is a later phase, so it contributes
-                # no entry to the scalar var-type map here (and routing it
-                # through substitute_type would hit the scalar-position guard).
+                # A pack-typed value-parameter fans out into N concrete params, so it has
+                # no single scalar type and contributes no entry here.
                 if self.monomorphizer.substitutor._pack_binding_for(param, substitution) is not None:
                     continue
                 concrete_ty = self.monomorphizer.substitutor.substitute_type(param.ty, substitution)
@@ -408,11 +400,9 @@ class FunctionMonomorphizer:
         inferrer = self._get_arg_inferrer(var_types)
 
         for arg_expr, param in zip(call_args, generic_func.params, strict=False):
-            # Infer the argument's type through Pass 2's shared inferrer when available
-            # (it types any expression: a call, cast, method result, or literal -- not just
-            # a bare Name), falling back to the var-type map on the unit-test paths that have
-            # no SymbolTables. The Names-only fallback used to abort inference on the FIRST
-            # non-Name argument, dropping the whole instantiation even when a later Name
+            # Pass 2's shared inferrer types any expression, not just a bare Name. The
+            # var-type map is the fallback for unit-test paths with no SymbolTables; a
+            # Names-only walk aborted on the FIRST non-Name argument
             # argument still supplied the type parameter (issue #214).
             arg_type = None
             if inferrer is not None:

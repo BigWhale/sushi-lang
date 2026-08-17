@@ -50,12 +50,8 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
         if resolved_type != stmt.ty:
             stmt.ty = resolved_type
 
-    # A bare Result constructor (Result.Ok(...) / Result.Err(...)) assigned to a
-    # non-Result variable must be rejected here with CE2505. The inference-based
-    # check further down only fires when the RHS *infers* as Result<...> (e.g. a
-    # function call); a direct constructor infers as None, so without this it
-    # slips through to codegen and dies on CE0113 -- a self-described compiler
-    # bug -- instead of a clean diagnostic (issue #48).
+    # A bare Result constructor infers as None, so the inference-based check below never
+    # fires on it and it used to reach codegen as a CE0113 (#48). CE2505 here instead.
     if stmt.value is not None:
         is_result_ctor = (
             (isinstance(stmt.value, EnumConstructor) and stmt.value.enum_name == "Result")
@@ -86,10 +82,8 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
     if stmt.value:
         rhs_type = validator.infer_expression_type(stmt.value)
 
-        # Detect whether the LHS is itself a Result. A declared `Result<T, E>` either resolves
-        # to its interned enum or stays a GenericTypeRef (line 113 keeps it), so both spellings
-        # are checked -- otherwise a Result-returning method assigned to a Result variable
-        # misfires as CE2505.
+        # A declared `Result<T, E>` either resolves to its interned enum or stays a
+        # GenericTypeRef, so both spellings are checked or CE2505 misfires.
         lhs_is_result = (
             (isinstance(resolved_type, EnumType) and resolved_type.name.startswith("Result<"))
             or (isinstance(stmt.ty, GenericTypeRef) and stmt.ty.base_name == "Result")
@@ -110,12 +104,9 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
 def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
     """Validate return statement type compatibility."""
     if not validator.current_function:
-        # Extension and perk-implementation method bodies have no current_function
-        # (they return a BARE value at the IR level, not a Result). The bare value
-        # still has to be type-checked, and its expression still has to be walked --
-        # otherwise a generic call in it is never rewritten to its monomorphized name
-        # and an undefined method or type mismatch sails straight into the backend as
-        # a CE0000 crash (issue #212).
+        # An extension or perk-impl body has no current_function -- it returns a BARE
+        # value. The expression must still be WALKED, or a generic call in it is never
+        # rewritten to its monomorphized name and reaches the backend as a CE0000 (#212).
         if getattr(validator, "in_extension_context", False) and stmt.value is not None:
             value = stmt.value
             # A Result.Ok(...)/Result.Err(...) wrapper is the anti-pattern that later
@@ -218,15 +209,10 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
     if expr_type is None:
         return
 
-    # Check type compatibility with the actual type (unwrapped for references).
-    #
-    # `types_compatible` and NOT a bare `!=`: the two sides reach here at different
-    # resolution depths, and a bare compare makes "how far resolved is it?" part of
-    # type identity -- the #240 defect. `g := make(5)??` on a `fn(i32) -> i32` local
-    # compared a resolved err_type against an UnknownType("StdError") one and reported
-    # `cannot assign fn(i32) -> i32 to fn(i32) -> i32` (issue #288). One type printed
-    # twice is that failure's signature. The shared compare resolves both sides and
-    # recurses into function members, which is what every other CE2002 site uses.
+    # `types_compatible` and NOT a bare `!=`: the two sides arrive at different
+    # resolution depths, and comparing directly makes "how far resolved is it?" part of
+    # type identity (#240). One type printed twice in a CE2002 is that failure's
+    # signature (#288).
     from .compatibility import types_compatible
     if not types_compatible(validator, expr_type, actual_type):
         er.emit(validator.reporter, er.ERR.CE2002, stmt.loc,
@@ -285,24 +271,17 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
     else:
         stmt.item_type = element_type
 
-    # A reference binding (#300 phase 1) is a pointer into the container's element
-    # storage, so the iterable must HAVE element storage. Only the four container
-    # iterators qualify: `arr.iter()`, `list.iter()`, `map.keys()`, `map.values()`.
-    # A range synthesizes its values and `map.entries()` synthesizes each Entry pair
-    # (the backend insert_values it from two GEPs); stdin lines are read into fresh
-    # buffers. The allowlist is deliberate: a new iterable kind must be PROVEN
-    # addressable before a reference binding may point into it.
+    # A reference binding points INTO the container's element storage, so the iterable
+    # must have some: a range and `map.entries()` synthesize their values. The allowlist
+    # is deliberate -- a new iterable kind must be PROVEN addressable first (#300).
     if stmt.item_borrow is not None:
         if not _foreach_iterable_is_addressable(stmt.iterable):
             er.emit(validator.reporter, er.ERR.CE2423,
                     stmt.item_borrow_span or stmt.loc)
             return
 
-    # The item binding lives for the LOOP and no longer (#341): save whatever entry it
-    # shadows and restore it after the body, the way a match arm already scopes its
-    # bindings (types/matching.py). Without the bracket, an outer local of the same
-    # name kept the ITEM's type for the rest of the function -- a false CE2006 on its
-    # next use.
+    # The item binding lives for the LOOP and no longer (#341), so whatever it shadows is
+    # saved and restored. Without that, an outer local kept the ITEM's type.
     _MISSING = object()
     previous = validator.variable_types.get(stmt.item_name, _MISSING)
     if stmt.item_borrow is not None:

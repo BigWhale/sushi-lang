@@ -21,26 +21,17 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
 
     scrutinee_value = codegen.expressions.emit_expr(stmt.scrutinee)
 
-    # Get the scrutinee's type for pattern variable extraction.
-    # Prefer the concrete enum type the type checker already resolved (Pass 2);
-    # only fall back to backend re-derivation when it is absent (older nodes /
-    # non-standard construction). The re-derivation cannot cover every scrutinee
-    # form, so relying on the annotation avoids silently dropping bindings.
+    # Prefer Pass 2's resolved enum type: the backend re-derivation below cannot cover
+    # every scrutinee form, and a miss silently drops the arm's bindings.
     from sushi_lang.semantics.typesys import EnumType
     scrutinee_type = getattr(stmt, 'resolved_scrutinee_type', None)
     if not isinstance(scrutinee_type, EnumType):
         scrutinee_type = _get_scrutinee_type(codegen, stmt.scrutinee)
 
-    # An UNBOUND scrutinee (`match mk():`) is a temporary that nothing owns, and the arm
-    # bindings only BORROW its payload -- so an owning payload was never freed (#159). Give it a
-    # real owner: an ordinary owning enum local in a scope wrapped around the whole match.
-    #
-    # Registering it as a normal local rather than inventing a temp registry means every exit
-    # path that already works keeps working, unchanged: fall-through frees it at pop_scope, an
-    # arm that `return`s frees it via emit_scope_cleanup, an arm that `break`s frees it via
-    # emit_loop_exit_cleanup -- and it inherits the move guard, so an arm that moves the payload
-    # out does not then double-free it. It behaves exactly like the already-correct bound case
-    # (`let Maybe<Box> m = arr.get(0)` then `match m:`).
+    # An UNBOUND scrutinee is a temporary nothing owns, and the arm bindings only BORROW
+    # its payload, so an owning payload was never freed (#159). It becomes an ordinary
+    # owning local in a scope around the whole match -- an ordinary local rather than a new
+    # temp registry, so every exit path and the move guard already work.
     owns_temp_scrutinee = _register_temp_scrutinee(codegen, stmt.scrutinee, scrutinee_value, scrutinee_type)
 
     tag = enum_utils.extract_enum_tag(codegen, scrutinee_value, name="match_tag")
@@ -177,10 +168,8 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                             return field_type
         return None
 
-    # A Call scrutinee (`match simple_result():`) needs no branch here: Pass 2 types the
-    # call and stamps resolved_scrutinee_type, which emit_match reads before ever calling
-    # this function. The backend used to re-infer it behind a bare `except Exception: pass`
-    # that silently swallowed a miss and dropped the pattern bindings.
+    # A Call scrutinee needs no branch: Pass 2 stamps `resolved_scrutinee_type`, which
+    # emit_match reads first. Re-inferring it here swallowed misses and dropped bindings.
 
     if isinstance(scrutinee, (DotCall, MethodCall)):
         if hasattr(scrutinee, 'inferred_return_type') and isinstance(scrutinee.inferred_return_type, EnumType):
@@ -289,12 +278,9 @@ def _emit_match_arms(
         codegen.builder.position_at_end(arm_bb)
         codegen.memory.push_scope()
 
-        # Bracket `variable_types` per ARM: pattern bindings write entries into the flat
-        # per-function dict (`memory._types` is scoped; this dict never was), so an arm's
-        # entry used to shadow a same-named outer local for the rest of the function --
-        # wrong TYPE info for a value binding (the structs.py hazard), wrong CODE for a
-        # reference binding (`Own(poke x)`, #300: `is_reference_parameter` keys on this
-        # dict, so a later same-named value binding would be double-dereferenced).
+        # Bracket `variable_types` per ARM: it is a FLAT per-function dict, so an arm's
+        # binding shadowed a same-named outer local for the rest of the function -- wrong
+        # type for a value binding, and a double deref for a reference one (#300).
         saved_variable_types = dict(codegen.variable_types)
 
         if isinstance(arm.pattern, Pattern):
@@ -330,12 +316,9 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
     if not pattern.bindings:
         return
 
-    # Use scrutinee_type if available (handles generic enums), otherwise fall back to pattern lookup.
-    # The fallback looks up the pattern's base enum name (e.g. "Result"/"Maybe"), which does NOT
-    # match a monomorphized key like "Result<i32, StdError>" - so for a generic scrutinee it only
-    # succeeds when scrutinee_type was already resolved. If it is still unresolved while the pattern
-    # carries bindings, we must fail loud: silently returning here drops the arm's binding locals and
-    # surfaces later as a confusing CE0055 in the arm body.
+    # The fallback looks up the pattern's BASE enum name, which cannot match a
+    # monomorphized key, so a generic scrutinee needs scrutinee_type. Fail loud if it is
+    # missing while the pattern binds: returning drops the locals and surfaces as CE0055.
     enum_type = scrutinee_type
     if enum_type is None and hasattr(codegen, 'enum_table'):
         enum_type = codegen.enum_table.by_name.get(pattern.enum_name)
@@ -367,12 +350,10 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
             strict=True):
         binding_llvm_type = codegen.types.ll_type(binding_type)
 
-        # A reference binding (#300 phase 3) points into the SCRUTINEE'S OWN payload
-        # storage, never into this arm's temporary copy -- a pointer into the copy
-        # would make every write through it a silently lost write (#253's class). The
-        # payload base is 8-aligned and the field offset naturally aligned (phase 2),
-        # so the interior pointer is safe to hand to natural-alignment code. Pass 3
-        # guarantees the scrutinee is a bare local/parameter name (CE2404 otherwise).
+        # A reference binding points into the SCRUTINEE'S own payload storage, never this
+        # arm's temporary copy -- a pointer into the copy makes every write silently lost
+        # (#253). The payload base is 8-aligned, so the interior pointer is naturally
+        # aligned; Pass 3 guarantees the scrutinee is a bare name (CE2404).
         if isinstance(binding_item, RefBindingNode):
             from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
             from sushi_lang.backend.statements.loops import bind_element_reference
@@ -396,10 +377,8 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
         field_value = codegen.builder.load(field_ptr_typed, name="field_value")
 
         if isinstance(binding_item, str):
-            # Simple binding: create local variable (skip wildcards "_"). The binding
-            # BORROWS the enum's payload (the enum, its owner, frees it at scope exit), so
-            # it is not registered for its own RAII free -- registering an owning payload
-            # binding too would double-free (#139/#147).
+            # The binding BORROWS the enum's payload, so it is NOT registered for its own
+            # RAII free -- the enum frees it, and registering both double-frees (#139).
             if binding_item != "_":
                 codegen.memory.create_local(binding_item, binding_llvm_type, field_value, binding_type, register_cleanup=False)
                 codegen.variable_types[binding_item] = binding_type
@@ -471,21 +450,14 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
 
     inner_pattern = own_pattern.inner_pattern
     if isinstance(inner_pattern, str):
-        # Simple binding: create local variable for the unwrapped value (skip wildcards "_").
-        # The binding BORROWS the Own's pointee -- the Own<T> still owns that heap block and
-        # frees it at scope exit -- so it must NOT be registered for its own RAII free, the
-        # same rule the plain match-arm binding follows above. Registering it double-freed
-        # the pointee. This was latent: the enum destructor used to no-op on an Own payload
-        # (needs_cleanup answered False for Own<T>), so the extra free destroyed nothing.
-        # Fixing that no-op (#162/#183) made the bogus owner real.
+        # The binding BORROWS the Own's pointee, which the Own<T> still owns, so it must
+        # NOT be registered -- the same rule as the plain arm binding above. It was latent
+        # until #162/#183 stopped the enum destructor no-opping on an Own payload.
         if inner_pattern != "_":
             if own_pattern.inner_borrow is not None:
-                # `Own(poke x)` (#300 phase 1): bind the heap POINTER itself, not a
-                # copy of the pointee, so a write through the binding lands in the
-                # allocation the Own owns. Malloc'd storage is naturally aligned, so
-                # the enum-payload alignment wall does not apply. The slot mimics a
-                # reference parameter's (`T**` holding the `T*`), and the
-                # `ReferenceType` in `variable_types` flips every deref/write consumer.
+                # `Own(poke x)` binds the heap POINTER, not a copy of the pointee, so a
+                # write lands in the allocation the Own owns. The slot mimics a reference
+                # parameter's `T**`, and the `ReferenceType` flips every deref consumer.
                 from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
                 pointee_ptr = codegen.builder.extract_value(own_value, 0, name="own_ptr")
                 mode = (BorrowMode.POKE if own_pattern.inner_borrow == "poke"

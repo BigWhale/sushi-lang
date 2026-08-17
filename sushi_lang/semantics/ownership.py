@@ -42,10 +42,8 @@ class Provenance(Enum):
 
     OWNED = "owned"        # a registered owner in this scope: a `let` local or a
     BORROWED = "borrowed"  # names storage owned elsewhere, for a SHORTER lifetime: a
-                           # match payload binding, a foreach binding, a peek/poke
-                           # parameter, a `let` bound from any of these, and every read
-                           # THROUGH a still-live owner -- `s.field`, `own.get()`, and a
-                           # container get-out
+                           # match/foreach binding, a peek/poke parameter, a `let` bound
+                           # from one, or any read through a still-live owner
     FRESH = "fresh"        # nothing owns it yet: a constructor, a call result,
 
 
@@ -56,11 +54,8 @@ class TypeClass(Enum):
     MOVE = "move"    # owns heap: a `string`, `T[]`, `List@(T)`, `Own@(T)`, `HashMap@(K,V)`,
                      # a function value, or any composite transitively holding one
     #
-    # There used to be a third class, COPY, for a value that owns heap but is duplicated
-    # rather than transferred -- a `string`, and string-only composites. Phase 9 deleted it:
-    # a string now MOVES like every other owning value, except that a binding initialised
-    # straight from a literal owns nothing at all and classifies PLAIN (option B,
-    # docs/design/ownership-conventions.md). Two classes, one question: does this own heap?
+    # Two classes, one question: does this own heap? A third class, COPY, was deleted --
+    # a `string` MOVES now, except that a literal-bound binding classifies PLAIN (option B).
 
 
 class Ownership(Enum):
@@ -73,19 +68,10 @@ class Ownership(Enum):
 
 # The classification table, `docs/design/ownership-conventions.md` section 4.3.
 #
-# The single cell every shipped bug in this family got wrong is (BORROWED, MOVE): #238
-# fixed it at three positions, #250 at five, #256 at six, #277 reports it at one more.
-# Per section 8 it is not a code-generation question at all -- consuming a borrowed
-# binding of an owning type is rejected, and `.clone()` is the escape.
-#
-# There used to be a fourth provenance, THROUGH_OWNER, for a read through a still-live
-# owner -- `s.field`, `own.get()`, a container get-out. It COPIED where BORROWED rejects,
-# and the asymmetry had one reason: a user who could not bind a borrow had no escape from
-# a rejection, so every `s.field` would have needed a `.clone()`. #242 supplies the escape,
-# so the two rows are now the same row and the compiler inserts no deep copy at a read.
-# Every deep copy in a Sushi program is one the user wrote as `.clone()`.
-# Phase 9 made this 3x2. The COPY column was the compiler inserting a deep copy of its own
-# accord; deleting it is what makes `.clone()` the only deep copy in a Sushi program.
+# (BORROWED, MOVE) is the cell every shipped bug in this family got wrong (#238, #250,
+# #256, #277): consuming a borrow of an owning type is REJECTED, and `.clone()` is the
+# escape. A fourth provenance and a COPY column were both deleted -- which is what makes
+# `.clone()` the only deep copy in a Sushi program.
 _TABLE: dict[tuple[Provenance, TypeClass], Ownership] = {
     (Provenance.OWNED,    TypeClass.PLAIN): Ownership.ADOPT,
     (Provenance.OWNED,    TypeClass.MOVE):  Ownership.MOVE,
@@ -113,18 +99,10 @@ def type_class_of(ty: Optional[Type], resolve: Callable[[Type], Type] = _IDENTIT
     if ty is None:
         return TypeClass.PLAIN
 
-    # A reference classifies as its REFERENT. The borrow is in the PROVENANCE, which
-    # `_name_provenance` already answers BORROWED for a reference-typed name, and the
-    # question this function asks is the other half: does the value own heap?
-    #
-    # Short-circuiting to PLAIN here answered the ownership question with the borrow
-    # question, and that made the (BORROWED, MOVE) cell -- the cell that says "you
-    # cannot consume a borrow" -- UNREACHABLE through a reference type. So every
-    # consuming use of a reference parameter landed in (BORROWED, PLAIN) = ADOPT, which
-    # the checker performed silently while the backend classified the same transfer from
-    # the TARGET type and answered REJECT: #301's CE0129, #310's compile-clean double
-    # free, #311's ref-to-ref rebind. One question, two answers -- the thing this module
-    # exists to make impossible.
+    # A reference classifies as its REFERENT: the borrow lives in the PROVENANCE, and the
+    # question here is the other half -- does the value own heap? Answering PLAIN made the
+    # (BORROWED, MOVE) cell unreachable through a reference type, so the checker adopted
+    # silently while the backend rejected: #301, #310, #311.
     if isinstance(ty, ReferenceType):
         ty = ty.referenced_type
 
@@ -155,11 +133,8 @@ def is_own_type(ty: Optional[Type]) -> bool:
     return isinstance(name, str) and name.startswith("Own<")
 
 
-# The generic containers whose `.get()` reads out of storage the receiver keeps. The
-# interned names carry `<...>`, never `@(...)` -- see `semantics/generics/type_display.py`.
-# The set coincides with the containers that keep their own clone/method paths, so it is
-# spelled ONCE (semantics/generics/cloning.py) and aliased here under the name that says
-# what this module uses it for.
+# Containers whose `.get()` reads out of storage the receiver keeps. Interned names carry
+# `<...>`, never `@(...)`. Spelled ONCE in semantics/generics/cloning.py and aliased here.
 from sushi_lang.semantics.generics.cloning import (  # noqa: E402
     CONTAINER_PREFIXES as _GET_OUT_PREFIXES,
 )

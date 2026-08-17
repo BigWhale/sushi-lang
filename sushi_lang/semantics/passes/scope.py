@@ -38,10 +38,8 @@ class ScopeAnalyzer:
         # legal when this is > 0 (CE1003); reset to 0 across nested functions.
         self._loop_depth: int = 0
         self.function_names: set[str] = set()
-        # Active lambda capture collectors (one per enclosing lambda, innermost
-        # last). Each is {'boundary': int, 'names': dict[str, Param]}: a variable
-        # use resolving to a scope BELOW a collector's boundary is captured by that
-        # lambda (and every enclosing lambda whose boundary is also above it).
+        # One per enclosing lambda, innermost last. A use resolving to a scope BELOW a
+        # collector's boundary is captured by that lambda and every enclosing one.
         self._capture_collectors: List[dict] = []
         # True while checking a `poke self` method body (#327): `self := v` is then
         # the store-through write, not the forbidden receiver rebind.
@@ -194,10 +192,8 @@ class ScopeAnalyzer:
         self._loop_depth = 0
 
         for param in func.params:
-            # Synthesized pack fan-out params (args_0, args_1, ... produced when a
-            # ...Ts pack is monomorphized) carry user-invisible names and cannot be
-            # consumed until expand(...) lands (T7b). Declare them with no span so the
-            # implicit-variable exemption suppresses a spurious CW1001 unused warning.
+            # Synthesized pack fan-out params carry user-invisible names, so they are
+            # declared with no span and the implicit-variable exemption suppresses CW1001.
             span = None if getattr(param, 'is_pack', False) else param.name_span
             self._declare_variable(param.name, span)
 
@@ -249,10 +245,9 @@ class ScopeAnalyzer:
             handler = getattr(self, handler_name)
             handler(stmt)
         else:
-            # NOT a silent fall-through (#245). A statement with no handler got no scope
-            # analysis at all, invisibly -- the same class CE0125 closed in the borrow
-            # checker; `expand(...)` bodies were skipped this way. The CI gate is
-            # tests/unit/test_scope_dispatch_is_total.py; this is the runtime backstop.
+            # NOT a silent fall-through (#245): a statement with no handler got NO scope
+            # analysis, the class CE0125 closed in the borrow checker. The CI gate is
+            # tests/unit/test_scope_dispatch_is_total.py; this is the backstop.
             er.raise_internal_error("CE0130", node=type(stmt).__name__)
 
     def _check_let(self, stmt: Let) -> None:
@@ -269,10 +264,8 @@ class ScopeAnalyzer:
         # For field rebind (obj.field := value), target is a MemberAccess
         if isinstance(stmt.target, Name):
             var_name = stmt.target.id
-            # A rebind of 'self' is not allowed for the classic read-only receiver --
-            # but a `poke self` method (#327) writes its primitive receiver exactly
-            # this way (`self := 0`), the same store-through a `poke T` parameter's
-            # rebind performs.
+            # Not allowed for the read-only receiver, but a `poke self` method writes its
+            # primitive receiver exactly this way (#327).
             if var_name == "self" and not self._self_is_poke:
                 er.emit(self.reporter, er.ERR.CE1002, stmt.loc, name=var_name)
             else:
@@ -320,11 +313,10 @@ class ScopeAnalyzer:
         """Check a foreach statement."""
         self._check_expression(stmt.iterable)
 
-        # A `poke` element binding (#300 phase 1) writes through a pointer into the
-        # container's storage, so the container must be a LOCAL -- a constant is emitted
-        # into `.rodata` and a store through it is undefined behaviour, not a diagnostic
-        # (the CE2096 rationale). This pass owns the "what kind of name is this"
-        # question (#330), so the rejection is CE2400, the borrow-of-a-non-local code.
+        # A `poke` element binding writes through a pointer into the container's storage,
+        # so the container must be a LOCAL: a constant lives in `.rodata`, where a store is
+        # undefined behaviour rather than a diagnostic. This pass owns "what kind of name is
+        # this" (#330), so the rejection is CE2400.
         if stmt.item_borrow == "poke":
             root = stmt.iterable
             from sushi_lang.semantics.ast import DotCall as _DotCall, MethodCall as _MethodCall
@@ -442,10 +434,8 @@ class ScopeAnalyzer:
                 for arg in expr.args:
                     self._check_expression(arg)
             case MethodCall():
-                # Check receiver and arguments
-                # Special case: if receiver is an enum type name (e.g., Result.Ok()),
-                # this is actually an enum constructor, not a method call
-                # We need to handle this specially to avoid treating the enum name as a variable
+                # An enum type name as receiver (`Result.Ok()`) is a constructor, not a
+                # method call, so the name must not be treated as a variable.
                 if isinstance(expr.receiver, Name) and (expr.receiver.id in self.enums.by_name or expr.receiver.id in self.generic_enums.by_name):
                     pass
                 else:
@@ -483,10 +473,8 @@ class ScopeAnalyzer:
             case MemberAccess():
                 self._check_expression(expr.receiver)
             case EnumConstructor():
-                # Enum variant constructor (including Result.Ok(), Result.Err()) - check all arguments
-                # BUT: check if this is actually a method call on a variable (not an enum type)
-                # This happens when user writes: let Result<i32> x = Result.Ok(42); x.realise(0)
-                # The AST builder parses both as EnumConstructor, but x.realise should be MethodCall
+                # The AST builder parses both `Result.Ok(42)` and `x.realise(0)` as an
+                # EnumConstructor, so a receiver naming a VARIABLE is really a method call.
 
                 enum_name = expr.enum_name
                 is_variable = False
@@ -496,10 +484,8 @@ class ScopeAnalyzer:
                         break
 
                 if is_variable:
-                    # This is actually a method call on a variable, not an enum constructor
-                    # We need to convert this EnumConstructor to MethodCall
-                    # But we can't modify the AST directly here without breaking iteration
-                    # For now, just check the receiver variable as used and check arguments
+                    # A method call on a variable. The AST cannot be rewritten mid-walk, so
+                    # mark the receiver used and check the arguments.
                     self._use_variable(enum_name, expr.enum_name_span)
                 else:
                     pass
@@ -509,11 +495,9 @@ class ScopeAnalyzer:
             case TryExpr():
                 self._check_expression(expr.expr)
             case Borrow():
-                # Borrow expression: &expr. What is borrowed is the ROOT of the place --
-                # `peek cfg.port` borrows out of `cfg` -- so the whole chain resolves
-                # through the one borrow-specific arm. Walking to the base here is what
-                # gives `peek nope.x` the same single diagnostic as `peek nope`; it used
-                # to fall through to the ordinary member-access walk and be reported twice.
+                # What is borrowed is the ROOT of the place -- `peek cfg.port` borrows out
+                # of `cfg` -- so the whole chain resolves through this one arm. That is what
+                # gives `peek nope.x` a single diagnostic instead of two.
                 base = expr.expr
                 while isinstance(base, MemberAccess):
                     base = base.receiver

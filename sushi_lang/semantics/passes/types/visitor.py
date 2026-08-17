@@ -18,10 +18,8 @@ from sushi_lang.semantics.ast import (
 )
 
 
-# Stdlib modules whose registry entries declare a return type outright, i.e. their
-# get_return_type() takes no arguments. `math` is deliberately absent: its return type
-# depends on the argument types, so its resolver takes params and visit_call handles it
-# separately. Keyed by `use <path>`, so a function only resolves if its module is imported.
+# Stdlib modules whose registry declares a return type outright. `math` is absent on
+# purpose: its return type depends on the argument types, so it keeps its own branch.
 _REGISTRY_TYPED_STDLIB_MODULES = ("time", "sys/env", "sys/process", "random", "io/files")
 
 
@@ -334,19 +332,14 @@ class ExpressionValidator(RecursiveVisitor):
                 # consumed (borrow-checked use-after-move, CE2405). No diagnostic.
                 pass
             elif owns_heap(cap.ty):
-                # List<T> / Own<T> move-capture into the env (T1.5 item 1): moved in,
-                # owned + freed by the env destructor, outer binding consumed (CE2405).
-                # Reading them back inside the body dispatches through the env-field
-                # member-access receiver path (backend calls/utils.py).
+                # Move-capture into the env: the env owns and frees it, and the outer
+                # binding is consumed (CE2405).
                 pass
 
-        # CE2094 (T1.7 cut): an owning parameter type on a function value has no
-        # deep-copy on the indirect-call path yet (a latent double-free), so reject it.
-        # `owns_heap` is the merged predicate and now answers True for a `string` too. A
-        # string parameter is NOT the hazard this check is about: a by-value string param has
-        # its `owned` bit cleared at entry, so it is a borrow and frees nothing. Excluding it
-        # keeps `|string s| ...` legal, exactly as before Phase 9 -- widening CE2094 here
-        # would be a silent language change, not part of the tier flip.
+        # CE2094: an owning parameter type on a function value has no deep-copy on the
+        # indirect-call path yet, so reject it. A `string` is excluded deliberately -- its
+        # `owned` bit is cleared at entry, so it frees nothing, and including it would
+        # silently make `|string s| ...` illegal.
         for p in node.params:
             if p.ty != BuiltinType.STRING and owns_heap(p.ty):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
@@ -394,15 +387,10 @@ class ExpressionValidator(RecursiveVisitor):
             self._validate_from_bits(node)
             return
 
-        # The receiver is deliberately NOT validated here. Every path out of this method either
-        # does not have a receiver to validate, or delegates to something that validates it --
-        # and validating it here as well walked the receiver TWICE, so any diagnostic inside it
-        # was reported twice (#201). Errors, not just warnings.
-        #
-        #   enum constructor  -- the receiver is a type NAME, not a value; nothing to validate
-        #   fn-typed field    -- validated explicitly in that branch, below
-        #   method call       -- validate_method_call validates it (calls/methods.py), as it must
-        #                        anyway for a real MethodCall node reaching visit_methodcall
+        # The receiver is deliberately NOT validated here: every path either has no
+        # receiver (an enum constructor's is a type NAME) or validates it itself. Doing it
+        # here as well walked the receiver twice and reported every diagnostic in it
+        # twice (#201).
 
         if isinstance(node.receiver, Name):
             receiver_name = node.receiver.id
@@ -457,10 +445,8 @@ class ExpressionValidator(RecursiveVisitor):
         if getattr(temp_method_call, 'callee_self_mode', None) is not None:
             node.callee_self_mode = temp_method_call.callee_self_mode
 
-        # CRITICAL: and the parameter-mode stamp with it. Pass 3 reads it off THIS node
-        # to decide which arguments the method takes ownership of, so losing it here
-        # would make every `nom` parameter of a method inert -- a declared mode nothing
-        # enforced, which is the defect the mode exists to remove.
+        # The parameter-mode stamp travels with it: Pass 3 reads it off THIS node, so
+        # losing it makes every `nom` parameter of a method inert.
         if getattr(temp_method_call, 'callee_param_modes', None) is not None:
             node.callee_param_modes = temp_method_call.callee_param_modes
             node.callee_param_names = temp_method_call.callee_param_names
@@ -525,10 +511,8 @@ class ExpressionValidator(RecursiveVisitor):
         if node.id in tv.variable_types or node.id in tv.const_table.by_name:
             return
         if node.id in tv.generic_func_table.by_name:
-            # T2.3: a generic-fn reference is allowed when an explicit expected fn type
-            # is present (e.g. `let fn(i32) -> i32 g = identity`). Solve the type args,
-            # rewrite the node to the mangled concrete name, and accept. A bare reference
-            # with no expected fn type stays CE2093 (the minimal-slice boundary).
+            # A generic-fn reference is allowed WITH an explicit expected fn type: solve
+            # the type args and rewrite to the mangled name. A bare one stays CE2093.
             from sushi_lang.semantics.passes.types.calls.generics import resolve_generic_fn_reference
             resolved = resolve_generic_fn_reference(tv, node.id, getattr(node, "expected_type", None))
             if resolved is not None:
@@ -732,10 +716,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             if left_type == BuiltinType.STRING or right_type == BuiltinType.STRING:
                 return None
 
-            # Strict same-type rule: the result is the common operand type.
-            # Mixed numeric operands are a CE2510 error (emitted by the
-            # ExpressionValidator); return None there to avoid cascading
-            # mismatch errors on the enclosing expression.
+            # The result is the common operand type. Mixed numerics are CE2510 from the
+            # ExpressionValidator; None here avoids cascading mismatches.
             numeric = (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
                        BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
                        BuiltinType.F32, BuiltinType.F64)
@@ -791,10 +773,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
     def visit_call(self, node: Call) -> Optional[Type]:
         """Infer function call type."""
         from sushi_lang.semantics.typesys import FunctionType
-        # Call-through an arbitrary expression that evaluates to a function value:
-        # `env.f(x)` (a captured closure in a lifted lambda body), `obj.handler()`,
-        # `arr[0]()`, `(e)()`. Calling through it yields Result<ok, err>, exactly like a
-        # direct call (so `f(x)??` unwraps to ok_type).
+        # Call-through any expression yielding a function value (`env.f(x)`,
+        # `obj.handler()`, `arr[0]()`). Yields Result<ok, err> like a direct call.
         if not isinstance(node.callee, Name):
             callee_ty = self.type_validator.infer_expression_type(node.callee)
             if isinstance(callee_ty, FunctionType):
@@ -813,15 +793,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if function_name == "open":
             return self.type_validator.enum_table.by_name.get("FileResult")
 
-        # Stdlib functions whose return type the registry declares outright. The registry
-        # is the single source of truth the backend consults too, so reading it here keeps
-        # the two from drifting. Hardcoded copies used to live here and had already gone
-        # stale: they looked up a one-arg "Result<i32>" enum that is never registered (the
-        # canonical name is two-arg, Result<T, E>), so every time/sys-env call silently
-        # returned None and fell through to backend re-inference.
+        # The registry is the single source of truth the backend reads too, so reading it
+        # here keeps the two from drifting. The hardcoded copies this replaced had gone
+        # stale: they looked up a one-arg "Result<i32>" that is never registered.
         #
-        # math is excluded on purpose: its return type depends on the argument types, so
-        # its get_return_type() takes params and it keeps its own branch below.
+        # math keeps its own branch below -- its return type depends on the arguments.
         for module_path in _REGISTRY_TYPED_STDLIB_MODULES:
             stdlib_func = self.type_validator.func_table.lookup_stdlib_function(
                 module_path, function_name

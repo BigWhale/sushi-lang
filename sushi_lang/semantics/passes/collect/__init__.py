@@ -178,11 +178,7 @@ class CollectorPass:
 
     def _register_predefined_generics(self) -> None:
         """Register predefined generic enums and structs."""
-        # Result<T, E> generic enum - error handling with typed errors
-        # Type parameters: T (success value type), E (error type)
-        # Variants:
-        #   Ok(T) - success with value of type T
-        #   Err(E) - failure with error of type E
+        # Result<T, E>: Ok(T) / Err(E).
         result_generic = GenericEnumType(
             name="Result",
             type_params=(TypeParameter(name="T"), TypeParameter(name="E")),
@@ -200,11 +196,7 @@ class CollectorPass:
         self.generic_enums.by_name["Result"] = result_generic
         self.generic_enums.order.append("Result")
 
-        # Maybe<T> generic enum - optional values
-        # Type parameter: T (the value type when present)
-        # Variants:
-        #   Some(T) - contains a value of type T
-        #   None() - no value present
+        # Maybe<T>: Some(T) / None().
         maybe_generic = GenericEnumType(
             name="Maybe",
             type_params=(TypeParameter(name="T"),),
@@ -223,11 +215,7 @@ class CollectorPass:
         self.generic_enums.by_name["Maybe"] = maybe_generic
         self.generic_enums.order.append("Maybe")
 
-        # Own<T> generic struct - unique ownership of heap-allocated data
-        # Type parameter: T (the owned value type)
-        # Fields:
-        #   value: T* (pointer to heap-allocated T)
-        # Note: The actual field is a PointerType, but we represent it internally
+        # Own<T>: unique ownership of a heap T. The field is really a PointerType.
         own_generic = GenericStructType(
             name="Own",
             type_params=(TypeParameter(name="T"),),
@@ -242,17 +230,8 @@ class CollectorPass:
             self.generic_structs.by_name["HashMap"] = hashmap_generic_struct()
             self.generic_structs.order.append("HashMap")
 
-        # List<T> generic struct - dynamic array with automatic growth
-        # Type parameters: T (element type)
-        # Fields:
-        #   len: i32 (current number of elements)
-        #   capacity: i32 (allocated capacity)
-        #   data: T* (pointer to heap-allocated array)
-        #
-        # Features:
-        #   - Automatic 2x growth on push when len >= capacity
-        #   - Lazy allocation (capacity 0 until first push)
-        #   - Methods: new(), with_capacity(), push(), pop(), get(), clear(), reserve(), shrink_to_fit(), destroy(), free()
+        # List<T>: `{i32 len, i32 capacity, T* data}`, 2x growth, lazily allocated.
+        # See docs/stdlib/collections/list.md.
         list_generic = GenericStructType(
             name="List",
             type_params=(TypeParameter(name="T"),),

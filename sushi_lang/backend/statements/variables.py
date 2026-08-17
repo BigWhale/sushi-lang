@@ -35,10 +35,8 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
         if isinstance(stmt.ty, StructType):
             semantic_type = stmt.ty
         elif isinstance(stmt.ty, UnknownType):
-            # UnknownType has a name attribute - look it up in struct_table, then enum_table.
-            # Resolving to a concrete EnumType lets create_local register the enum local for
-            # RAII cleanup when it owns heap (a dynamic-array / string / ... variant payload);
-            # #143 lifted CE2059 without this owner, so such enum locals leaked (#139).
+            # Resolving to a concrete EnumType is what lets create_local register an
+            # owning enum local for RAII cleanup; without it they leaked (#139).
             type_name = stmt.ty.name
             if type_name in codegen.struct_table.by_name:
                 semantic_type = codegen.struct_table.by_name[type_name]
@@ -50,19 +48,14 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
             elif stmt.ty in codegen.enum_table.by_name:
                 semantic_type = codegen.enum_table.by_name[stmt.ty]
 
-        # Registration is DEFERRED until the ownership seam has spoken (#242). Whether a
-        # `let` owns its value is `bind()`'s answer, and `bind()` cannot run until the
-        # initializer is emitted. Registering first and undoing it afterwards is what the
-        # two reconcilers used to do, and they derived the answer a second time to do it.
+        # Registration is DEFERRED until the seam has spoken (#242): whether a `let` owns
+        # its value is `bind()`'s answer, and that needs the initializer emitted first.
         slot = codegen.memory.create_local_nostore(stmt.name, ll_type, semantic_type,
                                                    register_cleanup=False)
 
-        # Zero-initialise a string local's slot ({null, 0, owned=0}) BEFORE emitting the RHS,
-        # and a closure local's fat pointer ({null fn, null env, null drop}) likewise. The RHS
-        # may contain a `??` (`let checked = check(s)??`) whose early exit runs the string and
-        # closure cleanup over every live local. This local is not registered yet, so that
-        # sweep skips it -- but the store costs one instruction and it keeps the slot free of
-        # poison for any path that reads it before the real value lands (#145).
+        # Zero-initialise the slot BEFORE emitting the RHS: the RHS may contain a `??`
+        # whose early exit sweeps every live local, and one store keeps the slot free of
+        # poison for any path that reads it first (#145).
         from sushi_lang.semantics.typesys import BuiltinType as _BT
         from sushi_lang.semantics.typesys import FunctionType as _FT
         if semantic_type == _BT.STRING or isinstance(semantic_type, _FT):
@@ -121,21 +114,14 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     semantic_type = codegen.variable_types.get(var_name) or codegen.memory.find_semantic_type(var_name)
 
     if isinstance(semantic_type, ReferenceType):
-        # A `poke` rebind stores THROUGH the pointer, so it overwrites a value the CALLER
-        # owns. Ownership applies at both ends, exactly as it does for a local rebind:
+        # A `poke` rebind stores THROUGH the pointer, so ownership applies at both ends:
+        # the new value comes through the seam, and the OLD value is freed here, because
+        # the caller frees only what the binding holds at scope exit. Returning before
+        # either step double-freed a string (#303) and leaked an array (#304).
         #
-        #   1. the new value is taken from its source through the seam, and
-        #   2. the OLD value is freed here, because the caller frees only what its binding
-        #      holds at scope exit -- which is the new value.
-        #
-        # This arm used to store and return before both steps, so an owning pointee was
-        # double-freed (a string, #303) or leaked (an array, #304).
-        #
-        # The slot itself holds a POINTER and is never registered for cleanup
-        # (`functions/helpers.py`), so there is no move mark to consult on this path: the
-        # pointee always belongs to the caller. `consume` runs BEFORE the destructor for
-        # the reason `_emit_dynamic_array_rebind` states -- a source that aliases the
-        # value about to be freed must be read first.
+        # The slot holds a POINTER and is never registered, so there is no move mark to
+        # consult -- the pointee always belongs to the caller. `consume` runs BEFORE the
+        # destructor: a source aliasing the value about to be freed must be read first.
         referent_type = semantic_type.referenced_type
         val = consume(codegen, stmt.value, val, referent_type, ConsumingUse.REBIND)
         ref_ptr = codegen.builder.load(slot, name=f"{var_name}_ref_ptr")
@@ -153,10 +139,8 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
           dst.pointee.width == 8):
         codegen.builder.store(val, slot)
     elif isinstance(dst, ir.types.BaseStructType):
-        # BaseStructType: a user struct is an identified type (#257), a sibling of
-        # LiteralStructType rather than a subclass, so the narrower check sent every
-        # user-struct rebind to the else branch below instead of _emit_struct_rebind.
-        # Check if this is a dynamic array
+        # BaseStructType, not LiteralStructType: a user struct is an IDENTIFIED type and a
+        # sibling rather than a subclass, so the narrower check missed every one (#257).
         if codegen.types.is_dynamic_array_type(dst):
             _emit_dynamic_array_rebind(codegen, stmt, slot, val, dst)
         else:
@@ -213,11 +197,9 @@ def _emit_dynamic_array_rebind(
     if hasattr(codegen, 'dynamic_arrays') and codegen.dynamic_arrays is not None:
         codegen.dynamic_arrays.reset_destroyed_on_rebind(var_name)
 
-    # Nullify a MOVED source's descriptor (data=NULL, len=0, cap=0). The move mark alone
-    # keeps scope exit from freeing it; this additionally makes a later read of the source
-    # observably empty rather than a stale view of the buffer the target now owns.
-    # `consume` has already decided -- a copied or adopted source must NOT be nullified,
-    # which is what `moves.is_moved` distinguishes.
+    # Nullify a MOVED source's descriptor, so a later read is observably empty rather
+    # than a stale view of the buffer the target now owns. A copied or adopted source must
+    # NOT be nullified, which is what `moves.is_moved` distinguishes.
     if isinstance(stmt.value, Name):
         source_name = stmt.value.id
         source_slot = codegen.memory.try_find_local_slot(source_name)
@@ -251,18 +233,10 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
     # `resolve_named_type` is the shared one and also resolves a generic spelling.
     resolved = resolve_named_type(codegen, codegen.memory.find_semantic_type(var_name))
 
-    # Destroy the old value's heap so it does not leak when overwritten (#139) -- but
-    # only when this binding still OWNS it. Two ways it may not:
-    #
-    #   MOVED     a moved-away value (`f(s); s := "new"`) belongs to its new owner, and
-    #             freeing the stale copy here would double-free (F5).
-    #   DESTROYED an explicit `.destroy()` already released it and did NOT null the field,
-    #             so the slot still holds the freed pointer. Freeing it again frees
-    #             whatever `malloc` has since handed to the NEW value -- which is what
-    #             made `o.destroy(); o := Own.alloc(7); o.get()` read freed memory (#294).
-    #
-    # The per-kind ladder that used to stand here (struct/enum, then string, then closure)
-    # is gone: every arm of it called the destructor this helper calls.
+    # Destroy the old heap so it does not leak when overwritten (#139), but only when the
+    # binding still OWNS it. A MOVED value belongs to its new owner, and a DESTROYED one
+    # left the freed pointer in the slot -- freeing that again frees whatever `malloc` has
+    # since handed to the NEW value (#294).
     da = getattr(codegen, "dynamic_arrays", None)
     already_destroyed = da is not None and da.is_destroyed(var_name)
     if not codegen.moves.is_moved(slot) and not already_destroyed:
@@ -320,10 +294,8 @@ def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
         name=f"{target.member}_rebind_ptr"
     )
 
-    # Free what the field already held, or overwriting it leaks. The variable rebind does
-    # this (emit_struct_field_cleanup); the field rebind never did. Emitted AFTER the
-    # value is consumed above, so a COPY has already read the source -- a source aliasing
-    # the buffer about to be freed would otherwise be a use-after-free.
+    # Free what the field held, or overwriting it leaks. AFTER the value is consumed, so
+    # a source aliasing the buffer about to be freed has already been read.
     from sushi_lang.backend.destructors import emit_value_destructor, needs_cleanup
     if field_type is not None and needs_cleanup(field_type):
         emit_value_destructor(codegen, field_ptr, field_type)

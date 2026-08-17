@@ -24,55 +24,33 @@ class ScopeManager:
         self._locals: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
         self._types: Dict[str, List[tuple[int, 'Type']]] = {}
 
-        # Struct cleanup tracking: variable name -> stack of (scope_level, StructType, alloca).
-        # Stacked like _locals so a nested shadow of an owning struct does not overwrite the
-        # outer entry: the inner binding pushes and its pop drains only the top-at-depth,
-        # leaving the outer binding to be freed by the outer pop (a flat dict leaked it).
-        # Only stores structs that need RAII cleanup.
+        # name -> stack of (scope_level, StructType, alloca). STACKED, not flat: a nested
+        # shadow of an owning struct would overwrite the outer entry and leak it.
         self._struct_cleanup: Dict[str, List[tuple[int, 'StructType', ir.AllocaInstr]]] = {}
 
-        # Closure (function-value) cleanup tracking: variable name -> stack of
-        # (scope_level, alloca) holding the {fn_ptr, env_ptr, drop_ptr} fat value. Stacked
-        # like _locals for shadow-correctness (see _struct_cleanup). Every function-typed
-        # `let` local is registered; the free is runtime-guarded by drop_ptr, so a
-        # non-capturing value frees to a no-op (capture is erased from the `fn(...)` type).
-        # A by-value fn PARAMETER is registered too (the 2026-08-14 ruling: the callee
-        # owns; the caller transferred through the seam). Extension/perk-method bodies
-        # (fn_def=None) register nothing and stay borrows.
+        # name -> stack of (scope_level, alloca) holding the fat value. Stacked for the
+        # same reason as _struct_cleanup. The free is drop_ptr-guarded, so a non-capturing
+        # value frees to a no-op -- capture is erased from the `fn(...)` type. An
+        # extension/perk body (fn_def=None) registers nothing; its params stay borrows.
         self._closure_cleanup: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
 
-        # FFI no-leak registry: per-scope stack of marshalled C strings (i8*) that
-        # must be freed at scope exit. Parallel to the dynamic-array scope stack.
+        # FFI no-leak registry: per-scope marshalled C strings to free at scope exit.
         #
-        # Discipline (mirrors basic-block mutual-exclusivity):
-        # - register_cstr appends to the innermost scope's list.
-        # - An early-exit path (return / ?? propagation) calls
-        #   emit_cstr_cleanup_all(), which emits a free for every live cstr into
-        #   the CURRENT (terminating) block WITHOUT mutating the registry. That
-        #   block is mutually exclusive with all other exit blocks at runtime.
-        # - The structural pop_scope() pops the innermost list and frees it into
-        #   the fall-through block (also mutually exclusive with the early-exit
-        #   blocks). Popping is the ONLY thing that removes entries.
-        # Net effect: exactly one free executes per runtime path, no double free.
+        # The discipline is what makes it exactly one free per runtime path: an early-exit
+        # path emits frees into its own terminating block WITHOUT mutating the registry, and
+        # `pop_scope` is the ONLY thing that removes entries. Every exit block is mutually
+        # exclusive at runtime, so no path frees twice.
         self._cstr_cleanup: List[List[ir.Value]] = []
 
-        # Inline-closure temp registry: per-scope stack of {fn,env,drop} fat VALUES for
-        # capturing closures created inline as a call argument (#123). Such a closure is
-        # never bound to a local, so it has no owner in _closure_cleanup; the caller's
-        # scope owns it and frees its heap env at scope exit. Value-keyed (SSA fat value,
-        # no name/slot) and freed via the runtime-guarded drop, mirroring _cstr_cleanup's
-        # mutual-exclusion discipline: register appends; early-exit emits without mutating;
-        # pop_scope drains exactly once on the fall-through. One free per runtime path.
+        # A capturing closure created inline as a call argument is bound to no local, so it
+        # has no owner in _closure_cleanup and the caller's scope frees its env (#123).
+        # Value-keyed, and it follows _cstr_cleanup's mutual-exclusion discipline.
         self._closure_temp_cleanup: List[List[ir.Value]] = []
 
-        # String-value RAII (#145): local `string` bindings whose heap buffer is freed at
-        # scope exit via the owned bit (a literal/borrow carries owned=0 -> the free is a
-        # runtime no-op). Stacked like _closure_cleanup for shadow-correctness; move-tracked
-        # via MoveTracker so a returned/aliased owning string is skipped (its new owner frees
-        # it). A by-value string PARAMETER of a plain function is registered too (the
-        # 2026-08-14 ruling: the callee owns and its owned bit survives). Extension/perk
-        # bodies (fn_def=None) register nothing; their string params stay borrows with a
-        # cleared owned bit, which is what keeps `return self` safe there.
+        # String-value RAII (#145): freed at scope exit through the owned bit, so a literal
+        # (owned=0) frees to a no-op. Stacked, and move-tracked so a value with a new owner
+        # is skipped. An extension/perk body registers nothing -- its string params stay
+        # borrows with a cleared owned bit.
         self._string_cleanup: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
 
     @staticmethod
@@ -124,16 +102,10 @@ class ScopeManager:
 
         current_vars = self._scope_vars[self._scope_depth]
 
-        # Drain the three stacked cleanup registries on the fall-through (normal) exit.
-        # This is ONE shape (it used to be three verbatim loops; 11b): if the block
-        # already terminated, an early return/`??` inside this scope emitted the frees on
-        # that path already (emit_struct_cleanup / emit_closure_cleanup /
-        # emit_string_cleanup_all); emitting again would append a stray free after the
-        # terminator. Skip emission but still drain the tracking. Each runtime exit path
-        # frees on its own mutually-exclusive block, so no double free (#59/#60). A moved
-        # binding is skipped -- its new owner frees it. The closure free is drop_ptr-
-        # guarded and the string free owned-bit-guarded (#145), so a borrow-shaped value
-        # frees to a runtime no-op.
+        # Drain the three stacked registries on the fall-through exit. If the block already
+        # terminated, an early return emitted the frees on that path, so skip emission but
+        # still drain the tracking -- emitting would append a stray free after the
+        # terminator. Every exit path frees on its own mutually-exclusive block (#59/#60).
         if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
             self._drain_registry_at_depth(
                 self._struct_cleanup, current_vars,
@@ -159,20 +131,13 @@ class ScopeManager:
                     if not self._types[var_name]:
                         del self._types[var_name]
 
-        # Free the marshalled C strings registered in this scope on the normal
-        # (fall-through) block exit. This is the ONLY place the per-scope list is
-        # removed. Early-exit paths (return / ??) emit their own frees into their
-        # own terminating blocks via emit_cstr_cleanup_all() without popping, so
-        # exactly one free runs per runtime path. _free_cstr_list is a no-op when
-        # the current block is already terminated (e.g. the scope body ended in a
-        # bare return), avoiding a stray free after the ret.
+        # The ONLY place the per-scope cstr list is removed. An early exit emits its own
+        # frees without popping, so exactly one free runs per runtime path.
         if self._cstr_cleanup:
             self._free_cstr_list(self._cstr_cleanup.pop())
 
-        # Free inline-closure argument temporaries registered in this scope on the
-        # normal (fall-through) block exit -- the only place the per-scope list is
-        # removed. Early-exit paths emit their own guarded drop via
-        # emit_closure_temp_cleanup_all() without popping, so exactly one runs per path.
+        # The only place the per-scope closure-temp list is removed; an early exit emits its
+        # own guarded drop without popping.
         if self._closure_temp_cleanup:
             self._free_closure_temp_list(self._closure_temp_cleanup.pop())
 
@@ -287,20 +252,15 @@ class ScopeManager:
         from sushi_lang.backend.destructors import resolve_named_type
         semantic_ty = resolve_named_type(self.codegen, semantic_ty)
         if isinstance(semantic_ty, (StructType, EnumType)):
-            # An enum local whose active variant owns heap (a dynamic-array / string /
-            # closure / owning-struct payload) is freed at scope exit like a struct
-            # local, reusing the struct-cleanup registry so both the fall-through
-            # (pop_scope) and early-exit (emit_struct_cleanup) paths free it through
-            # the recursion-safe emit_value_destructor. #143 lifted CE2059 (enum may
-            # hold T[]) without wiring this owner, so such enum locals leaked (#139).
+            # An enum local whose active variant owns heap reuses the struct-cleanup
+            # registry, so both exit paths free it through emit_value_destructor. Lifting
+            # CE2059 without this owner leaked every such local (#139).
             if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
                 if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
                     self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
-        # A fixed-size array local (`string[3]`, `Box[2]`) whose ELEMENTS own heap. It owns no
-        # buffer of its own -- the storage is the alloca -- so it is not a dynamic array and
-        # has no registry of its own; it reuses the owning-value registry, whose drain calls
-        # the same recursion-safe emit_value_destructor. ArrayType matched NO branch in this
-        # chain, so such a local was registered nowhere and no exit path could free it (#185).
+        # A fixed array whose ELEMENTS own heap. Its storage is the alloca, so it is no
+        # dynamic array and reuses the owning-value registry. ArrayType matched NO branch
+        # here, so such a local was registered nowhere and never freed (#185).
         elif isinstance(semantic_ty, ArrayType):
             from sushi_lang.backend.destructors import needs_cleanup
             if needs_cleanup(semantic_ty):
