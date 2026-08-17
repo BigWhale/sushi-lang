@@ -6,11 +6,11 @@
 struct Box:
     i32 n
 
-fn eat(string s) i32:
+fn eat(nom string s) i32:
     return Result.Ok(s.len())
 
 extend Box swallow(string s) i32:
-    match eat(s):
+    match eat(nom s):
         Result.Ok(n) -> return n
         Result.Err(_) -> return 0
 

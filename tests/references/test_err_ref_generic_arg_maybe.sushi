@@ -1,9 +1,9 @@
 # There is NO Maybe / Result exemption, unlike the `ptr` gate (CE5012): a
-# `Maybe@(&peek T)` is exactly how a returned borrow escapes into a match, which is the
+# `Maybe@(peek T)` is exactly how a returned borrow escapes into a match, which is the
 # hole the return-type rejection closes (#314, #316).
 # EXPECT_ERROR_CODE: CE2419
 fn main() i32:
     let i32 n = 5
-    let Maybe@(&peek i32) m = Maybe.Some(&peek n)
+    let Maybe@(peek i32) m = Maybe.Some(peek n)
     println(m.is_some())
     return Result.Ok(0)

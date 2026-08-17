@@ -82,7 +82,7 @@ class Provenance(Enum):
     OWNED = "owned"        # a registered owner in this scope: a `let` local or a
                            # by-value parameter
     BORROWED = "borrowed"  # names storage owned elsewhere, for a SHORTER lifetime: a
-                           # match payload binding, a foreach binding, a &peek/&poke
+                           # match payload binding, a foreach binding, a peek/poke
                            # parameter, a `let` bound from any of these, and every read
                            # THROUGH a still-live owner -- `s.field`, `own.get()`, and a
                            # container get-out

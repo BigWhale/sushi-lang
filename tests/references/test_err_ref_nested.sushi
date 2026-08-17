@@ -1,7 +1,7 @@
-# `&peek &peek i32` parses -- both grammar rules for a borrow are recursive -- and used to
+# `peek peek i32` parses -- both grammar rules for a borrow are recursive -- and used to
 # be accepted at a declaration, giving a function nothing could call (#317).
 # EXPECT_ERROR_CODE: CE2418
-fn odd(&peek &peek i32 x) ~:
+fn odd(peek peek i32 x) ~:
     println("called")
     return Result.Ok(~)
 

@@ -14,8 +14,8 @@ from sushi_lang.internals.errors.registry import (
 
 
 _add(ErrorMessage("CE2410", Severity.ERROR,
-    "cannot move '{name}': it is a borrowed view of the process arguments (main's string[] args); borrow it instead with '&peek string[]'",
-    Category.BORROW, "main's `string[] args` aliases the process argv, which the runtime owns and frees. Moving it by value (passing it to a by-value parameter, rebinding, or storing it) would make the callee free argv and double-free. Take it by reference with `&peek string[]`."))
+    "cannot move '{name}': it is a borrowed view of the process arguments (main's string[] args); borrow it instead with 'peek string[]'",
+    Category.BORROW, "main's `string[] args` aliases the process argv, which the runtime owns and frees. Moving it by value (passing it to a by-value parameter, rebinding, or storing it) would make the callee free argv and double-free. Take it by reference with `peek string[]`."))
 
 # Borrow/reference errors (CE24xx)
 _add(ErrorMessage("CE2400", Severity.ERROR,
@@ -24,19 +24,19 @@ _add(ErrorMessage("CE2400", Severity.ERROR,
 
 _add(ErrorMessage("CE2401", Severity.ERROR,
     "cannot move '{name}' while it is borrowed",
-    Category.BORROW, "One statement borrowed a value and also handed it to a position that takes ownership -- `both(&peek s, s)`. The new owner frees the buffer while the borrow still points at it, so `both(&poke a, a)` is a double free plus a read of released memory, whichever order the arguments are written in. Borrow it twice (`&peek` is shareable), or clone the value the owning position needs: `both(&peek s, s.clone())`. A borrow lasts only for the statement that creates it, so the same two lines written as two statements are unaffected."))
+    Category.BORROW, "One statement borrowed a value and also handed it to a position that takes ownership -- `both(peek s, s)`. The new owner frees the buffer while the borrow still points at it, so `both(poke a, a)` is a double free plus a read of released memory, whichever order the arguments are written in. Borrow it twice (`peek` is shareable), or clone the value the owning position needs: `both(peek s, s.clone())`. A borrow lasts only for the statement that creates it, so the same two lines written as two statements are unaffected."))
 
 # CE2402 ("cannot destroy '{name}' while it is borrowed") was RETIRED in R7 of the reference
 # seam plan (`old/FIX-reference-seam.md`). It was unreachable: `.destroy()` returns `~`, so
 # it is only ever a statement of its own, and
 # borrow counters are cleared at the end of every statement -- no borrow can be live when
-# it runs. Its intent is covered three ways: CE2408 (destroy through a `&peek` reference),
+# it runs. Its intent is covered three ways: CE2408 (destroy through a `peek` reference),
 # CE2412 (destroy an owner a `let`-borrow binding reads out of) and CE2406 (use after
 # destroy). A registered code that nothing can reach misinforms the registry's own promise.
 
 _add(ErrorMessage("CE2403", Severity.ERROR,
-    "'{name}' already has an active &poke borrow (only one exclusive borrow allowed)",
-    Category.BORROW, "A variable can only have one active &poke (read-write) borrow at a time to prevent aliasing issues."))
+    "'{name}' already has an active poke borrow (only one exclusive borrow allowed)",
+    Category.BORROW, "A variable can only have one active poke (read-write) borrow at a time to prevent aliasing issues."))
 
 _add(ErrorMessage("CE2404", Severity.ERROR,
     "cannot borrow '{expr}': expression has no stable address",
@@ -51,16 +51,16 @@ _add(ErrorMessage("CE2406", Severity.ERROR,
     Category.BORROW, "Variable was explicitly destroyed via .destroy() and is no longer valid."))
 
 _add(ErrorMessage("CE2407", Severity.ERROR,
-    "cannot have &peek and &poke borrows of '{name}' simultaneously",
-    Category.BORROW, "A variable cannot have both read-only (&peek) and read-write (&poke) borrows at the same time."))
+    "cannot have peek and poke borrows of '{name}' simultaneously",
+    Category.BORROW, "A variable cannot have both read-only (peek) and read-write (poke) borrows at the same time."))
 
 _add(ErrorMessage("CE2408", Severity.ERROR,
-    "cannot modify '{name}' through &peek reference (read-only)",
-    Category.BORROW, "&peek references are read-only. Use &poke for mutable access."))
+    "cannot modify '{name}' through peek reference (read-only)",
+    Category.BORROW, "peek references are read-only. Use poke for mutable access."))
 
 _add(ErrorMessage("CE2413", Severity.ERROR,
-    "a 'let' binding cannot have a reference type ('&{mode} {ty}')",
-    Category.BORROW, "A reference-typed `let` (`let &peek T x = ...`) parses but has no checked semantics: the binding would be an alias the borrow checker does not track, so two `&poke` bindings of one variable would compile silently (issue #252). Borrow at a USE site instead: pass `&peek x` / `&poke x` to a reference parameter, or take an independent value with `.clone()`. Checked local borrow bindings are a possible future feature; until they are designed, the form is rejected."))
+    "a 'let' binding cannot have a reference type ('{mode} {ty}')",
+    Category.BORROW, "A reference-typed `let` (`let peek T x = ...`) parses but has no checked semantics: the binding would be an alias the borrow checker does not track, so two `poke` bindings of one variable would compile silently (issue #252). Borrow at a USE site instead: pass `peek x` / `poke x` to a reference parameter, or take an independent value with `.clone()`. Checked local borrow bindings are a possible future feature; until they are designed, the form is rejected."))
 
 _add(ErrorMessage("CE2412", Severity.ERROR,
     "cannot mutate '{owner}' while '{name}' borrows from it",
@@ -68,7 +68,7 @@ _add(ErrorMessage("CE2412", Severity.ERROR,
 
 _add(ErrorMessage("CE2414", Severity.ERROR,
     "cannot mutate through binding '{name}': a match/foreach binding is a read-only view",
-    Category.BORROW, "A `match` payload binding and a `foreach` loop binding borrow a value the scrutinee or the container owns. The compiled binding is a private copy, so a write through it -- a mutating method, a field assignment, or a `&poke` borrow -- never reaches the owner and is silently lost (issue #253). Take an independent value with `.clone()`, mutate that, and store it back into the owner. A rebind of the binding ITSELF (`n := 99`) stays legal: it re-initializes a local and does not claim to write through."))
+    Category.BORROW, "A `match` payload binding and a `foreach` loop binding borrow a value the scrutinee or the container owns. The compiled binding is a private copy, so a write through it -- a mutating method, a field assignment, or a `poke` borrow -- never reaches the owner and is silently lost (issue #253). Take an independent value with `.clone()`, mutate that, and store it back into the owner. A rebind of the binding ITSELF (`n := 99`) stays legal: it re-initializes a local and does not claim to write through."))
 
 _add(ErrorMessage("CE2411", Severity.ERROR,
     "cannot consume '{name}': another owner keeps this value",
@@ -76,7 +76,7 @@ _add(ErrorMessage("CE2411", Severity.ERROR,
 
 # --- The undefined reference POSITIONS (R4) ------------------------------------------
 #
-# The grammar's `?type` rule is recursive and universal, so `&peek T` / `&poke T` parses in
+# The grammar's `?type` rule is recursive and universal, so `peek T` / `poke T` parses in
 # EVERY type position. Semantics defines it for exactly ONE: the parameter. Each of the six
 # positions below was accepted and then failed in its own way -- an internal error, a
 # dangling read, or silent dead code (old/BORROW.md section 6).
@@ -91,66 +91,66 @@ _add(ErrorMessage("CE2411", Severity.ERROR,
 
 _add(ErrorMessage("CE2415", Severity.ERROR,
     "a struct field cannot have a reference type ('{ty}')",
-    Category.BORROW, "A `&peek` / `&poke` struct field parses but has no checked semantics: nothing relates the field's borrow to the value it points at, so the struct may outlive it. Reading such a field is an internal error today (issue #315). Store an owned value, or an index into a container the struct does not own. A borrow inside a struct needs lifetimes and is a possible future feature; until it is designed, the form is rejected."))
+    Category.BORROW, "A `peek` / `poke` struct field parses but has no checked semantics: nothing relates the field's borrow to the value it points at, so the struct may outlive it. Reading such a field is an internal error today (issue #315). Store an owned value, or an index into a container the struct does not own. A borrow inside a struct needs lifetimes and is a possible future feature; until it is designed, the form is rejected."))
 
 _add(ErrorMessage("CE2416", Severity.ERROR,
     "an enum variant payload cannot have a reference type ('{ty}')",
-    Category.BORROW, "A `&peek` / `&poke` enum payload parses and runs with no tracking of any kind, so the enum may outlive the value it borrows (issue #316). It is also how a returned borrow escapes: a `Result@(&peek T, E)` is an enum payload, which is the shape that made a dangling read reachable (issue #314). Carry an owned value in the variant. Same lifetime problem as a reference struct field (CE2415)."))
+    Category.BORROW, "A `peek` / `poke` enum payload parses and runs with no tracking of any kind, so the enum may outlive the value it borrows (issue #316). It is also how a returned borrow escapes: a `Result@(peek T, E)` is an enum payload, which is the shape that made a dangling read reachable (issue #314). Carry an owned value in the variant. Same lifetime problem as a reference struct field (CE2415)."))
 
 _add(ErrorMessage("CE2417", Severity.ERROR,
     "a function cannot return a reference type ('{ty}')",
-    Category.BORROW, "Returning a `&peek` / `&poke` lets a function hand out a borrow of its own local, and the caller reads it after the frame is gone -- a dangling read that compiles clean today (issue #314). `typesys.py` states the intended rule, 'borrows are function-scoped (end at function return)', and this is what enforces it. Return an owned value, or `.clone()` what you borrowed. Returning a borrow needs lifetimes to be sound."))
+    Category.BORROW, "Returning a `peek` / `poke` lets a function hand out a borrow of its own local, and the caller reads it after the frame is gone -- a dangling read that compiles clean today (issue #314). `typesys.py` states the intended rule, 'borrows are function-scoped (end at function return)', and this is what enforces it. Return an owned value, or `.clone()` what you borrowed. Returning a borrow needs lifetimes to be sound."))
 
 _add(ErrorMessage("CE2418", Severity.ERROR,
     "a reference to a reference is not supported ('&{outer} &{inner} ...')",
-    Category.BORROW, "Both grammar rules for a borrow are recursive, so `&peek &peek i32` parses -- in a type position and in an expression position (issue #317). There is no double borrow in the language: a borrow of a borrow is the same borrow, and the extra level has no meaning at any layer. Write the single borrow."))
+    Category.BORROW, "Both grammar rules for a borrow are recursive, so `peek peek i32` parses -- in a type position and in an expression position (issue #317). There is no double borrow in the language: a borrow of a borrow is the same borrow, and the extra level has no meaning at any layer. Write the single borrow."))
 
 _add(ErrorMessage("CE2419", Severity.ERROR,
     "a reference type cannot be a generic type argument ('{ty}')",
-    Category.BORROW, "A container of borrows -- `List@(&peek T)`, `HashMap@(&peek K, V)`, `Maybe@(&peek T)` -- has no defined semantics: nothing relates the stored borrows to the values they point at, and the backend cannot lay one out (issue #318). Store owned values, or indices into a container that outlives the uses. There is NO `Maybe` / `Result` exemption on purpose: those two are exactly how a returned borrow escapes (CE2417). Foreign `ptr` carries the same restriction, as CE5012."))
+    Category.BORROW, "A container of borrows -- `List@(peek T)`, `HashMap@(peek K, V)`, `Maybe@(peek T)` -- has no defined semantics: nothing relates the stored borrows to the values they point at, and the backend cannot lay one out (issue #318). Store owned values, or indices into a container that outlives the uses. There is NO `Maybe` / `Result` exemption on purpose: those two are exactly how a returned borrow escapes (CE2417). Foreign `ptr` carries the same restriction, as CE5012."))
 
 _add(ErrorMessage("CE2420", Severity.ERROR,
     "an extension cannot target a reference type ('{ty}')",
-    Category.BORROW, "`extend &peek T` compiles and is permanently uncallable: a reference target falls through method resolution, so every call reports 'no such method' and the body is dead code the author believes they wrote (issue #319). Extend the referent instead -- the methods on `&T` ARE the methods on `T`, so `extend T` is already callable through a `&peek T` / `&poke T` receiver. This is the CE2097 shape: an extension that can never be reached is a diagnostic, not silence."))
+    Category.BORROW, "`extend peek T` compiles and is permanently uncallable: a reference target falls through method resolution, so every call reports 'no such method' and the body is dead code the author believes they wrote (issue #319). Extend the referent instead -- the methods on `&T` ARE the methods on `T`, so `extend T` is already callable through a `peek T` / `poke T` receiver. This is the CE2097 shape: an extension that can never be reached is a diagnostic, not silence."))
 
 # --- Method parameters, `self` included (R6) -------------------------------------------
 #
 # The third and fourth read-only receivers, after the match/foreach binding (CE2414) and
-# the `&peek` reference (CE2408). All four share ONE gate in `semantics/passes/borrow.py`
+# the `peek` reference (CE2408). All four share ONE gate in `semantics/passes/borrow.py`
 # over a table of kinds, and each keeps its own code because each carries its own
 # rationale and its own escape -- the same reasoning as the six position codes above.
 #
 # The two here are one rule (#298: every parameter of an extension or perk method is a
-# borrow) with two escapes: a by-value parameter is redeclared `&poke T`, and a receiver
-# `&poke self` (#327, shipped 2026-08-16). The codes stay separate because the escapes are
+# borrow) with two escapes: a by-value parameter is redeclared `poke T`, and a receiver
+# `poke self` (#327, shipped 2026-08-16). The codes stay separate because the escapes are
 # what the help text has to name.
 
 _add(ErrorMessage("CE2421", Severity.ERROR,
     "cannot write through 'self': a method receiver is a read-only borrow",
-    Category.BORROW, "An extension or perk method receives `self` as a BORROW: the caller keeps the value (the ruling on issue #298, `docs/design/ownership-conventions.md` S8.6). The compiled receiver is a private copy, so a write through it -- a mutating method, a field assignment, or a `&poke` borrow of it -- never reaches the caller. A plain field was silently LOST; an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy (issue #326). This is CE2414's rule for the one receiver CE2414 does not cover. The mutating receiver is spelled `&poke self` (issue #327): declare the method `extend T name(&poke self, ...)` and the write reaches the caller. Alternatively return the new value and let the caller store it."))
+    Category.BORROW, "An extension or perk method receives `self` as a BORROW: the caller keeps the value (the ruling on issue #298, `docs/design/ownership-conventions.md` S8.6). The compiled receiver is a private copy, so a write through it -- a mutating method, a field assignment, or a `poke` borrow of it -- never reaches the caller. A plain field was silently LOST; an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy (issue #326). This is CE2414's rule for the one receiver CE2414 does not cover. The mutating receiver is spelled `poke self` (issue #327): declare the method `extend T name(poke self, ...)` and the write reaches the caller. Alternatively return the new value and let the caller store it."))
 
 _add(ErrorMessage("CE2422", Severity.ERROR,
     "cannot write through '{name}': a by-value method parameter is a read-only borrow",
-    Category.BORROW, "Every parameter of an extension or perk method is a BORROW of the caller's value, `self` and the explicit ones alike (the ruling on issue #298). A by-value one is compiled as a private copy, so a write through it -- a mutating method, a field assignment, or a `&poke` borrow of it -- never reaches the caller: a plain field was silently lost, and an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy. CE2421 is the same rule for the receiver, and the plain-function form has no such problem, because there the callee OWNS its by-value parameters. Unlike the receiver, this one has an escape that exists today: declare the parameter `&poke T` and the write reaches the caller."))
+    Category.BORROW, "Every parameter of an extension or perk method is a BORROW of the caller's value, `self` and the explicit ones alike (the ruling on issue #298). A by-value one is compiled as a private copy, so a write through it -- a mutating method, a field assignment, or a `poke` borrow of it -- never reaches the caller: a plain field was silently lost, and an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy. CE2421 is the same rule for the receiver, and the plain-function form has no such problem, because there the callee OWNS its by-value parameters. Unlike the receiver, this one has an escape that exists today: declare the parameter `poke T` and the write reaches the caller."))
 
 # --- Reference bindings (#300 phase 1) --------------------------------------------------
 #
-# `foreach(&poke r in ...)` and `Own(&poke inner)` bind a POINTER into the container's /
+# `foreach(poke r in ...)` and `Own(poke inner)` bind a POINTER into the container's /
 # pointee's storage, so a write through the binding reaches the owner. The two codes here
 # fence the phase-1 boundary: an iterable whose items have no address (CE2423), and the
 # match-pattern position, which waits on the enum payload alignment fix (CE2424).
 
 _add(ErrorMessage("CE2423", Severity.ERROR,
     "a reference binding needs addressable elements; this iterable yields values",
-    Category.BORROW, "A `&peek`/`&poke` foreach binding is a pointer into the container's element storage, so the iterable must HAVE element storage. A range (`0..10`) synthesizes its values, and `HashMap.entries()` synthesizes each `Entry` pair on the fly -- there is no address to bind (issue #300). Iterate a container (`arr.iter()`, `list.iter()`, `map.keys()`, `map.values()`) or drop the marker and take the value."))
+    Category.BORROW, "A `peek`/`poke` foreach binding is a pointer into the container's element storage, so the iterable must HAVE element storage. A range (`0..10`) synthesizes its values, and `HashMap.entries()` synthesizes each `Entry` pair on the fly -- there is no address to bind (issue #300). Iterate a container (`arr.iter()`, `list.iter()`, `map.keys()`, `map.values()`) or drop the marker and take the value."))
 
 _add(ErrorMessage("CE2424", Severity.ERROR,
     "a reference binding in a NESTED match pattern is not supported",
-    Category.BORROW, "A top-level `Variant(&poke x)` binds a pointer into the scrutinee's payload storage and is supported (issue #300 phase 3, on the aligned enum payload layout). A NESTED pattern is different: extraction walks through temporary copies of the inner enums, so a pointer into one writes to storage nobody reads -- the silently-lost-write class of issue #253. Bind the payload by value in the nested pattern, or restructure to match the inner enum at the top level."))
+    Category.BORROW, "A top-level `Variant(poke x)` binds a pointer into the scrutinee's payload storage and is supported (issue #300 phase 3, on the aligned enum payload layout). A NESTED pattern is different: extraction walks through temporary copies of the inner enums, so a pointer into one writes to storage nobody reads -- the silently-lost-write class of issue #253. Bind the payload by value in the nested pattern, or restructure to match the inner enum at the top level."))
 
 _add(ErrorMessage("CE2425", Severity.ERROR,
-    "a '&peek self'/'&poke self' receiver parameter is not valid here",
-    Category.BORROW, "The receiver parameter (#327) is the FIRST parameter of an EXTENSION or PERK method: `extend Counter bump(&poke self) ~:`. It is not valid in a plain top-level function (a plain function has no receiver -- take `&poke T name`), not valid after the first position, and a bare `&poke name` that is not `self` is a reference parameter missing its type."))
+    "a 'peek self'/'poke self' receiver parameter is not valid here",
+    Category.BORROW, "The receiver parameter (#327) is the FIRST parameter of an EXTENSION or PERK method: `extend Counter bump(poke self) ~:`. It is not valid in a plain top-level function (a plain function has no receiver -- take `poke T name`), not valid after the first position, and a bare `poke name` that is not `self` is a reference parameter missing its type."))
 
 # --- The `let`-borrow binding (#344) ----------------------------------------------------
 #
@@ -163,3 +163,20 @@ _add(ErrorMessage("CE2425", Severity.ERROR,
 _add(ErrorMessage("CE2426", Severity.ERROR,
     "cannot write through '{name}': it borrows storage another value still owns",
     Category.BORROW, "A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(0)??` -- BORROWS: it names storage the owner keeps and still frees (issue #242). A write through it is not merely lost, which is what CE2414 says for a match/foreach binding: the binding holds its own copy of the descriptor while the DATA is shared, so a mutating method updates a length nobody reads, a field assignment lands on the private copy, and a `.push()` that reallocates frees the OWNER's buffer -- a double free plus a read of released memory that compiled clean before issue #344. Write to the owner directly (`h.items.push(9)`), or take an independent value with `.clone()`, mutate it, and store it back. CE2412 is the complementary question -- may the OWNER be changed while the binding lives -- not an alternative to this one."))
+
+
+# --- Borrow by default: the mode markers (docs/design/borrow-model.md) ------------------
+#
+# A marked mode is written at BOTH ends -- the declaration and the call site -- and the
+# unmarked default is written at neither. `peek` and `poke` already had that symmetry, and
+# they get it for free: a reference parameter carries a `ReferenceType`, so a missing or
+# wrong marker is CE2006, an argument type mismatch. `nom` changes no type, so it needs a
+# code of its own.
+
+_add(ErrorMessage("CE2427", Severity.ERROR,
+    "argument mode does not match the declared mode of parameter '{name}'",
+    Category.BORROW, "A `nom` parameter takes OWNERSHIP of its argument, and that must be visible where the value is handed over: without the marker, `f(s)` would not show whether `s` survives the call, and the reader would have to open the callee to find out (docs/design/borrow-model.md S3). So the marker is written at both ends, or at neither. Add `nom` at the call site to hand the value over, or drop it if the callee only borrows. `.clone()` is the escape when the caller needs to keep its own value: `f(nom s.clone())`."))
+
+_add(ErrorMessage("CE2428", Severity.ERROR,
+    "`nom` has no meaning on the foreign parameter '{name}'",
+    Category.BORROW, "FFI is outside the mode system. A C callee never receives a Sushi value: the compiler marshals the argument into a fresh C representation that the CALLER owns and frees at scope exit, so there is nothing for a foreign parameter to take ownership of. Declare the parameter without the marker. The four modes describe how a value crosses a SUSHI call boundary (docs/design/borrow-model.md S5)."))

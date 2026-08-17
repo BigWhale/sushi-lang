@@ -1,14 +1,14 @@
-# `.destroy()` through a `&peek` borrow: the same shape as the HashMap `.free()`
+# `.destroy()` through a `peek` borrow: the same shape as the HashMap `.free()`
 # twin. The callee released the caller's list through a read-only parameter.
 # EXPECT_ERROR_CODE: CE2408
-fn wreck(&peek List@(i32) l) ~:
+fn wreck(peek List@(i32) l) ~:
     l.destroy()
     return Result.Ok(~)
 
 fn run_test() i32:
     let List@(i32) xs = List.new()
     xs.push(1)
-    wreck(&peek xs)
+    wreck(peek xs)
     println(xs.len())
     return Result.Ok(0)
 

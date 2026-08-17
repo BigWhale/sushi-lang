@@ -4,7 +4,7 @@ The language has five receivers a write cannot reach through, each found as its 
 and each given its own code, because each carries its own escape:
 
   a match/foreach binding    -> CE2414 (#253) -- compiled as a private deep copy
-  a `&peek` reference        -> CE2408 (#302, R1) -- a read-only borrow of the caller
+  a `peek` reference        -> CE2408 (#302, R1) -- a read-only borrow of the caller
   the method receiver        -> CE2421 (#326) -- a borrow, per the #298 ruling
   a by-value method PARAM    -> CE2422 -- the same borrow, one line over
   a `let`-borrow binding     -> CE2426 (#344) -- shares the OWNER's data, so the write is
@@ -15,7 +15,7 @@ first two kinds:
 
   a mutating method under the receiver   `x.items.push(9)`
   a field assignment under the receiver  `x.n := 42`
-  a `&poke` borrow of the receiver       `f(&poke x)`
+  a `poke` borrow of the receiver       `f(poke x)`
 
 Fifteen cells. The gate is one dispatcher (`_reject_readonly_write`) over a table of
 kinds, called from the four write sites, so a new kind is one table entry and a new write
@@ -23,7 +23,7 @@ shape is one call -- never a fifth copy of the same walk. This test is what make
 table load-bearing: a kind wired into the table but missing from a call site, or a call
 site that forgets the dispatcher, turns a cell red instead of shipping a silent write.
 
-`test_peek_write_gate_is_total.py` covers the other axis for the `&peek` kind: every
+`test_peek_write_gate_is_total.py` covers the other axis for the `peek` kind: every
 member of `_MUTATING_METHODS`, not every shape.
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ import pytest
 # Each kind builds a program whose method body performs `write` on a receiver of that
 # kind. `{write}` is substituted with a statement using the receiver name `r`.
 _GROW = (
-    "fn grow(&poke i32[] arr) ~:\n"
+    "fn grow(poke i32[] arr) ~:\n"
     "    arr.push(9)\n"
     "    return Result.Ok(~)\n"
     "\n"
@@ -43,10 +43,10 @@ _GROW = (
 _SHAPES = {
     "mutating_method": "r.items.push(9)",
     "field_assign":    "r.n := 42",
-    "poke_borrow":     "grow(&poke r.items)",
+    "poke_borrow":     "grow(poke r.items)",
 }
 
-# The `&poke` borrow shape for a whole-receiver borrow needs a matching callee, so each
+# The `poke` borrow shape for a whole-receiver borrow needs a matching callee, so each
 # kind carries its own spelling of it below where the field form does not fit.
 _STRUCT = (
     "struct Holder:\n"
@@ -59,7 +59,7 @@ _STRUCT = (
 def _peek_program(write: str) -> str:
     return (
         _STRUCT + _GROW +
-        "fn touch(&peek Holder r) ~:\n"
+        "fn touch(peek Holder r) ~:\n"
         f"    {write}\n"
         "    return Result.Ok(~)\n"
         "\n"
@@ -135,11 +135,33 @@ def _let_borrow_program(write: str) -> str:
     )
 
 
+def _function_param_program(write: str) -> str:
+    """An unmarked parameter of a PLAIN function -- CE2422's kind, generalized.
+
+    Until borrow by default, a plain function OWNED its by-value parameters, so a write
+    through one was legal and only a method's was rejected. Now every mode but `nom`
+    borrows in every callable, so the same write lands on the callee's private shallow
+    copy here too: a plain field is silently lost, and an owning one is a double free
+    plus a leak. Declaring the parameter `poke Holder r` is the escape, exactly as the
+    code says (docs/design/borrow-model.md S1).
+    """
+    return (
+        _STRUCT + _GROW +
+        "fn touch(Holder r) ~:\n"
+        f"    {write}\n"
+        "    return Result.Ok(~)\n"
+        "\n"
+        "fn main() i32:\n"
+        "    return Result.Ok(0)\n"
+    )
+
+
 KINDS = {
     "peek_reference":  ("CE2408", _peek_program),
     "pattern_binding": ("CE2414", _binding_program),
     "method_receiver": ("CE2421", _self_program),
     "method_parameter": ("CE2422", _method_param_program),
+    "function_parameter": ("CE2422", _function_param_program),
     "let_borrow": ("CE2426", _let_borrow_program),
 }
 
@@ -160,15 +182,15 @@ def test_write_through_readonly_receiver_is_rejected(analyze, kind, shape):
 
 
 def test_poke_borrow_of_the_whole_receiver_is_rejected(analyze):
-    """The receiver itself handed to a `&poke` parameter -- the shape #307 found."""
+    """The receiver itself handed to a `poke` parameter -- the shape #307 found."""
     src = (
         _STRUCT +
-        "fn bump(&poke Holder h) ~:\n"
+        "fn bump(poke Holder h) ~:\n"
         "    h.n := h.n + 1\n"
         "    return Result.Ok(~)\n"
         "\n"
         "extend Holder inc() i32:\n"
-        "    bump(&poke self)\n"
+        "    bump(poke self)\n"
         "    return 1\n"
         "\n"
         "fn main() i32:\n"
@@ -184,12 +206,12 @@ def test_poke_borrow_of_a_whole_method_parameter_is_rejected(analyze):
         "struct Box:\n"
         "    i32 v\n"
         "\n"
-        "fn bump(&poke Holder h) ~:\n"
+        "fn bump(poke Holder h) ~:\n"
         "    h.n := h.n + 1\n"
         "    return Result.Ok(~)\n"
         "\n"
         "extend Box inc(Holder r) i32:\n"
-        "    bump(&poke r)\n"
+        "    bump(poke r)\n"
         "    return 1\n"
         "\n"
         "fn main() i32:\n"
@@ -198,19 +220,41 @@ def test_poke_borrow_of_a_whole_method_parameter_is_rejected(analyze):
     assert "CE2422" in _codes(analyze(src))
 
 
-def test_a_poke_method_parameter_stays_writable(analyze):
-    """The escape CE2422 names, and the line that keeps the gate off `&poke`.
+def test_a_nom_parameter_stays_writable(analyze):
+    """The other escape, and the line that keeps the gate off `nom`.
 
-    A `&poke` parameter is the supported way to write through a method's argument, so the
-    method-parameter kind must exclude reference parameters entirely -- a `&peek` one is
-    already CE2408, and a `&poke` one is the answer.
+    A `nom` parameter is OWNED by the callee -- the caller transferred the value and its
+    binding is moved -- so the callee may do what it likes with its own value, writes
+    included. The gate must therefore key on the declared MODE and not on "is this a
+    parameter?" (docs/design/borrow-model.md S2).
+    """
+    src = (
+        _STRUCT + _GROW +
+        "fn touch(nom Holder r) ~:\n"
+        "    r.n := 42\n"
+        "    r.items.push(9)\n"
+        "    return Result.Ok(~)\n"
+        "\n"
+        "fn main() i32:\n"
+        "    return Result.Ok(0)\n"
+    )
+    codes = _codes(analyze(src))
+    assert "CE2422" not in codes and "CE2421" not in codes, codes
+
+
+def test_a_poke_method_parameter_stays_writable(analyze):
+    """The escape CE2422 names, and the line that keeps the gate off `poke`.
+
+    A `poke` parameter is the supported way to write through a method's argument, so the
+    method-parameter kind must exclude reference parameters entirely -- a `peek` one is
+    already CE2408, and a `poke` one is the answer.
     """
     src = (
         _STRUCT +
         "struct Box:\n"
         "    i32 v\n"
         "\n"
-        "extend Box inc(&poke Holder r) i32:\n"
+        "extend Box inc(poke Holder r) i32:\n"
         "    r.n := 42\n"
         "    r.items.push(9)\n"
         "    return 1\n"
@@ -223,13 +267,13 @@ def test_a_poke_method_parameter_stays_writable(analyze):
 
 
 def test_poke_borrow_of_a_whole_let_borrow_binding_is_rejected(analyze):
-    """The binding itself handed to a `&poke` parameter -- the third shape of #344."""
+    """The binding itself handed to a `poke` parameter -- the third shape of #344."""
     src = (
         _STRUCT + _GROW +
         "fn main() i32:\n"
         "    let Holder h = Holder(1, from([1, 2]))\n"
         "    let i32[] v = h.items\n"
-        "    grow(&poke v)\n"
+        "    grow(poke v)\n"
         "    return Result.Ok(0)\n"
     )
     assert "CE2426" in _codes(analyze(src))

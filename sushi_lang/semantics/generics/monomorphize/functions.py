@@ -573,8 +573,8 @@ class FunctionMonomorphizer:
 
             # Unify with parameter type through the SHARED engine (F7, 2026-08-14).
             # A private UnknownType-or-exact-equality unification lived here before,
-            # which is the two-spellings disease: it could not see through a `&peek T`
-            # parameter, so a borrowed nested call (`tag(&peek v)`) inside a generic
+            # which is the two-spellings disease: it could not see through a `peek T`
+            # parameter, so a borrowed nested call (`tag(peek v)`) inside a generic
             # body was never collected.
             if param.ty is None:
                 return None

@@ -5,6 +5,7 @@ This module orchestrates the dispatching of function and method calls to
 appropriate handlers based on receiver type and method name.
 """
 from __future__ import annotations
+import itertools
 from typing import TYPE_CHECKING, Union
 
 from llvmlite import ir
@@ -93,21 +94,17 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if variadic_param is not None:
         fixed_count = len(func_sig.params) - 1
         fixed_args = [codegen.expressions.emit_expr(a) for a in expr.args[:fixed_count]]
-        # The FIXED by-value parameters of a variadic function take ownership exactly
-        # like a non-variadic call's (the ruling of 2026-08-14: the callee owns). The
-        # trailing arguments are consumed by build_variadic_array into the synthesized
-        # T[], which the callee owns as a whole.
-        _consume_call_arguments(codegen, expr.args[:fixed_count], fixed_args, func_sig)
+        # The FIXED parameters of a variadic function follow their declared modes
+        # exactly like a non-variadic call's. The trailing arguments are consumed by
+        # build_variadic_array into the synthesized T[], which the callee owns whole --
+        # the caller made it, so nothing else can.
+        _settle_named_call_arguments(codegen, expr.args[:fixed_count], fixed_args, func_sig)
         array_struct = build_variadic_array(
             codegen, expr.args[fixed_count:], variadic_param.ty, callee)
         args = fixed_args + [array_struct]
     else:
         args = [codegen.expressions.emit_expr(a) for a in expr.args]
-        # A by-value parameter takes ownership; the callee frees its value at scope exit.
-        # That includes an inline-lambda argument: the callee's FunctionType param is
-        # registered for cleanup (begin_function), so the caller-side temp registration
-        # (#123) is gone from this path -- it would double-free.
-        _consume_call_arguments(codegen, expr.args, args, func_sig)
+        _settle_named_call_arguments(codegen, expr.args, args, func_sig)
 
     params = list(llvm_fn.args)
     if len(args) != len(params):
@@ -117,7 +114,7 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     # to the array-struct POINTER) against a by-value struct parameter, so cast_for_param
     # does not raise CE0017 (issue #131). Mirrors the self-by-value reconcile in
     # emit_method_call; fires only on an exact pointer-to-value-struct mismatch, so a
-    # &peek/&poke pointer param (PointerType != struct) never triggers it.
+    # peek/poke pointer param (PointerType != struct) never triggers it.
     # BaseStructType so a user struct's identified type (#257) still reconciles here; it is
     # a sibling of LiteralStructType, not a subclass.
     args = [
@@ -175,36 +172,14 @@ def _emit_indirect_call(codegen: 'LLVMCodegen', expr: Call, fat_value: 'ir.Value
     Result<T,E> struct flows downstream exactly like a direct call's.
     """
     from sushi_lang.backend.runtime import closures
-    from sushi_lang.semantics.typesys import ReferenceType
+    from sushi_lang.semantics.param_modes import CalleeKind, effective_modes
     args = [codegen.expressions.emit_expr(a) for a in expr.args]
-    # A by-value parameter of the indirect callee takes ownership, exactly like a
-    # direct call's (the ruling of 2026-08-14): every indirect callee is a lifted
-    # lambda or a plain fn, and both compile through begin_function's param
-    # registration, so the callee frees. Reference params are borrows and are skipped.
-    for i, pty in enumerate(fn_type.param_types):
-        if i >= len(args) or isinstance(pty, ReferenceType):
-            continue
-        args[i] = consume(codegen, expr.args[i], args[i],
-                          _resolve_param_type(codegen, pty), ConsumingUse.CALL_ARG)
+    # The callee's modes travel WITH the function type, which is why the type is
+    # invariant on them: without that, one indirection would defeat the rule (#335).
+    settle_call_arguments(
+        codegen, list(expr.args), args, list(fn_type.param_types),
+        effective_modes(fn_type.modes, CalleeKind.INDIRECT))
     return closures.emit_indirect_call(codegen, fat_value, fn_type, args, to_i1)
-
-
-def _register_inline_closure_temps(codegen: 'LLVMCodegen', arg_exprs: list, arg_values: list) -> None:
-    """Register inline-closure argument temporaries for scope-exit cleanup (#123).
-
-    ONLY the extension-method fallback still needs this: an extension body is compiled
-    with fn_def=None, registers no parameter cleanup, and so never owns its arguments --
-    the caller stays the owner of an inline lambda's env. Every plain (direct, variadic,
-    indirect) call instead transfers ownership to the callee through the seam, and the
-    callee's registered FunctionType param frees the env (the 2026-08-14 ruling); a
-    caller-side registration there would double-free. Only a syntactic inline `Lambda`
-    is registered: a `Name` arg is owned by its local's cleanup slot, and a container
-    get-out / struct-field read is a non-owning borrow.
-    """
-    from sushi_lang.semantics.ast import Lambda
-    for arg_expr, value in zip(arg_exprs, arg_values, strict=True):
-        if isinstance(arg_expr, Lambda):
-            codegen.memory.register_closure_temp(value)
 
 
 def _resolve_param_type(codegen: 'LLVMCodegen', ty):
@@ -222,29 +197,95 @@ def _resolve_param_type(codegen: 'LLVMCodegen', ty):
     return ty
 
 
-def _consume_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list, func_sig) -> None:
-    """Route every by-value argument through the ownership seam, in place.
+_ARG_TEMP_SEQ = itertools.count()
 
-    A by-value parameter takes ownership: the callee frees the value at scope exit (see
-    begin_function's param registration). Reference parameters are borrows and are skipped
-    -- a borrow is spelled `&peek x` at the call site, which is a `Borrow` node, so it
-    never reaches the seam at all.
 
-    This position was the reference implementation before the seam existed: it was the one
-    of eleven that got the rule right, and it did so with two cooperating passes (one
-    deciding copies, one marking moves) plus its own resolver. All three collapse here.
+def _park_argument_temp(codegen: 'LLVMCodegen', value: ir.Value, resolved) -> None:
+    """Give a caller-kept argument temporary an owner, so scope exit frees it once.
+
+    The value has no binding, so nothing would free it: under callee-owns the CALLEE
+    did, and a borrow parameter has no such owner. This is the same answer
+    `_spill_receiver` gives an unbound owning receiver -- register it as a scope temp.
+
+    An owning argument reaches this point in one of two shapes. `make()??` hands back
+    the descriptor by VALUE; an inline `from([...])` hands back a POINTER to it. Load
+    the pointer first, or the temp slot holds an address where the destructor expects
+    the descriptor and every element GEP is off by one indirection.
     """
-    if func_sig is None or not func_sig.params:
+    ll_type = codegen.types.ll_type(resolved)
+    if isinstance(value.type, ir.PointerType) and value.type.pointee == ll_type:
+        value = codegen.builder.load(value, name="arg_temp_val")
+    elif value.type != ll_type:
         return
-    from sushi_lang.semantics.typesys import ReferenceType
-    for i, param in enumerate(func_sig.params):
-        if i >= len(args) or isinstance(param.ty, ReferenceType):
+
+    name = f"__arg_temp_{next(_ARG_TEMP_SEQ)}"
+    slot = codegen.memory.create_local(name, value.type, value, resolved,
+                                       register_cleanup=False)
+    codegen.memory.register_owning_value(name, resolved, slot)
+
+
+def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
+                          param_types: list, modes) -> None:
+    """THE call-argument seam: give every argument exactly one owner, in place.
+
+    Two answers, and the mode picks between them (docs/design/borrow-model.md S4):
+
+    - **`nom`** -- the callee becomes the owner, so the argument goes through the
+      ownership seam. A `Name` source is marked moved; a temporary adopts in.
+    - **every other mode** -- the CALLER stays the owner. That is free for a value some
+      binding already names, and it is not free for a TEMPORARY: `look(make()??)` and
+      `look(v.clone())` produce a value nobody names, and under callee-owns the callee
+      used to free it. Register it as a caller scope temp, which is the answer the
+      language already gives an unbound owning temporary everywhere else.
+
+    Pass 3 asked the same question of the same resolver before codegen ran, so the two
+    halves cannot disagree about who frees. Disagreeing is exactly what they used to do.
+    """
+    from sushi_lang.backend.destructors import needs_cleanup
+    from sushi_lang.backend.expressions.memory import expression_is_temporary
+
+    for i, mode in enumerate(modes):
+        if i >= len(args) or i >= len(arg_exprs):
             continue
-        arg_expr = arg_exprs[i] if i < len(arg_exprs) else None
+        arg_expr = arg_exprs[i]
         if arg_expr is None:
             continue
-        args[i] = consume(codegen, arg_expr, args[i],
-                          _resolve_param_type(codegen, param.ty), ConsumingUse.CALL_ARG)
+        resolved = _resolve_param_type(codegen, param_types[i])
+        if mode.consumes:
+            args[i] = consume(codegen, arg_expr, args[i], resolved,
+                              ConsumingUse.CALL_ARG)
+        elif (resolved is not None and needs_cleanup(resolved)
+                and expression_is_temporary(codegen, arg_expr)):
+            _park_argument_temp(codegen, args[i], resolved)
+
+
+def _settle_method_call_arguments(codegen: 'LLVMCodegen', expr, args: list) -> None:
+    """Settle a method call's arguments from the modes Pass 2 resolved.
+
+    Only Pass 2 knows WHICH method `receiver.name(...)` denotes, so it stamps the modes
+    and both later halves read the stamp (`callee_param_modes`). A built-in method
+    carries no stamp: its arguments are container inserts and the like, which have their
+    own rules and must not be settled here.
+    """
+    modes = getattr(expr, "callee_param_modes", None)
+    if modes is None:
+        return
+    param_types = list(getattr(expr, "callee_param_types", None) or ())
+    if len(param_types) < len(modes):
+        param_types += [None] * (len(modes) - len(param_types))
+    settle_call_arguments(codegen, list(expr.args), args, param_types, modes)
+
+
+def _settle_named_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
+                                 func_sig) -> None:
+    """Settle the ownership of a named callee's arguments, from its declared signature."""
+    from sushi_lang.semantics.param_modes import CalleeKind, modes_for
+    if func_sig is None or not func_sig.params:
+        return
+    settle_call_arguments(
+        codegen, arg_exprs, args,
+        [p.ty for p in func_sig.params],
+        modes_for(func_sig.params, CalleeKind.FUNCTION))
 
 
 def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool = False, is_dotcall: bool = False) -> ir.Value:
@@ -412,7 +453,7 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     # ========================================================================
     # Use semantic type if available to distinguish bool from i8
     if semantic_type is not None:
-        # Unwrap ReferenceType if present (for &peek T or &poke T parameters)
+        # Unwrap ReferenceType if present (for peek T or poke T parameters)
         from sushi_lang.semantics.typesys import deref_type
         actual_type = deref_type(semantic_type)
         lang_type = str(actual_type)
@@ -445,7 +486,7 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if llvm_fn is None:
         raise KeyError(f"Extension method not found: {func_name}")
 
-    # A `&poke self` / `&peek self` method (#327) takes its receiver by POINTER, so a
+    # A `poke self` / `peek self` method (#327) takes its receiver by POINTER, so a
     # write through `self` reaches the caller's value. Pass 2 stamped the resolution on
     # the node; `emit_receiver_as_pointer` returns the receiver's slot address (with the
     # load-through for a reference-parameter receiver). Pass 2/3 reject the shapes with
@@ -456,7 +497,12 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
 
     emitted_args = [receiver_value]
     arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
-    _register_inline_closure_temps(codegen, expr.args, arg_values)
+    # A method's arguments follow the declared modes exactly like a plain call's: a
+    # `nom` one transfers, and every other one stays the caller's -- which is what
+    # registers an unbound owning temporary, so `b.eat(make_list())` is freed once.
+    # That was `_register_inline_closure_temps`, which covered a syntactic `Lambda`
+    # argument only and leaked every other temporary shape.
+    _settle_method_call_arguments(codegen, expr, arg_values)
     emitted_args.extend(arg_values)
 
     params = list(llvm_fn.args)
@@ -468,7 +514,7 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     # emit_receiver_value hands us the alloca POINTER, but user extension methods
     # declare `self` by value (ll_type of the target). Load the header value here so
     # `cast_for_param` does not raise CE0017. Only the receiver (index 0) is affected;
-    # a &peek/&poke reference param has a pointer param type, so PointerType(ptr) !=
+    # a peek/poke reference param has a pointer param type, so PointerType(ptr) !=
     # arg.type and this never misfires. The by-value `self` is a shallow copy sharing
     # the caller's `data*`; the extension callee never registers it for RAII cleanup
     # (its body is emitted with fn_def=None), so there is no double-free.

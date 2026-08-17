@@ -10,12 +10,12 @@ enum StrList:
     Nil
     Cons(string, Own@(StrList))
 
-fn count(&peek StrList lst) i32:
+fn count(peek StrList lst) i32:
     match lst:
         StrList.Nil ->
             return Result.Ok(0)
         StrList.Cons(_, Own(tail)) ->
-            let i32 n = count(&peek tail)??
+            let i32 n = count(peek tail)??
             return Result.Ok(1 + n)
 
 fn main() i32:
@@ -23,7 +23,7 @@ fn main() i32:
     let Own@(StrList) n1 = Own.alloc(StrList.Cons("world", n2))
     let StrList lst = StrList.Cons("hello", n1)
 
-    let i32 len = count(&peek lst).realise(0)
+    let i32 len = count(peek lst).realise(0)
     if (len != 2):
         println("FAIL: expected 2 got {len}")
         return Result.Ok(1)

@@ -2,7 +2,7 @@
 # (here: an owning field of the element, into a by-value parameter) is CE2411,
 # with .clone() as the escape -- the same rule every reference parameter follows.
 # EXPECT_ERROR_CODE: CE2411
-fn eat(i32[] a) i32:
+fn eat(nom i32[] a) i32:
     return Result.Ok(a.len())
 
 struct Row:
@@ -10,8 +10,8 @@ struct Row:
 
 fn main() i32:
     let Row[] rows = from([Row(from([1]))])
-    foreach(&poke r in rows.iter()):
-        match eat(r.cells):
+    foreach(poke r in rows.iter()):
+        match eat(nom r.cells):
             Result.Ok(n) -> println(n)
             Result.Err(_) -> println("e")
     return Result.Ok(0)

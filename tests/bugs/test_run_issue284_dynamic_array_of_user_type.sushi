@@ -7,7 +7,7 @@
 # UnknownType while every value of that type infers the interned StructType.
 #
 # All four spellings the issue names: a named value, an inline constructor, an enum
-# element, and a push through a `&poke P[]` parameter.
+# element, and a push through a `poke P[]` parameter.
 #
 # The element is read back with `foreach` and not with `es[0].label()`: a method call
 # on an INDEXED element is issue #286, which is a different defect.
@@ -21,7 +21,7 @@ enum E:
     A
     B(i32)
 
-fn fill(&poke P[] xs) ~:
+fn fill(poke P[] xs) ~:
     xs.push(P(9))
     return Result.Ok(~)
 
@@ -30,7 +30,7 @@ fn main() i32:
     let P p = P(2)
     arr.push(p)
     arr.push(P(3))
-    fill(&poke arr)
+    fill(poke arr)
 
     let E[] es = from([E.A])
     es.push(E.B(7))

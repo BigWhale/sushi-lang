@@ -32,7 +32,7 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
     Returns True if unification succeeds.
     """
     # Case 0: reference parameter -- unify THROUGH the borrow (F7, 2026-08-14).
-    # `&peek T item` called as `f(&peek x)` binds T from x's type; `&peek Pair@(A, B)`
+    # `peek T item` called as `f(peek x)` binds T from x's type; `peek Pair@(A, B)`
     # binds both. Mutability and the borrow spelling are argument-validation questions
     # (CE2006), not unification ones -- a mis-spelled call records an instantiation
     # that Pass 2 then rejects, which is harmless.

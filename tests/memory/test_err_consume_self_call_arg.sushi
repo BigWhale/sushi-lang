@@ -11,12 +11,12 @@
 struct Holder:
     string label
 
-fn eat(Holder h) i32:
+fn eat(nom Holder h) i32:
     println("eating {h.label}")
     return Result.Ok(1)
 
 extend Holder feed() i32:
-    return eat(self).realise(0)
+    return eat(nom self).realise(0)
 
 fn main() i32:
     let Holder h = Holder("initial-{0}")

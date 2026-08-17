@@ -1,11 +1,11 @@
-# Issue #252, the &poke form: two `&poke` let-bindings of one variable used to
+# Issue #252, the poke form: two `poke` let-bindings of one variable used to
 # compile silently as unchecked aliases. Rejected with CE2413.
 # EXPECT_ERROR_CODE: CE2413
 
 fn main() i32:
     let i32 x = 42
-    let &poke i32 a = &poke x
-    let &poke i32 b = &poke x
+    let poke i32 a = poke x
+    let poke i32 b = poke x
     a := 1
     b := 2
     println(x)

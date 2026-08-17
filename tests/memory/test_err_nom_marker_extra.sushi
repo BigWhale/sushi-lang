@@ -1,0 +1,16 @@
+# The other direction of CE2427: a `nom` marker at a BORROW parameter.
+#
+# The callee only borrows, so the value stays the caller's after the call and there is
+# nothing to hand over. The marker would tell the reader the opposite.
+# EXPECT_ERROR_CODE: CE2427
+
+fn look(string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn main() i32:
+    let string base = "Ford"
+    let string s = "{base} Prefect"
+    look(nom s)
+    println(s)
+    return Result.Ok(0)

@@ -9,6 +9,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from sushi_lang.semantics.param_modes import param_mode
+
 if TYPE_CHECKING:
     from sushi_lang.semantics.units import Unit
     from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
@@ -135,7 +137,12 @@ class LibraryManifestGenerator:
                 public_funcs.append({
                     "name": func.name,
                     "params": [
-                        {"name": p.name, "type": self._type_to_string(p.ty)}
+                        # The MODE is its own field, not part of the type string. A
+                        # `nom` cannot be spelled in a type at all, and reading peek /
+                        # poke back out of a type string was the half that was missing
+                        # (docs/design/borrow-model.md S10).
+                        {"name": p.name, "type": self._type_to_string(p.ty),
+                         "mode": param_mode(p).value}
                         for p in func.params
                     ],
                     "return_type": self._type_to_string(func.ret),

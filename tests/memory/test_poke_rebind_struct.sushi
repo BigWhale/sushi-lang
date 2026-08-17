@@ -1,4 +1,4 @@
-# A `&poke` rebind of a struct that owns heap through its fields: the old struct's
+# A `poke` rebind of a struct that owns heap through its fields: the old struct's
 # field buffers must be freed by the rebind, the new struct's by the caller at scope
 # exit.
 # EXPECT_STDOUT_EXACT: "new-1\n2\n"
@@ -8,13 +8,13 @@ struct Holder:
     string label
     i32[] items
 
-fn replace_holder(&poke Holder h) ~:
+fn replace_holder(poke Holder h) ~:
     h := Holder("new-{1}", from([5, 6]))
     return Result.Ok(~)
 
 fn run_test() i32:
     let Holder holder = Holder("old-{0}", from([1, 2, 3]))
-    replace_holder(&poke holder)
+    replace_holder(poke holder)
     println(holder.label)
     println(holder.items.len())
     return Result.Ok(0)

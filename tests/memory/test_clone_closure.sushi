@@ -25,7 +25,7 @@ struct Holder:
     fn(i32) -> i32 handler
 
 # A return is a consuming use: the caller becomes the owner, so the field must be cloned.
-fn pick(&peek Holder h) fn(i32) -> i32:
+fn pick(peek Holder h) fn(i32) -> i32:
     return Result.Ok(h.handler.clone())
 
 fn run() i32:
@@ -37,7 +37,7 @@ fn run() i32:
     fns.push(h.handler.clone())
     let i32 a = fns.get(0)??(5)??
 
-    let fn(i32) -> i32 g = pick(&peek h)??
+    let fn(i32) -> i32 g = pick(peek h)??
     let i32 b = g(7)??
 
     # A container get-out borrows for the same reason a field read does.

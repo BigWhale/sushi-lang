@@ -8,7 +8,7 @@ fn eat(i32[] a) ~:
     println("ate {a.len()}")
     return Result.Ok(~)
 
-fn f(&peek i32[] a) ~:
+fn f(peek i32[] a) ~:
     let i32[] b = a.clone()
     b.push(9)
     eat(b)
@@ -16,7 +16,7 @@ fn f(&peek i32[] a) ~:
 
 fn main() i32:
     let i32[] arr = from([1, 2])
-    let Result@(~, StdError) r = f(&peek arr)
+    let Result@(~, StdError) r = f(peek arr)
     if (r):
         println("after: {arr.len()}")
     return Result.Ok(0)

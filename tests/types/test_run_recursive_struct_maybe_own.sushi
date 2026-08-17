@@ -19,10 +19,10 @@ struct Node:
     i32 value
     Maybe@(Own@(Node)) next
 
-fn sum(&peek Node n) i32:
+fn sum(peek Node n) i32:
     match n.next:
         Maybe.Some(Own(nxt)) ->
-            let i32 rest = sum(&peek nxt)??
+            let i32 rest = sum(peek nxt)??
             return Result.Ok(n.value + rest)
         Maybe.None() ->
             return Result.Ok(n.value)
@@ -32,7 +32,7 @@ fn run_test() i32:
     let Node n2 = Node(2, Maybe.Some(Own.alloc(n3)))
     let Node n1 = Node(1, Maybe.Some(Own.alloc(n2)))
 
-    let i32 total = sum(&peek n1)??
+    let i32 total = sum(peek n1)??
     println("Sum: {total}")
     return Result.Ok(0)
 

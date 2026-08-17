@@ -12,7 +12,7 @@ enum CustomError:
     InvalidAge
     InvalidName
 
-fn create_person(string name, i32 age) Result@(Person, CustomError):
+fn create_person(nom string name, i32 age) Result@(Person, CustomError):
     if (age < 0):
         return Result.Err(CustomError.InvalidAge)
     if (name == ""):
@@ -20,7 +20,7 @@ fn create_person(string name, i32 age) Result@(Person, CustomError):
     return Result.Ok(Person(name, age))
 
 fn main() i32:
-    match create_person("Alice", 30):
+    match create_person(nom "Alice", 30):
         Result.Ok(person) ->
             if (person.name == "Alice" and person.age == 30):
                 println("PASS: Struct in Ok works")
@@ -31,7 +31,7 @@ fn main() i32:
             println("FAIL: Got error for valid input")
             return Result.Ok(1)
 
-    match create_person("", 30):
+    match create_person(nom "", 30):
         Result.Ok(_) ->
             println("FAIL: Should have gotten InvalidName error")
             return Result.Ok(1)

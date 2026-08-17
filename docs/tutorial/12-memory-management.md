@@ -74,7 +74,7 @@ The same move rule covers every owning type — dynamic arrays, `List@(T)`, `Own
 or enum that holds one of those** (move-ness is compositional: a value moves iff it transitively owns
 heap). A plain-data or string-only struct still copies (its string field is cloned and the source
 stays usable). Passing an owning value by value to a function moves it: the callee takes ownership and
-frees it at scope exit, so the caller must not use it afterwards. Borrow with `&peek` / `&poke` (or
+frees it at scope exit, so the caller must not use it afterwards. Borrow with `peek` / `poke` (or
 pass a `.clone()` — auto-derived for every struct and enum) when you want to keep it. (One special
 case: `main`'s `string[] args` is a borrowed view of the process argument vector, not a heap-owned
 array — borrow it downstream, never move it by value.)
@@ -84,8 +84,8 @@ array — borrow it downstream, never move it by value.)
 Moving is great for ownership, but you often want to *lend* a value to a function without
 giving it away. That's a **borrow**, and Sushi has two flavours:
 
-- `&peek T` — a **read-only** borrow. You may look, not touch. Many peeks can coexist.
-- `&poke T` — a **read-write** borrow. You may modify in place. Exclusive: only one at a time.
+- `peek T` — a **read-only** borrow. You may look, not touch. Many peeks can coexist.
+- `poke T` — a **read-write** borrow. You may modify in place. Exclusive: only one at a time.
 
 ```sushi
 --8<-- "docs/tutorial/examples/12-memory-management/references.sushi"
@@ -100,12 +100,12 @@ The answer is 42
 The answer is 42
 ```
 
-The caller never loses `answer`; it lends it out and keeps using it afterwards. A `&peek`
+The caller never loses `answer`; it lends it out and keeps using it afterwards. A `peek`
 borrow is the zero-cost way to pass something read-only (no copy of the underlying data is
-made), and a `&poke` borrow lets a function mutate the caller's variable directly, which is
+made), and a `poke` borrow lets a function mutate the caller's variable directly, which is
 how the unit-returning `increment` bumped `answer` from 41 to 42.
 
-Note the last line: `announce` wants a `&peek`, and we handed it a `&poke`. That's allowed —
+Note the last line: `announce` wants a `peek`, and we handed it a `poke`. That's allowed —
 a read-write borrow can safely **coerce down** to a read-only one. The reverse never happens:
 you cannot smuggle a read-only borrow into a slot that wants to write.
 
@@ -113,19 +113,19 @@ you cannot smuggle a read-only borrow into a slot that wants to write.
 
 The exclusivity is not a guideline; it's enforced at compile time. The full ruleset:
 
-- Any number of `&peek` borrows of the same value may be active at once.
-- Only **one** `&poke` borrow may be active at a time.
-- You may **not** mix `&peek` and `&poke` borrows of the same value simultaneously.
-- A `&poke` coerces to `&peek` (safe downgrade); the reverse is forbidden.
+- Any number of `peek` borrows of the same value may be active at once.
+- Only **one** `poke` borrow may be active at a time.
+- You may **not** mix `peek` and `poke` borrows of the same value simultaneously.
+- A `poke` coerces to `peek` (safe downgrade); the reverse is forbidden.
 
 These are exactly the rules that make data races and aliasing bugs impossible: shared
 read-only access is fine, but anyone who can *write* must have exclusive access.
 
 Here's a program that breaks the second rule. It does **not compile** — it asks for two
-exclusive `&poke` borrows of `num` at the same call site:
+exclusive `poke` borrows of `num` at the same call site:
 
 ```sushi
-fn swap(&poke i32 a, &poke i32 b) ~:
+fn swap(poke i32 a, poke i32 b) ~:
     let i32 t = a
     a := b
     b := t
@@ -133,13 +133,13 @@ fn swap(&poke i32 a, &poke i32 b) ~:
 
 fn main() i32:
     let i32 num = 42
-    swap(&poke num, &poke num)   # two &poke borrows of num at once
+    swap(poke num, poke num)   # two poke borrows of num at once
     return Result.Ok(0)
 ```
 
-The compiler rejects it with **CE2403: 'num' already has an active &poke borrow (only one
+The compiler rejects it with **CE2403: 'num' already has an active poke borrow (only one
 exclusive borrow allowed)**, and helpfully points at where the first borrow started. (Mixing
-a `&peek` and a `&poke` of the same value instead trips the closely related **CE2407**.) The
+a `peek` and a `poke` of the same value instead trips the closely related **CE2407**.) The
 fix is to give each exclusive borrow its own variable — the borrow checker is telling you,
 correctly, that two mutable aliases to the same memory is a bug.
 
@@ -185,10 +185,10 @@ null-free.
 - Primitives and strings are **copied** on assignment; dynamic arrays are **moved**, leaving
   the source invalid (use-after-move is caught as **CE2405**), so each heap buffer has exactly
   one owner and one free. Use `.clone()` for an independent copy.
-- **References** lend without owning: `&peek` is read-only and shareable, `&poke` is
-  read-write and exclusive, and `&poke` coerces down to `&peek`.
-- The **borrow checker** enforces those rules at compile time (e.g. two `&poke` borrows of one
-  value is **CE2403**; mixing `&peek` with `&poke` is **CE2407**).
+- **References** lend without owning: `peek` is read-only and shareable, `poke` is
+  read-write and exclusive, and `poke` coerces down to `peek`.
+- The **borrow checker** enforces those rules at compile time (e.g. two `poke` borrows of one
+  value is **CE2403**; mixing `peek` with `poke` is **CE2407**).
 - **Own&lt;T&gt;** is explicit heap allocation for recursive types: `.alloc()`, `.get()`,
   `.destroy()` — though RAII usually frees it for you.
 

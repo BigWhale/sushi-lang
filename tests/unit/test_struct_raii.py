@@ -66,30 +66,50 @@ def test_struct_index_borrows_and_does_not_copy(tmp_path):
     assert mallocs == 0, f"`arr[i]` must borrow, not copy, got {mallocs} mallocs"
 
 
-def test_byvalue_struct_param_freed_by_callee(tmp_path):
-    """A by-value struct param with a `T[]` field is freed by the callee at scope exit.
+def test_nom_struct_param_freed_by_callee(tmp_path):
+    """A `nom` struct param with a `T[]` field is freed by the callee at scope exit.
 
-    The callee owns its own (deep-copied) copy, so it must free it. Before the fix struct
-    parameters were never registered for cleanup and the callee emitted zero frees.
+    The callee is the one owner, so it must free it. Before the fix struct parameters
+    were never registered for cleanup and the callee emitted zero frees.
     """
     src = _STRUCT + (
-        "fn consume(DataBuffer d) i32:\n"
+        "fn consume(nom DataBuffer d) i32:\n"
         "    return Result.Ok(d.data.len())\n"
         "\n"
         "fn main() i32:\n"
         "    let DataBuffer x = DataBuffer(from([1 as u8, 2 as u8, 3 as u8]), 3)\n"
-        "    let i32 n = consume(x).realise(0)\n"
+        "    let i32 n = consume(nom x).realise(0)\n"
         "    return Result.Ok(0)\n"
     )
     ir_text = _emit_ir(tmp_path, src)
     frees = _count_in_function(ir_text, "consume", '@"free"')
-    assert frees >= 1, f"callee must free its by-value struct param's buffer, got {frees} frees"
+    assert frees >= 1, f"callee must free its `nom` struct param's buffer, got {frees} frees"
+
+
+def test_borrow_struct_param_not_freed_by_callee(tmp_path):
+    """The twin, and the flip itself: an UNMARKED struct param is a borrow.
+
+    The caller keeps the value and frees it, so the callee must emit no free at all. The
+    two functions differ by one word (docs/design/borrow-model.md S4).
+    """
+    src = _STRUCT + (
+        "fn look(DataBuffer d) i32:\n"
+        "    return Result.Ok(d.data.len())\n"
+        "\n"
+        "fn main() i32:\n"
+        "    let DataBuffer x = DataBuffer(from([1 as u8, 2 as u8, 3 as u8]), 3)\n"
+        "    let i32 n = look(x).realise(0)\n"
+        "    return Result.Ok(x.data.len())\n"
+    )
+    ir_text = _emit_ir(tmp_path, src)
+    frees = _count_in_function(ir_text, "look", '@"free"')
+    assert frees == 0, f"a borrow parameter must never be freed by the callee, got {frees}"
 
 
 def test_byvalue_struct_arg_moved_at_call_site(tmp_path):
-    """The call site MOVES a bare owning struct arg (#134) -- no deep copy.
+    """The call site MOVES a bare owning struct arg into a `nom` slot (#134).
 
-    Pairs with test_byvalue_struct_param_freed_by_callee: the callee frees the moved-in
+    Pairs with test_nom_struct_param_freed_by_callee: the callee frees the moved-in
     value, and the caller marks the source moved so it does not free it too. Asserted
     relatively: passing the bare Name `consume(x)` (a move) emits FEWER mallocs in `main`
     than passing an explicit `consume(x.clone())` (a copy) -- the move elides the call-site
@@ -97,12 +117,12 @@ def test_byvalue_struct_arg_moved_at_call_site(tmp_path):
     the two counts were equal.
     """
     body = (
-        "fn consume(DataBuffer d) i32:\n"
+        "fn consume(nom DataBuffer d) i32:\n"
         "    return Result.Ok(d.data.len())\n"
         "\n"
         "fn main() i32:\n"
         "    let DataBuffer x = DataBuffer(from([1 as u8, 2 as u8, 3 as u8]), 3)\n"
-        "    let i32 n = consume({arg}).realise(0)\n"
+        "    let i32 n = consume(nom {arg}).realise(0)\n"
         "    return Result.Ok(0)\n"
     )
     move_mallocs = _count_in_function(_emit_ir(tmp_path, _STRUCT + body.format(arg="x")), "user_main", "malloc")

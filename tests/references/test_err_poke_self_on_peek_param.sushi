@@ -1,19 +1,19 @@
-# #327: calling a `&poke self` method IS a write to the receiver root, so calling one
-# through a `&peek` parameter is CE2408 -- the same gate every write goes through.
+# #327: calling a `poke self` method IS a write to the receiver root, so calling one
+# through a `peek` parameter is CE2408 -- the same gate every write goes through.
 # EXPECT_ERROR_CODE: CE2408
 struct Counter:
     i32 n
 
-extend Counter bump(&poke self) ~:
+extend Counter bump(poke self) ~:
     self.n := self.n + 1
     return ~
 
-fn poke_it(&peek Counter c) i32:
+fn poke_it(peek Counter c) i32:
     c.bump()
     return Result.Ok(0)
 
 fn main() i32:
     let Counter c = Counter(1)
-    let i32 r = poke_it(&peek c).realise(0)
+    let i32 r = poke_it(peek c).realise(0)
     println(r)
     return Result.Ok(0)

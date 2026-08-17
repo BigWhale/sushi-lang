@@ -13,24 +13,24 @@ enum Expr:
     Mul(Own@(Expr), Own@(Expr))
     Neg(Own@(Expr))
 
-fn eval(&peek Expr e) i32:
+fn eval(peek Expr e) i32:
     match e:
         Expr.Num(n) ->
             return Result.Ok(n)
         Expr.Add(Own(l), Own(r)) ->
-            let i32 lv = eval(&peek l)??
-            let i32 rv = eval(&peek r)??
+            let i32 lv = eval(peek l)??
+            let i32 rv = eval(peek r)??
             return Result.Ok(lv + rv)
         Expr.Sub(Own(l), Own(r)) ->
-            let i32 lv = eval(&peek l)??
-            let i32 rv = eval(&peek r)??
+            let i32 lv = eval(peek l)??
+            let i32 rv = eval(peek r)??
             return Result.Ok(lv - rv)
         Expr.Mul(Own(l), Own(r)) ->
-            let i32 lv = eval(&peek l)??
-            let i32 rv = eval(&peek r)??
+            let i32 lv = eval(peek l)??
+            let i32 rv = eval(peek r)??
             return Result.Ok(lv * rv)
         Expr.Neg(Own(x)) ->
-            let i32 xv = eval(&peek x)??
+            let i32 xv = eval(peek x)??
             return Result.Ok(0 - xv)
 
 fn main() i32:
@@ -44,7 +44,7 @@ fn main() i32:
     let Own@(Expr) sub = Own.alloc(Expr.Sub(n10, n2))
     let Expr root = Expr.Mul(add, sub)
 
-    let i32 result = eval(&peek root).realise(-1)
+    let i32 result = eval(peek root).realise(-1)
     if (result != 56):
         println("FAIL: expected 56 got {result}")
         return Result.Ok(1)

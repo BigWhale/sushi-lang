@@ -1,5 +1,5 @@
 # A write through an explicit method parameter is #326's shape, for the parameter rather
-# than the receiver -- and it needs its own code, because unlike `&poke self` its escape
+# than the receiver -- and it needs its own code, because unlike `poke self` its escape
 # already exists.
 #
 # The parameter is a borrow (#298), materialized as a private copy, so the field rebind
@@ -8,7 +8,7 @@
 # `leaked=7 blocks=1 double_frees=1`. The plain-function twin is sound: there the callee
 # owns its by-value parameter.
 #
-# Escape, and it works today: declare the parameter `&poke Holder h`. Pinned by
+# Escape, and it works today: declare the parameter `poke Holder h`. Pinned by
 # `tests/memory/test_method_param_borrows_ok.sushi`.
 # EXPECT_ERROR_CODE: CE2422
 struct Holder:

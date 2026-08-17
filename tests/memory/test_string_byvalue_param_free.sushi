@@ -17,7 +17,7 @@ fn take(string s) ~:
     println(s)
     return Result.Ok(~)
 
-fn bounce(string s) string:
+fn bounce(nom string s) string:
     return Result.Ok(s)
 
 fn forward(string s) ~:
@@ -36,7 +36,7 @@ fn main() i32:
     take(b)
     take("fresh-{'one'}")
     take("lit")
-    let string back = bounce("hi-{'again'}").realise("err")
+    let string back = bounce(nom "hi-{'again'}").realise("err")
     println("back:{back}")
     forward("fwd-{'deep'}")
     let string p = "p-{'yo'}"

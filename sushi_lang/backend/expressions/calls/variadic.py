@@ -31,8 +31,9 @@ _variadic_temp_counter = [0]
 
 
 def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
-                         array_type, callee_name: str) -> ir.Value:
-    """Produce the owned T[] struct value for a variadic callee's collected slot.
+                         array_type, callee_name: str,
+                         callee_owns: bool = True) -> ir.Value:
+    """Produce the T[] struct value for a variadic callee's collected slot.
 
     Args:
         codegen: The LLVM code generator.
@@ -41,6 +42,11 @@ def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
         array_type: The variadic parameter's array type (``DynamicArrayType`` or the
             element type, which is wrapped defensively).
         callee_name: Used to name the synthesized temp for readable IR.
+        callee_owns: Whether the CALLEE frees the collected array. True for a Sushi
+            ``...T`` parameter, whose body registers it (``begin_function``). False for
+            a stdlib variadic such as ``run``: its body is generated IR that frees
+            nothing, so the caller keeps the array and its scope exit frees it. Passing
+            True there leaked the whole argv on every call, with no owner anywhere.
 
     Returns:
         An ``ir.Value`` holding the T[] struct (fat pointer) to pass as the callee's
@@ -52,7 +58,8 @@ def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
 
     # Bloom: `arr...` moves an existing array in whole.
     if len(trailing_exprs) == 1 and isinstance(trailing_exprs[0], Spread):
-        return _bloom_move_array(codegen, trailing_exprs[0].value, array_type)
+        return _bloom_move_array(codegen, trailing_exprs[0].value, array_type,
+                                 callee_owns)
 
     # Collect: synthesize an owned T[] from the individual trailing values. Each
     # trailing element is a CALL_ARG consuming use of the ELEMENT type: the synthesized
@@ -75,13 +82,17 @@ def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
     array_struct = codegen.builder.load(descriptor.llvm_alloca, name=f"{temp_name}_val")
 
     # Ownership moves into the callee: the caller must not free this temp. The temp is
-    # compiler-made and carries no provenance, which is exactly what relinquish_temp is for.
-    relinquish_temp(codegen, temp_name)
+    # compiler-made and carries no provenance, which is exactly what relinquish_temp is
+    # for. When the callee does NOT own it, say nothing -- the temp is registered, so
+    # the caller's scope exit frees it and its elements exactly once.
+    if callee_owns:
+        relinquish_temp(codegen, temp_name)
 
     return array_struct
 
 
-def _bloom_move_array(codegen: 'LLVMCodegen', source, array_type) -> ir.Value:
+def _bloom_move_array(codegen: 'LLVMCodegen', source, array_type,
+                      callee_owns: bool = True) -> ir.Value:
     """Move an existing array (the bloom source) into the callee.
 
     Loads the source's T[] struct by value and consumes the source (a CALL_ARG use of
@@ -92,4 +103,7 @@ def _bloom_move_array(codegen: 'LLVMCodegen', source, array_type) -> ir.Value:
     value = codegen.expressions.emit_expr(source)
     if isinstance(value.type, ir.PointerType):
         value = codegen.builder.load(value, name="bloom_src_val")
+    if not callee_owns:
+        # The callee frees nothing, so the source keeps its buffer and frees it once.
+        return value
     return consume(codegen, source, value, array_type, ConsumingUse.CALL_ARG)

@@ -3,7 +3,7 @@
 # `self` is a method receiver, and the 2026-08-15 ruling on #298 makes that a BORROW: the
 # caller keeps the value. The compiled receiver is a private copy, so this store lands on
 # the copy and is lost -- it used to compile with no diagnostic and print the ORIGINAL 1.
-# The escape the diagnostic names is `&poke self` (#327), designed separately.
+# The escape the diagnostic names is `poke self` (#327), designed separately.
 # EXPECT_ERROR_CODE: CE2421
 struct Counter:
     i32 n

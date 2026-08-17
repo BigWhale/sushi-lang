@@ -38,7 +38,7 @@ unsafe external "C" as libc because "formatted output via libc":
 
 ## Semantics
 
-- **Element type** is a single concrete `T` (homogeneous). Reference element types (`&peek`/`&poke`)
+- **Element type** is a single concrete `T` (homogeneous). Reference element types (`peek`/`poke`)
   are rejected with `CE0114`. A dynamic-array element `...T[]` is allowed: each trailing array
   argument is *moved* (not copied) into the synthesized array-of-arrays, so there is no double-free.
   Only the individual-args call form (`total(a, b)`) is reachable in practice, since a true

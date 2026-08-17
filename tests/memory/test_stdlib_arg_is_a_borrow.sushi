@@ -1,0 +1,36 @@
+# A stdlib parameter is a BORROW, so an owning argument survives the call.
+#
+# The defect this closes: the borrow checker marked EVERY call argument moved, without
+# ever looking at the callee, while the backend skipped the transfer for a stdlib callee
+# entirely. Two halves, two answers -- and the visible half was a false CE2405 at every
+# stdlib call site that passed a `let string`. Every stdlib test passed a string LITERAL,
+# which owns no heap, so the one shape where the question does not arise was the only one
+# covered.
+#
+# The mode is declared now, and a stdlib function declares a borrow: the caller keeps the
+# value and frees it exactly once (docs/design/borrow-model.md S5).
+# There is no EXPECT_NO_LEAKS here, and the reason is a SEPARATE defect: `chdir` and
+# `setenv` marshal their argument into a C string that the generated body never frees
+# (issue #292, and #291 for `copy`). That leak is about marshalling, not about ownership,
+# and it is Track B of BORROW.md. Adding the directive here would fail for a reason this
+# file does not test.
+# EXPECT_STDOUT_EXACT: "/nowhere-Zaphod\n/nowhere-Zaphod\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+use <sys/process>
+use <sys/env>
+
+fn main() i32:
+    let string who = "Zaphod"
+    let string path = "/nowhere-{who}"
+
+    # Every one of these takes its argument as a borrow. None of them may move it.
+    if (chdir(path).realise(-1) == 0):
+        println("unreachable")
+    if (setenv(path, path).realise(-1) == 99):
+        println("unreachable")
+    println(path)
+
+    let string again = path
+    println(again)
+    return Result.Ok(0)

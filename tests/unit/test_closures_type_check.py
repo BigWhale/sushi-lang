@@ -47,9 +47,9 @@ def test_non_capturing_lambda_type_checks_clean(analyze):
 
 
 def test_borrow_capture_is_CE2094(analyze):
-    # Capturing a &peek borrow through a closure is deferred to Tier 2.
+    # Capturing a peek borrow through a closure is deferred to Tier 2.
     src = (
-        "fn use_ref(&peek i32 r) i32:\n"
+        "fn use_ref(peek i32 r) i32:\n"
         "    let fn(i32) -> i32 g = |i32 x| x + r\n"
         "    return Result.Ok(g(1).realise(0))\n"
         "fn main() i32:\n"

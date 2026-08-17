@@ -87,7 +87,7 @@ def handle_cast(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
 
 
 def expr_borrow(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
-    """Handle borrow expression: &peek expr or &poke expr."""
+    """Handle borrow expression: peek expr or poke expr."""
     from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree_child
 
     # Extract borrow mode (peek or poke)

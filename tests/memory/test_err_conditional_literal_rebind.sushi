@@ -5,7 +5,7 @@
 # recorded no move, the BACKEND moved it anyway, and this program printed `after: ` with
 # no diagnostic at all.
 # EXPECT_ERROR_CODE: CE2405
-fn eat(string s) ~:
+fn eat(nom string s) ~:
     println("ate {s}")
     return Result.Ok(~)
 
@@ -13,7 +13,7 @@ fn run_test(bool flag) i32:
     let string a = "owned-{1}"
     if (flag):
         a := "hi"
-    eat(a)
+    eat(nom a)
     println("after: {a}")
     return Result.Ok(0)
 

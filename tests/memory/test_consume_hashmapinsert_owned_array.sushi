@@ -24,7 +24,7 @@ struct Buf:
 
 use <collections/hashmap>
 
-fn at_len(&peek HashMap@(i32, Buf) m, i32 key) i32:
+fn at_len(peek HashMap@(i32, Buf) m, i32 key) i32:
     let Buf found = m.get(key)??
     return Result.Ok(found.data.len())
 
@@ -32,6 +32,6 @@ fn main() i32:
     let Buf w = Buf(from([1, 2, 3]))
     let HashMap@(i32, Buf) m = HashMap.new()
     m.insert(1, w)
-    println("n={at_len(&peek m, 1).realise(-1)}")
+    println("n={at_len(peek m, 1).realise(-1)}")
     m.free()
     return Result.Ok(0)

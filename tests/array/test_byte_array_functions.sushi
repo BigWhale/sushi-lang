@@ -15,7 +15,7 @@ fn create_sequence(i32 start, i32 count) u8[]:
         i := i + 1
     return Result.Ok(seq)
 
-fn append_byte(u8[] arr, u8 value) u8[]:
+fn append_byte(nom u8[] arr, u8 value) u8[]:
     arr.push(value)
     return Result.Ok(arr)
 

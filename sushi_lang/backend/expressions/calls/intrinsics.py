@@ -456,7 +456,7 @@ def try_emit_perk_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
         # Function should have been generated - this is an internal error
         raise_internal_error("CE0027", method=expr.method, type=str(semantic_type))
 
-    # A `&poke self` / `&peek self` perk method (#327) takes the receiver by POINTER --
+    # A `poke self` / `peek self` perk method (#327) takes the receiver by POINTER --
     # the same rule as the extension call site (dispatcher.py), read from the same
     # Pass 2 stamp.
     if getattr(expr, "callee_self_mode", None) is not None:

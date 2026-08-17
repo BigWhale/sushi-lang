@@ -152,7 +152,7 @@ A variadic extern must declare at least one fixed parameter (`CE5004`): the C AB
 
 | # | Guarantee | What FFI suspends |
 |---|---|---|
-| 1 | Borrow checking (`&peek`/`&poke`) | aliasing is not tracked through foreign pointers |
+| 1 | Borrow checking (`peek`/`poke`) | aliasing is not tracked through foreign pointers |
 | 2 | RAII / move semantics | a foreign-returned `ptr` is unmanaged; you free it yourself |
 | 3 | `Result` / `Maybe` | no auto-wrapping; check C sentinels (errno/-1/NULL) by hand |
 | 4 | Bounds / null safety | a returned `ptr` may be null and is not bounds-checked |

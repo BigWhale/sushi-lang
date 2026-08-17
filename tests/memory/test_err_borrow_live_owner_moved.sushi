@@ -1,18 +1,18 @@
 # Moving the owner out from under a live `let`-borrow binding is CE2412 (#242).
 #
-# `view` reads out of `h`, and `take(h)` hands `h` to a callee that frees it at scope exit.
+# `view` reads out of `h`, and `take(nom h)` hands `h` to a callee that frees it at scope exit.
 # The binding would then name storage nobody holds.
 # EXPECT_ERROR_CODE: CE2412
 
 struct Holder:
     i32[] items
 
-fn take(Holder h) i32:
+fn take(nom Holder h) i32:
     return Result.Ok(h.items.len())
 
 fn main() i32:
     let Holder h = Holder(from([1, 2, 3]))
     let i32[] view = h.items
-    let i32 n = take(h).realise(-1)
+    let i32 n = take(nom h).realise(-1)
     println("n={n} view={view.len()}")
     return Result.Ok(0)

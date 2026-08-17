@@ -6,7 +6,7 @@
 # EXPECT_ERROR_CODE: CE2412
 fn main() i32:
     let i32[] xs = from([1, 2])
-    foreach(&poke r in xs.iter()):
+    foreach(poke r in xs.iter()):
         xs.push(9)
         r := r + 1
     return Result.Ok(0)

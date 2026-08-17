@@ -97,7 +97,7 @@ The environment is **freed automatically** on every exit path — scope exit, an
 
 ## What you can't capture (yet)
 
-Capturing a **`&peek`/`&poke` borrow** is still rejected at compile time as **CE2094** — threading
+Capturing a **`peek`/`poke` borrow** is still rejected at compile time as **CE2094** — threading
 a borrow's exclusivity guarantee through an escaping closure is a harder problem, deferred to a
 later Tier. Pass the borrowed data as a parameter to the closure instead of capturing the borrow.
 

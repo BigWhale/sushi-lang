@@ -115,7 +115,7 @@ def emit_name(codegen: 'LLVMCodegen', expr: Name, to_i1: bool) -> ir.Value:
 
     slot = resolve_name_slot(codegen, expr.id)
     if slot is not None:
-        # load_with_reference_handling dereferences a &peek/&poke parameter, whose slot
+        # load_with_reference_handling dereferences a peek/poke parameter, whose slot
         # holds a pointer to the borrowed variable rather than the value itself. A
         # constant is never a reference parameter, so it takes the plain-load path.
         from sushi_lang.backend.expressions import type_utils

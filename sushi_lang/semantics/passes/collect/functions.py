@@ -87,7 +87,7 @@ def validate_variadic_params(reporter: 'Reporter', params: List['Param']) -> Non
                 message="a variadic '...T' parameter must be the last parameter")
         return
 
-    # Reject a reference element type (T cannot be &peek/&poke). A borrow cannot be
+    # Reject a reference element type (T cannot be peek/poke). A borrow cannot be
     # owned or moved into the callee-owned collected array.
     element_ty = vparam.ty.base_type if isinstance(vparam.ty, DynamicArrayType) else vparam.ty
     if isinstance(element_ty, ReferenceType):
@@ -181,6 +181,8 @@ class Param:
                                       # `ty` holds the collected DynamicArrayType(T)
     is_pack: bool = False             # True for a v2 type-pack value-param (...Ts args);
                                       # `ty` is the bare pack type-param reference (UnknownType)
+    is_nom: bool = False              # `nom T name`: the CALLEE takes ownership. Read it
+                                      # through semantics/param_modes.py, never directly.
 
 
 @dataclass
@@ -267,6 +269,15 @@ class FunctionTable:
         """
         return (module_path, function_name) in self._stdlib_functions
 
+    def stdlib_by_name(self) -> Dict[str, Any]:
+        """Every imported stdlib function, keyed by its BARE name.
+
+        A call site writes the bare name (`chdir(p)`), so this is the shape the mode
+        resolver needs to tell a stdlib callee from a user one -- and to find the
+        collecting slot of a stdlib variadic such as `run`.
+        """
+        return {name: func for (_module, name), func in self._stdlib_functions.items()}
+
 
 @dataclass
 class GenericFunctionTable:
@@ -303,7 +314,7 @@ class ExtensionMethod:
     ret_type: Optional[Type] = None
     ret_span: Optional[Span] = None
     params: List[Param] = field(default_factory=list)  # Parameters excluding implicit 'self'
-    self_mode: Optional[str] = None  # "peek"/"poke" for a `&poke self` receiver (#327);
+    self_mode: Optional[str] = None  # "peek"/"poke" for a `poke self` receiver (#327);
                                      # None is the classic read-only-borrow receiver
 
 
@@ -343,7 +354,7 @@ class GenericExtensionMethod:
     ret_span: Optional[Span] = None
     params: List[Param] = field(default_factory=list)  # May contain TypeParameter in param types
     body: Optional[Any] = None       # Method body (Block AST node)
-    self_mode: Optional[str] = None  # "peek"/"poke" for a `&poke self` receiver (#327)
+    self_mode: Optional[str] = None  # "peek"/"poke" for a `poke self` receiver (#327)
 
 
 @dataclass
@@ -823,7 +834,8 @@ class FunctionCollector:
                     name_span=param.name_span,
                     type_span=param.type_span,
                     index=param.index,
-                    is_variadic=getattr(param, "is_variadic", False)
+                    is_variadic=getattr(param, "is_variadic", False),
+                    is_nom=getattr(param, "is_nom", False),
                 ))
 
             generic_method = GenericExtensionMethod(

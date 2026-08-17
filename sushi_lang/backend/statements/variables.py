@@ -171,7 +171,7 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     semantic_type = codegen.variable_types.get(var_name) or codegen.memory.find_semantic_type(var_name)
 
     if isinstance(semantic_type, ReferenceType):
-        # A `&poke` rebind stores THROUGH the pointer, so it overwrites a value the CALLER
+        # A `poke` rebind stores THROUGH the pointer, so it overwrites a value the CALLER
         # owns. Ownership applies at both ends, exactly as it does for a local rebind:
         #
         #   1. the new value is taken from its source through the seam, and

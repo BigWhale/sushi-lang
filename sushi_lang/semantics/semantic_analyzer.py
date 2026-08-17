@@ -367,7 +367,7 @@ class SemanticAnalyzer:
         # Unlike single-file mode, we need to analyze all units together since they can reference each other
         # However, we use unit-specific reporters to properly attribute errors to the correct files
 
-        # Destroy-effect summary for Pass 3 (#168): which functions destroy a `&poke`
+        # Destroy-effect summary for Pass 3 (#168): which functions destroy a `poke`
         # parameter, transitively. Computed ONCE across EVERY unit -- the borrow checker
         # runs per unit, so a per-unit summary would make a cross-unit callee invisible.
         from sushi_lang.semantics.passes.borrow import compute_destroy_effects
@@ -505,6 +505,7 @@ class SemanticAnalyzer:
         if self.library_linker is None:
             return
 
+        from sushi_lang.semantics.param_modes import ParamMode
         from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
         from sushi_lang.semantics.type_resolution import parse_type_string
 
@@ -526,7 +527,8 @@ class SemanticAnalyzer:
                         ty=param_type,
                         name_span=None,
                         type_span=None,
-                        index=idx
+                        index=idx,
+                        is_nom=p.get("mode") == ParamMode.NOM.value,
                     ))
 
                 ret_type_str = func_info.get("return_type", "~")

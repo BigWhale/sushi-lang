@@ -22,7 +22,7 @@
 struct Buf:
     i32[] data
 
-fn head_len(&peek List@(Buf) l) i32:
+fn head_len(peek List@(Buf) l) i32:
     let Buf first = l.get(0)??
     return Result.Ok(first.data.len())
 
@@ -30,6 +30,6 @@ fn main() i32:
     let Buf w = Buf(from([1, 2, 3]))
     let List@(Buf) l = List.new()
     l.push(w)
-    println("n={head_len(&peek l).realise(-1)}")
+    println("n={head_len(peek l).realise(-1)}")
     l.destroy()
     return Result.Ok(0)

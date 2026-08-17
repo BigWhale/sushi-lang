@@ -1,7 +1,7 @@
 # Test generic function monomorphization with multiple type parameters
 # Generic swap function should be monomorphized for various type combinations
 
-fn swap@(T, U)(T first, U second) U:
+fn swap@(T, U)(nom T first, nom U second) U:
     # Use first parameter by copying it around (demonstrates generic type usage)
     # These assignments test that type substitution works in variable declarations
     let T temp = first.clone()
@@ -11,21 +11,21 @@ fn swap@(T, U)(T first, U second) U:
 
 fn run_test() i32:
     # Call swap with i32, string - should monomorphize to swap__i32_string
-    if (swap(42, "text")?? == ""):
+    if (swap(nom 42, nom "text")?? == ""):
         return Result.Ok(10)
 
     # Call swap with string, i32 - should monomorphize to swap__string_i32
-    let i32 result2 = swap("hello", 100)??
+    let i32 result2 = swap(nom "hello", nom 100)??
     if (result2 != 100):
         return Result.Ok(1)
 
     # Call swap with i32, i32 - should monomorphize to swap__i32_i32
-    let i32 result3 = swap(1, 2)??
+    let i32 result3 = swap(nom 1, nom 2)??
     if (result3 != 2):
         return Result.Ok(2)
 
     # Call swap with string, string - should monomorphize to swap__string_string
-    if (swap("first", "second")?? == ""):
+    if (swap(nom "first", nom "second")?? == ""):
         return Result.Ok(11)
 
     return Result.Ok(0)

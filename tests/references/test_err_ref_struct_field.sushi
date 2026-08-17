@@ -3,10 +3,10 @@
 # error (#315).
 # EXPECT_ERROR_CODE: CE2415
 struct Holder:
-    &peek i32 value
+    peek i32 value
 
 fn main() i32:
     let i32 n = 42
-    let Holder h = Holder(&peek n)
+    let Holder h = Holder(peek n)
     println(h.value)
     return Result.Ok(0)

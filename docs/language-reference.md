@@ -263,15 +263,15 @@ fn modify(i32 x) i32:
 **Borrowed (by reference):**
 
 Sushi has two borrow modes:
-- `&peek T` - Read-only borrow (multiple allowed)
-- `&poke T` - Read-write borrow (exclusive access)
+- `peek T` - Read-only borrow (multiple allowed)
+- `poke T` - Read-write borrow (exclusive access)
 
 ```sushi
-fn increment(&poke i32 counter) ~:
+fn increment(poke i32 counter) ~:
     counter := counter + 1
     return Result.Ok(~)
 
-fn read_value(&peek i32 x) i32:
+fn read_value(peek i32 x) i32:
     return Result.Ok(x)
 ```
 

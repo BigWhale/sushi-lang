@@ -1,15 +1,15 @@
 # Test error: peek and poke conflict
 # EXPECT_ERROR_CODE: CE2407
-# Cannot have &peek and &poke borrows simultaneously
+# Cannot have peek and poke borrows simultaneously
 
-fn read_and_write(&peek i32 a, &poke i32 b) ~:
+fn read_and_write(peek i32 a, poke i32 b) ~:
     b := a
     return Result.Ok(~)
 
 fn main() i32:
     let i32 num = 42
 
-    # This should fail: &peek and &poke of same variable
-    read_and_write(&peek num, &poke num)??
+    # This should fail: peek and poke of same variable
+    read_and_write(peek num, poke num)??
 
     return Result.Ok(0)

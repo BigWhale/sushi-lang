@@ -49,8 +49,8 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
     block_tree = children[idx]
     body = ast_builder._block(block_tree)
 
-    # A reference-typed item (`foreach(&poke i32 r in ...)`) is the long spelling of
-    # the marker form (`foreach(&poke r in ...)`) -- normalize it, so every downstream
+    # A reference-typed item (`foreach(poke i32 r in ...)`) is the long spelling of
+    # the marker form (`foreach(poke r in ...)`) -- normalize it, so every downstream
     # pass sees ONE spelling: `item_borrow` set, `item_type` the referent (#300).
     item_borrow: Optional[str] = None
     item_borrow_span: Optional[Span] = None
@@ -73,9 +73,9 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
 
 
 def parse_foreach_ref(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
-    """Parse foreach_ref: FOREACH "(" BIT_AND BORROW_MODE NAME "in" expr ")" ":" block
+    """Parse foreach_ref: FOREACH "(" BORROW_MODE NAME "in" expr ")" ":" block
 
-    The reference-binding marker form (#300 phase 1): `foreach(&poke r in rows.iter())`
+    The reference-binding marker form (#300 phase 1): `foreach(poke r in rows.iter())`
     binds `r` as a pointer into the container's element storage. The element type is
     inferred from the iterable, exactly like the untyped plain form.
     """
@@ -85,15 +85,10 @@ def parse_foreach_ref(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
     if idx < len(children) and isinstance(children[idx], Token) and children[idx].type == "FOREACH":
         idx += 1
 
-    if idx >= len(children) or not isinstance(children[idx], Token) or children[idx].type != "BIT_AND":
-        ice(node, f"foreach_ref expects BIT_AND at index {idx}")
-    borrow_span_start = span_of(children[idx])
-    idx += 1
-
     if idx >= len(children) or not isinstance(children[idx], Token) or children[idx].type != "BORROW_MODE":
         ice(node, f"foreach_ref expects BORROW_MODE at index {idx}")
     item_borrow = children[idx].value
-    item_borrow_span = span_of(children[idx]) or borrow_span_start
+    item_borrow_span = span_of(children[idx])
     idx += 1
 
     if idx >= len(children) or not isinstance(children[idx], Token) or children[idx].type != "NAME":

@@ -1,16 +1,16 @@
 # EXPECT_STDOUT_EXACT: "4hello36033"
-# Test dynamic array function parameters. modify_array borrows &poke, so its push is
+# Test dynamic array function parameters. modify_array borrows poke, so its push is
 # visible to the caller (mutable.len()==3 afterward).
 
 
-# Read-only helpers borrow &peek so the caller keeps ownership and can pass the same
-# array again; the mutating helper borrows &poke so its push is visible to the caller.
+# Read-only helpers borrow peek so the caller keeps ownership and can pass the same
+# array again; the mutating helper borrows poke so its push is visible to the caller.
 # (A by-value array param is moved and freed by the callee -- see get_bool_count, which
 # consumes its argument.)
-fn get_length(&peek i32[] arr) i32:
+fn get_length(peek i32[] arr) i32:
     return Result.Ok(arr.len())
 
-fn get_string_length(&peek string[] arr) string:
+fn get_string_length(peek string[] arr) string:
     # A get-out is a borrow and the caller keeps the array, so returning an owned string
     # means cloning it.
     return Result.Ok(arr.get(0)??.clone())
@@ -23,19 +23,19 @@ fn get_bool_count(bool[] arr) i32:
 fn process_multiple(i32[] numbers, string[] names) i32:
     return Result.Ok(numbers.len() + names.len())
 
-fn modify_array(&poke i32[] arr) i32:
+fn modify_array(poke i32[] arr) i32:
     print(arr.push(99))
     return Result.Ok(arr.len())
 
 fn main() i32:
     # Test basic dynamic array parameter
     let i32[] nums = from([1, 2, 3, 4])
-    let i32 length = get_length(&peek nums).realise(0)
+    let i32 length = get_length(peek nums).realise(0)
     print(length)  # Should print 4
 
     # Test string array parameter
     let string[] words = from(["hello", "world"])
-    let string first = get_string_length(&peek words).realise("")
+    let string first = get_string_length(peek words).realise("")
     print(first)   # Should print "hello"
 
     # Test bool array parameter
@@ -49,7 +49,7 @@ fn main() i32:
 
     # Test array modification in function
     let i32[] mutable = from([10, 20])
-    let i32 new_length = modify_array(&poke mutable).realise(0)
+    let i32 new_length = modify_array(poke mutable).realise(0)
     print(new_length)  # Should print 3
     print(mutable.len())  # Should also print 3
 

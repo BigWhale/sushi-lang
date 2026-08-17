@@ -1,12 +1,12 @@
 # EXPECT_STDOUT_EXACT: "Updated!\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
-fn update_message(&poke string msg) ~:
+fn update_message(poke string msg) ~:
     msg := "Updated!"
     return Result.Ok(~)
 
 fn main() i32:
     let string text = "Original"
-    update_message(&poke text)
+    update_message(poke text)
     println(text)
     return Result.Ok(0)

@@ -1,22 +1,22 @@
-# The `&poke` -> `&peek` coercion must NOT leak into function-type compatibility.
+# The `poke` -> `peek` coercion must NOT leak into function-type compatibility.
 #
-# `poker` takes `&poke i32` and writes through it. Binding it to a `fn(&peek i32) -> i32`
+# `poker` takes `poke i32` and writes through it. Binding it to a `fn(peek i32) -> i32`
 # used to be accepted, because the function-type arm recursed through the ordinary
 # compatibility check -- which applies the coercion -- although its own comment says
-# parameters are invariant. The call site then hands out `&peek n` and the callee writes
+# parameters are invariant. The call site then hands out `peek n` and the callee writes
 # it: this program compiled clean and printed `r: 999 n: 999`, a write through a read-only
 # borrow with no diagnostic anywhere. It is the classic covariant-parameter hole, and it
-# defeated the whole `&peek` write gate (CE2408) through one indirection.
+# defeated the whole `peek` write gate (CE2408) through one indirection.
 #
 # Parameters are invariant, so the mutability is part of what the value promises.
 # EXPECT_ERROR_CODE: CE2002
-fn poker(&poke i32 x) i32:
+fn poker(poke i32 x) i32:
     x := 999
     return Result.Ok(x)
 
 fn main() i32:
-    let fn(&peek i32) -> i32 g = poker
+    let fn(peek i32) -> i32 g = poker
     let i32 n = 1
-    let i32 r = g(&peek n).realise(0)
+    let i32 r = g(peek n).realise(0)
     println("r: {r} n: {n}")
     return Result.Ok(0)

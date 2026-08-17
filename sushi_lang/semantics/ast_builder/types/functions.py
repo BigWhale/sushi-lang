@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 from lark import Tree, Token
+from sushi_lang.semantics.param_modes import ParamMode, normalize_modes
 from sushi_lang.semantics.typesys import FunctionType, UnknownType, Type
 
 if TYPE_CHECKING:
@@ -11,22 +12,33 @@ if TYPE_CHECKING:
 def parse_function_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
     """Parse a function type (fn_type_t).
 
-    Syntax: fn "(" [type_list] ")" "->" type ["|" type]
-    Examples: fn(i32) -> i32, fn() -> ~, fn(i32, string) -> bool | MathError
+    Syntax: fn "(" [fn_param_types] ")" "->" type ["|" type]
+    Examples: fn(i32) -> i32, fn() -> ~, fn(i32, string) -> bool | MathError,
+              fn(nom string) -> i32, fn(peek i32) -> i32
 
     Tree children (anonymous string terminals are filtered out by Lark):
-      [FN token, type_list?, return_type_tree, error_type_tree?]
+      [FN token, fn_param_types?, return_type_tree, error_type_tree?]
     The optional error type defaults to UnknownType("StdError"), which the normal
     type-resolution pass binds to the StdError enum (mirroring fn declarations).
+
+    A parameter list carries a MODE per parameter: `peek`/`poke` ride on the type as a
+    ReferenceType, and `nom` arrives as its own token (docs/design/borrow-model.md S6).
     """
     param_types = []
+    nom_flags = []
     direct_type_trees = []  # return type, then optional error type
 
     for child in node.children:
         if isinstance(child, Token):
             continue  # the FN keyword
-        if isinstance(child, Tree) and child.data == "type_list":
-            for type_node in child.children:
+        if isinstance(child, Tree) and child.data == "fn_param_types":
+            for param_node in child.children:
+                nom_flags.append(any(isinstance(c, Token) and c.type == "NOM"
+                                     for c in param_node.children))
+                type_node = next((c for c in param_node.children
+                                  if isinstance(c, Tree)), None)
+                if type_node is None:
+                    return None
                 param_type = ast_builder._parse_type(type_node)
                 if param_type is None:
                     return None
@@ -53,4 +65,7 @@ def parse_function_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]
         param_types=tuple(param_types),
         ok_type=ok_type,
         err_type=err_type,
+        param_modes=normalize_modes(param_types, [
+            ParamMode.NOM if flag else ParamMode.BORROW for flag in nom_flags
+        ]),
     )

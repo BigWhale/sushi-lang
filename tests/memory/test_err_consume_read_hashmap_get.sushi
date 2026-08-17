@@ -10,7 +10,7 @@
 # EXPECT_ERROR_CODE: CE2411
 use <collections/hashmap>
 
-fn len_of(Maybe@(List@(i32)) got) i32:
+fn len_of(nom Maybe@(List@(i32)) got) i32:
     match got:
         Maybe.Some(lst) ->
             return Result.Ok(lst.len())
@@ -22,7 +22,7 @@ fn main() i32:
     let List@(i32) xs = List.new()
     xs.push(7)
     map.insert(1, xs)
-    let i32 n = len_of(map.get(1)).realise(-1)
+    let i32 n = len_of(nom map.get(1)).realise(-1)
     println("n={n}")
     map.free()
     return Result.Ok(0)

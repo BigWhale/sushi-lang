@@ -123,8 +123,8 @@ def validate_extension_method(self, ext: ExtendDef) -> None:
     if ext.target_type == BuiltinType.BLANK:
         self.err.emit(er.ERR.CE2032, ext.target_type_span)
 
-    # Add 'self' parameter with target type to variable table. A `&poke self` /
-    # `&peek self` receiver (#327) registers its full ReferenceType, so every consumer
+    # Add 'self' parameter with target type to variable table. A `poke self` /
+    # `peek self` receiver (#327) registers its full ReferenceType, so every consumer
     # that asks "is this name a borrow?" answers truthfully and inference auto-derefs.
     self_type = None
     if isinstance(ext.target_type, (BuiltinType, ArrayType, DynamicArrayType, StructType)):
@@ -188,7 +188,7 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
         # Validate target type
         validate_type_name(self, impl.target_type, impl.target_type_span)
 
-        # Add 'self' parameter with target type (ReferenceType for `&poke self`, #327)
+        # Add 'self' parameter with target type (ReferenceType for `poke self`, #327)
         self_type = None
         if isinstance(impl.target_type, (BuiltinType, ArrayType, DynamicArrayType, StructType)):
             self_type = impl.target_type

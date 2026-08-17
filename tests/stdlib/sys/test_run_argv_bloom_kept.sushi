@@ -1,0 +1,22 @@
+# The bloom half of BORROW.md bug 2: `run("cmd", argv...)` leaves the source array with
+# the CALLER.
+#
+# `run` frees nothing, so consuming the source would leave the array with no owner at
+# all. It stays the caller's, which makes it readable after the call and freed exactly
+# once -- and Pass 3 agrees, so there is no false CE2405 either. A Sushi `...T` callee
+# still takes the bloomed array, because its body registers it.
+#
+# ONE `run` per file: see the sibling file.
+# EXPECT_STDOUT_EXACT: "bloomed ok\n2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+use <sys/process>
+
+fn main() i32:
+    let string[] argv = from(["x", "y"])
+    match run("true", argv...):
+        Result.Ok(_) -> println("bloomed ok")
+        Result.Err(_) -> println("bloomed err")
+    println(argv.len())
+    return Result.Ok(0)

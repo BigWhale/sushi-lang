@@ -148,34 +148,34 @@ class IteratorType:
 
 @dataclass(frozen=True)
 class ReferenceType:
-    """Represents a borrowed reference to a value (&peek T or &poke T).
+    """Represents a borrowed reference to a value (peek T or poke T).
 
     References allow temporary access to data without transferring ownership.
     Two borrow modes:
-    - &peek T: Read-only borrow (multiple allowed)
-    - &poke T: Read-write borrow (exclusive access)
+    - peek T: Read-only borrow (multiple allowed)
+    - poke T: Read-write borrow (exclusive access)
 
     Borrow Rules (enforced at compile time):
-    - Multiple &peek borrows allowed (read-only)
-    - Only one &poke borrow at a time (exclusive)
-    - Cannot have &peek and &poke borrows simultaneously
+    - Multiple peek borrows allowed (read-only)
+    - Only one poke borrow at a time (exclusive)
+    - Cannot have peek and poke borrows simultaneously
     - Can't move, rebind, or destroy a variable while it's borrowed
     - Borrows are function-scoped (end at function return)
 
     Type Coercion:
-    - &poke T can be passed where &peek T is expected (safe downgrade)
-    - &peek T cannot be passed where &poke T is expected
+    - poke T can be passed where peek T is expected (safe downgrade)
+    - peek T cannot be passed where poke T is expected
 
     Usage:
-    - Read-only params: fn read(&peek i32[] arr) i32
-    - Mutable params: fn modify(&poke i32 x) ~
+    - Read-only params: fn read(peek i32[] arr) i32
+    - Mutable params: fn modify(poke i32 x) ~
     - Zero-cost: compiles to LLVM pointers
     """
     referenced_type: "Type"  # The type being borrowed (e.g., i32[], MyStruct)
     mutability: BorrowMode = BorrowMode.POKE  # Default to poke for backward compat during migration
 
     def __str__(self) -> str:
-        return f"&{self.mutability} {self.referenced_type}"
+        return f"{self.mutability} {self.referenced_type}"
 
     def __hash__(self) -> int:
         return hash(("reference", self.referenced_type, self.mutability))
@@ -200,7 +200,7 @@ def deref_type(t: Optional["Type"]) -> Optional["Type"]:
     "The methods on `&T` are the methods on `T`", and the same holds for fields, indexing
     and iteration: a borrow is transparent to everything except ownership. Roughly twenty
     sites spell this unwrap by hand, and each one that forgets it silently loses a whole
-    receiver family -- `&peek i32` and `&peek string` reached no built-in method at all,
+    receiver family -- `peek i32` and `peek string` reached no built-in method at all,
     fell through to the user extension path, and died there as a CE0000 rather than a
     diagnostic.
     """
@@ -274,14 +274,31 @@ class FunctionType:
     EXCLUDED from __eq__/__hash__ so type identity stays capture-agnostic — `fn(i32) -> i32`
     names both a plain fn and any closure of that arity/ok/err (compatibility is invariant on
     arity + each param + ok + err, never on capture).
+
+    `param_modes` carries the PARAMETER MODE of each parameter and IS part of identity:
+    `fn(nom string) -> i32` and `fn(string) -> i32` are different types in both directions.
+    Without that, one indirection defeats the mode rule — which is what #335 showed for
+    `peek`/`poke` (docs/design/borrow-model.md §7). It is normalized on read through
+    `param_modes.normalize_modes`, so a type built with no modes and one built with all
+    default modes are the same type, and `peek`/`poke` always agree with the type.
     """
     param_types: tuple["Type", ...]
     ok_type: "Type"
     err_type: "Type"
     captures: Optional[tuple] = None
+    param_modes: Optional[tuple] = None
+
+    @property
+    def modes(self) -> tuple:
+        """The normalized parameter modes. Read this, never `param_modes` directly."""
+        from sushi_lang.semantics.param_modes import normalize_modes
+        return normalize_modes(self.param_types, self.param_modes)
 
     def __str__(self) -> str:
-        params = ", ".join(str(p) for p in self.param_types)
+        params = ", ".join(
+            f"{m.marker} {p}" if m.marker and not m.by_pointer else str(p)
+            for p, m in zip(self.param_types, self.modes, strict=True)
+        )
         base = f"fn({params}) -> {self.ok_type}"
         # Hide the implicit StdError to match the surface syntax in diagnostics.
         if str(self.err_type) != "StdError":
@@ -289,13 +306,15 @@ class FunctionType:
         return base
 
     def __hash__(self) -> int:
-        return hash(("function", self.param_types, self.ok_type, self.err_type))
+        return hash(("function", self.param_types, self.ok_type, self.err_type,
+                     self.modes))
 
     def __eq__(self, other) -> bool:
         return (isinstance(other, FunctionType) and
                 self.param_types == other.param_types and
                 self.ok_type == other.ok_type and
-                self.err_type == other.err_type)
+                self.err_type == other.err_type and
+                self.modes == other.modes)
 
 
 def owns_heap(t: Optional["Type"], _visited: Optional[set] = None,

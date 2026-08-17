@@ -27,14 +27,14 @@ def emit_argument_mismatch(validator: 'TypeValidator', arg, index: int,
     """Report CE2006, and say how to borrow when the parameter wants a borrow.
 
     A borrow reads exactly like the value it refers to, so `infer_expression_type`
-    dereferences one: `v + 1` must see `i32`, not `&peek i32`. At an argument position
-    that dereference makes the message read `expected &peek string, got string`, which
+    dereferences one: `v + 1` must see `i32`, not `peek i32`. At an argument position
+    that dereference makes the message read `expected peek string, got string`, which
     describes two types the user never wrote and names no fix.
 
     A borrow is always created AT the call site in Sushi, whether the place is owned or
-    already borrowed, so the fix is the same `&peek x` the caller writes everywhere else.
+    already borrowed, so the fix is the same `peek x` the caller writes everywhere else.
     Say so. This matters most where a function forwards its own borrowed parameter to
-    another function, which is the shape every `&peek string` signature produces.
+    another function, which is the shape every `peek string` signature produces.
     """
     from sushi_lang.semantics.ast import MemberAccess
     from sushi_lang.semantics.typesys import ReferenceType
@@ -136,10 +136,10 @@ def validate_fn_value_call_args(validator: 'TypeValidator', args, fn_ty,
 
 
 def _explain_missing_borrow(diag, arg, arg_ty, param_ty) -> None:
-    """Add the "you meant `&peek x`" help where the mismatch is a missing borrow.
+    """Add the "you meant `peek x`" help where the mismatch is a missing borrow.
 
-    A `fn(&peek i32) -> i32` parameter reports "expected '&peek i32', got 'i32'" for an
-    argument the user declared `&peek i32` -- naming a type they DID write. Pass 2 unwraps
+    A `fn(peek i32) -> i32` parameter reports "expected 'peek i32', got 'i32'" for an
+    argument the user declared `peek i32` -- naming a type they DID write. Pass 2 unwraps
     a reference-typed name at every mention, deliberately: a borrow is created at the USE
     site, not carried by the name. The rule is right; only the message was unhelpful.
 

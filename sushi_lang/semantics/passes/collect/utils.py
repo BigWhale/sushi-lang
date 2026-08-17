@@ -71,6 +71,7 @@ def param_from_node(p: Any, idx: int) -> 'Param':
         index=idx,
         is_variadic=bool(getattr(p, "is_variadic", False)),
         is_pack=bool(getattr(p, "is_pack", False)),
+        is_nom=bool(getattr(p, "is_nom", False)),
     )
 
 
@@ -110,7 +111,7 @@ def reject_reference_in(reporter, ty: Optional[Type], span: Optional[Span],
     """Reject a reference type in a position that has no semantics for one (R4).
 
     The one emit helper behind CE2415-CE2420. It asks `contains_reference` (the one walk)
-    and renders the type with `display_type`, so the diagnostic shows `&peek i32`, never
+    and renders the type with `display_type`, so the diagnostic shows `peek i32`, never
     the interned spelling.
 
     Returns True when it reported, so a caller can skip work that a rejected type would

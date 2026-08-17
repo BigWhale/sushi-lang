@@ -1,5 +1,5 @@
 """
-Borrow (&peek / &poke) emission for the Sushi language compiler.
+Borrow (peek / poke) emission for the Sushi language compiler.
 
 A borrow lowers to the address of the borrowed value: a reference is a pointer, and
 borrow checking is entirely a compile-time affair (see semantics/passes/borrow.py).
@@ -16,23 +16,23 @@ if TYPE_CHECKING:
 
 
 def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
-    """Emit borrow expression (&peek expr or &poke expr) as pointer to expression.
+    """Emit borrow expression (peek expr or poke expr) as pointer to expression.
 
     Supports:
-    - Variables: &peek x, &poke x -> slot pointer
-    - Member access: &peek obj.field, &poke obj.field -> GEP to field
-    - Nested member access: &peek obj.a.b, &poke obj.a.b -> nested GEP
+    - Variables: peek x, poke x -> slot pointer
+    - Member access: peek obj.field, poke obj.field -> GEP to field
+    - Nested member access: peek obj.a.b, poke obj.a.b -> nested GEP
 
-    References are zero-cost abstractions in Sushi. Both &peek (read-only) and
-    &poke (read-write) borrows emit identical LLVM IR - they simply return the
+    References are zero-cost abstractions in Sushi. Both peek (read-only) and
+    poke (read-write) borrows emit identical LLVM IR - they simply return the
     pointer to the memory location. The semantic differences are enforced at
     compile time by the borrow checker.
 
     The borrow checker (Pass 3 in semantic analysis) has already verified:
     - The borrowed expression is borrowable (variable or member access)
-    - &poke borrows are exclusive (only one at a time)
-    - &peek borrows allow multiple simultaneous reads
-    - Cannot mix &peek and &poke borrows of the same variable
+    - poke borrows are exclusive (only one at a time)
+    - peek borrows allow multiple simultaneous reads
+    - Cannot mix peek and poke borrows of the same variable
     - Cannot move/rebind/destroy while borrowed
     - Cannot borrow moved variables
 

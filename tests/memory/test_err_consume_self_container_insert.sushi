@@ -5,14 +5,14 @@
 struct Holder:
     string label
 
-extend Holder stash(&poke List@(Holder) sink) i32:
+extend Holder stash(poke List@(Holder) sink) i32:
     sink.push(self)
     return 1
 
 fn main() i32:
     let List@(Holder) l = List.new()
     let Holder h = Holder("initial-{0}")
-    let i32 x = h.stash(&poke l)
+    let i32 x = h.stash(poke l)
     println("len: {l.len()} x: {x}")
     l.free()
     return Result.Ok(0)

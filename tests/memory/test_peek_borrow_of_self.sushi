@@ -1,10 +1,10 @@
-# A `&peek` borrow of the method receiver, and of one of its fields.
+# A `peek` borrow of the method receiver, and of one of its fields.
 #
 # Both used to be CE2400, "cannot borrow 'self': variable does not exist" -- true of the
 # borrow checker's state and puzzling to a user who can see `self` on the line above. The
 # receiver is registered now (#326), so a READ-ONLY borrow of it is what it always should
 # have been: legal, and the shape that lets a method hand its receiver to a helper without
-# copying anything. The `&poke` twin is CE2421; the write is the part that cannot work.
+# copying anything. The `poke` twin is CE2421; the write is the part that cannot work.
 # EXPECT_STDOUT_EXACT: "n: 7\nlen: 3\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
@@ -14,17 +14,17 @@ struct Counter:
 struct Bag:
     i32[] items
 
-fn read_counter(&peek Counter c) i32:
+fn read_counter(peek Counter c) i32:
     return Result.Ok(c.n)
 
-fn count(&peek i32[] xs) i32:
+fn count(peek i32[] xs) i32:
     return Result.Ok(xs.len())
 
 extend Counter show() i32:
-    return read_counter(&peek self).realise(0)
+    return read_counter(peek self).realise(0)
 
 extend Bag size() i32:
-    return count(&peek self.items).realise(0)
+    return count(peek self.items).realise(0)
 
 fn run_test() i32:
     let Counter c = Counter(7)

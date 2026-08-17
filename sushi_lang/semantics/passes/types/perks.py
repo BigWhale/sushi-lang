@@ -61,7 +61,7 @@ def _signatures_match(impl: FuncDef, required: PerkMethodSignature) -> bool:
     """Check if implementation signature matches requirement.
 
     Compares:
-    - Receiver mode (#327): a perk that declares `(&poke self)` needs an impl that
+    - Receiver mode (#327): a perk that declares `(poke self)` needs an impl that
       writes through the receiver, and a by-value impl would silently lose the writes
       -- the #326 bug reintroduced through the perk door. Mismatch either way is CE4004.
     - Parameter count (excluding implicit self)

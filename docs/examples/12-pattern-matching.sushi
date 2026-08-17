@@ -21,7 +21,7 @@ enum JourneyStatus:
     Arrived(string)
     Lost()
 
-fn describe_status(&peek JourneyStatus status) ~:
+fn describe_status(peek JourneyStatus status) ~:
     # Match expression with exhaustive checking
     # All four variants must be handled or the code won't compile
     match status:
@@ -37,7 +37,7 @@ fn describe_status(&peek JourneyStatus status) ~:
 
     return Result.Ok(~)
 
-fn is_journey_active(&peek JourneyStatus status) bool:
+fn is_journey_active(peek JourneyStatus status) bool:
     # Using default pattern (_) to match multiple cases
     # Instead of listing Lost and NotStarted separately, we can use _ as a catch-all
     match status:
@@ -57,15 +57,15 @@ fn main() i32:
     let JourneyStatus s4 = JourneyStatus.Lost()
 
     # Process each status - function calls don't need ?? since they return Result@(~)
-    describe_status(&peek s1)
-    describe_status(&peek s2)
-    describe_status(&peek s3)
-    describe_status(&peek s4)
+    describe_status(peek s1)
+    describe_status(peek s2)
+    describe_status(peek s3)
+    describe_status(peek s4)
 
     println("")
 
     # Demonstrate the default pattern (_) usage - only InProgress is active
-    let bool active = is_journey_active(&peek s2).realise(false)
+    let bool active = is_journey_active(peek s2).realise(false)
     println("InProgress is active: {active}")
 
     return Result.Ok(0)

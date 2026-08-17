@@ -1,10 +1,10 @@
 # #327: a temporary has no address the write could land in -- the receiver of a
-# `&poke self` call must be a place, so a constructor-expression receiver is CE2404.
+# `poke self` call must be a place, so a constructor-expression receiver is CE2404.
 # EXPECT_ERROR_CODE: CE2404
 struct Counter:
     i32 n
 
-extend Counter bump(&poke self) ~:
+extend Counter bump(poke self) ~:
     self.n := self.n + 1
     return ~
 

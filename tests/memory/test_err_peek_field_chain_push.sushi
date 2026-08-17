@@ -1,16 +1,16 @@
-# The receiver is a FIELD of the `&peek` parameter, not the parameter itself. The
+# The receiver is a FIELD of the `peek` parameter, not the parameter itself. The
 # root of the chain decides, so this is the same error.
 # EXPECT_ERROR_CODE: CE2408
 struct Holder:
     i32[] items
 
-fn grow(&peek Holder h) ~:
+fn grow(peek Holder h) ~:
     h.items.push(9)
     return Result.Ok(~)
 
 fn run_test() i32:
     let Holder holder = Holder(from([1, 2]))
-    grow(&peek holder)
+    grow(peek holder)
     println(holder.items.len())
     return Result.Ok(0)
 

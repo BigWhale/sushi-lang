@@ -23,11 +23,11 @@ if TYPE_CHECKING:
 
 
 def _reject_immutable_poke_receiver(validator: 'TypeValidator', call: MethodCall) -> None:
-    """A `&poke self` method call writes through its receiver's ADDRESS (#327).
+    """A `poke self` method call writes through its receiver's ADDRESS (#327).
 
     So the receiver must HAVE an address the write can reach: a temporary would be
     spilled to a copy nobody reads (a silently lost write, the #326 class) and is
-    CE2404; a constant lives in `.rodata` and is CE2400. A binding/`&peek` receiver
+    CE2404; a constant lives in `.rodata` and is CE2400. A binding/`peek` receiver
     is Pass 3's half -- the write gate treats a poke-self call as a write to the root.
     """
     from sushi_lang.semantics.ast import DotCall, MemberAccess
@@ -188,7 +188,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     perk_method = validator.perk_impl_table.get_method(receiver_type, call.method)
     if perk_method is not None:
         # Found a perk method - validate it
-        # A `&poke self` / `&peek self` perk method (#327): stamp the mode for Pass 3
+        # A `poke self` / `peek self` perk method (#327): stamp the mode for Pass 3
         # and the backend, and reject a receiver with no address for the poke form --
         # the same rule as the extension arm below.
         perk_self_mode = getattr(perk_method, "self_mode", None)
@@ -196,6 +196,8 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             call.callee_self_mode = perk_self_mode
             if perk_self_mode == "poke":
                 _reject_immutable_poke_receiver(validator, call)
+
+        _stamp_param_modes(call, perk_method)
 
         # Validate argument count (receiver is implicit, so compare explicit args)
         expected = len(perk_method.params)
@@ -297,7 +299,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         er.emit(validator.reporter, er.ERR.CE2008, call.loc, name=f"{display_type(receiver_type)}.{call.method}")
         return
 
-    # A `&poke self` / `&peek self` method (#327) receives its receiver's ADDRESS. Stamp
+    # A `poke self` / `peek self` method (#327) receives its receiver's ADDRESS. Stamp
     # the mode on the call node -- Pass 3 treats a poke-self call as a WRITE to the
     # receiver root (the CE2408/CE2412 gates), and the backend passes a pointer instead
     # of a value. Both read the stamp instead of re-resolving the method.
@@ -306,6 +308,8 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         call.callee_self_mode = self_mode
         if self_mode == "poke":
             _reject_immutable_poke_receiver(validator, call)
+
+    _stamp_param_modes(call, method)
 
     # Validate argument count (receiver is implicit, so compare explicit args)
     expected_params = method.params
@@ -330,3 +334,19 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     # Validate any excess arguments (if more args than params)
     for i in range(len(expected_params), len(actual_args)):
         validator.validate_expression(actual_args[i])
+
+
+def _stamp_param_modes(call, method) -> None:
+    """Record the resolved method's declared parameter modes on the call node.
+
+    Pass 3 and the backend both need "what does this callee take?", and only Pass 2
+    resolves WHICH method a `receiver.name(...)` denotes -- through the perk table, the
+    extension table and the generic-extension table, with built-ins winning first. The
+    stamp is the same mechanism `callee_self_mode` already uses: resolve once, read
+    twice, rather than re-deriving the answer in two more places.
+    """
+    from sushi_lang.semantics.param_modes import CalleeKind, modes_for
+    params = getattr(method, "params", None) or ()
+    call.callee_param_modes = modes_for(params, CalleeKind.METHOD)
+    call.callee_param_names = tuple(p.name for p in params)
+    call.callee_param_types = tuple(p.ty for p in params)

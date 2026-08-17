@@ -3,7 +3,7 @@
 # EXPECT_STDOUT_CONTAINS: test_cmdline_multiple_params
 
 # args is main's borrowed view of C argv -- borrow it downstream (never move it by value).
-fn run_test(i32 unused_param, &peek string[] args, bool another_unused) i32:
+fn run_test(i32 unused_param, peek string[] args, bool another_unused) i32:
     # Test that only the 'args' parameter gets special treatment
     # Other parameters should be ignored/zeroed
     println("Unused param value: {unused_param}")
@@ -17,6 +17,6 @@ fn run_test(i32 unused_param, &peek string[] args, bool another_unused) i32:
 fn main(i32 unused_param, string[] args, bool another_unused) i32:
     # Touch args directly (avoids the borrow-only CW1003 lint); the reader borrows it.
     if (args.len() > 0):
-        let i32 result = run_test(unused_param, &peek args, another_unused).realise(99)
+        let i32 result = run_test(unused_param, peek args, another_unused).realise(99)
         return Result.Ok(result)
     return Result.Ok(0)

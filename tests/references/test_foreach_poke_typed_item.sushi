@@ -1,4 +1,4 @@
-# #300 phase 1: the long spelling `foreach(&poke i32 r in ...)` -- a reference-typed
+# #300 phase 1: the long spelling `foreach(poke i32 r in ...)` -- a reference-typed
 # item -- is normalized by the AST builder to the marker form, so both spellings are
 # ONE feature. (This form used to die as a CE2034 type mismatch.)
 # EXPECT_STDOUT_EXACT: "3\n6\n"
@@ -6,7 +6,7 @@
 # EXPECT_NO_LEAKS
 fn main() i32:
     let i32[] xs = from([1, 2])
-    foreach(&poke i32 r in xs.iter()):
+    foreach(poke i32 r in xs.iter()):
         r := r * 3
     foreach(v in xs.iter()):
         println(v)

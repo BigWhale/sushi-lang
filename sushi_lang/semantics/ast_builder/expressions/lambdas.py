@@ -12,7 +12,7 @@ Grammar (see grammar.lark):
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional, Union
-from lark import Tree
+from lark import Token, Tree
 
 from sushi_lang.semantics.ast import Lambda, Param, Block, Expr
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
@@ -76,12 +76,16 @@ def _parse_lambda_params(t: Tree, ast_builder: "ASTBuilder") -> List[Param]:
             ty_node = next((c for c in ch.children if _is_type_node(c)), None)
             nm_tok = first_name(ch.children)
             ty = ast_builder._parse_type(ty_node) if ty_node is not None else None
+            nom_tok = next((c for c in ch.children
+                            if isinstance(c, Token) and c.type == "NOM"), None)
             out.append(Param(
                 name=str(nm_tok),
                 ty=ty,
                 name_span=span_of(nm_tok),
                 type_span=span_of(ty_node) if ty_node is not None else None,
                 loc=span_of(ch),
+                is_nom=nom_tok is not None,
+                nom_span=span_of(nom_tok) if nom_tok is not None else None,
             ))
         elif ch.data == "lambda_bare_param":
             # A bare-name param: type is inferred later from an expected FunctionType.

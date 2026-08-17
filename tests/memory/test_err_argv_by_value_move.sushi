@@ -5,12 +5,12 @@
 #
 # Moving a borrowed view is unsound, so this must not compile: the borrow checker stamps
 # main's args as an argv view and rejects a by-value move with CE2410, directing the user
-# to borrow it with `&peek string[]` (which use_args would take as `&peek string[] a`).
+# to borrow it with `peek string[]` (which use_args would take as `peek string[] a`).
 # EXPECT_ERROR_CODE: CE2410
 
-fn use_args(string[] a) i32:
+fn use_args(nom string[] a) i32:
     return Result.Ok(a.len())
 
 fn main(string[] args) i32:
-    println(use_args(args).realise(-1))
+    println(use_args(nom args).realise(-1))
     return Result.Ok(0)

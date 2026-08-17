@@ -11,10 +11,27 @@ from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, Param, ExtendDef
 from sushi_lang.semantics.typesys import Type as Ty, BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, UnknownType, ReferenceType, ForeignPtrType
 from sushi_lang.backend import enum_utils
+from sushi_lang.backend.ownership import relinquish
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+
+
+def callee_owns_param(param) -> bool:
+    """Does the CALLEE own this parameter, and therefore free it at scope exit?
+
+    One question, asked of the DECLARATION and of nothing else. It deliberately takes
+    no callee, no `fn_def` and no flag: the convention used to be derived from the
+    callee's implementation ("is this body a method?"), which is how one language
+    feature came to free its parameters in a `.slib` build and not in a generated
+    stdlib one (docs/design/borrow-model.md S1).
+
+    `tests/unit/test_callee_mode_matrix.py` pins the answer for all four modes, and
+    pins that the signature stays this narrow.
+    """
+    from sushi_lang.semantics.param_modes import param_mode
+    return param_mode(param).consumes
 
 
 class FunctionHelpers:
@@ -300,110 +317,57 @@ class FunctionHelpers:
 
             param_slots.append((arg, slot))
 
-        # A by-value parameter of a plain function TAKES OWNERSHIP: the caller transferred
-        # the value (the seam marked a Name source moved, a temp adopted in), so the callee
-        # owns the buffer and its owned bit must survive. A body compiled with fn_def=None
-        # (an extension/perk method) registers no cleanup, so its string params stay
-        # BORROWS and keep the owned-bit clear below -- the body can then never free the
-        # caller's buffer (#145). Since the #338 ruling, every CONSUMING use of such a
-        # parameter is CE2411 in Pass 3, so the cleared bit no longer escapes anywhere:
-        # it guards the read paths only. `main`'s params are argv views and stay borrows
-        # too.
-        is_user_main = fn_def is not None and fn_def.name == "main"
-        owning_string_params: set[str] = set()
-        if fn_def is not None and not is_user_main:
+        # A `nom` parameter TAKES OWNERSHIP: the caller transferred the value (the seam
+        # marked a Name source moved, a temp adopted in), so the callee owns the buffer
+        # and its owned bit must survive. Every other mode is a BORROW: the caller keeps
+        # the value, so clear the callee's copy's owned bit to 0 and the body can never
+        # free the caller's buffer, whatever it does with it (#145). Consuming a borrow
+        # is CE2411 in Pass 3, so the cleared bit guards the read paths only.
+        owning_params: set[str] = set()
+        if fn_def is not None:
             for param in fn_def.params:
-                if param.ty == BuiltinType.STRING and not getattr(param, "is_variadic", False):
-                    owning_string_params.add(param.name)
+                if callee_owns_param(param):
+                    owning_params.add(param.name)
 
         for arg, slot in param_slots:
             val = arg
-            # A by-value `string` parameter of an fn_def=None body is a BORROW: the
-            # caller's binding retains ownership and frees the buffer. Clear the callee's
-            # copy's owned bit to 0 so anything the body does with it (notably `return
-            # self` in an extension method, or forwarding it onward) never frees the
-            # caller's buffer -- no double-free (#145). An OWNING param (registered below)
-            # keeps its owned bit: the callee is the one owner and must really free it.
             if (self.codegen.types.is_string_type(arg.type)
-                    and (arg.name or "") not in owning_string_params):
+                    and (arg.name or "") not in owning_params):
                 val = self.codegen.builder.insert_value(arg, ir.Constant(self.codegen.i8, 0), 2)
             self.codegen.builder.store(val, slot)
 
-        # Register owning value parameters (moved-in T[] / List<T> / Own<T>, native
-        # variadic '...T' arrays, and -- the by-value-parameter ruling, 2026-08-14 --
-        # strings, function values and owning fixed arrays) for RAII cleanup: a by-value
-        # parameter is a consuming position, so the CALLEE owns the value and frees it
-        # at scope exit (MM.md section 0.2; X8/F12 and the string twin found with X9).
+        # Register the parameters the callee OWNS for RAII cleanup. One question, asked
+        # of the declaration: `callee_owns_param`. It used to be asked of the callee's
+        # implementation instead -- "is `fn_def` None, i.e. is this a method body?" --
+        # which is how the same language feature came to free its parameters in a
+        # `.slib` build and not in a generated stdlib one.
         #
-        # Exception: the user `main`'s `args` parameter is a BORROWED view of C argv --
-        # its string elements point directly at process argv memory, not heap-owned
-        # copies -- so it must never be freed. Skip cleanup registration for main's
-        # parameters entirely (callers must borrow `args`, not move it by value).
-        if fn_def is not None and not is_user_main:
+        # A native variadic `...T` array is the one parameter the CALLER synthesizes: it
+        # has no other owner, so the callee adopts it whatever the mode says.
+        if fn_def is not None:
             slot_by_name = {arg.name or f"arg{i}": slot
                             for i, (arg, slot) in enumerate(param_slots)}
             for param in fn_def.params:
-                # Reference parameters (&peek/&poke) are borrows -- never owned/freed.
-                if isinstance(param.ty, ReferenceType):
-                    continue
                 slot = slot_by_name.get(param.name)
                 if slot is None:
                     continue
 
-                # A native variadic '...T' array parameter: the callee owns the
-                # caller-collected T[] and frees it at scope exit.
-                if getattr(param, "is_variadic", False) and isinstance(param.ty, DynamicArrayType):
-                    self.codegen.dynamic_arrays.register_param_array(
-                        param.name, param.ty.base_type, slot
-                    )
+                is_variadic = (getattr(param, "is_variadic", False)
+                               and isinstance(param.ty, DynamicArrayType))
+                if is_variadic or callee_owns_param(param):
+                    self.codegen.memory.register_owning_value(param.name, param.ty, slot)
                     continue
 
-                # Move-by-value owning parameters (#131): a bare owning value (dynamic
-                # array / List<T> / Own<T>) passed by value is MOVED into the callee,
-                # which now owns it and must free it exactly once at scope exit (the
-                # caller marked its source moved and skips its own free). Registration
-                # mirrors what a `let` local of the same type gets.
-                if isinstance(param.ty, DynamicArrayType):
-                    self.codegen.dynamic_arrays.register_param_array(
-                        param.name, param.ty.base_type, slot
-                    )
-                    continue
-
-                resolved = param.ty
-                if isinstance(resolved, UnknownType):
-                    resolved = (self.codegen.struct_table.by_name.get(resolved.name)
-                                or self.codegen.enum_table.by_name.get(resolved.name)
-                                or resolved)
-                if isinstance(resolved, StructType):
-                    if self.codegen.dynamic_arrays.is_own_type(resolved):
-                        self.codegen.dynamic_arrays.register_own(param.name, resolved, slot)
-                    elif self.codegen.dynamic_arrays.is_list_type(resolved):
-                        self.codegen.dynamic_arrays.register_list(param.name, resolved, slot)
-                    elif self.codegen.dynamic_arrays.struct_needs_cleanup(resolved):
-                        # By-value owning USER struct (#134): the caller MOVES the value in
-                        # (bare Name) or hands over an independent copy (MemberAccess / copy
-                        # composite); either way the callee is the sole owner and frees it once.
-                        self.codegen.memory.register_struct_cleanup(param.name, resolved, slot)
-                elif isinstance(resolved, EnumType):
-                    # By-value owning ENUM param (#134): the caller moved the value in (or
-                    # passed an independent copy for a MemberAccess/copy source), so the callee
-                    # owns it and frees it at scope exit, reusing the struct-cleanup registry.
-                    if self.codegen.dynamic_arrays.struct_needs_cleanup(resolved):
-                        self.codegen.memory.register_struct_cleanup(param.name, resolved, slot)
-                else:
-                    # The by-value-parameter ruling (2026-08-14): a string, a function
-                    # value, or an owning fixed array passed by value is owned by the
-                    # callee, exactly like the arms above. register_local_cleanup routes
-                    # each to its registry, and every free is runtime-guarded (owned bit /
-                    # drop_ptr), so a literal string or a plain fn reference frees to a
-                    # no-op. Lifted lambda bodies compile through this path too, so the
-                    # indirect-call ABI agrees with the direct one.
-                    from sushi_lang.semantics.typesys import FunctionType
-                    from sushi_lang.backend.destructors import needs_cleanup
-                    if (resolved == BuiltinType.STRING
-                            or isinstance(resolved, FunctionType)
-                            or (isinstance(resolved, ArrayType) and needs_cleanup(resolved))):
-                        self.codegen.memory.register_local_cleanup(param.name, resolved, slot)
+                # A BORROW parameter is registered and immediately RELINQUISHED. The
+                # registration is what a REBIND needs -- `s := "new"` re-initializes the
+                # callee's local copy, and the new value has no other owner, so without a
+                # registry entry it leaks. The relinquish is what the caller needs: the
+                # value that arrives belongs to the caller, so no exit path may free it,
+                # and the rebind's destroy-the-old-value step must skip it too. A rebind
+                # then `unmark`s the slot, and scope exit frees the value the callee
+                # itself put there. Two facts, one slot, in the right order.
+                self.codegen.memory.register_owning_value(param.name, param.ty, slot)
+                relinquish(self.codegen, param.name)
 
     def end_function(self) -> None:
         """Clean up function emission context.

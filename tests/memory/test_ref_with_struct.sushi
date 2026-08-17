@@ -8,12 +8,12 @@ struct Point:
     i32 x
     i32 y
 
-fn move_right(&poke Point p) ~:
+fn move_right(poke Point p) ~:
     let Point new_p = Point(p.x + 10, p.y)
     p := new_p
     return Result.Ok(~)
 
-fn move_up(&poke Point p) ~:
+fn move_up(poke Point p) ~:
     let Point new_p = Point(p.x, p.y + 5)
     p := new_p
     return Result.Ok(~)
@@ -23,11 +23,11 @@ fn main() i32:
     println(origin.x)
     println(origin.y)
 
-    move_right(&poke origin)
+    move_right(poke origin)
     println(origin.x)
     println(origin.y)
 
-    move_up(&poke origin)
+    move_up(poke origin)
     println(origin.x)
     println(origin.y)
 

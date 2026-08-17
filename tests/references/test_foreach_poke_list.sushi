@@ -1,4 +1,4 @@
-# #300 phase 1: List@(T) elements mutate in place through a `&poke` binding --
+# #300 phase 1: List@(T) elements mutate in place through a `poke` binding --
 # List.iter() walks the same {index, length, T*} view an array's iter() does.
 # EXPECT_STDOUT_EXACT: "10\n12\n"
 # EXPECT_RUNTIME_EXIT: 0
@@ -7,7 +7,7 @@ fn main() i32:
     let List@(i32) xs = List.new()
     xs.push(5)
     xs.push(6)
-    foreach(&poke r in xs.iter()):
+    foreach(poke r in xs.iter()):
         r := r * 2
     foreach(v in xs.iter()):
         println(v)

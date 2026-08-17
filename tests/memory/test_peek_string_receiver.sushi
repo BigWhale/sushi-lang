@@ -9,8 +9,8 @@
 # symbol nobody defines, so the program failed at LINK time and the linker error was
 # reported as a CE0000 internal compiler error.
 #
-# `&peek string` had ZERO coverage before this file. Every `&peek string` in the
-# repository was `&peek string[]`, an array borrow, which works by accident: a dynamic
+# `peek string` had ZERO coverage before this file. Every `peek string` in the
+# repository was `peek string[]`, an array borrow, which works by accident: a dynamic
 # array is passed by pointer anyway, so the borrow and the value have the same shape.
 # A string does not. MM.md section 2; no upstream issue.
 #
@@ -27,7 +27,7 @@
 
 use <collections/strings>
 
-fn info(&peek string s) ~:
+fn info(peek string s) ~:
     let string loud = s.upper()
     let string tight = s.trim()
     println("len={s.len()} upper={loud} trim=[{tight}]")
@@ -37,5 +37,5 @@ fn info(&peek string s) ~:
 
 fn main() i32:
     let string v = "  Ford  "
-    info(&peek v)
+    info(peek v)
     return Result.Ok(0)

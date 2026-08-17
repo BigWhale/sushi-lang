@@ -1,10 +1,10 @@
-# #327: a match binding is a read-only view, so calling a `&poke self` method on one
+# #327: a match binding is a read-only view, so calling a `poke self` method on one
 # is CE2414 -- the write could never reach the owner.
 # EXPECT_ERROR_CODE: CE2414
 struct Counter:
     i32 n
 
-extend Counter bump(&poke self) ~:
+extend Counter bump(poke self) ~:
     self.n := self.n + 1
     return ~
 

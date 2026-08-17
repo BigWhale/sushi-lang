@@ -1,7 +1,7 @@
 # The container-insert sink with a reference source: the list would own and free the
 # caller's string.
 # EXPECT_ERROR_CODE: CE2411
-fn f(&poke string s) ~:
+fn f(poke string s) ~:
     let List@(string) l = List.new()
     l.push(s)
     println(l.len())
@@ -9,7 +9,7 @@ fn f(&poke string s) ~:
 
 fn main() i32:
     let string a = "aa-{1}"
-    let Result@(~, StdError) r = f(&poke a)
+    let Result@(~, StdError) r = f(poke a)
     if (r):
         println("after")
     return Result.Ok(0)

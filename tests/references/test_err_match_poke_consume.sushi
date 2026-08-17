@@ -5,14 +5,14 @@ enum Shape:
     Poly(i32[])
     Empty
 
-fn eat(i32[] a) i32:
+fn eat(nom i32[] a) i32:
     return Result.Ok(a.len())
 
 fn main() i32:
     let Shape s = Shape.Poly(from([1]))
     match s:
-        Shape.Poly(&poke p) ->
-            match eat(p):
+        Shape.Poly(poke p) ->
+            match eat(nom p):
                 Result.Ok(n) -> println(n)
                 Result.Err(_) -> println("e")
         Shape.Empty -> println("empty")

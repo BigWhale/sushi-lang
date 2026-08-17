@@ -126,6 +126,8 @@ def monomorphize_extension_method(
             ty=concrete_param_type,
             name_span=param.name_span,
             type_span=param.type_span,
+            is_nom=getattr(param, 'is_nom', False),
+            nom_span=getattr(param, 'nom_span', None),
         ))
 
     # Create concrete ExtendDef (preserving the body from generic method)

@@ -9,17 +9,17 @@ enum Expr:
     Add(Own@(Expr), Own@(Expr))
     Mul(Own@(Expr), Own@(Expr))
 
-fn eval(&peek Expr expr) i32:
+fn eval(peek Expr expr) i32:
     match expr:
         Expr.IntLit(n) ->
             return Result.Ok(n)
         Expr.Add(Own(left), Own(right)) ->
-            let i32 l = eval(&peek left)??
-            let i32 r = eval(&peek right)??
+            let i32 l = eval(peek left)??
+            let i32 r = eval(peek right)??
             return Result.Ok(l + r)
         Expr.Mul(Own(left), Own(right)) ->
-            let i32 l = eval(&peek left)??
-            let i32 r = eval(&peek right)??
+            let i32 l = eval(peek left)??
+            let i32 r = eval(peek right)??
             return Result.Ok(l * r)
 
 fn run_test() i32:
@@ -31,7 +31,7 @@ fn run_test() i32:
     let Own@(Expr) mul = Own.alloc(Expr.Mul(lit3, lit5))
     let Expr add = Expr.Add(lit2, mul)
 
-    let i32 result = eval(&peek add)??
+    let i32 result = eval(peek add)??
     println("Result: {result}")
     let i32 expected = 17
     return Result.Ok(result - expected)

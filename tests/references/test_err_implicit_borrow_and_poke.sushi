@@ -1,0 +1,19 @@
+# An unmarked argument is a BORROW now, so it counts against the exclusivity rules.
+#
+# `both(poke a, a)` hands one callee a write pointer to `a` AND a second view of the same
+# buffer: a `push` through the pointer reallocates, and the view is left reading released
+# memory. That is issue #329's shape arriving by a different route -- before borrow by
+# default the second argument was a MOVE, which CE2401 caught.
+#
+# Both argument orders are one rule, because the call arm checks every argument before it
+# settles any of them.
+# EXPECT_ERROR_CODE: CE2407
+
+fn both(poke i32[] r, i32[] view) i32:
+    r.push(9)
+    return Result.Ok(view.len())
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    println(both(poke a, a).realise(-1))
+    return Result.Ok(0)

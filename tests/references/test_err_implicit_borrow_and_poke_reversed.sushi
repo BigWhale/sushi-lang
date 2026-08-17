@@ -1,0 +1,12 @@
+# The reversed argument order of `test_err_implicit_borrow_and_poke.sushi`: the implicit
+# borrow is registered first and the explicit `poke` finds it. One rule, two orders.
+# EXPECT_ERROR_CODE: CE2407
+
+fn both(i32[] view, poke i32[] r) i32:
+    r.push(9)
+    return Result.Ok(view.len())
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    println(both(a, poke a).realise(-1))
+    return Result.Ok(0)

@@ -10,11 +10,11 @@
 use <lib/private_closure_lib>
 
 fn run_i32() i32:
-    let i32 m = compute(10, 20)??
+    let i32 m = compute(nom 10, nom 20)??
     return Result.Ok(m)
 
 fn run_string() string:
-    let string s = compute("first", "second")??
+    let string s = compute(nom "first", nom "second")??
     return Result.Ok(s)
 
 fn main() i32:

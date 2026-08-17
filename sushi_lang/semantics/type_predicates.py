@@ -295,7 +295,7 @@ def contains_foreign_ptr(ty: Type, struct_table: Optional[dict] = None,
 
 
 def contains_reference(ty: Optional[Type]) -> bool:
-    """Does this declared type contain a `&peek` / `&poke` anywhere it is not supported?
+    """Does this declared type contain a `peek` / `poke` anywhere it is not supported?
 
     The single walk behind the six position rejections (CE2415-CE2420). The grammar's
     `?type` rule is recursive and universal, so a reference parses in EVERY type position;
@@ -308,8 +308,8 @@ def contains_reference(ty: Optional[Type]) -> bool:
     field the struct's own declaration already rejected.
 
     **The `FunctionType` carve-out is load-bearing.** A reference PARAMETER inside a
-    function type -- `fn(&peek i32) -> i32` -- is legal and works, and so is the lambda
-    that satisfies it (`|&peek i32 x| ...`). A function type is a parameter list, so its
+    function type -- `fn(peek i32) -> i32` -- is legal and works, and so is the lambda
+    that satisfies it (`|peek i32 x| ...`). A function type is a parameter list, so its
     parameters are the supported position, wherever the function type itself appears: as a
     struct field, a generic argument, a variable. The RETURN of a function type is not
     exempt -- returning a borrow is the same unsound shape as a plain reference return

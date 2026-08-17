@@ -84,7 +84,8 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
         # Build the owned argv string[] from the trailing args (collect or bloom). The
         # helper returns a by-value struct, so no extra load is needed.
         args_value = build_variadic_array(
-            codegen, expr.args[1:], DynamicArrayType(BuiltinType.STRING), "run")
+            codegen, expr.args[1:], DynamicArrayType(BuiltinType.STRING), "run",
+            callee_owns=False)
 
         # Build Result<ProcessOutput, ProcessError> from the shared aligned-layout helper
         # so the returned type matches both the .bc and the caller's variable type

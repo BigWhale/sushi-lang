@@ -387,22 +387,22 @@ Enforce memory safety rules for references.
 
 ```sushi
 let i32 x = 42
-# let &peek i32 r = &peek x  # ERROR CE2413: a let binding cannot have a reference type
+# let peek i32 r = peek x  # ERROR CE2413: a let binding cannot have a reference type
 ```
 
-A borrow is created at a USE site (`f(&peek x)`); a local borrow BINDING is not a
+A borrow is created at a USE site (`f(peek x)`); a local borrow BINDING is not a
 checked feature yet, so the form is rejected rather than compiled as an unchecked
 alias.
 
 2. **Cannot move/rebind while borrowed**
 
 ```sushi
-fn borrow(&peek i32 x) i32:
+fn borrow(peek i32 x) i32:
     return Result.Ok(x)
 
 fn main() i32:
     let i32 num = 42
-    let i32 borrowed = borrow(&peek num).realise(0)
+    let i32 borrowed = borrow(peek num).realise(0)
     # num := 50  # ERROR CE1007: Cannot rebind while borrowed
     return Result.Ok(0)
 ```
@@ -411,11 +411,11 @@ fn main() i32:
 
 ```sushi
 # ERROR: Cannot borrow temporary expression
-# let i32 x = func(&peek (5 + 3))
+# let i32 x = func(peek (5 + 3))
 
 # OK: Use variable
 let i32 temp = 5 + 3
-let i32 x = func(&peek temp)
+let i32 x = func(peek temp)
 ```
 
 4. **Use-after-destroy detection**
@@ -431,7 +431,7 @@ arr.destroy()
 
 A `let` does not always take ownership of what it binds. Its OWNERSHIP is derived from the
 *provenance* of its source expression -- one of three: `OWNED` (a bare local or a by-value
-parameter), `BORROWED` (a `match`/`foreach` binding, a `&peek`/`&poke` parameter, or any read
+parameter), `BORROWED` (a `match`/`foreach` binding, a `peek`/`poke` parameter, or any read
 through a still-live owner -- a field, an index, a container get-out), or `FRESH` (a constructor, a
 call result, `.clone()`, a literal). See `docs/design/ownership-conventions.md` for the full
 classification table.
@@ -457,7 +457,7 @@ fn main() i32:
 
 The borrow lasts to the end of the block that declared it. Mutating, freeing, or rebinding `w`
 while `borrowed` is still live is **CE2412**; handing `borrowed` itself to a by-value sink is
-**CE2411**. This is what makes rule 1's rejection (`let &peek T x = ...`, CE2413) unnecessary as a
+**CE2411**. This is what makes rule 1's rejection (`let peek T x = ...`, CE2413) unnecessary as a
 checked-borrow mechanism: an ordinary `let T x = <borrowed source>` is already tracked.
 
 ### Borrow Tracking

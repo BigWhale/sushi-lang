@@ -471,6 +471,38 @@ class ScopeManager:
         elif semantic_ty == BuiltinType.STRING:
             self._string_cleanup.setdefault(name, []).append((self._scope_depth, slot))
 
+    def register_owning_value(self, name: str, semantic_ty: 'Type',
+                              slot: ir.AllocaInstr) -> None:
+        """Give a slot that OWNS its value the registry that will free it, for any type.
+
+        `register_local_cleanup` decides which registry a type belongs to, but it does not
+        reach the three that carry an element type of their own -- a dynamic `T[]`,
+        `Own@(T)` and `List@(T)`. Every caller that owns a value therefore had to remember
+        those three by hand, and there were three such callers with three different
+        subsets: a `let` binding, a callee parameter, and (missing entirely) a call
+        argument the caller keeps. The third is what leaked `look(make()??)` under borrow
+        by default.
+
+        One entry point, so a new owning kind is wired once.
+        """
+        from sushi_lang.semantics.typesys import DynamicArrayType, StructType
+        from sushi_lang.backend.destructors import resolve_named_type
+
+        resolved = resolve_named_type(self.codegen, semantic_ty)
+        arrays = getattr(self.codegen, "dynamic_arrays", None)
+
+        if isinstance(resolved, DynamicArrayType) and arrays is not None:
+            arrays.register_param_array(name, resolved.base_type, slot)
+            return
+
+        self.register_local_cleanup(name, resolved, slot)
+
+        if isinstance(resolved, StructType) and arrays is not None:
+            if arrays.is_own_type(resolved):
+                arrays.register_own(name, resolved, slot)
+            elif arrays.is_list_type(resolved):
+                arrays.register_list(name, resolved, slot)
+
     def create_local_nostore(self, name: str, ty: ir.Type, semantic_ty: Optional['Type'] = None,
                              register_cleanup: bool = True) -> ir.AllocaInstr:
         """Create local variable without initialization.

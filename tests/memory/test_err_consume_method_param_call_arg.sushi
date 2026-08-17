@@ -11,12 +11,12 @@ struct Holder:
 struct Box:
     i32 n
 
-fn eat(Holder h) i32:
+fn eat(nom Holder h) i32:
     println("eating {h.label}")
     return Result.Ok(1)
 
 extend Box feed(Holder h) i32:
-    return eat(h).realise(0)
+    return eat(nom h).realise(0)
 
 fn main() i32:
     let Box b = Box(1)

@@ -4,13 +4,13 @@
 # EXPECT_STDOUT_EXACT: "owned-7\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
-fn take_over(&poke string s) ~:
+fn take_over(poke string s) ~:
     s := "owned-{7}"
     return Result.Ok(~)
 
 fn main() i32:
     let string a = "literal"
-    let Result@(~, StdError) r = take_over(&poke a)
+    let Result@(~, StdError) r = take_over(poke a)
     if (r):
         println(a)
     return Result.Ok(0)
