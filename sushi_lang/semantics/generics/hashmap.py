@@ -101,26 +101,9 @@ def parse_hashmap_types(hashmap_type: StructType, validator: Any) -> tuple[Optio
 
 
 def _resolve_type_string(type_str: str, validator: Any) -> Optional[Type]:
-    """Resolve a type string (e.g., "i32", "Maybe<i32>", "Pair<i32, string>") to a Type object.
-    """
-    from sushi_lang.semantics.typesys import BuiltinType
-
-    builtin_map = {
-        'i8': BuiltinType.I8, 'i16': BuiltinType.I16, 'i32': BuiltinType.I32, 'i64': BuiltinType.I64,
-        'u8': BuiltinType.U8, 'u16': BuiltinType.U16, 'u32': BuiltinType.U32, 'u64': BuiltinType.U64,
-        'f32': BuiltinType.F32, 'f64': BuiltinType.F64,
-        'bool': BuiltinType.BOOL, 'string': BuiltinType.STRING,
-    }
-    if type_str in builtin_map:
-        return builtin_map[type_str]
-
-    if hasattr(validator, 'enum_table') and type_str in validator.enum_table.by_name:
-        return validator.enum_table.by_name[type_str]
-
-    if hasattr(validator, 'struct_table') and type_str in validator.struct_table.by_name:
-        return validator.struct_table.by_name[type_str]
-
-    return None
+    """Resolve one of HashMap<K, V>'s type arguments, through the shared reader."""
+    from sushi_lang.semantics.generics.type_strings import resolve_type_argument
+    return resolve_type_argument(type_str, validator)
 
 
 def _validate_hashmap_new(
