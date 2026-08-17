@@ -1,0 +1,16 @@
+# The other direction of the same invariance (#368): a borrowing callee does not satisfy a
+# `nom` fn type. The caller would write the marker, stop using the value, and nobody would
+# free it -- a leak rather than a double free, and just as wrong.
+# EXPECT_ERROR_CODE: CE2002
+
+use <collections/strings>
+
+fn look(string s) i32:
+    return Result.Ok(s.len() as i32)
+
+fn main() i32:
+    let string base = "Ford"
+    let string s = "{base} Prefect"
+    let fn(nom string) -> i32 g = look
+    println(g(nom s).realise(-1))
+    return Result.Ok(0)

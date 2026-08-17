@@ -107,12 +107,12 @@ def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: T
 
 
 def _params_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
-    """Compatibility for one parameter INSIDE a function type: no borrow coercion."""
-    if isinstance(actual, ReferenceType) or isinstance(expected, ReferenceType):
-        return (isinstance(actual, ReferenceType) and isinstance(expected, ReferenceType)
-                and actual.mutability == expected.mutability
-                and types_compatible(validator, actual.referenced_type,
-                                     expected.referenced_type))
+    """Compatibility for what one parameter INSIDE a function type carries.
+
+    The MODE is a separate question, answered once by the caller off `FunctionType.modes`.
+    """
+    if isinstance(actual, ReferenceType) and isinstance(expected, ReferenceType):
+        return types_compatible(validator, actual.referenced_type, expected.referenced_type)
     return types_compatible(validator, actual, expected)
 
 
@@ -128,6 +128,12 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
     # err type (no variance in v1). Recurse so members still carrying UnknownType resolve.
     if isinstance(actual, FunctionType) and isinstance(expected, FunctionType):
         if len(actual.param_types) != len(expected.param_types):
+            return False
+        # Invariant in the MODE too, in both directions (borrow-model.md S7). `peek` and
+        # `poke` ride on the parameter's type, so they were already compared here; `nom`
+        # does not, and went uncompared -- a `nom` callee satisfied a borrow fn type and
+        # the call was a double free (#368). `modes` is the one normalized answer.
+        if actual.modes != expected.modes:
             return False
         if not all(_params_compatible(validator, ap, ep)
                    for ap, ep in zip(actual.param_types, expected.param_types, strict=False)):

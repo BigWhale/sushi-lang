@@ -1,5 +1,6 @@
 """Type parameter substitution and AST transformation."""
 from __future__ import annotations
+from dataclasses import replace
 from typing import Dict, List, TYPE_CHECKING
 import copy
 
@@ -124,15 +125,15 @@ class TypeSubstitutor:
             )
 
         # For function types (fn(T) -> U), substitute the parameter, ok, and err types.
-        # Captures are metadata (excluded from type identity) but drive ownership, so
-        # carry them through unchanged.
+        # `replace`, so both metadata fields ride along: `captures` drives ownership, and
+        # `param_modes` carries the declared `nom` a rebuild used to drop (#368).
         from sushi_lang.semantics.typesys import FunctionType
         if isinstance(ty, FunctionType):
-            return FunctionType(
+            return replace(
+                ty,
                 param_types=tuple(self.substitute_type(p, substitution) for p in ty.param_types),
                 ok_type=self.substitute_type(ty.ok_type, substitution),
                 err_type=self.substitute_type(ty.err_type, substitution),
-                captures=ty.captures,
             )
 
         return ty

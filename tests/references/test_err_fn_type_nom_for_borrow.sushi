@@ -1,0 +1,18 @@
+# A function type is invariant in its parameter MODE, `nom` included (#368).
+#
+# `eat` takes ownership. Binding it to a `fn(string) -> i32`, which promises the caller
+# keeps the value, used to be accepted -- the type of a fn reference never carried the
+# declared modes, so a `nom` callee compared equal to a borrow fn type. The call then
+# compiled clean and aborted: both sides freed the string.
+# EXPECT_ERROR_CODE: CE2002
+
+fn eat(nom string owned) i32:
+    println("owned: {owned}")
+    return Result.Ok(1)
+
+fn main() i32:
+    let string base = "Ford"
+    let string s = "{base} Prefect"
+    let fn(string) -> i32 g = eat
+    println(g(s).realise(-1))
+    return Result.Ok(0)

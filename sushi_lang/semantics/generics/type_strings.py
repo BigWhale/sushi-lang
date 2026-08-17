@@ -70,6 +70,7 @@ def _split_top_level(s: str, sep: str) -> list[str]:
 
 def _resolve_function_type_from_string(type_str: str, tables: Any) -> Type:
     """Resolve a first-class function type string: "fn(P0, P1, ...) -> T [| E]"."""
+    from sushi_lang.semantics.param_modes import ParamMode, normalize_modes
     from sushi_lang.semantics.typesys import FunctionType
 
     open_idx = type_str.index("(")
@@ -93,13 +94,24 @@ def _resolve_function_type_from_string(type_str: str, tables: Any) -> Type:
     ret_str = pipe_parts[0].strip()
     err_str = pipe_parts[1].strip() if len(pipe_parts) > 1 else "StdError"
 
+    # A `nom` parameter is spelled with the marker, which is not part of any type name.
+    # `str(FunctionType)` writes it, so reading one back must accept it -- it used to reach
+    # the type lookup as the text `nom string` and raise CE0022 (#368). `peek` and `poke`
+    # need no case: they ARE part of the type, and the reference branch takes them.
+    param_texts = [p for p in _split_top_level(params_str, ",") if p]
+    nom_flags = [text.startswith("nom ") for text in param_texts]
     param_types = tuple(
-        resolve_type_from_string(p, tables)
-        for p in _split_top_level(params_str, ",") if p
+        resolve_type_from_string(text[4:] if flag else text, tables)
+        for text, flag in zip(param_texts, nom_flags, strict=True)
     )
     ok_type = resolve_type_from_string(ret_str, tables)
     err_type = resolve_type_from_string(err_str, tables)
-    return FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type)
+    return FunctionType(
+        param_types=param_types, ok_type=ok_type, err_type=err_type,
+        param_modes=normalize_modes(param_types, [
+            ParamMode.NOM if flag else ParamMode.BORROW for flag in nom_flags
+        ]),
+    )
 
 
 def resolve_type_from_string(type_str: str, tables: Any) -> Type:

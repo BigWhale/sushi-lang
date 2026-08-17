@@ -159,6 +159,17 @@ bit that the type cannot carry (`Param.is_nom`); everything else is read off the
 a function type built without modes and a function type built with all-default modes are
 the same type.
 
+**That convenience is also the hazard, so hold a second invariant: every rebuild of a
+`FunctionType` carries `param_modes`.** `peek` and `poke` ride on the parameter's own type
+and survive any rebuild; `nom` does not, and a rebuild that omits the field silently says
+"every parameter borrows" rather than "the modes are unknown". Resolution, three
+substitution walks and a manifest read all did exactly that — so `nom` in a fn-type
+annotation was unusable, and two shapes double freed (#368). Use `dataclasses.replace` to
+rebuild, and `declared_modes(params)` to build from a signature.
+`tests/unit/test_fn_type_metadata_survives.py` pins both halves: each transformation
+round-trips a type with non-default metadata, and no construction under `semantics/` may
+leave `param_modes` unstated.
+
 One resolver answers "what are the modes of this callee?" for every kind in the section 5
 table. It is modelled on the closed `ConsumingUse` enum: `CalleeKind` is a closed set, and
 a member with no row fails a unit test statically. Pass 3 and the backend call the same
@@ -176,9 +187,10 @@ deriving it in several.
 
 - **A function type carries the mode, and stays invariant.** `fn(nom string) -> i32` and
   `fn(string) -> i32` are different types, in both directions. Without this, one
-  indirection defeats the rule — which is exactly what #335 showed for `peek` and `poke`.
-  The `poke` to `peek` coercion is a property of the call-site position, not of the type
-  pair, so it does not travel into a stored function type.
+  indirection defeats the rule — which is exactly what #335 showed for `peek` and `poke`,
+  and #368 for `nom`. The `poke` to `peek` coercion is a property of the call-site position,
+  not of the type pair, so it does not travel into a stored function type. `types_compatible`
+  compares `FunctionType.modes` for this, in one place, rather than asking each parameter.
 - **A perk declares the mode, and the implementation must match it.** This is CE4004, which
   is already the rule for `peek self` and `poke self`.
 - **You may return, store and capture a `nom` parameter.** The callee owns it. A borrow
