@@ -77,6 +77,38 @@ Asking for index 42 of a four-element array would crash with `crew[42]`, but `cr
 calmly hands back `Maybe.None()`, and the `match` handles it. Use direct indexing when you
 *know* the index is valid; reach for `.get(...)` when you're not sure.
 
+## Changing an element
+
+Reading is only half of it. To *write* one element, put the same square-bracket form on
+the left of a `:=`:
+
+```sushi
+--8<-- "docs/tutorial/examples/07-arrays/writing.sushi"
+```
+
+Output:
+
+```
+Index 0 is now Marvin.
+Squares: 0 1 4 9 16
+Index 1 is now Trillian, and index 3 is still Trillian.
+```
+
+The index is bounds-checked exactly like a read, so `crew[42] := "Slartibartfast"` stops
+the program with **RE2020** rather than writing past the end. Writing in a loop, as the
+`squares` example does, is the everyday way to fill an array with computed values.
+
+The last two lines are worth a second look. `crew[3]` reads Trillian's name *out of* the
+array, but the array still owns that name and will still free it. If you could store the
+same name in `crew[1]` as well, two slots would own one value, and the cleanup would free
+it twice. So the compiler rejects the bare `crew[1] := crew[3]` with **CE2411**, and
+`.clone()` is how you say "give me an independent copy". You met this idea as *ownership*;
+[Chapter 12](12-memory-management.md) covers it properly.
+
+!!! note "Fixed arrays are mutable — only their *length* is fixed"
+    `i32[5]` means "always exactly five integers". It does not mean the five integers never
+    change. You can write any element you like; you just cannot make it a sixth.
+
 ## Growing and iterating
 
 Dynamic arrays earn their keep with a small set of methods:
@@ -121,6 +153,8 @@ model, which [Chapter 12](12-memory-management.md) explores.)
 - `.len()` reports the current length.
 - `arr[i]` is fast but crashes (RE2020) on a bad index; `arr.get(i)` is safe and returns
   `Maybe@(T)`.
+- `arr[i] := value` writes one element, on both kinds of array. A fixed array's *length* is
+  fixed; its contents are not.
 - `.push()`, `.pop()`, `.iter()`, and `.clone()` are the everyday dynamic-array methods,
   and `foreach(x in arr.iter()):` is how you loop.
 

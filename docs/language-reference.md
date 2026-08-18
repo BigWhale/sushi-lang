@@ -427,6 +427,28 @@ arr.push(4)
 let i32 last = arr.pop()
 ```
 
+### Indexed Assignment
+
+`arr[index] := value` writes one element, on a fixed array and a dynamic array alike:
+
+```sushi
+let i32[3] scores = [1, 2, 3]
+scores[0] := 42
+
+let i32[] names = from([1, 2])
+names[1] := 99
+```
+
+The index is bounds-checked like a read (**RE2020** at run time; **CE2012** for a literal
+index past the end of a fixed array). An owning element that the write replaces is freed
+first. The assignment takes ownership of the value, so an owned source is moved (later use
+is **CE2405**) and a value read out of a container needs `.clone()` (**CE2411**).
+
+The write must be able to reach the owner. It is rejected through a `peek` parameter
+(**CE2408**), a `match`/`foreach` binding (**CE2414**), a method receiver without
+`poke self` (**CE2421**), an unmarked parameter (**CE2422**), a `let` binding that borrows
+from an owner (**CE2426**), and a constant (**CE2096**).
+
 ## Structs
 
 ### Definition

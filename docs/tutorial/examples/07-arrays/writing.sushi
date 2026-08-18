@@ -1,0 +1,20 @@
+fn main() i32:
+    let string[] crew = from(["Arthur", "Ford", "Zaphod", "Trillian"])
+
+    # Write one element in place. The index may be any i32 expression.
+    crew[0] := "Marvin"
+    println("Index 0 is now {crew[0]}.")
+
+    # A loop of writes is the usual way to fill an array with computed values.
+    let i32[5] squares = [0, 0, 0, 0, 0]
+    foreach(i in 0..5):
+        squares[i] := i * i
+
+    println("Squares: {squares[0]} {squares[1]} {squares[2]} {squares[3]} {squares[4]}")
+
+    # Reading one element out of an array does NOT take it away from the array,
+    # so storing it somewhere else needs an independent copy.
+    crew[1] := crew[3].clone()
+    println("Index 1 is now {crew[1]}, and index 3 is still {crew[3]}.")
+
+    return Result.Ok(0)

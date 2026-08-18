@@ -59,6 +59,18 @@ of every struct with an array field and every `T[]` parameter, and it would re-o
 question of who owns the pointee — a question the descriptor answers today by being owned
 wherever it is stored.
 
+## The one element address
+
+`emit_element_pointer` (`backend/types/arrays/indexing.py`) is the single place that turns an
+`IndexAccess` into an element address, and it emits the bounds check on the way. It has two
+consumers now: the READ (`arr[i]`) and, since #261, the WRITE (`arr[i] := v`). That is why the
+write is bounds-checked by construction rather than by a second check written beside it.
+
+The write emits its VALUE before it asks for the address. A dynamic array can reallocate while
+the value is being emitted -- `a[0] := grow(poke a)??` is a legal program -- so an address taken
+first would point into the buffer that `realloc` released. Rust orders `a[i] = v` the same way,
+right operand before place.
+
 ## The type-argument reader
 
 `List@(i32[])` and `HashMap@(K, V[])` failed for a second, independent reason. A container

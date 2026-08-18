@@ -4,6 +4,7 @@
 # - Fixed-size arrays (T[N]) - stack-allocated, immutable length
 # - Dynamic arrays (T[]) - heap-allocated, growable
 # - Array methods: len(), get(), capacity(), push(), pop()
+# - Writing one element: arr[i] := value
 # - Array iteration with foreach
 # - Array manipulation: fill(), reverse(), clone()
 # - Deep copying with RAII memory management
@@ -19,6 +20,11 @@ fn main() i32:
     println("Fixed array length: {primes.len()}")
     println("First prime: {primes.get(0).realise(0)}")
     println("Third prime: {primes.get(2).realise(0)}")
+
+    # Write one element in place. Only the LENGTH of a fixed array is immutable.
+    let i32[5] adjusted = [2, 3, 5, 7, 11]
+    adjusted[0] := 42
+    println("First element after the write: {adjusted[0]}")
 
     # Dynamic array from literal
     let i32[] fibonacci = from([1, 1, 2, 3, 5, 8, 13])

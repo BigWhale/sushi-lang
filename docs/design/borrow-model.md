@@ -7,9 +7,9 @@ This document is the normative spec for how a value crosses a call boundary. It 
 section 8.6.
 
 `docs/design/ownership-conventions.md` stays normative for everything else about ownership:
-the two type classes, the three provenances, the 3x2 table, and the ten consuming
-positions. This document changes only one of those ten — the call argument — and it changes
-it from "always a consume" to "whatever the callee declares".
+the two type classes, the three provenances, the 3x2 table, and the twelve consuming
+positions. This document changes only one of those twelve — the call argument — and it
+changes it from "always a consume" to "whatever the callee declares".
 
 ## 1. The rule
 

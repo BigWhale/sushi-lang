@@ -507,6 +507,26 @@ extend i32 squared() i32:
 **Fix:** Don't use `??` in extension methods (limitation). Extension methods return
 their value directly (bare `return`, no `Result.Ok(...)` wrapper).
 
+#### CE3007: No main() Function
+
+```sushi
+# ERROR CE3007: no main() function: an executable needs an entry point
+fn helper(i32 a) i32:
+    return Result.Ok(a + 1)
+```
+
+**Fix:** Add `fn main() i32:`, or compile the unit as a library with `--lib`. A library must
+not carry a `main()` -- that is the mirror error, `CE3501`.
+
+#### CE3008: Linking Failed
+
+Reported when the C compiler used as the linker exits non-zero -- most often an
+`unsafe external` declaration naming a symbol that no linked library provides. The linker's
+own output is attached to the diagnostic as notes.
+
+**Fix:** Read the attached notes. An undefined symbol means the link name is wrong or the
+library it lives in was not linked.
+
 ### Constant Expression Errors
 
 #### CE0108: Expression Not Compile-Time Constant
