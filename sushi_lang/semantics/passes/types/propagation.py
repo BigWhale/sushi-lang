@@ -1,6 +1,6 @@
 """Type propagation utilities for generic types."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.typesys import (EnumType, StructType, BuiltinType, ArrayType,
                                           DynamicArrayType)
@@ -204,6 +204,24 @@ def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
         # generic ones stopped propagation at `Own.alloc(Holder(0, Maybe.None()))`.
         elif struct_name == struct_type.name:
             _propagate_to_struct_args(validator, node, struct_type)
+
+
+def propagate_declared_type_to_value(validator: 'TypeValidator', value_expr: Expr,
+                                     declared_type: Optional['Type']) -> Optional['Type']:
+    """Propagate a DECLARED type into a value, and answer what it resolves to.
+
+    `propagate_types_to_value` acts on a RESOLVED type: a `Maybe@(i32)` still spelled as a
+    GenericTypeRef matches no arm and stamps nothing. A declared position -- an extension
+    or perk method's return type, or its parameter -- holds the spelling, so it resolves
+    first (#387).
+    """
+    if declared_type is None:
+        return None
+
+    from .utils import resolve_declared_type
+    resolved = resolve_declared_type(validator, declared_type)
+    propagate_types_to_value(validator, value_expr, resolved)
+    return resolved
 
 
 def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,

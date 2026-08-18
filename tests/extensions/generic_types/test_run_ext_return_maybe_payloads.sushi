@@ -1,0 +1,40 @@
+# The payload of the returned generic enum is every kind, owning ones included: the
+# propagation walks into the constructor's arguments, so a `List.new()` inside a
+# `Maybe.Some(...)` resolves too (the #265 family). Issue #387.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "marvin\n8\n2\n1\n"
+struct P:
+    i32 n
+
+extend i32 label() Maybe@(string):
+    return Maybe.Some("marvin")
+
+extend i32 boxed() Maybe@(P):
+    return Maybe.Some(P(self))
+
+extend i32 spread() Maybe@(i32[]):
+    return Maybe.Some(from([self, self]))
+
+extend i32 listed() Maybe@(List@(i32)):
+    let List@(i32) out = List.new()
+    out.push(self)
+    return Maybe.Some(out)
+
+fn run_test() i32:
+    println(8.label().realise("none"))
+    println(8.boxed().realise(P(0)).n)
+
+    match 3.spread():
+        Maybe.Some(a) -> println(a.len())
+        Maybe.None() -> println("none")
+
+    match 5.listed():
+        Maybe.Some(l) -> println(l.len())
+        Maybe.None() -> println("none")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

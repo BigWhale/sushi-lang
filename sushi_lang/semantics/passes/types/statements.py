@@ -119,11 +119,17 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
                 er.emit(validator.reporter, er.ERR.CE2091, value.loc, name=method_name)
                 return
 
-            # Walk the return expression and check the bare value against the declared
-            # return type. validate_return_compatibility does both (and emits CE2003 on
-            # a mismatch). A blank (~) return type accepts anything, so skip the check.
-            expected_type = getattr(validator, "extension_return_type", None)
-            if expected_type is not None and expected_type != BuiltinType.BLANK:
+            # PROPAGATE the declared return type into the value, then walk it and check
+            # the bare value against that type. validate_return_compatibility does both
+            # (and emits CE2003 on a mismatch). A blank (~) return type accepts anything,
+            # so skip both. Propagation is what stamps `resolved_enum_type` on a generic
+            # enum constructor: without it every generic enum in this position was a
+            # CE0113 (#387), which is the same symptom the CE2091 guard above predicts.
+            declared_type = getattr(validator, "extension_return_type", None)
+            if declared_type is not None and declared_type != BuiltinType.BLANK:
+                from .propagation import propagate_declared_type_to_value
+                expected_type = propagate_declared_type_to_value(validator, value, declared_type)
+
                 from .compatibility import validate_return_compatibility
                 validate_return_compatibility(validator, expected_type, value, value.loc)
             else:

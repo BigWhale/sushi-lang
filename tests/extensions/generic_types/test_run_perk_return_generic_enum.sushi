@@ -1,0 +1,32 @@
+# A PERK implementation method declaring a generic enum return type, and an extension
+# method on a STRUCT receiver. Both go through the same unstamped return arm (#387).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4\nnone\n42\n"
+struct P:
+    i32 n
+
+perk Halver:
+    fn half() Maybe@(i32)
+
+extend i32 with Halver:
+    fn half() Maybe@(i32):
+        if (self % 2 != 0):
+            return Maybe.None()
+        return Maybe.Some(self / 2)
+
+extend P doubled() Maybe@(i32):
+    return Maybe.Some(self.n * 2)
+
+fn run_test() i32:
+    println(8.half().realise(-1))
+    match 7.half():
+        Maybe.Some(v) -> println(v)
+        Maybe.None() -> println("none")
+
+    let P p = P(21)
+    println(p.doubled().realise(0))
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

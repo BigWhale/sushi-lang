@@ -7,7 +7,9 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, FunctionType, StructType, ForeignPtrType
 from sushi_lang.semantics.ast import MethodCall, Name
 from ..compatibility import types_compatible
-from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args
+from ..propagation import propagate_declared_type_to_value
+from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args,\
+    resolve_declared_type
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -167,15 +169,18 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             return
 
         for _i, (arg, param) in enumerate(zip(call.args, perk_method.params, strict=False)):
+            # PROPAGATE before validating -- see the extension arm below (#387).
+            expected_ty = propagate_declared_type_to_value(validator, arg, param.ty)
+
             validator.validate_expression(arg)
             arg_type = validator.infer_expression_type(arg)
-            if arg_type is not None and param.ty is not None:
-                if not types_compatible(validator, arg_type, param.ty):
+            if arg_type is not None and expected_ty is not None:
+                if not types_compatible(validator, arg_type, expected_ty):
                     er.emit(validator.reporter, er.ERR.CE2023, arg.loc if hasattr(arg, 'loc') else call.loc,
-                           method=call.method, expected=display_type(param.ty), got=display_type(arg_type))
+                           method=call.method, expected=display_type(expected_ty), got=display_type(arg_type))
 
         if perk_method.ret is not None:
-            call.inferred_return_type = perk_method.ret
+            call.inferred_return_type = resolve_declared_type(validator, perk_method.ret)
         return
 
     if isinstance(receiver_type, BuiltinType) and receiver_type in [
@@ -265,13 +270,18 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
                name=f"{display_type(receiver_type)}.{call.method}", expected=len(expected_params), got=len(actual_args))
 
     for i, (arg, param) in enumerate(zip(actual_args, expected_params, strict=False)):
+        # PROPAGATE before validating, as a plain function's call site does: a generic enum
+        # or struct constructor handed to a method parameter is unstamped otherwise, and
+        # reached the backend as a CE0113 (#387, the argument half).
+        expected_ty = propagate_declared_type_to_value(validator, arg, param.ty)
+
         validator.validate_expression(arg)
 
-        if param.ty is not None:  # Skip if parameter has unknown type
+        if expected_ty is not None:  # Skip if parameter has unknown type
             arg_type = validator.infer_expression_type(arg)
-            if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
+            if arg_type is not None and not types_compatible(validator, arg_type, expected_ty):
                 er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=display_type(param.ty), got=display_type(arg_type))
+                       index=i+1, expected=display_type(expected_ty), got=display_type(arg_type))
 
     for i in range(len(expected_params), len(actual_args)):
         validator.validate_expression(actual_args[i])

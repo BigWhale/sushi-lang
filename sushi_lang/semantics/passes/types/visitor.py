@@ -900,15 +900,22 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 actual_type, node.method, self.type_validator
             )
 
+            # An extension or perk method's return type is a DECLARED spelling, so it
+            # resolves before it is stamped: a `Maybe@(string)` left as a GenericTypeRef is
+            # no EnumType, so every consumer reading the stamp fell through -- the backend
+            # to a layout heuristic that answered `Maybe<i32>` and then mis-typed the
+            # payload (#387).
+            from .utils import resolve_declared_type
+
             if inferred_type is None:
                 perk_method = self.type_validator.perk_impl_table.get_method(actual_type, node.method)
                 if perk_method is not None and perk_method.ret is not None:
-                    inferred_type = perk_method.ret
+                    inferred_type = resolve_declared_type(self.type_validator, perk_method.ret)
 
             if inferred_type is None:
                 method = self.type_validator.extension_table.get_method(actual_type, node.method)
                 if method is not None:
-                    inferred_type = method.ret_type
+                    inferred_type = resolve_declared_type(self.type_validator, method.ret_type)
 
             if inferred_type is not None:
                 node.inferred_return_type = inferred_type
