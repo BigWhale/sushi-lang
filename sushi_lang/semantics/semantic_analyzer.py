@@ -147,6 +147,11 @@ class SemanticAnalyzer:
         for unit in compilation_order:
             if unit.ast is not None:
                 instantiation_collector.run(unit.ast)
+        # AFTER every unit: an extension on a generic target is read per instantiation of
+        # that target, and the instantiation may come from another unit (#389).
+        instantiation_collector.collect_from_generic_extensions(
+            [unit.ast for unit in compilation_order if unit.ast is not None]
+        )
         type_instantiations = instantiation_collector.instantiations
         func_instantiations = instantiation_collector.function_instantiations
 

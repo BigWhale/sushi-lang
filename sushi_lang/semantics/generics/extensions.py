@@ -1,48 +1,12 @@
 """Generic Extension Method Monomorphization"""
 from __future__ import annotations
-from dataclasses import replace
 from typing import Dict, Tuple, Set
 
 from sushi_lang.semantics.ast import ExtendDef, Param
 from sushi_lang.semantics.typesys import Type, StructType
-from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
+from sushi_lang.semantics.generics.types import substitute_type_params
 from sushi_lang.semantics.passes.collect import GenericExtensionMethod
 from sushi_lang.internals.errors import raise_internal_error
-
-
-def substitute_type_params(
-    ty: Type,
-    substitution: Dict[str, Type]
-) -> Type:
-    """Recursively substitute type parameters in a type annotation."""
-    if isinstance(ty, TypeParameter):
-        return substitution.get(ty.name, ty)
-
-    if isinstance(ty, GenericTypeRef):
-        new_type_args = tuple(
-            substitute_type_params(arg, substitution)
-            for arg in ty.type_args
-        )
-        return GenericTypeRef(base_name=ty.base_name, type_args=new_type_args)
-
-    from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, FunctionType
-    if isinstance(ty, ArrayType):
-        new_base = substitute_type_params(ty.base_type, substitution)
-        return ArrayType(base_type=new_base, size=ty.size)
-    elif isinstance(ty, DynamicArrayType):
-        new_base = substitute_type_params(ty.base_type, substitution)
-        return DynamicArrayType(base_type=new_base)
-
-    elif isinstance(ty, FunctionType):
-        # `replace`, so `param_modes` rides along beside `captures` (#368).
-        return replace(
-            ty,
-            param_types=tuple(substitute_type_params(p, substitution) for p in ty.param_types),
-            ok_type=substitute_type_params(ty.ok_type, substitution),
-            err_type=substitute_type_params(ty.err_type, substitution),
-        )
-
-    return ty
 
 
 def monomorphize_extension_method(

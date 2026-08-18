@@ -1,0 +1,53 @@
+# An extension whose TARGET is a generic type may name a generic type in its signature
+# (issue #389). Pass 1.5 walks `program.extensions` but not `program.generic_extensions`,
+# and the AST builder puts every extension with a `@(...)` target in the second list -- so
+# `Maybe<i32>` was never collected and the declaration was a false CE2001 unknown type.
+# Naming the same type anywhere else in the program was the workaround.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4\n42\n43\n1\nford\nnone\n"
+use <collections/hashmap>
+
+struct Box@(T):
+    T value
+
+extend List@(i32) head() Maybe@(i32):
+    return self.get(0)
+
+extend Box@(i32) doubled() Maybe@(i32):
+    return Maybe.Some(self.value * 2)
+
+# The PARAMETER position needs the same collection as the return position.
+extend Box@(i32) plus(Maybe@(i32) m) i32:
+    return self.value + m.realise(0)
+
+# A two-argument target, to pin that the substitution is per type parameter.
+extend HashMap@(i32, string) tagline() Maybe@(string):
+    if (self.len() > 0):
+        return Maybe.Some("ford")
+    return Maybe.None()
+
+fn run_test() i32:
+    let List@(i32) l = List.new()
+    l.push(4)
+    println(l.head().realise(0))
+    l.destroy()
+
+    let Box@(i32) b = Box(21)
+    println(b.doubled().realise(0))
+    println(b.plus(Maybe.Some(22)))
+    println(b.plus(Maybe.None()) - 20)
+
+    let HashMap@(i32, string) m = HashMap.new()
+    m.insert(1, "arthur")
+    println(m.tagline().realise("none"))
+    m.free()
+
+    let HashMap@(i32, string) empty = HashMap.new()
+    println(empty.tagline().realise("none"))
+    empty.free()
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

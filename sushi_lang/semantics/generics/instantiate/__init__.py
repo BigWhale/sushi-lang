@@ -53,8 +53,8 @@ class InstantiationCollector:
 
     visited_types: Set[str] = field(default_factory=set)
 
-    def run(self, program: "Program") -> Tuple[Set[Tuple[str, Tuple["Type", ...]]], Set[Tuple[str, Tuple["Type", ...]]]]:
-        """Entry point for instantiation collection."""
+    def _build_function_collector(self) -> FunctionCollector:
+        """The collaborator trio, wired. Both entry points walk types the same way."""
         type_inferrer = TypeInferrer(
             variable_types=self.variable_types,
             struct_table=self.struct_table or {},
@@ -85,6 +85,11 @@ class InstantiationCollector:
         )
 
         expression_scanner.scan_block = function_collector._collect_from_block
+        return function_collector
+
+    def run(self, program: "Program") -> Tuple[Set[Tuple[str, Tuple["Type", ...]]], Set[Tuple[str, Tuple["Type", ...]]]]:
+        """Entry point for instantiation collection."""
+        function_collector = self._build_function_collector()
 
         for const in program.constants:
             function_collector.collect_from_const(const)
@@ -113,6 +118,73 @@ class InstantiationCollector:
             function_collector.collect_from_perk_impl(perk_impl)
 
         return self.instantiations, self.function_instantiations
+
+    # An extension on a GENERIC target is monomorphized per instantiation of that target,
+    # so its signature can only be read once the target instantiations are known -- which
+    # is after every unit has been walked. Hence the second entry point rather than another
+    # loop inside `run`.
+    #
+    # A substituted signature may itself instantiate a generic that carries its own
+    # generic-target extension, so this iterates. The bound only exists so a pathological
+    # program cannot spin: reaching it drops an instantiation, which surfaces as the
+    # ordinary CE2001, never as a hang.
+    MAX_EXPANSION_ROUNDS = 8
+
+    def collect_from_generic_extensions(self, programs) -> None:
+        """Signature instantiations of every generic-TARGET extension (#389).
+
+        `program.extensions` holds only the plain-target ones -- the AST builder files an
+        extension whose target is spelled `@(...)` under `generic_extensions`, CONCRETE
+        arguments included. Nothing walked that list, so a generic type named in such a
+        signature was never collected and the declaration was a false CE2001, for a type
+        the program plainly declares.
+        """
+        from sushi_lang.semantics.generics.types import GenericTypeRef, substitute_type_params
+        from sushi_lang.semantics.type_predicates import is_abstract_type as _is_abstract_arg
+
+        function_collector = self._build_function_collector()
+        structs = self.struct_table or {}
+        enums = self.enum_table or {}
+
+        for _round in range(self.MAX_EXPANSION_ROUNDS):
+            before = len(self.instantiations)
+
+            for program in programs:
+                for ext in getattr(program, "generic_extensions", None) or ():
+                    target = ext.target_type
+                    if not isinstance(target, GenericTypeRef):
+                        continue
+
+                    # A TEMPLATE target (`extend Box@(T)`) is deliberately out of scope:
+                    # its instantiations SHARE one body AST, so Pass 2's and Pass 3's
+                    # per-instantiation stamps land on the same nodes and the last one
+                    # wins. Reading its signature here would make that reachable -- an
+                    # invalid-IR CE0000 for a program that reports a clean error today.
+                    # Tracked separately; the body has to be copied and re-checked per
+                    # instantiation before the template face can be answered.
+                    if any(_is_abstract_arg(arg, structs, enums) for arg in target.type_args):
+                        continue
+
+                    param_names = [str(arg) for arg in target.type_args]
+                    for base_name, type_args in list(self.instantiations):
+                        if base_name != target.base_name or len(type_args) != len(param_names):
+                            continue
+
+                        substitution = dict(zip(param_names, type_args, strict=True))
+                        for declared in (ext.ret, *(p.ty for p in ext.params)):
+                            if declared is None:
+                                continue
+                            function_collector._collect_from_type(
+                                substitute_type_params(declared, substitution))
+
+                    # The BODY's own annotations are collected as written. For a concrete
+                    # target they already are concrete; for a template they still name the
+                    # type parameter, and `_collect_from_type` drops what it cannot resolve.
+                    function_collector._reset_scope()
+                    function_collector._collect_from_block(ext.body)
+
+            if len(self.instantiations) == before:
+                return
 
     def _build_shared_inferrer(self):
         """Pass 2's TypeValidator over the same tables, wired to discard diagnostics."""
