@@ -1,0 +1,15 @@
+# TEST_TYPE: runtime
+# The fixed-array twin: the size is a compile-time count, but a dynamic index is
+# still checked at run time.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_CONTAINS: "before the write"
+
+fn main() i32:
+    let i32[3] numbers = [10, 20, 30]
+    let i32 far = 5
+
+    println("before the write")
+    numbers[far] := 1
+    println("this line must not run")
+
+    return Result.Ok(0)

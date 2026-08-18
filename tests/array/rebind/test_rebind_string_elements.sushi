@@ -1,0 +1,31 @@
+# A `string` element OWNS heap, so an indexed assignment must free the element it
+# replaces and take ownership of the new value. Both array kinds, and all three
+# sources that a FRESH value can come from.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "fixed: zaphod pre-beeblebrox towel"
+# EXPECT_STDOUT_CONTAINS: "dynamic: marvin pre-android"
+# EXPECT_NO_LEAKS: true
+
+fn make_towel() string:
+    return Result.Ok("towel")
+
+fn run_test() i32:
+    let string prefix = "pre"
+
+    # Every element starts OWNING: an interpolation allocates.
+    let string[3] fixed = ["{prefix}-a", "{prefix}-b", "{prefix}-c"]
+    fixed[0] := "zaphod"
+    fixed[1] := "{prefix}-beeblebrox"
+    fixed[2] := make_towel()??
+    println("fixed: {fixed[0]} {fixed[1]} {fixed[2]}")
+
+    let string[] dynamic = from(["{prefix}-x", "{prefix}-y"])
+    dynamic[0] := "marvin"
+    dynamic[1] := "{prefix}-android"
+    println("dynamic: {dynamic[0]} {dynamic[1]}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

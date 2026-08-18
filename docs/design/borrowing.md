@@ -146,7 +146,7 @@ owner's buffer. Same rule, different first answer.
 
 **A borrow cannot be consumed.** The ownership table's `(BORROWED, MOVE)` cell rejects, and
 that is the whole implementation: `type_class_of` derefs a reference to its referent, so
-all ten consuming positions answer the same way with no per-sink work. The code is CE2411
+all twelve consuming positions answer the same way with no per-sink work. The code is CE2411
 and the escape is `.clone()`, which is total over types.
 
 **An owner is frozen while a borrow of it lives.** CE2412, reported NLL-style: the owner is

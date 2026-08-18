@@ -35,6 +35,27 @@ from sushi_lang.backend.stdlib_linker import StdlibLinker
 import sushi_lang.backend.types  # noqa: F401
 
 
+def _run_linker(cmd: List[str], cc: str) -> None:
+    """Run the link step, and report a failure as a diagnostic rather than a crash.
+
+    Both linking paths come here. `check=True` alone let `CalledProcessError` reach the
+    top-level guard, which renders any uncaught exception as a CE0000 "this is a bug in
+    the Sushi compiler" -- and printed the raw `cc` stderr ahead of it, unfiltered (#251).
+    """
+    from sushi_lang.internals.diagnostics import SushiError
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        return
+
+    error = SushiError("CE3008", cc=cc, status=result.returncode)
+    for stream in (result.stderr, result.stdout):
+        for line in (stream or "").splitlines():
+            if line.strip():
+                error.note(line.rstrip())
+    raise error
+
+
 def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
     """Wrap a perk-impl method as a synthetic ExtendDef."""
     return ExtendDef(
@@ -490,10 +511,14 @@ class LLVMCodegen:
 
         if debug:
             cmd.insert(1, "-g")
-        subprocess.run(cmd, check=True)
-
-        if not keep_object:
-            obj_path.unlink()
+        try:
+            _run_linker(cmd, cc)
+        finally:
+            # The object file is an intermediate either way. Leaving it behind on the
+            # failure path was half of #251: a failed compile wrote a stale `.o` next
+            # to the source and said nothing about it.
+            if not keep_object:
+                obj_path.unlink(missing_ok=True)
         return out
 
     def build_module_single_unit(self, target_unit: Unit, all_units: list[Unit]) -> ir.Module:
@@ -671,7 +696,7 @@ class LLVMCodegen:
 
         if debug:
             cmd.insert(1, "-g")
-        subprocess.run(cmd, check=True)
+        _run_linker(cmd, cc)
         return out
 
     def has_stdlib_unit(self, unit_path: str) -> bool:
@@ -849,40 +874,67 @@ class LLVMCodegen:
             self.funcs[func_name] = llvm_fn
             self.function_return_types[func_name] = result_type
 
+    def _constant_string_value(self, text: str, data_name: str) -> ir.Constant:
+        """A `{i8*, i32, i8 owned}` constant, with its backing byte array global.
+
+        `owned = 0` on every one: the bytes live in a read-only global, so RAII must
+        never free them (#145).
+        """
+        string_data = text.encode('utf-8')
+        size = len(string_data)
+
+        array_type = ir.ArrayType(self.i8, size)
+        data_global = ir.GlobalVariable(self.module, array_type, name=data_name)
+        data_global.linkage = 'internal'
+        data_global.global_constant = True
+        data_global.initializer = ir.Constant(array_type, bytearray(string_data))
+        data_global.unnamed_addr = True
+
+        zero = ir.Constant(self.i32, 0)
+        data_ptr = data_global.gep([zero, zero])
+
+        return ir.Constant.literal_struct(
+            [data_ptr, ir.Constant(self.i32, size), ir.Constant(self.i8, 0)])
+
+    def _register_global_constant(self, name: str, llvm_type: ir.Type,
+                                  value: ir.Constant) -> None:
+        """Publish an evaluated constant as a read-only global."""
+        # Internal linkage: cross-unit visibility comes from sharing one LLVM module.
+        # True separate compilation would need external linkage for a public constant.
+        global_const = ir.GlobalVariable(self.module, llvm_type, name=name)
+        global_const.linkage = 'internal'
+        global_const.global_constant = True
+        global_const.initializer = value
+        global_const.unnamed_addr = True  # Allow merging identical constants
+        self.constants[name] = global_const
+
     def _emit_global_constant(self, const: ConstDef) -> None:
         """Emit a global constant definition."""
-        from sushi_lang.semantics.ast import StringLit
+        from sushi_lang.semantics.ast import ArrayLiteral, StringLit
 
         if const.ty is None:
             return  # Skip constants with no type (should be caught in semantic analysis)
 
         if isinstance(const.value, StringLit):
-            string_data = const.value.value.encode('utf-8')
-            size = len(string_data)
+            self._register_global_constant(
+                const.name, self.types.string_struct,
+                self._constant_string_value(const.value.value, f".str_data.{const.name}"))
+            return
 
-            array_type = ir.ArrayType(self.i8, size)
-            data_global = ir.GlobalVariable(self.module, array_type, name=f".str_data.{const.name}")
-            data_global.linkage = 'internal'
-            data_global.global_constant = True
-            data_global.initializer = ir.Constant(array_type, bytearray(string_data))
-            data_global.unnamed_addr = True
-
-            zero = ir.Constant(self.i32, 0)
-            data_ptr = data_global.gep([zero, zero])
-
-            # Create fat pointer struct constant {i8*, i32, i8 owned}; a const string is
-            # backed by a global -> owned=0 (RAII must never free it) (#145).
-            string_struct_type = self.types.string_struct
-            size_value = ir.Constant(self.i32, size)
-            struct_value = ir.Constant.literal_struct([data_ptr, size_value, ir.Constant(self.i8, 0)])
-
-            struct_global = ir.GlobalVariable(self.module, string_struct_type, name=const.name)
-            struct_global.linkage = 'internal'
-            struct_global.global_constant = True
-            struct_global.initializer = struct_value
-            struct_global.unnamed_addr = True
-
-            self.constants[const.name] = struct_global
+        # An ARRAY of strings takes the same route, one fat pointer per element. The
+        # constant evaluator cannot build these -- a string value needs a global to
+        # point at, and the evaluator has no module -- so it returned None and the
+        # constant was never registered at all, which is why every use said CE0055
+        # rather than the declaration saying anything (#260).
+        if (isinstance(const.value, ArrayLiteral) and const.value.elements
+                and all(isinstance(e, StringLit) for e in const.value.elements)):
+            elements = [
+                self._constant_string_value(e.value, f".str_data.{const.name}.{i}")
+                for i, e in enumerate(const.value.elements)
+            ]
+            array_type = ir.ArrayType(self.types.string_struct, len(elements))
+            self._register_global_constant(const.name, array_type,
+                                           ir.Constant(array_type, elements))
             return
 
         llvm_type = self.types.ll_type(const.ty)
@@ -896,17 +948,7 @@ class LLVMCodegen:
         if const_value is None:
             return  # Skip non-constant expressions
 
-        global_const = ir.GlobalVariable(self.module, llvm_type, name=const.name)
-
-        # Internal linkage: cross-unit visibility comes from sharing one LLVM module. True
-        # separate compilation would need external linkage for a public constant.
-        global_const.linkage = 'internal'
-
-        global_const.global_constant = True
-        global_const.initializer = const_value
-        global_const.unnamed_addr = True  # Allow merging identical constants
-
-        self.constants[const.name] = global_const
+        self._register_global_constant(const.name, llvm_type, const_value)
 
     def _evaluate_constant_expression(self, expr, expected_type=None) -> Optional[ir.Constant]:
         """Evaluate a constant expression at compile time."""

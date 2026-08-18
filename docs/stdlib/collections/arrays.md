@@ -20,6 +20,8 @@ Sushi provides two array types:
 - **Dynamic arrays** (`T[]`): Heap-allocated, runtime size
 
 Both types share common methods, while dynamic arrays have additional memory management methods.
+Both are mutable in place: `arr[i] := v` writes one element, and `.fill()` / `.reverse()` write
+all of them. Only the LENGTH of a fixed array is immutable.
 
 ## Common Methods (Fixed and Dynamic)
 
@@ -67,6 +69,60 @@ let u64 h = arr.hash()
 ```
 
 **Limitation:** Nested arrays cannot be hashed.
+
+### `arr[index] := value`
+
+Write one element, in place. Not a method -- it is the assignment form of `arr[index]`,
+and it works on a fixed array and a dynamic array alike, for every element type.
+
+```sushi
+let i32[3] scores = [1, 2, 3]
+scores[0] := 42            # scores is now [42, 2, 3]
+
+let i32 i = 2
+scores[i] := 99            # the index may be any i32 expression
+```
+
+The index is bounds-checked exactly like a read: an index past the end aborts with
+**RE2020** at run time, and a literal index past the end of a fixed array is rejected at
+compile time with **CE2012**.
+
+If the element type owns heap -- a `string`, a struct with a dynamic-array field -- the
+element that the write replaces is freed first, so a write in a loop does not leak:
+
+```sushi
+let string[] words = from(["towel", "guide"])
+words[0] := "babel fish"   # the old "towel" is freed; the array owns the new value
+```
+
+An indexed assignment takes ownership of the value, so the ordinary ownership rules apply.
+An owned source is MOVED into the array, and using it afterwards is **CE2405**. A value read
+out of a container is a BORROW, so storing it in another element is **CE2411** -- take an
+independent value with `.clone()`:
+
+```sushi
+words[0] := words[1]           # ERROR CE2411: another owner keeps this value
+words[0] := words[1].clone()   # correct
+```
+
+You may write only where the write can reach the owner. The compiler rejects the rest:
+
+| receiver | code |
+|---|---|
+| a `peek` parameter | CE2408 |
+| a `match` / `foreach` binding | CE2414 |
+| the receiver of a method without `poke self` | CE2421 |
+| an unmarked parameter | CE2422 |
+| a `let` binding that borrows from an owner | CE2426 |
+| a constant | CE2096 |
+
+A `poke` parameter, a `nom` parameter and a `poke self` receiver are all writable:
+
+```sushi
+fn set_first(poke i32[] numbers, i32 value) ~:
+    numbers[0] := value        # reaches the caller's array
+    return Result.Ok(~)
+```
 
 ### `.fill(T value) -> ~`
 
@@ -177,6 +233,9 @@ let i32 value = arr.get(0)??  # Error propagation
 
 # Unsafe: Direct indexing (throws RE2020 if out of bounds)
 let i32 direct = arr[0]
+
+# Writing one element. Bounds-checked the same way; there is no safe `.set()` form.
+arr[0] := 42
 ```
 
 **Best practice:** Use `.get()` for safety, use `[index]` for idiomatic access when bounds are known.
@@ -184,6 +243,7 @@ let i32 direct = arr[0]
 ## Performance
 
 - **Access** (`.get()`, `[index]`): O(1)
+- **Element write** (`arr[i] := v`): O(1), plus the destructor of the element it replaces
 - **Push** (`.push()`): Amortized O(1)
 - **Pop** (`.pop()`): O(1)
 - **Fill** (`.fill()`): O(n)

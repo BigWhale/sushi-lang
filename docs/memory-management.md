@@ -250,6 +250,41 @@ via `.clone()`, duplicated). A `let` behaves the same way for a source that read
 `let string x = w.inner` binds `x` as a borrow of `w`, not an independent copy -- see
 [Borrowed `let` Bindings](#borrowed-let-bindings) below.
 
+### Writing an Array Element
+
+`arr[i]` on the LEFT of a `:=` is the mirror of the read above. The read is a borrow; the
+write is an **ownership sink**. Two things follow, and both are automatic:
+
+- the element the write replaces is **freed first**, so a write in a loop does not leak;
+- the new value is **consumed**, so an owned source is moved and a source that reads through
+  an owner is `CE2411`.
+
+```sushi
+fn main() i32:
+    let string[] words = from(["towel", "guide"])
+
+    words[0] := "babel fish"       # the old "towel" is freed; the array owns the new value
+
+    # ERROR CE2411: cannot consume 'words[1]': another owner keeps this value
+    # words[0] := words[1]
+
+    words[0] := words[1].clone()   # OK: an independent copy
+
+    return Result.Ok(0)
+```
+
+An element can never be moved *out* of an array -- that is what the `CE2411` above is saying,
+at every sink -- so an array owns every one of its elements for its whole life. That invariant
+is what makes both the write above and the scope-exit destructor safe: each frees an element
+that nothing else can have taken. (An element leaves only when the container *shrinks* past it,
+as `List@(T).pop()` and `List@(T).remove()` do.)
+
+The write must also be able to reach the owner, which is the [borrow](#references-and-borrowing)
+question rather than the ownership one: it is rejected through a `peek` parameter (`CE2408`),
+a `match`/`foreach` binding (`CE2414`), a method receiver without `poke self` (`CE2421`), an
+unmarked parameter (`CE2422`), a `let` binding that borrows from an owner (`CE2426`), and a
+constant (`CE2096`).
+
 ### Function Arguments
 
 **A parameter is a borrow unless it says otherwise.** The caller keeps the value and frees it, so a
@@ -729,8 +764,8 @@ fn main() i32:
   returns a *view* of the payload, which the `Own` keeps owning and still frees. Reading it is
   free -- a `let x = own.get()` binds `x` as a borrow of `own`, exactly like a struct-field read
   (see [Borrowed `let` Bindings](#borrowed-let-bindings)). *Consuming* that view at a real
-  ownership sink -- a `nom` argument, a constructor field, an enum payload, a `return` -- is
-  **`CE2411`**, with `.clone()` as the escape.
+  ownership sink -- a `nom` argument, a constructor field, an enum payload, an indexed
+  assignment `arr[i] := ...`, a `return` -- is **`CE2411`**, with `.clone()` as the escape.
 
 ```sushi
 fn main() i32:

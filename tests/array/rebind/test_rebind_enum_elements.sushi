@@ -1,0 +1,33 @@
+# An enum element, with a payload-free variant, a primitive payload, and a payload
+# that owns heap.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "tag: big 21"
+# EXPECT_STDOUT_CONTAINS: "named: pre-arthur"
+# EXPECT_NO_LEAKS: true
+
+enum Tag:
+    Small
+    Big(i32)
+
+enum Named:
+    Anonymous
+    Called(string)
+
+fn main() i32:
+    let Tag[3] tags = [Tag.Small(), Tag.Big(1), Tag.Small()]
+    tags[0] := Tag.Big(21)
+    tags[1] := Tag.Small()
+
+    match tags[0]:
+        Tag.Big(n) -> println("tag: big {n}")
+        Tag.Small -> println("tag: small")
+
+    let string prefix = "pre"
+    let Named[] names = from([Named.Called("{prefix}-ford"), Named.Anonymous()])
+    names[0] := Named.Called("{prefix}-arthur")
+
+    match names[0]:
+        Named.Called(who) -> println("named: {who}")
+        Named.Anonymous -> println("named: none")
+
+    return Result.Ok(0)

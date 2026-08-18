@@ -52,7 +52,7 @@ def monomorphize_extension_method(
 ) -> ExtendDef:
     """Monomorphize a generic extension method for a specific instantiation."""
     if len(type_args) != len(generic_method.type_params):
-        raise_internal_error("CE0096", operation="Type argument count mismatch: expected {len(generic_method.type_params)}, "
+        raise_internal_error("CE0096", operation=f"Type argument count mismatch: expected {len(generic_method.type_params)}, "
             f"got {len(type_args)}"
         )
 

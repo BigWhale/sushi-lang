@@ -12,6 +12,7 @@ from sushi_lang.semantics.ast import (
     ExprStmt,
     Foreach,
     If,
+    IndexAccess,
     Let,
     Match,
     MemberAccess,
@@ -126,6 +127,11 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
         # read-only receiver, where the store cannot reach what it writes.
         reject_readonly_write(checker, owner, stmt.loc, "assign to a field")
         check_expr(checker, target)
+    elif isinstance(target, IndexAccess):
+        # An element rebind mutates in place too, and `root_owner` already walks an
+        # index, so the same gate answers for all five read-only receiver kinds.
+        reject_readonly_write(checker, owner, stmt.loc, "assign to an array element")
+        check_expr(checker, target)
 
     check_expr(checker, stmt.value)
     # Both rebind shapes take ownership, and replacing what the owner holds invalidates
@@ -141,6 +147,8 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
             reinitialize(target_state)
     elif isinstance(target, MemberAccess):
         consume(checker, stmt.value, ConsumingUse.FIELD_ASSIGN)
+    elif isinstance(target, IndexAccess):
+        consume(checker, stmt.value, ConsumingUse.ELEMENT_ASSIGN)
     clear_borrows(checker)
 
 

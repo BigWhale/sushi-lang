@@ -83,6 +83,22 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   resolve as a prefix of `--leaks-only` and quietly narrow a 1293-test run to 96
 
 ### Added
+- **Indexed assignment: `arr[i] := value`** (#261). Both array kinds, every element type, and an
+  array that is a struct field. The form parsed already and fell through the rebind dispatch to a
+  `CE0022` internal error. The index is bounds-checked through the same helper the READ uses, so
+  `RE2020` at run time and `CE2012` for a literal index past the end of a fixed array come for
+  free. It is an ownership sink: the element the write replaces is freed first, an owned source is
+  moved (`CE2405` on a later use), and a source that reads through an owner is `CE2411` with
+  `.clone()` as the escape. The write must be able to reach the owner, so it is rejected through a
+  `peek` parameter (`CE2408`), a `match`/`foreach` binding (`CE2414`), a method receiver without
+  `poke self` (`CE2421`), an unmarked parameter (`CE2422`), a `let` binding that borrows from an
+  owner (`CE2426`), and a constant (`CE2096`). `ConsumingUse` gains its twelfth member
+- **`const string[N]` works** (#260). A `string`-element array constant emits a
+  `[N x {i8*, i32, i8}]` global with `owned = 0` on every element, so RAII never frees a literal.
+  Index, `.len()`, `.get()`, `.iter()`, `.hash()`, copying into a local and shadowing all work. It
+  used to emit NO global at all -- the constant evaluator cannot build a string value, because one
+  needs a global to point at and the evaluator has no module -- so every USE reported `CE0055`
+  while the declaration reported nothing
 - **`.clone()` is total over types.** Every struct and enum has an auto-derived clone, and so do a
   primitive (a plain copy), a `string`, a fixed array, a dynamic array, `List@(T)`, `Own@(T)`,
   `HashMap@(K, V)` and a function value (its heap environment is duplicated through the fat
@@ -183,6 +199,20 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   emit into two functions at once
 
 ### Fixed
+- **A missing `main()` is a real diagnostic** (#251, `CE3007`), and it names `--lib`. The missing
+  `_main` used to reach the LINKER, so the user got raw `cc` stderr followed by a `CE0000`
+  "this is a bug in the Sushi compiler" -- for a condition in their own program. A failing link is
+  `CE3008` now, carrying the linker's own output as notes; `subprocess.run(..., check=True)` let
+  `CalledProcessError` escape to the top-level guard, which renders any uncaught exception as an
+  ICE. One helper serves both link paths, and the intermediate `.o` is removed on the failure path
+  as well as the success path
+- **Five `CE0096` diagnostics printed their own placeholders** (#270) -- an f-string body passed
+  without the `f` prefix, so `{receiver.id}.{method}()` reached the user literally. One is
+  reachable from ordinary source: a stdio method call without `use <io/stdio>`
+- **`CE0004` had two unrelated meanings** (#271). It is registered as `duplicate struct '{name}'`
+  and was also emitted as a file-utility ARITY error, with `func`/`expected`/`got` -- so the
+  message was about the wrong thing and none of the three parameters matched the template. The
+  arity case is `CE2009`, the code the auto-derived builtins already use
 - **A foreach binding shadowing an outer struct of a different type read the wrong field index**
   (#279, silent wrong data) -- the backend now resolves the binding's type through the scope-aware
   resolver, which also fixes `CE0056` on a field of a List/array iterator binding (#263) and on a

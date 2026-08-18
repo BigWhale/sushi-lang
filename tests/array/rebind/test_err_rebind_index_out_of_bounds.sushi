@@ -1,0 +1,8 @@
+# A literal index past the end of a FIXED array is known at compile time, so the
+# write is rejected there rather than at run time. CE2012, as for a read.
+# EXPECT_ERROR_CODE: CE2012
+
+fn main() i32:
+    let i32[3] numbers = [1, 2, 3]
+    numbers[3] := 9
+    return Result.Ok(0)

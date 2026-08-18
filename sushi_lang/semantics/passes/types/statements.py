@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
-from sushi_lang.semantics.ast import Let, Return, Rebind, If, While, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess
+from sushi_lang.semantics.ast import Let, Return, Rebind, If, While, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
 from .compatibility import validate_assignment_compatibility, types_compatible
@@ -187,6 +187,25 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
 
     elif isinstance(stmt.target, MemberAccess):
         validator.validate_expression(stmt.target)
+
+        actual_type = validator.infer_expression_type(stmt.target)
+        if actual_type is None:
+            validator.validate_expression(stmt.value)
+            return
+
+    elif isinstance(stmt.target, IndexAccess):
+        # `arr[i] := v`. The index and the compile-time bounds are the read side's
+        # question, so validating the target answers both (CE2002, CE2012), and the
+        # inference stamps `inferred_element_type` for the backend to read.
+        validator.validate_expression(stmt.target)
+
+        # A constant lives in .rodata: the store is undefined behaviour, not a
+        # diagnostic, so it must never be emitted (CE2096).
+        from .arrays import reject_write_to_constant
+        if reject_write_to_constant(stmt.target.array, "assign to an element of",
+                                    stmt.loc, validator.reporter, validator):
+            validator.validate_expression(stmt.value)
+            return
 
         actual_type = validator.infer_expression_type(stmt.target)
         if actual_type is None:

@@ -1,0 +1,21 @@
+# An OWNED source at an indexed assignment is MOVED: the array becomes the owner and
+# frees it, and the source binding does not. A BORROWED source needs `.clone()`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "moved: pre-gift"
+# EXPECT_STDOUT_CONTAINS: "cloned: pre-gift pre-gift"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let string prefix = "pre"
+
+    let string gift = "{prefix}-gift"
+    let string[] slots = from(["{prefix}-a", "{prefix}-b"])
+    slots[0] := gift
+    println("moved: {slots[0]}")
+
+    # A read out of the array is a BORROW, so it must be cloned to be stored again.
+    let string[] copies = from(["{prefix}-c"])
+    copies[0] := slots[0].clone()
+    println("cloned: {copies[0]} {slots[0]}")
+
+    return Result.Ok(0)

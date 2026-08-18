@@ -1,0 +1,22 @@
+# Indexed assignment on a FIXED array of floats and of bools.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "floats: 7.5 8.25"
+# EXPECT_STDOUT_CONTAINS: "bools: 1 0"
+
+fn main() i32:
+    let f32[2] small = [1.5, 2.5]
+    let f64[2] large = [1.5, 2.5]
+    let bool[2] flags = [false, true]
+
+    small[0] := 7.5
+    large[1] := 8.25
+    flags[0] := true
+    flags[1] := false
+
+    println("floats: {small[0]} {large[1]}")
+    println("bools: {flags[0]} {flags[1]}")
+
+    if (small[1] != 2.5):
+        return Result.Ok(1)
+
+    return Result.Ok(0)

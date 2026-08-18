@@ -1,0 +1,14 @@
+# A failing linker is an ENVIRONMENT condition, and it belongs to the user's toolchain.
+# It used to escape as a CalledProcessError and render as a CE0000 ICE, with the raw
+# `cc` stderr printed ahead of the diagnostic (#251). It is a coded diagnostic now, and
+# it carries the linker output as notes.
+# The message text differs per platform; only the code and the exit status are pinned.
+# EXPECT_ERROR_CODE: CE3008
+
+unsafe external "C" as absent because "the symbol is deliberately missing, to make the link fail":
+    fn vanished(i32 n) i32 = "sushi_test_symbol_that_does_not_exist"
+
+fn main() i32:
+    let i32 n = absent.vanished(1)
+    println(n)
+    return Result.Ok(0)

@@ -427,6 +427,28 @@ arr.push(4)
 let i32 last = arr.pop()
 ```
 
+### Indexed Assignment
+
+`arr[index] := value` writes one element, on a fixed array and a dynamic array alike:
+
+```sushi
+let i32[3] scores = [1, 2, 3]
+scores[0] := 42
+
+let i32[] names = from([1, 2])
+names[1] := 99
+```
+
+The index is bounds-checked like a read (**RE2020** at run time; **CE2012** for a literal
+index past the end of a fixed array). An owning element that the write replaces is freed
+first. The assignment takes ownership of the value, so an owned source is moved (later use
+is **CE2405**) and a value read out of a container needs `.clone()` (**CE2411**).
+
+The write must be able to reach the owner. It is rejected through a `peek` parameter
+(**CE2408**), a `match`/`foreach` binding (**CE2414**), a method receiver without
+`poke self` (**CE2421**), an unmarked parameter (**CE2422**), a `let` binding that borrows
+from an owner (**CE2426**), and a constant (**CE2096**).
+
 ## Structs
 
 ### Definition
@@ -822,15 +844,24 @@ fn local_wins() i32:
     return Result.Ok(PRIMES[0])         # 7, and .fill()/.reverse() work on it
 ```
 
+A `string` element type works like any other:
+
+```sushi
+const string[2] NAMES = ["ford", "arthur"]
+
+fn main() i32:
+    println(NAMES[1])                   # arthur
+    let string[2] copy = NAMES          # an ordinary local
+    println(copy[0])                    # ford
+    return Result.Ok(0)
+```
+
 **Restrictions:**
 - Array must be fixed-size (`T[N]`), not dynamic (`T[]`)
 - All elements must be compile-time constant expressions
-- **Immutable**: `.fill()` and `.reverse()` mutate their receiver in place, so calling either on a
-  constant is **CE2096**. The constant lives in read-only memory; copy it into a local and mutate
-  that. (A local shadowing the constant is freely mutable.)
-- **`string` elements are not supported yet**: a `const string[N]` never emits its global, so every
-  use of it fails with `CE0055` — including copying it into a local
-  ([issue #260](https://github.com/BigWhale/sushi-lang/issues/260))
+- **Immutable**: `.fill()`, `.reverse()` and `PRIMES[0] := 9` all write to their receiver, so each
+  of them on a constant is **CE2096**. The constant lives in read-only memory; copy it into a local
+  and mutate that. (A local shadowing the constant is freely mutable.)
 
 ### Restrictions
 

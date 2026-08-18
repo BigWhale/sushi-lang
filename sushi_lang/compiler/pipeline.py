@@ -182,14 +182,25 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
 
     # A library must not carry main(): --lib used to embed it into the .slib silently,
     # where it collides at link time in every consumer. Reject it here (CE3501).
+    #
+    # An executable must carry one, and that is the mirror image (CE3007). Without the
+    # check the missing `_main` symbol reached the LINKER, so the user got raw `cc`
+    # stderr and then a CE0000 "this is a compiler bug" -- for a condition in their own
+    # program (#251).
+    from sushi_lang.internals import errors as er
     if is_library:
-        from sushi_lang.internals import errors as er
         for unit in compilation_order:
             if unit.ast is None:
                 continue
             for func in unit.ast.functions:
                 if func.name == "main":
                     er.emit(reporter, er.ERR.CE3501, func.name_span)
+    elif not any(func.name == "main"
+                 for unit in compilation_order if unit.ast is not None
+                 for func in unit.ast.functions):
+        er.emit_with(reporter, er.ERR.CE3007, None) \
+            .help("add `fn main() i32:` to the program, or compile it as a library "
+                  "with `--lib`").emit()
 
     if reporter.has_errors:
         return 2

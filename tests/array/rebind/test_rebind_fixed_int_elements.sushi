@@ -1,0 +1,30 @@
+# Indexed assignment on a FIXED array, for every integer element type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "fixed ints: 9 9 9 9 9 9 9 9"
+
+fn main() i32:
+    let i8[3] a8 = [1, 2, 3]
+    let i16[3] a16 = [1, 2, 3]
+    let i32[3] a32 = [1, 2, 3]
+    let i64[3] a64 = [1, 2, 3]
+    let u8[3] b8 = [1, 2, 3]
+    let u16[3] b16 = [1, 2, 3]
+    let u32[3] b32 = [1, 2, 3]
+    let u64[3] b64 = [1, 2, 3]
+
+    a8[1] := 9
+    a16[1] := 9
+    a32[1] := 9
+    a64[1] := 9
+    b8[1] := 9
+    b16[1] := 9
+    b32[1] := 9
+    b64[1] := 9
+
+    println("fixed ints: {a8[1]} {a16[1]} {a32[1]} {a64[1]} {b8[1]} {b16[1]} {b32[1]} {b64[1]}")
+
+    # The neighbours must be unchanged.
+    if (a32[0] != 1 or a32[2] != 3):
+        return Result.Ok(1)
+
+    return Result.Ok(0)

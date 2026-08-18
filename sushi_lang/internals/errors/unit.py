@@ -33,3 +33,13 @@ _add(ErrorMessage("CE3005", Severity.ERROR,
 _add(ErrorMessage("CE3006", Severity.ERROR,
     "unknown stdlib module <{module}>",
     Category.UNIT, "The imported standard-library module does not exist. Check the spelling against the available modules."))
+
+# Producing the output. Both are user or environment conditions, not compiler bugs,
+# which is why neither may reach the CE0000 top-level guard.
+_add(ErrorMessage("CE3007", Severity.ERROR,
+    "no main() function: an executable needs an entry point",
+    Category.UNIT, "A program compiled without --lib is linked into an executable, and the linker needs a main(). Add one, or compile the unit as a library with --lib."))
+
+_add(ErrorMessage("CE3008", Severity.ERROR,
+    "linking failed: '{cc}' exited with status {status}",
+    Category.UNIT, "The C compiler used as the linker rejected the object file. Its own output is attached as a note. This is an environment condition, not a compiler bug."))

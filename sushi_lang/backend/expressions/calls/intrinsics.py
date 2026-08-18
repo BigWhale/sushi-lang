@@ -96,7 +96,7 @@ def try_emit_stdio_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
         return None
 
     if not codegen.has_stdlib_unit("io/stdio"):
-        raise_internal_error("CE0096", operation="Missing stdlib unit: io/stdio. Add 'use <io/stdio>' to use {receiver.id}.{method}()"
+        raise_internal_error("CE0096", operation=f"Missing stdlib unit: io/stdio. Add 'use <io/stdio>' to use {receiver.id}.{method}()"
         )
 
     return emit_stdlib_stdio_call(codegen, receiver.id, method, args, to_i1)
@@ -124,7 +124,7 @@ def try_emit_file_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
     file_ptr = codegen.expressions.emit_expr(receiver)
 
     if not codegen.has_stdlib_unit("io/files"):
-        raise_internal_error("CE0096", operation="Missing stdlib unit: io/files. Add 'use <io/files>' to use file.{method}()"
+        raise_internal_error("CE0096", operation=f"Missing stdlib unit: io/files. Add 'use <io/files>' to use file.{method}()"
         )
 
     return emit_stdlib_file_call(codegen, file_ptr, method, args, to_i1)
@@ -184,7 +184,7 @@ def try_emit_string_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
         return None
 
     if not codegen.has_stdlib_unit("collections/strings"):
-        raise_internal_error("CE0096", operation="Missing stdlib unit: collections/strings. Add 'use <collections/strings>' to use string.{expr.method}()"
+        raise_internal_error("CE0096", operation=f"Missing stdlib unit: collections/strings. Add 'use <collections/strings>' to use string.{expr.method}()"
         )
 
     return emit_stdlib_string_call(codegen, expr.method, receiver_value, expr.args, to_i1)

@@ -31,6 +31,7 @@ class ConsumingUse(Enum):
     STRUCT_FIELD = "struct_field"        # S(field: <source>)
     ENUM_PAYLOAD = "enum_payload"        # E.Variant(<source>), incl. Result.Ok / Maybe.Some
     ARRAY_ELEMENT = "array_element"      # from([<source>, ...]) and [<source>, ...]
+    ELEMENT_ASSIGN = "element_assign"    # arr[i] := <source>
     CONTAINER_INSERT = "container_insert"  # List.push/.insert, HashMap.insert (key AND value)
     RETURN = "return"                    # return Result.Ok(<source>)
     CAPTURE = "capture"                  # a lambda's captured environment slot

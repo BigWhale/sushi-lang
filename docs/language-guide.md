@@ -459,6 +459,27 @@ fn main() i32:
 
 **Array methods**: `.len()`, `.get()`, `.push()`, `.pop()`, `.clone()`, `.iter()`, `.hash()`
 
+**Writing one element**: `arr[i] := value` works on both array kinds and on every element type. The
+index is bounds-checked exactly like a read, so an index past the end aborts with `RE2020` (and a
+literal index past the end of a fixed array is rejected at compile time with `CE2012`):
+
+```sushi
+fn main() i32:
+    let i32[3] fixed = [1, 2, 3]
+    fixed[0] := 42
+
+    let string[] words = from(["towel", "guide"])
+    words[1] := "babel fish"        # the old element is freed, the new one adopted
+
+    println("{fixed[0]} {words[1]}")
+    return Result.Ok(0)
+```
+
+An indexed assignment takes ownership of the value, so the rules are the ones every other owning
+position uses: an owned source is moved (using it afterwards is `CE2405`), and a value read out of
+a container needs `.clone()` (`words[0] := words[1]` is `CE2411`). You may only write where the
+write can reach the owner — not through a `peek` parameter, a match binding, or a constant.
+
 **Memory Management**: Dynamic arrays use RAII - they're automatically deallocated when they go out of scope. The destructor recursively cleans up all elements, so arrays of structs or nested arrays are properly freed. Arrays use move semantics: when you pass a dynamic array to a function, ownership transfers unless you explicitly `.clone()` it.
 
 ### List@(T)
