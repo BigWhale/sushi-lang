@@ -78,7 +78,14 @@ def try_emit_own_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
             and receiver_semantic_type.name.startswith("Own<")):
         return None
 
-    own_value = None if method == "alloc" else codegen.expressions.emit_expr(expr.receiver)
+    own_value = None
+    if method != "alloc":
+        # `Own.alloc(x).get()` and `make()??.get()` name no storage, so nothing else frees
+        # the box: the receiver needs an owner here or it leaks (#382). Every other
+        # container asks the same question through its own receiver path.
+        from sushi_lang.backend.expressions.memory import own_temporary
+        own_value = codegen.expressions.emit_expr(expr.receiver)
+        own_temporary(codegen, expr.receiver, own_value, receiver_semantic_type)
     temp_expr = MethodCall(receiver=expr.receiver, method=method, args=expr.args, loc=expr.loc)
     return emit_builtin_own_method(codegen, temp_expr, own_value, receiver_semantic_type)
 

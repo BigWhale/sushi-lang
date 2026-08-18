@@ -1,0 +1,35 @@
+# The other half of issue #382: a value read out of storage someone else OWNS must
+# NOT be given an owner when it is parked in a slot. A container get-out, a struct
+# field and a plain binding all keep their owner, so freeing the parked copy would be
+# a double free rather than a leak -- and the leak gate reports both.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7\n7\n7\n2\n7\n"
+struct Holder:
+    i32[] items
+
+fn give() i32[]:
+    return Result.Ok(from([7, 8]))
+
+fn run_test() i32:
+    let Own@(i32[]) boxed = Own.alloc(from([7, 8]))
+    println(boxed.get()[0])
+    boxed.destroy()
+
+    let List@(i32[]) rows = List.new()
+    rows.push(from([7, 8]))
+    println(rows.get(0)??[0])
+    rows.destroy()
+
+    let Holder h = Holder(from([7, 8]))
+    println(h.items[0])
+    println(h.items.len())
+
+    let i32[] bound = give()??
+    println(bound[0])
+
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

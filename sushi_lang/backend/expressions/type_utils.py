@@ -64,7 +64,7 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
     `u8 255` printed `-1` through an index, a field or a `get()` (#379).
     """
     from sushi_lang.semantics.ast import (Name, IntLit, FloatLit, BinaryOp, StringLit, BoolLit,
-                                          UnaryOp, CastExpr, MemberAccess)
+                                          UnaryOp, CastExpr, MemberAccess, DynamicArrayFrom)
     from sushi_lang.backend.expressions.calls.utils import stamped_semantic_type
     from sushi_lang.semantics.typesys import BuiltinType
 
@@ -93,10 +93,16 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
         return expr.target_type
 
     elif isinstance(expr, IntLit):
-        return BuiltinType.I32
+        # The context type Pass 2 stamped, else the default. A literal in an `i64[]`
+        # element position is i64, and answering i32 for it would report the array's
+        # element type wrongly to every caller that asks.
+        return expr.resolved_type or BuiltinType.I32
 
     elif isinstance(expr, FloatLit):
-        return BuiltinType.F64
+        return expr.resolved_type or BuiltinType.F64
+
+    elif isinstance(expr, DynamicArrayFrom):
+        return _dynamic_array_from_type(codegen, expr)
 
     elif isinstance(expr, StringLit):
         return BuiltinType.STRING
@@ -133,6 +139,17 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
 
     # Cannot infer type for other expression types
     return None
+
+
+def _dynamic_array_from_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
+    """The `T[]` an inline `from([...])` produces, read off its first element."""
+    from sushi_lang.semantics.typesys import DynamicArrayType
+
+    elements = expr.elements.elements
+    if not elements:
+        return None
+    element_type = infer_expr_semantic_type(codegen, elements[0])
+    return None if element_type is None else DynamicArrayType(base_type=element_type)
 
 
 def _field_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:

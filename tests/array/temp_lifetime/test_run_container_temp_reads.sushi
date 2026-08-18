@@ -1,0 +1,34 @@
+# `List@(T)` and `Own@(T)` temporaries leak the same way an array one does (issue
+# #382): all three are parked in a slot by the same seam, and it registered only the
+# subset of owner kinds `register_local_cleanup` knows. HashMap was never affected.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1\n7\n7\n1\n"
+use <collections/hashmap>
+
+fn make_list() List@(i32):
+    let List@(i32) l = List.new()
+    l.push(7)
+    return Result.Ok(l)
+
+fn make_own() Own@(i32):
+    return Result.Ok(Own.alloc(7))
+
+fn make_map() HashMap@(i32, i32):
+    let HashMap@(i32, i32) m = HashMap.new()
+    m.insert(1, 7)
+    return Result.Ok(m)
+
+fn run_test() i32:
+    println(make_list()??.len())
+    println(make_list()??.get(0)??)
+
+    println(make_own()??.get())
+
+    println(make_map()??.len())
+
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))
