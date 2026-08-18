@@ -86,23 +86,41 @@ static size_t slot(uintptr_t key) {
     return (size_t)((key * 0x9E3779B97F4A7C15ULL) >> 48) & TAB_MASK;
 }
 
+/* Where to put `key`, in preference order:
+ *   1. this key's own ST_DEAD slot -- the allocator commonly hands back an address it
+ *      just freed, and reviving that slot is what keeps a later legitimate free from
+ *      being misread as a double free (#359);
+ *   2. the ST_EMPTY at the end of the probe chain;
+ *   3. only if the table holds no ST_EMPTY at all, another key's ST_DEAD slot.
+ *
+ * Taking ANOTHER key's tombstone is what step 3 is a last resort for. The loop used to
+ * take the first ST_EMPTY *or* ST_DEAD it met, so a colliding insert consumed a live
+ * tombstone and the genuine second free of that key then read as untracked and went
+ * UNREPORTED -- a false negative in the gate every other claim rests on (#371).
+ *
+ * The cost is that a dead slot is no longer recycled by a different key, so occupancy
+ * grows with distinct addresses rather than with live blocks. Step 3 bounds it: a
+ * saturated table behaves exactly as it did before. */
 static void tab_insert(uintptr_t key, size_t size) {
     lock();
     size_t i = slot(key);
-    /* Prefer reclaiming this key's own ST_DEAD slot: the allocator commonly hands
-     * back an address it just freed, and reviving that slot is what keeps a later
-     * legitimate free from being misread as a double free. */
+    size_t target = TAB_CAP, foreign_dead = TAB_CAP;
     for (unsigned n = 0; n < TAB_CAP; n++) {
         unsigned char st = g_tab[i].state;
-        if (st == ST_EMPTY || st == ST_DEAD) {
-            g_tab[i].key = key;
-            g_tab[i].size = size;
-            g_tab[i].state = ST_LIVE;
-            g_live_bytes += (long)size;
-            g_live_blocks += 1;
-            break;
+        if (st == ST_EMPTY) { target = i; break; }
+        if (st == ST_DEAD) {
+            if (g_tab[i].key == key) { target = i; break; }
+            if (foreign_dead == TAB_CAP) foreign_dead = i;
         }
         i = (i + 1) & TAB_MASK;
+    }
+    if (target == TAB_CAP) target = foreign_dead;
+    if (target != TAB_CAP) {
+        g_tab[target].key = key;
+        g_tab[target].size = size;
+        g_tab[target].state = ST_LIVE;
+        g_live_bytes += (long)size;
+        g_live_blocks += 1;
     }
     unlock();
 }

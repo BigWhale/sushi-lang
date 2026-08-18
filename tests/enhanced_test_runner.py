@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 from test_metadata import parse_test_metadata, get_test_category, should_run_runtime_test, TestMetadata
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
-                       leakcheck_lib_path, COMPILATION_QUARANTINE)
+                       leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE)
 
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
@@ -38,6 +38,9 @@ _NUMERIC = re.compile(r"-?\d+")
 SKIP_NOT_BUILT = "interposer not built"
 SKIP_TIMED_OUT = "interposer run timed out"
 SKIP_NO_REPORT = "no interposer report"
+# macOS and Linux are the two platforms the interposer supports. Anything else used to be
+# treated as Linux, so it reported SKIP_NOT_BUILT -- the wrong reason (#275).
+SKIP_UNSUPPORTED_PLATFORM = "leak checking not supported on this platform"
 
 
 # --- terminal color ----------------------------------------------------------
@@ -595,6 +598,8 @@ class TestRunner:
                      metadata: TestMetadata) -> Tuple[Optional[bool], str]:
         """Re-run a binary under the malloc-interposer and assert it leaks nothing."""
         shim = leakcheck_lib_path(self.tests_dir.parent)
+        if shim is None:
+            return self._skip_leak_check(test_name, SKIP_UNSUPPORTED_PLATFORM)
         if not shim.exists():
             return self._skip_leak_check(test_name, SKIP_NOT_BUILT)
 
@@ -909,7 +914,13 @@ def main():
         # Unconditional: EXPECT_NO_LEAKS is enforced by every enhanced run, so the
         # interposer is as much a prerequisite as the stdlib. Gating this on a flag is
         # what turned a fresh checkout's 96 leak assertions into 96 silent skips.
-        if not build_leakcheck(project_root, args.verbose):
+        # An unsupported platform is not a build failure: the run continues and every
+        # leak assertion records SKIP_UNSUPPORTED_PLATFORM, which the summary reports.
+        if leakcheck_platform() is None:
+            if not args.json:
+                print(f"Leak checking is not supported on {sys.platform}; "
+                      "leak assertions will be skipped")
+        elif not build_leakcheck(project_root, args.verbose):
             if not args.json:
                 print("Failed to build leak-check interposer, aborting tests")
             return 1

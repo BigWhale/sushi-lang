@@ -60,6 +60,8 @@ def test_leaking_program_fails_plain_enhanced(leaking_test_in_suite):
     )
 
 
+@pytest.mark.skipif(enhanced_test_runner.leakcheck_platform() is None,
+                   reason=f"the leak interposer is not supported on {sys.platform}")
 def test_enhanced_builds_the_interposer(leaking_test_in_suite, tmp_path):
     """`--enhanced` builds the interposer, so a fresh clone checks rather than skips."""
     shim = enhanced_test_runner.leakcheck_lib_path(PROJECT_ROOT)
