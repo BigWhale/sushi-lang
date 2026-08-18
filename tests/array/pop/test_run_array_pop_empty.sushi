@@ -1,0 +1,32 @@
+# An empty pop is `Maybe.None()`, for every element type. It used to hand back a zeroed
+# value of the element type -- a real 0 for an `i32[]`, and for a `string[]` a fat pointer
+# with a null `data` that only escaped RAII because its owned bit was zero too (#377).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\ntrue\nempty\n-1\n"
+fn run_test() i32:
+    let i32[] ints = from([])
+    println("{ints.pop().is_none()}")
+
+    let string[] words = from([])
+    println("{words.pop().is_none()}")
+
+    let u8[] bytes = from([])
+    println("{bytes.pop().is_none()}")
+
+    let bool[] flags = from([])
+    println("{flags.pop().is_none()}")
+
+    # A popped-out value and an absent one are now distinguishable, which is the point:
+    # a genuinely popped 0 answers Some, an empty pop answers None.
+    let i32[] zeros = from([0])
+    match zeros.pop():
+        Maybe.Some(_) -> println("empty")
+        Maybe.None() -> println("absent")
+    println(zeros.pop().realise(-1))
+
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

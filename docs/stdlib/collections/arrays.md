@@ -153,13 +153,18 @@ arr.push(42)
 # arr is now [1, 2, 3, 42]
 ```
 
-### `.pop() -> T`
+### `.pop() -> Maybe@(T)`
 
-Remove and return last element (returns the element's zero value if the array is empty).
+Remove and return the last element. An empty array has no last element, so it answers
+`Maybe.None()` rather than inventing a value — the same shape `.get()` and
+`List@(T).pop()` use.
 
 ```sushi
-let i32 last = arr.pop()
-println("Popped: {last}")
+match arr.pop():
+    Maybe.Some(last) -> println("Popped: {last}")
+    Maybe.None() -> println("nothing to pop")
+
+let i32 last = arr.pop().realise(-1)   # or a default
 ```
 
 ### `.capacity() -> i32`

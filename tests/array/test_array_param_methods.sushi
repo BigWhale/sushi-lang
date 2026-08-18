@@ -12,7 +12,7 @@ fn check_capacity(string[] arr) i32:
 # Mutating helpers borrow poke so the caller keeps ownership and sees the mutation
 # (a by-value array param would be moved and freed by the callee).
 fn pop_last(poke bool[] arr) bool:
-    return Result.Ok(arr.pop())
+    return Result.Ok(arr.pop()??)
 
 fn chain_methods(poke i32[] arr) i32:
     print(arr.push(42))

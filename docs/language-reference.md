@@ -424,7 +424,7 @@ let i32[] arr = from([1, 2, 3])
 let i32[] empty = new()
 
 arr.push(4)
-let i32 last = arr.pop()
+let i32 last = arr.pop().realise(-1)   # .pop() answers Maybe@(T)
 ```
 
 ### Indexed Assignment

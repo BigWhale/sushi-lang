@@ -22,7 +22,7 @@ fn run_test() i32:
     println("Third byte: {third}")    # Should be 67
 
     # Pop element
-    let u8 popped = bytes.pop()
+    let u8 popped = bytes.pop().realise(0 as u8)
     println("Popped: {popped}")       # Should be 67
     println("After pop: {bytes.len()}")  # Should be 2
 

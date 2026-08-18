@@ -338,22 +338,21 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
 
 
 def get_builtin_array_method_return_type(method_name: str, array_type: ArrayType | DynamicArrayType) -> Type | None:
-    """Get the return type of a built-in array method."""
+    """Get the return type of a built-in array method.
+
+    `get` and `pop` are NOT here: both answer `Maybe@(T)`, and interning that type is the
+    caller's job (`ArrayMethodInferrer`), which resolves them before reaching this table.
+    An entry here would be a second answer to a question already answered elsewhere.
+    """
     if method_name == "len":
         return BuiltinType.I32
     elif method_name == "capacity":
         if isinstance(array_type, DynamicArrayType):
             return BuiltinType.I32
         return None
-    elif method_name == "get":
-        return array_type.base_type
     elif method_name == "push":
         if isinstance(array_type, DynamicArrayType):
             return BuiltinType.BLANK
-        return None
-    elif method_name == "pop":
-        if isinstance(array_type, DynamicArrayType):
-            return array_type.base_type
         return None
     elif method_name == "destroy":
         if isinstance(array_type, DynamicArrayType):
