@@ -1,6 +1,7 @@
 """Memory management operations for the Sushi language compiler."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+import itertools
+from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
@@ -232,6 +233,56 @@ def expression_is_temporary(codegen: 'LLVMCodegen', expr) -> bool:
     if isinstance(expr, (Name, MemberAccess, IndexAccess)):
         return False
     return not is_container_get_call(codegen, expr)
+
+
+_PARK_SEQ = itertools.count()
+
+
+def own_temporary(codegen: 'LLVMCodegen', expr, value: ir.Value,
+                  semantic_type: Optional[Type],
+                  slot_type: Optional[ir.Type] = None) -> Optional[ir.Value]:
+    """Give a value NOBODY else will free an owner, and return its slot; None if it has one.
+
+    THE ownership decision for a value no binding names, and `expression_is_temporary` is
+    the predicate that makes it: a value nobody else will free is registered like any
+    owning local, so scope exit frees it exactly once; a value read out of storage someone
+    else owns gets no owner here, because a second one would be a double free.
+
+    Registration goes through `register_owning_value`, the COMPLETE registry router.
+    `create_local` reaches only `register_local_cleanup`, which knows structs with owning
+    fields, fixed arrays, closures and strings -- so a dynamic array, a `List@(T)` and an
+    `Own@(T)` given an owner here were registered NOWHERE and leaked (#382).
+    """
+    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
+
+    if value is None or semantic_type is None:
+        return None
+    resolved = resolve_named_type(codegen, semantic_type)
+    if resolved is None or not needs_cleanup(resolved):
+        return None
+    if not expression_is_temporary(codegen, expr):
+        return None
+
+    name = f"__temp_{next(_PARK_SEQ)}"
+    slot = codegen.memory.create_local(name, slot_type or value.type, value, resolved,
+                                       register_cleanup=False)
+    codegen.memory.register_owning_value(name, resolved, slot)
+    return slot
+
+
+def park_value(codegen: 'LLVMCodegen', expr, value: ir.Value,
+               semantic_type: Optional[Type],
+               slot_type: Optional[ir.Type] = None) -> ir.Value:
+    """Park a value that names no storage in a slot, giving it an OWNER when it needs one."""
+    slot = own_temporary(codegen, expr, value, semantic_type, slot_type)
+    if slot is not None:
+        return slot
+
+    # An ENTRY-block slot, not one per block: a receiver inside a `while` body would
+    # otherwise allocate on every iteration and grow the stack without bound.
+    slot = codegen.memory.entry_alloca(slot_type or value.type, "temp_slot")
+    codegen.builder.store(value, slot)
+    return slot
 
 
 def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,

@@ -1,6 +1,5 @@
 """Utility functions for method call emission."""
 from __future__ import annotations
-import itertools
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 from llvmlite import ir
@@ -277,27 +276,31 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
             # the question it is named for -- claiming any node with `resolved_enum_type`
             # typed `go().realise("err")` as its receiver's enum and leaked the string
             # (#293).
-            semantic_type = stamped_semantic_type(codegen, receiver)
-            _own_receiver_temp(codegen, receiver, receiver_value, semantic_type)
+            # Pass 2's stamp first, then reconstruction -- an inline `from([...])`
+            # receiver carries no stamp, so it had no type here and therefore no owner.
+            from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+            semantic_type = infer_expr_semantic_type(codegen, receiver)
+            receiver_value = _own_receiver_temp(
+                codegen, receiver, receiver_value, semantic_type)
 
     return receiver_value, receiver_type, semantic_type
 
 
 def _own_receiver_temp(codegen: 'LLVMCodegen', receiver: Expr, value: ir.Value,
-                       semantic_type: Optional['Type']) -> None:
-    """Give a receiver that nobody owns an owner, so it is freed exactly once."""
-    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
-    from sushi_lang.backend.expressions.memory import expression_is_temporary
+                       semantic_type: Optional['Type']) -> ir.Value:
+    """Give a receiver that nobody owns an owner, and hand back what to read it through.
 
-    if value is None or semantic_type is None:
-        return
-    resolved = resolve_named_type(codegen, semantic_type)
-    if resolved is None or not needs_cleanup(resolved):
-        return
-    if not expression_is_temporary(codegen, receiver):
-        return
-    codegen.memory.create_local(
-        f"__recv_temp_{next(_SPILL_SEQ)}", value.type, value, resolved)
+    A dynamic array is read through a GEP, so its owning slot IS its address and is handed
+    over -- exactly as the `Name` branch above hands over its alloca. Returning the VALUE
+    would make the array dispatcher spill it a second time, giving the same temporary two
+    owners and freeing it twice.
+    """
+    from sushi_lang.backend.expressions.memory import own_temporary
+
+    slot = own_temporary(codegen, receiver, value, semantic_type)
+    if slot is not None and codegen.types.is_dynamic_array_type(value.type):
+        return slot
+    return value
 
 
 def _infer_enum_construction_type(codegen: 'LLVMCodegen', receiver: Expr) -> Optional['Type']:
@@ -390,28 +393,16 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr,
     return _spill_receiver(codegen, receiver, semantic_type)
 
 
-_SPILL_SEQ = itertools.count()
-
-
 def _spill_receiver(codegen: 'LLVMCodegen', receiver: Expr,
                     semantic_type: Optional['Type']) -> Optional[ir.Value]:
     """Park a receiver that names no storage in a slot, and give it an owner if it needs one."""
-    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
-    from sushi_lang.backend.expressions.memory import expression_is_temporary
+    from sushi_lang.backend.expressions.memory import park_value
 
     value = codegen.expressions.emit_expr(receiver)
     if value is None:
         return None
 
-    resolved = resolve_named_type(codegen, semantic_type) if semantic_type is not None else None
-    if (resolved is not None and needs_cleanup(resolved)
-            and expression_is_temporary(codegen, receiver)):
-        name = f"__recv_temp_{next(_SPILL_SEQ)}"
-        return codegen.memory.create_local(name, value.type, value, resolved)
-
-    slot = codegen.memory.entry_alloca(value.type, "recv_temp_slot")
-    codegen.builder.store(value, slot)
-    return slot
+    return park_value(codegen, receiver, value, semantic_type)
 
 
 def emit_cstr_arg(codegen: 'LLVMCodegen', arg: Expr) -> ir.Value:

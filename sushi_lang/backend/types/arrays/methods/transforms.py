@@ -125,10 +125,10 @@ def emit_dynamic_array_clone(codegen: "LLVMCodegen", call: MethodCall, receiver_
     from sushi_lang.backend.expressions.memory import clone_dynamic_array_value
 
     source_array = codegen.builder.load(receiver_value, name="clone_source")
-    cloned_array = clone_dynamic_array_value(codegen, source_array, element_semantic_type)
 
-    clone_slot = codegen.builder.alloca(receiver_type, name="clone_slot")
-    codegen.builder.store(cloned_array, clone_slot)
-
-    return clone_slot
+    # The DESCRIPTOR by value, like every other `T[]` expression. Handing back a slot made
+    # `.clone()` the last emitter still disagreeing with the convention #281/#283 settled,
+    # so the seam that gives an unbound temporary an owner saw a pointer where a value
+    # belongs and built a slot one indirection too deep (#382).
+    return clone_dynamic_array_value(codegen, source_array, element_semantic_type)
 

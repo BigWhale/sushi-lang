@@ -47,8 +47,10 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
         # A chained or temporary array (`o.get()[0]`, `from([1, 2])[0]`): `emit_expr` yields
         # the descriptor by VALUE, and everything below reads through a GEP.
         from .addressing import as_array_address
+        from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
         array_value = codegen.expressions.emit_expr(expr.array)
-        array_slot = as_array_address(codegen, array_value)
+        array_slot = as_array_address(codegen, array_value, None, expr.array,
+                                      infer_expr_semantic_type(codegen, expr.array))
 
     index_value = codegen.expressions.emit_expr(expr.index)
 
