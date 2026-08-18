@@ -14,8 +14,12 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
 
 
-def _stamped_semantic_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional['Type']:
-    """The type Pass 2 recorded for a method call, or None."""
+def stamped_semantic_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional['Type']:
+    """The type Pass 2 recorded for this expression, or None.
+
+    The one reader of Pass 2's type stamps. A shape with no stamp -- or a stamp Pass 2
+    left abstract -- answers None, so a caller can fall back to its own reconstruction.
+    """
     from sushi_lang.semantics.ast import IndexAccess, TryExpr
     from sushi_lang.semantics.generics.types import GenericTypeRef
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
@@ -94,7 +98,7 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
     # Strategy 3: a chained method call, which neither strategy above can see. Pass 2
     # already typed it. The three are disjoint by node type, so the order is not a
     # priority.
-    stamped = _stamped_semantic_type(codegen, receiver)
+    stamped = stamped_semantic_type(codegen, receiver)
     if isinstance(stamped, ReferenceType):
         stamped = stamped.referenced_type
     if isinstance(stamped, StructType) and stamped.name.startswith(prefix):
@@ -273,7 +277,7 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
             # the question it is named for -- claiming any node with `resolved_enum_type`
             # typed `go().realise("err")` as its receiver's enum and leaked the string
             # (#293).
-            semantic_type = _stamped_semantic_type(codegen, receiver)
+            semantic_type = stamped_semantic_type(codegen, receiver)
             _own_receiver_temp(codegen, receiver, receiver_value, semantic_type)
 
     return receiver_value, receiver_type, semantic_type

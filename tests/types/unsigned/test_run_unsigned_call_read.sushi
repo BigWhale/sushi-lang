@@ -1,0 +1,43 @@
+# An unsigned value returned by a CALL must print unsigned (issue #379) --
+# a free function through `??`, an extension method, and `.realise()`.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "255\n65535\n4294967295\n18446744073709551615\n4294967295\n40000\n4294967295\n"
+struct Box:
+    u32 v
+
+extend Box value() u32:
+    return self.v
+
+fn make_u8() u8:
+    return Result.Ok(255 as u8)
+
+fn make_u16() u16:
+    return Result.Ok(65535 as u16)
+
+fn make_u32() u32:
+    return Result.Ok(4294967295 as u32)
+
+fn make_u64() u64:
+    return Result.Ok(18446744073709551615 as u64)
+
+fn run_test() i32:
+    println(make_u8()??)
+    println("{make_u16()??}")
+    println(make_u32()??)
+    println("{make_u64()??}")
+
+    let Box b = Box(4294967295 as u32)
+    println(b.value())
+
+    let Maybe@(u16) m = Maybe.Some(40000 as u16)
+    println(m.realise(0 as u16))
+
+    let u32[] d32 = from([4294967295 as u32])
+    println("{d32.get(0).realise(0 as u32)}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))
