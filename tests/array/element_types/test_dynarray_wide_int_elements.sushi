@@ -1,0 +1,41 @@
+# A dynamic array of i16/i64/u16/u64 (issue #375). The element SIZE decides the stride
+# of every access, so the VALUES matter more than the compile: a wrong stride overlaps
+# neighbours silently rather than crashing. The i64/u64 values need more than 32 bits,
+# so a 4-byte stride cannot round-trip them.
+#
+# Two workarounds, both for pre-existing bugs this test would otherwise trip over:
+#   - the `as` casts: an array-literal element is not context-typed (issue #378)
+#   - the `let` bindings on the UNSIGNED reads: an unsigned value read through an index
+#     prints as signed (issue #379). A `let` carries the declared type, so it prints
+#     correctly -- and that keeps this test measuring the stride, not the formatter.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "i16: 300 -300 32767"
+# EXPECT_STDOUT_CONTAINS: "i64: 4294967303 -4294967303 9007199254740993"
+# EXPECT_STDOUT_CONTAINS: "u16: 65535 1 40000"
+# EXPECT_STDOUT_CONTAINS: "u64: 18446744073709551615 1 4294967296"
+# EXPECT_NO_LEAKS: true
+
+fn run_test() i32:
+    let i16[] small = from([300 as i16, -300 as i16, 32767 as i16])
+    println("i16: {small[0]} {small[1]} {small[2]}")
+
+    let i64[] big = from([4294967303 as i64, -4294967303 as i64, 9007199254740993 as i64])
+    println("i64: {big[0]} {big[1]} {big[2]}")
+
+    let u16[] usmall = from([65535 as u16, 1 as u16, 40000 as u16])
+    let u16 s0 = usmall[0]
+    let u16 s1 = usmall[1]
+    let u16 s2 = usmall[2]
+    println("u16: {s0} {s1} {s2}")
+
+    let u64[] ubig = from([18446744073709551615 as u64, 1 as u64, 4294967296 as u64])
+    let u64 b0 = ubig[0]
+    let u64 b1 = ubig[1]
+    let u64 b2 = ubig[2]
+    println("u64: {b0} {b1} {b2}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

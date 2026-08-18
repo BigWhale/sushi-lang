@@ -1,9 +1,11 @@
 # Indexed assignment on a DYNAMIC array, for the primitive element types.
-# i16/i64/u16/u64 are absent on purpose: a dynamic array of one is CE0079 today,
-# before any write, so it belongs to issue #375 and not to this test. The FIXED
-# array of each of the four is covered by test_rebind_fixed_int_elements.sushi.
+# The four wide integer widths used to be excluded here: a dynamic array of one was
+# CE0079 before any write (#375, fixed). They are in now, and i64 is the one that
+# matters -- writing an element at an 8-byte stride is a different instruction
+# sequence from writing one at 4, and the value proves the stride round-trips.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: "dynamic: 42 43 44 4.5 1"
+# EXPECT_STDOUT_CONTAINS: "wide: 30000 4294967303"
 # EXPECT_NO_LEAKS: true
 
 fn main() i32:
@@ -21,8 +23,17 @@ fn main() i32:
 
     println("dynamic: {ints[0]} {small[1]} {bytes[0]} {reals[1]} {flags[1]}")
 
+    # The wide widths (#375). The `as` casts work around issue #378.
+    let i16[] halfword = from([1 as i16, 2 as i16])
+    let i64[] doubleword = from([1 as i64, 2 as i64])
+    halfword[1] := 30000 as i16
+    doubleword[1] := 4294967303 as i64
+    println("wide: {halfword[1]} {doubleword[1]}")
+
     # A write must not change the length or the other elements.
     if (ints.len() != 3 or ints[1] != 2 or ints[2] != 3):
+        return Result.Ok(1)
+    if (halfword[0] != 1 as i16 or doubleword[0] != 1 as i64):
         return Result.Ok(1)
 
     return Result.Ok(0)

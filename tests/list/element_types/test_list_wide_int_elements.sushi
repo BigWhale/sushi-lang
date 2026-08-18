@@ -1,0 +1,44 @@
+# The List@(T) half of issue #375. `get_element_size_constant` is shared with the
+# dynamic array, so the same four integer widths were broken here too -- the issue
+# names only the array. HashMap escapes it because its entry type is a STRUCT, which
+# takes the getelementptr(null, 1) arm rather than the integer chain.
+#
+# The `as` casts work around issue #378, and the `let` bindings on the UNSIGNED reads
+# work around issue #379, so this test measures the element stride and nothing else.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "i16: 300 32767"
+# EXPECT_STDOUT_CONTAINS: "i64: 4294967303 9007199254740993"
+# EXPECT_STDOUT_CONTAINS: "u16: 65535 40000"
+# EXPECT_STDOUT_CONTAINS: "u64: 18446744073709551615 4294967296"
+# EXPECT_NO_LEAKS: true
+
+fn run_test() i32:
+    let List@(i16) small = List.new()
+    small.push(300 as i16)
+    small.push(32767 as i16)
+    println("i16: {small.get(0)??} {small.get(1)??}")
+
+    let List@(i64) big = List.new()
+    big.push(4294967303 as i64)
+    big.push(9007199254740993 as i64)
+    println("i64: {big.get(0)??} {big.get(1)??}")
+
+    let List@(u16) usmall = List.new()
+    usmall.push(65535 as u16)
+    usmall.push(40000 as u16)
+    let u16 s0 = usmall.get(0)??
+    let u16 s1 = usmall.get(1)??
+    println("u16: {s0} {s1}")
+
+    let List@(u64) ubig = List.new()
+    ubig.push(18446744073709551615 as u64)
+    ubig.push(4294967296 as u64)
+    let u64 b0 = ubig.get(0)??
+    let u64 b1 = ubig.get(1)??
+    println("u64: {b0} {b1}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)
