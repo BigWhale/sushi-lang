@@ -1,0 +1,51 @@
+# Every position that hands an array literal an expected type must context-type its
+# elements (issue #378). `let` and `const` were the only two that did; a struct field,
+# a call argument, a return and an enum payload rejected a plain `[1, 2]` against an
+# `i64[2]` with a false type mismatch -- no wide literal needed to see it.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4294967303\n4294967303\n4294967303\n4294967303\n4294967303\n4294967303\n4294967303\n"
+struct Row:
+    i64[2] fixed
+    i64[] dynamic
+
+enum Held:
+    Fixed(i64[2])
+    Dynamic(i64[])
+
+fn take_fixed(i64[2] a) i64:
+    return Result.Ok(a[0])
+
+fn take_dynamic(nom i64[] a) i64:
+    return Result.Ok(a[0])
+
+fn give_fixed() i64[2]:
+    return Result.Ok([4294967303, 1])
+
+fn give_dynamic() i64[]:
+    return Result.Ok(from([4294967303, 1]))
+
+fn run_test() i32:
+    let Row r = Row([4294967303, 1], from([4294967303, 1]))
+    println(r.fixed[0])
+    println(r.dynamic[0])
+
+    println(take_fixed([4294967303, 1])??)
+    println(take_dynamic(nom from([4294967303, 1]))??)
+
+    println(give_fixed()??[0])
+    # Bound rather than indexed inline: an unbound owning array temporary from a call
+    # leaks (#382), which is independent of this issue and pre-dates it.
+    let i64[] returned = give_dynamic()??
+    println(returned[0])
+
+    let Held h = Held.Fixed([4294967303, 1])
+    match h:
+        Held.Fixed(v) -> println(v[0])
+        Held.Dynamic(v) -> println(v[0])
+
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

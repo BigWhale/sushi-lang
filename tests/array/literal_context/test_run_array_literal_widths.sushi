@@ -1,0 +1,67 @@
+# An array-literal element takes its type from the declared element type, at every
+# integer width and in both array kinds (issue #378). A value outside the i32 range
+# is the only one that proves the context was read: a small literal passes the
+# default-i32 range check and is widened afterwards, which is what hid this.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "127\n32767\n2147483647\n4294967303\n255\n65535\n4294967295\n18446744073709551615\n127\n32767\n2147483647\n4294967303\n255\n65535\n4294967295\n18446744073709551615\n4294967303\n18446744073709551615\n18446744073709551615\n-128\n-32768\n-4294967303\n1.5\n2.5\n"
+const i64[2] BIG_SIGNED = [4294967303, 1]
+const u64[2] BIG_UNSIGNED = [18446744073709551615, 1]
+
+fn main() i32:
+    let i8[2] f8 = [127, 1]
+    let i16[2] f16 = [32767, 1]
+    let i32[2] f32i = [2147483647, 1]
+    let i64[2] f64i = [4294967303, 1]
+    let u8[2] fu8 = [255, 1]
+    let u16[2] fu16 = [65535, 1]
+    let u32[2] fu32 = [4294967295, 1]
+    let u64[2] fu64 = [18446744073709551615, 1]
+
+    println(f8[0])
+    println(f16[0])
+    println(f32i[0])
+    println(f64i[0])
+    println(fu8[0])
+    println(fu16[0])
+    println(fu32[0])
+    println(fu64[0])
+
+    let i8[] d8 = from([127, 1])
+    let i16[] d16 = from([32767, 1])
+    let i32[] d32 = from([2147483647, 1])
+    let i64[] d64 = from([4294967303, 1])
+    let u8[] du8 = from([255, 1])
+    let u16[] du16 = from([65535, 1])
+    let u32[] du32 = from([4294967295, 1])
+    let u64[] du64 = from([18446744073709551615, 1])
+
+    println(d8[0])
+    println(d16[0])
+    println(d32[0])
+    println(d64[0])
+    println(du8[0])
+    println(du16[0])
+    println(du32[0])
+    println(du64[0])
+
+    println(BIG_SIGNED[0])
+    println(BIG_UNSIGNED[0])
+
+    let u64[2] hex = [0xFFFFFFFFFFFFFFFF, 1]
+    println(hex[0])
+
+    let i8[2] neg8 = [-128, 1]
+    let i16[2] neg16 = [-32768, 1]
+    let i64[] neg64 = from([-4294967303, 1])
+    println(neg8[0])
+    println(neg16[0])
+    println(neg64[0])
+
+    let f32[2] ff = [1.5, 1.0]
+    let f64[] fd = from([2.5, 1.0])
+    println(ff[0])
+    println(fd[0])
+
+    return Result.Ok(0)
