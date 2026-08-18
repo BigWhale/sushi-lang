@@ -1,0 +1,10 @@
+# An out-of-range element in a struct-constructor FIELD reports CE2073 against the
+# declared element type (issue #378).
+# EXPECT_ERROR_CODE: CE2073
+struct Row:
+    u8[2] xs
+
+fn main() i32:
+    let Row r = Row([300, 1])
+    println(r.xs[0])
+    return Result.Ok(0)

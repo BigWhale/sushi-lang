@@ -2,8 +2,10 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from sushi_lang.semantics.typesys import EnumType, StructType, BuiltinType
-from sushi_lang.semantics.ast import EnumConstructor, DotCall, Call, Name, IntLit, FloatLit, UnaryOp, BinaryOp
+from sushi_lang.semantics.typesys import (EnumType, StructType, BuiltinType, ArrayType,
+                                          DynamicArrayType)
+from sushi_lang.semantics.ast import (EnumConstructor, DotCall, Call, Name, IntLit, FloatLit,
+                                      UnaryOp, BinaryOp, ArrayLiteral, DynamicArrayFrom)
 from sushi_lang.internals import errors as er
 from .inference import int_literal_fits, float_literal_fits
 
@@ -65,6 +67,17 @@ def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
             er.emit(validator.reporter, er.ERR.CE2073, lit.loc,
                     literal=str(value), type=expected.value)
         lit.resolved_type = expected
+
+
+def _propagate_array_element_type(validator: 'TypeValidator', value_expr: 'Expr',
+                                  element_type: 'Type') -> None:
+    """Push an expected element type into an array literal's elements."""
+    if isinstance(value_expr, DynamicArrayFrom):
+        value_expr = value_expr.elements
+    if not isinstance(value_expr, ArrayLiteral):
+        return
+    for element in value_expr.elements:
+        propagate_types_to_value(validator, element, element_type)
 
 
 def _propagate_to_enum_args(validator: 'TypeValidator', node: Expr,
@@ -199,6 +212,15 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
     if isinstance(expected_type, BuiltinType) and (
             expected_type in _NUMERIC_INT or expected_type in _NUMERIC_FLOAT):
         _propagate_numeric_type(validator, value_expr, expected_type)
+        return
+
+    # An array literal's elements take the DECLARED element type, in every position that
+    # has one. Without this arm the elements saw no context at all: a wide literal was
+    # range-checked against the default i32 (CE2070, the code for no context), and a plain
+    # `[1, 2]` inferred `i32[2]` and was rejected against an `i64[2]` field, argument,
+    # return or enum payload (#378).
+    if isinstance(expected_type, (ArrayType, DynamicArrayType)):
+        _propagate_array_element_type(validator, value_expr, expected_type.base_type)
         return
 
     # Hand a lambda its expected FunctionType so bare-name params (`|x|`) infer, and a

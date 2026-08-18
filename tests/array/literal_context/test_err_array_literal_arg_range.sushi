@@ -1,0 +1,9 @@
+# An out-of-range element at a call ARGUMENT reports CE2073 against the declared
+# element type, not CE2070 against a defaulted i32 (issue #378).
+# EXPECT_ERROR_CODE: CE2073
+fn take(u8[2] a) u8:
+    return Result.Ok(a[0])
+
+fn main() i32:
+    println(take([300, 1])??)
+    return Result.Ok(0)

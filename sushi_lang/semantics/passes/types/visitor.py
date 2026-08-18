@@ -246,11 +246,15 @@ class ExpressionValidator(RecursiveVisitor):
 
         # A negated integer literal is range-checked as one signed value, so
         # that i32 min (-2147483648) stays legal while the positive literal
-        # 2147483648 alone would not be.
+        # 2147483648 alone would not be. Only when it has no context type: a stamped
+        # literal was already checked against its target, and re-checking it against
+        # the i32 default made `let i64 a = -4294967303` a CE2070 -- the same shape
+        # `visit_intlit` guards against for the positive half.
         if node.op == "neg" and isinstance(node.expr, IntLit):
-            if not getattr(node.expr, 'in_cast_context', False):
-                if -int(node.expr.value) < -(2 ** 31):
-                    self._emit_literal_overflow(node.expr)
+            context_typed = (getattr(node.expr, 'in_cast_context', False)
+                             or node.expr.resolved_type is not None)
+            if not context_typed and -int(node.expr.value) < -(2 ** 31):
+                self._emit_literal_overflow(node.expr)
             node.expr.range_checked = True
 
         self.type_validator.validate_expression(node.expr)

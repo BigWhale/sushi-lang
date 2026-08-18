@@ -1,0 +1,8 @@
+# A dynamic-array literal element out of the element type's range is CE2073. This
+# shape already worked before issue #378 -- it is the control that says the fix
+# changed the positions that had no context, not the check itself.
+# EXPECT_ERROR_CODE: CE2073
+fn main() i32:
+    let u8[] a = from([300, 1])
+    println(a[0])
+    return Result.Ok(0)
