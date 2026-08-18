@@ -1,0 +1,36 @@
+# An unsigned value read through a struct FIELD must print unsigned (issue #379).
+# A nested field and a field of an array element are the same read, one level down.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "255\n65535\n40000\n4294967295\n18446744073709551615\n4294967295\n255\n65535\n40000\n4294967295\n18446744073709551615\n"
+struct Widths:
+    u8 a
+    u16 b
+    u16 c
+    u32 d
+    u64 e
+
+struct Outer:
+    Widths inner
+
+fn main() i32:
+    let Widths w = Widths(255 as u8, 65535 as u16, 40000 as u16, 4294967295 as u32, 18446744073709551615 as u64)
+
+    println(w.a)
+    println(w.b)
+    println("{w.c}")
+    println(w.d)
+    println("{w.e}")
+
+    let Outer o = Outer(Widths(255 as u8, 65535 as u16, 40000 as u16, 4294967295 as u32, 18446744073709551615 as u64))
+    println(o.inner.d)
+
+    let Widths[] rows = from([Widths(255 as u8, 65535 as u16, 40000 as u16, 4294967295 as u32, 18446744073709551615 as u64)])
+    println(rows[0].a)
+    println(rows[0].b)
+    println("{rows[0].c}")
+    println(rows[0].d)
+    println("{rows[0].e}")
+
+    return Result.Ok(0)

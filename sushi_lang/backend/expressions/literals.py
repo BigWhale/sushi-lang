@@ -123,10 +123,10 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                             fresh_flags.append(True)
                             continue
 
-                        # Signedness from the part's semantic type: prefer the
-                        # checker's stamp, else reconstruct it (handles casts,
-                        # consts, and locals) - the source the print statements use.
-                        part_type = inferred if inferred is not None else infer_expr_semantic_type(codegen, part)
+                        # Signedness from the part's semantic type - the same source the
+                        # print statements use; it reads Pass 2's stamp before falling back
+                        # to its own reconstruction.
+                        part_type = infer_expr_semantic_type(codegen, part)
                         is_signed = not is_unsigned_type(part_type)
                         string_values.append(codegen.runtime.formatting.emit_integer_to_string(expr_value, is_signed=is_signed, bit_width=width))
                         fresh_flags.append(True)

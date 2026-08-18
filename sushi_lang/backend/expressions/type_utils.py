@@ -55,9 +55,22 @@ def is_dynamic_array_pointer(codegen: 'LLVMCodegen', llvm_type: ir.Type) -> bool
 
 
 def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
-    """Infer the semantic type of an expression at codegen time."""
-    from sushi_lang.semantics.ast import Name, IntLit, FloatLit, BinaryOp, StringLit, BoolLit, UnaryOp, CastExpr
+    """Infer the semantic type of an expression at codegen time.
+
+    Pass 2's stamp is the first answer, because the backend must not re-derive a type the
+    checker already decided. Everything below is reconstruction for the shapes Pass 2
+    stamps nothing on. A shape this function cannot answer for is not merely unformatted:
+    the callers read signedness off it, so `None` renders an unsigned value as SIGNED --
+    `u8 255` printed `-1` through an index, a field or a `get()` (#379).
+    """
+    from sushi_lang.semantics.ast import (Name, IntLit, FloatLit, BinaryOp, StringLit, BoolLit,
+                                          UnaryOp, CastExpr, MemberAccess)
+    from sushi_lang.backend.expressions.calls.utils import stamped_semantic_type
     from sushi_lang.semantics.typesys import BuiltinType
+
+    stamped = stamped_semantic_type(codegen, expr)
+    if stamped is not None:
+        return stamped
 
     # Variable: look up in scope manager (supports nested scopes). Constants are
     # not registered in the scope tables, so fall back to the constant table -
@@ -72,6 +85,9 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
             if sig is not None and sig.const_type is not None:
                 return sig.const_type
         return None
+
+    elif isinstance(expr, MemberAccess):
+        return _field_semantic_type(codegen, expr)
 
     elif isinstance(expr, CastExpr):
         return expr.target_type
@@ -117,6 +133,29 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
 
     # Cannot infer type for other expression types
     return None
+
+
+def _field_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
+    """The declared type of the field a member access reads, or None."""
+    from sushi_lang.backend.expressions.structs import infer_struct_type
+    from sushi_lang.internals.diagnostics import InternalCompilerError
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    from sushi_lang.semantics.typesys import UnknownType
+
+    try:
+        owner = infer_struct_type(codegen, expr.receiver)
+    except InternalCompilerError:
+        # A receiver that names no struct -- an FFI namespace, an enum type name. Those
+        # shapes reach this function too, and none of them has a field to read.
+        return None
+
+    field_type = owner.get_field_type(expr.member)
+    if field_type is None:
+        return None
+
+    resolved = resolve_unknown_type(field_type, codegen.struct_table.by_name,
+                                    codegen.enum_table.by_name)
+    return None if isinstance(resolved, UnknownType) else resolved
 
 
 def is_unsigned_type(semantic_type: Optional[Type]) -> bool:

@@ -1,0 +1,45 @@
+# An unsigned element read with an INDEX must print unsigned (issue #379).
+# Both array kinds, every unsigned width. A plain `let` is the control line:
+# it always printed correctly, which is what made the bug easy to miss.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "255\n65535\n40000\n4294967295\n18446744073709551615\n255\n65535\n40000\n4294967295\n18446744073709551615\n255\n65535\n40000\n4294967295\n18446744073709551615\n"
+fn main() i32:
+    let u8[] d8 = from([255 as u8])
+    let u16[] d16 = from([65535 as u16])
+    let u16[] d16b = from([40000 as u16])
+    let u32[] d32 = from([4294967295 as u32])
+    let u64[] d64 = from([18446744073709551615 as u64])
+
+    println(d8[0])
+    println(d16[0])
+    println(d16b[0])
+    println(d32[0])
+    println(d64[0])
+
+    let u8[1] f8 = [255 as u8]
+    let u16[1] f16 = [65535 as u16]
+    let u16[1] f16b = [40000 as u16]
+    let u32[1] f32a = [4294967295 as u32]
+    let u64[1] f64a = [18446744073709551615 as u64]
+
+    println("{f8[0]}")
+    println("{f16[0]}")
+    println("{f16b[0]}")
+    println("{f32a[0]}")
+    println("{f64a[0]}")
+
+    let u8 s8 = 255
+    let u16 s16 = 65535
+    let u16 s16b = 40000
+    let u32 s32 = 4294967295
+    let u64 s64 = 18446744073709551615
+
+    println(s8)
+    println(s16)
+    println(s16b)
+    println(s32)
+    println(s64)
+
+    return Result.Ok(0)

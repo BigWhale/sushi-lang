@@ -1,0 +1,51 @@
+# An unsigned value read out of a container with `get()??` must print unsigned
+# (issue #379). Array, List and HashMap all reach the value the same way.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "255\n65535\n40000\n4294967295\n18446744073709551615\n255\n4294967295\n18446744073709551615\n65535\n4294967295\n"
+use <collections/hashmap>
+
+fn run_test() i32:
+    let u8[] d8 = from([255 as u8])
+    let u16[] d16 = from([65535 as u16])
+    let u16[] d16b = from([40000 as u16])
+    let u32[] d32 = from([4294967295 as u32])
+    let u64[] d64 = from([18446744073709551615 as u64])
+
+    println(d8.get(0)??)
+    println(d16.get(0)??)
+    println("{d16b.get(0)??}")
+    println(d32.get(0)??)
+    println("{d64.get(0)??}")
+
+    let List@(u8) l8 = List.new()
+    l8.push(255 as u8)
+    println(l8.get(0)??)
+
+    let List@(u32) l32 = List.new()
+    l32.push(4294967295 as u32)
+    println(l32.get(0)??)
+
+    let List@(u64) l64 = List.new()
+    l64.push(18446744073709551615 as u64)
+    println("{l64.get(0)??}")
+
+    let HashMap@(i32, u16) m16 = HashMap.new()
+    m16.insert(1, 65535 as u16)
+    println(m16.get(1)??)
+
+    let HashMap@(i32, u32) m32 = HashMap.new()
+    m32.insert(1, 4294967295 as u32)
+    println("{m32.get(1)??}")
+
+    l8.destroy()
+    l32.destroy()
+    l64.destroy()
+    m16.free()
+    m32.free()
+
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))
