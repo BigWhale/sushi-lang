@@ -199,6 +199,15 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   emit into two functions at once
 
 ### Fixed
+- **A dynamic array or a `List@(T)` of `i16`/`i64`/`u16`/`u64` was a `CE0079` internal error**
+  (#375). `get_element_size_constant` was a hand-written chain of `==` comparisons naming i32,
+  i8, pointer, float, double and struct -- and no other integer width -- so eight ordinary
+  instantiations crashed the compiler. Its sibling `calculate_llvm_type_size` read the width off
+  `ir.IntType` all along, which is what made "the two disagree" the shape of the bug rather than
+  "the language does not support i64". It reads the width now.
+  `tests/unit/test_element_size_is_total.py` asserts the two agree over every integer width, so
+  the table cannot go partial again. `HashMap@(K, V)` was never affected: its entry type is a
+  struct, which takes the `getelementptr(null, 1)` arm
 - **A missing `main()` is a real diagnostic** (#251, `CE3007`), and it names `--lib`. The missing
   `_main` used to reach the LINKER, so the user got raw `cc` stderr followed by a `CE0000`
   "this is a bug in the Sushi compiler" -- for a condition in their own program. A failing link is

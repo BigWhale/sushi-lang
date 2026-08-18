@@ -16,10 +16,13 @@ if TYPE_CHECKING:
 
 def get_element_size_constant(codegen: 'LLVMCodegen', element_type: ir.Type) -> ir.Value:
     """Get the size in bytes of an element type as an LLVM constant."""
-    if element_type == codegen.types.i32:
-        return ir.Constant(codegen.types.i32, 4)  # i32 = 4 bytes
-    elif element_type == codegen.types.i8:
-        return ir.Constant(codegen.types.i32, 1)  # i8 = 1 byte
+    # Read the width off the type. The chain of `==` comparisons that stood here named
+    # i32 and i8 and no other integer, so `i16[]`, `i64[]`, `u16[]`, `u64[]` and the four
+    # matching `List@(T)` instantiations reached the CE0079 below -- an internal error on
+    # ordinary code (#375). `calculate_llvm_type_size` was total over `ir.IntType` all
+    # along, which is what made the two siblings disagree.
+    if isinstance(element_type, ir.IntType):
+        return ir.Constant(codegen.types.i32, element_type.width // 8)
     elif isinstance(element_type, ir.PointerType):
         return ir.Constant(codegen.types.i32, 8)  # pointer = 8 bytes (64-bit)
     elif isinstance(element_type, ir.FloatType):

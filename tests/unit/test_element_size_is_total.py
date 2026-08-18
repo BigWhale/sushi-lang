@@ -20,6 +20,8 @@ from sushi_lang.backend.expressions.memory import (
     calculate_llvm_type_size,
     get_element_size_constant,
 )
+from sushi_lang.backend.types.core.sizing import TypeSizing
+from sushi_lang.semantics.passes.collect import EnumTable, StructTable
 from sushi_lang.semantics.typesys import BuiltinType
 
 # Every primitive an array or a List can hold, with its size in bytes.
@@ -80,3 +82,26 @@ def test_the_two_size_helpers_agree_on_integers(codegen, width):
     assert int(get_element_size_constant(codegen, llvm_type).constant) == (
         calculate_llvm_type_size(llvm_type)
     )
+
+
+def test_all_three_size_authorities_agree(codegen):
+    """There are THREE places that answer "how big is this", and they must not drift.
+
+    `get_element_size_constant` and `calculate_llvm_type_size` answer from the LLVM type;
+    `TypeSizing.get_type_size_bytes` answers from the semantic type. Only the first was
+    partial, but "more than one answer site" is the shape behind #239, #272, #284 and
+    #375 alike -- so the gate pins the agreement, not just the one that broke.
+    """
+    sizing = TypeSizing(StructTable(), EnumTable())
+    disagreements = []
+    for builtin, expected in PRIMITIVE_SIZES.items():
+        llvm_type = codegen.types.ll_type(builtin)
+        answers = {
+            "get_element_size_constant": int(
+                get_element_size_constant(codegen, llvm_type).constant),
+            "calculate_llvm_type_size": calculate_llvm_type_size(llvm_type),
+            "TypeSizing.get_type_size_bytes": sizing.get_type_size_bytes(builtin),
+        }
+        if set(answers.values()) != {expected}:
+            disagreements.append(f"{builtin.name}: {answers} (expected {expected})")
+    assert not disagreements, "the size authorities disagree:\n  " + "\n  ".join(disagreements)
