@@ -1,0 +1,45 @@
+# Reading the returned generic enum straight off the call, with no binding in between.
+# The declared return type is stamped RESOLVED now, so the backend reads an EnumType
+# instead of falling through to its layout heuristic (#387). Before, that heuristic
+# answered `Maybe<i32>` for a `Maybe@(string)`: `.realise()` was a CE0017 and `.expect()`
+# printed an integer where the string was -- silent wrong data.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "marvin\nmarvin\ntrue\nfalse\nford\n4\ntrue\n21\n"
+struct P:
+    i32 n
+
+perk Namer:
+    fn name() Maybe@(string)
+
+extend i32 with Namer:
+    fn name() Maybe@(string):
+        return Maybe.Some("ford")
+
+extend i32 label() Maybe@(string):
+    return Maybe.Some("marvin")
+
+extend i32 unlabelled() Maybe@(string):
+    return Maybe.None()
+
+extend i32 halved() Maybe@(i32):
+    return Maybe.Some(self / 2)
+
+extend i32 boxed() Maybe@(P):
+    return Maybe.Some(P(self * 3))
+
+fn run_test() i32:
+    println(8.label().realise("none"))
+    println(8.label().expect("boom"))
+    println("{8.label().is_some()}")
+    println("{8.unlabelled().is_some()}")
+    println(1.name().realise("none"))
+
+    println(8.halved().expect("boom"))
+    println("{8.halved().is_some()}")
+    println(7.boxed().realise(P(0)).n)
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

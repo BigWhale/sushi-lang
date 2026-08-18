@@ -1,0 +1,38 @@
+# The ARGUMENT half of #387: a generic enum constructor passed to an extension or perk
+# method. The extension arm of the method-call check validated each argument but
+# propagated the declared parameter type into none of them, so the constructor was
+# unstamped exactly as in the return position -- a CE0113. A plain function's call site
+# propagates, which is the control at the bottom.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n1\n43\n12\n41\n"
+struct Pair@(T, U):
+    T first
+    U second
+
+extend i32 pick(Maybe@(i32) m) i32:
+    return self + m.realise(0)
+
+extend i32 sum_pair(Pair@(i32, i32) p) i32:
+    return self + p.first + p.second
+
+perk Picker:
+    fn choose(Maybe@(i32) m) i32
+
+extend i32 with Picker:
+    fn choose(Maybe@(i32) m) i32:
+        return self + m.realise(1)
+
+fn plain_pick(Maybe@(i32) m) i32:
+    return Result.Ok(m.realise(0))
+
+fn run_test() i32:
+    println(1.pick(Maybe.Some(41)))
+    println(1.pick(Maybe.None()))
+    println(1.choose(Maybe.Some(42)))
+    println(2.sum_pair(Pair(4, 6)))
+    println(plain_pick(Maybe.Some(41))??)
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

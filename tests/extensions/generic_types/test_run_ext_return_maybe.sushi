@@ -1,0 +1,36 @@
+# An extension method may declare a generic ENUM as its return type (issue #387).
+# The extension arm of `validate_return_statement` propagated nothing into the returned
+# value, so the enum constructor reached the backend with no `resolved_enum_type` stamp
+# and every shape below was a CE0113 internal error.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4\n-1\n4\n-1\ntrue\nfalse\n7\n"
+extend i32 halved() Maybe@(i32):
+    return Maybe.Some(self / 2)
+
+extend i32 nothing() Maybe@(i32):
+    return Maybe.None()
+
+extend i32 safe_half() Maybe@(i32):
+    if (self % 2 != 0):
+        return Maybe.None()
+    return Maybe.Some(self / 2)
+
+# The annotated-`let` spelling always worked: the `let` arm propagates. It stays a
+# control, because it is the workaround the issue text says does not exist.
+extend i32 via_binding() Maybe@(i32):
+    let Maybe@(i32) m = Maybe.Some(self - 1)
+    return m
+
+fn run_test() i32:
+    println(8.halved().realise(0))
+    println(8.nothing().realise(-1))
+    println(8.safe_half().realise(-1))
+    println(7.safe_half().realise(-1))
+    println("{8.halved().is_some()}")
+    println("{8.nothing().is_some()}")
+    println(8.via_binding().realise(0))
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))
