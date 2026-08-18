@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 from pathlib import Path
+from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from tqdm import tqdm
@@ -102,27 +103,47 @@ def purge_unit_caches(project_root: Path, verbose: bool = False) -> None:
             shutil.rmtree(cache, ignore_errors=True)
 
 
-def leakcheck_lib_path(project_root: Path) -> Path:
-    """Path to the precompiled malloc-interposer for the current platform."""
-    plat = "darwin" if sys.platform == "darwin" else "linux"
+def leakcheck_platform() -> Optional[str]:
+    """The interposer's platform key, or None where leak checking is not supported.
+
+    Two platforms, named explicitly. Mapping "not macOS" to Linux meant an unsupported
+    platform looked for `bin/linux/leakcheck.so`, did not find it, and reported the leak
+    check as "interposer not built" -- a reason that is not the real one (#275).
+    """
+    if sys.platform == "darwin":
+        return "darwin"
+    if sys.platform.startswith("linux"):
+        return "linux"
+    return None
+
+
+def leakcheck_lib_path(project_root: Path) -> Optional[Path]:
+    """Path to the precompiled malloc-interposer, or None on an unsupported platform."""
+    plat = leakcheck_platform()
+    if plat is None:
+        return None
     ext = "dylib" if plat == "darwin" else "so"
     return project_root / "tests" / "leakcheck" / "bin" / plat / f"leakcheck.{ext}"
 
 
 def build_leakcheck(project_root: Path, verbose: bool = False) -> bool:
     """Compile the malloc-interposer the leak gate preloads (macOS + Linux)."""
+    out = leakcheck_lib_path(project_root)
+    if out is None:
+        print(f"Leak checking is not supported on {sys.platform}")
+        return False
+
     src = project_root / "tests" / "leakcheck" / "leakcheck.c"
     if not src.exists():
         print(f"Leak-check source not found: {src}")
         return False
 
-    out = leakcheck_lib_path(project_root)
     out.parent.mkdir(parents=True, exist_ok=True)
 
     if out.exists() and out.stat().st_mtime >= src.stat().st_mtime:
         return True
 
-    if sys.platform == "darwin":
+    if leakcheck_platform() == "darwin":
         cmd = ["cc", "-dynamiclib", "-O1", "-o", str(out), str(src)]
     else:
         cmd = ["cc", "-shared", "-fPIC", "-O1", "-o", str(out), str(src), "-ldl"]
