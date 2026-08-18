@@ -1,0 +1,59 @@
+# Every primitive element type across List@(T), exercising the size-dependent paths:
+# with_capacity, the growth realloc under push, the strided get, and insert/remove
+# (which memmove by element size).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "ints 30 300 30000 3000000000"
+# EXPECT_STDOUT_CONTAINS: "uints 30 300 30000 3000000000"
+# EXPECT_STDOUT_CONTAINS: "reals 3.5 3.5 flag true"
+# EXPECT_STDOUT_CONTAINS: "shifted 7 3"
+# EXPECT_NO_LEAKS: true
+
+fn run_test() i32:
+    let List@(i8) a8 = List.new()
+    a8.push(10 as i8)
+    a8.push(30 as i8)
+    let List@(i16) a16 = List.new()
+    a16.push(100 as i16)
+    a16.push(300 as i16)
+    let List@(i32) a32 = List.new()
+    a32.push(10000)
+    a32.push(30000)
+    let List@(i64) a64 = List.new()
+    a64.push(1000000000 as i64)
+    a64.push(3000000000 as i64)
+    println("ints {a8.get(1)??} {a16.get(1)??} {a32.get(1)??} {a64.get(1)??}")
+
+    let List@(u8) b8 = List.new()
+    b8.push(10 as u8)
+    b8.push(30 as u8)
+    let List@(u16) b16 = List.new()
+    b16.push(100 as u16)
+    b16.push(300 as u16)
+    let List@(u32) b32 = List.new()
+    b32.push(10000 as u32)
+    b32.push(30000 as u32)
+    let List@(u64) b64 = List.new()
+    b64.push(1000000000 as u64)
+    b64.push(3000000000 as u64)
+    println("uints {b8.get(1)??} {b16.get(1)??} {b32.get(1)??} {b64.get(1)??}")
+
+    let List@(f32) c32 = List.new()
+    c32.push(3.5)
+    let List@(f64) c64 = List.new()
+    c64.push(3.5)
+    let List@(bool) flags = List.new()
+    flags.push(true)
+    println("reals {c32.get(0)??} {c64.get(0)??} flag {flags.get(0)??}")
+
+    # insert/remove shift by element size; a wrong stride moves the wrong bytes.
+    let List@(i64) shifted = List.new()
+    shifted.push(1 as i64)
+    shifted.push(3 as i64)
+    shifted.insert(0, 7 as i64)
+    println("shifted {shifted.get(0)??} {shifted.get(2)??}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)
