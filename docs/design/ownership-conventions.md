@@ -172,7 +172,7 @@ Three, not four:
 |---|---|---|
 | **OWNED** | a registered owner in this scope | a bare `Name` bound by `let` or a by-value parameter |
 | **BORROWED** | names storage owned elsewhere, for a shorter lifetime | a `match` payload binding, a `foreach` binding, a `peek`/`poke` parameter, a `let` bound from any of these, **and every read THROUGH a still-live owner** — `s.field`, `own.get()`, `arr[i]`, `list.get(i)??` |
-| **FRESH** | nothing owns it yet | a constructor, a call result, `.clone()`, a literal, `List.pop()` (which REMOVES the element, so the container stops owning it) |
+| **FRESH** | nothing owns it yet | a constructor, a call result, `.clone()`, a literal, `arr.pop()` / `List.pop()` (which REMOVE the element, so the container stops owning it) |
 
 **`THROUGH_OWNER` merged into `BORROWED`.** The design as originally written kept these as separate
 provenances because they had different outcomes in the table (BORROWED rejected, THROUGH_OWNER

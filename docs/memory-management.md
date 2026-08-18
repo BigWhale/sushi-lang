@@ -277,7 +277,8 @@ An element can never be moved *out* of an array -- that is what the `CE2411` abo
 at every sink -- so an array owns every one of its elements for its whole life. That invariant
 is what makes both the write above and the scope-exit destructor safe: each frees an element
 that nothing else can have taken. (An element leaves only when the container *shrinks* past it,
-as `List@(T).pop()` and `List@(T).remove()` do.)
+as `arr.pop()`, `List@(T).pop()` and `List@(T).remove()` do -- each answers
+`Maybe@(T)`, because a container that has shrunk to empty has nothing to hand over.)
 
 The write must also be able to reach the owner, which is the [borrow](#references-and-borrowing)
 question rather than the ownership one: it is rejected through a `peek` parameter (`CE2408`),

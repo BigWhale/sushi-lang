@@ -114,7 +114,8 @@ it twice. So the compiler rejects the bare `crew[1] := crew[3]` with **CE2411**,
 Dynamic arrays earn their keep with a small set of methods:
 
 - `.push(x)` appends `x` to the end, growing the array if needed.
-- `.pop()` removes the last element and returns it.
+- `.pop()` removes the last element and returns it as `Maybe@(T)` — an empty array
+  answers `Maybe.None()`.
 - `.iter()` produces something you can walk over with a `foreach` loop.
 - `.clone()` makes a deep, independent copy.
 

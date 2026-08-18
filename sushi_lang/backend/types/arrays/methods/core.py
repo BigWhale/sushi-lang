@@ -130,8 +130,21 @@ def emit_dynamic_array_push(codegen: 'LLVMCodegen', array_value: ir.Value, array
 
 
 def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
-                           to_i1: bool) -> ir.Value:
-    """Emit code to remove and return the last element from a dynamic array."""
+                           element_semantic_type: 'Type', to_i1: bool) -> ir.Value:
+    """Emit code to remove the last element from a dynamic array, as `Maybe@(T)`.
+
+    A pop from an empty array has no element, so the empty branch answers `Maybe.None()`
+    and nothing has to be invented. It used to answer `Constant(element_type, 0)`: a real
+    0 for an `i32[]`, indistinguishable from a genuinely popped one -- and for an
+    AGGREGATE element not a valid initializer at all, so a `string[]` or a struct with an
+    owning field was a CE0000 before it ever ran (#377). `List@(T).pop()` already
+    answered `Maybe@(T)`, and so does `arr.get()`.
+
+    The element is REMOVED, so the array stops owning it and the `Maybe.Some(...)` carries
+    it out -- the opposite of `.get()`, which leaves the array as the owner.
+    """
+    from sushi_lang.backend.generics.maybe import emit_maybe_some, emit_maybe_none
+
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
 
@@ -142,7 +155,6 @@ def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value, array_
     one = ir.Constant(codegen.types.i32, 1)
     is_empty = codegen.builder.icmp_unsigned("==", current_len, zero)
 
-    element_type = array_type.elements[2].pointee
     empty_block = codegen.builder.function.append_basic_block("array_empty")
     non_empty_block = codegen.builder.function.append_basic_block("array_non_empty")
     merge_block = codegen.builder.function.append_basic_block("pop_merge")
@@ -150,7 +162,8 @@ def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value, array_
     codegen.builder.cbranch(is_empty, empty_block, non_empty_block)
 
     codegen.builder.position_at_end(empty_block)
-    zero_element = ir.Constant(element_type, 0)
+    none_result = emit_maybe_none(codegen, element_semantic_type)
+    none_pred = codegen.builder.block
     codegen.builder.branch(merge_block)
 
     codegen.builder.position_at_end(non_empty_block)
@@ -163,14 +176,16 @@ def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value, array_
     new_len = codegen.builder.sub(current_len, one, name="new_len")
     codegen.builder.store(new_len, len_ptr)
 
+    some_result = emit_maybe_some(codegen, element_semantic_type, popped_element)
+    some_pred = codegen.builder.block
     codegen.builder.branch(merge_block)
 
     codegen.builder.position_at_end(merge_block)
-    result_phi = codegen.builder.phi(element_type, name="pop_result")
-    result_phi.add_incoming(zero_element, empty_block)
-    result_phi.add_incoming(popped_element, non_empty_block)
+    result_phi = codegen.builder.phi(some_result.type, name="pop_result")
+    result_phi.add_incoming(none_result, none_pred)
+    result_phi.add_incoming(some_result, some_pred)
 
-    return codegen.utils.as_i1(result_phi) if to_i1 else result_phi
+    return result_phi
 
 
 def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,

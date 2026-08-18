@@ -23,12 +23,12 @@ fn run_test() i32:
   print(numbers.capacity()) # Should be >= 3
 
   # Pop elements
-  let i32 popped = numbers.pop()
+  let i32 popped = numbers.pop().realise(-1)
   print(popped)             # Should print 30
   print(numbers.len())      # Should print 2
 
   # Pop again
-  let i32 second_popped = numbers.pop()
+  let i32 second_popped = numbers.pop().realise(-1)
   print(second_popped)      # Should print 20
   print(numbers.len())      # Should print 1
 

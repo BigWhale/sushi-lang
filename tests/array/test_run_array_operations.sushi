@@ -33,7 +33,7 @@ fn run_test() i32:
     validation_count := validation_count + 1
 
   # Test pop operation
-  let i32 popped = dynamic.pop()
+  let i32 popped = dynamic.pop().realise(-1)
   if (popped == 300 and dynamic.len() == 2):
     validation_count := validation_count + 1
 

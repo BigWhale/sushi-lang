@@ -26,7 +26,7 @@ fn run_test() i32:
   print(flags.push(false))  # Push returns void (0)
   print(flags.push(true))   # Push returns void (0)
 
-  let bool middle = flags.pop()  # Should be true
+  let bool middle = flags.pop().realise(false)  # Should be true
   print(middle)
   print(flags.len())        # Should print 2
 

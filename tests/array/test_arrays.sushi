@@ -29,7 +29,7 @@ fn run_test() i32:
     println("Second element: {second}")
 
     # Test pop
-    let i32 last = numbers.pop()
+    let i32 last = numbers.pop().realise(-1)
     println("Popped: {last}")
     println("Length after pop: {numbers.len()}")
 

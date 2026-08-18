@@ -15,13 +15,14 @@ fn main() i32:
     let u8[] single = new()
     single.push(65 as u8)  # 'A'
     println("Single length: {single.len()}")  # Should be 1
-    let u8 val = single.pop()
+    let u8 val = single.pop().realise(0 as u8)
     println("Popped value: {val}")  # Should be 65
     println("After pop length: {single.len()}")  # Should be 0
 
-    # Test 3: Pop from empty (should return 0)
-    let u8 empty_pop = single.pop()
-    println("Pop from empty: {empty_pop}")  # Should be 0
+    # Test 3: Pop from empty is Maybe.None() -- it used to invent a zero, which an
+    # i32[] could not tell from a genuinely popped 0 (#377).
+    let bool empty_pop = single.pop().is_none()
+    println("Pop from empty: {empty_pop}")  # Should be true
 
     # Test 4: Large array growth
     let u8[] large = new()

@@ -141,7 +141,10 @@ def emit_array_method(
             return core.emit_dynamic_array_push(codegen, receiver_value, array_struct_type, element_value)
 
         case "pop":
-            return core.emit_dynamic_array_pop(codegen, receiver_value, array_struct_type, to_i1)
+            if not isinstance(semantic_type, DynamicArrayType):
+                raise_internal_error("CE0042", type=type(semantic_type).__name__)
+            return core.emit_dynamic_array_pop(codegen, receiver_value, array_struct_type,
+                                               semantic_type.base_type, to_i1)
 
         case "free":
             if isinstance(semantic_type, DynamicArrayType):
