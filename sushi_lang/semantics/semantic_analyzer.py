@@ -272,6 +272,8 @@ class SemanticAnalyzer:
             self.generic_extensions.by_type,
             struct_instantiations,
             concrete_structs,
+            enum_instantiations,
+            concrete_enums,
             substitutor=monomorphizer.substitutor,
         )
 
