@@ -1,0 +1,18 @@
+# The method name is NOT a variant of the shadowed enum, which used to be a false
+# CE2045 naming an enum the user did not write (issue #296).
+# EXPECT_STDOUT_EXACT: "14\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+enum Color:
+    Red
+
+struct Holder:
+    i32 v
+
+extend Holder Green() i32:
+    return self.v * 2
+
+fn main() i32:
+    let Holder Color = Holder(7)
+    println(Color.Green())
+    return Result.Ok(0)

@@ -1,0 +1,15 @@
+# A field read through the shadowing local, which used to be a CE0034 ICE
+# ("variant 'v' not found in enum 'Color'") -- the same defect as issue #296.
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+enum Color:
+    Red
+
+struct Holder:
+    i32 v
+
+fn main() i32:
+    let Holder Color = Holder(7)
+    println(Color.v)
+    return Result.Ok(0)

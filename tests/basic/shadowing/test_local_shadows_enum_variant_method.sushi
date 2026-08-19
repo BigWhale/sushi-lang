@@ -1,0 +1,18 @@
+# A local named after an enum wins over the enum (issue #296). The method name is
+# also a VARIANT of the shadowed enum, which used to be a CE0017 ICE.
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+enum Color:
+    Red
+
+struct Holder:
+    i32 v
+
+extend Holder Red() i32:
+    return self.v
+
+fn main() i32:
+    let Holder Color = Holder(7)
+    println(Color.Red())
+    return Result.Ok(0)

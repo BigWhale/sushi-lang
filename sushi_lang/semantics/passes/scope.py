@@ -120,10 +120,12 @@ class ScopeAnalyzer:
             return True
         if self._is_math_constant(name):
             return True
-        if name in self.enums.by_name or name in self.generic_enums.by_name:
-            return True
+        # Local-wins: a bound local shadows an enum name, a constant and a function
+        # name alike (#296) -- the same rule the EnumConstructor arm applies.
         if self._is_bound_local(name):
             return False
+        if name in self.enums.by_name or name in self.generic_enums.by_name:
+            return True
         return name in self.constants.by_name or name in self.function_names
 
     def _use_variable(self, name: str, usage_span: Optional[Span] = None, is_rebind: bool = False) -> None:
@@ -449,7 +451,11 @@ class ScopeAnalyzer:
                 # Otherwise, it's a method call
                 if isinstance(expr.receiver, Name):
                     receiver_name = expr.receiver.id
-                    if self._is_external_namespace(receiver_name):
+                    # Local-wins (#296): a bound local shadows an enum or generic-struct
+                    # name, so the receiver is a variable use.
+                    if self._is_bound_local(receiver_name):
+                        self._check_expression(expr.receiver)
+                    elif self._is_external_namespace(receiver_name):
                         pass
                     elif receiver_name in self.enums.by_name or receiver_name in self.generic_enums.by_name:
                         pass

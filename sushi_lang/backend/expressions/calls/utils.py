@@ -322,7 +322,9 @@ def _infer_enum_construction_type(codegen: 'LLVMCodegen', receiver: Expr) -> Opt
     # So ask the question this function is named for: `Ok` is a variant, `realise` is not.
     enum_type = getattr(receiver, 'resolved_enum_type', None)
     if enum_type is None and isinstance(receiver.receiver, Name):
-        enum_type = codegen.enum_table.by_name.get(receiver.receiver.id)
+        # Local-wins (#296): a local named after the enum shadows it.
+        if codegen.memory.find_semantic_type(receiver.receiver.id) is None:
+            enum_type = codegen.enum_table.by_name.get(receiver.receiver.id)
     if enum_type is None:
         return None
 
