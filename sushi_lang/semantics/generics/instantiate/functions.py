@@ -43,11 +43,11 @@ class FunctionCollector:
     def _bind_self(self, target_type) -> None:
         """Bind `self` to the receiver type, mirroring Pass 2 (signatures.py)."""
         from sushi_lang.semantics.typesys import (
-            BuiltinType, ArrayType, DynamicArrayType, StructType, UnknownType,
+            BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType, UnknownType,
         )
         if target_type is None:
             return
-        if isinstance(target_type, (BuiltinType, ArrayType, DynamicArrayType, StructType)):
+        if isinstance(target_type, (BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType)):
             self.variable_types["self"] = target_type
         elif isinstance(target_type, UnknownType):
             from sushi_lang.semantics.type_resolution import resolve_unknown_type

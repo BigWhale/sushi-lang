@@ -1,0 +1,25 @@
+# The enum twin of #392: the generic call's argument is `self` itself, so the
+# type argument is the monomorphized enum -- known only per instantiation.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7\n7\n"
+enum Wrap@(T):
+    Full(T)
+    Empty
+
+fn tag@(U)(U x) i32:
+    return Result.Ok(((x.hash() as i32) * 0) + 7)
+
+extend Wrap@(T) tagged() i32:
+    return tag(self).realise(0)
+
+fn run_test() i32:
+    let Wrap@(i32) w = Wrap.Full(3)
+    println(w.tagged())
+    let Wrap@(string) s = Wrap.Full("marvin")
+    println(s.tagged())
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

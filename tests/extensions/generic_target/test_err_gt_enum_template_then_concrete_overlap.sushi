@@ -1,0 +1,22 @@
+# A template plus a concrete instantiation of one method name is the overlap #393
+# rejects -- the same fence must hold for an ENUM target (#394).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE0101
+# EXPECT_STDERR_CONTAINS: "extension method 'tag' for 'Wrap@(i32)'"
+enum Wrap@(T):
+    Full(T)
+    Empty
+
+extend Wrap@(T) tag() i32:
+    return 0
+
+extend Wrap@(i32) tag() i32:
+    return 1
+
+fn run_test() i32:
+    let Wrap@(i32) n = Wrap.Full(7)
+    println(n.tag())
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))
