@@ -115,8 +115,12 @@ def resolve_fn_field_call(type_validator, node) -> Optional["Type"]:
     if type_validator.extension_table.get_method(recv_ty, node.method) is not None:
         return None
     if '<' in recv_ty.name:
+        # A method wins over a same-named fn-typed field only if it APPLIES to this
+        # instantiation: `extend Box@(i32) handler()` leaves a `Box@(string)`'s field alone
+        # (#393).
         base_name = recv_ty.name.split('<')[0]
-        if type_validator.generic_extension_table.get_method(base_name, node.method) is not None:
+        if type_validator.generic_extension_table.find_applicable(
+                base_name, node.method, recv_ty.name) is not None:
             return None
     return field_ty
 

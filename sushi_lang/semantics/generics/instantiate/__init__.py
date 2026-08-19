@@ -140,6 +140,7 @@ class InstantiationCollector:
         the program plainly declares.
         """
         from sushi_lang.semantics.generics.types import GenericTypeRef, substitute_type_params
+        from sushi_lang.semantics.generics.extension_targets import target_shape_of
 
         function_collector = self._build_function_collector()
 
@@ -150,6 +151,18 @@ class InstantiationCollector:
                 for ext in getattr(program, "generic_extensions", None) or ():
                     target = ext.target_type
                     if not isinstance(target, GenericTypeRef):
+                        continue
+
+                    shape = target_shape_of(ext)
+                    if shape is not None and shape.is_concrete:
+                        # A concrete target names its types outright, so its signature needs
+                        # no instantiation to be read -- and reading it per instantiation of
+                        # the base name would substitute `Box@(Point)`'s `Point` away (#393).
+                        for declared in (ext.ret, *(p.ty for p in ext.params)):
+                            if declared is not None:
+                                function_collector._collect_from_type(declared)
+                        function_collector._reset_scope()
+                        function_collector._collect_from_block(ext.body)
                         continue
 
                     param_names = [str(arg) for arg in target.type_args]

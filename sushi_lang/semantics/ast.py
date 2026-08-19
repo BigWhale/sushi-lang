@@ -1,10 +1,13 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union, Literal
+from typing import List, Optional, Tuple, Union, Literal, TYPE_CHECKING
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.typesys import Type
 
 from lark import Token
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
 
 
 @dataclass
@@ -144,6 +147,9 @@ class ExtendDef(Node):
     ret_span: Optional[Span] = None
     self_mode: Optional[str] = None  # "peek"/"poke" when declared `(poke self, ...)` (#327);
     self_mode_span: Optional[Span] = None
+    # What a `@(...)` target's arguments mean: a constraint, parameter names, or a mix.
+    # Stamped by Phase 0, which is the pass that knows which names are declared types (#393).
+    target_shape: Optional["ExtensionTarget"] = None
 
 @dataclass
 class PerkMethodSignature:

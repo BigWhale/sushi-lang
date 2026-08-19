@@ -199,6 +199,32 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   emit into two functions at once
 
 ### Fixed
+- **A concrete type argument in an extension target now CONSTRAINS** (#393; the ruling and the
+  mechanism are in `docs/design/method-resolution.md`). `extend Box@(i32)` applies to
+  `Box@(i32)` and to nothing else, exactly as a perk implementation on the same target already
+  did. The argument was stored as a type-parameter NAME and substituted positionally, so the
+  method registered for every instantiation of the base type: `extend Box@(i32) tag()` answered
+  a `Box@(string)` receiver and printed its answer, and the same declaration with
+  `self.value * 2` in the body was a `CE0000` on that receiver. Four consequences, all user
+  visible:
+  - **Two fully-concrete targets are two methods**, so one method name serves both.
+    `extend Box@(i32) tag()` beside `extend Box@(string) tag()` used to be a false `CE0101`,
+    because both were one template for a single `(base name, method)` slot
+  - **A template plus a concrete target for one name is rejected** (`CE0101`, relational, either
+    declaration order). Sushi has no specialization: an unreachable declaration is a diagnostic
+    (`CE2097`'s rule), and under most-specific-wins whether the template's body is dead code
+    would depend on which instantiations exist elsewhere in the program. The escape is a perk
+    implementation on the concrete target
+  - **A partially-concrete target is `CE2098`** (`extend Pair@(i32, U)`). It used to compile and
+    run. Rejecting it is what keeps a specificity-ordering rule from ever being needed
+  - **The diagnostic names the target it turns on** -- `extension method 'tag' for 'Box@(i32)'`,
+    where it used to elide the arguments as `Box@(...)`
+  Found by the test batch, and fixed here too: **a perk implementation on a concrete generic
+  target with more than one argument never registered.** The perk-impl table built the target
+  name itself and joined the arguments on `','` where the interned type name joins on `', '`, so
+  `extend Pair@(i32, string) with Tagger` registered under `Pair<i32,string>` while the receiver
+  resolved to `Pair<i32, string>` -- every call was `CE2008 undefined function`. The
+  single-argument case matched by coincidence, which is what hid it
 - **A dynamic array or a `List@(T)` of `i16`/`i64`/`u16`/`u64` was a `CE0079` internal error**
   (#375). `get_element_size_constant` was a hand-written chain of `==` comparisons naming i32,
   i8, pointer, float, double and struct -- and no other integer width -- so eight ordinary

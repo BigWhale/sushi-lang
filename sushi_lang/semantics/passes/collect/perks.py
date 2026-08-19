@@ -120,9 +120,15 @@ def _get_type_name(ty: Optional[Type]) -> Optional[str]:
     if isinstance(ty, EnumType):
         return ty.name
 
+    # A generic target is keyed by the instantiation it names, so it must mangle the way the
+    # type table does. This built the name itself and joined on ',' where the interned name
+    # joins on ', ': `extend Pair@(i32, string) with P` registered under `Pair<i32,string>`
+    # while the receiver resolved to `Pair<i32, string>`, so every call was CE2008 -- the
+    # single-argument case worked, which is what hid it. One authority for the name (#393).
+    from sushi_lang.semantics.generics.extension_targets import instantiation_key
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(ty, GenericTypeRef):
-        return f"{ty.base_name}<{','.join(str(arg) for arg in ty.type_args)}>"
+        return instantiation_key(ty.base_name, tuple(ty.type_args))
 
     return str(ty)
 

@@ -148,6 +148,56 @@ It keys on whether a built-in genuinely exists for that pair, never on the bare 
 so a type that carries no such built-in (a struct the compiler could not derive `hash` for, say)
 can still be extended with a `hash()` of its own.
 
+## Which types an extension applies TO
+
+A separate question from precedence, and settled by the same principle. Status: **decided**,
+issue #393.
+
+> **A concrete type argument in an extension target is a CONSTRAINT, not a type-parameter
+> name.** `extend Box@(i32)` applies to `Box@(i32)` and to nothing else.
+
+| declaration | applies to |
+|---|---|
+| `extend Box@(T) f()` -- fully generic | every instantiation of `Box` |
+| `extend Box@(i32) f()` -- fully concrete | `Box@(i32)` only |
+| `extend Box@(i32) f()` **and** `extend Box@(string) f()` | legal -- two types, two methods |
+| `extend Box@(T) f()` **and** `extend Box@(i32) f()` | **rejected** -- `CE0101`, relational |
+| `extend Pair@(i32, U) f()` -- partially concrete | **rejected** -- `CE2098` |
+
+The argument used to be stored as a type-parameter *name*, so `extend Box@(i32) tag()`
+registered for every instantiation of `Box`: it answered a `Box@(string)` receiver, and it was
+a `CE0000` as soon as the body touched the type. A perk implementation on the same target had
+always scoped correctly -- one question, two answer sites, which is the #239 class exactly.
+
+**Why the overlap is rejected rather than resolved by most-specific-wins.** Under
+specialization, whether the template's body is dead code would depend on which instantiations
+exist ELSEWHERE in the program: with only `Box@(string)` live the template method is compiled
+and never called, and one `Box@(i32)` anywhere makes it live again. That is a reachability rule
+keyed on the rest of the program, and `CE2097` above is built on the opposite rule -- an
+unreachable declaration is a diagnostic. Rejecting is also forward-compatible: an error can
+become working code later, while removing specialization later breaks programs.
+
+**Why the partial form is rejected too.** It removes the ordering question entirely. Two fully
+concrete targets cannot overlap, and template-versus-concrete is strictly ordered, so
+`Pair@(i32, U)` against `Pair@(T, string)` -- equally specific, neither more so -- cannot
+arise. Partial ordering is where Rust's specialization has stalled for years. Rust and Haskell
+reject overlap unless you opt in (`E0592`; `{-# OVERLAPPING #-}`); C++, C#, Swift and Kotlin
+allow it and pay for a formal specificity ordering.
+
+**The escape** is a perk implementation on the concrete target, which already outranks
+extension methods in the ladder above and already scopes correctly.
+
+**Where the rule lives.** The classification is decided ONCE, in Phase 0
+(`semantics/generics/extension_targets.py:classify_extension_target`), because that is the
+pass whose struct and enum tables say which bare names are declared types -- `Box@(T)` and
+`Box@(Point)` are spelled identically and mean opposite things. The answer is carried on the
+declaration (`ExtendDef.target_shape`) and on its collected signature
+(`GenericExtensionMethod.target_key`), so Pass 1.5 and Pass 1.6 read it instead of deciding
+again from a different set of visible types. `instantiation_key` is the one authority for the
+mangled name a concrete target matches; the perk-impl table built its own and joined the
+arguments differently, so a two-argument concrete target registered under a name no receiver
+ever resolved to.
+
 ## Related
 
 - `docs/design/closures.md` -- the same rule stated for `List@(T)` extension methods

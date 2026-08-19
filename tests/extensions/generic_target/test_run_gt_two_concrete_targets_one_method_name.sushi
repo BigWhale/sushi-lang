@@ -1,0 +1,28 @@
+# Two fully-concrete targets are two methods on two different types, so one method NAME
+# serves both (#393). Both declarations used to be templates for one `(base name, method)`
+# slot, so the second was rejected as a duplicate function -- and the message elided the
+# arguments as `Box@(...)` because the table had nowhere to put them.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "70\n6\n"
+use <collections/strings>
+
+struct Box@(T):
+    T value
+
+extend Box@(i32) tag() i32:
+    return self.value * 10
+
+extend Box@(string) tag() i32:
+    return self.value.len()
+
+fn run_test() i32:
+    let Box@(i32) n = Box(7)
+    println(n.tag())
+    let Box@(string) s = Box("marvin")
+    println(s.tag())
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

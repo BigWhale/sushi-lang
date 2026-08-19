@@ -1,0 +1,20 @@
+# Two declarations of one method name on the SAME fully-concrete target are a genuine
+# duplicate, and stay rejected (#393). The distinction from the legal case is the argument
+# list, so the diagnostic has to render it: `Box@(i32)`, not the elided `Box@(...)` that
+# could not tell this apart from `extend Box@(string) tag()`.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE0101
+# EXPECT_STDERR_CONTAINS: "extension method 'tag' for 'Box@(i32)'"
+struct Box@(T):
+    T value
+
+extend Box@(i32) tag() i32:
+    return 1
+
+extend Box@(i32) tag() i32:
+    return 2
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println(b.tag())
+    return Result.Ok(0)

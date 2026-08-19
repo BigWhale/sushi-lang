@@ -1,0 +1,28 @@
+# Two two-argument concrete targets that differ only in the ORDER of their arguments (#393).
+# The match is per type argument, not on the base name, so `Pair@(i32, string)` and
+# `Pair@(string, i32)` are two different types and one method name serves both. Both used to
+# be one template for `Pair`, so the second declaration was a duplicate function and the
+# first answered whichever instantiation asked.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "one\ntwo\n"
+struct Pair@(A, B):
+    A first
+    B second
+
+extend Pair@(i32, string) label() string:
+    return self.second.clone()
+
+extend Pair@(string, i32) label() string:
+    return self.first.clone()
+
+fn run_test() i32:
+    let Pair@(i32, string) a = Pair(1, "one")
+    println(a.label())
+    let Pair@(string, i32) b = Pair("two", 2)
+    println(b.label())
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

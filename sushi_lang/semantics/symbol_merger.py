@@ -48,12 +48,17 @@ class SymbolTableMerger:
 
     @staticmethod
     def _merge_by_type(unit_table, global_table) -> None:
-        """Merge a type-keyed table of per-method dicts (extension methods)."""
+        """Merge a type-keyed table of per-method dicts (extension methods).
+
+        The inner key is opaque here: a method name for a plain target, and a (method,
+        target key) pair for a generic one, where the target key is what tells
+        `extend Box@(i32)` from `extend Box@(string)` (#393).
+        """
         for type_name, methods in unit_table.by_type.items():
             target = global_table.by_type.setdefault(type_name, {})
-            for method_name, method in methods.items():
-                if method_name not in target:
-                    target[method_name] = method
+            for key, method in methods.items():
+                if key not in target:
+                    target[key] = method
 
     def _merge_perk_impls(
         self,
