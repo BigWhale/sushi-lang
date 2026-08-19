@@ -94,7 +94,7 @@ def validate_extension_method(self, ext: ExtendDef) -> None:
     # `peek self` receiver (#327) registers its full ReferenceType, so every consumer
     # that asks "is this name a borrow?" answers truthfully and inference auto-derefs.
     self_type = None
-    if isinstance(ext.target_type, (BuiltinType, ArrayType, DynamicArrayType, StructType)):
+    if isinstance(ext.target_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
         self_type = ext.target_type
     elif isinstance(ext.target_type, UnknownType):
         resolved_type = resolve_unknown_type(ext.target_type, self.struct_table.by_name, self.enum_table.by_name)
@@ -144,7 +144,7 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
 
         # Add 'self' parameter with target type (ReferenceType for `poke self`, #327)
         self_type = None
-        if isinstance(impl.target_type, (BuiltinType, ArrayType, DynamicArrayType, StructType)):
+        if isinstance(impl.target_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
             self_type = impl.target_type
         elif isinstance(impl.target_type, UnknownType):
             resolved_type = resolve_unknown_type(impl.target_type, self.struct_table.by_name, self.enum_table.by_name)

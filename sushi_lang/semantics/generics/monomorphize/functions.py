@@ -8,7 +8,7 @@ from sushi_lang.semantics.generics.types import TypePack
 from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Block, Call, FuncDef
+    from sushi_lang.semantics.ast import Block, Call, ExtendDef, FuncDef
     from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 
 
@@ -240,8 +240,6 @@ class FunctionMonomorphizer:
         """Scan function body for calls to other generic functions and recursively monomorphize
         them.
         """
-        from sushi_lang.semantics.ast import Let, ExprStmt, Return, If, While, Match, Foreach, Block
-
         var_types = {}
         for param in generic_func.params:
             if param.ty:
@@ -252,13 +250,43 @@ class FunctionMonomorphizer:
                 concrete_ty = self.monomorphizer.substitutor.substitute_type(param.ty, substitution)
                 var_types[param.name] = concrete_ty
 
-        from sushi_lang.semantics.ast import Lambda
+        self._collect_block_instantiations(body, substitution, var_types)
+
+    def collect_from_extension_body(self, extend_def: 'ExtendDef') -> Set[Tuple[str, Tuple[Type, ...]]]:
+        """Function instantiations in one MONOMORPHIZED extension body (#392).
+
+        A generic call whose argument types come from `self` is knowable only here: the
+        template spells the receiver's type parameter, and the substituted copy is the
+        first body in which `self.value` has a concrete type. The body is already
+        substituted, so the walk runs with an empty substitution and `self` bound to the
+        concrete target.
+        """
+        var_types: Dict[str, Type] = {"self": extend_def.target_type}
+        for param in extend_def.params:
+            if param.ty is not None:
+                var_types[param.name] = param.ty
+
+        saved = getattr(self.monomorphizer, 'pending_instantiations', None)
+        self.monomorphizer.pending_instantiations = set()
+        self._collect_block_instantiations(extend_def.body, {}, var_types)
+        found = self.monomorphizer.pending_instantiations
+        self.monomorphizer.pending_instantiations = saved if saved is not None else set()
+        return found
+
+    def _collect_block_instantiations(
+        self,
+        body: 'Block',
+        substitution: Dict[str, "Type | TypePack"],
+        var_types: Dict[str, Type],
+    ) -> None:
+        """The statement walk shared by function bodies and extension bodies."""
+        from sushi_lang.semantics.ast import Let, ExprStmt, Return, If, While, Match, Foreach, Block, Lambda
 
         for stmt in body.statements:
             if isinstance(stmt, Let) and stmt.value:
                 self._collect_from_expr(stmt.value, substitution, var_types)
                 if isinstance(stmt.value, Lambda) and stmt.value.is_block_body:
-                    self._collect_nested_instantiations(stmt.value.body, substitution, generic_func)
+                    self._collect_block_instantiations(stmt.value.body, substitution, var_types)
             elif isinstance(stmt, ExprStmt):
                 self._collect_from_expr(stmt.expr, substitution, var_types)
             elif isinstance(stmt, Return) and stmt.value:
@@ -266,23 +294,23 @@ class FunctionMonomorphizer:
             elif isinstance(stmt, If):
                 for cond, block in stmt.arms:
                     self._collect_from_expr(cond, substitution, var_types)
-                    self._collect_nested_instantiations(block, substitution, generic_func)
+                    self._collect_block_instantiations(block, substitution, var_types)
                 if stmt.else_block:
-                    self._collect_nested_instantiations(stmt.else_block, substitution, generic_func)
+                    self._collect_block_instantiations(stmt.else_block, substitution, var_types)
             elif isinstance(stmt, While):
                 if stmt.cond:
                     self._collect_from_expr(stmt.cond, substitution, var_types)
-                self._collect_nested_instantiations(stmt.body, substitution, generic_func)
+                self._collect_block_instantiations(stmt.body, substitution, var_types)
             elif isinstance(stmt, Foreach):
                 if stmt.iterable:
                     self._collect_from_expr(stmt.iterable, substitution, var_types)
-                self._collect_nested_instantiations(stmt.body, substitution, generic_func)
+                self._collect_block_instantiations(stmt.body, substitution, var_types)
             elif isinstance(stmt, Match):
                 if stmt.scrutinee:
                     self._collect_from_expr(stmt.scrutinee, substitution, var_types)
                 for arm in stmt.arms:
                     if isinstance(arm.body, Block):
-                        self._collect_nested_instantiations(arm.body, substitution, generic_func)
+                        self._collect_block_instantiations(arm.body, substitution, var_types)
 
     def _collect_from_expr(self, expr, substitution: Dict[str, "Type | TypePack"], var_types: Dict[str, Type]) -> None:
         """Recursively scan expression for generic function calls."""

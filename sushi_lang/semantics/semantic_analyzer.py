@@ -234,6 +234,27 @@ class SemanticAnalyzer:
             self.structs.by_name[struct_name] = struct_type
             self.structs.order.append(struct_name)
 
+        # Pass 1.6 (cont.): extensions on generic targets, BEFORE Pass 1.7/1.8. A generic
+        # call in a substituted body has its argument types only now -- they come from
+        # `self` (#392) -- and what the second function round below interns must still
+        # receive field resolution (1.7) and hash/clone derivation (1.8). The extension
+        # TABLE merge and the CE2097 check stay after 1.8, where their placement is
+        # load-bearing.
+        concrete_extension_defs = monomorphize_all_extension_methods(
+            self.generic_extensions.by_type,
+            struct_instantiations,
+            concrete_structs,
+            enum_instantiations,
+            concrete_enums,
+            substitutor=monomorphizer.substitutor,
+        )
+
+        extension_fn_instantiations = set()
+        for extend_def in concrete_extension_defs.values():
+            extension_fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
+        if extension_fn_instantiations:
+            monomorphizer.monomorphize_all_functions(extension_fn_instantiations, compilation_order)
+
         # Pass 1.7: AFTER monomorphization, so every struct/enum exists in the tables.
         from sushi_lang.semantics.passes.ast_transform import resolve_struct_field_types, resolve_enum_variant_types
         resolve_struct_field_types(self.structs, self.enums)
@@ -267,15 +288,6 @@ class SemanticAnalyzer:
             register_struct_clone_method(struct_type)
         for enum_type in self.enums.by_name.values():
             register_enum_clone_method(enum_type)
-
-        concrete_extension_defs = monomorphize_all_extension_methods(
-            self.generic_extensions.by_type,
-            struct_instantiations,
-            concrete_structs,
-            enum_instantiations,
-            concrete_enums,
-            substitutor=monomorphizer.substitutor,
-        )
 
         for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
             self.monomorphized_extensions.append(extend_def)

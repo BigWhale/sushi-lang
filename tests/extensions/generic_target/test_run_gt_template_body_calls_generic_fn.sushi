@@ -1,0 +1,34 @@
+# A generic function called from a TEMPLATE-target extension body, with the
+# argument's type coming from `self` (#392). The instantiation is known only at
+# Pass 1.6, when the body is substituted per instantiation -- so collection has
+# to read each monomorphized copy, not the template.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7\n7\n8\n8\n"
+struct Box@(T):
+    T value
+
+fn tag@(U)(U x) i32:
+    return Result.Ok(((x.hash() as i32) * 0) + 7)
+
+fn outer@(U)(U x) i32:
+    return Result.Ok(tag(x).realise(0) + 1)
+
+extend Box@(T) tagged() i32:
+    return tag(self.value).realise(0)
+
+extend Box@(T) chained() i32:
+    return outer(self.value).realise(0)
+
+fn run_test() i32:
+    let Box@(i32) n = Box(5)
+    let Box@(string) s = Box("five")
+    println(n.tagged())
+    println(s.tagged())
+    println(n.chained())
+    println(s.chained())
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

@@ -159,3 +159,7 @@ class Monomorphizer:
         self.function_monomorphizer.monomorphize_all_functions(
             function_instantiations, program_or_units
         )
+
+    def collect_from_extension_body(self, extend_def) -> Set[Tuple[str, Tuple[Type, ...]]]:
+        """Function instantiations in one monomorphized extension body (#392)."""
+        return self.function_monomorphizer.collect_from_extension_body(extend_def)
