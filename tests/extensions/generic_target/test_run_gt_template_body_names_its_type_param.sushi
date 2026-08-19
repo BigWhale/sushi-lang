@@ -1,0 +1,44 @@
+# A template's BODY may name its type parameter now: the body is substituted per
+# instantiation instead of being shared verbatim, so `let List@(T)` becomes `let
+# List@(i32)` in one copy and `let List@(string)` in the other (#391). It used to reach
+# Pass 2 as written and report CE2001 unknown type 'T'.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1\n1\n7\nford\n2\n"
+struct Box@(T):
+    T value
+
+extend Box@(T) counted() i32:
+    let List@(T) out = List.new()
+    out.push(self.value.clone())
+    let i32 n = out.len()
+    out.destroy()
+    return n
+
+extend Box@(T) held() T:
+    let Own@(T) o = Own.alloc(self.value.clone())
+    let T v = o.get().clone()
+    o.destroy()
+    return v
+
+extend Box@(T) maybe_len() i32:
+    let Maybe@(T) m = Maybe.Some(self.value.clone())
+    if (m.is_some()):
+        return 2
+    return 0
+
+fn run_test() i32:
+    let Box@(i32) n = Box(7)
+    println(n.counted())
+
+    let Box@(string) s = Box("ford")
+    println(s.counted())
+
+    println(n.held())
+    println(s.held())
+    println(n.maybe_len())
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

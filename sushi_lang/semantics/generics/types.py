@@ -180,18 +180,16 @@ def substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
     A NAMED type (StructType/EnumType) is terminal: its interned name already IS
     (declaration, type arguments), so there is nothing left to substitute (#240).
 
-    **It does NOT substitute an `UnknownType`, and that is deliberate.** A type parameter
-    written inside a generic type reaches a declared position spelled as an UnknownType
-    (the collect pass converts only a TOP-LEVEL one to a `TypeParameter`), so adding that
-    arm is what would let `extend Box@(T) f() Maybe@(T)` monomorphize its signature -- and
-    every instantiation of a generic-target extension SHARES one body AST, so the second
-    instantiation of such a method emits a function whose stamps belong to the first.
-    The arm belongs with the per-instantiation body work, not ahead of it (#389, #390).
+    Two arms carry #389, and each was missing from one of the two copies this replaces. A
+    type parameter reaches a DECLARED position spelled as an **UnknownType** -- the collect
+    pass converts only a TOP-LEVEL one to a `TypeParameter` -- and it is usually nested
+    inside a **GenericTypeRef**, so `Maybe@(T)` in a generic-target extension's signature
+    used to survive monomorphization untouched and report CE2001 on `T`.
     """
     from sushi_lang.semantics.typesys import (PointerType, ArrayType, DynamicArrayType,
-                                              ReferenceType, FunctionType)
+                                              ReferenceType, FunctionType, UnknownType)
 
-    if isinstance(ty, TypeParameter):
+    if isinstance(ty, (TypeParameter, UnknownType)):
         return substitution.get(ty.name, ty)
 
     elif isinstance(ty, GenericTypeRef):

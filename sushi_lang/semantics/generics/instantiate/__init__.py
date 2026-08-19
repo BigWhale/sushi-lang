@@ -140,11 +140,8 @@ class InstantiationCollector:
         the program plainly declares.
         """
         from sushi_lang.semantics.generics.types import GenericTypeRef, substitute_type_params
-        from sushi_lang.semantics.type_predicates import is_abstract_type as _is_abstract_arg
 
         function_collector = self._build_function_collector()
-        structs = self.struct_table or {}
-        enums = self.enum_table or {}
 
         for _round in range(self.MAX_EXPANSION_ROUNDS):
             before = len(self.instantiations)
@@ -153,16 +150,6 @@ class InstantiationCollector:
                 for ext in getattr(program, "generic_extensions", None) or ():
                     target = ext.target_type
                     if not isinstance(target, GenericTypeRef):
-                        continue
-
-                    # A TEMPLATE target (`extend Box@(T)`) is deliberately out of scope:
-                    # its instantiations SHARE one body AST, so Pass 2's and Pass 3's
-                    # per-instantiation stamps land on the same nodes and the last one
-                    # wins. Reading its signature here would make that reachable -- an
-                    # invalid-IR CE0000 for a program that reports a clean error today.
-                    # Tracked separately; the body has to be copied and re-checked per
-                    # instantiation before the template face can be answered.
-                    if any(_is_abstract_arg(arg, structs, enums) for arg in target.type_args):
                         continue
 
                     param_names = [str(arg) for arg in target.type_args]

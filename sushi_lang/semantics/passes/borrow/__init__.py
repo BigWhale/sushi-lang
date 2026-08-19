@@ -79,6 +79,11 @@ class BorrowChecker:
         for ext in program.extensions:
             self._check_extension(ext)
 
+        # The TEMPLATE, with `self` still abstract. Its per-instantiation truth is checked
+        # on the monomorphized copies instead (semantic_analyzer), because an owning field
+        # is a consume in one instantiation and a plain copy in another -- one answer
+        # cannot serve both (#391). This walk stays for what does NOT depend on the type
+        # argument, and because an UNINSTANTIATED template has no copy to be checked on.
         for ext in program.generic_extensions:
             self._check_extension(ext)
 

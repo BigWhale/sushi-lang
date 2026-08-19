@@ -1,0 +1,22 @@
+# Every instantiation of a generic-target extension used to SHARE one body AST, and Pass 3
+# checked that body once with an abstract `self` -- so an owning field handed out of it was
+# classified PLAIN and no ownership decision was stamped. `return self.value` at
+# `Box@(string)` compiled clean and the binary exited 133: a compile-clean DOUBLE FREE,
+# where the plain-target twin is correctly CE2411 (#391).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2411
+struct Box@(T):
+    T value
+
+extend Box@(T) unwrap() T:
+    return self.value
+
+fn run_test() i32:
+    let string base = "marvin"
+    let Box@(string) b = Box("{base} the robot")
+    let string out = b.unwrap()
+    println(out)
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

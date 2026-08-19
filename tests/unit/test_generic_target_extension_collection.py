@@ -98,25 +98,46 @@ def test_a_generic_target_declaration_interns_the_types_it_names(
     )
 
 
-def test_a_template_target_is_left_alone():
-    """A TEMPLATE target is out of scope, and stays out until its body is per-instantiation.
+# A TEMPLATE target reads its signature per instantiation of the target. This case used to
+# assert the OPPOSITE -- the restriction that kept a template's signature unread, because
+# every instantiation shared one body AST and the per-instantiation stamps collided on it.
+# Each instantiation owns its body now (#391), so the restriction is gone and the positive
+# case takes its place.
 
-    Every instantiation of a generic-target extension shares ONE body AST, so Pass 2's and
-    Pass 3's per-instantiation stamps land on the same nodes. Reading a template's signature
-    here would make that reachable -- an invalid-IR CE0000 in place of the clean error the
-    program gets today. This asserts the restriction on purpose: delete it in the PR that
-    gives each instantiation its own body (#390), not before.
-    """
-    from sushi_lang.semantics.generics.types import (
-        GenericTypeRef, TypeParameter, substitute_type_params,
+_TEMPLATE_CASES = [
+    ("template_return", "extend Box@(T) peeked() Maybe@(T):\n"
+                        "    return Maybe.Some(self.value.clone())\n",
+     ["Maybe<i32>", "Maybe<string>"]),
+    ("template_parameter", "extend Box@(T) plus(Maybe@(T) m) T:\n"
+                           "    return m.realise(self.value.clone())\n",
+     ["Maybe<i32>", "Maybe<string>"]),
+    ("template_nested", "extend Box@(T) wrapped() Maybe@(List@(T)):\n"
+                        "    return Maybe.Some(List.new())\n",
+     ["List<i32>", "List<string>", "Maybe<List<i32>>", "Maybe<List<string>>"]),
+]
+
+_TWO_INSTANTIATIONS = """\
+fn main() i32:
+    let Box@(i32) a = Box(1)
+    let Box@(string) b = Box("marvin")
+    return Result.Ok(0)
+"""
+
+
+@pytest.mark.parametrize("case_id,declaration,interned", _TEMPLATE_CASES,
+                         ids=[c[0] for c in _TEMPLATE_CASES])
+def test_a_template_target_interns_one_signature_per_instantiation(
+        analyze_program, case_id, declaration, interned):
+    """Both instantiations of a template intern their own signature types."""
+    analysis = analyze_program(_PRELUDE + declaration + _TWO_INSTANTIATIONS, name=case_id)
+
+    names = _interned_names(analysis)
+    missing = [name for name in interned if name not in names]
+    assert not missing, (
+        f"{case_id}: {missing} never interned. A template's signature is read once per "
+        "instantiation of its target."
     )
-    from sushi_lang.semantics.typesys import BuiltinType, UnknownType
-
-    # The spelling a type parameter has inside a generic type in a DECLARED position.
-    nested = GenericTypeRef(base_name="Maybe", type_args=(UnknownType("T"),))
-    assert substitute_type_params(nested, {"T": BuiltinType.I32}) == nested
-
-    # A top-level TypeParameter does substitute -- that is what a template's bare `T`
-    # return type uses, and it has always worked.
-    assert substitute_type_params(TypeParameter(name="T"), {"T": BuiltinType.I32}) \
-        == BuiltinType.I32
+    assert not analysis.reporter.has_errors, (
+        f"{case_id}: semantic analysis reported an error:\n"
+        + "\n".join(str(d) for d in analysis.reporter.diagnostics)
+    )

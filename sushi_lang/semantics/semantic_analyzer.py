@@ -27,6 +27,24 @@ def enum_base_names(*tables) -> set[str]:
     return names
 
 
+def _diagnostic_identity(diagnostic):
+    """What makes two diagnostics the same REPORT: everything the user reads first.
+
+    A diagnostic repeated per instantiation says one thing about one line of source, so the
+    second copy is noise. Notes are excluded from the identity deliberately -- two
+    instantiations can attach different secondary locations to the same finding, and the
+    user still wants to be told once.
+    """
+    span = diagnostic.span
+    return (
+        diagnostic.kind,
+        diagnostic.code,
+        diagnostic.message,
+        diagnostic.filename,
+        None if span is None else (span.line, span.col, span.end_line, span.end_col),
+    )
+
+
 class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
 
@@ -253,7 +271,8 @@ class SemanticAnalyzer:
         concrete_extension_defs = monomorphize_all_extension_methods(
             self.generic_extensions.by_type,
             struct_instantiations,
-            concrete_structs
+            concrete_structs,
+            substitutor=monomorphizer.substitutor,
         )
 
         for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
@@ -331,9 +350,35 @@ class SemanticAnalyzer:
             self.reporter.items.extend(unit_reporter.items)
 
         if self.monomorphized_extensions:
-            type_validator = TypeValidator(self.reporter, self.tables)
-            for extend_def in self.monomorphized_extensions:
-                type_validator._validate_extension_method(extend_def)
+            self._check_monomorphized_extensions(destroy_effects, enum_names)
+
+    def _check_monomorphized_extensions(self, destroy_effects, enum_names) -> None:
+        """Type- and borrow-check every instantiation of a generic-target extension.
+
+        This is where a generic extension's per-instantiation truth is decided: `self` is
+        concrete here, so an owning field handed out of the body is the CE2411 it is, while
+        the same body over a plain type argument stays legal (#391). The template itself is
+        walked by Pass 1 and Pass 3 for what does not depend on the type argument.
+
+        One body error would otherwise be reported once per instantiation, plus once from
+        the template -- so the run collects into its own reporter and merges what is new.
+        """
+        scratch = Reporter(source=self.reporter.source, filename=self.reporter.filename)
+        type_validator = TypeValidator(scratch, self.tables)
+        borrow_checker = BorrowChecker(scratch, destroy_effects=destroy_effects,
+                                       enum_names=enum_names, tables=self.tables)
+
+        for extend_def in self.monomorphized_extensions:
+            type_validator._validate_extension_method(extend_def)
+            borrow_checker._check_extension(extend_def)
+
+        seen = {_diagnostic_identity(d) for d in self.reporter.items}
+        for diagnostic in scratch.items:
+            identity = _diagnostic_identity(diagnostic)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            self.reporter.items.append(diagnostic)
 
     def _check_extension_shadows_builtin(self) -> None:
         """Reject an extension method that collides with a built-in (CE2097)."""
