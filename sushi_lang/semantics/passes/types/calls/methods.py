@@ -67,11 +67,15 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
                             method=call.method, expected=expected, got=got)
             return
         elif type_name == "HashMap" and call.method == "new":
-            if len(call.args) != 0:
-                from sushi_lang.semantics.generics.hashmap import is_builtin_hashmap_method
-                if is_builtin_hashmap_method(call.method):
-                    er.emit(validator.reporter, er.ERR.CE2016, call.loc,
-                            method=call.method, expected=0, got=len(call.args))
+            # The receiver is a type NAME, so the concrete HashMap type comes from the
+            # propagation stamp -- reading it is what makes the key gate reachable (#272).
+            from sushi_lang.semantics.generics.hashmap import validate_hashmap_method_with_validator
+            hashmap_type = getattr(call, 'resolved_struct_type', None)
+            if isinstance(hashmap_type, StructType) and hashmap_type.name.startswith("HashMap<"):
+                validate_hashmap_method_with_validator(call, hashmap_type, validator.reporter, validator)
+            elif len(call.args) != 0:
+                er.emit(validator.reporter, er.ERR.CE2016, call.loc,
+                        method=call.method, expected=0, got=len(call.args))
             return
 
     if receiver_type is None:

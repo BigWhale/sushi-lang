@@ -86,9 +86,18 @@ def get_hashmap_field_ptrs(codegen: Any, hashmap_ptr: ir.Value) -> HashMapFields
     )
 
 
-def get_key_hash_method(key_type: Type) -> Optional[Any]:
-    """Get the hash method for a HashMap key type, registering it on-demand if needed."""
+def get_key_hash_method(codegen: Any, key_type: Type) -> Optional[Any]:
+    """Get the hash method for a HashMap key type, registering it on-demand if needed.
+
+    A perk implementation wins, exactly as it does at the three dispatch layers
+    (docs/design/method-resolution.md) -- otherwise the map would probe with the
+    derived hash while `.hash()` answers the override.
+    """
     from sushi_lang.sushi_stdlib.src.common import get_builtin_method
+
+    perk_method = _perk_key_hash_method(codegen, key_type)
+    if perk_method is not None:
+        return perk_method
 
     hash_method = get_builtin_method(key_type, "hash")
     if hash_method is not None:
@@ -102,6 +111,37 @@ def get_key_hash_method(key_type: Type) -> Optional[Any]:
             return get_builtin_method(key_type, "hash")
 
     return None
+
+
+def _perk_key_hash_method(codegen: Any, key_type: Type) -> Optional[Any]:
+    """A BuiltinMethod-shaped adapter that calls the perk `hash` implementation."""
+    from sushi_lang.semantics.typesys import BuiltinType
+    from sushi_lang.sushi_stdlib.src.common import BuiltinMethod
+
+    if codegen.perk_impl_table.get_method(key_type, "hash") is None:
+        return None
+
+    from sushi_lang.semantics.library_templates import impl_method_symbol
+    func_name = impl_method_symbol(str(key_type), "hash")
+
+    def emit_perk_hash(codegen: Any, call: Any, receiver_value: ir.Value,
+                       receiver_ll_type: ir.Type, to_i1: bool) -> ir.Value:
+        from sushi_lang.internals.errors import raise_internal_error
+        llvm_fn = codegen.funcs.get(func_name)
+        if llvm_fn is None:
+            raise_internal_error("CE0027", method="hash", type=str(key_type))
+        param_type = list(llvm_fn.args)[0].type
+        casted = codegen.utils.cast_for_param(receiver_value, param_type)
+        return codegen.builder.call(llvm_fn, [casted])
+
+    return BuiltinMethod(
+        name="hash",
+        parameter_types=[],
+        return_type=BuiltinType.U64,
+        description="perk hash implementation used for HashMap key hashing",
+        semantic_validator=None,
+        llvm_emitter=emit_perk_hash,
+    )
 
 
 def get_user_entry_type(codegen: Any, key_type: Type, value_type: Type) -> 'ir.Type':

@@ -1,0 +1,27 @@
+# A perk hash implementation is the sanctioned override, and the map must use it
+# for its keys: the key gate accepts the type, and insert/get agree with it.
+# EXPECT_STDOUT_EXACT: "one\ntwo\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+use <collections/hashmap>
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        return (self.x * 31 + self.y) as u64
+
+fn main() i32:
+    let HashMap@(Point, string) m = HashMap.new()
+    m.insert(Point(1, 2), "one")
+    m.insert(Point(3, 4), "two")
+    println(m.get(Point(1, 2)).realise("missing"))
+    println(m.get(Point(3, 4)).realise("missing"))
+    m.free()
+    return Result.Ok(0)

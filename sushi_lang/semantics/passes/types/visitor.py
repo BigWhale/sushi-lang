@@ -446,6 +446,9 @@ class ExpressionValidator(RecursiveVisitor):
             args=node.args,
             loc=node.loc
         )
+        # The propagation stamp travels with it: the HashMap.new() key gate reads the
+        # concrete HashMap type off the call node (#272).
+        temp_method_call.resolved_struct_type = getattr(node, 'resolved_struct_type', None)
         self.type_validator._validate_method_call(temp_method_call)
 
         if hasattr(temp_method_call, 'inferred_return_type') and temp_method_call.inferred_return_type is not None:
