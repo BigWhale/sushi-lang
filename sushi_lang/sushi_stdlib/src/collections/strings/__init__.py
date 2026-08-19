@@ -165,29 +165,34 @@ def validate_builtin_string_method_with_validator(call: MethodCall, string_type:
 
 
 def get_builtin_string_method_return_type(method_name: str, string_type: BuiltinType) -> Type | None:
-    """Get the return type of a built-in string method."""
+    """Get the return type of a built-in string method.
+
+    Total over every string method: a Maybe-returning one answers a GenericTypeRef
+    spelling, which a caller with an enum table interns (the table has none). The
+    former None special cases made every caller keep a private copy of those arms
+    (#269).
+    """
     from sushi_lang.semantics.typesys import DynamicArrayType
-    if method_name in {"len", "size"}:
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    if method_name in {"len", "size", "count"}:
         return BuiltinType.I32
     elif method_name in {"is_empty", "contains", "starts_with", "ends_with"}:
         return BuiltinType.BOOL
     elif method_name in {"clone", "concat", "s", "sleft", "sright", "char_at", "ss",
                          "upper", "lower", "cap", "trim", "tleft", "tright", "replace",
-                         "join", "pad_left", "pad_right", "strip_prefix", "strip_suffix"}:
+                         "join", "pad_left", "pad_right", "strip_prefix", "strip_suffix",
+                         "repeat", "reverse"}:
         return BuiltinType.STRING
     elif method_name == "to_bytes":
         return DynamicArrayType(BuiltinType.U8)
     elif method_name == "split":
         return DynamicArrayType(BuiltinType.STRING)
-    elif method_name == "to_i32":
-        # Return Maybe<i32> - note we need access to enum_table for this
-        # This will be handled specially in type_visitor.py
-        return None  # Special case, handled in type_visitor
+    elif method_name in {"find", "find_last", "to_i32"}:
+        return GenericTypeRef(base_name="Maybe", type_args=(BuiltinType.I32,))
     elif method_name == "to_i64":
-        return None  # Special case, handled in type_visitor
+        return GenericTypeRef(base_name="Maybe", type_args=(BuiltinType.I64,))
     elif method_name == "to_f64":
-        return None  # Special case, handled in type_visitor
-    # Note: .find() method is handled specially in type_visitor.py
+        return GenericTypeRef(base_name="Maybe", type_args=(BuiltinType.F64,))
     return None
 
 

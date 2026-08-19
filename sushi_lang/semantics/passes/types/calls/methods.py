@@ -67,11 +67,15 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
                             method=call.method, expected=expected, got=got)
             return
         elif type_name == "HashMap" and call.method == "new":
-            if len(call.args) != 0:
-                from sushi_lang.semantics.generics.hashmap import is_builtin_hashmap_method
-                if is_builtin_hashmap_method(call.method):
-                    er.emit(validator.reporter, er.ERR.CE2016, call.loc,
-                            method=call.method, expected=0, got=len(call.args))
+            # The receiver is a type NAME, so the concrete HashMap type comes from the
+            # propagation stamp -- reading it is what makes the key gate reachable (#272).
+            from sushi_lang.semantics.generics.hashmap import validate_hashmap_method_with_validator
+            hashmap_type = getattr(call, 'resolved_struct_type', None)
+            if isinstance(hashmap_type, StructType) and hashmap_type.name.startswith("HashMap<"):
+                validate_hashmap_method_with_validator(call, hashmap_type, validator.reporter, validator)
+            elif len(call.args) != 0:
+                er.emit(validator.reporter, er.ERR.CE2016, call.loc,
+                        method=call.method, expected=0, got=len(call.args))
             return
 
     if receiver_type is None:
@@ -183,33 +187,10 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             call.inferred_return_type = resolve_declared_type(validator, perk_method.ret)
         return
 
-    if isinstance(receiver_type, BuiltinType) and receiver_type in [
-        BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-        BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-        BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING
-    ]:
-        from sushi_lang.semantics.generics.primitives import has_primitive_method, validate_primitive_method
-        # A method name may be a builtin primitive method in general (to_str/hash/to_bits)
-        # but only exist on some types (e.g. to_bits only on f32/f64). Ask about THIS
-        # receiver; otherwise fall through so a call like i32.to_bits() gets a clean
-        # unknown-method error.
-        if has_primitive_method(receiver_type, call.method):
-            validate_primitive_method(call, receiver_type, validator.reporter)
-            return
-
-    # Check for built-in methods on a function value (clone). A closure read out of a
-    # struct field or a container is a borrow, so consuming it is CE2411 and `.clone()` is
-    # the escape the diagnostic names -- it has to resolve here, or dispatch falls through
-    # to the extension path and mangles the type name into a symbol nobody defines.
-    if isinstance(receiver_type, FunctionType):
-        from sushi_lang.semantics.generics.closures import (
-            is_builtin_function_method, validate_function_method_with_validator,
-        )
-        if is_builtin_function_method(call.method):
-            validate_function_method_with_validator(
-                call, receiver_type, validator.reporter, validator)
-            return
-
+    # The family order from here on matches the codegen dispatcher exactly --
+    # derived hash, derived clone, function clone, primitive, extension. The receiver
+    # kinds are disjoint, so the order is arbitrary; stating ONE order in both layers
+    # is the point (#273), and tests/unit/test_method_resolution_family_order.py pins it.
     if isinstance(receiver_type, StructType) and call.method == "hash":
         from sushi_lang.sushi_stdlib.src.common import get_builtin_method
         struct_hash_method = get_builtin_method(receiver_type, "hash")
@@ -231,6 +212,33 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         clone_method = get_builtin_method(receiver_type, "clone")
         if clone_method is not None:
             clone_method.semantic_validator(call, receiver_type, validator.reporter)
+            return
+
+    # Check for built-in methods on a function value (clone). A closure read out of a
+    # struct field or a container is a borrow, so consuming it is CE2411 and `.clone()` is
+    # the escape the diagnostic names -- it has to resolve here, or dispatch falls through
+    # to the extension path and mangles the type name into a symbol nobody defines.
+    if isinstance(receiver_type, FunctionType):
+        from sushi_lang.semantics.generics.closures import (
+            is_builtin_function_method, validate_function_method_with_validator,
+        )
+        if is_builtin_function_method(call.method):
+            validate_function_method_with_validator(
+                call, receiver_type, validator.reporter, validator)
+            return
+
+    if isinstance(receiver_type, BuiltinType) and receiver_type in [
+        BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
+        BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
+        BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING
+    ]:
+        from sushi_lang.semantics.generics.primitives import has_primitive_method, validate_primitive_method
+        # A method name may be a builtin primitive method in general (to_str/hash/to_bits)
+        # but only exist on some types (e.g. to_bits only on f32/f64). Ask about THIS
+        # receiver; otherwise fall through so a call like i32.to_bits() gets a clean
+        # unknown-method error.
+        if has_primitive_method(receiver_type, call.method):
+            validate_primitive_method(call, receiver_type, validator.reporter)
             return
 
     # A generic-target extension is resolved through the monomorphized copy Pass 1.6 put in

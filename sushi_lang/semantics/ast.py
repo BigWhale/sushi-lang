@@ -439,6 +439,7 @@ class MethodCall(Node):
     method: str
     args: List["Expr"]
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
+    resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type (populated by type checker)
     callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
                                             # `poke self` (#327); stamped by Pass 2, read
                                             # by Pass 3 (a poke call is a receiver WRITE)
@@ -452,6 +453,7 @@ class DotCall(Node):
     args: List["Expr"]
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
+    resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type (populated by type checker)
     external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for FFI calls (set by type checker)
     callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
                                             # `poke self` (#327); see MethodCall

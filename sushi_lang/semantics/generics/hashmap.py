@@ -113,65 +113,81 @@ def _validate_hashmap_new(
     validator: Any
 ) -> None:
     """Validate HashMap<K, V>.new() method call."""
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="new", expected=0, got=len(call.args))
 
-    # Extract K type from HashMap<K, V>
-    # We need a minimal validator object with empty tables for parse_hashmap_types
-    # Since we're at HashMap.new() time, we don't have a validator passed in
-    # We need to parse the type name directly
-    from sushi_lang.semantics.typesys import EnumType
-
-    if not hashmap_type.name.startswith("HashMap<"):
-        return
-
-    type_params_str = hashmap_type.name[8:-1]  # Remove "HashMap<" and ">"
-
-    bracket_depth = 0
-    comma_pos = -1
-    for i, c in enumerate(type_params_str):
-        if c == '<':
-            bracket_depth += 1
-        elif c == '>':
-            bracket_depth -= 1
-        elif c == ',' and bracket_depth == 0:
-            comma_pos = i
-            break
-
-    if comma_pos == -1:
-        return
-
-    key_type_str = type_params_str[:comma_pos].strip()
-
-    if '[]' in key_type_str:
-        er.emit(reporter, er.ERR.CE2058, call.loc, key_type=key_type_str)
-        return
-
-    if '[' in key_type_str:
-        return
-
-    key_type = _resolve_type_string(key_type_str, validator)
+    key_type, _ = parse_hashmap_types(hashmap_type, validator)
     if key_type is None:
         return
 
-    hash_method = get_builtin_method(key_type, "hash")
-    if hash_method is None:
+    from sushi_lang.semantics.typesys import DynamicArrayType
+    if isinstance(key_type, DynamicArrayType):
+        er.emit(reporter, er.ERR.CE2058, call.loc, key_type=display_type(key_type))
+        return
+
+    # The seam, not the backend-populated registry: during Pass 2 the registry holds
+    # only what Pass 1.8 derived, so reading it directly rejected every primitive key
+    # (#272). A perk implementation is the sanctioned hash override and counts too.
+    from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
+    has_hash = (builtin_method_exists(key_type, "hash")
+                or validator.perk_impl_table.get_method(key_type, "hash") is not None)
+    if not has_hash:
         er.emit(reporter, er.ERR.CE2054, call.loc, key_type=display_type(key_type))
+        return
 
-    from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
-    supported_equality = (
-        key_type in (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-                     BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-                     BuiltinType.BOOL, BuiltinType.F32, BuiltinType.F64, BuiltinType.STRING) or
-        isinstance(key_type, StructType) or
-        isinstance(key_type, EnumType) or
-        isinstance(key_type, (ArrayType, DynamicArrayType))
-    )
-
-    if not supported_equality:
+    if not _key_supports_equality(key_type, validator):
         er.emit(reporter, er.ERR.CE2055, call.loc, key_type=display_type(key_type))
+
+
+_EQUALITY_SCALARS = (
+    BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
+    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
+    BuiltinType.BOOL, BuiltinType.F32, BuiltinType.F64, BuiltinType.STRING,
+)
+
+
+def _key_supports_equality(key_type: Type, validator: Any, _seen: Optional[set] = None) -> bool:
+    """Can the probe compare two keys of this type?
+
+    Mirrors the kinds `emit_key_equality_check` (backend/generics/hashmap/utils.py)
+    implements; anything it declines here would be a NotImplementedError there. A
+    foreign `ptr` has no identity (CE5010), and `Own`/`List` backing structs carry a
+    raw pointer field, so a key reaching one of those has no equality.
+    """
+    from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, EnumType, UnknownType
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    if _seen is None:
+        _seen = set()
+
+    if isinstance(key_type, UnknownType):
+        resolved = (validator.struct_table.by_name.get(key_type.name)
+                    or validator.enum_table.by_name.get(key_type.name))
+        if resolved is None:
+            return True
+        key_type = resolved
+
+    if isinstance(key_type, BuiltinType):
+        return key_type in _EQUALITY_SCALARS
+    if isinstance(key_type, StructType):
+        if key_type.name in _seen:
+            return True
+        _seen.add(key_type.name)
+        return all(_key_supports_equality(field_type, validator, _seen)
+                   for _, field_type in key_type.fields)
+    if isinstance(key_type, EnumType):
+        if key_type.name in _seen:
+            return True
+        _seen.add(key_type.name)
+        return all(_key_supports_equality(assoc, validator, _seen)
+                   for variant in key_type.variants
+                   for assoc in variant.associated_types)
+    if isinstance(key_type, (ArrayType, DynamicArrayType)):
+        return _key_supports_equality(key_type.base_type, validator, _seen)
+    if isinstance(key_type, GenericTypeRef):
+        return all(_key_supports_equality(arg, validator, _seen)
+                   for arg in key_type.type_args)
+    return False
 
 
 def _validate_hashmap_insert(

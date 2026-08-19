@@ -13,6 +13,15 @@ def is_builtin_maybe_method(method_name: str) -> bool:
     return method_name in ("is_some", "is_none", "realise", "expect")
 
 
+def maybe_method_return_type(payload_type: Type, method_name: str) -> Optional[Type]:
+    """Return type of a Maybe<T> method, given the payload type T."""
+    if method_name in ("realise", "expect"):
+        return payload_type
+    if method_name in ("is_some", "is_none"):
+        return BuiltinType.BOOL
+    return None
+
+
 def validate_maybe_method_with_validator(
     call: MethodCall,
     maybe_type: EnumType,

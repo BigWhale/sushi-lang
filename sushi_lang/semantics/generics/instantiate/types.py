@@ -80,24 +80,33 @@ class TypeInferrer:
         return None
 
     def get_builtin_method_return_type(self, receiver_type: "Type", method_name: str) -> "Type | None":
-        """Get return type of built-in extension methods."""
-        if receiver_type == BuiltinType.STRING:
-            if method_name in ("find", "find_last"):
-                return GenericTypeRef(base_name="Maybe", type_args=(BuiltinType.I32,))
-            elif method_name in ("upper", "lower", "cap", "trim", "tleft", "tright"):
-                return BuiltinType.STRING
+        """Return type of a built-in method, read from the owning family's table.
 
-        if isinstance(receiver_type, GenericTypeRef) and receiver_type.base_name == "Maybe":
-            if method_name in ("realise", "expect"):
-                if receiver_type.type_args:
-                    return receiver_type.type_args[0]
-            elif method_name in ("is_some", "is_none"):
-                return BuiltinType.BOOL
+        This used to be a third, independent return-type table (#269): it knew some
+        string methods and Maybe, and nothing about to_str, hash or to_bits.
+        """
+        from sushi_lang.sushi_stdlib.src.collections.strings import (
+            get_builtin_string_method_return_type,
+            is_builtin_string_method,
+        )
+        from sushi_lang.semantics.generics.primitives import primitive_method_return_type
+        from sushi_lang.semantics.generics.maybe import (
+            is_builtin_maybe_method,
+            maybe_method_return_type,
+        )
 
-        # Future extension points:
-        # - Array methods: array.get() could return Maybe<T>
-        # - HashMap methods: map.get() could return Maybe<V>
-        # - Result methods: result.and_then() could take generic closures
+        if receiver_type == BuiltinType.STRING and is_builtin_string_method(method_name):
+            return get_builtin_string_method_return_type(method_name, receiver_type)
+
+        primitive_ret = primitive_method_return_type(receiver_type, method_name)
+        if primitive_ret is not None:
+            return primitive_ret
+
+        if (isinstance(receiver_type, GenericTypeRef)
+                and receiver_type.base_name == "Maybe"
+                and receiver_type.type_args
+                and is_builtin_maybe_method(method_name)):
+            return maybe_method_return_type(receiver_type.type_args[0], method_name)
 
         return None
 

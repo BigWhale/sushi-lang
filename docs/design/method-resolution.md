@@ -76,6 +76,19 @@ receiver dispatch, family for family:
 both directions. Two places answering one question drift; that is the #248 lesson (*if the
 same question is asked in six places, the fix is a seam, not a fallback*).
 
+## The family order
+
+Inside the built-in step, both layers try the families in one canonical order:
+
+> perk -> derived hash -> derived clone -> function-value clone -> primitive -> extension fallback
+
+The receiver kinds are disjoint -- a primitive is a `BuiltinType`, the derived pair applies
+to `StructType`/`EnumType`, the function-value clone to `FunctionType` -- so the order is
+arbitrary. What matters is that validation and codegen state the SAME one: the two layers
+used to state it oppositely, and a type that ever satisfied two families would have
+dispatched differently per layer with no diagnostic (#273).
+`tests/unit/test_method_resolution_family_order.py` pins the order in both files.
+
 ## Why extensions lose
 
 Precedent is one-sided. Every language with extension-method-like features resolves the type's

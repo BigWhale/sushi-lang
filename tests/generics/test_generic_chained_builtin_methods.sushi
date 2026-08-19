@@ -1,0 +1,25 @@
+# Chained built-in method calls inside a generic body (issue #269): the
+# instantiation-collection inference reads the family return-type tables, so
+# every chain link is typed -- hash/to_str included, which the old private
+# table did not know.
+# EXPECT_STDOUT_EXACT: "FORD PREFECT\n5\n1\n1\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+use <collections/strings>
+
+fn shout@(T)(T value) string:
+    return Result.Ok(value.to_str().upper())
+
+fn measure@(T)(T value) i32:
+    return Result.Ok(value.to_str().len())
+
+fn describe@(T)(T value) string:
+    return Result.Ok(value.hash().to_str())
+
+fn main() i32:
+    println(shout("ford prefect").realise("err"))
+    println(measure(12345).realise(0))
+    let string h = describe(42).realise("err")
+    println(h.len() > 0)
+    println("abc".find("b").realise(-1))
+    return Result.Ok(0)

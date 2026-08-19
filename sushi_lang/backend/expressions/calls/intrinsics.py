@@ -30,7 +30,9 @@ def try_emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
         return None
 
     if isinstance(receiver, Name) and hasattr(codegen, 'enum_table'):
-        if receiver.id in codegen.enum_table.by_name:
+        # Local-wins (#296): a local named after the enum shadows it.
+        if (receiver.id in codegen.enum_table.by_name
+                and codegen.memory.find_semantic_type(receiver.id) is None):
             from sushi_lang.backend.expressions import enums
             enum_type = codegen.enum_table.by_name[receiver.id]
             return enums.emit_enum_constructor_from_method_call(codegen, enum_type, method, args)

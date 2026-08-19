@@ -409,8 +409,11 @@ class ExpressionValidator(RecursiveVisitor):
 
         if isinstance(node.receiver, Name):
             receiver_name = node.receiver.id
-            if (receiver_name in self.type_validator.enum_table.by_name or
-                receiver_name in self.type_validator.generic_enum_table.by_name):
+            # Local-wins (#296): a local named after an enum shadows it, so the call is
+            # a method call on the local, never a variant construction.
+            if (receiver_name not in self.type_validator.variable_types and
+                (receiver_name in self.type_validator.enum_table.by_name or
+                 receiver_name in self.type_validator.generic_enum_table.by_name)):
                 from sushi_lang.semantics.ast import EnumConstructor
                 temp_constructor = EnumConstructor(
                     enum_name=receiver_name,
@@ -446,6 +449,9 @@ class ExpressionValidator(RecursiveVisitor):
             args=node.args,
             loc=node.loc
         )
+        # The propagation stamp travels with it: the HashMap.new() key gate reads the
+        # concrete HashMap type off the call node (#272).
+        temp_method_call.resolved_struct_type = getattr(node, 'resolved_struct_type', None)
         self.type_validator._validate_method_call(temp_method_call)
 
         if hasattr(temp_method_call, 'inferred_return_type') and temp_method_call.inferred_return_type is not None:
@@ -870,7 +876,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_methodcall(self, node: MethodCall) -> Optional[Type]:
         """Infer method call type and annotate node with inferred return type."""
-        if isinstance(node.receiver, Name):
+        if (isinstance(node.receiver, Name)
+                and node.receiver.id not in self.type_validator.variable_types):
             enum_name = node.receiver.id
             if enum_name in self.type_validator.enum_table.by_name:
                 inferred_type = self.type_validator.enum_table.by_name[enum_name]
@@ -940,7 +947,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             node.inferred_return_type = ty
             return ty
 
-        if isinstance(node.receiver, Name):
+        if (isinstance(node.receiver, Name)
+                and node.receiver.id not in self.type_validator.variable_types):
             receiver_name = node.receiver.id
             if receiver_name in self.type_validator.enum_table.by_name:
                 inferred_type = self.type_validator.enum_table.by_name[receiver_name]

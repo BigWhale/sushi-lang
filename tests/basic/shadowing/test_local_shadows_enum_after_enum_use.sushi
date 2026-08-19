@@ -1,0 +1,26 @@
+# The enum resolves normally BEFORE the shadowing declaration, and the local wins
+# after it -- shadowing starts at the declaration, not at the top of the function.
+# EXPECT_STDOUT_EXACT: "1\n7\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+enum Color:
+    Red
+    Green
+
+struct Holder:
+    i32 v
+
+extend Holder Red() i32:
+    return self.v
+
+fn tell(Color c) i32:
+    match c:
+        Color.Red -> return Result.Ok(1)
+        Color.Green -> return Result.Ok(2)
+
+fn main() i32:
+    let Color c = Color.Red()
+    println(tell(c).realise(0))
+    let Holder Color = Holder(7)
+    println(Color.Red())
+    return Result.Ok(0)

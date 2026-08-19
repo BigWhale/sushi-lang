@@ -328,6 +328,12 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
         from sushi_lang.semantics.typesys import BuiltinType
 
         ret_sushi_type = get_builtin_string_method_return_type(expr.method, BuiltinType.STRING)
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        if isinstance(ret_sushi_type, GenericTypeRef) and ret_sushi_type.base_name == "Maybe":
+            from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
+            ret_sushi_type = ensure_maybe_type_in_table(
+                codegen.enum_table, ret_sushi_type.type_args[0],
+                struct_table=codegen.struct_table.by_name)
         if ret_sushi_type is not None:
             ret_llvm_type = codegen.types.ll_type(ret_sushi_type)
             llvm_fn = declare_stdlib_function(codegen.module, func_name, ret_llvm_type, [receiver_type])

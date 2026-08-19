@@ -84,7 +84,9 @@ class ExpressionEmitter:
                         return calls.emit_fn_field_call(self.codegen, expr, _fn_field_ty, to_i1)
                 if isinstance(expr.receiver, Name):
                     receiver_name = expr.receiver.id
-                    if receiver_name in self.codegen.enum_table.by_name:
+                    # Local-wins (#296): a local named after an enum shadows it.
+                    if (receiver_name in self.codegen.enum_table.by_name
+                            and self.codegen.memory.find_semantic_type(receiver_name) is None):
                         from sushi_lang.backend.expressions import enums
                         return enums.emit_enum_constructor(self.codegen, expr, is_dotcall=True)
                     elif hasattr(expr, 'resolved_enum_type') and expr.resolved_enum_type is not None:
@@ -99,7 +101,9 @@ class ExpressionEmitter:
             case MemberAccess():
                 if isinstance(expr.receiver, Name):
                     receiver_name = expr.receiver.id
-                    if receiver_name in self.codegen.enum_table.by_name:
+                    # Local-wins (#296): `Color.v` on a local named Color is a field read.
+                    if (receiver_name in self.codegen.enum_table.by_name
+                            and self.codegen.memory.find_semantic_type(receiver_name) is None):
                         from sushi_lang.backend.expressions import enums
                         enum_type = self.codegen.enum_table.by_name[receiver_name]
                         return enums.emit_enum_constructor_from_method_call(

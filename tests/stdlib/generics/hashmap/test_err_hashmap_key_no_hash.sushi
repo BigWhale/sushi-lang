@@ -1,0 +1,16 @@
+# A struct with a ptr field gets no auto-derived hash, so it is exactly the key
+# CE2054 exists to reject. The gate never ran for `new` before issue #272.
+# EXPECT_ERROR_CODE: CE2054
+
+use <collections/hashmap>
+
+unsafe external "C" as libc because "a ptr field is the one struct the compiler cannot hash":
+    fn strlen(string s) i64 = "strlen"
+
+struct Handle:
+    ptr h
+
+fn main() i32:
+    let HashMap@(Handle, string) m = HashMap.new()
+    m.free()
+    return Result.Ok(0)

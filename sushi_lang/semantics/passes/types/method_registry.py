@@ -96,21 +96,16 @@ class StringMethodInferrer:
     def infer_return_type(self) -> Optional['Type']:
         from sushi_lang.sushi_stdlib.src.collections.strings import is_builtin_string_method, get_builtin_string_method_return_type
         from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
+        from sushi_lang.semantics.generics.types import GenericTypeRef
         if is_builtin_string_method(self.method_name):
-            if self.method_name in ("find", "find_last"):
-                maybe_i32_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32, struct_table=self.validator.struct_table.by_name)
-                return maybe_i32_type
-            elif self.method_name == "to_i32":
-                maybe_i32_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32, struct_table=self.validator.struct_table.by_name)
-                return maybe_i32_type
-            elif self.method_name == "to_i64":
-                maybe_i64_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I64, struct_table=self.validator.struct_table.by_name)
-                return maybe_i64_type
-            elif self.method_name == "to_f64":
-                maybe_f64_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.F64, struct_table=self.validator.struct_table.by_name)
-                return maybe_f64_type
-            else:
-                return get_builtin_string_method_return_type(self.method_name, BuiltinType.STRING)
+            ret = get_builtin_string_method_return_type(self.method_name, BuiltinType.STRING)
+            # The family table answers a Maybe as a SPELLING (it has no enum table);
+            # interning it is this layer's job.
+            if isinstance(ret, GenericTypeRef) and ret.base_name == "Maybe":
+                return ensure_maybe_type_in_table(
+                    self.validator.enum_table, ret.type_args[0],
+                    struct_table=self.validator.struct_table.by_name)
+            return ret
         return None
 
 
@@ -205,15 +200,12 @@ class MaybeMethodInferrer:
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method
+        from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method, maybe_method_return_type
         if is_builtin_maybe_method(self.method_name):
             some_variant = self.receiver_type.get_variant("Some")
             if some_variant and some_variant.associated_types:
-                t_type = some_variant.associated_types[0]
-                if self.method_name in ("is_some", "is_none"):
-                    return BuiltinType.BOOL
-                elif self.method_name in ("realise", "expect"):
-                    return t_type
+                return maybe_method_return_type(
+                    some_variant.associated_types[0], self.method_name)
         return None
 
 

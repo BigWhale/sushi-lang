@@ -107,7 +107,7 @@ def emit_hashmap_get(
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
     from ..types import get_key_hash_method
-    hash_method = get_key_hash_method(key_type)
+    hash_method = get_key_hash_method(codegen, key_type)
     if hash_method is None:
         raise_internal_error("CE0053", type=key_type)
 
@@ -233,7 +233,7 @@ def emit_hashmap_contains_key(
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
     from ..types import get_key_hash_method
-    hash_method = get_key_hash_method(key_type)
+    hash_method = get_key_hash_method(codegen, key_type)
     if hash_method is None:
         raise_internal_error("CE0053", type=key_type)
 
