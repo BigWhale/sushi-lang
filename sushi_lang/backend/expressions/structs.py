@@ -320,11 +320,14 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
         raise_internal_error("CE0069", method=expr.method)
 
     elif isinstance(expr, IndexAccess):
-        # `a[i].field` -- the struct is the indexed array's ELEMENT type. Both a fixed `T[N]`
-        # and a dynamic `T[]` index to their element (#187): without this arm, reading a field
-        # off an indexed element fell through to CE0067 and reported itself as a compiler bug.
-        # Pass 2 already infers exactly this (passes/types/inference.py::infer_index_access_type);
-        # this mirrors its rule rather than inventing a second one.
+        # `a[i].field` -- the struct is the indexed array's ELEMENT type. Pass 2 already
+        # stamped it (#348), so read the stamp first; the structural walk below stays as
+        # the answer for an unstamped node.
+        from sushi_lang.backend.expressions.calls.utils import stamped_semantic_type
+        stamped = stamped_semantic_type(codegen, expr)
+        if isinstance(stamped, StructType):
+            return stamped
+
         array_type = _indexed_array_type(codegen, expr.array)
         if isinstance(array_type, (ArrayType, DynamicArrayType)):
             return _resolve_struct_type(codegen, array_type.base_type, "CE0043")
