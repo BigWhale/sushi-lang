@@ -1,0 +1,32 @@
+# The escape, and the instantiation that is genuinely fine. `self` is a borrow, so an
+# owning field is cloned out of it -- and the SAME body serves `Box@(i32)`, where the
+# clone is a plain copy. One shared answer could never serve both, which is why the body
+# is checked per instantiation (#391).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "marvin the robot\n42\nmarvin\n42\n"
+struct Box@(T):
+    T value
+
+extend Box@(T) cloned() T:
+    return self.value.clone()
+
+extend Box@(T) peeked() Maybe@(T):
+    return Maybe.Some(self.value.clone())
+
+fn run_test() i32:
+    let string base = "marvin"
+    let Box@(string) s = Box("{base} the robot")
+    println(s.cloned())
+
+    let Box@(i32) n = Box(42)
+    println(n.cloned())
+
+    let Box@(string) t = Box("marvin")
+    println(t.peeked().realise("none"))
+    println(n.peeked().realise(0))
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

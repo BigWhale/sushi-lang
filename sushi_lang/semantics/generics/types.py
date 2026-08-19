@@ -135,7 +135,7 @@ class GenericStructType:
 
         concrete_fields = []
         for field_name, field_type in self.fields:
-            concrete_type = _substitute_type_params(field_type, substitution)
+            concrete_type = substitute_type_params(field_type, substitution)
             concrete_fields.append((field_name, concrete_type))
 
         type_arg_strs = ", ".join(str(t) for t in type_args)
@@ -166,43 +166,66 @@ class GenericTypeRef:
                 self.type_args == other.type_args)
 
 
-def _substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
-    """Recursively substitute type parameters in a type."""
-    from sushi_lang.semantics.typesys import PointerType, ArrayType, DynamicArrayType, ReferenceType, FunctionType
+def substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
+    """Recursively put a type argument in the place of each type parameter it names.
 
-    if isinstance(ty, TypeParameter):
-        if ty.name in substitution:
-            return substitution[ty.name]
-        else:
-            raise ValueError(f"Unknown type parameter: {ty.name}")
+    The PURE substitution: it rewrites a type and interns nothing, so a `Maybe@(T)` comes
+    back as `Maybe@(i32)` rather than as the monomorphized `EnumType`. Its counterpart is
+    `monomorphize.TypeSubstitutor.substitute_type`, which substitutes AND monomorphizes on
+    demand, and is what Pass 1.6 uses.
+
+    An unbound name passes through, rather than raising: a signature may legitimately name
+    a type parameter this substitution does not bind.
+
+    A NAMED type (StructType/EnumType) is terminal: its interned name already IS
+    (declaration, type arguments), so there is nothing left to substitute (#240).
+
+    Two arms carry #389, and each was missing from one of the two copies this replaces. A
+    type parameter reaches a DECLARED position spelled as an **UnknownType** -- the collect
+    pass converts only a TOP-LEVEL one to a `TypeParameter` -- and it is usually nested
+    inside a **GenericTypeRef**, so `Maybe@(T)` in a generic-target extension's signature
+    used to survive monomorphization untouched and report CE2001 on `T`.
+    """
+    from sushi_lang.semantics.typesys import (PointerType, ArrayType, DynamicArrayType,
+                                              ReferenceType, FunctionType, UnknownType)
+
+    if isinstance(ty, (TypeParameter, UnknownType)):
+        return substitution.get(ty.name, ty)
+
+    elif isinstance(ty, GenericTypeRef):
+        return GenericTypeRef(
+            base_name=ty.base_name,
+            type_args=tuple(substitute_type_params(a, substitution) for a in ty.type_args),
+        )
 
     elif isinstance(ty, PointerType):
-        substituted_pointee = _substitute_type_params(ty.pointee_type, substitution)
+        substituted_pointee = substitute_type_params(ty.pointee_type, substitution)
         return PointerType(pointee_type=substituted_pointee)
 
     elif isinstance(ty, ArrayType):
-        substituted_base = _substitute_type_params(ty.base_type, substitution)
+        substituted_base = substitute_type_params(ty.base_type, substitution)
         return ArrayType(base_type=substituted_base, size=ty.size)
 
     elif isinstance(ty, DynamicArrayType):
-        substituted_base = _substitute_type_params(ty.base_type, substitution)
+        substituted_base = substitute_type_params(ty.base_type, substitution)
         return DynamicArrayType(base_type=substituted_base)
 
     elif isinstance(ty, ReferenceType):
-        substituted_ref = _substitute_type_params(ty.referenced_type, substitution)
+        substituted_ref = substitute_type_params(ty.referenced_type, substitution)
         return ReferenceType(referenced_type=substituted_ref, mutability=ty.mutability)
 
     elif isinstance(ty, FunctionType):
         # `replace`, so `param_modes` rides along beside `captures` (#368).
         return replace(
             ty,
-            param_types=tuple(_substitute_type_params(p, substitution) for p in ty.param_types),
-            ok_type=_substitute_type_params(ty.ok_type, substitution),
-            err_type=_substitute_type_params(ty.err_type, substitution),
+            param_types=tuple(substitute_type_params(p, substitution) for p in ty.param_types),
+            ok_type=substitute_type_params(ty.ok_type, substitution),
+            err_type=substitute_type_params(ty.err_type, substitution),
         )
 
     else:
         return ty
 
 
-__all__ = ["TypeParameter", "TypePack", "GenericEnumType", "GenericStructType", "GenericTypeRef"]
+__all__ = ["TypeParameter", "TypePack", "GenericEnumType", "GenericStructType",
+           "GenericTypeRef", "substitute_type_params"]

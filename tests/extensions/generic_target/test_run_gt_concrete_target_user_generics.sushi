@@ -1,0 +1,56 @@
+# A USER generic enum and a generic struct named in the signature of a generic-target
+# extension, and an OWNING signature type. One collection step covers every kind -- the
+# gap was the list that was never walked, not the type that was named (#389).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "42\nempty\nmarvin\n0\n9\n"
+struct Box@(T):
+    T value
+
+struct Pair@(A, B):
+    A first
+    B second
+
+enum Wrap@(T):
+    Full(T)
+    Empty
+
+extend Box@(i32) wrapped() Wrap@(i32):
+    return Wrap.Full(self.value)
+
+extend Box@(i32) blanked() Wrap@(i32):
+    return Wrap.Empty()
+
+extend Box@(i32) named() Maybe@(string):
+    return Maybe.Some("marvin")
+
+extend Box@(i32) listed() List@(string):
+    return List.new()
+
+extend Box@(i32) paired(Pair@(i32, i32) p) i32:
+    return self.value + p.first + p.second
+
+fn run_test() i32:
+    let Box@(i32) b = Box(42)
+
+    match b.wrapped():
+        Wrap.Full(v) -> println(v)
+        Wrap.Empty() -> println("empty")
+
+    match b.blanked():
+        Wrap.Full(v) -> println(v)
+        Wrap.Empty() -> println("empty")
+
+    println(b.named().realise("none"))
+
+    let List@(string) l = b.listed()
+    println(l.len())
+    l.destroy()
+
+    let Box@(i32) small = Box(1)
+    println(small.paired(Pair(3, 5)))
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

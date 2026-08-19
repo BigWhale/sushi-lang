@@ -1,0 +1,19 @@
+# The same consume, carried out through an enum payload. It reached the backend with no
+# ownership decision and surfaced as the CE0129 internal error rather than as a double
+# free -- the same gap wearing the loud face instead of the silent one (#391).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2411
+struct Box@(T):
+    T value
+
+extend Box@(T) peeked() Maybe@(T):
+    return Maybe.Some(self.value)
+
+fn run_test() i32:
+    let string base = "marvin"
+    let Box@(string) b = Box("{base} the robot")
+    println(b.peeked().realise("none"))
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

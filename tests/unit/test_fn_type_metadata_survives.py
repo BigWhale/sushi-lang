@@ -12,10 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from sushi_lang.semantics.generics.extensions import substitute_type_params
 from sushi_lang.semantics.generics.monomorphize.transformer import TypeSubstitutor
 from sushi_lang.semantics.generics.type_strings import resolve_type_from_string
-from sushi_lang.semantics.generics.types import TypeParameter, _substitute_type_params
+from sushi_lang.semantics.generics.types import TypeParameter, substitute_type_params
 from sushi_lang.semantics.param_modes import ParamMode
 from sushi_lang.semantics.type_resolution import resolve_type_recursively
 from sushi_lang.semantics.typesys import (
@@ -59,12 +58,8 @@ def test_resolve_type_recursively_carries_the_metadata():
 
 
 def test_generic_substitution_carries_the_metadata():
-    before = _fn((TypeParameter(name="T"), STRING))
-    after = _substitute_type_params(before, {"T": I32})
-    _assert_metadata_survived(before, after)
-
-
-def test_extension_substitution_carries_the_metadata():
+    # One PURE substitution, for both callers. `generics/extensions.py` used to carry a
+    # second copy of the same rule with its own arms, and #389 was a hole in it.
     before = _fn((TypeParameter(name="T"), STRING))
     after = substitute_type_params(before, {"T": I32})
     _assert_metadata_survived(before, after)

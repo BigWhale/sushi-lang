@@ -1,0 +1,58 @@
+# TWO instantiations of one generic-target extension, whose signature types have different
+# layouts. Pass 2 stamps a resolved type on the nodes of every monomorphized copy, so a
+# shared body kept only the LAST instantiation's stamps and the function emitted for the
+# other returned a value of the wrong shape -- invalid IR ("value doesn't match function
+# result type"). Each instantiation owns its body now (#391), which is also what lets a
+# generic type be named in a template's signature at all (#389).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3\nmarvin\n1\n1\n9\nzaphod\n42\n"
+struct Box@(T):
+    T value
+
+extend Box@(T) peeked() Maybe@(T):
+    return Maybe.Some(self.value.clone())
+
+extend Box@(T) listed() List@(T):
+    let List@(T) out = List.new()
+    out.push(self.value.clone())
+    return out
+
+extend Box@(T) owned() Own@(T):
+    return Own.alloc(self.value.clone())
+
+extend Box@(T) unwrapped() T:
+    return self.value.clone()
+
+fn run_test() i32:
+    let Box@(i32) n = Box(3)
+    println(n.peeked().realise(0))
+
+    let Box@(string) s = Box("marvin")
+    println(s.peeked().realise("none"))
+
+    let List@(i32) ln = n.listed()
+    println(ln.len())
+    ln.destroy()
+
+    let List@(string) ls = s.listed()
+    println(ls.len())
+    ls.destroy()
+
+    let Box@(i32) nine = Box(9)
+    let Own@(i32) o = nine.owned()
+    println(o.get())
+    o.destroy()
+
+    let Box@(string) z = Box("zaphod")
+    let Own@(string) p = z.owned()
+    println(p.get())
+    p.destroy()
+
+    let Box@(i32) big = Box(42)
+    println(big.unwrapped())
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))
