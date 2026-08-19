@@ -1,0 +1,24 @@
+# A template and a fully-concrete target for ONE method name overlap: both claim
+# `Box@(i32).tag`. Sushi rejects the overlap rather than letting the most specific win
+# (#393) -- rejecting is forward-compatible, and specialization would make "is the
+# template's body dead code?" depend on which instantiations exist elsewhere in the
+# program, which is the rule CE2097 rests on.
+#
+# The diagnostic must NAME the instantiation. It used to elide it as `Box@(...)`, because
+# the table keyed on the base name alone and had nowhere to put the arguments.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE0101
+# EXPECT_STDERR_CONTAINS: "extension method 'tag' for 'Box@(i32)'"
+struct Box@(T):
+    T value
+
+extend Box@(T) tag() i32:
+    return 1
+
+extend Box@(i32) tag() i32:
+    return 2
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println(b.tag())
+    return Result.Ok(0)

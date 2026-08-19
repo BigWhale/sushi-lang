@@ -304,6 +304,10 @@ _add(ErrorMessage("CE2096", Severity.ERROR,
     "cannot {what} constant '{name}': constants are immutable",
     Category.TYPE, "A constant is emitted as a read-only global (.rodata), so a write that would reach it -- an in-place method, or an indexed assignment -- cannot target one; the store would be undefined behaviour rather than a diagnostic. Copy the constant into a local first and mutate that."))
 
+_add(ErrorMessage("CE2098", Severity.ERROR,
+    "extension target '{target}' mixes concrete type arguments with type parameters",
+    Category.TYPE, "An extension target names either every type parameter -- `extend Box@(T)`, which applies to every instantiation -- or a concrete type for every argument -- `extend Box@(i32)`, which applies to that instantiation alone. A partial form such as `extend Pair@(i32, U)` is partial specialization, and Sushi has none. Rejecting it is what keeps an ordering rule from ever being needed: two fully-concrete targets cannot overlap and template-versus-concrete is strictly ordered, so `Pair@(i32, U)` against `Pair@(T, string)` -- equally specific, neither more so -- cannot arise. That ambiguity is where Rust's specialization has stalled for years. Name every parameter, make every argument concrete, or implement a perk on the concrete target."))
+
 _add(ErrorMessage("CE2097", Severity.ERROR,
     "extension method '{name}()' conflicts with the built-in '{type}.{name}()'",
     Category.TYPE, "Method resolution always considers built-in methods before extension methods -- during type validation, during type inference, and again during code generation -- so an extension method whose name collides with one is compiled and then never called. The built-in families are: the hash() and clone() the compiler derives for every struct and enum; the primitive and string methods (to_str, hash, to_bits, len, trim, ...); the array methods; and the methods of the built-in containers Result, Maybe, Own, List and HashMap. A perk implementation is the supported way to replace a built-in: it takes precedence at every layer, by design."))

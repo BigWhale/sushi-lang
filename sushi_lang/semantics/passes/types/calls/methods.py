@@ -233,18 +233,12 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             clone_method.semantic_validator(call, receiver_type, validator.reporter)
             return
 
+    # A generic-target extension is resolved through the monomorphized copy Pass 1.6 put in
+    # the extension table under the concrete receiver type. There used to be a second lookup
+    # here, by base name -- it repeated the lookup above verbatim, so it could only ever find
+    # None again, and under #393 asking by base name is the wrong question anyway: a concrete
+    # target answers its own instantiation and no other.
     method = validator.extension_table.get_method(receiver_type, call.method)
-
-    if method is None and isinstance(receiver_type, StructType):
-        type_name = receiver_type.name
-        if '<' in type_name:
-            base_name = type_name.split('<')[0]
-            generic_method = validator.generic_extension_table.get_method(base_name, call.method)
-            if generic_method is not None:
-                # Generic extension found - use it as if it were a regular method
-                # The method has already been monomorphized and added to extensions
-                # during Pass 1.6, so we can validate it here
-                method = validator.extension_table.get_method(receiver_type, call.method)
 
     if method is None:
         er.emit(validator.reporter, er.ERR.CE2008, call.loc, name=f"{display_type(receiver_type)}.{call.method}")

@@ -1,0 +1,28 @@
+# The rule is about the TARGET, not about who declared the generic type: a concrete argument
+# on a BUILT-IN generic constrains the same way (#393). `extend List@(i32)` used to be
+# monomorphized for `List@(string)` as well, so `acc + x` reached the backend with a string
+# operand -- an internal error, where the honest answer is "no such method".
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: "List@(string).total"
+extend List@(i32) total() i32:
+    let i32 acc = 0
+    foreach(x in self.iter()):
+        acc := acc + x
+    return acc
+
+fn run_test() i32:
+    let List@(i32) ns = List.new()
+    ns.push(1)
+    ns.push(2)
+    println(ns.total())
+    ns.destroy()
+
+    let List@(string) ss = List.new()
+    ss.push("marvin")
+    println(ss.total())
+    ss.destroy()
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

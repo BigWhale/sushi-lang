@@ -761,7 +761,34 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-Extension methods can be generic over user-defined generic structs: the type parameter (`T`) is declared on the receiver type (`Box@(T)`), and the compiler automatically instantiates the method for each concrete type used in your program. (Generic extensions on built-in generic types such as `List@(T)` are not currently supported.)
+Extension methods can be generic over generic types, user-defined and built-in alike: the type parameter (`T`) is declared on the receiver type (`Box@(T)`, `List@(T)`), and the compiler instantiates the method for each concrete type used in your program.
+
+**A concrete type argument in the target is a constraint.** `extend Box@(i32)` extends `Box@(i32)` and nothing else, so one method name can serve several instantiations with a body written for each:
+
+```sushi
+extend Box@(i32) tag() i32:
+    return self.value * 10
+
+extend Box@(string) tag() i32:
+    return self.value.len()     # needs `use <collections/strings>`
+```
+
+Two rules come with that. A **template and a concrete target for the same method name** overlap, and Sushi rejects the overlap rather than picking the more specific one — there is no specialization:
+
+```sushi
+extend Box@(T) tag() i32: ...
+extend Box@(i32) tag() i32: ...    # error [CE0101]: duplicate function
+                                   #   'extension method 'tag' for 'Box@(i32)''
+```
+
+And a **partially concrete target** is rejected too — name every type parameter, or make every argument concrete:
+
+```sushi
+extend Pair@(i32, U) tag() i32: ...  # error [CE2098]: extension target 'Pair@(i32, U)'
+                                     #   mixes concrete type arguments with type parameters
+```
+
+To give one instantiation its own behaviour where a template already covers it, implement a perk on the concrete target — a perk implementation outranks extension methods (see below).
 
 **Benefits**:
 - **Namespace organization**: Group related functionality with the types they operate on

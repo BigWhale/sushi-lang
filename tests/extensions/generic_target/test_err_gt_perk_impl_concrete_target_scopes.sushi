@@ -1,0 +1,29 @@
+# The internal PRECEDENT for the #393 ruling, pinned as a control. A perk implementation on
+# a concrete generic target has always scoped correctly: `extend Box@(i32) with Tagger`
+# answers a `Box@(i32)` receiver and reports "no such method" for a `Box@(string)` one.
+#
+# The extension path and the perk-impl path disagreed about what a concrete target argument
+# MEANS -- one question, two answer sites, which is the #239 class of defect. This test is
+# the side that was already right, so it must stay right.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: "Box@(string).tag"
+perk Tagger:
+    fn tag() i32
+
+struct Box@(T):
+    T value
+
+extend Box@(i32) with Tagger:
+    fn tag() i32:
+        return self.value
+
+fn run_test() i32:
+    let Box@(i32) n = Box(7)
+    println(n.tag())
+    let Box@(string) s = Box("marvin")
+    println(s.tag())
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

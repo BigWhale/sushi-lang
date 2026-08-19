@@ -1,0 +1,38 @@
+# The escape the #393 ruling names -- a perk implementation on the concrete target -- was
+# itself broken for a target with more than ONE argument. The perk-impl table built the
+# target's name itself and joined the arguments on ',' where the interned type name joins on
+# ', ', so `extend Pair@(i32, string) with Tagger` registered under `Pair<i32,string>` while
+# the receiver resolved to `Pair<i32, string>`: every call was CE2008 undefined function.
+#
+# The single-argument case matched by coincidence, which is what hid it. Found by this
+# batch, not by the issue.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7\nmarvin\n"
+perk Tagger:
+    fn tag() i32
+
+perk Namer:
+    fn name() string
+
+struct Pair@(A, B):
+    A first
+    B second
+
+extend Pair@(i32, string) with Tagger:
+    fn tag() i32:
+        return self.first
+
+extend Pair@(i32, string) with Namer:
+    fn name() string:
+        return self.second.clone()
+
+fn run_test() i32:
+    let Pair@(i32, string) p = Pair(7, "marvin")
+    println(p.tag())
+    println(p.name())
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

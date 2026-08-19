@@ -1,0 +1,20 @@
+# The overlap in the other declaration order: the concrete target is declared first and the
+# template second (#393). The rule is a property of the pair, not of which one the collector
+# reaches first, so this is the same rejection -- reported at the template, which is the
+# declaration that arrives second and covers an instantiation already taken.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE0101
+# EXPECT_STDERR_CONTAINS: "extension method 'tag' for 'Box@(T)'"
+struct Box@(T):
+    T value
+
+extend Box@(i32) tag() i32:
+    return 2
+
+extend Box@(T) tag() i32:
+    return 1
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println(b.tag())
+    return Result.Ok(0)

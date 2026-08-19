@@ -35,6 +35,7 @@ from sushi_lang.semantics.generics.types import (
 )
 
 from .utils import extract_type_param_names, param_from_node, reject_reference_in
+from sushi_lang.semantics.generics.extension_targets import classify_extension_target
 from sushi_lang.semantics.generics.type_display import display_type
 
 
@@ -260,8 +261,10 @@ class ExtensionTable:
 class GenericExtensionMethod:
     """Phase 0 generic extension method signature."""
     base_type_name: str              # Generic type name (e.g., "HashMap", "Box")
-    type_params: Tuple[str, ...]     # Type parameter names (e.g., ("K", "V"))
+    type_params: Tuple[str, ...]     # Type parameter names (e.g., ("K", "V")), () if concrete
     name: str                        # Method name (get, insert, etc.)
+    # The instantiation a concrete target constrains ("Box<i32>"), "" for a template (#393).
+    target_key: str = ""
     loc: Optional[Span] = None
     target_type_span: Optional[Span] = None
     name_span: Optional[Span] = None
@@ -274,22 +277,38 @@ class GenericExtensionMethod:
 
 @dataclass
 class GenericExtensionTable:
-    """Table of generic extension methods organized by base type name."""
-    by_type: Dict[str, Dict[str, GenericExtensionMethod]] = field(default_factory=dict)
+    """Generic extension methods by base type name, then by (method, target key).
+
+    The target key is what makes `extend Box@(i32)` and `extend Box@(string)` two methods
+    rather than one template declared twice (#393). Keying on the method name alone had
+    nowhere to put the arguments, so the second declaration was a duplicate function and the
+    message elided the target as `Box@(...)`.
+    """
+    by_type: Dict[str, Dict[Tuple[str, str], GenericExtensionMethod]] = field(default_factory=dict)
 
     def add_method(self, method: GenericExtensionMethod) -> None:
         """Add a generic extension method to the table."""
-        if method.base_type_name not in self.by_type:
-            self.by_type[method.base_type_name] = {}
-        self.by_type[method.base_type_name][method.name] = method
+        methods = self.by_type.setdefault(method.base_type_name, {})
+        methods[(method.name, method.target_key)] = method
 
-    def get_method(self, base_type_name: str, method_name: str) -> Optional[GenericExtensionMethod]:
-        """Get a specific generic extension method."""
-        return self.by_type.get(base_type_name, {}).get(method_name)
+    def declarations(self, base_type_name: str, method_name: str) -> List[GenericExtensionMethod]:
+        """Every declaration of one method name on one base type."""
+        return [
+            method for (name, _key), method in self.by_type.get(base_type_name, {}).items()
+            if name == method_name
+        ]
 
-    def get_all_methods(self, base_type_name: str) -> Dict[str, GenericExtensionMethod]:
-        """Get all generic extension methods for a base type."""
-        return self.by_type.get(base_type_name, {})
+    def find_applicable(self, base_type_name: str, method_name: str,
+                        instantiation: str) -> Optional[GenericExtensionMethod]:
+        """The declaration that applies to one instantiation of the base type.
+
+        A concrete target applies to its own instantiation; a template applies to all. The
+        two cannot coexist for one method name -- that overlap is CE0101 -- so at most one
+        declaration answers.
+        """
+        methods = self.by_type.get(base_type_name, {})
+        return (methods.get((method_name, instantiation))
+                or methods.get((method_name, "")))
 
 
 class FunctionCollector:
@@ -611,12 +630,21 @@ class FunctionCollector:
 
         if target_type is not None and isinstance(target_type, GenericTypeRef):
             base_type_name = target_type.base_name
-            type_params_tuple = tuple(str(t) if isinstance(t, TypeParameter) else str(t) for t in target_type.type_args)
 
-            if base_type_name not in self.generic_structs.by_name and base_type_name not in self.generic_enums.by_name:
-                pass
+            # A concrete argument is a CONSTRAINT, a bare name is a type PARAMETER, and a mix
+            # of the two is partial specialization, which Sushi does not have (#393). Phase 0
+            # is the pass that can tell them apart, because the struct and enum tables say
+            # which names are declared types -- so the answer is decided here and carried.
+            shape = classify_extension_target(target_type, self._is_declared_type)
+            ext.target_shape = shape
+            if shape.is_mixed:
+                er.emit_with(self.r, ERR.CE2098, target_type_span or name_span,
+                             target=display_type(target_type)) \
+                    .help("name every type parameter, or make every argument concrete -- "
+                          "there is no partial specialization").emit()
+                return
 
-            type_param_names = set(type_params_tuple)
+            type_param_names = set(shape.param_names)
 
             def convert_unknown_to_typeparam(ty: Optional[Type]) -> Optional[Type]:
                 """Convert UnknownType to TypeParameter if it matches a type parameter name."""
@@ -642,7 +670,8 @@ class FunctionCollector:
 
             generic_method = GenericExtensionMethod(
                 base_type_name=base_type_name,
-                type_params=type_params_tuple,
+                type_params=shape.param_names,
+                target_key=shape.target_key,
                 name=name,
                 loc=getattr(ext, "loc", None),
                 target_type_span=target_type_span,
@@ -654,11 +683,7 @@ class FunctionCollector:
                 self_mode=getattr(ext, "self_mode", None),
             )
 
-            existing = self.generic_extensions.get_method(base_type_name, name)
-            if existing is not None:
-                er.emit_with(self.r, ERR.CE0101, name_span,
-                       name=f"extension method '{name}' for '{base_type_name}@(...)'") \
-                    .note("first defined here", existing.name_span).emit()
+            if self._reject_overlapping_target(generic_method, target_type, name_span):
                 return
 
             self.generic_extensions.add_method(generic_method)
@@ -693,3 +718,49 @@ class FunctionCollector:
 
             if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, StructType, EnumType)):
                 self.extensions.add_method(method)
+
+    def _is_declared_type(self, name: str) -> bool:
+        """Whether a bare name in a type position names a declared type.
+
+        The tables accumulate in compilation order, and library symbols register after Phase 0,
+        so a name this cannot see yet is read as a type PARAMETER. That is the safe direction:
+        a name IN the tables is certainly a type, so the only reachable mistake is the old
+        behaviour (the declaration applies to every instantiation), never a false rejection.
+        """
+        return (name in self.structs.by_name
+                or name in self.enums.by_name
+                or name in self.generic_structs.by_name
+                or name in self.generic_enums.by_name)
+
+    def _reject_overlapping_target(self, method: GenericExtensionMethod,
+                                   target_type: GenericTypeRef,
+                                   name_span: Optional[Span]) -> bool:
+        """Reject a second declaration of one method name that covers the same type (#393).
+
+        Two fully-concrete targets never overlap, so they are two methods. A template and a
+        concrete target for one name both claim that instantiation, and Sushi resolves the
+        overlap by rejecting it rather than by letting the most specific win: under
+        specialization, whether the template's body is dead code would depend on which
+        instantiations exist ELSEWHERE in the program, and `docs/design/method-resolution.md`
+        rules that an unreachable declaration is a diagnostic.
+        """
+        for existing in self.generic_extensions.declarations(method.base_type_name, method.name):
+            same_target = existing.target_key == method.target_key
+            if not same_target and existing.target_key and method.target_key:
+                continue  # two distinct concrete targets: two types, two methods
+
+            diag = er.emit_with(
+                self.r, ERR.CE0101, name_span,
+                name=f"extension method '{method.name}' for '{display_type(target_type)}'")
+            if same_target:
+                diag.note("first defined here", existing.name_span)
+            else:
+                diag.note("this declaration already covers that target",
+                          existing.name_span)
+                diag.help("Sushi has no specialization: make both targets fully concrete, "
+                          "or implement a perk on the concrete target -- a perk "
+                          "implementation outranks an extension method by design.")
+            diag.emit()
+            return True
+
+        return False

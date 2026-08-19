@@ -384,13 +384,18 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+A **concrete** type argument in the target is a constraint rather than a parameter name, so
+`extend Box@(i32)` extends `Box@(i32)` alone and one method name can serve several
+instantiations. A template and a concrete target for the same method name overlap and are
+rejected (`CE0101`); a partially concrete target such as `extend Pair@(i32, U)` is rejected too
+(`CE2098`). See the Extension Methods section of the language guide for the full rule.
+
 !!! warning "Limitations of generic extension methods"
-    Generic extension methods are restricted. The following are **not** currently supported
-    and will fail to compile: extending the built-in collections (`extend List@(T) ...`),
-    extending array types (`extend T[] ...`), methods that return the blank type (`~`),
-    methods that take a generic parameter, and methods that permute multiple type parameters
-    (for example `extend Pair@(T, U) swap() Pair@(U, T)`). Prefer ordinary generic functions
-    for those cases.
+    An **array** target is not supported: `extend i32[] ...` compiles and every call reports
+    `CE2008`. Two limitations apply to a **generic enum** target — no monomorphized copy is
+    produced, so every call is `CE2008` (issue #394) — and to a **generic call typed through
+    `self`** in such a body, which reports `CE2061` (issue #392). Prefer an ordinary generic
+    function for those cases.
 
 ## Nested Generics
 

@@ -1,0 +1,26 @@
+# A concrete type argument in an extension target is a CONSTRAINT (#393): `extend Box@(i32)`
+# applies to `Box@(i32)` and to nothing else, exactly as a perk implementation on the same
+# target already did. The argument used to be stored as a type-parameter NAME, so the method
+# registered for EVERY instantiation of `Box` and answered a `Box@(string)` receiver -- this
+# program printed 1 twice, and the `i32` in the declaration constrained nothing.
+#
+# A batch that instantiates ONE type argument cannot see this, which is why the #389 batch
+# passed over the same declaration.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: "Box@(string).tag"
+struct Box@(T):
+    T value
+
+extend Box@(i32) tag() i32:
+    return 1
+
+fn run_test() i32:
+    let Box@(i32) n = Box(7)
+    println(n.tag())
+    let Box@(string) s = Box("marvin")
+    println(s.tag())
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(9))

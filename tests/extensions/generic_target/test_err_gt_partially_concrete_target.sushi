@@ -1,0 +1,21 @@
+# A partially-concrete extension target is rejected (#393). It used to compile and run,
+# with `i32` stored as a type-parameter NAME beside `U`.
+#
+# Rejecting it removes the ordering question entirely: two fully-concrete targets can never
+# overlap and template-versus-concrete is strictly ordered, so `Pair@(i32, U)` against
+# `Pair@(T, string)` -- equally specific, ambiguous -- cannot arise. That ambiguity is where
+# Rust's specialization has stalled for years.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2098
+# EXPECT_STDERR_CONTAINS: "extension target 'Pair@(i32, U)'"
+struct Pair@(A, B):
+    A first
+    B second
+
+extend Pair@(i32, U) tag() i32:
+    return self.first
+
+fn main() i32:
+    let Pair@(i32, string) p = Pair(7, "marvin")
+    println(p.tag())
+    return Result.Ok(0)
