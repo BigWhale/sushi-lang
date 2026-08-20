@@ -1,0 +1,13 @@
+# A captured name can BE the `if` condition inside the lambda body. The
+# condition sits in a (cond, Block) TUPLE element, so the rewrite must rebuild
+# the tuple -- a tuple cannot be mutated in place (#400).
+# EXPECT_STDOUT_EXACT: "5\n"
+fn main() i32:
+    let bool flag = true
+    let fn(i32) -> i32 f = |i32 x|:
+        if (flag):
+            return Result.Ok(x + 4)
+        return Result.Ok(x)
+    let i32 v = f(1).realise(0)
+    println("{v}")
+    return Result.Ok(0)

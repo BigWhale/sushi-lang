@@ -1,0 +1,14 @@
+# An unmarked owning parameter is a borrow, so capturing it is the
+# (BORROWED, MOVE) cell: CE2411, escape .clone() (#399 pins the gate in an
+# extension body).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2411
+extend i32 combined(string tag) i32:
+    let fn(i32) -> i32 f = |i32 x| x + tag.len()
+    let i32 r = f(self).realise(0)
+    return r
+
+fn main() i32:
+    let string t = "zaphod"
+    println("{4.combined(t)}")
+    return Result.Ok(0)

@@ -1,0 +1,11 @@
+# A generic-target extension declared in ANOTHER unit, instantiated here. The
+# monomorphized body used to be DEFINED with external linkage in every unit
+# module, so the incremental link failed with a duplicate symbol (#404). The
+# definition carries weak_odr now, like a perk-impl method.
+# EXPECT_STDOUT_EXACT: "7\n"
+use "helpers/gt_multiunit_helper"
+
+fn main() i32:
+    let Crate@(i32) c = Crate(21)
+    println("{c.shown()}")
+    return Result.Ok(0)

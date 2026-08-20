@@ -604,8 +604,11 @@ class LLVMCodegen:
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_def(synthetic_ext)
 
+        # A monomorphized extension belongs to no unit, so its body is defined
+        # in EVERY unit module. weak_odr lets the linker keep one, like a
+        # perk-impl method; external linkage was a duplicate symbol (#404).
         for ext in self.monomorphized_extensions:
-            self.functions.emit_extension_method_def(ext)
+            self.functions.emit_extension_method_def(ext).linkage = "weak_odr"
 
         _set_linkonce_odr_on_inline_runtime(self.module)
 
@@ -756,8 +759,11 @@ class LLVMCodegen:
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_def(synthetic_ext)
 
+        # weak_odr for the same reason as the single-unit path (#404); the
+        # monolithic module defines each body once, so it is inert here, and
+        # one rule for both paths beats two.
         for ext in self.monomorphized_extensions:
-            self.functions.emit_extension_method_def(ext)
+            self.functions.emit_extension_method_def(ext).linkage = "weak_odr"
 
     def _declare_library_perk_impl_methods(self) -> None:
         """Declare (never define) library-shipped perk-impl methods (C4a)."""

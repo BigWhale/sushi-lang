@@ -364,9 +364,11 @@ class SemanticAnalyzer:
             self.reporter.items.extend(unit_reporter.items)
 
         if self.monomorphized_extensions:
-            self._check_monomorphized_extensions(destroy_effects, enum_names)
+            lift_target = next((u.ast for u in compilation_order if u.ast is not None), None)
+            self._check_monomorphized_extensions(destroy_effects, enum_names, lift_target)
 
-    def _check_monomorphized_extensions(self, destroy_effects, enum_names) -> None:
+    def _check_monomorphized_extensions(self, destroy_effects, enum_names,
+                                        lift_target=None) -> None:
         """Type- and borrow-check every instantiation of a generic-target extension.
 
         This is where a generic extension's per-instantiation truth is decided: `self` is
@@ -376,15 +378,41 @@ class SemanticAnalyzer:
 
         One body error would otherwise be reported once per instantiation, plus once from
         the template -- so the run collects into its own reporter and merges what is new.
+
+        The copies mirror the per-unit pass order 1 -> 2 -> 2.5 -> 3 (#399). They were
+        deep-copied BEFORE Pass 1 ran, so no walk ever stamped their lambda captures; the
+        scope run here exists only for that stamp and reports into a throwaway -- the
+        template's own Pass 1 already reported scope findings once. The lifted functions
+        land in `lift_target` (the first unit's AST) marked public, because every unit
+        module DEFINES the monomorphized extension bodies and only public functions of
+        another unit are declared there.
         """
         scratch = Reporter(source=self.reporter.source, filename=self.reporter.filename)
         type_validator = TypeValidator(scratch, self.tables)
         borrow_checker = BorrowChecker(scratch, destroy_effects=destroy_effects,
                                        enum_names=enum_names, tables=self.tables)
 
+        throwaway = Reporter(source=self.reporter.source, filename=self.reporter.filename)
+        capture_scope = ScopeAnalyzer(throwaway, self.constants, self.structs, self.enums,
+                                      self.generic_enums, self.generic_structs,
+                                      external_table=self.externals)
+        capture_scope.function_names = set(self.funcs.by_name)
+
+        lifter = None
+        if lift_target is not None:
+            from sushi_lang.semantics.passes.lambda_lift import LambdaLifter
+            lifter = LambdaLifter(self.structs, self.funcs, lift_target,
+                                  annotate=type_validator._validate_function)
+
         for extend_def in self.monomorphized_extensions:
+            capture_scope._check_extension_method(extend_def)
             type_validator._validate_extension_method(extend_def)
+            lifted = lifter.lift_body(extend_def.body) if lifter is not None else []
+            for fn in lifted:
+                fn.is_public = True
             borrow_checker._check_extension(extend_def)
+            for fn in lifted:
+                borrow_checker._check_function(fn)
 
         seen = {_diagnostic_identity(d) for d in self.reporter.items}
         for diagnostic in scratch.items:

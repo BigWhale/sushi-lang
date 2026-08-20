@@ -28,7 +28,8 @@ Perks provide a way to:
 **Key Design Principles:**
 - Perks return bare types (not `Result@(T)`), so a perk method body has no error
   channel: `??` is rejected there (CE0131). Handle a Result in the body with `match`
-  or `.realise(default)`
+  or `.realise(default)`. A `??` inside a lambda in the body is legal -- the lambda
+  has its own Result channel
 - Static dispatch only (no dynamic dispatch/vtables)
 - Explicit implementations required (no structural typing)
 - Full type checking at compile time

@@ -365,16 +365,21 @@ class ExpressionValidator(RecursiveVisitor):
         for p in node.params:
             if p.ty is not None:
                 tv.variable_types[p.name] = p.ty
+        # The ?? validator reads current_function for the enclosing Result
+        # channel, and a lambda has its OWN channel in both body forms (#403).
+        # The expression body used to validate against the ENCLOSING function:
+        # a false CE2511 on a mismatched error type, and a false CW2511 in main.
+        from sushi_lang.semantics.ast import Block, FuncDef
+        body_block = node.body if node.is_block_body else Block(statements=[], loc=node.loc)
+        synthetic = FuncDef(name="<lambda>", params=list(node.params), ret=ft.ok_type,
+                            body=body_block, err_type=ft.err_type, loc=node.loc)
+        saved_fn = tv.current_function
+        tv.current_function = synthetic
         if node.is_block_body:
-            from sushi_lang.semantics.ast import FuncDef
-            synthetic = FuncDef(name="<lambda>", params=list(node.params), ret=ft.ok_type,
-                                body=node.body, err_type=ft.err_type, loc=node.loc)
-            saved_fn = tv.current_function
-            tv.current_function = synthetic
             tv._validate_block(node.body)
-            tv.current_function = saved_fn
         else:
             tv.validate_expression(node.body)
+        tv.current_function = saved_fn
         tv.variable_types.clear()
         tv.variable_types.update(saved_vars)
 

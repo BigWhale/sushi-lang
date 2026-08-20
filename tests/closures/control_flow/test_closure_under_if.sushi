@@ -1,0 +1,15 @@
+# A lambda declared inside an `if` arm must be lifted (#400). `If.arms` holds
+# plain (cond, Block) tuples, and the lifter's walk skipped tuples -- so this
+# lambda kept lifted_name = None and the backend died with a CE0055 ICE.
+# EXPECT_STDOUT_EXACT: "15\n"
+fn pick(bool b) i32:
+    let i32 base = 10
+    if (b):
+        let fn(i32) -> i32 f = |i32 x| x + base
+        return Result.Ok(f(5).realise(0))
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 v = pick(true).realise(0)
+    println("{v}")
+    return Result.Ok(0)

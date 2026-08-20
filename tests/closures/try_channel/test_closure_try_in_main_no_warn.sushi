@@ -1,0 +1,11 @@
+# A ?? inside a lambda inside main() belongs to the LAMBDA's channel, so it
+# must not warn CW2511 (#403). A warning makes this test exit 1 and fail.
+# EXPECT_STDOUT_EXACT: "5\n"
+fn get() i32:
+    return Result.Ok(4)
+
+fn main() i32:
+    let fn(i32) -> i32 f = |i32 x| get()?? + x
+    let i32 v = f(1).realise(0)
+    println("{v}")
+    return Result.Ok(0)

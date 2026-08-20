@@ -1,0 +1,5 @@
+struct Crate@(T):
+    T value
+
+extend Crate@(T) shown() i32:
+    return 7

@@ -1,0 +1,22 @@
+# The perk-impl twin: a ?? inside a lambda inside a perk-impl method body is
+# legal for the same reason (#399).
+# EXPECT_STDOUT_EXACT: "7\n"
+perk Fixed:
+    fn fixed() i32
+
+fn tag(i32 n) i32:
+    return Result.Ok(n)
+
+struct Q:
+    i32 n
+
+extend Q with Fixed:
+    fn fixed() i32:
+        let fn(i32) -> i32 f = |i32 x| tag(x)??
+        let i32 r = f(self.n).realise(0)
+        return r
+
+fn main() i32:
+    let Q q = Q(7)
+    println("{q.fixed()}")
+    return Result.Ok(0)

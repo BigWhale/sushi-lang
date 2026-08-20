@@ -1,0 +1,18 @@
+# A `poke self` receiver registers as a ReferenceType, and capturing a borrow
+# is CE2094 (deferred to Tier 2). Pins the existing gate for method bodies
+# (#399).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2094
+struct Counter:
+    i32 n
+
+extend Counter bump(poke self) ~:
+    let fn(i32) -> i32 f = |i32 x| x + self.n
+    let i32 r = f(1).realise(0)
+    self.n := r
+
+fn main() i32:
+    let Counter c = Counter(0)
+    c.bump()
+    println("{c.n}")
+    return Result.Ok(0)
