@@ -205,7 +205,7 @@ def test_mangling_matrix_is_pairwise_unique():
 
     assert len(set(symbols)) == len(symbols), (
         "collision detected among mangled symbols:\n  "
-        + "\n  ".join(f"{c} -> {s}" for c, s in zip(cases, symbols))
+        + "\n  ".join(f"{c} -> {s}" for c, s in zip(cases, symbols, strict=True))
     )
 
     # Spot-check the adversarial structural separation explicitly.

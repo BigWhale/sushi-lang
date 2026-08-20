@@ -5,7 +5,6 @@ import io
 import os
 import re
 import shutil
-import struct
 import subprocess
 from pathlib import Path
 

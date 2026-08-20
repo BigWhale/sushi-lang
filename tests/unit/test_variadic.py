@@ -3,13 +3,11 @@ from __future__ import annotations
 
 import pytest
 
-from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.internals.report import Reporter
 
 # Reuse the production IR-emit + function-body helpers from the FFI unit tests.
 from tests.unit.test_ffi import (
     _emit_ir,
-    _function_body,
     _count_in_function,
     _ensure_newline,
     _make_unit,

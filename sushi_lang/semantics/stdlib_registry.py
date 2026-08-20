@@ -119,9 +119,11 @@ class StdlibRegistry:
         "sys/process": "sushi_lang.sushi_stdlib.src.sys.process",
         "random": "sushi_lang.sushi_stdlib.src.random",
         "io/files": "sushi_lang.sushi_stdlib.src.io.files_funcs",
-        # Future modules can be added here
-        # "io/stdio": "sushi_lang.sushi_stdlib.src.io.stdio",
-        # "collections/strings": "sushi_lang.sushi_stdlib.src.collections.strings",
+        # io/stdio and collections/strings are NOT registry-driven and cannot
+        # be listed here: they expose a METHOD interface
+        # (is_builtin_stdio_method / is_builtin_string_method), while this
+        # registry reads the free-FUNCTION interface (#247). Their methods
+        # resolve through semantics/passes/types/method_registry.py instead.
     }
 
     def __init__(self):
@@ -129,12 +131,20 @@ class StdlibRegistry:
         self._function_lookup: Dict[Tuple[str, str], StdlibFunction] = {}
 
     def discover_modules(self) -> None:
-        """Discover and register all known stdlib modules."""
+        """Discover and register all known stdlib modules.
+
+        A failure here is a compiler configuration error, never a no-op: a
+        KNOWN_MODULES entry that imports nothing or registers nothing used to
+        be skipped in silence (#247).
+        """
         for module_path, python_path in self.KNOWN_MODULES.items():
             try:
                 self._discover_module(module_path, python_path)
-            except ImportError:
-                pass
+            except ImportError as e:
+                raise RuntimeError(
+                    f"stdlib registry: KNOWN_MODULES entry '{module_path}' "
+                    f"names '{python_path}', which does not import: {e}"
+                ) from e
 
     def _discover_module(self, module_path: str, python_path: str) -> None:
         """Discover and register a single stdlib module."""
@@ -156,8 +166,16 @@ class StdlibRegistry:
         validator_name = f"validate_{module_name}_function_call"
         validator = getattr(py_module, validator_name, None)
 
-        if not checker or not type_resolver or not validator:
-            return
+        missing = [name for name, symbol in ((checker_name, checker),
+                                              (type_resolver_name, type_resolver),
+                                              (validator_name, validator))
+                   if not symbol]
+        if missing:
+            raise RuntimeError(
+                f"stdlib registry: module '{module_path}' ({python_path}) is "
+                f"missing {', '.join(missing)} -- a KNOWN_MODULES entry must "
+                "expose the free-function interface"
+            )
 
         self._discover_functions_heuristic(
             stdlib_module, module_name, checker, type_resolver, validator

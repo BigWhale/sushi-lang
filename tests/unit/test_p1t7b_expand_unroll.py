@@ -1,14 +1,11 @@
 """P1-T7b: compile-time unrolling of ``expand(...)`` over parameter packs."""
-import copy
 
-import pytest
 
-from sushi_lang.semantics.generics.types import TypeParameter, TypePack
+from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands
 from sushi_lang.semantics.typesys import BuiltinType, UnknownType
 from sushi_lang.semantics.ast import (
-    Block, Param, Expand, Name, DotCall, PrintLn, ExprStmt, Let, Return,
-    If, BoolLit,
+    Block, Param, Expand, Name, DotCall, PrintLn, Let, If, BoolLit,
 )
 
 I32 = BuiltinType.I32
@@ -232,7 +229,7 @@ def test_unroll_renames_toplevel_locals_per_copy():
 
     # Each copy's declared local has a DISTINCT name (so they don't collide in
     # the shared callee scope).
-    let_names = [l.name for l in lets]
+    let_names = [let.name for let in lets]
     assert len(set(let_names)) == 2, let_names
     assert let_names == ["s__x0", "s__x1"]
 

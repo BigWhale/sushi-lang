@@ -406,7 +406,7 @@ def main():
     if failed_tests:
         print()
         print("Failed tests:")
-        for test_name, expected, actual, output in failed_tests:
+        for test_name, expected, actual, _output in failed_tests:
             print(f"  {test_name}: expected {expected}, got {actual}")
 
     # Return appropriate exit code

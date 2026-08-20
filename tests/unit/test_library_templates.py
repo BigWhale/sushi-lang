@@ -1,17 +1,35 @@
 """Unit tests for the .slib generic-template codec (Phase 2, P2-T1 + P2-T2)."""
 from __future__ import annotations
 
-import pytest
+from types import SimpleNamespace
 
 from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.internals.report import Reporter
+from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 from sushi_lang.semantics.units import Unit
-from sushi_lang.semantics.passes.collect import CollectorPass, StructTable, EnumTable
+from sushi_lang.semantics.passes.collect import (
+    CollectorPass,
+    StructTable,
+    EnumTable,
+    ExtensionTable,
+    GenericFunctionTable,
+    GenericStructTable,
+    GenericEnumTable,
+    PerkTable,
+    PerkImplementationTable,
+)
 from sushi_lang.semantics.library_templates import (
     serialize_generic_function,
     deserialize_generic_function,
     serialize_perk,
     deserialize_perk,
+    serialize_generic_struct,
+    deserialize_generic_struct,
+    serialize_generic_enum,
+    deserialize_generic_enum,
+    serialize_perk_impl,
+    deserialize_perk_impl,
+    impl_method_symbol,
 )
 
 
@@ -119,13 +137,13 @@ def test_round_trip_structural_equality():
 
     # Same type-params (names + constraints).
     assert len(rebuilt.type_params) == len(direct.type_params)
-    for r_tp, d_tp in zip(rebuilt.type_params, direct.type_params):
+    for r_tp, d_tp in zip(rebuilt.type_params, direct.type_params, strict=True):
         assert r_tp.name == d_tp.name
         assert list(r_tp.constraints or []) == list(d_tp.constraints or [])
 
     # Same params (names + type strings).
     assert len(rebuilt.params) == len(direct.params)
-    for r_p, d_p in zip(rebuilt.params, direct.params):
+    for r_p, d_p in zip(rebuilt.params, direct.params, strict=True):
         assert r_p.name == d_p.name
         assert str(r_p.ty) == str(d_p.ty)
 
@@ -261,10 +279,6 @@ def test_closure_ships_private_helper_reference(tmp_path):
 
 # P2-T4: consumer-side registration of library generic templates.
 
-from types import SimpleNamespace
-
-from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
-from sushi_lang.semantics.passes.collect import GenericFunctionTable
 
 
 def _analyzer_with_loaded_libraries(loaded: dict) -> SemanticAnalyzer:
@@ -489,16 +503,6 @@ def test_seed_library_perks_guards_missing_templates():
 
 # P2-5 Phase 1 (C3): generic STRUCT / ENUM templates.
 
-from sushi_lang.semantics.library_templates import (
-    serialize_generic_struct,
-    deserialize_generic_struct,
-    serialize_generic_enum,
-    deserialize_generic_enum,
-)
-from sushi_lang.semantics.passes.collect import (
-    GenericStructTable,
-    GenericEnumTable,
-)
 
 BOX_SRC = (
     "struct Box@(T):\n"
@@ -691,16 +695,6 @@ def test_register_library_generic_struct_respects_local_definition():
 
 # C4a: concrete perk-impl shipping (templates.perk_impls)
 
-from sushi_lang.semantics.library_templates import (
-    serialize_perk_impl,
-    deserialize_perk_impl,
-    impl_method_symbol,
-)
-from sushi_lang.semantics.passes.collect import (
-    PerkTable,
-    PerkImplementationTable,
-    ExtensionTable,
-)
 
 
 IMPL_LIB_SRC = (

@@ -7,7 +7,6 @@ tables answer, so it can never drift from them again.
 """
 from __future__ import annotations
 
-import pytest
 
 from sushi_lang.semantics.generics.instantiate.types import TypeInferrer
 from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method, maybe_method_return_type

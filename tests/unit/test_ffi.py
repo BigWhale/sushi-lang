@@ -99,7 +99,7 @@ def test_string_marshalling_frees_cstr_in_ir(tmp_path):
 
 def _function_body(ir_text: str, fn_name: str) -> str:
     """Return the IR text of the body of `define ... @fn_name(...)`."""
-    start = ir_text.index(f'define ')
+    start = ir_text.index('define ')
     while True:
         # Find a `define` whose name matches `@"fn_name"(`.
         marker = f'@"{fn_name}"('
