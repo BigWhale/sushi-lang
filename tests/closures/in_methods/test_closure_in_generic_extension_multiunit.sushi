@@ -1,0 +1,11 @@
+# The generic extension lives in ANOTHER unit and the instantiation lives
+# here. The monomorphized body is emitted in every unit module (weak_odr,
+# #404), so the lambda lifted from it must be visible from every module --
+# which is why a lifted monomorphized-extension lambda is public (#399).
+# EXPECT_STDOUT_EXACT: "42\n"
+use "helpers/generic_ext_unit"
+
+fn main() i32:
+    let Crate@(i32) c = Crate(21)
+    println("{c.doubled_len()}")
+    return Result.Ok(0)
