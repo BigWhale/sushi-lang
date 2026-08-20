@@ -1,0 +1,4 @@
+public fn helper_apply() i32:
+    let i32 a = 100
+    let fn(i32) -> i32 f = |i32 x| x + a
+    return Result.Ok(f(1).realise(0))

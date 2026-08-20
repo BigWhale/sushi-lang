@@ -1,0 +1,14 @@
+# Each unit gets its own LambdaLifter, and the counter starts at zero per
+# instance while the tables are global -- so both units synthesized
+# __lambda_0, and the second registration was a SILENT no-op that wired this
+# unit's closure to the helper's body and env layout (#402).
+# EXPECT_OUTPUT: 101 6
+use "helpers/closure_unit_helper"
+
+fn main() i32:
+    let i32 two = 2
+    let fn(i32) -> i32 g = |i32 x| x * two
+    let i32 a = helper_apply().realise(0)
+    let i32 b = g(3).realise(0)
+    println("{a} {b}")
+    return Result.Ok(0)

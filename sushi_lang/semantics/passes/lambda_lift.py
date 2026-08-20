@@ -44,6 +44,13 @@ class LambdaLifter:
                 self._walk(getattr(node, f.name))
 
     def _lift(self, lam: Lambda) -> None:
+        # The counter is per lifter instance and the tables are global, so a
+        # taken index means another unit's lifter got there first -- advance
+        # past it, or this closure silently aliases that unit's body and env
+        # layout (#402).
+        while (f"__lambda_{self._counter}" in self.func_table.by_name
+               or f"__closure_env_{self._counter}" in self.structs.by_name):
+            self._counter += 1
         idx = self._counter
         self._counter += 1
         env_name = f"__closure_env_{idx}"
@@ -52,9 +59,8 @@ class LambdaLifter:
 
         env_struct = StructType(name=env_name,
                                 fields=tuple((c.name, c.ty) for c in captures))
-        if env_name not in self.structs.by_name:
-            self.structs.by_name[env_name] = env_struct
-            self.structs.order.append(env_name)
+        self.structs.by_name[env_name] = env_struct
+        self.structs.order.append(env_name)
 
         if lam.is_block_body:
             body = lam.body
@@ -88,7 +94,11 @@ class LambdaLifter:
             loc=lam.loc,
         )
         from sushi_lang.semantics.generics.synthesis import register_synthesized_function
-        register_synthesized_function(self.func_table, lifted, program=self.program)
+        if not register_synthesized_function(self.func_table, lifted,
+                                             program=self.program):
+            # Unreachable after the free-name search above; a silent False
+            # here is exactly the #402 aliasing, so fail loud instead.
+            raise RuntimeError(f"lifted lambda name '{lifted_name}' already registered")
         self._lifted.append(lifted)
 
         lam.lifted_name = lifted_name
