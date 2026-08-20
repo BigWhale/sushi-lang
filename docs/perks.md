@@ -26,7 +26,9 @@ Perks provide a way to:
 - Achieve zero-cost abstractions through monomorphization
 
 **Key Design Principles:**
-- Perks return bare types (not `Result@(T)`)
+- Perks return bare types (not `Result@(T)`), so a perk method body has no error
+  channel: `??` is rejected there (CE0131). Handle a Result in the body with `match`
+  or `.realise(default)`
 - Static dispatch only (no dynamic dispatch/vtables)
 - Explicit implementations required (no structural typing)
 - Full type checking at compile time

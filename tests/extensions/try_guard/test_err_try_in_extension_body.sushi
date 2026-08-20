@@ -1,0 +1,16 @@
+# An extension method returns a bare value (CE2091), so it has no error channel.
+# A `??` in its body has nothing to propagate into. The rejection is structural
+# and gets its own code, emitted from Phase 0 (#398). It used to be CE2508 by
+# accident of `current_function is None`, which told the user to change the
+# return type -- and no return spelling can satisfy that.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE0131
+fn tag(i32 n) i32:
+    return Result.Ok(n)
+
+extend i32 fixed() i32:
+    return tag(9)??
+
+fn main() i32:
+    println("{8.fixed()}")
+    return Result.Ok(0)

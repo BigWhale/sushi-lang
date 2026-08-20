@@ -119,6 +119,10 @@ _add(ErrorMessage("CE0125", Severity.ERROR,
     "internal error: borrow checker has no arm for expression node '{node}'",
     Category.INTERNAL, "The Expr union grew a member the borrow checker does not dispatch on. This used to be a SILENT fall-through, which meant no borrow checking at all for that node - the root cause of the bloom use-after-free (#174), the unchecked range bound (#175) and the unchecked perk body (#176). tests/unit/test_borrow_dispatch_is_total.py is the CI gate; this is the runtime backstop."))
 
+_add(ErrorMessage("CE0131", Severity.ERROR,
+    "'??' operator not allowed in {context}: the method returns a bare value and has no error channel",
+    Category.FUNC, "An extension method and a perk-impl method return a bare value (CE2091), so a '??' has no Result return to propagate into. Handle the Result in the method body with match or .realise(). Emitted from Phase 0 collection, so it fires once per declaration and covers templates nobody instantiates."))
+
 _add(ErrorMessage("CE0130", Severity.ERROR,
     "internal error: scope checker has no arm for node '{node}'",
     Category.INTERNAL, "The AST grew a statement or expression node the scope checker does not dispatch on. This used to be a SILENT fall-through (issue #245) - an unhandled statement got no scope analysis at all, invisibly, the same hazard class CE0125 closed in the borrow checker. Notably the expand(...) statement was skipped this way. tests/unit/test_scope_dispatch_is_total.py is the CI gate; this is the runtime backstop."))

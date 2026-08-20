@@ -10,7 +10,7 @@ from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.ast import PerkDef, ExtendWithDef, FuncDef, Program
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
 
-from .utils import reject_reference_in
+from .utils import reject_reference_in, reject_try_in_body
 
 
 @dataclass
@@ -232,6 +232,10 @@ class PerkCollector:
         perk_name = getattr(impl, "perk_name", None)
         if not isinstance(perk_name, str):
             return
+
+        # A `??` has no error channel in a perk-impl body (CE0131, #398).
+        for method in getattr(impl, "methods", []) or []:
+            reject_try_in_body(self.r, getattr(method, "body", None), "a perk method")
 
         perk_name_span: Optional[Span] = getattr(impl, "perk_name_span", None) or getattr(impl, "loc", None)
         target_type: Optional[Type] = getattr(impl, "target_type", None)
