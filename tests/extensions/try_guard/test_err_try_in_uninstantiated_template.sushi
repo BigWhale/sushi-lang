@@ -1,0 +1,18 @@
+# A generic-target extension nobody instantiates has no monomorphized copy, and
+# Pass 2 walks only copies (#391) -- so a `??` in the template body used to be
+# accepted SILENTLY (this program compiled and ran, exit 0). Phase 0 walks the
+# declaration itself, so the guard fires once, at the declaration (#398).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE0131
+struct Box@(T):
+    T value
+
+fn tag(i32 n) i32:
+    return Result.Ok(n)
+
+extend Box@(T) tagged() i32:
+    return tag(1)??
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

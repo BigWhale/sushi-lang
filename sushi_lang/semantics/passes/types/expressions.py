@@ -160,7 +160,12 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
             return
 
     if validator.current_function is None:
-        er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
+        # An extension/perk body has no error channel; Phase 0 already
+        # rejected every `??` in it with CE0131 (#398), so emitting the
+        # accidental CE2508 here would only duplicate and mislead. Any
+        # other None context keeps the CE2508 backstop.
+        if not getattr(validator, "in_extension_context", False):
+            er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
         return
 
     # CW2511: Warn about ?? operator in main function

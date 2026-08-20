@@ -746,6 +746,18 @@ fn main() i32:
 3. The call `x.squared()` is transformed at compile-time into `squared(x)`
 4. This transformation is zero-cost - there's no runtime overhead
 
+**No `??` in an extension body**: an extension method returns a bare value, not a
+`Result@(T, E)` (a `Result.Ok(...)` return is CE2091). The body has no error channel, so
+`??` has nothing to propagate into and is rejected with CE0131. Handle the Result in the
+body instead -- match on it, or use `.realise(default)`:
+
+```sushi
+extend i32 tagged() i32:
+    return tag(self).realise(0)   # tag() returns Result@(i32, StdError)
+```
+
+The same rule applies to perk implementation methods.
+
 **Generic Extension Methods**:
 ```sushi
 struct Box@(T):

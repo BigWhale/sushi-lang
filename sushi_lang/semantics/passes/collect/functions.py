@@ -34,7 +34,8 @@ from sushi_lang.semantics.generics.types import (
     TypeParam,
 )
 
-from .utils import extract_type_param_names, param_from_node, reject_reference_in
+from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
+                    reject_try_in_body)
 from sushi_lang.semantics.generics.extension_targets import classify_extension_target
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -623,10 +624,15 @@ class FunctionCollector:
             params.append(param)
 
         # Variadic parameters are not allowed in extension methods (CE0115).
+        # The pack half is unreachable today, but the guard must match its
+        # documented contract and stay correct by construction (#246).
         for p in params:
-            if getattr(p, "is_variadic", False):
+            if getattr(p, "is_variadic", False) or getattr(p, "is_pack", False):
                 er.emit(self.r, ERR.CE0115, p.name_span, context="an extension method")
                 break
+
+        # A `??` has no error channel in an extension body (CE0131, #398).
+        reject_try_in_body(self.r, body, "an extension method")
 
         if target_type is not None and isinstance(target_type, GenericTypeRef):
             base_type_name = target_type.base_name

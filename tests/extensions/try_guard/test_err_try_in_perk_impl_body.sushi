@@ -1,0 +1,21 @@
+# A perk-impl method returns a bare value, exactly like an extension method,
+# so a `??` in its body is rejected with the same dedicated code (#398).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE0131
+perk Tagged:
+    fn tagit() i32
+
+fn tag(i32 n) i32:
+    return Result.Ok(n)
+
+struct P:
+    i32 n
+
+extend P with Tagged:
+    fn tagit() i32:
+        return tag(self.n)??
+
+fn main() i32:
+    let P p = P(4)
+    println("{p.tagit()}")
+    return Result.Ok(0)

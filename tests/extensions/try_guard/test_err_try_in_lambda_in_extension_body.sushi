@@ -1,0 +1,18 @@
+# A `??` inside a lambda inside an extension body stays rejected. A lambda has
+# its own Result channel, so this could become legal -- but a lambda in an
+# extension body is never lifted at all today (#399). The Phase 0 walk enters
+# lambda bodies on purpose, so the rejection stays until #399 lands, and #399
+# then narrows the walk.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE0131
+fn tag(i32 n) i32:
+    return Result.Ok(n)
+
+extend i32 fixed() i32:
+    let fn(i32) -> i32 f = |i32 x| tag(x)??
+    let i32 r = f(self).realise(0)
+    return r
+
+fn main() i32:
+    println("{8.fixed()}")
+    return Result.Ok(0)

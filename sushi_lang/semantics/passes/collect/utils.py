@@ -81,3 +81,38 @@ def reject_reference_in(reporter, ty: Optional[Type], span: Optional[Span],
         return False
     er.emit(reporter, code, span, ty=display_type(ty))
     return True
+
+
+def reject_try_in_body(reporter, body: Any, context: str) -> None:
+    """Reject every `??` in an extension or perk method body (CE0131, #398).
+
+    These bodies return a bare value (CE2091), so a `??` has nothing to
+    propagate into. The rule is structural, so Phase 0 owns it: the walk sees
+    the DECLARATION, fires once per occurrence, and covers a template nobody
+    instantiates. The walk enters lambda bodies too -- a lambda in one of
+    these bodies is never lifted (#399), so the `??` stays rejected there
+    until #399 lands.
+    """
+    import dataclasses
+
+    from sushi_lang.internals import errors as er
+    from sushi_lang.semantics.ast import Node, TryExpr
+
+    def walk(node: Any) -> None:
+        if isinstance(node, TryExpr):
+            er.emit_with(reporter, er.ERR.CE0131,
+                         getattr(node, "loc", None), context=context) \
+                .help("handle the Result in the body: match on it, or use "
+                      ".realise(default)").emit()
+            walk(node.expr)
+            return
+        # `If.arms` holds plain (cond, Block) tuples, so tuples walk too.
+        if isinstance(node, (list, tuple)):
+            for item in node:
+                walk(item)
+            return
+        if isinstance(node, Node):
+            for f in dataclasses.fields(node):
+                walk(getattr(node, f.name))
+
+    walk(body)
