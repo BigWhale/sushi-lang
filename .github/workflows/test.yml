@@ -47,6 +47,18 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run ruff check sushi_lang
 
+      # Tier 4.1 layering gate (#276): semantics must never import backend.
+      # The documented grep, run for real. tests/unit/test_layering_gate.py
+      # holds the stronger checks (every import form, and the #239-shape
+      # import-isolation discriminator).
+      - name: Layering gate (semantics must not import backend)
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          if grep -rn "sushi_lang\.backend" sushi_lang/semantics/; then
+            echo "semantics must never import backend (Tier 4.1)"
+            exit 1
+          fi
+
       # Blocking over the mypy-clean packages (the Tier 5.2 ratchet); grow this
       # list as later waves land. Keep in sync with MYPY_PKGS in .githooks/pre-push.
       - name: Run mypy (ratcheted packages, blocking)
