@@ -81,6 +81,14 @@ runs:
           uv sync --extra dev
         fi
 
+    - name: Mark the workspace safe for git
+      # The Linux jobs run in a container whose user differs from the checkout's
+      # owner, so any `git` invocation inside the repo -- `git ls-files` in
+      # tests/docs_sweep.py and tests/unit/test_path_references_exist.py -- is
+      # refused with "detected dubious ownership" (exit 128) without this.
+      shell: bash
+      run: git config --global --add safe.directory "$(pwd)"
+
     - name: Make sushic executable
       if: inputs.make-sushic-executable == 'true'
       shell: bash
