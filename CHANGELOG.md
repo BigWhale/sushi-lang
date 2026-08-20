@@ -2,10 +2,12 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
-## [Unreleased]
+## [0.11.0] - 2026-08-20
 
-Two breaking language changes (generic syntax, ownership), the Tier 0-6 remediation programme, and
-the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-07-07.
+Three breaking language changes (generic syntax, ownership, borrow by default), the
+reference-seam programme that made every borrow rule enforced in both directions, the Tier 0-6
+remediation programme, the leak/RAII cluster, and the sixteen-round bug-clearing campaign that
+emptied the ranked bug table. Everything below landed after the 0.10.0 release on 2026-07-07.
 
 ### Breaking
 - **Borrow by default: a parameter mode is DECLARED, not derived from the callee** (#354;
@@ -81,8 +83,81 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   used to mean "also enforce leak assertions" no longer names anything. `--leaks` is an argparse
   error rather than a silent alias, and both harness parsers set `allow_abbrev=False` so it cannot
   resolve as a prefix of `--leaks-only` and quietly narrow a 1293-test run to 96
+- **`arr.pop()` returns `Maybe@(T)`** (#377), matching `arr.get()` and `List@(T).pop()`. Popping
+  an EMPTY array used to invent a value -- a real `0` for an `i32[]`, indistinguishable from a
+  genuinely popped one -- and for any aggregate element (`string[]`, a struct with an owning
+  field) it was a `CE0000` before the program ever ran. `a.pop() + 1` becomes `a.pop()?? + 1`;
+  the popped element moves out inside the `Maybe.Some`
 
 ### Added
+- **The read-only receiver gate: a write cannot reach through a borrow, and each kind says so**
+  (`docs/design/borrowing.md` S5 -- six kinds, one dispatcher, each with its own code and its own
+  escape). Every one of these shapes used to COMPILE CLEAN and lose the write, corrupt memory, or
+  both:
+  - **`CE2414`** (#253): a write through a `match`/`foreach` binding -- a mutating method
+    (`p.push(9)`), a field assignment (`b.w := 99`), a `poke` borrow of it -- landed on a private
+    deep copy and was silently discarded. A rebind of the binding itself (`n := 99`) stays legal
+  - **`CE2408` widened from one shape to all of them** (#302, #307): only the rebind of a `peek`
+    reference was checked; a mutating method (`a.push(9)`, `m.free()`), a field chain
+    (`h.items.push(9)`), a field assignment and the `poke`-of-`peek` upgrade (#307) all wrote
+    straight through to the caller's value
+  - **`CE2421` / `CE2422`** (#326): a write through `self` or a by-value parameter -- a plain
+    field write was silently lost, an owning field write was a double free plus a leak, and
+    `self.items.push(9)` did not even reach codegen. Escapes: `poke self` / `poke T` / `nom T`
+  - **`CE2426`** (#344): a write through a `let`-borrow binding (`let i32[] v = h.items` then
+    `v.push(9)`, `v.destroy()`, `f(poke v)`). A `let`-borrow shares the owner's DATA, so a
+    reallocating push freed the owner's buffer, which the owner then freed again
+  - **`CE2429`** (#352 ruling, #407): a write through an UNBOUND CHAINED borrow. The rule: a
+    write receiver must reach its root -- a name -- through member and index steps only;
+    everything past a call boundary is a temporary copy. `o.get().items.push(9)` compiled,
+    printed the old length, and the leak counters balanced; the indexed and field-assign faces
+    were internal errors. Reads through the chain stay legal, and the chained indexed READ
+    (`o.get().items[0]`, a `CE0000`) was fixed with the gate. A FRESH temporary
+    (`from([1, 2]).push(9)`) is rejected by the same rule -- the statement discards the value.
+    Escapes: clone-mutate-rebuild (`o := Own.alloc(h)`), or a nested `Own(poke inner)` binding
+  - `CE2096` (a constant) completes the set; `tests/unit/test_readonly_receiver_matrix.py` pins
+    every kind x shape cell
+- **Reference bindings: `poke`/`peek` in a binding position mutates or reads IN PLACE**
+  (#300, shipped in three phases; #327). `foreach(poke r in rows.iter())`, `Own(poke x)`, and --
+  on the new aligned enum payload layout -- a top-level match binding `Shape.Poly(poke p)` bind a
+  POINTER into the owner's storage, so `p.push(9)` and `r.n := 5` reach the owner with no copy.
+  The binding registers as a reference, so the existing rules apply by construction: a `peek`
+  write is `CE2408`, a consume is `CE2411`, and the OWNER IS FROZEN while the binding lives
+  (`CE2412` -- mutating the container inside the loop, or rebinding the scrutinee under a payload
+  borrow, Rust's E0506). Fences: `CE2423` (a ref binding over an iterable whose items have no
+  address -- a range, `HashMap.entries()`), `CE2424` (a ref binding in a NESTED pattern).
+  **`poke self`** (#327) is the receiver's spelling: `extend Counter bump(poke self) ~:` makes
+  `self.n := v` and `self.items.push(9)` reach the CALLER's value; `peek self` states the
+  read-only default; a receiver parameter anywhere else is `CE2425`. The enum layout that makes
+  the match phase possible is `{i32 tag, [K x i64] data}` -- 8-aligned payload, one offset
+  authority, the `align=1` access family retired
+- **`CE2415`-`CE2420`** (#314-#319): a reference type in the six positions that have no semantics
+  for one -- a struct field (was a `CE0017` ICE), an enum payload (was silently untracked), a
+  RETURN type (**compiled into a dangling read of a dead frame**), a nested `peek peek T`, a
+  generic type argument (was a `CE0022` ICE; no `Maybe`/`Result` exemption, because those two are
+  exactly how a returned borrow would escape into a `match`), and an extension/perk target (was
+  permanently unreachable dead code). Two positions promoted to tested support by the same batch:
+  a reference parameter in a function type (`fn(peek i32) -> i32`) and the lambda satisfying it
+  (`|peek i32 x|`)
+- **Consuming a borrow is `CE2411` everywhere, references and method parameters included**
+  (#301, #310, #311, #333, #338). A `peek`/`poke` parameter handed to an owning position
+  (`eat(a)`, `return Result.Ok(a)`, `Holder(a)`, `l.push(s)`) used to be a `CE0129` ICE, and a
+  `let` bound from one was a **compile-clean double free**. `return self` / `eat(self)` /
+  `sink.push(self)` -- and the explicit-parameter twins -- were compile-clean double frees too
+  (#333). The `string` carve-out was removed (#338): the view it let escape DANGLED when the
+  receiver was a caller's local, so the `Display` idiom is `return self.clone()` -- and
+  `string.clone()` itself copies UNCONDITIONALLY now (#340; it used to pass an `owned = 0` source
+  through as an alias, so the escape dangled exactly like the thing it escaped). `.clone()` and
+  `.hash()` work on a reference receiver (#312, #308 -- both were ICEs)
+- **`CE0131`** (#398): `??` in an extension or perk method body. These bodies return a bare value
+  (`CE2091`), so there is no error channel to propagate into. It used to be a misleading `CE2508`
+  ("change the return type" -- which nothing can satisfy), and a TEMPLATE nobody instantiated was
+  accepted silently; the check runs at Phase 0 collection, so it covers both. A lambda inside such
+  a body keeps its own error channel, so `??` inside one is legal (#399)
+- **The HashMap key gate actually fires** (#272): `CE2054` (unhashable key) was dead code -- an
+  unhashable key compiled and crashed at codegen; a key type reaching a foreign `ptr` was a raw
+  `NotImplementedError`, now `CE2055`. A perk `hash` implementation on the key type satisfies the
+  gate, and the map probes with it
 - **Indexed assignment: `arr[i] := value`** (#261). Both array kinds, every element type, and an
   array that is a struct field. The form parsed already and fell through the rebind dispatch to a
   `CE0022` internal error. The index is bounds-checked through the same helper the READ uses, so
@@ -197,8 +272,98 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   (#257). The ambient `codegen.builder` is the backend's convention -- 1388 uses across 78 files
   -- and this was the only file imposing a second one, which is what let an out-of-line body
   emit into two functions at once
+- **The borrow checker is a package** (`semantics/passes/borrow/`, the same shape as
+  `passes/types/`), deduplicated and dispatched with `match`; diagnostic text verified identical
+  across the split. Three diagnostics moved to where they can be answered: `CE2400` is emitted by
+  Pass 1 now, so borrowing a constant reports "cannot borrow a non-local" instead of `CE1001`
+  "undeclared identifier" about a constant declared two lines up (#330); `CE2401` (move of a value
+  borrowed in the same statement, `both(poke s, s)`) is emitted at the consuming use, where it can
+  actually fire -- its old site ran before the value walk, so the shape was a compile-clean double
+  free (#329); `CE2402` is retired as unreachable. The scope pass gains the `CE0130` totality
+  backstop (#245 -- `expand` statements used to get no scope analysis at all)
+- **Method resolution has one answer site per question** (#269, #273, #296): the return-type
+  tables and the family resolution order are unified, and LOCAL-WINS holds everywhere -- a local
+  named after an enum used to resolve to the enum, so a method call on it was a `CE0017` ICE and
+  a field read a `CE0034` ICE
 
 ### Fixed
+- **Silent wrong data, five separate roots:**
+  - an UNSIGNED value read through an index, a struct field, a container `get()`, a `??` result
+    or `Maybe.realise()` printed as SIGNED -- `u8 255` printed `-1`, `u16 40000` printed `-25536`
+    (#379)
+  - `open(2)` was declared with a FIXED third parameter while the libc function is variadic, so
+    on macOS arm64 the file mode was read off the stack: `copy()` gave its destination whatever
+    happened to be there -- `0140` in one program, `0540` in another (#363). Variadic libc
+    functions are declared `var_arg` now, and `tests/unit/test_stdlib_copy_mode.py` asserts the
+    mode from pytest, because CI structurally cannot reach the macOS-arm64-only miscompile
+  - two units with one lambda each collided on `__lambda_0`, so the second unit's closure
+    **silently ran the first unit's body** (#402)
+  - a moved-out flag leaked across an `if` join (`owns_no_heap`), so a program compiled, moved
+    the value, and printed an EMPTY string with no diagnostic (#321)
+  - the return-type stamp at a perk boundary was left unresolved, so
+    `8.label().expect("boom")` on a `Maybe@(string)` printed an INTEGER (#387)
+- **The leak cluster, second round.** Every stdlib call that passes a `string` where the callee
+  wants a C string leaked the marshalled copy -- literals as much as owning values, 13 generated
+  sites plus `open()`; marshalling now happens at the call site through one seam and is freed at
+  scope exit (#291, #292). Every UNBOUND owning temporary leaked -- `give()??[0]`,
+  `from([1, 2]).len()`, `a.clone()[0]`, `make_list()??.len()`, `make_own()??.get()` -- because
+  the narrow registration router knew only the kinds whose storage is the alloca; one complete
+  router now serves them all (#382). Three more owned temporaries had no owner: a string
+  temporary outside a print argument (`go().realise("err")` -- unbounded in a loop), the print
+  frame on a `??` early-exit path, and a bare enum constant initializer (`Shape.Empty`) (#293,
+  #295, #289). A rebind through a `poke i32[]` parameter leaked the old buffer, and the `string`
+  twin was a DOUBLE FREE, exit 133 (#304, #303; a `poke List@(i32)` parameter was a false
+  `CE2002` "cannot assign List@(i32) to List@(i32)", #305)
+- **The borrow checker's control-flow joins** (#287, #294, #321-#324): a rebind now clears every
+  stale fact, so five false positives are gone -- `CE2406` after re-initializing a destroyed
+  value, `CE2405` after a returning `if` arm and in a second `match` arm, `CE2412` in a sibling
+  arm, `CE2411` after re-initialization -- and the one SILENT case (#321) is under "silent wrong
+  data" above. A match/foreach binding shadowing an outer local gets its own scope (#337 -- a
+  false `CE2411` after the match; #341 -- the item's type leaked out of the loop, a false
+  `CE2006`)
+- **Function types carry their modes, in both directions.** The `poke` -> `peek` coercion used to
+  travel INTO a stored function type, so `let fn(peek i32) -> i32 g = poker` accepted a `poke`
+  callee and `g(peek n)` wrote through a read-only borrow with no diagnostic (#335) -- borrow
+  modes in a function type are invariant now (`CE2002` both ways). And `nom` was dropped by 8 of
+  the 9 places that build a `FunctionType` and compared by none, so a `nom` in a fn-type
+  annotation was a false `CE2427`, and dropping the marker to satisfy it was a compile-clean
+  DOUBLE FREE (#368); every rebuild preserves the modes and `types_compatible` compares them.
+  An indirect call through a fn-typed STRUCT FIELD skipped borrow registration entirely, so a
+  program that is `CE2407` through a fn-typed local compiled clean and READ FREED MEMORY (#365)
+- **A method call on a chained or indexed receiver works** (#285, #286, #284, #288, #265): a
+  field or method chained onto `.realise(x)` was a `CE0000`; `rows[0].hash()` /
+  `rows[0].clone()` on a struct or enum element was a `CE0019`; a dynamic array of a user
+  struct/enum could not even be FILLED (`arr.push(P(3))` -- a false "expected P, got P"), and
+  `Row[]` where `Row` has an `i32[]` field now hashes -- the old `CE0052` rejection was this bug
+  wearing a different code; a fn-typed rebind was a false `CE2002`; and a static constructor as
+  a PLAIN enum-constructor argument (`Boxed.Wrap(Own.alloc(h))`) was a false `CE0055`
+- **A dynamic array has ONE value convention** (#281, #283, and two unfiled twins): `emit_expr`
+  yields the `{len, cap, data}` descriptor BY VALUE everywhere, so `Own.alloc(from([1, 2, 3]))`
+  and `l.push(from([1, 2]))` no longer die with `cannot store {i32,i32,i32*}* ...`, and
+  `o.get().len()` / `o.get()[0]` work. Separately, `List@(i32[])` and `HashMap@(K, i32[])`
+  failed with `CE0124` because each container hand-rolled its element-type reader and none had
+  an array case -- one shared reader now (`docs/design/array-representation.md` is the spec)
+- **An array literal's elements are context-typed in every position that has an element type**
+  (#378): a wide literal in a `let`/`const`/`from([...])` was a false `CE2070`, and a plain
+  `[1, 2]` against an `i64[2]` field, argument, return or payload was a false
+  `CE2028`/`CE2006`/`CE2031`. A NEGATED literal was re-checked against i32 after it was stamped,
+  so `let i64 a = -4294967303` was a false `CE2070` with no array anywhere
+- **Extension and perk boundaries propagate the declared type** (#387): a generic constructor at
+  a method's RETURN (`extend i32 halved() Maybe@(i32)`) or as a method-call ARGUMENT
+  (`x.method(Maybe.Some(41))`) was a `CE2008`/`CE0113`/`CE0017`/`CE0055` depending on the type;
+  one resolve-then-propagate seam answers all of them
+- **Generic-target extensions are read like any other** (#389, #391, #394, #392): an extension
+  spelled `extend Box@(T)` or `extend List@(i32)` was never COLLECTED from (false `CE2001`);
+  every instantiation SHARED the template's body, so `extend Box@(T) unwrap() T` at
+  `Box@(string)` was a compile-clean DOUBLE FREE (it is `CE2411` there now, and legal at
+  `Box@(i32)`); an extension on a generic ENUM target compiled into dead code (every call a
+  false `CE2008`); and a generic call typed through `self` in such a body was a `CE2061` --
+  the monomorphized copies feed a second collection round now
+- **Lambdas lift everywhere a statement lives** (#400, #403, #404, #399): a lambda declared in
+  an `if`/`elif` arm was a `CE0055` ICE; `|i32 x| may_fail(x)??` drew a false `CW2511`/`CE2511`
+  (a lambda has its own error channel); a multi-unit program whose generic extension and
+  instantiation sat in different units failed at LINK with a duplicate symbol (`weak_odr` now);
+  and a lambda in an extension/perk body lifts too
 - **A concrete type argument in an extension target now CONSTRAINS** (#393; the ruling and the
   mechanism are in `docs/design/method-resolution.md`). `extend Box@(i32)` applies to
   `Box@(i32)` and to nothing else, exactly as a perk implementation on the same target already
@@ -380,6 +545,32 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
 - Extension and perk-impl return expressions are now type-checked
 - Quality gates: `ruff` clean at F,E,W,B and `mypy` clean over `internals`/`compiler`/`packager`/
   `sushi_stdlib`, both blocking in CI, alongside the cross-platform malloc-interposer leak gate
+
+### Testing
+- The leak gate tells the truth in three more cases: a freed address reallocated by an untracked
+  library no longer reports a false `DOUBLE_FREE` (#359); a colliding insert no longer consumes a
+  LIVE tombstone, which made a genuine double free go unreported (#371); and an unsupported
+  platform is a recorded skip instead of "interposer not built" (#275)
+- The test harness itself is ruff-linted, in CI and pre-push -- 38 real harness defects fixed
+  (#274) -- and a misconfigured stdlib registry entry raises loudly instead of registering
+  nothing (#247)
+- `tests/unit/test_path_references_exist.py`: every backtick-quoted `dir/file.ext` reference in
+  documentation and comments must name a real file (#366). Its first run found 13 stale
+  references beyond the 7 the issue filed
+
+### Documentation
+- **`tests/docs_sweep.py`** (#297): compiles every self-contained ```sushi block under `docs/`
+  with a four-way outcome -- pass (exit 0 or 1; a warning is not a failure), expected-error
+  (`<!-- docs-sweep: error CExxxx -->` on the line above the fence), skip
+  (`<!-- docs-sweep: skip (reason) -->`), fail. A tool to run BY HAND, periodically --
+  deliberately not a CI job. At close: 249 candidate blocks, 0 failing; the 13 genuinely
+  drifting blocks were FIXED, not marked
+- The seven stale references to the deleted `semantics/passes/borrow.py` are fixed, preferring
+  symbol names over line numbers (#366)
+- The borrow model is documented as one table across the language reference, the guide, the
+  memory-management page and the tutorial; `docs/design/borrow-model.md` is the normative spec
+  for how a value crosses a call boundary, and `docs/design/borrowing.md` for the reference
+  mechanisms (#360)
 
 ## [0.10.0] - 2026-07-07
 
