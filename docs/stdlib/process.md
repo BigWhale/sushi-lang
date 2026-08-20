@@ -395,14 +395,14 @@ fn main() i32:
 
 ### macOS (darwin)
 
-Platform-specific implementation in `stdlib/src/_platform/darwin/process.py`:
+Platform-specific implementation in `sushi_stdlib/src/_platform/darwin/process.py`:
 - Uses standard POSIX `getcwd()`, `chdir()`, `getpid()`, `getuid()`
 - PATH_MAX is typically 1024 bytes
 - Follows BSD semantics
 
 ### Linux
 
-Platform-specific implementation in `stdlib/src/_platform/linux/process.py`:
+Platform-specific implementation in `sushi_stdlib/src/_platform/linux/process.py`:
 - Uses standard POSIX `getcwd()`, `chdir()`, `getpid()`, `getuid()`
 - PATH_MAX is typically 4096 bytes
 - Follows GNU/Linux semantics

@@ -357,6 +357,7 @@ The compiler searches for `.slib` files in this order:
 
 After installing a package containing `mathutils.slib`:
 
+<!-- docs-sweep: skip (needs a .slib library built from the page's earlier example) -->
 ```sushi
 # No SUSHI_LIB_PATH needed - the compiler finds it automatically
 use <lib/mathutils>

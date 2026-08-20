@@ -106,6 +106,7 @@ fn divide(i32 a, i32 b) i32 | MathError:
 
 #### Using `.realise(default)`
 
+<!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
 fn main() i32:
     let i32 x = divide(10, 2).realise(0)   # x = 5
@@ -121,6 +122,7 @@ fn main() i32:
 
 #### Using Conditionals
 
+<!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
 fn main() i32 | MathError:
     let Result@(i32, MathError) result = divide(10, 2)
@@ -139,6 +141,7 @@ fn main() i32 | MathError:
 
 #### Using Pattern Matching
 
+<!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
 fn main() i32 | MathError:
     match divide(10, 2):
@@ -478,6 +481,7 @@ fn outer() i32 | ErrorB:
 
 Using `??` in the `main()` function generates a compiler warning (CW2511) and is highly discouraged:
 
+<!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
 fn main() i32:
     # ⚠️ Warning CW2511: ?? operator used in main function
@@ -536,6 +540,7 @@ fn process_pipeline() string:
 
 ### 4. Propagate Errors, Handle at Top Level
 
+<!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
 fn low_level() i32:
     # Just propagate
@@ -578,6 +583,7 @@ fn lookup(HashMap@(string, i32) map, string key) Maybe@(i32):
 
 ### 6. Avoid Silent Failures
 
+<!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
 # Bad: Silently returns default
 fn get_config() string:

@@ -3,7 +3,8 @@
 #
 # The backend already treats it as a move (`move_owning_arg_into_container` marks the
 # source moved, so scope exit does not free it), but semantics never marks it:
-# `borrow.py:572-593` marks only `Own.alloc` and enum constructors among method calls. So
+# the checker marked only `Own.alloc` and enum constructors among method calls (the gap
+# `maybe_mark_container_insert` in `borrow/calls.py` now closes). So
 # `l.push(a)` followed by `a.len()` compiles clean and reads through a pointer the List
 # owns -- and once the List is destroyed, the same read is a use-after-free that returns
 # whatever the allocator left behind.

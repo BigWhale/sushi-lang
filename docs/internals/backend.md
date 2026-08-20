@@ -256,7 +256,7 @@ builder.trunc(value, target_type)   # Truncate
 
 ### Array Operations
 
-**File:** `backend/expressions/arrays.py`
+**File:** `backend/types/arrays/literals.py` (the `backend/types/arrays/` package)
 
 **Array literal:**
 ```python
@@ -294,7 +294,7 @@ builder.store(size, builder.gep(arr_struct, [zero, two]))            # capacity
 
 ### Function Calls
 
-**File:** `backend/expressions/calls.py`
+**File:** `backend/expressions/calls/` (a package; the entry point is `dispatcher.py`)
 
 ```python
 # Load function from registry

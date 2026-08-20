@@ -207,6 +207,7 @@ fn close_handle(ptr h) ~:
 A wrapper may also *return* the handle it acquired - `ptr` flows through the
 implicit `Result` wrapping (and through `Maybe@(ptr)`) like any other value:
 
+<!-- docs-sweep: skip (uses the unsafe external block declared earlier on the page) -->
 ```sushi
 fn grab() ptr:
     let ptr p = libc.malloc(8 as i64)
