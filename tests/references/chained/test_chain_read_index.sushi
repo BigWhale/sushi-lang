@@ -1,0 +1,14 @@
+# The indexed READ through the chain, a face nobody filed: #407's matrix verified
+# `.len()` only, and `o.get().items[0]` is a CE0000 ICE ('LiteralStructType' object
+# has no attribute 'pointee'). A read is legal under the #352 ruling, so it must work.
+# EXPECT_STDOUT_EXACT: "1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct Holder:
+    i32[] items
+
+fn main() i32:
+    let Own@(Holder) o = Own.alloc(Holder(from([1, 2, 3])))
+    println("{o.get().items[0]}")
+    o.destroy()
+    return Result.Ok(0)

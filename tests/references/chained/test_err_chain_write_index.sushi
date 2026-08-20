@@ -1,0 +1,12 @@
+# #407 second face: the indexed assignment through the same chain. Before the gate this
+# was a CE0000 ICE ('LiteralStructType' object has no attribute 'pointee'). Same gate,
+# same code as the method face.
+# EXPECT_ERROR_CODE: CE2429
+struct Holder:
+    i32[] items
+
+fn main() i32:
+    let Own@(Holder) o = Own.alloc(Holder(from([1, 2, 3])))
+    o.get().items[0] := 9
+    o.destroy()
+    return Result.Ok(0)

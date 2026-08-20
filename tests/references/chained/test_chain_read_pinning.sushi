@@ -1,0 +1,15 @@
+# #280 pinning test: the READ through an unbound chained get-out works and is
+# leak-clean. Fixed sideways by #281/#283 at ad384a46 with no test; this pins it.
+# (The indexed read is a separate, still-broken face: test_chain_read_index.sushi.)
+# EXPECT_STDOUT_EXACT: "3 1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct Holder:
+    i32 n
+    i32[] items
+
+fn main() i32:
+    let Own@(Holder) o = Own.alloc(Holder(1, from([1, 2, 3])))
+    println("{o.get().items.len()} {o.get().n}")
+    o.destroy()
+    return Result.Ok(0)

@@ -1,0 +1,21 @@
+# The two escapes CE2429 names, both leak-clean and both reaching real storage: the
+# clone-and-rebuild replaces what the Own holds, and the plain clone takes an
+# independent value the owner never sees. (The nested `Own(poke inner)` binding is
+# pinned by test_own_pattern_poke.sushi.)
+# EXPECT_STDOUT_EXACT: "rebuilt: 4\nclone: 5 owner: 4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct Holder:
+    i32[] items
+
+fn main() i32:
+    let Own@(Holder) o = Own.alloc(Holder(from([1, 2, 3])))
+    let Holder h = o.get().clone()
+    h.items.push(9)
+    o := Own.alloc(h)
+    println("rebuilt: {o.get().items.len()}")
+    let i32[] c = o.get().items.clone()
+    c.push(7)
+    println("clone: {c.len()} owner: {o.get().items.len()}")
+    o.destroy()
+    return Result.Ok(0)
