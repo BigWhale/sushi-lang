@@ -92,14 +92,18 @@ def test_fingerprint_changes_when_dependency_signature_changes(make_unit, tmp_pa
 # stdlib / library fingerprints
 
 def test_stdlib_fingerprint_is_order_independent(tmp_path):
-    a = tmp_path / "a.bc"; a.write_bytes(b"AAA")
-    b = tmp_path / "b.bc"; b.write_bytes(b"BBB")
+    a = tmp_path / "a.bc"
+    a.write_bytes(b"AAA")
+    b = tmp_path / "b.bc"
+    b.write_bytes(b"BBB")
     assert compute_stdlib_fingerprint([a, b]) == compute_stdlib_fingerprint([b, a])
 
 
 def test_stdlib_fingerprint_changes_with_content(tmp_path):
-    a = tmp_path / "a.bc"; a.write_bytes(b"AAA")
-    b = tmp_path / "b.bc"; b.write_bytes(b"BBB")
+    a = tmp_path / "a.bc"
+    a.write_bytes(b"AAA")
+    b = tmp_path / "b.bc"
+    b.write_bytes(b"BBB")
     before = compute_stdlib_fingerprint([a, b])
     b.write_bytes(b"CHANGED")
     assert compute_stdlib_fingerprint([a, b]) != before
@@ -156,7 +160,6 @@ def test_definition_signature_with_generic_type_params():
     a generic function a CE0000 ICE.
     """
     from sushi_lang.compiler.fingerprint import _definition_signature
-    from sushi_lang.semantics.ast import BoundedTypeParam
     program, _ = parse_to_ast("public fn identity@(T)(T x) T:\n    return Result.Ok(x)\n")
     sig = _definition_signature(program.functions[0])
     assert "<T>" in sig

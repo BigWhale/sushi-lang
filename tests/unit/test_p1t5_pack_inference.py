@@ -1,7 +1,6 @@
 """P1-T5: pack-aware type-argument inference (Pass 1.5 shared helper)."""
-import pytest
 
-from sushi_lang.semantics.generics.types import TypeParameter, TypePack
+from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.generics.pack_inference import (
     infer_flat_type_args,
     has_pack_value_param,
@@ -43,7 +42,7 @@ def _leading(generic_func, leading_arg_types):
     if len(leading_arg_types) != len(non_pack_params):
         return None
     bindings = {}
-    for arg_ty, param in zip(leading_arg_types, non_pack_params):
+    for arg_ty, param in zip(leading_arg_types, non_pack_params, strict=True):
         if isinstance(param.ty, UnknownType):
             name = str(param.ty)
             if name in bindings and bindings[name] != arg_ty:

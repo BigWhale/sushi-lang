@@ -41,11 +41,14 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         uses: ./.github/actions/setup-sushi
 
+      # `tests` is linted too (#274): the harness is the gate every claim
+      # rests on, and #241 was a harness bug that made 96 leak assertions
+      # silently inert.
       - name: Run ruff
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          uv run ruff check sushi_lang
+          uv run ruff check sushi_lang tests
 
       # Tier 4.1 layering gate (#276): semantics must never import backend.
       # The documented grep, run for real. tests/unit/test_layering_gate.py

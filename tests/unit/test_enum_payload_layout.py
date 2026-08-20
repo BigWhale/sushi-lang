@@ -30,7 +30,7 @@ def test_every_field_offset_is_naturally_aligned():
     ]
     for types in mixes:
         offsets = sizing.payload_field_offsets(types)
-        for ty, offset in zip(types, offsets):
+        for ty, offset in zip(types, offsets, strict=True):
             align = sizing.get_type_alignment(ty)
             assert offset % align == 0, (
                 f"{ty} at offset {offset} is under-aligned (needs {align}) in {types}"
@@ -43,7 +43,7 @@ def test_offsets_do_not_overlap_and_size_covers_them():
     types = (BuiltinType.I32, BuiltinType.STRING, BuiltinType.I8, BuiltinType.I64)
     offsets = sizing.payload_field_offsets(types)
     end = 0
-    for ty, offset in zip(types, offsets):
+    for ty, offset in zip(types, offsets, strict=True):
         assert offset >= end, f"{ty} at {offset} overlaps the previous field (end {end})"
         end = offset + sizing.get_type_size_bytes(ty)
     assert sizing.variant_payload_size(types) == end

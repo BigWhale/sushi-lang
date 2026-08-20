@@ -11,7 +11,6 @@ from sushi_lang.semantics.typesys import (
     DynamicArrayType,
     DynamicArrayType as DynArr,
     EnumType,
-    EnumVariantInfo,
     FunctionType,
     StructType,
 )

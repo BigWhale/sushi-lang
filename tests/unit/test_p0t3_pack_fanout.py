@@ -1,5 +1,4 @@
 """P0-T3: pack value-parameter fan-out in the monomorphizer."""
-import pytest
 
 from sushi_lang.semantics.generics.types import TypeParameter, TypePack
 from sushi_lang.semantics.generics.monomorphize.transformer import TypeSubstitutor
