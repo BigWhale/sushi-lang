@@ -623,8 +623,10 @@ class FunctionCollector:
             params.append(param)
 
         # Variadic parameters are not allowed in extension methods (CE0115).
+        # The pack half is unreachable today, but the guard must match its
+        # documented contract and stay correct by construction (#246).
         for p in params:
-            if getattr(p, "is_variadic", False):
+            if getattr(p, "is_variadic", False) or getattr(p, "is_pack", False):
                 er.emit(self.r, ERR.CE0115, p.name_span, context="an extension method")
                 break
 

@@ -198,9 +198,11 @@ class PerkCollector:
             return
 
         # Variadic parameters are not allowed in perk methods (CE0115).
+        # The pack half is unreachable today, but the guard must match its
+        # documented contract and stay correct by construction (#246).
         for method in getattr(perk, "methods", []) or []:
             for p in getattr(method, "params", []) or []:
-                if getattr(p, "is_variadic", False):
+                if getattr(p, "is_variadic", False) or getattr(p, "is_pack", False):
                     er.emit(self.r, ERR.CE0115,
                             getattr(p, "name_span", None) or name_span,
                             context="a perk method")
