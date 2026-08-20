@@ -89,3 +89,21 @@ def test_ce2508_no_longer_fires_for_extension_bodies(analyze):
     reporter = analyze(INSTANTIATED_SRC)
     codes = [d.code for d in reporter.items if d.kind == "error"]
     assert "CE2508" not in codes
+
+LAMBDA_SRC = (
+    "fn tag(i32 n) i32:\n"
+    "    return Result.Ok(n)\n"
+    "\n"
+    "extend i32 fixed() i32:\n"
+    "    let fn(i32) -> i32 f = |i32 x| tag(x)??\n"
+    "    let i32 r = f(self).realise(0)\n"
+    "    return r\n"
+    "\n"
+    "fn main() i32:\n"
+    "    return Result.Ok(0)\n"
+)
+
+
+def test_try_inside_lambda_is_not_ce0131():
+    """The walk skips Lambda subtrees (#399): the lambda has its own channel."""
+    assert _collect_codes(LAMBDA_SRC).count("CE0131") == 0

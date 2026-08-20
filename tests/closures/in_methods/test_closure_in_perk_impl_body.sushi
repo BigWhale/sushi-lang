@@ -1,0 +1,19 @@
+# A lambda in a perk-impl method body is lifted too (#399).
+# EXPECT_STDOUT_EXACT: "12\n"
+perk Scaled:
+    fn scaled() i32
+
+struct P:
+    i32 n
+
+extend P with Scaled:
+    fn scaled() i32:
+        let i32 factor = 3
+        let fn(i32) -> i32 f = |i32 x| x * factor
+        let i32 r = f(self.n).realise(0)
+        return r
+
+fn main() i32:
+    let P p = P(4)
+    println("{p.scaled()}")
+    return Result.Ok(0)

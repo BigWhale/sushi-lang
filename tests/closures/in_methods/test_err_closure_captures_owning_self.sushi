@@ -1,0 +1,17 @@
+# Capturing an OWNING `self` move-captures a BORROW: another owner keeps the
+# value. The existing (BORROWED, MOVE) cell rejects it; the escape is
+# .clone() (#399 pins that the gate fires once captures are stamped).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2411
+struct Bag:
+    string label
+
+extend Bag tagged() i32:
+    let fn(i32) -> i32 f = |i32 x| x + self.label.len()
+    let i32 r = f(0).realise(0)
+    return r
+
+fn main() i32:
+    let Bag b = Bag("towel")
+    println("{b.tagged()}")
+    return Result.Ok(0)

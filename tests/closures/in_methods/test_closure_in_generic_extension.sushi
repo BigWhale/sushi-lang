@@ -1,0 +1,25 @@
+# A lambda in a generic-target extension body lifts once PER INSTANTIATION:
+# each monomorphized copy owns its body, so each copy owns its lambda (#399).
+# The copies get no Pass 1 walk of their own, so their captures must be
+# stamped before lifting.
+# EXPECT_STDOUT_EXACT: "11 21\n"
+struct Box@(T):
+    T value
+
+extend Box@(T) bumped() i32:
+    let i32 bump = 1
+    let fn(i32) -> i32 f = |i32 x| x + bump
+    let i32 r = f(self.tagvalue()).realise(0)
+    return r
+
+extend Box@(i32) tagvalue() i32:
+    return self.value
+
+extend Box@(string) tagvalue() i32:
+    return 20
+
+fn main() i32:
+    let Box@(i32) a = Box(10)
+    let Box@(string) b = Box("x")
+    println("{a.bumped()} {b.bumped()}")
+    return Result.Ok(0)

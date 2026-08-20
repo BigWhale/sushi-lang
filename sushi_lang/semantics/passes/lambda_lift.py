@@ -25,9 +25,34 @@ class LambdaLifter:
             if getattr(fn, "type_params", None):
                 continue  # generic templates: their instantiations carry the lambdas
             self._walk(fn.body)
+        # Extension and perk-impl bodies emit through the same statement paths
+        # as a plain fn, so their lambdas lift the same way (#399).
+        # program.generic_extensions stays unwalked: templates, like generic
+        # fn templates -- their instantiation copies carry the lambdas and are
+        # lifted in _check_monomorphized_extensions.
+        for ext in list(self.program.extensions):
+            self._walk(ext.body)
+        for impl in list(self.program.perk_impls):
+            for method in impl.methods:
+                self._walk(method.body)
         if self.annotate is not None:
             for lifted in self._lifted:
                 self.annotate(lifted)
+
+    def lift_body(self, body) -> List[FuncDef]:
+        """Lift one body and answer the FuncDefs this call produced (#399).
+
+        The per-instantiation extension copies live in no unit AST, so the
+        caller runs the passes the per-unit loop cannot: it annotates and
+        borrow-checks exactly what this call lifted.
+        """
+        before = len(self._lifted)
+        self._walk(body)
+        produced = self._lifted[before:]
+        if self.annotate is not None:
+            for lifted in produced:
+                self.annotate(lifted)
+        return produced
 
     def _walk(self, node) -> None:
         """Find and lift Lambda nodes anywhere under `node` (not into their bodies)."""

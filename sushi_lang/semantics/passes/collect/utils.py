@@ -89,16 +89,17 @@ def reject_try_in_body(reporter, body: Any, context: str) -> None:
     These bodies return a bare value (CE2091), so a `??` has nothing to
     propagate into. The rule is structural, so Phase 0 owns it: the walk sees
     the DECLARATION, fires once per occurrence, and covers a template nobody
-    instantiates. The walk enters lambda bodies too -- a lambda in one of
-    these bodies is never lifted (#399), so the `??` stays rejected there
-    until #399 lands.
+    instantiates. The walk SKIPS lambda subtrees: a lambda has
+    its own Result channel, so a `??` inside one is legal (#399).
     """
     import dataclasses
 
     from sushi_lang.internals import errors as er
-    from sushi_lang.semantics.ast import Node, TryExpr
+    from sushi_lang.semantics.ast import Lambda, Node, TryExpr
 
     def walk(node: Any) -> None:
+        if isinstance(node, Lambda):
+            return
         if isinstance(node, TryExpr):
             er.emit_with(reporter, er.ERR.CE0131,
                          getattr(node, "loc", None), context=context) \

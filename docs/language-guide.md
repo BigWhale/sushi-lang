@@ -756,7 +756,14 @@ extend i32 tagged() i32:
     return tag(self).realise(0)   # tag() returns Result@(i32, StdError)
 ```
 
-The same rule applies to perk implementation methods.
+The same rule applies to perk implementation methods. A `??` inside a LAMBDA in such a
+body is legal -- the lambda has its own Result channel:
+
+```sushi
+extend i32 fixed() i32:
+    let fn(i32) -> i32 f = |i32 x| tag(x)??   # legal: propagates into the lambda's Result
+    return f(self).realise(0)
+```
 
 **Generic Extension Methods**:
 ```sushi

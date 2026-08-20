@@ -1,6 +1,6 @@
 # Control: the block-body twin always used its own channel. Pins the boundary
 # of #403.
-# EXPECT_OUTPUT: 4
+# EXPECT_STDOUT_EXACT: "4\n"
 enum CalcError:
     Boom
 

@@ -1,5 +1,5 @@
 # The elif arm rides the same (cond, Block) tuple as the if arm (#400).
-# EXPECT_OUTPUT: 9
+# EXPECT_STDOUT_EXACT: "9\n"
 fn pick(i32 n) i32:
     let i32 base = 2
     if (n == 0):

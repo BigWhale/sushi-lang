@@ -121,7 +121,7 @@ _add(ErrorMessage("CE0125", Severity.ERROR,
 
 _add(ErrorMessage("CE0131", Severity.ERROR,
     "'??' operator not allowed in {context}: the method returns a bare value and has no error channel",
-    Category.FUNC, "An extension method and a perk-impl method return a bare value (CE2091), so a '??' has no Result return to propagate into. Handle the Result in the method body with match or .realise(). Emitted from Phase 0 collection, so it fires once per declaration and covers templates nobody instantiates."))
+    Category.FUNC, "An extension method and a perk-impl method return a bare value (CE2091), so a '??' has no Result return to propagate into. Handle the Result in the method body with match or .realise(). Emitted from Phase 0 collection, so it fires once per declaration and covers templates nobody instantiates. A ?? inside a LAMBDA in such a body is legal - the lambda has its own Result channel (#399)."))
 
 _add(ErrorMessage("CE0130", Severity.ERROR,
     "internal error: scope checker has no arm for node '{node}'",

@@ -1,0 +1,17 @@
+# A lambda in an extension body may capture a PLAIN `self` -- it copy-captures
+# like any borrow of a plain type (#399). No new rule: the borrow model
+# answers.
+# EXPECT_STDOUT_EXACT: "30\n"
+struct Point:
+    i32 x
+    i32 y
+
+extend Point summed() i32:
+    let fn(i32) -> i32 f = |i32 extra| self.x + self.y + extra
+    let i32 r = f(0).realise(0)
+    return r
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    println("{p.summed()}")
+    return Result.Ok(0)

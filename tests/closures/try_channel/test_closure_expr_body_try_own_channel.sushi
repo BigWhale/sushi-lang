@@ -1,7 +1,7 @@
 # The ?? in an expression-body lambda propagates into the LAMBDA's Result
 # channel, not the enclosing function's (#403). This used to be a false
 # CE2511 against outer()'s StdError, while the block-body twin compiled.
-# EXPECT_OUTPUT: 4
+# EXPECT_STDOUT_EXACT: "4\n"
 enum CalcError:
     Boom
 

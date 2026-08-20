@@ -1,6 +1,6 @@
 # Control: `If.else_block` is a plain Block field, so a lambda in an `else`
 # was lifted all along. Pins the boundary of #400.
-# EXPECT_OUTPUT: 7
+# EXPECT_STDOUT_EXACT: "7\n"
 fn pick(bool b) i32:
     let i32 base = 3
     if (b):

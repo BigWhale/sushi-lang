@@ -2,7 +2,7 @@
 # instance while the tables are global -- so both units synthesized
 # __lambda_0, and the second registration was a SILENT no-op that wired this
 # unit's closure to the helper's body and env layout (#402).
-# EXPECT_OUTPUT: 101 6
+# EXPECT_STDOUT_EXACT: "101 6\n"
 use "helpers/closure_unit_helper"
 
 fn main() i32:
