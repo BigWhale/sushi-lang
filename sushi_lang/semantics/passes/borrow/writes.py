@@ -10,7 +10,7 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import Expr
 from sushi_lang.semantics.typesys import ReferenceType
 
-from .reads import root_owner
+from .reads import chain_call_boundary, root_owner
 from .state import BorrowState
 
 if TYPE_CHECKING:
@@ -119,16 +119,32 @@ def maybe_reject_mutation(checker: 'BorrowChecker', expr: Expr) -> None:
     is_poke_self_call = getattr(expr, "callee_self_mode", None) == "poke"
     if getattr(expr, "method", None) not in MUTATING_METHODS and not is_poke_self_call:
         return
-    root = root_owner(getattr(expr, "receiver", None))
+    receiver = getattr(expr, "receiver", None)
+    root = root_owner(receiver)
     what = f"call `.{expr.method}()`"
-    if reject_readonly_write(checker, root, expr.loc, what):
+    if reject_readonly_write(checker, root, expr.loc, what, receiver=receiver):
         return
     check_owner_not_borrowed(checker, root, expr.loc, what)
 
 
 def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
-                          span: Optional[Span], what: str) -> bool:
+                          span: Optional[Span], what: str,
+                          receiver: Optional[Expr] = None) -> bool:
     """THE gate: a write that cannot reach the value it appears to write is rejected."""
+    # The sixth kind keys on SHAPE, not on the state of a name (#352, #407): past a call
+    # boundary the receiver is a temporary copy, whatever the root's mode is -- so this
+    # answers BEFORE the state table, and the boundary is the diagnostic's second location.
+    boundary = chain_call_boundary(receiver) if receiver is not None else None
+    if boundary is not None:
+        diag = checker.err.emit_with(er.ERR.CE2429, span)
+        diag.note("the value past this expression is a temporary copy, not the "
+                  "owner's storage", boundary)
+        diag.help(f"the write ({what}) would land on the copy and be lost; bind a "
+                  "clone, mutate it, and rebuild the owner -- or mutate in place "
+                  "through a nested `Own(poke ...)` reference binding where the "
+                  "`Own` sits in an enum payload")
+        diag.emit()
+        return True
     if name is None:
         return False
     state = checker.borrow_state.get(name)

@@ -176,3 +176,16 @@ _add(ErrorMessage("CE2427", Severity.ERROR,
 _add(ErrorMessage("CE2428", Severity.ERROR,
     "`nom` has no meaning on the foreign parameter '{name}'",
     Category.BORROW, "FFI is outside the mode system. A C callee never receives a Sushi value: the compiler marshals the argument into a fresh C representation that the CALLER owns and frees at scope exit, so there is nothing for a foreign parameter to take ownership of. Declare the parameter without the marker. The four modes describe how a value crosses a SUSHI call boundary (docs/design/borrow-model.md S5)."))
+
+
+# --- The unbound chained borrow (#352 ruling, #407) --------------------------------------
+#
+# The SIXTH read-only receiver kind, and the first keyed on SHAPE rather than on the state
+# of a name: a write receiver must reach its root through member and index steps only. A
+# chain that crosses a call boundary -- a method call, a `??`, a plain call -- holds a
+# temporary copy past that point, so there is no name to hold a `BorrowState` on and the
+# write could never reach the owner.
+
+_add(ErrorMessage("CE2429", Severity.ERROR,
+    "cannot write through an unbound chained borrow",
+    Category.BORROW, "The value past a call boundary is a temporary copy, not the owner's storage: `o.get()` is a get-out, so `o.get().items.push(9)` would land on the copy and be lost, while the `Own` keeps and frees the real buffer (issue #407 -- the write compiled, printed the old length, and the leak counters balanced). A FRESH temporary is rejected by the same rule, because the statement discards the value and the write is dead either way. Bind a clone, mutate it, and rebuild the owner -- `let Holder h = o.get().clone()`, `h.items.push(9)`, `o := Own.alloc(h)` -- or, where the `Own` sits in an enum payload, mutate in place through a nested `Own(poke inner)` reference binding (#300)."))

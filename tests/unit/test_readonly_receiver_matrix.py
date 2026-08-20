@@ -113,6 +113,18 @@ def _function_param_program(write: str) -> str:
     )
 
 
+def _chained_program(write: str) -> str:
+    """An unbound chained get-out -- the sixth kind, keyed on SHAPE, not state (#352)."""
+    return (
+        _STRUCT + _GROW +
+        "fn main() i32:\n"
+        "    let Own@(Holder) o = Own.alloc(Holder(1, from([1, 2])))\n"
+        f"    {write.replace('r.', 'o.get().')}\n"
+        "    o.destroy()\n"
+        "    return Result.Ok(0)\n"
+    )
+
+
 KINDS = {
     "peek_reference":  ("CE2408", _peek_program),
     "pattern_binding": ("CE2414", _binding_program),
@@ -120,6 +132,13 @@ KINDS = {
     "method_parameter": ("CE2422", _method_param_program),
     "function_parameter": ("CE2422", _function_param_program),
     "let_borrow": ("CE2426", _let_borrow_program),
+    "unbound_chained": ("CE2429", _chained_program),
+}
+
+# Cells whose code differs from the kind's: a `poke` borrow of a chained expression is
+# rejected upstream as CE2404 (no stable address), which pre-dates and outranks the gate.
+_CELL_OVERRIDES = {
+    ("unbound_chained", "poke_borrow"): "CE2404",
 }
 
 
@@ -131,6 +150,7 @@ def _codes(reporter) -> list[str]:
 @pytest.mark.parametrize("shape", sorted(_SHAPES))
 def test_write_through_readonly_receiver_is_rejected(analyze, kind, shape):
     code, build = KINDS[kind]
+    code = _CELL_OVERRIDES.get((kind, shape), code)
     reporter = analyze(build(_SHAPES[shape]))
     assert code in _codes(reporter), (
         f"`{_SHAPES[shape]}` through a {kind} receiver was not rejected with {code}; "
@@ -276,7 +296,9 @@ def test_every_readonly_kind_is_in_the_gate_table(analyze):
     from sushi_lang.semantics.passes.borrow import READONLY_RECEIVERS
 
     table_codes = {kind.code.code for kind in READONLY_RECEIVERS}
-    assert table_codes == {code for code, _ in KINDS.values()}
+    # CE2429 is the shape-keyed sixth kind (#352): it answers BEFORE the state table,
+    # so it is deliberately not a table row.
+    assert table_codes == {code for code, _ in KINDS.values()} - {"CE2429"}
 
 
 # The green mirror. Each kind must leave READS alone, or the gate is a ban on the

@@ -114,6 +114,7 @@ You may write only where the write can reach the owner. The compiler rejects the
 | the receiver of a method without `poke self` | CE2421 |
 | an unmarked parameter | CE2422 |
 | a `let` binding that borrows from an owner | CE2426 |
+| an unbound chained receiver (`o.get().items`) | CE2429 |
 | a constant | CE2096 |
 
 A `poke` parameter, a `nom` parameter and a `poke self` receiver are all writable:

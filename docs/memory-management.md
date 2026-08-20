@@ -283,8 +283,8 @@ as `arr.pop()`, `List@(T).pop()` and `List@(T).remove()` do -- each answers
 The write must also be able to reach the owner, which is the [borrow](#references-and-borrowing)
 question rather than the ownership one: it is rejected through a `peek` parameter (`CE2408`),
 a `match`/`foreach` binding (`CE2414`), a method receiver without `poke self` (`CE2421`), an
-unmarked parameter (`CE2422`), a `let` binding that borrows from an owner (`CE2426`), and a
-constant (`CE2096`).
+unmarked parameter (`CE2422`), a `let` binding that borrows from an owner (`CE2426`), an
+unbound chained receiver such as `o.get().items` (`CE2429`), and a constant (`CE2096`).
 
 ### Function Arguments
 

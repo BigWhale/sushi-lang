@@ -149,13 +149,15 @@ owner's buffer. Same rule, different first answer.
 **The sixth kind keys on SHAPE, not on state** (ruled 2026-08-20, #352; the live bug was
 #407). The other five are each a NAMED thing carrying a `BorrowState`; an unbound chained
 receiver has no name to hold state on. The rule is structural: **a write receiver must
-reach its root through member and index steps only**. A chain that crosses a call
-boundary — a `MethodCall`, a `DotCall`, or a `??` — holds a temporary copy past that
-point, so the write would land on the copy and be lost (`o.get().items.push(9)` printed
-the old length, exit 0, leak-clean). `chain_call_boundary` (`reads.py`) finds the
-boundary; the same dispatcher checks it BEFORE the state table, because the boundary
-answer is the more precise one whatever the root's mode is. The boundary span is the
-second location of the relational diagnostic. Three consequences:
+reach its root — a NAME — through member and index steps only**. Whatever else the walk
+stops at — a method call, a `??`, a plain call, an inline constructor — yields a
+temporary copy, so the write would land on the copy and be lost
+(`o.get().items.push(9)` printed the old length, exit 0, leak-clean).
+`chain_call_boundary` (`reads.py`) finds the boundary, deliberately INVERTED — "a Name
+is fine" rather than a list of boundary kinds — so a new expression kind is rejected,
+never silently writable. The same dispatcher checks it BEFORE the state table, because
+the boundary answer is the more precise one whatever the root's mode is. The boundary
+span is the second location of the relational diagnostic. Three consequences:
 
 - The READ through the same chain stays legal and leak-clean (#280; the receiver is a
   registered scope temporary).
@@ -199,7 +201,7 @@ Each gate turns the next occurrence of its bug class into a red test:
 | `test_borrow_dispatch_is_total.py` | an arm for every `Expr` node (CE0125) |
 | `test_scope_dispatch_is_total.py` | the same for Pass 1 (CE0130) |
 | `test_peek_write_gate_is_total.py` | every member of `_MUTATING_METHODS` |
-| `test_readonly_receiver_matrix.py` | all twelve kind x shape cells of §5 |
+| `test_readonly_receiver_matrix.py` | every kind x shape cell of §5, the shape-keyed sixth kind included |
 | `test_borrow_flag_lifecycle.py` | every `BorrowState` flag x flow event |
 | `test_ownership_table.py` | the 3x2 table, reference rows included |
 | `test_consuming_use_coverage.py` | nothing bypasses the backend seam |
