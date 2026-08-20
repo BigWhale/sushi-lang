@@ -21,6 +21,9 @@ line, in a block that must compile.
 Only blocks containing `fn main(` AND a `return` are candidates: a fragment without a
 main is prose, and so is a lone `fn main() i32:` line quoted to explain the signature
 (a legal main always returns, so a mainful block with no return cannot be a program).
+
+This is a tool to run BY HAND, periodically or after a docs edit -- it is deliberately
+not a CI job.
 Usage: python tests/docs_sweep.py [--jobs N] [--verbose]
 """
 from __future__ import annotations
@@ -51,21 +54,12 @@ class Block:
     expected_codes: list[str]
 
 
-def git_ls_files(*patterns: str) -> list[str]:
-    proc = subprocess.run(
-        ["git", "ls-files", *patterns],
-        capture_output=True, text=True, cwd=PROJECT_ROOT,
-    )
-    if proc.returncode != 0:
-        sys.exit(f"git ls-files failed (exit {proc.returncode}): {proc.stderr.strip()}")
-    return proc.stdout.splitlines()
-
-
 def collect_blocks() -> list[Block]:
-    tracked = git_ls_files("docs/**/*.md", "docs/*.md")
+    pages = sorted(str(p.relative_to(PROJECT_ROOT))
+                   for p in (PROJECT_ROOT / "docs").rglob("*.md"))
 
     blocks: list[Block] = []
-    for page in tracked:
+    for page in pages:
         lines = (PROJECT_ROOT / page).read_text(errors="replace").splitlines()
         i = 0
         while i < len(lines):
