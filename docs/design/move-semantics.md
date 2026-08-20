@@ -104,7 +104,8 @@ semantics flags what backend copies → spurious CE2405). Mitigations, both requ
 
 1. The backend imports and uses the **same** semantics predicate at every flip site (`backend`
    importing `semantics` is the allowed direction).
-2. A unit test (`tests/unit/test_move_predicate_sync.py`) that builds representative types —
+2. A unit test (now `tests/unit/test_owns_heap_verdicts.py`; the predicate is `owns_heap`
+   since the 2026-08-14 ownership refactor) that builds representative types —
    plain struct, string-only struct, `struct {i32[]}`, nested owning struct, owning enum,
    recursive enum via `Own@(T)`, fixed array of owning structs, `struct {string, List@(i32)}` —
    and asserts the predicate's verdicts against a hand-written expectation table, plus asserts
@@ -317,7 +318,7 @@ locations** of the relational diagnostic; value tests use `EXPECT_STDOUT_EXACT`.
   #159).
 - `test_memberaccess_copy_keeps_owner.sushi` — `# EXPECT_NO_LEAKS`: `take(s.field)` copies;
   `s` stays fully usable and both the copy and the original free exactly once (§3.1 pin).
-- Unit: `tests/unit/test_move_predicate_sync.py` (§2.1).
+- Unit: `tests/unit/test_owns_heap_verdicts.py` (§2.1; formerly `test_move_predicate_sync`).
 
 **Tests that flip (copy → move):**
 - `tests/unit/test_struct_raii.py::test_byvalue_struct_param_freed_by_callee` and

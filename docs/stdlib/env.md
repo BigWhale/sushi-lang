@@ -95,8 +95,9 @@ An existing variable with the same name is always overwritten.
 ```sushi
 use <sys/env>
 
-fn main() i32:
-    # Set a custom environment variable
+fn configure() i32 | EnvError:
+    # Set a custom environment variable -- ?? propagates EnvError, so the
+    # enclosing function must declare it
     setenv("MY_APP_CONFIG", "/etc/myapp.conf")??
 
     # Verify it was set
@@ -107,6 +108,9 @@ fn main() i32:
             println("Failed to set variable")
 
     return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(configure().realise(1))
 ```
 
 **Overwriting an existing value:**
@@ -114,7 +118,7 @@ fn main() i32:
 ```sushi
 use <sys/env>
 
-fn main() i32:
+fn set_twice() i32 | EnvError:
     # Set an initial value
     setenv("MY_VAR", "initial")??
 
@@ -125,6 +129,9 @@ fn main() i32:
     println("MY_VAR: {value}")  # MY_VAR: overwritten
 
     return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(set_twice().realise(1))
 ```
 
 ## Error Handling
@@ -158,37 +165,40 @@ fn main() i32:
 
 ### setenv Error Handling
 
-Since `setenv` returns `Result@(i32)`, use error propagation or pattern matching:
+Since `setenv` returns `Result@(i32, EnvError)`, use error propagation -- inside a
+function that declares `| EnvError` -- or pattern matching:
 
 ```sushi
 use <sys/env>
 
-fn main() i32:
+fn set_var() i32 | EnvError:
     # With error propagation (??)
     setenv("MY_VAR", "value")??
+    return Result.Ok(0)
 
+fn main() i32:
     # With explicit error handling
-    let Result@(i32, StdError) set_result = setenv("MY_VAR", "value")
+    let Result@(i32, EnvError) set_result = setenv("MY_VAR", "value")
     match set_result:
         Result.Ok(_) ->
             println("Variable set successfully")
         Result.Err(_) ->
             println("Failed to set variable")
 
-    return Result.Ok(0)
+    return Result.Ok(set_var().realise(1))
 ```
 
 ## Platform-Specific Behavior
 
 ### macOS (darwin)
 
-Platform-specific implementation in `stdlib/src/_platform/darwin/env.py`:
+Platform-specific implementation in `sushi_stdlib/src/_platform/darwin/env.py`:
 - Uses standard POSIX `getenv()` and `setenv()`
 - Follows BSD semantics
 
 ### Linux
 
-Platform-specific implementation in `stdlib/src/_platform/linux/env.py`:
+Platform-specific implementation in `sushi_stdlib/src/_platform/linux/env.py`:
 - Uses standard POSIX `getenv()` and `setenv()`
 - Follows GNU/Linux semantics
 
@@ -294,7 +304,7 @@ Test files can use `setenv` to set up test conditions:
 ```sushi
 use <sys/env>
 
-fn test_env_vars() i32:
+fn test_env_vars() i32 | EnvError:
     # Setup test environment
     setenv("TEST_VAR", "test_value")??
 

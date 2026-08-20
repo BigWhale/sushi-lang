@@ -224,6 +224,7 @@ fn outer() i32 | ErrorA:
 
 Using `??` in the `main()` function generates a compiler warning and is highly discouraged:
 
+<!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
 fn main() i32:
     let i32 x = risky()??  # ⚠️ Warning CW2511
@@ -232,6 +233,7 @@ fn main() i32:
 
 Instead, use explicit error handling:
 
+<!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
 fn main() i32:
     match risky():

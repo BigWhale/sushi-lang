@@ -382,6 +382,10 @@ fn main() i32:
 ### Solution: Clone
 
 ```sushi
+fn eat(nom i32[] a) ~:
+    println("ate {a.len()} elements")
+    return Result.Ok(~)
+
 fn main() i32:
     let i32[] original = from([1, 2, 3])
     let i32[] copy = original.clone()  # Deep copy

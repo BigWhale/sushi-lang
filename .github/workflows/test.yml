@@ -112,6 +112,46 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run pytest -q
 
+  # Stage 1.5: the docs-block sweep (#297). Compiles every self-contained ```sushi
+  # block under docs/ with a four-way outcome (pass / expected-error / skip / fail),
+  # so documentation drift fails the build instead of waiting for a reader to hit it.
+  # Runs when docs or code change -- a compiler change can break a block as easily as
+  # a docs edit can.
+  docs-blocks:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie-slim
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Check for relevant changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4
+        id: changes
+        with:
+          filters: |
+            relevant:
+              - 'docs/**'
+              - 'sushi_lang/**'
+              - 'tests/docs_sweep.py'
+              - '.github/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'sushic'
+
+      - name: Set up Sushi toolchain
+        if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
+        uses: ./.github/actions/setup-sushi
+
+      - name: Compile the documentation blocks
+        if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run python tests/docs_sweep.py
+
   # Stage 2: leak gate on both platforms, after pytest and before the full suites.
   # Uses the malloc-interposer (tests/leakcheck), which runs in hosted CI on both
   # Linux and macOS (unlike `leaks`, which cannot attach on the hosted macOS runner).

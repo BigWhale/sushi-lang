@@ -1,6 +1,7 @@
 # A `foreach` binding over owning elements must be usable by value at least once.
 #
-# The two halves disagree about what the binding IS. `borrow.py:465` registers it with
+# The two halves disagreed about what the binding IS. The checker's binding registration
+# (now `register_pattern_bindings` in `borrow/bindings.py`) registered it with
 # `var_type=stmt.item_type` -- an OWNED local -- while `statements/loops.py:356-363`
 # creates it with `register_cleanup=False`, a borrow. On top of that,
 # `_check_loop_body` runs a silent discovery pass, so the move recorded for iteration N is

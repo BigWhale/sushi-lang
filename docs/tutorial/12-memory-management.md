@@ -150,6 +150,7 @@ read-only access is fine, but anyone who can *write* must have exclusive access.
 Here's a program that breaks the second rule. It does **not compile** — it asks for two
 exclusive `poke` borrows of `num` at the same call site:
 
+<!-- docs-sweep: error CE2403 -->
 ```sushi
 fn swap(poke i32 a, poke i32 b) ~:
     let i32 t = a

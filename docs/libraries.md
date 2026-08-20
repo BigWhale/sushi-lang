@@ -97,6 +97,7 @@ public fn make_point(i32 x, i32 y) Point:
 
 To use a precompiled library, add a `use` statement with the `lib/` prefix:
 
+<!-- docs-sweep: skip (needs a .slib library built from the page's earlier example) -->
 ```sushi
 # program.sushi
 use <lib/mathutils>
@@ -116,6 +117,7 @@ The compiler will:
 
 Use multiple `use` statements:
 
+<!-- docs-sweep: skip (needs a .slib library built from the page's earlier example) -->
 ```sushi
 use <lib/math>
 use <lib/utils>
@@ -323,6 +325,7 @@ Include version information in your library names:
 
 Create test programs that exercise your library functions:
 
+<!-- docs-sweep: skip (needs a .slib library built from the page's earlier example) -->
 ```sushi
 # test_mylib.sushi
 use <lib/mylib>

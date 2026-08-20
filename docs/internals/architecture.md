@@ -97,7 +97,10 @@ sushi/
 │   │   ├── ast_transform.py   # Phase 1.7: AST transformation
 │   │   ├── const_eval.py      # Constant evaluation
 │   │   ├── hash_registration.py # Phase 1.8: Hash function derivation
-│   │   ├── borrow.py          # Phase 3: Borrow checking
+│   │   ├── borrow/            # Phase 3: Borrow checking (state in __init__.py,
+│   │   │   │                  #   free-function siblings: statements, expressions,
+│   │   │   │                  #   borrows, bindings, calls, consume, reads, writes,
+│   │   │   │                  #   flow, diagnostics, types, destroy_effects)
 │   │   └── types/             # Phase 2: Modular type validation
 │   │       ├── utils.py       # Type utilities
 │   │       ├── inference.py   # Type inference

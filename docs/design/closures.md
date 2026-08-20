@@ -26,6 +26,7 @@ or a lambda that reads nothing from its enclosing scope) carries null `env_ptr`/
 environment record that the value owns, frees via `drop_ptr`, and duplicates via `clone_ptr` when
 `.clone()`d.
 
+<!-- docs-sweep: skip (design vision: the UFCS .map form is Gap B, and closure-type inference on a bare let is future work) -->
 ```sushi
 fn make_adder(i32 n) fn(i32) -> i32:
     return Result.Ok(|i32 x| x + n)      # captures n by value; escapes upward (returned)
@@ -536,7 +537,7 @@ Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
 | `Lambda` node / `FuncDef` shape | `semantics/ast.py:82, 346` |
 | `Call.callee` widened to `Expr` | `semantics/ast.py`; `semantics/ast_builder/expressions/chains.py` |
 | Capture analysis | `semantics/passes/scope.py` |
-| Lambda type-check, CE2094, bare-param inference | `semantics/type_visitor.py` |
+| Lambda type-check, CE2094, bare-param inference | `semantics/passes/types/visitor.py` |
 | Expected-type propagation to bare-param lambdas | `semantics/passes/types/propagation.py` |
 | Lambda-lifting pass | `semantics/passes/lambda_lift.py` |
 | Shared fn-synthesis wiring | `semantics/generics/synthesis.py:register_synthesized_function` |
@@ -547,13 +548,13 @@ Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
 | Backend expr dispatch -> `emit_lambda` | `backend/expressions/__init__.py` (`case Lambda()`) |
 | Indirect call, non-`Name` callee routing | `backend/expressions/calls/dispatcher.py`, `backend/expressions/calls/utils.py` |
 | Generic higher-order unification (Pass 2 / Pass 1.5) | `semantics/passes/types/calls/generics.py:_unify_types_for_inference`; `semantics/generics/instantiate/types.py:unify_types` |
-| `FunctionType` substitution (monomorphization) | `semantics/generics/monomorphize/transformer.py`; `semantics/generics/types.py`; `backend/generics/extensions.py` |
+| `FunctionType` substitution (monomorphization) | `semantics/generics/monomorphize/transformer.py`; `semantics/generics/types.py`; `semantics/generics/extensions.py` |
 | Gap D (`List@(T)` extensibility) | `semantics/passes/collect/__init__.py:373` (List as generic struct); `backend/expressions/calls/dispatcher.py:268,308,355` (provider-first dispatch + receiver reconcile) |
 | T2.3 generic-fn-ref-under-annotation | `semantics/generics/instantiate/expressions.py`; `semantics/generics/instantiate/functions.py`; `semantics/passes/types/calls/generics.py` |
 | `collections/iter` source module | `sushi_lang/sushi_stdlib/src_sushi/collections/iter.sushi` |
 | Source-stdlib-module registry + pipeline injection | `semantics/stdlib_registry.py:SOURCE_STDLIB_MODULES`; `compiler/pipeline.py` |
-| Diagnostics | `internals/errors.py` (CE2002:627, CE2092:984, CE2093:988, CE2094:992) |
-| Fat-pointer precedent (strings) | `backend/strings.py` |
+| Diagnostics | `internals/errors/types.py` (CE2002, CE2092, CE2093, CE2094) |
+| Fat-pointer precedent (strings) | `backend/runtime/strings.py` |
 
 Where the passes actually run (worth knowing before touching any of the above): the live semantic
 pipeline is `semantics/semantic_analyzer.py`. (The old `semantics/pipeline.py` scaffold and the
@@ -587,7 +588,7 @@ Four pieces are missing:
    argument unification. The free-function unifier
    (`semantics/passes/types/calls/generics.py:_unify_types_for_inference`, extended for `fn(T)->U`
    in §5's Gap C) would need to be reused for method calls to solve `U` from the `f` argument.
-4. **Monomorphization**: `monomorphize_all_extension_methods` (`backend/generics/extensions.py:148`)
+4. **Monomorphization**: `monomorphize_all_extension_methods` (`semantics/generics/extensions.py`)
    is eager/receiver-driven, keyed on `struct_instantiations` with a strict `zip` of
    `generic_method.type_params` against the receiver's `type_args` (CE0096 on count mismatch).
    Method params need a call-site-driven instantiation dimension combining receiver args **and**
@@ -659,6 +660,7 @@ expected function type (an fn-typed `let` annotation) must be present at the ref
 reference with **no** expected fn type — e.g. passing a generic function directly as an argument
 without first binding it to a typed local — is still CE2093:
 
+<!-- docs-sweep: error CE2093 -->
 ```sushi
 fn identity@(T)(T x) T:
     return Result.Ok(x)

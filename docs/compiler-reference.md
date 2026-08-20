@@ -63,6 +63,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 
 Libraries are used via `use <lib/...>` statements in source code:
 
+<!-- docs-sweep: skip (needs a .slib library built from the page's earlier example) -->
 ```sushi
 use <lib/mylib>
 
@@ -392,6 +393,7 @@ Sushi uses structured error codes for diagnosing issues.
 
 #### CE1001: Undeclared Identifier
 
+<!-- docs-sweep: error CE1001 -->
 ```sushi
 fn main() i32:
     # ERROR CE1001: use of undeclared identifier 'x'
@@ -403,6 +405,7 @@ fn main() i32:
 
 #### CE1002: Rebind to Undeclared Variable
 
+<!-- docs-sweep: error CE1002 -->
 ```sushi
 fn main() i32:
     # ERROR CE1002: rebind to undeclared variable 'count'
@@ -415,6 +418,7 @@ fn main() i32:
 
 #### CE2024: Use of Destroyed Dynamic Array
 
+<!-- docs-sweep: error CE2024 -->
 ```sushi
 fn main() i32:
     let i32[] arr = from([1, 2, 3])
@@ -430,6 +434,7 @@ fn main() i32:
 
 #### CE2502: .realise() Wrong Argument Count
 
+<!-- docs-sweep: error CE2502 -->
 ```sushi
 fn get_value() i32:
     return Result.Ok(42)
@@ -447,6 +452,7 @@ fn main() i32:
 
 #### CE2503: .realise() Type Mismatch
 
+<!-- docs-sweep: error CE2503 -->
 ```sushi
 fn get_value() i32:
     return Result.Ok(42)
@@ -467,6 +473,7 @@ fn main() i32:
 Assigning a `Result`-returning call directly to a non-`Result` variable is a type
 mismatch:
 
+<!-- docs-sweep: error CE2002 -->
 ```sushi
 fn get_value() i32:
     return Result.Ok(42)
@@ -482,6 +489,7 @@ fn main() i32:
 
 #### CE2507: Using ?? on Non-Result Type
 
+<!-- docs-sweep: error CE2507 -->
 ```sushi
 fn main() i32:
     let i32 x = 5

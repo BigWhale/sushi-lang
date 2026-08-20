@@ -112,8 +112,9 @@ _add(ErrorMessage("CE2420", Severity.ERROR,
 # --- Method parameters, `self` included (R6) -------------------------------------------
 #
 # The third and fourth read-only receivers, after the match/foreach binding (CE2414) and
-# the `peek` reference (CE2408). All four share ONE gate in `semantics/passes/borrow.py`
-# over a table of kinds, and each keeps its own code because each carries its own
+# the `peek` reference (CE2408). All the read-only kinds share ONE gate -- the
+# `READONLY_RECEIVERS` table in `semantics/passes/borrow/writes.py` -- and each keeps
+# its own code because each carries its own
 # rationale and its own escape -- the same reasoning as the six position codes above.
 #
 # The two here are one rule (#298: every parameter of an extension or perk method is a

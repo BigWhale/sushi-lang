@@ -235,6 +235,7 @@ public fn show_all@(...Ts: Display)(...Ts args) ~:
     return Result.Ok(~)
 ```
 
+<!-- docs-sweep: skip (needs a .slib library built from the page's earlier example) -->
 ```sushi
 # in a consumer program
 use <lib/format_lib>

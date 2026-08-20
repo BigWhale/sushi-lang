@@ -345,7 +345,7 @@ use <collections/strings>
 extend string shout() string:
     return "{self}!!!"
 
-extend string repeat(i32 times) string:
+extend string echo(i32 times) string:
     let string result = ""
     let i32 i = 0
     while (i < times):
@@ -355,7 +355,7 @@ extend string repeat(i32 times) string:
 
 fn main() i32:
     println("Don't Panic".shout())     # Don't Panic!!!
-    println("Ha".repeat(3))            # HaHaHa
+    println("Ha".echo(3))              # HaHaHa
 
     return Result.Ok(0)
 ```
