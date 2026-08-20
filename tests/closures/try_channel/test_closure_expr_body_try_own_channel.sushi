@@ -1,0 +1,21 @@
+# The ?? in an expression-body lambda propagates into the LAMBDA's Result
+# channel, not the enclosing function's (#403). This used to be a false
+# CE2511 against outer()'s StdError, while the block-body twin compiled.
+# EXPECT_OUTPUT: 4
+enum CalcError:
+    Boom
+
+fn may_fail(i32 n) i32 | CalcError:
+    if (n < 0):
+        return Result.Err(CalcError.Boom)
+    return Result.Ok(n)
+
+fn outer() i32:
+    let fn(i32) -> i32 | CalcError f = |i32 x| may_fail(x)??
+    let i32 v = f(4).realise(0)
+    return Result.Ok(v)
+
+fn main() i32:
+    let i32 v = outer().realise(0)
+    println("{v}")
+    return Result.Ok(0)
