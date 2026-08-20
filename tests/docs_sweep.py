@@ -51,11 +51,18 @@ class Block:
     expected_codes: list[str]
 
 
+def git_ls_files(*patterns: str) -> list[str]:
+    proc = subprocess.run(
+        ["git", "ls-files", *patterns],
+        capture_output=True, text=True, cwd=PROJECT_ROOT,
+    )
+    if proc.returncode != 0:
+        sys.exit(f"git ls-files failed (exit {proc.returncode}): {proc.stderr.strip()}")
+    return proc.stdout.splitlines()
+
+
 def collect_blocks() -> list[Block]:
-    tracked = subprocess.run(
-        ["git", "ls-files", "docs/**/*.md", "docs/*.md"],
-        capture_output=True, text=True, cwd=PROJECT_ROOT, check=True,
-    ).stdout.splitlines()
+    tracked = git_ls_files("docs/**/*.md", "docs/*.md")
 
     blocks: list[Block] = []
     for page in tracked:

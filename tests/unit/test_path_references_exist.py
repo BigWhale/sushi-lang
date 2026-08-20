@@ -47,7 +47,8 @@ ALLOWED = {
 
 def tracked_files() -> list[str]:
     out = subprocess.run(["git", "ls-files"], capture_output=True, text=True,
-                         cwd=PROJECT_ROOT, check=True)
+                         cwd=PROJECT_ROOT)
+    assert out.returncode == 0, f"git ls-files failed: {out.stderr.strip()}"
     return out.stdout.splitlines()
 
 
