@@ -1,4 +1,4 @@
-"""A Pygments lexer for the Sushi programming language (targets Sushi 0.10.0 syntax)."""
+"""A Pygments lexer for the Sushi programming language (targets Sushi 0.11.0 syntax)."""
 
 from pygments.lexer import RegexLexer, bygroups, words
 from pygments.token import (
