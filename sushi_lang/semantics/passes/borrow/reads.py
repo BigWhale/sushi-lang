@@ -18,6 +18,7 @@ from sushi_lang.semantics.ast import (
     Name,
     TryExpr,
 )
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ownership import is_get_out_container
 from sushi_lang.semantics.typesys import ReferenceType, StructType, Type
 
@@ -65,6 +66,31 @@ def root_owner(expr: Optional[Expr]) -> Optional[str]:
                 expr = expr.array
             case _:
                 return None
+
+
+def chain_call_boundary(expr: Optional[Expr]) -> Optional[Span]:
+    """The boundary that keeps a write receiver from reaching a root, or None (#352).
+
+    A write receiver must reach its root -- a NAME -- through member and index steps
+    only. Whatever else the walk stops at (a method call, a `??`, a plain call, an
+    inline constructor) yields a temporary copy, so a write receiver whose chain
+    crosses it cannot reach the storage it appears to write. Deliberately inverted --
+    "a Name is fine" rather than a list of boundary kinds -- so a new expression kind
+    is rejected, never silently writable. The boundary's span is the second location
+    of the CE2429 diagnostic.
+    """
+    if expr is None:
+        return None
+    while True:
+        match expr:
+            case MemberAccess():
+                expr = expr.receiver
+            case IndexAccess():
+                expr = expr.array
+            case Name() | None:
+                return None
+            case _:
+                return expr.loc
 
 
 def reads_through_owner(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:

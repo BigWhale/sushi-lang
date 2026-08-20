@@ -125,8 +125,9 @@ every position where the coercion does and does not apply.
 
 ## 5. One gate for each rule
 
-**A write cannot reach through a read-only receiver.** Five kinds, three write shapes each
-(a mutating method under the receiver, a field assignment, a `poke` borrow of it):
+**A write cannot reach through a read-only receiver.** Six kinds, three write shapes each
+(a mutating method under the receiver, a field assignment, a `poke` borrow of it), plus the
+indexed assignment, which routes through the same gate:
 
 | kind | code | escape |
 |---|---|---|
@@ -135,14 +136,37 @@ every position where the coercion does and does not apply.
 | method receiver | CE2421 | `poke self` |
 | by-value method parameter | CE2422 | declare the parameter `poke T` |
 | `let`-borrow binding | CE2426 | write to the owner; or `.clone()`, mutate, store back |
+| unbound chained borrow (`o.get().items`) | CE2429 | `.clone()`, mutate, rebuild the owner (`o := Own.alloc(h)`); or a nested `Own(poke ...)` binding where the `Own` sits in an enum |
 
-The kinds are a TABLE (`_READONLY_RECEIVERS`) behind one dispatcher
-(`_reject_readonly_write`) with four call sites, so a sixth kind is one row and not a sixth
-walk — the fifth one (#344) cost exactly that. The codes stay separate because each carries
-its own escape, and the last two rows show why that convention earns its keep: a
+The first five kinds are a TABLE (`READONLY_RECEIVERS`) behind one dispatcher
+(`reject_readonly_write`) with four call sites, so a new state-keyed kind is one row and not
+a new walk — the fifth one (#344) cost exactly that. The codes stay separate because each
+carries its own escape, and rows four and five show why that convention earns its keep: a
 `match`/`foreach` binding is a private DEEP copy, so its write is only lost, while a
 `let`-borrow shares the owner's DATA, so its write is lost AND a reallocating one frees the
 owner's buffer. Same rule, different first answer.
+
+**The sixth kind keys on SHAPE, not on state** (ruled 2026-08-20, #352; the live bug was
+#407). The other five are each a NAMED thing carrying a `BorrowState`; an unbound chained
+receiver has no name to hold state on. The rule is structural: **a write receiver must
+reach its root — a NAME — through member and index steps only**. Whatever else the walk
+stops at — a method call, a `??`, a plain call, an inline constructor — yields a
+temporary copy, so the write would land on the copy and be lost
+(`o.get().items.push(9)` printed the old length, exit 0, leak-clean).
+`chain_call_boundary` (`reads.py`) finds the boundary, deliberately INVERTED — "a Name
+is fine" rather than a list of boundary kinds — so a new expression kind is rejected,
+never silently writable. The same dispatcher checks it BEFORE the state table, because
+the boundary answer is the more precise one whatever the root's mode is. The boundary
+span is the second location of the relational diagnostic. Three consequences:
+
+- The READ through the same chain stays legal and leak-clean (#280; the receiver is a
+  registered scope temporary).
+- A FRESH temporary is rejected too (`make().items.push(9)`): the statement discards the
+  value, so the write is dead either way. Swift rejects the same shape. One rule, no
+  fresh/borrowed split.
+- The `poke`-borrow shape of this kind was already gated — CE2404, "expression has no
+  stable address" — so the kind covers the mutating method, the field assignment and the
+  indexed assignment (which was a CE0000 ICE until this gate).
 
 **A borrow cannot be consumed.** The ownership table's `(BORROWED, MOVE)` cell rejects, and
 that is the whole implementation: `type_class_of` derefs a reference to its referent, so
@@ -177,7 +201,7 @@ Each gate turns the next occurrence of its bug class into a red test:
 | `test_borrow_dispatch_is_total.py` | an arm for every `Expr` node (CE0125) |
 | `test_scope_dispatch_is_total.py` | the same for Pass 1 (CE0130) |
 | `test_peek_write_gate_is_total.py` | every member of `_MUTATING_METHODS` |
-| `test_readonly_receiver_matrix.py` | all twelve kind x shape cells of §5 |
+| `test_readonly_receiver_matrix.py` | every kind x shape cell of §5, the shape-keyed sixth kind included |
 | `test_borrow_flag_lifecycle.py` | every `BorrowState` flag x flow event |
 | `test_ownership_table.py` | the 3x2 table, reference rows included |
 | `test_consuming_use_coverage.py` | nothing bypasses the backend seam |
@@ -203,6 +227,11 @@ The row keys on `is_let_borrow`, not on `borrows_from is not None`. An owner wit
 `BorrowState` — a temporary, as in `let v = make()??.items` — records no owner name, and
 the `borrows_from` spelling would have handed that case to CE2414, which tells the author
 their `let` is a match binding. The temporary's buffer is just as real.
+
+The sixth kind (CE2429) has only ONE of the two questions. A write THROUGH the chain is
+the §5 gate's answer; there is no owner-side question, because the chain names no binding
+the owner could invalidate — the temporary copy is freed at scope exit like any other
+unbound owning temporary.
 
 ## 9. Not designed
 

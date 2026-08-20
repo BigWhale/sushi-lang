@@ -238,6 +238,8 @@ Re-aimed:
   a borrow parameter of any callable, not only of a method.
 
 Unchanged: CE2411, CE2408, CE2421, CE2414, CE2426, CE2412, CE2401, CE2403, CE2407.
+(CE2429, the unbound chained receiver, joined the read-only kinds later — #352,
+2026-08-20; see `borrowing.md` §5.)
 
 ## 10. What this makes possible
 

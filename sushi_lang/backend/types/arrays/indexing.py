@@ -24,6 +24,16 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
     from sushi_lang.backend.expressions import type_utils
 
     require_builder(codegen)
+
+    def address_of_value() -> ir.Value:
+        # `emit_expr` yields an array by VALUE (docs/design/array-representation.md);
+        # `as_array_address` is the one seam that turns it into an address.
+        from .addressing import as_array_address
+        from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+        array_value = codegen.expressions.emit_expr(expr.array)
+        return as_array_address(codegen, array_value, None, expr.array,
+                                infer_expr_semantic_type(codegen, expr.array))
+
     if isinstance(expr.array, Name):
         # Local alloca, or the global backing an array constant (#248) -- indexing a
         # constant directly used to be a CE0000 ICE because this consulted only locals.
@@ -41,16 +51,13 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
         # a pointer.
         from sushi_lang.backend.expressions.structs import try_get_struct_alloca
         field_ptr = try_get_struct_alloca(codegen, expr.array)
-        array_slot = (field_ptr if field_ptr is not None
-                      else codegen.expressions.emit_expr(expr.array))
+        # No alloca arm matches a CHAINED receiver (`o.get().items[0]`, the #407 read
+        # face): the field arrives by value and dies at `.type.pointee` unless it goes
+        # through the same seam as the else-arm.
+        array_slot = field_ptr if field_ptr is not None else address_of_value()
     else:
-        # A chained or temporary array (`o.get()[0]`, `from([1, 2])[0]`): `emit_expr` yields
-        # the descriptor by VALUE, and everything below reads through a GEP.
-        from .addressing import as_array_address
-        from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
-        array_value = codegen.expressions.emit_expr(expr.array)
-        array_slot = as_array_address(codegen, array_value, None, expr.array,
-                                      infer_expr_semantic_type(codegen, expr.array))
+        # A chained or temporary array (`o.get()[0]`, `from([1, 2])[0]`).
+        array_slot = address_of_value()
 
     index_value = codegen.expressions.emit_expr(expr.index)
 

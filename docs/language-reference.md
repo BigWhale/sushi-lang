@@ -447,7 +447,8 @@ is **CE2405**) and a value read out of a container needs `.clone()` (**CE2411**)
 The write must be able to reach the owner. It is rejected through a `peek` parameter
 (**CE2408**), a `match`/`foreach` binding (**CE2414**), a method receiver without
 `poke self` (**CE2421**), an unmarked parameter (**CE2422**), a `let` binding that borrows
-from an owner (**CE2426**), and a constant (**CE2096**).
+from an owner (**CE2426**), an unbound chained receiver such as `o.get().items`
+(**CE2429**), and a constant (**CE2096**).
 
 ## Structs
 

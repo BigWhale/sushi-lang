@@ -125,12 +125,14 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
     elif isinstance(target, MemberAccess):
         # A field rebind mutates in place, so it is allowed unless the root owner is a
         # read-only receiver, where the store cannot reach what it writes.
-        reject_readonly_write(checker, owner, stmt.loc, "assign to a field")
+        reject_readonly_write(checker, owner, stmt.loc, "assign to a field",
+                              receiver=target.receiver)
         check_expr(checker, target)
     elif isinstance(target, IndexAccess):
         # An element rebind mutates in place too, and `root_owner` already walks an
         # index, so the same gate answers for all five read-only receiver kinds.
-        reject_readonly_write(checker, owner, stmt.loc, "assign to an array element")
+        reject_readonly_write(checker, owner, stmt.loc, "assign to an array element",
+                              receiver=target.array)
         check_expr(checker, target)
 
     check_expr(checker, stmt.value)

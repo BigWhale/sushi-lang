@@ -1,0 +1,12 @@
+# The third write shape through a chained get-out: a plain field assignment. Never
+# filed -- it was a CE0022 internal error ("Cannot get pointer for field rebinding").
+# One dispatcher covers all shapes.
+# EXPECT_ERROR_CODE: CE2429
+struct Holder:
+    i32 n
+
+fn main() i32:
+    let Own@(Holder) o = Own.alloc(Holder(1))
+    o.get().n := 42
+    o.destroy()
+    return Result.Ok(0)
