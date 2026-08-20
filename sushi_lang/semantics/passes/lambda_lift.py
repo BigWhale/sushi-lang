@@ -34,7 +34,8 @@ class LambdaLifter:
         if isinstance(node, Lambda):
             self._lift(node)
             return
-        if isinstance(node, list):
+        # `If.arms` holds plain (cond, Block) tuples, so tuples walk too (#400).
+        if isinstance(node, (list, tuple)):
             for item in node:
                 self._walk(item)
             return
@@ -102,6 +103,18 @@ def _rewrite_captures(node, cap_names: set) -> None:
         for i, item in enumerate(node):
             if isinstance(item, Name) and item.id in cap_names:
                 node[i] = _env_access(item)
+            elif isinstance(item, tuple):
+                # An `If.arms` element. A captured Name can BE a tuple element
+                # (the arm's condition), and a tuple cannot be mutated in
+                # place -- rebuild it into the list slot (#400).
+                rebuilt = []
+                for x in item:
+                    if isinstance(x, Name) and x.id in cap_names:
+                        rebuilt.append(_env_access(x))
+                    else:
+                        _rewrite_captures(x, cap_names)
+                        rebuilt.append(x)
+                node[i] = tuple(rebuilt)
             else:
                 _rewrite_captures(item, cap_names)
         return

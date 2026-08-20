@@ -1,0 +1,13 @@
+# A capture READ inside an `if` within the LAMBDA BODY must be rewritten to an
+# env-field access (#400). `_rewrite_captures` had the same tuple gap as the
+# walk, so the lifted body kept the raw name and died with a CE0055 ICE on it.
+# EXPECT_OUTPUT: 21
+fn main() i32:
+    let i32 bonus = 20
+    let fn(i32) -> i32 f = |i32 x|:
+        if (x > 0):
+            return Result.Ok(x + bonus)
+        return Result.Ok(x)
+    let i32 v = f(1).realise(0)
+    println("{v}")
+    return Result.Ok(0)
