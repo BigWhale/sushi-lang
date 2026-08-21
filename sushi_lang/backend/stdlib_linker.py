@@ -92,6 +92,7 @@ class StdlibLinker:
         "collections/hashmap",
         "collections/iter",
         "encoding/msgpack",
+        "toolchain/slib",
     }
 
     def _resolve_stdlib_unit(self, unit_path: str) -> list[Path]:
