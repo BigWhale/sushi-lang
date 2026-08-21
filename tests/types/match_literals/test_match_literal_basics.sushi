@@ -11,7 +11,7 @@ fn classify(i32 n) string:
             return Result.Ok("answer")
         -1 ->
             return Result.Ok("minus one")
-        1_000_000 ->
+        1000000 ->
             return Result.Ok("big")
         _ ->
             return Result.Ok("other")

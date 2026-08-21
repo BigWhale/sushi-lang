@@ -19,6 +19,12 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     builder, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()
 
+    # An integer match (#415) switches on the scrutinee VALUE, not on an enum
+    # tag; Pass 2 stamps `integer_match_type` on exactly those matches.
+    if getattr(stmt, 'integer_match_type', None) is not None:
+        _emit_integer_match(codegen, stmt)
+        return
+
     scrutinee_value = codegen.expressions.emit_expr(stmt.scrutinee)
 
     # Prefer Pass 2's resolved enum type: the backend re-derivation below cannot cover
@@ -61,6 +67,40 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     # same registry before branching away.
     if owns_temp_scrutinee:
         codegen.memory.pop_scope()
+
+
+def _emit_integer_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
+    """Emit a match on an integer scrutinee (#415): one LLVM switch on the value.
+
+    Pass 2 guarantees the shape: every arm is a LiteralPattern except a trailing
+    wildcard, which becomes the switch default. Integers are plain values, so
+    there is no temp-scrutinee ownership and no binding extraction; the shared
+    `_emit_match_arms` skips both for non-Pattern arms.
+    """
+    from llvmlite import ir
+    from sushi_lang.semantics.ast import LiteralPattern
+
+    scrutinee_value = codegen.expressions.emit_expr(stmt.scrutinee)
+
+    end_bb = codegen.func.append_basic_block(name="match.end")
+    arm_blocks = [codegen.func.append_basic_block(name=f"match.arm{i}")
+                  for i in range(len(stmt.arms))]
+
+    wildcard_bb = _find_wildcard_block(stmt, arm_blocks)
+    switch, unreachable_bb = _create_switch_instruction(codegen, scrutinee_value, wildcard_bb)
+
+    for arm, arm_bb in zip(stmt.arms, arm_blocks, strict=True):
+        if isinstance(arm.pattern, LiteralPattern):
+            case_value = ir.Constant(scrutinee_value.type, arm.pattern.value)
+            switch.add_case(case_value, arm_bb)
+
+    _emit_match_arms(codegen, stmt, arm_blocks, scrutinee_value, None, end_bb)
+
+    if unreachable_bb is not None:
+        codegen.builder.position_at_end(unreachable_bb)
+        codegen.builder.unreachable()
+
+    codegen.builder.position_at_end(end_bb)
 
 
 # A counter, not a fixed name: two matches in one function would otherwise register the same

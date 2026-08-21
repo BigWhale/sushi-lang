@@ -607,6 +607,33 @@ match color:
     Color.Green() -> println("Green")
 ```
 
+### Integer Matching
+
+A match on an integer scrutinee dispatches on literal arms. Each literal takes
+the scrutinee's type under the usual context-typing rule (a non-decimal literal
+is a bit pattern; out of range is CE2073). Two arms with the same value are one
+duplicate arm (CE2075), whatever their radix. Because integer values cannot be
+enumerated, the match must end with a `_` arm (CE2074). Literal arms and enum
+pattern arms never mix in one match (CE2076).
+
+```sushi
+fn tag_name(u8 t) string:
+    match t:
+        0xc0 ->
+            return Result.Ok("nil")
+        0xc2 ->
+            return Result.Ok("false")
+        0xc3 ->
+            return Result.Ok("true")
+        _ ->
+            return Result.Ok("other")
+
+fn main() i32:
+    let u8 tag = 0xc0
+    println(tag_name(tag).realise("err"))
+    return Result.Ok(0)
+```
+
 ## Module System
 
 ### Units

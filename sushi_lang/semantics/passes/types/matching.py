@@ -3,11 +3,19 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Set, Tuple
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.typesys import EnumType, UnknownType, StructType
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, UnknownType, StructType
 from sushi_lang.semantics.generics.types import GenericTypeRef
-from sushi_lang.semantics.ast import Match, Pattern, WildcardPattern, OwnPattern, Block, Expr
+from sushi_lang.semantics.ast import (
+    Match, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
+)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.generics.type_display import display_type
+
+# The scrutinee types an integer literal match accepts (#415).
+_INTEGER_SCRUTINEES = {
+    BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
+    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
+}
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -20,6 +28,11 @@ def validate_match_statement(validator: 'TypeValidator', stmt: Match) -> None:
     if scrutinee_type is None:
         return
 
+    if not isinstance(scrutinee_type, EnumType):
+        # An integer scrutinee dispatches on literal arms (#415).
+        validate_integer_match(validator, stmt, scrutinee_type)
+        return
+
     # Stash the resolved concrete enum type on the node so the backend does not
     # have to re-derive it from the scrutinee expression (which it cannot always
     # do; a miss there silently drops pattern bindings and surfaces as CE0055).
@@ -30,8 +43,8 @@ def validate_match_statement(validator: 'TypeValidator', stmt: Match) -> None:
     check_match_exhaustiveness(validator, stmt, scrutinee_type, covered_variants, has_wildcard)
 
 
-def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optional[EnumType]:
-    """Validate match scrutinee is an enum type."""
+def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optional[EnumType | BuiltinType]:
+    """Validate the scrutinee is matchable: an enum, or an integer (#415)."""
     validator.validate_expression(stmt.scrutinee)
     scrutinee_type = validator.infer_expression_type(stmt.scrutinee)
 
@@ -51,11 +64,57 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
             validator.enum_table.by_name
         )
 
-    if not isinstance(scrutinee_type, EnumType):
-        er.emit(validator.reporter, er.ERR.CE2048, stmt.scrutinee.loc, got=display_type(scrutinee_type))
-        return None
+    if isinstance(scrutinee_type, EnumType) or scrutinee_type in _INTEGER_SCRUTINEES:
+        return scrutinee_type
 
-    return scrutinee_type
+    er.emit(validator.reporter, er.ERR.CE2048, stmt.scrutinee.loc, got=display_type(scrutinee_type))
+    return None
+
+
+def validate_integer_match(validator: 'TypeValidator', stmt: Match,
+                           scrutinee_type: BuiltinType) -> None:
+    """Validate a match on an integer scrutinee: literal arms + a trailing `_` (#415).
+
+    A literal takes the scrutinee's type under the same fit rule as any
+    context-typed literal (a non-decimal literal is a bit pattern); duplicates
+    are duplicates by VALUE; the wildcard is required because integer values
+    cannot be enumerated.
+    """
+    from sushi_lang.semantics.passes.types.inference import int_literal_fits
+
+    # The backend dispatches on this stamp; EnumType matches use
+    # `resolved_scrutinee_type` instead.
+    stmt.integer_match_type = scrutinee_type
+
+    seen: dict[int, str] = {}
+    has_wildcard = False
+    for idx, arm in enumerate(stmt.arms):
+        pattern = arm.pattern
+
+        if isinstance(pattern, WildcardPattern):
+            has_wildcard = True
+            if idx != len(stmt.arms) - 1:
+                er.emit(validator.reporter, er.ERR.CE2041, pattern.loc, variant="_")
+        elif isinstance(pattern, LiteralPattern):
+            if not int_literal_fits(pattern.value, pattern.radix, scrutinee_type):
+                er.emit(validator.reporter, er.ERR.CE2073, pattern.loc,
+                        literal=pattern.display, type=scrutinee_type.value)
+            elif pattern.value in seen:
+                er.emit(validator.reporter, er.ERR.CE2075, pattern.loc,
+                        value=pattern.value, first=seen[pattern.value])
+            else:
+                seen[pattern.value] = pattern.display
+        else:
+            er.emit(validator.reporter, er.ERR.CE2076, pattern.loc,
+                    arm_kind="enum-pattern", scrutinee_type=scrutinee_type.value)
+
+        if isinstance(arm.body, Block):
+            validator._validate_block(arm.body)
+        elif isinstance(arm.body, Expr):
+            validator.validate_expression(arm.body)
+
+    if not has_wildcard:
+        er.emit(validator.reporter, er.ERR.CE2074, stmt.loc)
 
 
 def collect_and_validate_patterns(
@@ -79,6 +138,12 @@ def collect_and_validate_patterns(
             elif isinstance(arm.body, Expr):
                 validator.validate_expression(arm.body)
 
+            continue
+
+        if isinstance(pattern, LiteralPattern):
+            # A literal arm needs an integer scrutinee (#415).
+            er.emit(validator.reporter, er.ERR.CE2076, pattern.loc,
+                    arm_kind="literal", scrutinee_type=display_type(scrutinee_type))
             continue
 
         if not isinstance(pattern, Pattern):

@@ -173,8 +173,8 @@ _add(ErrorMessage("CE2047", Severity.ERROR,
     Category.TYPE, "An enum declares the same variant name more than once."))
 
 _add(ErrorMessage("CE2048", Severity.ERROR,
-    "match scrutinee must be an enum type, got '{got}'",
-    Category.TYPE, "Match expressions can only be used with enum types."))
+    "match scrutinee must be an enum or integer type, got '{got}'",
+    Category.TYPE, "A match dispatches on an enum's variants, or (since #415) on an integer's value with literal arms. Other types have no match semantics."))
 
 _add(ErrorMessage("CE2049", Severity.ERROR,
     "enum constructor argument type mismatch for variant '{variant}': expected '{expected}', got '{got}'",
@@ -249,6 +249,19 @@ _add(ErrorMessage("CE2072", Severity.ERROR,
 _add(ErrorMessage("CE2073", Severity.ERROR,
     "literal {literal} out of range for {type}",
     Category.TYPE, "The literal does not fit the target type's range. Use a wider type, or an explicit 'as' cast if you intend the bit pattern."))
+
+# Integer literal match arms (#415)
+_add(ErrorMessage("CE2074", Severity.ERROR,
+    "non-exhaustive integer match (add a trailing '_' arm)",
+    Category.TYPE, "A match on an integer scrutinee cannot enumerate every value, so it must end with a wildcard arm. Introduced with integer literal match arms (#415)."))
+
+_add(ErrorMessage("CE2075", Severity.ERROR,
+    "duplicate literal match arm: value {value} is already matched by arm '{first}'",
+    Category.TYPE, "Two literal arms match the same VALUE, whatever their radix: 0x2a and 42 are the same arm. The second arm is unreachable."))
+
+_add(ErrorMessage("CE2076", Severity.ERROR,
+    "match arm does not fit the scrutinee: {arm_kind} arm on a '{scrutinee_type}' scrutinee",
+    Category.TYPE, "A literal arm needs an integer scrutinee; an enum pattern arm needs an enum scrutinee. One match cannot mix the two arm kinds (#415)."))
 
 # Named struct constructor errors (CE2080-CE2089)
 _add(ErrorMessage("CE2080", Severity.ERROR,
