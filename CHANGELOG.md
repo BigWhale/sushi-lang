@@ -13,6 +13,19 @@ All notable changes to Sushi Lang will be documented in this file.
   a runtime drop flag; an unconditional move keeps the zero-cost static skip.
 
 ### Added
+- **`use <toolchain/slib>`: a `.slib` metadata reader in Sushi.** Reads the 52-byte
+  header and the msgpack metadata map of a version-3 library into a `MsgValue` tree
+  (`slib_read_metadata`), plus the bitcode length (`slib_bitcode_size`); mirrors the
+  Python `LibraryFormat.read_metadata_only` and never reads the bitcode. First stdlib
+  source module that imports another source module.
+- **The `toolchain/` directory: compiler tools written in Sushi.** `toolchain/src/`
+  holds tool programs, `./toolchain/build.py` compiles them into the gitignored
+  `toolchain/bin/`, and `sushic` delegates to a built tool when one exists. First tool:
+  `slib-info`, which owns the full `--lib-info` report; `sushic --lib-info` runs it and
+  returns its exit code, falling back to the built-in Python reader when no binary is
+  present (always the case in a wheel install). `SUSHI_TOOLCHAIN=off` forces the
+  fallback; `SUSHI_TOOLCHAIN_BIN` overrides the tool directory. A relative `--lib-info`
+  path now resolves against the caller's directory through the `./sushic` wrapper.
 - **Integer literal match arms** (#415). A `match` on an integer scrutinee dispatches on
   literal arms (`0xc0 ->`, `-1 ->`), compiled to one LLVM `switch`. A literal takes the
   scrutinee's type under the usual context-typing rule (a non-decimal literal is a bit

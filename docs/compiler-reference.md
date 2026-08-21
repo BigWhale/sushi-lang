@@ -61,6 +61,12 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 ./sushic --lib-info mylib.slib
 ```
 
+In a repository checkout, `--lib-info` runs the Sushi-written `toolchain/bin/slib-info`
+binary when it exists (build it with `./toolchain/build.py`) and returns its exit code;
+without the binary the built-in Python reader prints the same report. Set
+`SUSHI_TOOLCHAIN=off` to force the Python path, or `SUSHI_TOOLCHAIN_BIN=DIR` to point at
+a different tool directory.
+
 Libraries are used via `use <lib/...>` statements in source code:
 
 <!-- docs-sweep: skip (needs a .slib library built from the page's earlier example) -->

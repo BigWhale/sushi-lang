@@ -41,6 +41,12 @@ TESTS = [
         "expected_stdout": ["PASS"],
         "exit_code": 0,
     },
+    {
+        "name": "06_msgpack",
+        "file": "06_msgpack.sushi",
+        "expected_stdout": ["PASS"],
+        "exit_code": 0,
+    },
 ]
 
 
