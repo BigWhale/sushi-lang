@@ -49,6 +49,10 @@ jobs:
         with:
           name: stdlib-linux
           path: sushi_lang/sushi_stdlib/dist/linux/
+          # The .build_fingerprint marker is a hidden file, and upload-artifact drops
+          # hidden files by default -- without it the installed compiler scores the
+          # shipped bitcode stale and tries to rebuild.
+          include-hidden-files: true
 
   build-stdlib-darwin:
     runs-on: macos-latest
@@ -80,6 +84,7 @@ jobs:
         with:
           name: stdlib-darwin
           path: sushi_lang/sushi_stdlib/dist/darwin/
+          include-hidden-files: true
 
   build-wheel:
     needs: [build-stdlib-linux, build-stdlib-darwin]
@@ -108,6 +113,22 @@ jobs:
 
       - name: Build wheel
         run: uv build --wheel --python 3.13
+
+      - name: Assert the wheel is complete
+        # A wheel with no bitcode or no markers "builds" fine and fails on every user
+        # machine -- exactly the 0.11.0 release failure. Fail HERE, with the inventory.
+        run: |
+          WHEEL=$(ls dist/*.whl | head -1)
+          LISTING=$(unzip -l "$WHEEL")
+          BC_COUNT=$(echo "$LISTING" | grep -c "\.bc$" || true)
+          echo "bitcode files in wheel: $BC_COUNT"
+          test "$BC_COUNT" -gt 0 || { echo "FATAL: wheel contains no stdlib bitcode"; exit 1; }
+          for plat in linux darwin; do
+            echo "$LISTING" | grep -q "sushi_stdlib/dist/$plat/.build_fingerprint" \
+              || { echo "FATAL: wheel is missing the $plat .build_fingerprint marker"; exit 1; }
+          done
+          echo "$LISTING" | grep -q "sushi_stdlib/build.py" \
+            || { echo "FATAL: wheel is missing sushi_stdlib/build.py (the freshness fingerprint hashes it)"; exit 1; }
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v7
@@ -192,22 +213,10 @@ jobs:
           name: wheel
           path: dist/
 
-      - name: Extract changelog for release
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          awk -v ver="$VERSION" '
-            /^## \[/ {
-              if (found) exit
-              if ($0 ~ "\\[" ver "\\]") found=1
-              next
-            }
-            found { print }
-          ' CHANGELOG.md > release_notes.md
-          echo "Extracted release notes for version $VERSION"
-          cat release_notes.md
-
       - name: Upload wheel to release
+        # Attach the wheel ONLY. The release body is hand-written at publish time and
+        # carries no issue/PR references; body_path used to overwrite it with the
+        # changelog section, which does.
         uses: softprops/action-gh-release@v3
         with:
           files: dist/*.whl
-          body_path: release_notes.md
