@@ -1,0 +1,32 @@
+# A dynamic array conditionally moved by a rebind: the iterations that do not
+# move must free their array; the iteration that moves must not double-free.
+# EXPECT_STDOUT_EXACT: "1\n2\n"
+# EXPECT_NO_LEAKS: true
+
+fn never_moves() i32:
+    let i32[] keeper = from([9])
+    let i32 n = 5
+    let i32 i = 0
+    while (i < 2):
+        let i32[] tmp = from([i, i + 1])
+        if (i == n):
+            keeper := tmp
+        i := i + 1
+    return Result.Ok(keeper.len())
+
+fn moves_once() i32:
+    let i32[] keeper = from([9])
+    let i32 i = 0
+    while (i < 2):
+        let i32[] tmp = from([i, i + 1])
+        if (i == 0):
+            keeper := tmp
+        i := i + 1
+    return Result.Ok(keeper.len())
+
+fn main() i32:
+    let i32 a = never_moves().realise(-1)
+    println("{a}")
+    let i32 b = moves_once().realise(-1)
+    println("{b}")
+    return Result.Ok(0)

@@ -116,6 +116,13 @@ class BorrowChecker:
         self.borrow_state = {}
         self.active_borrows = set()
         self._scope_binding_borrows = []
+        # Conditional-move tracking (#414): `branch_depth` counts the if/match/loop
+        # bodies entered; a move at a depth greater than the owner's declaration depth
+        # cannot dominate the scope exit, so the backend must guard that owner's frees
+        # with a runtime drop flag. Stamped on the BODY block (shared by the synthetic
+        # perk-method wrapper) for the backend to read.
+        self.branch_depth = 0
+        self.conditional_moves = set()
 
         if self_type is not None:
             # A `poke self` / `peek self` receiver keeps its full ReferenceType, which
@@ -142,6 +149,7 @@ class BorrowChecker:
             self._declare(state, is_borrow=not param_mode(param).consumes)
 
         check_block(self, body)
+        body.conditional_move_names = frozenset(self.conditional_moves)
 
     def _declare(self, state: BorrowState, *, is_borrow: bool) -> None:
         """Register a parameter, recording whether its declared mode is a borrow."""

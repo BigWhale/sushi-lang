@@ -37,8 +37,10 @@ def emit_struct_cleanup(codegen: 'LLVMCodegen') -> None:
     for scope_idx in range(len(codegen.memory.struct_variables) - 1, -1, -1):
         struct_scope = codegen.memory.struct_variables[scope_idx]
         for var_name, (struct_type, alloca) in struct_scope.items():
-            if not codegen.moves.is_moved(alloca):
-                codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, struct_type, alloca)
+            codegen.moves.emit_free_unless_moved(
+                alloca,
+                lambda n=var_name, t=struct_type, a=alloca:
+                    codegen.dynamic_arrays.emit_struct_field_cleanup(n, t, a))
 
 
 def emit_closure_cleanup(codegen: 'LLVMCodegen') -> None:
@@ -48,8 +50,8 @@ def emit_closure_cleanup(codegen: 'LLVMCodegen') -> None:
         return
     for _var_name, entries in mem._closure_cleanup.items():
         for _depth, slot in entries:
-            if not codegen.moves.is_moved(slot):
-                mem._emit_closure_free(slot)
+            codegen.moves.emit_free_unless_moved(
+                slot, lambda s=slot: mem._emit_closure_free(s))
 
 
 def emit_dynamic_array_cleanup(codegen: 'LLVMCodegen') -> None:
@@ -109,23 +111,26 @@ def emit_loop_exit_cleanup(codegen: 'LLVMCodegen', min_scope_index: int) -> None
             for entry in mem._struct_cleanup.get(var_name, ()):
                 if entry[0] == scope_idx:
                     _d, struct_type, alloca = entry
-                    if not codegen.moves.is_moved(alloca):
-                        da.emit_struct_field_cleanup(var_name, struct_type, alloca)
+                    codegen.moves.emit_free_unless_moved(
+                        alloca,
+                        lambda n=var_name, t=struct_type, a=alloca:
+                            da.emit_struct_field_cleanup(n, t, a))
                     break
             for entry in mem._closure_cleanup.get(var_name, ()):
                 if entry[0] == scope_idx:
-                    if not codegen.moves.is_moved(entry[-1]):
-                        mem._emit_closure_free(entry[-1])
+                    codegen.moves.emit_free_unless_moved(
+                        entry[-1], lambda s=entry[-1]: mem._emit_closure_free(s))
                     break
             # String locals (#145): owned-bit-guarded free, bounded to the loop's scopes.
             for entry in mem._string_cleanup.get(var_name, ()):
                 if entry[0] == scope_idx:
-                    if not codegen.moves.is_moved(entry[-1]):
-                        mem._emit_string_free(entry[-1])
+                    codegen.moves.emit_free_unless_moved(
+                        entry[-1], lambda s=entry[-1]: mem._emit_string_free(s))
                     break
             descriptor = da.owned_pointers.get(var_name)
             if (descriptor is not None and descriptor.depth == scope_idx
-                    and not descriptor.destroyed and not codegen.moves.is_moved(descriptor.slot)):
+                    and not descriptor.destroyed):
+                # _emit_own_destructor carries its own moved/flag gate (#414).
                 da._emit_own_destructor(var_name, descriptor.own_type)
 
     for scope_idx in range(len(mem._cstr_cleanup) - 1, min_scope_index - 1, -1):

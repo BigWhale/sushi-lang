@@ -1,0 +1,33 @@
+# A local returned from ONE match arm must be freed on the other arm — in both
+# arm orders, because the leak depended on emission order (#414).
+# EXPECT_STDOUT_EXACT: "42\ntossed\n42\ntossed\n"
+# EXPECT_NO_LEAKS: true
+
+enum Choice:
+    Keep()
+    Toss()
+
+fn pick_keep_first(Choice c) string:
+    let string s = "{42}"
+    match c:
+        Choice.Keep() ->
+            return Result.Ok(s)
+        Choice.Toss() ->
+            return Result.Ok("tossed")
+
+fn pick_toss_first(Choice c) string:
+    let string s = "{42}"
+    match c:
+        Choice.Toss() ->
+            return Result.Ok("tossed")
+        Choice.Keep() ->
+            return Result.Ok(s)
+
+fn main() i32:
+    let Choice k = Choice.Keep()
+    let Choice t = Choice.Toss()
+    println(pick_keep_first(k).realise("err"))
+    println(pick_keep_first(t).realise("err"))
+    println(pick_toss_first(k).realise("err"))
+    println(pick_toss_first(t).realise("err"))
+    return Result.Ok(0)

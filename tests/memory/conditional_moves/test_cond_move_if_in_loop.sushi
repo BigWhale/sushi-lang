@@ -1,0 +1,15 @@
+# The #414 repro: a loop-local moved in ONE branch must still be freed on the
+# iterations that do not take that branch.
+# EXPECT_STDOUT_EXACT: "0\n"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let string acc = ""
+    let i32 i = 0
+    while (i < 3):
+        let string s = "{i}"
+        if (i == 0):
+            acc := s
+        i := i + 1
+    println(acc)
+    return Result.Ok(0)

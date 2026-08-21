@@ -1,0 +1,17 @@
+# A struct with an owning field, conditionally moved by a rebind inside a loop.
+# EXPECT_STDOUT_EXACT: "item 0\n"
+# EXPECT_NO_LEAKS: true
+
+struct Box:
+    string label
+
+fn main() i32:
+    let Box kept = Box("start")
+    let i32 i = 0
+    while (i < 2):
+        let Box b = Box("item {i}")
+        if (i == 0):
+            kept := b
+        i := i + 1
+    println(kept.label)
+    return Result.Ok(0)

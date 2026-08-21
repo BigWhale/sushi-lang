@@ -86,10 +86,25 @@ def check_stmt(checker: 'BorrowChecker', stmt: Stmt) -> None:
             pass  # No borrow checking needed
 
 
+def _branch(checker: 'BorrowChecker'):
+    """Count an if arm / match arm / loop body for conditional-move detection (#414)."""
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _scope():
+        checker.branch_depth += 1
+        try:
+            yield
+        finally:
+            checker.branch_depth -= 1
+    return _scope()
+
+
 def _check_let(checker: 'BorrowChecker', stmt: Let) -> None:
     """`let T x = v`: declare the binding, then give it its initializer's provenance."""
     checker.borrow_state[stmt.name] = BorrowState(
         name=stmt.name, var_type=stmt.ty, declared_at_span=stmt.loc,
+        declared_branch_depth=checker.branch_depth,
         # Option B: a string bound straight from a literal owns no heap, so consuming it
         # transfers nothing and CE2405 must not fire on it.
         owns_no_heap=binds_a_bare_literal_string(stmt.ty, stmt.value))
@@ -182,12 +197,14 @@ def _check_if(checker: 'BorrowChecker', stmt: If) -> None:
         restore_flow(checker, entry)
         check_expr(checker, cond_expr)
         clear_borrows(checker)
-        check_block(checker, arm_block)
+        with _branch(checker):
+            check_block(checker, arm_block)
         if not terminates(arm_block):
             paths.append(snapshot_flow(checker))
     if stmt.else_block:
         restore_flow(checker, entry)
-        check_block(checker, stmt.else_block)
+        with _branch(checker):
+            check_block(checker, stmt.else_block)
         if not terminates(stmt.else_block):
             paths.append(snapshot_flow(checker))
     else:
@@ -206,7 +223,7 @@ def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:
         # The scrutinee type gives each binding its var_type; Pass 2 stamps it (CE0121
         # guards that). The scope closes BEFORE the path snapshot, so the join sees the
         # outer local's facts, never the binding's.
-        with BindingScope(checker) as scope:
+        with BindingScope(checker) as scope, _branch(checker):
             if isinstance(arm.pattern, Pattern):
                 register_pattern_bindings(checker, scope, arm.pattern,
                                           stmt.resolved_scrutinee_type,
@@ -245,9 +262,11 @@ def check_loop_body(checker: 'BorrowChecker', body: Block) -> None:
     entry = snapshot_flow(checker)
     prev_suppressed = checker.err.suppressed
     checker.err.suppressed = True
-    check_block(checker, body)
+    with _branch(checker):
+        check_block(checker, body)
     checker.err.suppressed = prev_suppressed
     fixed_point = entry | snapshot_flow(checker)
     restore_flow(checker, fixed_point)
-    check_block(checker, body)
+    with _branch(checker):
+        check_block(checker, body)
     restore_flow(checker, fixed_point)

@@ -284,6 +284,18 @@ ownership, for the two shapes that have no source `Expr` to stamp a decision on)
 listed in the module's `__all__`; nothing else in the backend may call the primitives underneath
 them (§5.2).
 
+**A conditional move carries a runtime drop flag (#414).** "Mark the source moved" is a
+compile-time fact, but a move inside an if arm, a match arm, or a loop body does not dominate the
+owner's scope exit: on the paths that skip the move, the static skip leaked the value. Pass 3
+counts branch depth; a move recorded deeper than its owner's declaration lands the name in the
+callable's `conditional_move_names` stamp (on the BODY block, so the perk-method wrapper shares
+it). The backend arms those bindings with an entry-block `i1` drop flag — set live at declaration
+(re-armed on every loop iteration and on a rebind), cleared at each move site — and every free
+gate goes through `MoveTracker.emit_free_unless_moved`, which skips a statically moved slot,
+emits an `if (flag)` free for a flagged one, and frees unconditionally otherwise. An
+unconditional move keeps the zero-cost static skip; the gate
+`tests/memory/conditional_moves/` holds the leak batch.
+
 ### 5.1 The decision is computed in semantics, not in the backend
 
 This is what makes it a *single* authority rather than a backend-local one.
