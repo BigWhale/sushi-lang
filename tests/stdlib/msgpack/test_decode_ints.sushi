@@ -1,0 +1,62 @@
+# Decode the sized integer tags: uint8/16/32/64 and int8/16/32/64.
+# A uint64 above the i64 maximum becomes UInt (rendered with a 'u' suffix);
+# each other integer becomes Int.
+# EXPECT_STDOUT_EXACT: "255\n256\n65535\n3735928559\n42\n18446744073709551615u\n9223372036854775808u\n9223372036854775807\n-128\n-33\n127\n-32768\n300\n-1\n-2147483648\n-9223372036854775808\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/msgpack>
+
+fn check(u8[] buf) ~:
+    match mp_decode(buf):
+        Result.Ok(v) ->
+            println(mp_show(v)??)
+        Result.Err(e) ->
+            match e:
+                MpError.Truncated(off) ->
+                    println("Truncated({off})")
+                MpError.Unsupported(t) ->
+                    println("Unsupported({t})")
+                MpError.BadUtf8(off) ->
+                    println("BadUtf8({off})")
+                MpError.Trailing(p) ->
+                    println("Trailing({p})")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let u8[] b_u8 = from([0xcc, 0xff])
+    check(b_u8)??
+    let u8[] b_u16 = from([0xcd, 0x01, 0x00])
+    check(b_u16)??
+    let u8[] b_u16max = from([0xcd, 0xff, 0xff])
+    check(b_u16max)??
+    let u8[] b_u32 = from([0xce, 0xde, 0xad, 0xbe, 0xef])
+    check(b_u32)??
+    let u8[] b_u64small = from([0xcf, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2a])
+    check(b_u64small)??
+    let u8[] b_u64max = from([0xcf, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff])
+    check(b_u64max)??
+    let u8[] b_u64edge = from([0xcf, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    check(b_u64edge)??
+    let u8[] b_u64fit = from([0xcf, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff])
+    check(b_u64fit)??
+    let u8[] b_i8min = from([0xd0, 0x80])
+    check(b_i8min)??
+    let u8[] b_i8neg = from([0xd0, 0xdf])
+    check(b_i8neg)??
+    let u8[] b_i8pos = from([0xd0, 0x7f])
+    check(b_i8pos)??
+    let u8[] b_i16min = from([0xd1, 0x80, 0x00])
+    check(b_i16min)??
+    let u8[] b_i16pos = from([0xd1, 0x01, 0x2c])
+    check(b_i16pos)??
+    let u8[] b_i32neg = from([0xd2, 0xff, 0xff, 0xff, 0xff])
+    check(b_i32neg)??
+    let u8[] b_i32min = from([0xd2, 0x80, 0x00, 0x00, 0x00])
+    check(b_i32min)??
+    let u8[] b_i64min = from([0xd3, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    check(b_i64min)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

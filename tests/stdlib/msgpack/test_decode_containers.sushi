@@ -1,0 +1,54 @@
+# Decode arrays and maps: fixarray, array16, array32, fixmap, map16, map32,
+# the 15/16 fixarray boundary, nesting, and empty containers. A map keeps its
+# wire order.
+# EXPECT_STDOUT_EXACT: "[1,2]\n[]\n[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14]\n[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]\n[1,2]\n[[nil,true]]\n[[[[[1]]]]]\n{"k":42}\n{}\n{"a":1,"b":[2]}\n{"k":42}\n{"k":42}\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/msgpack>
+
+fn check(u8[] buf) ~:
+    match mp_decode(buf):
+        Result.Ok(v) ->
+            println(mp_show(v)??)
+        Result.Err(e) ->
+            match e:
+                MpError.Truncated(off) ->
+                    println("Truncated({off})")
+                MpError.Unsupported(t) ->
+                    println("Unsupported({t})")
+                MpError.BadUtf8(off) ->
+                    println("BadUtf8({off})")
+                MpError.Trailing(p) ->
+                    println("Trailing({p})")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let u8[] b_fixarr = from([0x92, 0x01, 0x02])
+    check(b_fixarr)??
+    let u8[] b_empty_arr = from([0x90])
+    check(b_empty_arr)??
+    let u8[] b_arr15 = from([0x9f, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e])
+    check(b_arr15)??
+    let u8[] b_arr16 = from([0xdc, 0x00, 0x10, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f])
+    check(b_arr16)??
+    let u8[] b_arr32 = from([0xdd, 0x00, 0x00, 0x00, 0x02, 0x01, 0x02])
+    check(b_arr32)??
+    let u8[] b_nested = from([0x91, 0x92, 0xc0, 0xc3])
+    check(b_nested)??
+    let u8[] b_deep = from([0x91, 0x91, 0x91, 0x91, 0x91, 0x01])
+    check(b_deep)??
+    let u8[] b_fixmap = from([0x81, 0xa1, 0x6b, 0x2a])
+    check(b_fixmap)??
+    let u8[] b_empty_map = from([0x80])
+    check(b_empty_map)??
+    let u8[] b_map2 = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
+    check(b_map2)??
+    let u8[] b_map16 = from([0xde, 0x00, 0x01, 0xa1, 0x6b, 0x2a])
+    check(b_map16)??
+    let u8[] b_map32 = from([0xdf, 0x00, 0x00, 0x00, 0x01, 0xa1, 0x6b, 0x2a])
+    check(b_map32)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

@@ -1,0 +1,66 @@
+# Construct and match each MsgValue variant by hand, before the decoder exists.
+# This test fires the first-user enum shapes: two owned-array payloads in one
+# variant (Map), string and u8[] payloads (Str, Bin), and the recursive Arr.
+# EXPECT_STDOUT_EXACT: "nil\nbool true\nint -42\nuint 18446744073709551615\nfloat 4614253070214989087\nstr Mostly Harmless\nbin 3\narr 2\nmap 1 1\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/msgpack>
+
+fn describe(MsgValue v) string:
+    match v:
+        MsgValue.Nil() ->
+            return Result.Ok("nil")
+        MsgValue.Bool(b) ->
+            return Result.Ok("bool {b}")
+        MsgValue.Int(n) ->
+            return Result.Ok("int {n}")
+        MsgValue.UInt(n) ->
+            return Result.Ok("uint {n}")
+        MsgValue.Float(x) ->
+            return Result.Ok("float {x.to_bits()}")
+        MsgValue.Str(s) ->
+            return Result.Ok("str {s}")
+        MsgValue.Bin(b) ->
+            return Result.Ok("bin {b.len()}")
+        MsgValue.Arr(items) ->
+            return Result.Ok("arr {items.len()}")
+        MsgValue.Map(keys, vals) ->
+            return Result.Ok("map {keys.len()} {vals.len()}")
+
+fn run_test() i32:
+    let MsgValue v_nil = MsgValue.Nil()
+    println(describe(v_nil)??)
+
+    let MsgValue v_bool = MsgValue.Bool(true)
+    println(describe(v_bool)??)
+
+    let MsgValue v_int = MsgValue.Int(-42)
+    println(describe(v_int)??)
+
+    let MsgValue v_uint = MsgValue.UInt(18446744073709551615)
+    println(describe(v_uint)??)
+
+    let MsgValue v_float = MsgValue.Float(3.14)
+    println(describe(v_float)??)
+
+    let MsgValue v_str = MsgValue.Str("Mostly Harmless")
+    println(describe(v_str)??)
+
+    let u8[] blob = from([1, 2, 3])
+    let MsgValue v_bin = MsgValue.Bin(blob)
+    println(describe(v_bin)??)
+
+    let MsgValue[] kids = from([MsgValue.Int(1), MsgValue.Nil()])
+    let MsgValue v_arr = MsgValue.Arr(kids)
+    println(describe(v_arr)??)
+
+    let MsgValue[] keys = from([MsgValue.Str("k")])
+    let MsgValue[] vals = from([MsgValue.Int(7)])
+    let MsgValue v_map = MsgValue.Map(keys, vals)
+    println(describe(v_map)??)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

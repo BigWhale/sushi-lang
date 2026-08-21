@@ -1,0 +1,36 @@
+# Decode the binary tags: bin8, bin16, bin32, and an empty payload.
+# EXPECT_STDOUT_EXACT: "bin(1,2,3)\nbin()\nbin(10,11)\nbin(255)\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/msgpack>
+
+fn check(u8[] buf) ~:
+    match mp_decode(buf):
+        Result.Ok(v) ->
+            println(mp_show(v)??)
+        Result.Err(e) ->
+            match e:
+                MpError.Truncated(off) ->
+                    println("Truncated({off})")
+                MpError.Unsupported(t) ->
+                    println("Unsupported({t})")
+                MpError.BadUtf8(off) ->
+                    println("BadUtf8({off})")
+                MpError.Trailing(p) ->
+                    println("Trailing({p})")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let u8[] b_bin8 = from([0xc4, 0x03, 0x01, 0x02, 0x03])
+    check(b_bin8)??
+    let u8[] b_empty = from([0xc4, 0x00])
+    check(b_empty)??
+    let u8[] b_bin16 = from([0xc5, 0x00, 0x02, 0x0a, 0x0b])
+    check(b_bin16)??
+    let u8[] b_bin32 = from([0xc6, 0x00, 0x00, 0x00, 0x01, 0xff])
+    check(b_bin32)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

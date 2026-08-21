@@ -1,0 +1,30 @@
+# mp_map_get scans a decoded map in wire order and clones the found value out.
+# A missing key gives Maybe.None.
+# EXPECT_STDOUT_EXACT: "a=1\nb=[2]\nzz missing\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/msgpack>
+
+fn lookup(MsgValue m, string key) ~:
+    match mp_map_get(m, key):
+        Maybe.Some(v) ->
+            let string shown = mp_show(v)??
+            println("{key}={shown}")
+        Maybe.None() ->
+            println("{key} missing")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
+    match mp_decode(buf):
+        Result.Ok(m) ->
+            lookup(m, "a")??
+            lookup(m, "b")??
+            lookup(m, "zz")??
+        Result.Err(_) ->
+            println("decode failed")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

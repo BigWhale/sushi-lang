@@ -1,0 +1,43 @@
+# dump: read one msgpack file and print its mp_show rendering on one line.
+# A tool program for the differential test, not a collected test. Exit codes:
+# 0 decoded, 1 decode error, 2 usage or I/O error.
+
+use <io/files>
+use <encoding/msgpack>
+
+fn run_tool(peek string[] args) i32:
+    if (args.len() < 2):
+        println("usage: dump <file.mp>")
+        return Result.Ok(2)
+    let string path = args.get(1)??
+    let i32 size = file_size(path)?? as i32
+    let FileResult r = open(path, FileMode.ReadB())
+    match r:
+        FileResult.Ok(f) ->
+            let u8[] bytes = f.read_bytes(size)
+            f.close()
+            match mp_decode(bytes):
+                Result.Ok(v) ->
+                    println(mp_show(v)??)
+                    return Result.Ok(0)
+                Result.Err(e) ->
+                    match e:
+                        MpError.Truncated(off) ->
+                            println("Truncated({off})")
+                        MpError.Unsupported(t) ->
+                            println("Unsupported({t})")
+                        MpError.BadUtf8(off) ->
+                            println("BadUtf8({off})")
+                        MpError.Trailing(p) ->
+                            println("Trailing({p})")
+                    return Result.Ok(1)
+        FileResult.Err(_) ->
+            println("cannot open {path}")
+            return Result.Ok(2)
+    return Result.Ok(0)
+
+fn main(string[] args) i32:
+    if (args.len() > 0):
+        let i32 r = run_tool(peek args).realise(99)
+        return Result.Ok(r)
+    return Result.Ok(2)
