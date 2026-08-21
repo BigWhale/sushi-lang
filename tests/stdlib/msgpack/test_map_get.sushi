@@ -6,7 +6,8 @@
 use <encoding/msgpack>
 
 fn lookup(MsgValue m, string key) ~:
-    match mp_map_get(m, key):
+    let Maybe@(MsgValue) found = mp_map_get(m, key)??
+    match found:
         Maybe.Some(v) ->
             let string shown = mp_show(v)??
             println("{key}={shown}")

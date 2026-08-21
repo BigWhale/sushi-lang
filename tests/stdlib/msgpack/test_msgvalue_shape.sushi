@@ -11,7 +11,9 @@ fn describe(MsgValue v) string:
         MsgValue.Nil() ->
             return Result.Ok("nil")
         MsgValue.Bool(b) ->
-            return Result.Ok("bool {b}")
+            if (b):
+                return Result.Ok("bool true")
+            return Result.Ok("bool false")
         MsgValue.Int(n) ->
             return Result.Ok("int {n}")
         MsgValue.UInt(n) ->

@@ -10,7 +10,13 @@ fn run_tool(peek string[] args) i32:
         println("usage: dump <file.mp>")
         return Result.Ok(2)
     let string path = args.get(1)??
-    let i32 size = file_size(path)?? as i32
+    let i32 size = 0
+    match file_size(path):
+        Result.Ok(n) ->
+            size := n as i32
+        Result.Err(_) ->
+            println("cannot stat {path}")
+            return Result.Ok(2)
     let FileResult r = open(path, FileMode.ReadB())
     match r:
         FileResult.Ok(f) ->
