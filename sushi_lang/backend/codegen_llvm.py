@@ -102,7 +102,7 @@ class LLVMCodegen:
         self.utils = LLVMUtils(self)
         self.runtime = LLVMRuntime(self)
         self.memory = ScopeManager(self)
-        self.moves = MoveTracker()  # Unified move tracking (arrays, lists, structs, Own<T>)
+        self.moves = MoveTracker(self)  # Unified move tracking (arrays, lists, structs, Own<T>)
         self.dynamic_arrays: Optional[DynamicArrayManager] = None  # Will be initialized when builder is available
         self.expressions = ExpressionEmitter(self)
         self.statements = StatementEmitter(self)

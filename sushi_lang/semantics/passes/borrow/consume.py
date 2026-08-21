@@ -144,6 +144,10 @@ def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
         check_owner_not_borrowed(checker, name, use_span, "move")
         state.is_moved = True
         state.moved_at_span = state.moved_at_span or use_span
+        # A move deeper than the owner's declaration cannot dominate the scope exit,
+        # so the backend guards this owner's frees with a runtime drop flag (#414).
+        if checker.branch_depth > state.declared_branch_depth:
+            checker.conditional_moves.add(state.name)
     elif decision is Ownership.REJECT:
         emit_consume_of_borrow(checker, name, use_span, state)
 
@@ -175,6 +179,9 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
     if decision is Ownership.MOVE:
         src_state.is_moved = True
         src_state.moved_at_span = src_state.moved_at_span or expr.loc
+        # Same rule as consume(): a conditional move needs a runtime drop flag (#414).
+        if checker.branch_depth > src_state.declared_branch_depth:
+            checker.conditional_moves.add(src_state.name)
     elif decision is Ownership.REJECT:
         record_borrowed_binding(checker, stmt, dest)
 

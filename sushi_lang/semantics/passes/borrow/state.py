@@ -44,6 +44,7 @@ class BorrowState:
     peek_borrow_count: int = 0          # unlimited
     is_moved: bool = False
     is_destroyed: bool = False          # released by an explicit `.destroy()`
+    declared_branch_depth: int = 0      # checker.branch_depth at declaration (#414)
     is_argv_view: bool = False          # main's `string[] args`; moving it frees argv
     is_borrowed_binding: bool = False
     is_let_borrow: bool = False

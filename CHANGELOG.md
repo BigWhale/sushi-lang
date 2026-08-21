@@ -4,6 +4,14 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **A conditional move no longer leaks the non-moving paths** (#414). A move inside an if
+  arm, a match arm, or a loop body cancelled the owner's scope-exit free statically, so
+  every path that skipped the move leaked the value — returning a local from one match
+  arm leaked it on the other arm, and which arm leaked depended on emission order. Pass 3
+  now stamps conditionally moved owners, and the backend guards exactly their frees with
+  a runtime drop flag; an unconditional move keeps the zero-cost static skip.
+
 ### Added
 - **Integer literal match arms** (#415). A `match` on an integer scrutinee dispatches on
   literal arms (`0xc0 ->`, `-1 ->`), compiled to one LLVM `switch`. A literal takes the

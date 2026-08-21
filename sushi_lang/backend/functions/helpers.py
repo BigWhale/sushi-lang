@@ -148,6 +148,11 @@ class FunctionHelpers:
         """Initialize function emission context."""
         self.codegen.func = llvm_fn
         self.codegen.entry_branch = None
+        # Pass 3 stamps the names whose moves do not dominate their scope exit on the
+        # BODY block (#414); registration arms a runtime drop flag for exactly those.
+        body = getattr(fn_def, "body", None) if fn_def is not None else None
+        self.codegen.current_conditional_moves = frozenset(
+            getattr(body, "conditional_move_names", ()) or ())
 
         # `variable_types` is per-FUNCTION state. Per-module, an entry one function wrote
         # stayed readable by every later one -- wrong DATA for a value type, wrong CODE for
@@ -248,6 +253,7 @@ class FunctionHelpers:
 
     def end_function(self) -> None:
         """Clean up function emission context."""
+        self.codegen.current_conditional_moves = frozenset()
         self.codegen.func = None
         self.codegen.builder = None
         self.codegen.alloca_builder = None

@@ -81,8 +81,9 @@ class ScopeManager:
             entries = registry.get(var_name)
             if entries and entries[-1][0] == self._scope_depth:
                 entry = entries[-1]
-                if block_live and not self.codegen.moves.is_moved(entry[-1]):
-                    emit_free(var_name, entry)
+                if block_live:
+                    self.codegen.moves.emit_free_unless_moved(
+                        entry[-1], lambda v=var_name, e=entry: emit_free(v, e))
                 self._stack_pop_at_depth(registry, var_name, self._scope_depth)
 
     def push_scope(self) -> None:
@@ -250,6 +251,7 @@ class ScopeManager:
         """Register a local in the cleanup registry its type belongs to."""
         from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, FunctionType, BuiltinType
         from sushi_lang.backend.destructors import resolve_named_type
+        self.codegen.moves.arm_if_conditional(name, slot)
         semantic_ty = resolve_named_type(self.codegen, semantic_ty)
         if isinstance(semantic_ty, (StructType, EnumType)):
             # An enum local whose active variant owns heap reuses the struct-cleanup
@@ -333,8 +335,8 @@ class ScopeManager:
             return
         for _var_name, entries in self._string_cleanup.items():
             for _depth, slot in entries:
-                if not self.codegen.moves.is_moved(slot):
-                    self._emit_string_free(slot)
+                self.codegen.moves.emit_free_unless_moved(
+                    slot, lambda s=slot: self._emit_string_free(s))
 
     def is_closure_registered(self, name: str) -> bool:
         """True if `name` is a registered function-value RAII owner in the current scope."""

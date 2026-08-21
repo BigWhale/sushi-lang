@@ -154,6 +154,7 @@ class DynamicArrayManager:
             llvm_alloca=alloca
         )
         self.arrays.setdefault(name, []).append(descriptor)
+        self.codegen.moves.arm_if_conditional(name, alloca)
 
         if self.scope_stack:
             self.scope_stack[-1].add(name)
@@ -178,6 +179,7 @@ class DynamicArrayManager:
             llvm_alloca=slot,
         )
         self.arrays.setdefault(name, []).append(descriptor)
+        self.codegen.moves.arm_if_conditional(name, slot)
         if self.scope_stack:
             self.scope_stack[-1].add(name)
 
@@ -236,6 +238,7 @@ class DynamicArrayManager:
         """Register a local List<T> variable for automatic RAII cleanup (#61)."""
         self.lists.setdefault(var_name, []).append(
             ListDescriptor(name=var_name, list_type=list_type, llvm_alloca=slot))
+        self.codegen.moves.arm_if_conditional(var_name, slot)
         if self.list_scope_stack:
             self.list_scope_stack[-1].add(var_name)
 
@@ -250,10 +253,12 @@ class DynamicArrayManager:
         descriptor = self._list(name)
         if descriptor is None:
             return
-        if descriptor.destroyed or self.codegen.moves.is_moved(descriptor.llvm_alloca):
+        if descriptor.destroyed:
             return
         from sushi_lang.backend.generics.list.methods_destroy import emit_list_destroy
-        emit_list_destroy(self.codegen, descriptor.llvm_alloca, descriptor.list_type)
+        self.codegen.moves.emit_free_unless_moved(
+            descriptor.llvm_alloca,
+            lambda: emit_list_destroy(self.codegen, descriptor.llvm_alloca, descriptor.list_type))
 
     def is_own_type(self, ty: Type) -> bool:
         """Check if a type is Own<T>."""
@@ -266,6 +271,7 @@ class DynamicArrayManager:
         depth = self.codegen.memory._scope_depth
         self.owned_pointers[var_name] = OwnDescriptor(
             name=var_name, own_type=own_type, slot=slot, depth=depth, destroyed=False)
+        self.codegen.moves.arm_if_conditional(var_name, slot)
 
     def is_destroyed(self, var_name: str) -> bool:
         """Has `var_name` already been released by an explicit `.destroy()` / `.free()`?"""
@@ -306,18 +312,25 @@ class DynamicArrayManager:
         from sushi_lang.backend.destructors import emit_value_destructor
 
         own_slot = self.codegen.memory.find_local_slot(var_name)
-        emit_value_destructor(self.codegen, own_slot, own_type)
+        descriptor = self.owned_pointers.get(var_name)
+        gate_slot = descriptor.slot if descriptor is not None else own_slot
+        self.codegen.moves.emit_free_unless_moved(
+            gate_slot,
+            lambda: emit_value_destructor(self.codegen, own_slot, own_type))
 
     def _emit_array_destructor(self, name: str) -> None:
         """Generate destructor code for a dynamic array."""
         descriptor = self._array(name)
         if descriptor is None:
             return
-        if descriptor.destroyed or self.codegen.moves.is_moved(descriptor.llvm_alloca):
+        if descriptor.destroyed:
             return
 
         from sushi_lang.backend.destructors import emit_value_destructor
-        emit_value_destructor(self.codegen, descriptor.llvm_alloca, DynamicArrayType(descriptor.element_type))
+        self.codegen.moves.emit_free_unless_moved(
+            descriptor.llvm_alloca,
+            lambda: emit_value_destructor(self.codegen, descriptor.llvm_alloca,
+                                          DynamicArrayType(descriptor.element_type)))
 
     def _update_array_fields(self, name: str, length: int, capacity: int, data_ptr: ir.Value) -> None:
         """Update the len, cap, and data fields of a dynamic array struct."""

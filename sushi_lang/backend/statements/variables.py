@@ -243,8 +243,9 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
     # since handed to the NEW value (#294).
     da = getattr(codegen, "dynamic_arrays", None)
     already_destroyed = da is not None and da.is_destroyed(var_name)
-    if not codegen.moves.is_moved(slot) and not already_destroyed:
-        _destroy_old_value(codegen, slot, resolved)
+    if not already_destroyed:
+        codegen.moves.emit_free_unless_moved(
+            slot, lambda: _destroy_old_value(codegen, slot, resolved))
 
     # A rebind takes ownership of its RHS. Run this for EVERY resolved type, not only the
     # cleanup-needing composites above: the gate belongs to the destroy-the-old-value step,
