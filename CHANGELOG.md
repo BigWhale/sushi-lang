@@ -2,6 +2,17 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Integer literal match arms** (#415). A `match` on an integer scrutinee dispatches on
+  literal arms (`0xc0 ->`, `-1 ->`), compiled to one LLVM `switch`. A literal takes the
+  scrutinee's type under the usual context-typing rule (a non-decimal literal is a bit
+  pattern; out of range is CE2073). New diagnostics: CE2074 (an integer match needs a
+  trailing `_` arm), CE2075 (duplicate literal arm by value), CE2076 (literal arm on an
+  enum scrutinee, or enum-pattern arm on an integer scrutinee). Motivated by the tag
+  dispatch in the first Sushi stdlib decoder.
+
 ## [0.11.0] - 2026-08-20
 
 Three breaking language changes (generic syntax, ownership, borrow by default), the

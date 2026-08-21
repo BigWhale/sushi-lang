@@ -294,6 +294,17 @@ class WildcardPattern(Node):
     pass
 
 @dataclass
+class LiteralPattern(Node):
+    """An integer literal pattern in a match arm on an integer scrutinee (#415).
+
+    `display` keeps the source spelling for diagnostics; `value` is the Python
+    integer (sign already applied). `radix` feeds the same fit rule as a
+    context-typed literal: a non-decimal literal is a bit pattern."""
+    value: int
+    display: str
+    radix: int = 10
+
+@dataclass
 class RefBinding(Node):
     """A reference binding in a match pattern: `Shape.Poly(poke p)` (#300 phase 3)."""
     name: str
@@ -310,7 +321,7 @@ class OwnPattern(Node):
 @dataclass
 class MatchArm(Node):
     """Single arm in a match statement/expression"""
-    pattern: Union[Pattern, WildcardPattern]
+    pattern: Union[Pattern, LiteralPattern, WildcardPattern]
     body: Union["Expr", "Block"]
 
 @dataclass
@@ -553,7 +564,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 __all__ = [
     "Node", "Program", "UseStatement", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
-    "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "WildcardPattern", "Break", "Continue",
+    "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",

@@ -2,7 +2,9 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Union
 from lark import Tree, Token
-from sushi_lang.semantics.ast import Match, MatchArm, Pattern, WildcardPattern, OwnPattern, Block, Expr
+from sushi_lang.semantics.ast import (
+    Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
+)
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice, expect, unhandled
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import _EXPR_NODES, contains_expr_like
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
@@ -38,12 +40,16 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
     """Parse match_arm: (pattern | wildcard_pattern) "->" (expr _NEWLINE | block)"""
     t = expect(t, "match_arm")
 
-    pattern: Union[Pattern, WildcardPattern]
+    pattern: Union[Pattern, LiteralPattern, WildcardPattern]
     pattern_tree = first_tree(t.children, "pattern")
+    literal_tree = (first_tree(t.children, "literal_pattern")
+                    or first_tree(t.children, "neg_literal_pattern"))
     wildcard_tree = first_tree(t.children, "wildcard_pattern")
 
     if pattern_tree is not None:
         pattern = parse_pattern(pattern_tree, ast_builder)
+    elif literal_tree is not None:
+        pattern = parse_literal_pattern(literal_tree, ast_builder)
     elif wildcard_tree is not None:
         pattern = WildcardPattern(loc=span_of(wildcard_tree))
     else:
@@ -76,6 +82,31 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
         ice(t, "missing body")
 
     return MatchArm(pattern=pattern, body=body, loc=span_of(t))
+
+
+def parse_literal_pattern(t: Tree, ast_builder: 'ASTBuilder') -> LiteralPattern:
+    """Parse literal_pattern / neg_literal_pattern: an integer literal arm (#415).
+
+    Delegates the token to `expr_from_token` so radix handling, underscore
+    stripping, and the leading-zero rejection (CE2071) stay in one place.
+    """
+    from sushi_lang.semantics.ast import IntLit
+    from sushi_lang.semantics.ast_builder.expressions.literals import expr_from_token
+
+    tok = next((c for c in t.children if isinstance(c, Token)), None)
+    if tok is None:
+        ice(t, "literal pattern without a number token")
+    lit = expr_from_token(tok, ast_builder)
+    if not isinstance(lit, IntLit):
+        ice(t, f"literal pattern is not an integer: {tok.value}")
+
+    negative = t.data == "neg_literal_pattern"
+    value = -lit.value if negative else lit.value
+    display = f"-{tok.value}" if negative else str(tok.value)
+    # A negated literal is a VALUE, never a bit pattern (same rule as
+    # _stamp_numeric_literal in passes/types/propagation.py).
+    radix = 10 if negative else lit.radix
+    return LiteralPattern(value=value, display=display, radix=radix, loc=span_of(t))
 
 
 def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> Pattern:

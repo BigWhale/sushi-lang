@@ -1,0 +1,14 @@
+# A literal arm takes the scrutinee's type, so it must fit that type's range:
+# 300 does not fit u8 (#415).
+# EXPECT_ERROR_CODE: CE2073
+
+fn f(u8 t) string:
+    match t:
+        300 ->
+            return Result.Ok("impossible")
+        _ ->
+            return Result.Ok("other")
+
+fn main() i32:
+    println(f(7).realise("err"))
+    return Result.Ok(0)

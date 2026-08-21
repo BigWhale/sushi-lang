@@ -83,7 +83,9 @@ foreach_stmt: FOREACH "(" [type] NAME "in" expr ")" ":" block
 expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
 
 match_stmt: MATCH expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
-match_arm: (pattern | wildcard_pattern) "->" (match_arm_inline | block)
+match_arm: (pattern | literal_pattern | wildcard_pattern) "->" (match_arm_inline | block)
+literal_pattern: "-" (INT | HEX_INT | BIN_INT | OCT_INT) -> neg_literal_pattern
+               | (INT | HEX_INT | BIN_INT | OCT_INT)
 match_arm_inline: (return_stmt | print_stmt | println_stmt | call_stmt | break_stmt | continue_stmt | expr _NEWLINE)
 pattern: NAME "." NAME ["(" [pattern_list] ")"]
 pattern_list: pattern_item ("," pattern_item)*

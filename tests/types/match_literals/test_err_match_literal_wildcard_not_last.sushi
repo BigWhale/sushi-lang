@@ -1,0 +1,13 @@
+# The wildcard arm must be last in an integer match, like in an enum match.
+# EXPECT_ERROR_CODE: CE2041
+
+fn f(i32 n) string:
+    match n:
+        _ ->
+            return Result.Ok("other")
+        1 ->
+            return Result.Ok("one")
+
+fn main() i32:
+    println(f(1).realise("err"))
+    return Result.Ok(0)

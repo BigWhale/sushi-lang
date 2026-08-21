@@ -1,0 +1,17 @@
+# An enum pattern arm does not fit an integer scrutinee (#415).
+# EXPECT_ERROR_CODE: CE2076
+
+enum Color:
+    Red()
+    Green()
+
+fn f(i32 n) string:
+    match n:
+        Color.Red() ->
+            return Result.Ok("red")
+        _ ->
+            return Result.Ok("other")
+
+fn main() i32:
+    println(f(1).realise("err"))
+    return Result.Ok(0)
