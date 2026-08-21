@@ -100,7 +100,9 @@ fn mp_take_map(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
         i := i + 1
     return Result.Ok(MsgValue.Map(keys, vals))
 
-# mp_decode_value: dispatch one tag byte and decode one value.
+# mp_decode_value: dispatch one tag byte and decode one value. The fix families
+# (fixint, fixmap, fixarray, fixstr, negative fixint) are RANGES, so they stay
+# as guards; every single-byte tag dispatches through the match.
 fn mp_decode_value(peek u8[] buf, poke MpCursor cur) MsgValue | MpError:
     let u8 t = mp_take(peek buf, poke cur)??
     if (t <= 0x7f):
@@ -113,70 +115,72 @@ fn mp_decode_value(peek u8[] buf, poke MpCursor cur) MsgValue | MpError:
         return Result.Ok(mp_take_str(peek buf, poke cur, (t & 0x1f) as i32)??)
     if (t >= 0xe0):
         return Result.Ok(MsgValue.Int((t as i64) - 256))
-    if (t == 0xc0):
-        return Result.Ok(MsgValue.Nil())
-    if (t == 0xc2):
-        return Result.Ok(MsgValue.Bool(false))
-    if (t == 0xc3):
-        return Result.Ok(MsgValue.Bool(true))
-    if (t == 0xc4):
-        let i32 n8 = mp_be_uint(peek buf, poke cur, 1)?? as i32
-        return Result.Ok(MsgValue.Bin(mp_take_bytes(peek buf, poke cur, n8)??))
-    if (t == 0xc5):
-        let i32 n16 = mp_be_uint(peek buf, poke cur, 2)?? as i32
-        return Result.Ok(MsgValue.Bin(mp_take_bytes(peek buf, poke cur, n16)??))
-    if (t == 0xc6):
-        let i32 n32 = mp_be_uint(peek buf, poke cur, 4)?? as i32
-        return Result.Ok(MsgValue.Bin(mp_take_bytes(peek buf, poke cur, n32)??))
-    if (t == 0xca):
-        let u64 bits32 = mp_be_uint(peek buf, poke cur, 4)??
-        let f32 single = f32.from_bits(bits32 as u32)
-        return Result.Ok(MsgValue.Float(single as f64))
-    if (t == 0xcb):
-        let u64 bits64 = mp_be_uint(peek buf, poke cur, 8)??
-        return Result.Ok(MsgValue.Float(f64.from_bits(bits64)))
-    if (t == 0xcc):
-        return Result.Ok(MsgValue.Int(mp_be_uint(peek buf, poke cur, 1)?? as i64))
-    if (t == 0xcd):
-        return Result.Ok(MsgValue.Int(mp_be_uint(peek buf, poke cur, 2)?? as i64))
-    if (t == 0xce):
-        return Result.Ok(MsgValue.Int(mp_be_uint(peek buf, poke cur, 4)?? as i64))
-    if (t == 0xcf):
-        let u64 big = mp_be_uint(peek buf, poke cur, 8)??
-        let u64 i64_max = 0x7fffffffffffffff
-        if (big > i64_max):
-            return Result.Ok(MsgValue.UInt(big))
-        return Result.Ok(MsgValue.Int(big as i64))
-    if (t == 0xd0):
-        return Result.Ok(MsgValue.Int(mp_signed(mp_be_uint(peek buf, poke cur, 1)??, 1)??))
-    if (t == 0xd1):
-        return Result.Ok(MsgValue.Int(mp_signed(mp_be_uint(peek buf, poke cur, 2)??, 2)??))
-    if (t == 0xd2):
-        return Result.Ok(MsgValue.Int(mp_signed(mp_be_uint(peek buf, poke cur, 4)??, 4)??))
-    if (t == 0xd3):
-        return Result.Ok(MsgValue.Int(mp_signed(mp_be_uint(peek buf, poke cur, 8)??, 8)??))
-    if (t == 0xd9):
-        let i32 s8 = mp_be_uint(peek buf, poke cur, 1)?? as i32
-        return Result.Ok(mp_take_str(peek buf, poke cur, s8)??)
-    if (t == 0xda):
-        let i32 s16 = mp_be_uint(peek buf, poke cur, 2)?? as i32
-        return Result.Ok(mp_take_str(peek buf, poke cur, s16)??)
-    if (t == 0xdb):
-        let i32 s32 = mp_be_uint(peek buf, poke cur, 4)?? as i32
-        return Result.Ok(mp_take_str(peek buf, poke cur, s32)??)
-    if (t == 0xdc):
-        let i32 a16 = mp_be_uint(peek buf, poke cur, 2)?? as i32
-        return Result.Ok(mp_take_arr(peek buf, poke cur, a16)??)
-    if (t == 0xdd):
-        let i32 a32 = mp_be_uint(peek buf, poke cur, 4)?? as i32
-        return Result.Ok(mp_take_arr(peek buf, poke cur, a32)??)
-    if (t == 0xde):
-        let i32 m16 = mp_be_uint(peek buf, poke cur, 2)?? as i32
-        return Result.Ok(mp_take_map(peek buf, poke cur, m16)??)
-    if (t == 0xdf):
-        let i32 m32 = mp_be_uint(peek buf, poke cur, 4)?? as i32
-        return Result.Ok(mp_take_map(peek buf, poke cur, m32)??)
-    return Result.Err(MpError.Unsupported(t))
+    match t:
+        0xc0 ->
+            return Result.Ok(MsgValue.Nil())
+        0xc2 ->
+            return Result.Ok(MsgValue.Bool(false))
+        0xc3 ->
+            return Result.Ok(MsgValue.Bool(true))
+        0xc4 ->
+            let i32 n8 = mp_be_uint(peek buf, poke cur, 1)?? as i32
+            return Result.Ok(MsgValue.Bin(mp_take_bytes(peek buf, poke cur, n8)??))
+        0xc5 ->
+            let i32 n16 = mp_be_uint(peek buf, poke cur, 2)?? as i32
+            return Result.Ok(MsgValue.Bin(mp_take_bytes(peek buf, poke cur, n16)??))
+        0xc6 ->
+            let i32 n32 = mp_be_uint(peek buf, poke cur, 4)?? as i32
+            return Result.Ok(MsgValue.Bin(mp_take_bytes(peek buf, poke cur, n32)??))
+        0xca ->
+            let u64 bits32 = mp_be_uint(peek buf, poke cur, 4)??
+            let f32 single = f32.from_bits(bits32 as u32)
+            return Result.Ok(MsgValue.Float(single as f64))
+        0xcb ->
+            let u64 bits64 = mp_be_uint(peek buf, poke cur, 8)??
+            return Result.Ok(MsgValue.Float(f64.from_bits(bits64)))
+        0xcc ->
+            return Result.Ok(MsgValue.Int(mp_be_uint(peek buf, poke cur, 1)?? as i64))
+        0xcd ->
+            return Result.Ok(MsgValue.Int(mp_be_uint(peek buf, poke cur, 2)?? as i64))
+        0xce ->
+            return Result.Ok(MsgValue.Int(mp_be_uint(peek buf, poke cur, 4)?? as i64))
+        0xcf ->
+            let u64 big = mp_be_uint(peek buf, poke cur, 8)??
+            let u64 i64_max = 0x7fffffffffffffff
+            if (big > i64_max):
+                return Result.Ok(MsgValue.UInt(big))
+            return Result.Ok(MsgValue.Int(big as i64))
+        0xd0 ->
+            return Result.Ok(MsgValue.Int(mp_signed(mp_be_uint(peek buf, poke cur, 1)??, 1)??))
+        0xd1 ->
+            return Result.Ok(MsgValue.Int(mp_signed(mp_be_uint(peek buf, poke cur, 2)??, 2)??))
+        0xd2 ->
+            return Result.Ok(MsgValue.Int(mp_signed(mp_be_uint(peek buf, poke cur, 4)??, 4)??))
+        0xd3 ->
+            return Result.Ok(MsgValue.Int(mp_signed(mp_be_uint(peek buf, poke cur, 8)??, 8)??))
+        0xd9 ->
+            let i32 s8 = mp_be_uint(peek buf, poke cur, 1)?? as i32
+            return Result.Ok(mp_take_str(peek buf, poke cur, s8)??)
+        0xda ->
+            let i32 s16 = mp_be_uint(peek buf, poke cur, 2)?? as i32
+            return Result.Ok(mp_take_str(peek buf, poke cur, s16)??)
+        0xdb ->
+            let i32 s32 = mp_be_uint(peek buf, poke cur, 4)?? as i32
+            return Result.Ok(mp_take_str(peek buf, poke cur, s32)??)
+        0xdc ->
+            let i32 a16 = mp_be_uint(peek buf, poke cur, 2)?? as i32
+            return Result.Ok(mp_take_arr(peek buf, poke cur, a16)??)
+        0xdd ->
+            let i32 a32 = mp_be_uint(peek buf, poke cur, 4)?? as i32
+            return Result.Ok(mp_take_arr(peek buf, poke cur, a32)??)
+        0xde ->
+            let i32 m16 = mp_be_uint(peek buf, poke cur, 2)?? as i32
+            return Result.Ok(mp_take_map(peek buf, poke cur, m16)??)
+        0xdf ->
+            let i32 m32 = mp_be_uint(peek buf, poke cur, 4)?? as i32
+            return Result.Ok(mp_take_map(peek buf, poke cur, m32)??)
+        _ ->
+            return Result.Err(MpError.Unsupported(t))
 
 # mp_decode: decode one whole buffer as exactly one value.
 public fn mp_decode(u8[] buf) MsgValue | MpError:
