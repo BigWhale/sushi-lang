@@ -68,9 +68,13 @@ One surface vocabulary, six mechanisms. Each has its own extent and its own diag
 
 **1 — the call-site borrow** is tracked by counters that are cleared at the end of every
 statement. Therefore the exclusivity rules have jurisdiction inside one statement only: a
-second `poke` is CE2403, a mixed pair is CE2407, and a `poke` of a `poke` parameter is
-the CW2409 warning. A move and a borrow of one owner in one statement is CE2401, in either
-argument order. Two statements are two borrows, and are unaffected.
+second `poke` is CE2403, and a mixed pair is CE2407. A `poke` of a `poke` parameter —
+forwarding it whole (`inner(poke cur)`) or by field (`set_port(poke cfg.port)`) — is
+legal and silent: the borrow ends with the statement, and the callee can neither store
+the reference nor write outside its declared mode. (CW2409 warned on the whole-parameter
+form until 0.11.x; it was retired because it marked the mandated composition idiom while
+guarding nothing the errors do not.) A move and a borrow of one owner in one statement is
+CE2401, in either argument order. Two statements are two borrows, and are unaffected.
 
 **2 — the reference parameter** is the position the subsystem is built for. It carries its
 full `ReferenceType` in the borrow state, which is what makes the write gate answerable

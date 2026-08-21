@@ -17,9 +17,13 @@ _add(ErrorMessage("CW2511", Severity.WARNING,
     "?? operator used in main function (consider explicit error handling for clarity)",
     Category.TYPE, "While ?? works in main, explicit error handling with .realise(), if statements, or match expressions makes error behavior clearer at the program entry point."))
 
-_add(ErrorMessage("CW2409", Severity.WARNING,
-    "re-borrowing '{name}' as poke (nested mutable borrow)",
-    Category.TYPE, "Creating a poke borrow of a poke reference parameter passes through exclusive access. Ensure the original reference is not used until the nested borrow ends."))
+# CW2409 (re-borrowing as poke, WARNING) was deleted: its only trigger was forwarding a
+# whole poke parameter to a poke argument -- the composition idiom the borrow model
+# mandates. The call-site borrow ends with the statement; a same-statement conflict is
+# CE2403/CE2407, and the callee cannot store or outlive the reference (the CE2411
+# family). Field forwarding (poke cfg.port) was always silent, so the warning also made
+# the whole stricter than the part. Retired 2026-08-21 with the first stdlib consumer
+# (encoding/msgpack), whose cursor threading fired it 40 times per importing program.
 
 # General warnings
 _add(ErrorMessage("CW0001", Severity.WARNING,

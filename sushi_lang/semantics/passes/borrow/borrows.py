@@ -8,8 +8,6 @@ from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import Borrow, Expr, MemberAccess, Name
 from sushi_lang.semantics.ownership import TypeClass
-from sushi_lang.semantics.typesys import ReferenceType
-
 from .diagnostics import emit_use_after_move, expr_to_string
 from .reads import member_access_base
 from .state import BorrowState
@@ -23,13 +21,6 @@ def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
     """Check a borrow expression: `peek x`, `poke x`, `peek x.field`, `poke x.field`."""
     is_poke = borrow.mutability == "poke"
     target = borrow.expr
-    # CW2409 warns on a DIRECT re-borrow only, and that narrow scope is a decision, not
-    # an omission: `inner(poke n)` takes the whole referent, while `set_port(poke
-    # cfg.port)` hands over a strictly SMALLER place. That is disjoint-field borrowing,
-    # the idiomatic way to give a helper one field of a `poke` parameter, and Rust
-    # accepts it without a word. `tests/memory/test_borrow_member_refparam.sushi` is the
-    # gate -- widening this to a field borrow turns it red, which is the intended alarm.
-    warn_reborrow = isinstance(target, Name)
     if isinstance(target, MemberAccess):
         # A field borrow is tracked against the BASE variable: this pass tracks whole
         # variables, not sub-places, so the two spellings differ in exactly one thing --
@@ -62,25 +53,23 @@ def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
         # mutating method (#242). CE2412 not CE2407: the user wrote no `peek`.
         check_owner_not_borrowed(checker, name, borrow.loc, "take `poke`")
 
-    acquire_borrow(checker, state, borrow.loc,
-                   is_poke=is_poke, warn_reborrow=warn_reborrow)
+    acquire_borrow(checker, state, borrow.loc, is_poke=is_poke)
 
 
 def acquire_borrow(checker: 'BorrowChecker', state: BorrowState, span: Optional[Span],
-                   *, is_poke: bool, warn_reborrow: bool = False) -> bool:
+                   *, is_poke: bool) -> bool:
     """Take a borrow of `state`, or report the conflict that blocks it.
 
-    THE place the counters move and the only emit site for CE2403, CE2407 and CW2409, so
-    an explicit `poke x` and an unmarked argument's implicit borrow cannot drift apart.
+    THE place the counters move and the only emit site for CE2403 and CE2407, so an
+    explicit `poke x` and an unmarked argument's implicit borrow cannot drift apart.
+    Forwarding a whole `poke` parameter (`inner(poke cur)`) is silent, like forwarding a
+    field of one: the borrow ends with the statement, and a real conflict is an error.
     """
     if is_poke:
         if state.poke_borrow_count > 0:
             return _conflict(checker, er.ERR.CE2403, state, span)
         if state.peek_borrow_count > 0:
             return _conflict(checker, er.ERR.CE2407, state, span)
-        if (warn_reborrow and isinstance(state.var_type, ReferenceType)
-                and state.var_type.is_poke()):
-            checker.err.emit(er.ERR.CW2409, span, name=state.name)
         state.poke_borrow_count = 1
         state.first_borrow_span = span
     else:
