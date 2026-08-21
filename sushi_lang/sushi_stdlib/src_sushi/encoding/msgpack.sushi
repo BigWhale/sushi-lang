@@ -240,11 +240,9 @@ public fn mp_show(MsgValue v) string:
             let string arr_body = ""
             let i32 j = 0
             while (j < items.len()):
-                # Interpolate rather than move: a move in one branch of a loop
-                # suppresses the scope-exit free of the other iterations (#414).
                 let string shown = mp_show(items[j])??
                 if (j == 0):
-                    arr_body := "{shown}"
+                    arr_body := shown
                 else:
                     arr_body := "{arr_body},{shown}"
                 j := j + 1
