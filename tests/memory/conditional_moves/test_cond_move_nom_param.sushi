@@ -1,0 +1,20 @@
+# A nom parameter conditionally passed on: the callee owns it, so the path that
+# does not pass it on must free it before returning.
+# EXPECT_STDOUT_EXACT: "1\n"
+# EXPECT_NO_LEAKS: true
+
+fn eat(nom string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn maybe_eat(nom string s, bool go) ~:
+    if (go):
+        eat(nom s)
+    return Result.Ok(~)
+
+fn main() i32:
+    let string a = "{1}"
+    maybe_eat(nom a, true)
+    let string b = "{2}"
+    maybe_eat(nom b, false)
+    return Result.Ok(0)

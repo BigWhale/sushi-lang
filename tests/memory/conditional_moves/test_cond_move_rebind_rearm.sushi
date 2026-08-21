@@ -1,0 +1,16 @@
+# A conditional move, then a rebind: the rebind must not free the moved-away
+# old value (the new owner holds it), and it re-initializes the binding so the
+# scope exit frees the NEW value exactly once.
+# EXPECT_STDOUT_EXACT: "6\n5\n"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let string keep = ""
+    let i32 n = 0
+    let string s = "{5}"
+    if (n == 0):
+        keep := s
+    s := "{6}"
+    println(s)
+    println(keep)
+    return Result.Ok(0)
