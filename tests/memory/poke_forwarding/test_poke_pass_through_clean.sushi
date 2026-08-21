@@ -1,0 +1,29 @@
+# A poke parameter forwarded whole to another poke parameter is the documented
+# composition idiom and compiles with no warning. CW2409 warned on exactly this
+# and was retired: the call-site borrow ends with the statement, a same-statement
+# conflict is CE2403/CE2407, and the callee can neither store the reference
+# (CE2411) nor outlive the call with it. Field forwarding (poke cfg.port) was
+# always silent; this makes the whole and the part consistent.
+# EXPECT_STDOUT_EXACT: "10\n30\n"
+# EXPECT_STDERR_EMPTY: true
+# EXPECT_NO_LEAKS: true
+
+fn add_five(poke i32 x) ~:
+    x := x + 5
+    return Result.Ok(~)
+
+fn multiply_by_two(poke i32 x) ~:
+    x := x * 2
+    return Result.Ok(~)
+
+fn transform(poke i32 value) ~:
+    add_five(poke value)
+    multiply_by_two(poke value)
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 n = 10
+    println("{n}")
+    transform(poke n)
+    println("{n}")
+    return Result.Ok(0)
