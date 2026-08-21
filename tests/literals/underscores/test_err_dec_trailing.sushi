@@ -1,0 +1,7 @@
+# A trailing underscore separates nothing.
+# EXPECT_ERROR_CODE: CE6006
+
+fn main() i32:
+    let i32 bad = 1_
+    println("{bad}")
+    return Result.Ok(0)

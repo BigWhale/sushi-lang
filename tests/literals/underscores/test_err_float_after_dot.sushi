@@ -1,0 +1,7 @@
+# An underscore must sit between two DIGITS, so it cannot follow the point.
+# EXPECT_ERROR_CODE: CE6006
+
+fn main() i32:
+    let f64 bad = 3._14
+    println("{bad}")
+    return Result.Ok(0)

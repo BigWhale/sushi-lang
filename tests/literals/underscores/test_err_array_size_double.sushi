@@ -1,0 +1,8 @@
+# An array SIZE is the second consumer of an INT token. It must reject a
+# malformed underscore with the same code, not fail to parse the type.
+# EXPECT_ERROR_CODE: CE6006
+
+fn main() i32:
+    let i32[1__0] bad = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    println(bad.len())
+    return Result.Ok(0)

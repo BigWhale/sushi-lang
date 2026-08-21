@@ -1,0 +1,23 @@
+# EXPECT_STDOUT_EXACT: "10\nthousand\nother\n1000\n45\n"
+# Every consumer of a numeric token normalizes through one seam, so an underscore
+# is spelled the same everywhere: an array size, a match arm, an interpolated
+# expression (which gets its own parser instance) and a range bound.
+
+fn classify(i32 n) string:
+    match n:
+        1_000 ->
+            return Result.Ok("thousand")
+        _ ->
+            return Result.Ok("other")
+
+fn main() i32:
+    let i32[1_0] fixed = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    println(fixed.len())
+    println(classify(1_000).realise("err"))
+    println(classify(7).realise("err"))
+    println("{1_000}")
+    let i32 sum = 0
+    foreach(i in 0..1_0):
+        sum := sum + i
+    println("{sum}")
+    return Result.Ok(0)

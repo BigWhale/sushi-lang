@@ -293,13 +293,24 @@ STDIN.2: /stdin\b/
 STDOUT.2: /stdout\b/
 STDERR.2: /stderr\b/
 
-HEX_INT: /0[xX][0-9a-fA-F]([0-9a-fA-F_]*[0-9a-fA-F])?/
-BIN_INT: /0[bB][01]([01_]*[01])?/
-OCT_INT: /0[oO][0-7]([0-7_]*[0-7])?/
-FLOAT: /\d+\.\d+([eE][+-]?\d+)?|\d+[eE][+-]?\d+/
+# A numeric terminal matches a PERMISSIVE superset: underscores anywhere in the
+# digit runs. Placement is checked in `ast_builder/expressions/literals.py`, which
+# is the one seam every consumer of these tokens goes through. The grammar cannot
+# do it and still say WHY -- a terminal that simply failed to match reported the
+# next token instead, so `0x_FF` came back as "unexpected token 'x_FF'" (CE6001).
+# The rule the seam enforces: one underscore, between two digits.
+#
+# The explicit priorities keep the radix and float terminals ahead of INT, which
+# they all overlap at a leading digit. INT is a terminal here rather than
+# `%import common.INT` -- the stock one is /\d+/, which is why decimal was the
+# one radix with no underscores at all.
+HEX_INT.2: /0[xX][0-9a-fA-F_]+/
+BIN_INT.2: /0[bB][01_]+/
+OCT_INT.2: /0[oO][0-7_]+/
+FLOAT.3: /\d[\d_]*\.[\d_]+([eE][+-]?[\d_]+)?|\d[\d_]*[eE][+-]?[\d_]+/
+INT.1: /\d[\d_]*/
 
 %import common.WS_INLINE
-%import common.INT
 %import common.CNAME -> NAME
 
 %declare _INDENT _DEDENT

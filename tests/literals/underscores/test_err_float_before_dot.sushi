@@ -1,0 +1,7 @@
+# Nor precede the point.
+# EXPECT_ERROR_CODE: CE6006
+
+fn main() i32:
+    let f64 bad = 3_.14
+    println("{bad}")
+    return Result.Ok(0)

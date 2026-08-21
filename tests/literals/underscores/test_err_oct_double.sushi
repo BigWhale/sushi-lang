@@ -1,0 +1,7 @@
+# The tightening, for octal: `0o7__7` used to compile and mean 63.
+# EXPECT_ERROR_CODE: CE6006
+
+fn main() i32:
+    let i32 bad = 0o7__7
+    println("{bad}")
+    return Result.Ok(0)
