@@ -1,0 +1,16 @@
+# Two literal arms with the same VALUE are duplicates, whatever their radix:
+# 0x2a and 42 are the same arm (#415).
+# EXPECT_ERROR_CODE: CE2075
+
+fn f(i32 n) string:
+    match n:
+        0x2a ->
+            return Result.Ok("hex answer")
+        42 ->
+            return Result.Ok("decimal answer")
+        _ ->
+            return Result.Ok("other")
+
+fn main() i32:
+    println(f(42).realise("err"))
+    return Result.Ok(0)

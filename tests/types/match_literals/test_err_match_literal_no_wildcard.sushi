@@ -1,0 +1,15 @@
+# An integer match cannot enumerate every value, so it requires a trailing
+# wildcard arm (#415).
+# EXPECT_ERROR_CODE: CE2074
+
+fn f(i32 n) string:
+    match n:
+        1 ->
+            return Result.Ok("one")
+        2 ->
+            return Result.Ok("two")
+    return Result.Ok("unreached")
+
+fn main() i32:
+    println(f(1).realise("err"))
+    return Result.Ok(0)

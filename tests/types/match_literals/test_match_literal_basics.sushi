@@ -1,0 +1,25 @@
+# Integer literal match arms (#415): decimal, hex, and negative literals on an
+# i32 scrutinee, with an inline body, a block body, and the required trailing
+# wildcard arm.
+# EXPECT_STDOUT_EXACT: "zero\nanswer\nminus one\nbig\nother\n"
+
+fn classify(i32 n) string:
+    match n:
+        0 ->
+            return Result.Ok("zero")
+        0x2a ->
+            return Result.Ok("answer")
+        -1 ->
+            return Result.Ok("minus one")
+        1_000_000 ->
+            return Result.Ok("big")
+        _ ->
+            return Result.Ok("other")
+
+fn main() i32:
+    println(classify(0).realise("err"))
+    println(classify(42).realise("err"))
+    println(classify(-1).realise("err"))
+    println(classify(1000000).realise("err"))
+    println(classify(7).realise("err"))
+    return Result.Ok(0)
