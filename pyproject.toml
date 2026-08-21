@@ -49,8 +49,15 @@ nori = "sushi_lang.packager:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sushi_lang"]
-exclude = [
-  "sushi_lang/sushi_stdlib/build.py",
+# The prebuilt stdlib bitcode is gitignored (#155 stopped tracking it), and hatchling
+# respects .gitignore when selecting files -- `artifacts` is the designed escape for
+# VCS-ignored build outputs. Without it the wheel ships ZERO .bc files and every
+# stdlib-using program dies at the missing-module rebuild (the 0.11.0 release failure).
+# build.py ships too: the freshness fingerprint hashes it, and a listed-but-absent
+# input is silently skipped, so excluding it made every installed wheel compute a
+# different digest than its .build_fingerprint marker.
+artifacts = [
+  "sushi_lang/sushi_stdlib/dist",
 ]
 
 [tool.hatch.build.targets.sdist]
