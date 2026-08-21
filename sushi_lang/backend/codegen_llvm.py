@@ -527,6 +527,13 @@ class LLVMCodegen:
         saved_funcs = self.funcs.copy()
         saved_constants = self.constants.copy()
         saved_ast_constants = self.ast_constants.copy()
+        # The lifecycle caches hold ir.Function handles, which belong to ONE module. A
+        # cached handle carried into the next unit's module emits a call with no
+        # declaration there ('use of undefined value @__sushi_dtor_...'). First hit by
+        # <encoding/msgpack>: a source-stdlib import makes every consumer multi-unit.
+        saved_dtor_funcs = self._dtor_funcs
+        saved_clone_funcs = getattr(self, "_clone_funcs", {})
+        saved_dtor_inprogress = self._dtor_inprogress
 
         # Same context as every other module of this compilation -- the type cache persists
         # across units, so this module must be able to declare the identified struct types
@@ -539,6 +546,10 @@ class LLVMCodegen:
         self._free_func = None
         self._realloc_func = None
         self._string_temp_stack = []
+        self._dtor_funcs = {}
+        self._clone_funcs = {}
+        self._dtor_inprogress = []
+        self._clone_inprogress = []
         self.string_manager = StringConstantManager(self)
 
         self.runtime = LLVMRuntime(self)
@@ -622,6 +633,10 @@ class LLVMCodegen:
         self._free_func = None
         self._realloc_func = None
         self._string_temp_stack = []
+        self._dtor_funcs = saved_dtor_funcs
+        self._clone_funcs = saved_clone_funcs
+        self._dtor_inprogress = saved_dtor_inprogress
+        self._clone_inprogress = []
         self.string_manager = StringConstantManager(self)
         self.runtime = LLVMRuntime(self)
 

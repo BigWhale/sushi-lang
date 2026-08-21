@@ -1,0 +1,50 @@
+# Decode errors are values, not exits. Each case prints the matched error arm:
+# empty input, truncated payloads, unsupported tags (0xc1, ext, fixext),
+# invalid UTF-8 in a str payload, and trailing bytes after the root value.
+# EXPECT_STDOUT_EXACT: "Truncated(0)\nTruncated(2)\nTruncated(1)\nUnsupported(193)\nUnsupported(212)\nUnsupported(199)\nBadUtf8(2)\nTrailing(1)\nTruncated(2)\nTruncated(2)\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/msgpack>
+
+fn check(u8[] buf) ~:
+    match mp_decode(buf):
+        Result.Ok(v) ->
+            println(mp_show(v)??)
+        Result.Err(e) ->
+            match e:
+                MpError.Truncated(off) ->
+                    println("Truncated({off})")
+                MpError.Unsupported(t) ->
+                    println("Unsupported({t})")
+                MpError.BadUtf8(off) ->
+                    println("BadUtf8({off})")
+                MpError.Trailing(p) ->
+                    println("Trailing({p})")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let u8[] b_empty = new()
+    check(b_empty)??
+    let u8[] b_short_str = from([0xa5, 0x68])
+    check(b_short_str)??
+    let u8[] b_short_int = from([0xcc])
+    check(b_short_int)??
+    let u8[] b_never = from([0xc1])
+    check(b_never)??
+    let u8[] b_fixext = from([0xd4, 0x01, 0x02])
+    check(b_fixext)??
+    let u8[] b_ext = from([0xc7, 0x01, 0x05, 0xff])
+    check(b_ext)??
+    let u8[] b_bad_utf8 = from([0xa1, 0xff])
+    check(b_bad_utf8)??
+    let u8[] b_trailing = from([0xc0, 0x00])
+    check(b_trailing)??
+    let u8[] b_short_arr = from([0x92, 0x01])
+    check(b_short_arr)??
+    let u8[] b_short_map = from([0xde, 0x00])
+    check(b_short_map)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

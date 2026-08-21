@@ -249,9 +249,9 @@ for the captured variable's provenance and type class, not a closures-specific r
    than the rule carved out.
 
    The mode is a SEMANTIC declaration only: no backend code reads `ReferenceType.mutability`, so
-   codegen is identical either way (the env is a pointer in both cases). Five semantics sites read
-   it, and for this parameter four are inert — the rebind check (captures are field accesses, the
-   env is never rebound), the CW2409 re-borrow warning (bare-`Name` arm only), the `poke`→`peek`
+   codegen is identical either way (the env is a pointer in both cases). Four semantics sites read
+   it, and for this parameter three are inert — the rebind check (captures are field accesses, the
+   env is never rebound), the `poke`→`peek`
    coercion (the env is never a checked argument), and `_poke_param_indices` for the #168
    destroy-effect analysis (round 1 needs a bare-`Name` receiver, round 2 needs a by-name call
    site, and a lifted function is only ever dispatched indirectly).

@@ -34,13 +34,21 @@ present locally). `src/_platform/` splits OS-specific declarations into
 ## 2. Bundled Sushi-source modules (`src_sushi/`)
 
 A small second class of stdlib module ships as plain `.sushi` source, parsed and
-monomorphized like user code instead of precompiled to bitcode. Currently just
-one: `collections/iter`, registered in `SOURCE_STDLIB_MODULES`
-(`sushi_lang/semantics/stdlib_registry.py`) and sourced from
-`sushi_stdlib/src_sushi/collections/iter.sushi`. Use this path for stdlib
-functions that are themselves generic (e.g. `map`/`filter`/`fold`) — writing
-them as an IR generator would mean hand-emitting a monomorphization scheme the
-Sushi generic pipeline already does for free.
+compiled like user code instead of precompiled to bitcode. Two exist today:
+
+- `collections/iter` (`src_sushi/collections/iter.sushi`) — generic combinators
+  (`map`/`filter`/`fold`); nothing is emitted unless a program instantiates one.
+- `encoding/msgpack` (`src_sushi/encoding/msgpack.sushi`) — a MessagePack
+  decoder, and the first source module with CONCRETE public functions: an
+  injected module is an ordinary compilation unit, so `public fn` exports work
+  exactly as they do between user units.
+
+Registration is two entries per module: `SOURCE_STDLIB_MODULES`
+(`sushi_lang/semantics/stdlib_registry.py`) maps the import path to the bundled
+file, and `_virtual_units` (`sushi_lang/backend/stdlib_linker.py`) tells the
+linker the module has no `.bc`. Use this path for stdlib code that is generic
+(an IR generator would hand-emit a monomorphization scheme the generic pipeline
+does for free) or that is simply better written in Sushi than in llvmlite calls.
 
 ## Registry (`sushi_lang/semantics/stdlib_registry.py`)
 

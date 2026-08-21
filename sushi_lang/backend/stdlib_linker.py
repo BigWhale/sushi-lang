@@ -91,6 +91,7 @@ class StdlibLinker:
     _virtual_units = {
         "collections/hashmap",
         "collections/iter",
+        "encoding/msgpack",
     }
 
     def _resolve_stdlib_unit(self, unit_path: str) -> list[Path]:

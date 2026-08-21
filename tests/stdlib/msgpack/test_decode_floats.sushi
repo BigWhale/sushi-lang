@@ -1,0 +1,35 @@
+# Decode float64 and float32. A float32 widens to f64. The renderer prints the
+# raw IEEE-754 bits of the f64, so the output never depends on float formatting.
+# EXPECT_STDOUT_EXACT: "f64(4614253070214989087)\nf64(4609434218613702656)\nf64(0)\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/msgpack>
+
+fn check(u8[] buf) ~:
+    match mp_decode(buf):
+        Result.Ok(v) ->
+            println(mp_show(v)??)
+        Result.Err(e) ->
+            match e:
+                MpError.Truncated(off) ->
+                    println("Truncated({off})")
+                MpError.Unsupported(t) ->
+                    println("Unsupported({t})")
+                MpError.BadUtf8(off) ->
+                    println("BadUtf8({off})")
+                MpError.Trailing(p) ->
+                    println("Trailing({p})")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let u8[] b_f64 = from([0xcb, 0x40, 0x09, 0x1e, 0xb8, 0x51, 0xeb, 0x85, 0x1f])
+    check(b_f64)??
+    let u8[] b_f32 = from([0xca, 0x3f, 0xc0, 0x00, 0x00])
+    check(b_f32)??
+    let u8[] b_zero = from([0xcb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    check(b_zero)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

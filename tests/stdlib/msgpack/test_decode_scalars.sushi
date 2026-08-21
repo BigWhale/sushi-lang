@@ -1,0 +1,42 @@
+# Decode the scalar tags: nil, false, true, positive fixint, negative fixint.
+# EXPECT_STDOUT_EXACT: "nil\nfalse\ntrue\n0\n127\n-1\n-32\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/msgpack>
+
+fn check(u8[] buf) ~:
+    match mp_decode(buf):
+        Result.Ok(v) ->
+            println(mp_show(v)??)
+        Result.Err(e) ->
+            match e:
+                MpError.Truncated(off) ->
+                    println("Truncated({off})")
+                MpError.Unsupported(t) ->
+                    println("Unsupported({t})")
+                MpError.BadUtf8(off) ->
+                    println("BadUtf8({off})")
+                MpError.Trailing(p) ->
+                    println("Trailing({p})")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let u8[] b_nil = from([0xc0])
+    check(b_nil)??
+    let u8[] b_false = from([0xc2])
+    check(b_false)??
+    let u8[] b_true = from([0xc3])
+    check(b_true)??
+    let u8[] b_zero = from([0x00])
+    check(b_zero)??
+    let u8[] b_fixmax = from([0x7f])
+    check(b_fixmax)??
+    let u8[] b_neg1 = from([0xff])
+    check(b_neg1)??
+    let u8[] b_neg32 = from([0xe0])
+    check(b_neg32)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)
