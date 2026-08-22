@@ -5,6 +5,27 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **The documentation highlighter knows the current syntax again.** The Pygments lexer
+  is not on the compiler's path, so the language moved under it in silence: its last real
+  refresh targeted 0.10.0, and the version in its docstring was bumped twice over a lexer
+  nobody had read. Three defects, all now fixed and gated:
+  - **`@` had no rule at all.** The 0.11.0 generic form renders it unstyled, 1679 times
+    across the corpus -- every `List@(i32)`, every `fn id@(T)`. It is punctuation now,
+    like the parenthesis it always precedes.
+  - **Two numeric shapes split in half.** An exponent-only float lexed as an integer
+    followed by an identifier (`1e10` was `1` and `e10`), and the underscores 0.11.1
+    added never reached the exponent (`1_0.2_5e1_0` lost its `_0`). The numeric rules
+    mirror the grammar terminals now, in one place and with the same permissive
+    superset.
+  - **An interpolation was lexed by a second, smaller expression lexer** that knew
+    neither `[`, `??` nor `==`, so `"{arr[0]}"` and `"{x.get(0)??}"` came out unstyled.
+    `{...}` holds an ordinary expression and is lexed as one.
+
+  `tests/unit/test_pygments_lexer.py` is what stops the next drift: every keyword in the
+  grammar must be known to the lexer, every numeric shape the grammar accepts must lex as
+  one token, and no character in the 1840-file corpus may reach the catch-all rule. The
+  version claim is gone from the docstring -- it lied twice, and the gate is the honest
+  version of it.
 - **A conditional move no longer leaks the non-moving paths** (#414). A move inside an if
   arm, a match arm, or a loop body cancelled the owner's scope-exit free statically, so
   every path that skipped the move leaked the value — returning a local from one match
