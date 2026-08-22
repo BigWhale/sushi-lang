@@ -66,7 +66,7 @@ def built(tmp_path_factory):
     src = tmp / "demolib.sushi"
     src.write_text(DEMO_LIB, encoding="utf-8")
     slib = tmp / "demolib.slib"
-    r = _run(["sushic", "--lib", str(src), "-o", str(slib)], cwd=tmp)
+    r = _run(["sushic", "--lib", "--lib-version", "0.0.0", str(src), "-o", str(slib)], cwd=tmp)
     assert r.returncode == 0, r.stdout + r.stderr
     tool = tmp / "slib-info"
     r = _run(["sushic", str(TOOL_SRC), "-o", str(tool)], cwd=tmp)

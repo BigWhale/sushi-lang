@@ -60,7 +60,7 @@ def _build_project(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     _write(lib_src, LIB_SOURCE)
 
     build = subprocess.run(
-        ["sushic", "--lib", str(lib_src), "-o", str(libs_dir / "mathlib.slib")],
+        ["sushic", "--lib", "--lib-version", "0.0.0", str(lib_src), "-o", str(libs_dir / "mathlib.slib")],
         cwd=tmp_path, capture_output=True, text=True,
     )
     assert build.returncode == 0, f"Library build failed:\n{build.stderr}"

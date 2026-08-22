@@ -28,6 +28,43 @@ def _check_library_platform(metadata: dict, lib_path: str) -> None:
         raise LibraryError("CE3504", lib_platform=lib_platform, current_platform=host)
 
 
+def _check_library_compiler_version(metadata: dict, lib_path: str,
+                                    current: str | None = None,
+                                    ignore: bool = False) -> None:
+    """Reject a `.slib` whose `requires_compiler` excludes the running compiler (CE3503).
+
+    A source library is built by the CONSUMER's compiler, so an incompatibility is real
+    and must be caught here rather than surfacing later as a confusing error inside
+    library source the consumer never wrote. The check is SKIPPED, never failed, when
+    either version cannot be parsed -- the gate exists to catch a genuine mismatch, not
+    to fail a build over a field it could not read.
+    """
+    from sushi_lang.backend.library_errors import LibraryError
+    from sushi_lang.internals.semver import InvalidVersion, Version, VersionReq
+
+    if ignore:
+        return
+
+    requires = metadata.get("requires_compiler")
+    if not requires:
+        return
+
+    if current is None:
+        from sushi_lang import __version__
+        current = __version__
+
+    try:
+        req = VersionReq.parse(requires)
+        running = Version.parse(current)
+    except InvalidVersion:
+        return
+
+    if not req.matches(running):
+        raise LibraryError("CE3503",
+                           lib=metadata.get("library_name") or lib_path,
+                           requires=requires, current=current)
+
+
 def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -> bool:
     """Merge bundled Sushi-source stdlib modules (e.g. <collections/iter>) as units."""
     from sushi_lang.internals.parser import parse_to_ast
@@ -165,6 +202,9 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                 slib_path = library_linker.resolve_library(lib_path)
                 metadata = LibraryFormat.read_metadata_only(slib_path)
                 _check_library_platform(metadata, lib_path)
+                _check_library_compiler_version(
+                    metadata, lib_path,
+                    ignore=bool(getattr(args, "ignore_compiler_version", False)))
                 library_linker.loaded_libraries[metadata["library_name"]] = metadata
 
                 formatted_path = " / ".join(lib_path.split('/'))
@@ -260,7 +300,14 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
         # in the bitcode (their definitions resolve consumer call sites at
         # link time), and any CE5006 rejection aborts before the expensive
         # bitcode compilation.
-        from sushi_lang.backend.library_manifest import LibraryManifestGenerator
+        from sushi_lang.backend.library_manifest import (
+            LibraryManifestGenerator, resolve_library_version,
+        )
+        # Resolve the library's own version FIRST: a missing or contradicted version is
+        # CE3505, and there is no point compiling bitcode for a library that cannot be
+        # stamped (the same reasoning as the export closure below).
+        library_version = resolve_library_version(
+            src_path.resolve().parent, args.lib_version, out_path.stem)
         manifest_gen = LibraryManifestGenerator(analyzer)
         templates = manifest_gen._extract_templates(compilation_order)
         closure_fn_names = set(
@@ -273,7 +320,8 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
                                         monomorphized_extensions=monomorphized_extensions,
                                         exported_private_functions=closure_fn_names)
 
-        manifest_gen.generate(compilation_order, out_path, bitcode, templates=templates)
+        manifest_gen.generate(compilation_order, out_path, bitcode, templates=templates,
+                              library_version=library_version, kind="binary")
 
         if args.write_ll:
             try:

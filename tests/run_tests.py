@@ -72,7 +72,10 @@ def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
 
         try:
             result = subprocess.run(
-                [str(sushic), "--lib", str(lib_file), "-o", str(output_path)],
+                # A .slib must state its own version (CE3505). These helpers are not
+                # packages, so there is no nori.toml to read one from.
+                [str(sushic), "--lib", "--lib-version", "0.0.0",
+                 str(lib_file), "-o", str(output_path)],
                 cwd=project_root,
                 capture_output=True,
                 text=True,

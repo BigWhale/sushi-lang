@@ -40,7 +40,7 @@ fn slib_header_check(peek u8[] header) ~ | SlibError:
             return Result.Err(SlibError.BadMagic())
         i := i + 1
     let u64 version = slib_le_uint(peek header, 16, 4)??
-    if (version != 3):
+    if (version != 4):
         return Result.Err(SlibError.BadVersion(version as u32))
     return Result.Ok(~)
 
@@ -67,7 +67,9 @@ public fn slib_read_metadata(string path) MsgValue | SlibError:
             return Result.Err(SlibError.OpenFailed(path.clone()))
     return Result.Err(SlibError.OpenFailed(path.clone()))
 
-# slib_bitcode_size: the u64 length of the bitcode that follows the metadata.
+# slib_bitcode_size: the u64 length of the bitcode. Container version 4 puts a
+# length-prefixed SOURCE section between the metadata and the bitcode, so reaching
+# the bitcode length means stepping over that section first.
 public fn slib_bitcode_size(string path) u64 | SlibError:
     match open(path, FileMode.ReadB()):
         FileResult.Ok(f) ->
@@ -77,10 +79,19 @@ public fn slib_bitcode_size(string path) u64 | SlibError:
                 return Result.Err(SlibError.Truncated())
             let i32 mlen = slib_le_uint(peek header, 44, 8)?? as i32
             let u8[] blob = f.read_bytes(mlen)
+            let u8[] src_field = f.read_bytes(8)
+            if (src_field.len() < 8):
+                f.close()
+                slib_header_check(peek header)??
+                return Result.Err(SlibError.Truncated())
+            let i32 slen = slib_le_uint(peek src_field, 0, 8)?? as i32
+            let u8[] src_blob = f.read_bytes(slen)
             let u8[] size_field = f.read_bytes(8)
             f.close()
             slib_header_check(peek header)??
             if (blob.len() < mlen):
+                return Result.Err(SlibError.Truncated())
+            if (src_blob.len() < slen):
                 return Result.Err(SlibError.Truncated())
             if (size_field.len() < 8):
                 return Result.Err(SlibError.Truncated())

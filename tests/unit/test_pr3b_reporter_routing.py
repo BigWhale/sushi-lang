@@ -55,7 +55,7 @@ def test_cross_platform_library_renders_ce3504_through_the_reporter(tmp_path):
     )
     slib = libs / "mathlib.slib"
     build = subprocess.run(
-        ["sushic", "--lib", str(lib_src), "-o", str(slib)],
+        ["sushic", "--lib", "--lib-version", "0.0.0", str(lib_src), "-o", str(slib)],
         cwd=tmp_path, capture_output=True, text=True,
     )
     assert build.returncode == 0, build.stderr

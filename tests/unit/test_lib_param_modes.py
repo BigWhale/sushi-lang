@@ -76,7 +76,7 @@ def mode_manifest(tmp_path_factory):
     src.write_text(MODE_LIB, encoding="utf-8")
     out = tmp_path / "modelib.slib"
     result = subprocess.run(
-        ["sushic", "--lib", str(src), "-o", str(out)],
+        ["sushic", "--lib", "--lib-version", "0.0.0", str(src), "-o", str(out)],
         cwd=tmp_path, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     metadata, _bitcode = LibraryFormat.read(out)

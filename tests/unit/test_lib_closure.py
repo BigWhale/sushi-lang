@@ -72,7 +72,7 @@ def _build_lib(tmp_path: Path, source: str, name: str = "closurelib"):
     lib_src = tmp_path / f"{name}.sushi"
     _write(lib_src, source)
     result = subprocess.run(
-        ["sushic", "--lib", str(lib_src), "-o", str(libs_dir / f"{name}.slib")],
+        ["sushic", "--lib", "--lib-version", "0.0.0", str(lib_src), "-o", str(libs_dir / f"{name}.slib")],
         cwd=tmp_path, capture_output=True, text=True,
     )
     env = {**os.environ, "SUSHI_LIB_PATH": str(libs_dir)}
