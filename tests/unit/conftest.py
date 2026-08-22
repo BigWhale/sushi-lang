@@ -11,6 +11,19 @@ from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 from sushi_lang.semantics.units import Unit, UnitManager
 
 
+def pytest_collection_modifyitems(items):
+    """Mark every test in a subprocess-spawning module `slow`.
+
+    Derived rather than hand-applied: 21 modules qualify today, and a marker maintained by
+    hand across that many files is one a new E2E module forgets. Importing `subprocess` is
+    what makes a module slow here -- it means sushic, clang or the packager CLI is spawned.
+    """
+    for item in items:
+        module = getattr(item, "module", None)
+        if module is not None and hasattr(module, "subprocess"):
+            item.add_marker("slow")
+
+
 def _ensure_newline(src: str) -> str:
     """.sushi sources should end with a trailing newline (avoids a warning)."""
     return src if src.endswith("\n") else src + "\n"

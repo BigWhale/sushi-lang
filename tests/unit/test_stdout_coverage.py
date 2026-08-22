@@ -46,7 +46,6 @@ QUARANTINE: dict[str, dict] = {
     "array/test_dynamic_arrays_bounds_runtime.sushi": {"reason": "no-stdout", "issue": None},
     "basic/test_function_calls.sushi": {"reason": "no-stdout", "issue": None},
     "list/test_list_match_get.sushi": {"reason": "no-stdout", "issue": None},
-    "list/test_tiny.sushi": {"reason": "no-stdout", "issue": None},
     "stdlib/generics/hashmap/test_hashmap_entries_empty.sushi": {"reason": "no-stdout", "issue": None},
     "stdlib/generics/hashmap/test_hashmap_keys_empty.sushi": {"reason": "no-stdout", "issue": None},
 }

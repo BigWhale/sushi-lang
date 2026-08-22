@@ -7,6 +7,11 @@
 # Fixed by a destroy-effect summary: which poke params does each function destroy?
 # Computed once over every unit, transitively, then applied at the call site. CE2406 still
 # fires from the existing Name arm -- no new error code, no new emit site.
+#
+# The RE2022 probe guard remains as defense-in-depth, now unreachable from this program.
+# The summary deliberately under-approximates: it cannot see a generic callee, an extension
+# method destroying its implicit `self`, a library callee, or an argument that is not a bare
+# name (`wreck(poke h.m)`). The trap has no direct coverage left -- an accepted cost.
 # EXPECT_ERROR_CODE: CE2406
 use <collections/hashmap>
 
