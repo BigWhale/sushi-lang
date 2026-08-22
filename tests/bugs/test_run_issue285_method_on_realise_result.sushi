@@ -3,7 +3,7 @@
 #
 # `infer_struct_type`'s call arms knew exactly ONE method name: `.get()`, through
 # `_infer_get_element_struct`. Every other call receiver fell past it to CE0068 / CE0069,
-# on the grounds that the method was not called `get`. Pass 2 had already stamped the
+# on the grounds that the method was not called `get`. The typecheck pass had already stamped the
 # return type on that very node, so the answer was there the whole time -- the backend was
 # reading the wrong place, which is the same shape as #286 one node type over.
 #

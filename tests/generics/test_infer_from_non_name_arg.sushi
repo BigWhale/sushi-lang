@@ -1,8 +1,8 @@
-# F8 (fixed 2026-08-14): Pass 1.5 collects an instantiation from a non-Name argument.
+# F8 (fixed 2026-08-14): the instantiate pass collects an instantiation from a non-Name argument.
 # `f(p.clone())` is the argument shape the clone idiom produces; the collector's
 # argument inference falls back to the receiver's type for `.clone()` (clone returns
 # its receiver's type by definition, and the interned instance does not exist until
-# Pass 1.6, so Pass 2's clone inference cannot answer at collection time).
+# the monomorphize pass, so the typecheck pass's clone inference cannot answer at collection time).
 # This file replaces the CE2061 known-hole pin test_err_infer_from_non_name_arg.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "42\n"

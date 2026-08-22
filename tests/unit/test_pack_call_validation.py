@@ -1,4 +1,4 @@
-"""P1-T6: Pass-2 type validation for type-pack calls."""
+"""Typecheck-pass validation for type-pack calls."""
 from __future__ import annotations
 
 # --- A valid pack call: every element implements the constraint perk ---------

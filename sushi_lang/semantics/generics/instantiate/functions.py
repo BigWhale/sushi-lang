@@ -41,7 +41,7 @@ class FunctionCollector:
         return resolved if resolved is not None else ty
 
     def _bind_self(self, target_type) -> None:
-        """Bind `self` to the receiver type, mirroring Pass 2 (signatures.py)."""
+        """Bind `self` to the receiver type, mirroring the typecheck pass (signatures.py)."""
         from sushi_lang.semantics.typesys import (
             BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType, UnknownType,
         )

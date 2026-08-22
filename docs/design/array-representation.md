@@ -77,7 +77,7 @@ right operand before place.
 recovers its element type by parsing its own interned name (`List<i32[]>`), and each
 container carried a hand-rolled reader: a builtin dictionary plus a struct-table and an
 enum-table lookup. **None of the three had an array case**, so the element resolved to `None`,
-Pass 2 stamped nothing on the `??`, and the backend reported **CE0124**.
+the typecheck pass stamped nothing on the `??`, and the backend reported **CE0124**.
 
 All three now call `resolve_type_argument` (`semantics/generics/type_strings.py`), which wraps
 the real resolver and returns `None` for a name it cannot place — the answer a type-argument

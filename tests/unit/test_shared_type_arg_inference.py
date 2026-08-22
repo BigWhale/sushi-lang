@@ -1,4 +1,4 @@
-"""Pass 1.5 must infer a generic call's argument types for every expression shape Pass 2 can
+"""The instantiate pass must infer a generic call's argument types for every expression shape the typecheck pass can
 (issues #171, #191).
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ I32 = BuiltinType.I32
 
 
 def _collect(src: str):
-    """Run Pass 0/1 + Pass 1.5 over one program; return the function-instantiation set."""
+    """Run collect, scope and instantiate over one program; return the function-instantiation set."""
     program, _ = parse_to_ast(src)
     tables = CollectorPass(Reporter()).run(program)
     inst = InstantiationCollector(
@@ -105,7 +105,7 @@ fn main() i32:
     assert ("identity", (I32,)) in _collect(src)
 
 
-# Regression guard: the shapes Pass 1.5 already handled must keep working
+# Regression guard: the shapes the instantiate pass already handled must keep working
 
 @pytest.mark.parametrize("arg", ["1", '"s"', "true", "n", "1 as i64"])
 def test_simple_argument_shapes_still_collected(arg):

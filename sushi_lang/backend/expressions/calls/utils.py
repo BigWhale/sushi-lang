@@ -14,9 +14,9 @@ if TYPE_CHECKING:
 
 
 def stamped_semantic_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional['Type']:
-    """The type Pass 2 recorded for this expression, or None.
+    """The type the typecheck pass recorded for this expression, or None.
 
-    The one reader of Pass 2's type stamps. A shape with no stamp -- or a stamp Pass 2
+    The one reader of the typecheck pass's type stamps. A shape with no stamp -- or a stamp the typecheck pass
     left abstract -- answers None, so a caller can fall back to its own reconstruction.
     """
     from sushi_lang.semantics.ast import IndexAccess, TryExpr
@@ -41,7 +41,7 @@ def stamped_semantic_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional['Type'
     resolved = resolve_unknown_type(stamped, struct_by_name, enum_by_name)
 
     # Never rebuild a named type -- if it has a name, the table is what that name means
-    # (#240). A no-op whenever Pass 2 already handed over the interned instance, which it
+    # (#240). A no-op whenever the typecheck pass already handed over the interned instance, which it
     # does today for every shape this function serves.
     name = getattr(resolved, 'name', None)
     if isinstance(name, str):
@@ -94,7 +94,7 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
             if type_name.startswith(prefix) and type_name in codegen.struct_table.by_name:
                 return codegen.struct_table.by_name[type_name]
 
-    # Strategy 3: a chained method call, which neither strategy above can see. Pass 2
+    # Strategy 3: a chained method call, which neither strategy above can see. The typecheck pass
     # already typed it. The three are disjoint by node type, so the order is not a
     # priority.
     stamped = stamped_semantic_type(codegen, receiver)
@@ -166,7 +166,7 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
             if type_name in codegen.enum_table.by_name:
                 return codegen.enum_table.by_name[type_name] if type_name.startswith(prefix) else None
 
-    # Strategy 1b: a method-call or `??` receiver carries Pass 2's stamp. Authoritative
+    # Strategy 1b: a method-call or `??` receiver carries the typecheck pass's stamp. Authoritative
     # like Strategy 1 -- the uniform enum layout (#300) makes the fallback heuristic unable
     # to tell `Maybe<string>` from `Result<i32, StdError>`.
     for stamp_attr in ('inferred_return_type', 'inferred_unwrapped_type'):
@@ -195,7 +195,7 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
 
             # Stdlib module functions are in no function table. Under the uniform enum
             # layout (#300) the fallback heuristic let the wrong family claim
-            # `getenv(x).realise(d)`, so these resolve from the facts Pass 1.5 registers
+            # `getenv(x).realise(d)`, so these resolve from the facts the instantiate pass registers
             # and a non-matching prefix answers None.
             stdlib_ret = _stdlib_call_return_enum(codegen, func_name)
             if stdlib_ret is not None:
@@ -276,7 +276,7 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
             # the question it is named for -- claiming any node with `resolved_enum_type`
             # typed `go().realise("err")` as its receiver's enum and leaked the string
             # (#293).
-            # Pass 2's stamp first, then reconstruction -- an inline `from([...])`
+            # The typecheck pass's stamp first, then reconstruction -- an inline `from([...])`
             # receiver carries no stamp, so it had no type here and therefore no owner.
             from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
             semantic_type = infer_expr_semantic_type(codegen, receiver)
@@ -316,7 +316,7 @@ def _infer_enum_construction_type(codegen: 'LLVMCodegen', receiver: Expr) -> Opt
     if not isinstance(receiver, DotCall):
         return None
 
-    # Only SOME `X.Y(args)` construct a variant, but Pass 2 stamps `resolved_enum_type` on
+    # Only SOME `X.Y(args)` construct a variant, but the typecheck pass stamps `resolved_enum_type` on
     # a Result/Maybe METHOD call too, where it names the enum called ON rather than what is
     # RETURNED. Claiming every stamped node skipped the temp registration and leaked (#293).
     # So ask the question this function is named for: `Ok` is a variant, `realise` is not.

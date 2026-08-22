@@ -5,7 +5,7 @@
 # The registration machinery already existed: `_own_receiver_temp` gives a receiver that
 # nobody owns a scope temp, gated on `needs_cleanup` and `expression_is_temporary`. It was
 # never REACHED, because the receiver was mis-typed. `_infer_enum_construction_type`
-# claimed any node carrying `resolved_enum_type`, and Pass 2 stamps that on a Result/Maybe
+# claimed any node carrying `resolved_enum_type`, and the typecheck pass stamps that on a Result/Maybe
 # METHOD call too -- where it names the enum the method was called ON, not what the call
 # RETURNS. So `go().realise("err")`, whose value is a `string`, came back typed
 # `Result<string, StdError>`, the caller saw a non-None semantic type, and skipped the

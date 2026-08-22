@@ -172,7 +172,7 @@ leave `param_modes` unstated.
 
 One resolver answers "what are the modes of this callee?" for every kind in the section 5
 table. It is modelled on the closed `ConsumingUse` enum: `CalleeKind` is a closed set, and
-a member with no row fails a unit test statically. Pass 3 and the backend call the same
+a member with no row fails a unit test statically. The borrow pass and the backend call the same
 resolver, which is what stops the two halves drifting the way they did before this ruling.
 
 One applier applies it. Every call shape reaches `apply_mode` in

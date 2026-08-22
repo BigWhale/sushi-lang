@@ -1,4 +1,4 @@
-"""The built-in-method seam and Pass 2 validation must recognise the same families."""
+"""The built-in-method seam and the typecheck pass validation must recognise the same families."""
 from __future__ import annotations
 
 import re
@@ -110,7 +110,7 @@ def test_reference_receivers_unwrap():
 
 
 def test_struct_auto_derived_pair_is_recognised(analyze):
-    """The one registry-backed family -- registered from semantics in Pass 1.8."""
+    """The one registry-backed family -- registered from semantics in the derive pass."""
     analyze("""
 struct P:
     i32 x

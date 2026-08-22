@@ -1,4 +1,4 @@
-"""Enum definition collection for Phase 0."""
+"""Enum definition collection."""
 
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -24,7 +24,7 @@ from .utils import extract_type_param_names, note_first_declaration, reject_refe
 
 @dataclass
 class EnumTable:
-    """Table of enum types collected in Phase 0."""
+    """Table of enum types collected by the collect pass."""
     by_name: Dict[str, EnumType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
@@ -32,7 +32,7 @@ class EnumTable:
 
 @dataclass
 class GenericEnumTable:
-    """Table of generic enum types collected in Phase 0."""
+    """Table of generic enum types collected by the collect pass."""
     by_name: Dict[str, GenericEnumType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
@@ -197,7 +197,7 @@ class EnumCollector:
         name_span: Optional[Span] = getattr(enum, "name_span", None) or getattr(enum, "loc", None)
 
         # Check if this enum has type parameters (e.g., enum Result<T>:)
-        # Note: For Phase 0, type_params will always be None since the grammar doesn't support it yet
+        # Note: In the collect pass, type_params is always None -- the grammar has no syntax for it yet
         type_params_raw = getattr(enum, "type_params", None)
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
@@ -266,7 +266,7 @@ class EnumCollector:
 
         if type_params and len(type_params) > 0:
             # Generic enum - store in generic_enums table
-            # Preserve BoundedTypeParam objects (Phase 4: constraint validation)
+            # Preserve BoundedTypeParam objects -- the monomorphize pass validates the constraints
             # Convert to tuple, handling both BoundedTypeParam and legacy string formats
             type_param_instances = tuple(
                 tp if isinstance(tp, BoundedTypeParam)

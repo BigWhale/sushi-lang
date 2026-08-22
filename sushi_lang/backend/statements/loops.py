@@ -368,7 +368,7 @@ def _emit_hashmap_foreach(
             # Reference binding (#300 phase 1): the entries buffer is heap storage, so
             # the GEP'd key/value pointer is bindable exactly like an array element's.
             # (`.entries()` bindings have NO address -- the user Entry is insert_value'd
-            # above -- and Pass 2 rejects the marker there with CE2423.)
+            # above -- and the typecheck pass rejects the marker there with CE2423.)
             previous_entry = bind_element_reference(codegen, node.item_name, node.item_borrow,
                                                      element_type, element_ptr)
         else:

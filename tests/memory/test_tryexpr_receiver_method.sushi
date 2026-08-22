@@ -5,7 +5,7 @@
 # type, so the receiver's raw LLVM type is mapped back to a language type and fails.
 #
 # This is the SAME defect Phase 7.5 fixed for a chained method receiver (`o.get().clone()`),
-# in its remaining shape. Pass 2 stamps the type on a `MethodCall`/`DotCall` and the backend
+# in its remaining shape. The typecheck pass stamps the type on a `MethodCall`/`DotCall` and the backend
 # now reads it; a `TryExpr` carries the answer too, in `inferred_unwrapped_type`, and the
 # backend does not read that one yet. `.clone()` in place of `.hash()` fails identically, so
 # the escape CE2411 names is unavailable through a `??` as well.

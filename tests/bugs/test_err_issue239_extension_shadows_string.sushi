@@ -5,7 +5,7 @@
 # extension emits the same symbol the stdlib unit already defines. Without the import it was
 # a CE0096 internal error instead. Neither is a user-level diagnostic.
 #
-# CE2097 rejects it in Pass 1.8's wake, before any of that can happen.
+# CE2097 rejects it in the derive pass's wake, before any of that can happen.
 # EXPECT_ERROR_CODE: CE2097
 
 use <collections/strings>

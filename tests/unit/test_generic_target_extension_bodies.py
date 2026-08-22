@@ -3,12 +3,12 @@
 `extend Box@(T)` is monomorphized into one `ExtendDef` per instantiation of `Box`. They used
 to SHARE one body AST, which made three facts collide on the same nodes:
 
-- Pass 2 stamps a resolved type on every copy it validates, so the last instantiation won
+- the typecheck pass stamps a resolved type on every copy it validates, so the last instantiation won
   and the function emitted for the others returned a value of the wrong shape.
-- Pass 3 checked the TEMPLATE once, with `self` abstract, so an owning field handed out of
+- the borrow pass checked the TEMPLATE once, with `self` abstract, so an owning field handed out of
   the body was classified PLAIN and no ownership decision was stamped -- a compile-clean
   DOUBLE FREE at an owning instantiation, where the plain-target twin is CE2411.
-- A body annotation naming `T` reached Pass 2 as written and was CE2001.
+- A body annotation naming `T` reached the typecheck pass as written and was CE2001.
 
 The three tests below pin the three halves of the answer: an own body, a per-instantiation
 check, and ONE report per finding rather than one per instantiation.
@@ -49,7 +49,7 @@ fn main() i32:
 
     bodies = {id(copy.body) for copy in copies}
     assert len(bodies) == 2, (
-        "both instantiations share one body AST. Pass 2 stamps the resolved type on those "
+        "both instantiations share one body AST. The typecheck pass stamps the resolved type on those "
         "nodes per instantiation, so the last one wins and the other emits invalid IR."
     )
 

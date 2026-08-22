@@ -1,4 +1,4 @@
-"""Single type-unification engine shared by Pass 1.5 and Pass 2."""
+"""One type-unification engine, shared by the instantiate and typecheck passes."""
 from __future__ import annotations
 
 from typing import Dict
@@ -22,7 +22,7 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
     # `peek T item` called as `f(peek x)` binds T from x's type; `peek Pair@(A, B)`
     # binds both. Mutability and the borrow spelling are argument-validation questions
     # (CE2006), not unification ones -- a mis-spelled call records an instantiation
-    # that Pass 2 then rejects, which is harmless.
+    # that the typecheck pass then rejects, which is harmless.
     if isinstance(param_type, ReferenceType):
         inner_arg = (arg_type.referenced_type
                      if isinstance(arg_type, ReferenceType) else arg_type)

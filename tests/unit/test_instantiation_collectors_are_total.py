@@ -1,4 +1,4 @@
-"""Both Pass 1.5 instantiation collectors must dispatch on every expression node."""
+"""Both the instantiate pass instantiation collectors must dispatch on every expression node."""
 from __future__ import annotations
 
 import ast

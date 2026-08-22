@@ -520,10 +520,10 @@ fn main() i32:
 
 ### Multi-Pass Compilation
 
-1. **Pass 1.5**: Collect generic instantiations from call sites
-2. **Pass 1.6**: Monomorphize generic types to concrete types
-3. **Pass 1.7**: Type resolution with concrete types
-4. **Pass 2**: Type validation on specialized code
+1. **`instantiate`**: collect generic instantiations from call sites
+2. **`monomorphize`**: monomorphize generic types to concrete types
+3. **`resolve`**: resolve field and variant types to the concrete ones
+4. **`typecheck`**: type validation on the specialized code
 
 ### Code Size Implications
 

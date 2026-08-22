@@ -1,4 +1,4 @@
-"""P1-T5: pack-aware type-argument inference (Pass 1.5 shared helper)."""
+"""Pack-aware type-argument inference (the instantiate pass's shared helper)."""
 
 from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.generics.pack_inference import (
@@ -149,7 +149,7 @@ def test_non_pack_arg_count_mismatch():
     assert _infer(g, [I32]) is None
 
 
-# end-to-end: real front-end + Pass 1.5 collector discovers the pack key
+# end-to-end: real front-end + the instantiate pass collector discovers the pack key
 
 _PROBE_SRC = """\
 perk Display:
@@ -171,7 +171,7 @@ fn main() i32:
 
 
 def test_collector_discovers_pack_instantiation():
-    """Pass 1.5 must produce the flat key ('print_all', (i32, string))."""
+    """The instantiate pass must produce the flat key ('print_all', (i32, string))."""
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.internals.report import Reporter
     from sushi_lang.semantics.passes.collect import CollectorPass

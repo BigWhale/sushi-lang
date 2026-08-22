@@ -1,4 +1,4 @@
-"""Struct definition collection for Phase 0."""
+"""Struct definition collection."""
 
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -16,7 +16,7 @@ from .utils import extract_type_param_names, note_first_declaration, reject_refe
 
 @dataclass
 class StructTable:
-    """Table of struct types collected in Phase 0."""
+    """Table of struct types collected by the collect pass."""
     by_name: Dict[str, StructType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     # Where each name was declared. A StructType is a frozen semantic type and has
@@ -28,7 +28,7 @@ class StructTable:
 
 @dataclass
 class GenericStructTable:
-    """Table of generic struct types collected in Phase 0."""
+    """Table of generic struct types collected by the collect pass."""
     by_name: Dict[str, GenericStructType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
@@ -171,6 +171,7 @@ class StructCollector:
 
             self.known_types.add(struct_type)
 
-            # Hash registration is deferred to Pass 1.8 (hash_registration.py)
-            # This ensures all types are resolved (Pass 1.7) and generics are monomorphized (Pass 1.6)
+            # Hash registration is deferred to the derive pass (passes/derive.py), which runs
+            # after the resolve pass resolved every type and the monomorphize pass made every
+            # generic concrete.
             # before we attempt to register hash methods

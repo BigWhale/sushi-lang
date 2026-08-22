@@ -202,7 +202,7 @@ def _infer_call_struct(codegen: 'LLVMCodegen', expr: Expr) -> Optional[StructTyp
 
 
 def _stamped_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional[StructType]:
-    """The struct Pass 2 stamped as this call's return type, or None."""
+    """The struct the typecheck pass stamped as this call's return type, or None."""
     stamped = getattr(expr, "inferred_return_type", None)
     if stamped is None:
         return None
@@ -320,7 +320,7 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
         raise_internal_error("CE0069", method=expr.method)
 
     elif isinstance(expr, IndexAccess):
-        # `a[i].field` -- the struct is the indexed array's ELEMENT type. Pass 2 already
+        # `a[i].field` -- the struct is the indexed array's ELEMENT type. The typecheck pass already
         # stamped it (#348), so read the stamp first; the structural walk below stays as
         # the answer for an unstamped node.
         from sushi_lang.backend.expressions.calls.utils import stamped_semantic_type

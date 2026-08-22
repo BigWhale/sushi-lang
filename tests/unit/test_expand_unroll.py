@@ -1,4 +1,4 @@
-"""P1-T7b: compile-time unrolling of ``expand(...)`` over parameter packs."""
+"""Compile-time unrolling of ``expand(...)`` over parameter packs."""
 
 
 from sushi_lang.semantics.generics.types import TypeParameter

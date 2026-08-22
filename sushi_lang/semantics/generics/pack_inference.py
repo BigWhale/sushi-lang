@@ -1,4 +1,4 @@
-"""Pack-aware type-argument inference (shared between Pass 1.5 and Pass 2)."""
+"""Pack-aware type-argument inference, shared by the instantiate and typecheck passes."""
 from __future__ import annotations
 
 from typing import Callable, Optional, Sequence, Tuple, TYPE_CHECKING

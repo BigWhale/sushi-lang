@@ -351,7 +351,7 @@ Current limitations of the library system:
    pack* functions (`...Ts`), and generic *structs*/*enums* can be instantiated across `.slib`
    boundaries. The library producer ships a re-parsable source template in the `.slib` `templates`
    section (templates version 4); the consumer re-parses it, registers it alongside its own
-   definitions, and monomorphizes it at consumer call sites using the standard Pass 1.5/1.6
+   definitions, and monomorphizes it at consumer call sites using the standard `instantiate`/`monomorphize`
    machinery. A pack function carries `type_params` (the `...Ts` is recorded with `is_pack`), so it
    ships as a template and is monomorphized per call site exactly like a regular generic. Perk
    *definitions* are also shipped so consumers do not need to redeclare a perk contract that

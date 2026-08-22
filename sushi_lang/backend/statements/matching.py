@@ -20,14 +20,14 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     codegen.utils.ensure_open_block()
 
     # An integer match (#415) switches on the scrutinee VALUE, not on an enum
-    # tag; Pass 2 stamps `integer_match_type` on exactly those matches.
+    # tag; the typecheck pass stamps `integer_match_type` on exactly those matches.
     if getattr(stmt, 'integer_match_type', None) is not None:
         _emit_integer_match(codegen, stmt)
         return
 
     scrutinee_value = codegen.expressions.emit_expr(stmt.scrutinee)
 
-    # Prefer Pass 2's resolved enum type: the backend re-derivation below cannot cover
+    # Prefer the typecheck pass's resolved enum type: the backend re-derivation below cannot cover
     # every scrutinee form, and a miss silently drops the arm's bindings.
     from sushi_lang.semantics.typesys import EnumType
     scrutinee_type = getattr(stmt, 'resolved_scrutinee_type', None)
@@ -72,7 +72,7 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
 def _emit_integer_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     """Emit a match on an integer scrutinee (#415): one LLVM switch on the value.
 
-    Pass 2 guarantees the shape: every arm is a LiteralPattern except a trailing
+    The typecheck pass guarantees the shape: every arm is a LiteralPattern except a trailing
     wildcard, which becomes the switch default. Integers are plain values, so
     there is no temp-scrutinee ownership and no binding extraction; the shared
     `_emit_match_arms` skips both for non-Pattern arms.
@@ -208,7 +208,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                             return field_type
         return None
 
-    # A Call scrutinee needs no branch: Pass 2 stamps `resolved_scrutinee_type`, which
+    # A Call scrutinee needs no branch: the typecheck pass stamps `resolved_scrutinee_type`, which
     # emit_match reads first. Re-inferring it here swallowed misses and dropped bindings.
 
     if isinstance(scrutinee, (DotCall, MethodCall)):
@@ -393,7 +393,7 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
         # A reference binding points into the SCRUTINEE'S own payload storage, never this
         # arm's temporary copy -- a pointer into the copy makes every write silently lost
         # (#253). The payload base is 8-aligned, so the interior pointer is naturally
-        # aligned; Pass 3 guarantees the scrutinee is a bare name (CE2404).
+        # aligned; the borrow pass guarantees the scrutinee is a bare name (CE2404).
         if isinstance(binding_item, RefBindingNode):
             from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
             from sushi_lang.backend.statements.loops import bind_element_reference

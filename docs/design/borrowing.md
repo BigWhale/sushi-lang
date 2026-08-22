@@ -184,14 +184,14 @@ invalidated at the change, and the error is reported at the next read of the bor
 
 - **Grammar / AST.** Two spellings of one concept: `ReferenceType` in a type position, and
   a `Borrow` expression at a use site.
-- **Pass 2** registers a reference parameter with its full `ReferenceType`, then UNWRAPS it
+- **`typecheck`** registers a reference parameter with its full `ReferenceType`, then UNWRAPS it
   at every mention. That gives borrow transparency — it is why `p.len()` works — at the
   price that no inferred type downstream can answer "is this a borrow?".
-- **Pass 3** is therefore the only layer that can ask, because it holds the borrow state.
+- **`borrow`** is therefore the only layer that can ask, because it holds the borrow state.
   All three callable kinds — plain function, extension method, perk method — go through one
   entry point (`_check_callable`), so a relational diagnostic renders its second location in
   a method body like anywhere else.
-- **The ownership seam** needs no reference arm: the rejection happens in Pass 3, before
+- **The ownership seam** needs no reference arm: the rejection happens in the borrow pass, before
   codegen. An unstamped consuming use in the backend is CE0129, which is fatal on purpose.
 - **The backend** keys every deref on `variable_types`, which is saved and restored per
   function (#332).
@@ -203,7 +203,7 @@ Each gate turns the next occurrence of its bug class into a red test:
 | gate | what it pins |
 |---|---|
 | `test_borrow_dispatch_is_total.py` | an arm for every `Expr` node (CE0125) |
-| `test_scope_dispatch_is_total.py` | the same for Pass 1 (CE0130) |
+| `test_scope_dispatch_is_total.py` | the same for the scope pass (CE0130) |
 | `test_peek_write_gate_is_total.py` | every member of `_MUTATING_METHODS` |
 | `test_readonly_receiver_matrix.py` | every kind x shape cell of §5, the shape-keyed sixth kind included |
 | `test_borrow_flag_lifecycle.py` | every `BorrowState` flag x flow event |

@@ -1,4 +1,4 @@
-"""Phase 0 collection pass - orchestrates all collectors via facade pattern."""
+"""The collect pass -- orchestrates every collector through a facade."""
 
 from __future__ import annotations
 from typing import Optional, Set, TYPE_CHECKING
@@ -65,7 +65,7 @@ __all__ = [
 
 
 class CollectorPass:
-    """Phase 0: Collect constants, structs, enums, functions, and perks from the AST."""
+    """Collect constants, structs, enums, functions, and perks from the AST."""
 
     def __init__(self, reporter: Reporter) -> None:
         """Initialize collector pass with all sub-collectors."""

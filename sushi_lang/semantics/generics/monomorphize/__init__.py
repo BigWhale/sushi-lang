@@ -1,4 +1,4 @@
-"""Pass 1.6: Monomorphization"""
+"""The monomorphize pass: every generic definition becomes concrete instances."""
 from __future__ import annotations
 from contextlib import contextmanager
 from typing import Dict, Iterator, Tuple, Set, TYPE_CHECKING
@@ -47,7 +47,7 @@ class Monomorphizer:
     enum_table: 'EnumTable | None' = None
     struct_table: 'StructTable | None' = None
     # Whole-program SymbolTables. Lets the nested-call collector infer a generic call's
-    # argument types through Pass 2's TypeValidator instead of the old Names-only inferrer,
+    # argument types through the typecheck pass's TypeValidator instead of the old Names-only inferrer,
     # so a non-Name argument (a call, cast, or method result) no longer aborts inference and
     # drops the instantiation (issue #214). None on unit-test paths built from loose tables.
     tables: object | None = None

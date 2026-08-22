@@ -158,7 +158,7 @@ def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
         # `Box.Full(a)` arrives here as a DotCall, not an EnumConstructor.
         consume_each(checker, expr.args, ConsumingUse.ENUM_PAYLOAD)
     elif getattr(expr, "callee_fn_type", None) is not None:
-        # Keyed on Pass 2's `callee_fn_type` stamp, so an FFI / extension / builtin
+        # Keyed on the typecheck pass's `callee_fn_type` stamp, so an FFI / extension / builtin
         # method keeps the rule above.
         consume_indirect_args(checker, expr)
     else:

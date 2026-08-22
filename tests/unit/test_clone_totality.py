@@ -108,7 +108,7 @@ def test_a_generic_type_argument_has_a_clone(name, ty):
 # The auto-derived pair, which needs the analyzer to have run
 
 def test_user_struct_and_enum_carry_a_clone(analyze):
-    """Pass 1.8 registers clone from SEMANTICS, so the registry answer is import-order safe."""
+    """The derive pass registers clone from SEMANTICS, so the registry answer is import-order safe."""
     analyze("""
 struct Bag:
     i32[] items
@@ -125,8 +125,8 @@ fn main() i32:
 """)
     bag = StructType(name="Bag", fields=())
     holder = EnumType(name="Holder", variants=())
-    assert builtin_method_exists(bag, "clone"), "Pass 1.8 must auto-derive a struct clone"
-    assert builtin_method_exists(holder, "clone"), "Pass 1.8 must auto-derive an enum clone"
+    assert builtin_method_exists(bag, "clone"), "the derive pass must auto-derive a struct clone"
+    assert builtin_method_exists(holder, "clone"), "the derive pass must auto-derive an enum clone"
 
 
 def test_an_owning_user_struct_is_move_and_therefore_needs_its_clone(analyze):

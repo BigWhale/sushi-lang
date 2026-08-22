@@ -412,7 +412,7 @@ class TestRunner:
         category = get_test_category(test_file)
         metadata = parse_test_metadata(test_file)
 
-        # Phase 1: Compilation
+        # Step 1: compilation
         # Tests in COMPILATION_QUARANTINE expose known compiler ICEs; treat as
         # passing at the compilation phase so the suite stays green while the
         # bug awaits a fix.
@@ -435,7 +435,7 @@ class TestRunner:
             compilation_message=compilation_message
         )
 
-        # Phase 2: Runtime (if applicable and requested)
+        # Step 2: runtime (if applicable and requested)
         if (self.mode in ("runtime", "full") and
             compilation_success and
             test_name not in RUNTIME_QUARANTINE and

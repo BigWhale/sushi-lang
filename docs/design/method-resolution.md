@@ -53,7 +53,7 @@ Two rules follow, and both are load-bearing:
 1. **A checker must claim only what it can actually type.** First-match-wins makes an
    over-broad claim indistinguishable from a missing family.
 2. **A semantics pass must not read the builtin-method registry** except for the struct/enum
-   `hash`/`clone` pair, which Pass 1.8 registers *from semantics*. Everything else in that
+   `hash`/`clone` pair, which the derive pass registers *from semantics*. Everything else in that
    registry is backend-populated, so from semantics it answers differently depending on what
    else the process imported. `semantics/generics/builtin_methods.py` exists to give that
    question one deterministic answer.
@@ -69,7 +69,7 @@ receiver dispatch, family for family:
 - **stdio** (`stdin`/`stdout`/`stderr`) and **File**
 - **primitives** -- `to_str`, `hash`, and the float-only `to_bits`
 - **containers** -- `Result`, `Maybe`, `Own`, `List`, `HashMap`
-- **the compiler-derived pair** -- `hash()` and `clone()`, auto-derived in Pass 1.8 for every
+- **the compiler-derived pair** -- `hash()` and `clone()`, auto-derived in the derive pass for every
   struct and enum
 
 `tests/unit/test_builtin_method_seam.py` pins that list against `validate_method_call`'s in
@@ -152,7 +152,7 @@ The check (`semantic_analyzer.py:_check_extension_shadows_builtin`) walks `Exten
 asks the seam about each `(target type, method name)` pair. Its placement is constrained at
 both ends:
 
-- **after Pass 1.8**, which registers the struct/enum `hash`/`clone`;
+- **after the derive pass**, which registers the struct/enum `hash`/`clone`;
 - **after the generic-extension merge loop**, because a monomorphized `extend Box@(i32) hash()`
   only enters the extension table there. Running earlier is exactly why that shape went
   uncovered in the first cut.
@@ -200,12 +200,12 @@ allow it and pay for a formal specificity ordering.
 **The escape** is a perk implementation on the concrete target, which already outranks
 extension methods in the ladder above and already scopes correctly.
 
-**Where the rule lives.** The classification is decided ONCE, in Phase 0
+**Where the rule lives.** The classification is decided ONCE, in the collect pass
 (`semantics/generics/extension_targets.py:classify_extension_target`), because that is the
 pass whose struct and enum tables say which bare names are declared types -- `Box@(T)` and
 `Box@(Point)` are spelled identically and mean opposite things. The answer is carried on the
 declaration (`ExtendDef.target_shape`) and on its collected signature
-(`GenericExtensionMethod.target_key`), so Pass 1.5 and Pass 1.6 read it instead of deciding
+(`GenericExtensionMethod.target_key`), so the instantiate and monomorphize passes read it instead of deciding
 again from a different set of visible types. `instantiation_key` is the one authority for the
 mangled name a concrete target matches; the perk-impl table built its own and joined the
 arguments differently, so a two-argument concrete target registered under a name no receiver

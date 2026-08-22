@@ -1,7 +1,7 @@
 # Issue #212: because an extension method's return expression was never validated, a
 # generic call in that position was never rewritten to its monomorphized name, so the
 # backend looked up the unmangled `identity` and crashed (CE0000: KeyError). Validating
-# the return expression rewrites the call to identity__i32, which Pass 1.5 already
+# the return expression rewrites the call to identity__i32, which the instantiate pass already
 # collected here (the argument is a literal, so it needs no `self` binding).
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "42\n"

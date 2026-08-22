@@ -22,7 +22,7 @@ def _program(mode: str, param_type: str, call: str, setup: str = "") -> str:
 _HASHMAP = "use <collections/hashmap>\n\n"
 
 # One case per member of `MUTATING_METHODS`: (parameter type, the call, extra source).
-# The receiver type must genuinely have the method, or Pass 2 rejects the call before
+# The receiver type must genuinely have the method, or the typecheck pass rejects the call before
 # the borrow checker ever runs and the case would prove nothing.
 CASES = {
     "push":          ("i32[]", "r.push(9)", ""),

@@ -154,7 +154,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     perk_method = validator.perk_impl_table.get_method(receiver_type, call.method)
     if perk_method is not None:
         # Found a perk method - validate it
-        # A `poke self` / `peek self` perk method (#327): stamp the mode for Pass 3
+        # A `poke self` / `peek self` perk method (#327): stamp the mode for the borrow pass
         # and the backend, and reject a receiver with no address for the poke form --
         # the same rule as the extension arm below.
         perk_self_mode = getattr(perk_method, "self_mode", None)
@@ -241,7 +241,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             validate_primitive_method(call, receiver_type, validator.reporter)
             return
 
-    # A generic-target extension is resolved through the monomorphized copy Pass 1.6 put in
+    # A generic-target extension is resolved through the monomorphized copy that the monomorphize pass put in
     # the extension table under the concrete receiver type. There used to be a second lookup
     # here, by base name -- it repeated the lookup above verbatim, so it could only ever find
     # None again, and under #393 asking by base name is the wrong question anyway: a concrete
@@ -253,7 +253,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         return
 
     # A `poke self` / `peek self` method (#327) receives its receiver's ADDRESS. Stamp
-    # the mode on the call node -- Pass 3 treats a poke-self call as a WRITE to the
+    # the mode on the call node -- the borrow pass treats a poke-self call as a WRITE to the
     # receiver root (the CE2408/CE2412 gates), and the backend passes a pointer instead
     # of a value. Both read the stamp instead of re-resolving the method.
     self_mode = getattr(method, "self_mode", None)

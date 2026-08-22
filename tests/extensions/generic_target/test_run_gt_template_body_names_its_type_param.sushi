@@ -1,7 +1,7 @@
 # A template's BODY may name its type parameter now: the body is substituted per
 # instantiation instead of being shared verbatim, so `let List@(T)` becomes `let
 # List@(i32)` in one copy and `let List@(string)` in the other (#391). It used to reach
-# Pass 2 as written and report CE2001 unknown type 'T'.
+# the typecheck pass as written and report CE2001 unknown type 'T'.
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

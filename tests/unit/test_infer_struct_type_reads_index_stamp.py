@@ -1,7 +1,7 @@
-"""infer_struct_type's IndexAccess arm reads Pass 2's inferred_element_type stamp.
+"""infer_struct_type's IndexAccess arm reads the typecheck pass's inferred_element_type stamp.
 
-The G-RESOLVE follow-up to #348: the arm used to copy the Pass 2 element-type rule
-instead of reading the stamp Pass 2 already wrote, which is exactly the
+The G-RESOLVE follow-up to #348: the arm used to copy the typecheck pass's element-type rule
+instead of reading the stamp the typecheck pass already wrote, which is exactly the
 one-question-several-answer-sites shape #296/#269/#273 collect. The fake codegen
 below has no memory manager, so the structural re-derivation cannot run -- passing
 proves the stamp path answered first.

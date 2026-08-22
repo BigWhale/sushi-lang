@@ -243,7 +243,7 @@ def _unify_types_for_inference(
     arg_type: Type,
     type_param_map: Dict[str, Type]
 ) -> bool:
-    """Unify parameter type with argument type for type inference (Pass 2)."""
+    """Unify parameter type with argument type for type inference (the typecheck pass)."""
     from sushi_lang.semantics.generics.unify import unify_types
     return unify_types(param_type, arg_type, type_param_map)
 

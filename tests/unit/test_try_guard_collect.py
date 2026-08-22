@@ -1,7 +1,7 @@
-"""The `??` guard for extension and perk bodies is a Phase 0 gate (#398).
+"""The `??` guard for extension and perk bodies is a collect-pass gate (#398).
 
 The rule is structural: these bodies return a bare value (CE2091), so a `??`
-has nothing to propagate into. Phase 0 collection walks the DECLARATION, so
+has nothing to propagate into. The collect pass walks the DECLARATION, so
 the guard fires once per declaration, before monomorphization -- an
 uninstantiated template cannot slip through, and an instantiated one is not
 reported once per copy.
@@ -71,11 +71,11 @@ def _collect_codes(src: str) -> list[str]:
     return [d.code for d in reporter.items if d.kind == "error"]
 
 
-def test_phase0_rejects_try_in_extension_template():
+def test_collect_rejects_try_in_extension_template():
     assert _collect_codes(TEMPLATE_SRC).count("CE0131") == 1
 
 
-def test_phase0_rejects_try_in_perk_impl_once_per_occurrence():
+def test_collect_rejects_try_in_perk_impl_once_per_occurrence():
     assert _collect_codes(PERK_IMPL_SRC).count("CE0131") == 2
 
 

@@ -1,6 +1,6 @@
 # Guards Tier 4.6: a `match` whose scrutinee is a stdlib call.
 #
-# Pass 2 now types stdlib calls from the stdlib registry and stamps
+# The typecheck pass now types stdlib calls from the stdlib registry and stamps
 # resolved_scrutinee_type on the match. It used to hardcode a lookup of a one-arg
 # "Result@(i32)" enum, a name that is never registered (the canonical name is two-arg,
 # Result@(T, E)), so the lookup always missed and the backend re-derived the scrutinee

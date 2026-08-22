@@ -86,22 +86,24 @@ sushi/
 │   │   │   └── string_processing.py # String handling
 │   │   └── exceptions.py      # Custom parsing exceptions
 │   ├── passes/
-│   │   ├── collect/           # Phase 0: Collection passes
+│   │   ├── collect/           # the collect pass
 │   │   │   ├── constants.py   # Constant definitions
 │   │   │   ├── functions.py   # Function signatures
 │   │   │   ├── structs.py     # Struct definitions
 │   │   │   ├── enums.py       # Enum definitions
 │   │   │   ├── perks.py       # Perk definitions
 │   │   │   └── utils.py       # Collection utilities
-│   │   ├── scope.py           # Phase 1: Scope and variable analysis
-│   │   ├── ast_transform.py   # Phase 1.7: AST transformation
-│   │   ├── const_eval.py      # Constant evaluation
-│   │   ├── hash_registration.py # Phase 1.8: Hash function derivation
-│   │   ├── borrow/            # Phase 3: Borrow checking (state in __init__.py,
+│   │   ├── scope.py           # the scope pass
+│   │   ├── resolve.py         # the resolve pass
+│   │   ├── const_eval.py      # constant evaluation (a helper, NOT a pass)
+│   │   ├── derive.py          # the derive pass (hash + clone)
+│   │   ├── finite_types.py    # the finite-types pass
+│   │   ├── lift.py            # the lift pass (lambda lifting)
+│   │   ├── borrow/            # the borrow pass (state in __init__.py,
 │   │   │   │                  #   free-function siblings: statements, expressions,
 │   │   │   │                  #   borrows, bindings, calls, consume, reads, writes,
 │   │   │   │                  #   flow, diagnostics, types, destroy_effects)
-│   │   └── types/             # Phase 2: Modular type validation
+│   │   └── types/             # the typecheck pass, modular
 │   │       ├── utils.py       # Type utilities
 │   │       ├── inference.py   # Type inference
 │   │       ├── compatibility.py # Type compatibility
@@ -123,11 +125,11 @@ sushi/
 │       ├── types.py           # Generic type definitions
 │       ├── name_mangling.py   # Name mangling for monomorphization
 │       ├── constraints.py     # Perk constraints
-│       ├── instantiate/       # Phase 1.5: Instantiation collection
+│       ├── instantiate/       # the instantiate pass
 │       │   ├── types.py       # Type instantiations
 │       │   ├── functions.py   # Function instantiations
 │       │   └── expressions.py # Expression instantiations
-│       ├── monomorphize/      # Phase 1.6: Monomorphization
+│       ├── monomorphize/      # the monomorphize pass
 │       │   ├── transformer.py # Main transformer
 │       │   ├── types.py       # Type monomorphization
 │       │   └── functions.py   # Function monomorphization
@@ -292,9 +294,28 @@ sushi/
         └── linux/             # Linux (similar structure)
 ```
 
-## Compilation Phases
+## Semantic Passes
 
-### Phase 0: Headers and Constants
+Fifteen passes, in this order. The passes have NAMES, not numbers -- a number goes out of
+order the moment a pass is inserted between two others. `SemanticAnalyzer.check()` is the
+code authority; `semantic-passes.md` documents each pass in detail.
+
+```
+whole program, once:
+  collect -> externs -> libraries -> entrypoint -> instantiate -> monomorphize
+     -> resolve -> finite-types -> derive -> shadowing -> effects
+
+then per unit, in one loop:
+  scope -> typecheck -> lift -> borrow
+```
+
+Six of them have no section below: `externs` (FFI signature validation), `libraries`
+(library symbol registration), `entrypoint` (`main()`'s signature), `shadowing` (an
+extension may not shadow a built-in, CE2097), `effects` (the destroy-effect summary) and
+`lift` (each lambda becomes a top-level function plus an environment).
+`semantic-passes.md` covers all six.
+
+### `collect`: headers and constants
 
 **Files:** `semantics/passes/collect/*.py`
 
@@ -311,22 +332,7 @@ sushi/
 - Function signature registry
 - Generic type definitions
 
-### Phase 1: Scope and Variables
-
-**File:** `semantics/passes/scope.py`
-
-**Responsibilities:**
-- Variable declaration and usage tracking
-- Scope analysis
-- Move semantics validation
-- Borrow tracking initialization
-
-**Output:**
-- Variable scopes
-- Move analysis results
-- Borrow tracking data
-
-### Phase 1.5: Generic Instantiation Collection
+### `instantiate`: generic instantiation collection
 
 **Files:** `semantics/generics/instantiate/*.py`
 
@@ -342,7 +348,7 @@ let List@(i32) nums = List.new()  # Collect: List@(i32)
 nums.push(42)                     # Collect: List@(i32).push
 ```
 
-### Phase 1.6: Monomorphization
+### `monomorphize`: generic to concrete
 
 **Files:** `semantics/generics/monomorphize/*.py`
 
@@ -359,29 +365,31 @@ extend Box@(i32) unwrap() i32
 extend Box@(string) unwrap() string
 ```
 
-### Phase 1.7: AST Transformation
+### `resolve`: field and variant type resolution
 
-**File:** `semantics/passes/ast_transform.py`
+**File:** `semantics/passes/resolve.py`
 
 **Responsibilities:**
-- Resolve extension methods to function calls
-- Transform UFCS (Uniform Function Call Syntax)
-- Type inference for expressions
-- Simplify AST for backend
+- Resolve every struct field type to the interned type the tables hold
+- Resolve every enum variant's associated types the same way
 
 **Example:**
-```sushi
-arr.len()  # Method call
-    ↓
-array_len(arr)  # Function call
+```
+struct Rectangle:
+    Point top_left      # collected as UnknownType("Point")
+                        #        ↓
+                        # resolved to the interned StructType
 ```
 
-### Phase 1.8: Hash Function Derivation
+Type identity is nominal, so this pass is what makes the table entry the one authority
+(`docs/design/type-identity.md`).
 
-**File:** `semantics/passes/hash_registration.py`
+### `derive`: hash and clone auto-derivation
+
+**File:** `semantics/passes/derive.py`
 
 **Responsibilities:**
-- Auto-generate `.hash()` methods for all types
+- Auto-generate `.hash()` and `.clone()` for all types
 - Compose hash functions for structs
 - Validate hashability
 
@@ -391,7 +399,22 @@ array_len(arr)  # Function call
 - Enums (discriminant + variant data hashing)
 - Arrays (element-wise hashing)
 
-### Phase 2: Type Validation
+### `scope`: scope and variables
+
+**File:** `semantics/passes/scope.py`
+
+**Responsibilities:**
+- Variable declaration and usage tracking
+- Scope analysis
+- Move semantics validation
+- Borrow tracking initialization
+
+**Output:**
+- Variable scopes
+- Move analysis results
+- Borrow tracking data
+
+### `typecheck`: type validation
 
 **Files:** `semantics/passes/types/*.py`
 
@@ -414,7 +437,7 @@ array_len(arr)  # Function call
 - `types/perks.py` - Perk constraint checking
 - `types/field_matcher.py` - Struct field matching
 
-### Phase 3: Borrow Checking
+### `borrow`: borrow checking
 
 **File:** `semantics/passes/borrow/`
 

@@ -206,9 +206,9 @@ value:
 
 Packs reuse Sushi's generics pipeline — **compile-time monomorphization with static dispatch**:
 
-1. **Pass 1.5** collects each call site's ordered tuple of concrete trailing-argument types plus the
+1. **`instantiate`** collects each call site's ordered tuple of concrete trailing-argument types plus the
    arity.
-2. **Pass 1.6** monomorphizes one concrete function per `(arity, type-tuple)`, expanding the value
+2. **`monomorphize`** monomorphizes one concrete function per `(arity, type-tuple)`, expanding the value
    pack into N ordinary parameters and **unrolling** the `expand` body — each expansion typed to its
    concrete element. After this step there is no pack node left for later passes to see.
 3. The mangled name encodes the arity and ordered types (e.g. `show_all__i32_string.pack2`), so

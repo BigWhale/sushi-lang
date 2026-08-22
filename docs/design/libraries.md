@@ -14,7 +14,7 @@ bitcode — the consumer only needs to *declare* them and let the linker resolve
 call. Generic symbols (generic functions, generic structs/enums, variadic type-pack
 functions) cannot be pre-compiled, because monomorphization needs the consumer's
 concrete type arguments — so they travel as **re-parsable Sushi source text** and are
-instantiated by the ordinary Pass 1.5/1.6 machinery *at the consumer*, exactly as if
+instantiated by the ordinary `instantiate`/`monomorphize` machinery *at the consumer*, exactly as if
 the consumer had typed the generic's definition itself.
 
 That one distinction — concrete ships as machine code and links, generic ships as
@@ -144,7 +144,7 @@ a template is registered only if its name is not already present.
 
 Structs are registered before enums (an enum variant payload may reference a struct).
 Generic *function* registration happens before generic struct/enum registration, and
-all of it happens before Pass 1.5 (instantiation collection), so the consumer's own
+all of it happens before the instantiate pass (instantiation collection), so the consumer's own
 `Box@(i32)` usages are discovered and monomorphized in the normal pass.
 
 ### 4.3 Type-pack (`...Ts`) functions

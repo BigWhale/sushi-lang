@@ -6,9 +6,9 @@ applies to every instantiation of `Box`; the second is a CONSTRAINT and applies 
 `Box<Point>` and to nothing else, exactly as a perk implementation on the same target
 already did.
 
-The question is answered ONCE, in Phase 0, where the struct and enum tables say which names
+The question is answered ONCE, in the collect pass, where the struct and enum tables say which names
 are declared types. The answer is carried on the declaration (`ExtendDef.target_shape`) and
-on its collected signature (`GenericExtensionMethod`), so Pass 1.5 and Pass 1.6 read it
+on its collected signature (`GenericExtensionMethod`), so the instantiate and monomorphize passes read it
 rather than deciding again -- two decisions from two sets of visible types could disagree,
 and the disagreement would be silent.
 """
@@ -65,7 +65,7 @@ def classify_extension_target(
 
 
 def target_shape_of(ext) -> Optional[ExtensionTarget]:
-    """The shape Phase 0 stamped on a declaration, if it stamped one."""
+    """The shape the collect pass stamped on a declaration, if it stamped one."""
     return getattr(ext, "target_shape", None)
 
 

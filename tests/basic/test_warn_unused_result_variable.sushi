@@ -1,6 +1,6 @@
 # TEST_TYPE: compilation
 # EXPECT_ERROR_CODE: CW2001
-# Test for Phase 4.1 - Unused Result Detection
+# Test for unused-Result detection
 # This test should emit a warning when a Result@(T) variable is used in an
 # expression statement without being handled
 

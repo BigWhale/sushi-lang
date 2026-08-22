@@ -15,7 +15,7 @@ class MoveTracker:
 
     Two regimes (#414). A binding whose every move dominates its scope exit is
     tracked STATICALLY: `mark` records the slot and every free site skips it. A
-    binding Pass 3 stamped as CONDITIONALLY moved carries a runtime i1 drop
+    binding the borrow pass stamped as CONDITIONALLY moved carries a runtime i1 drop
     flag instead: `arm` allocates it in the entry block and stores true at the
     declaration (re-arming per loop iteration), `mark` stores false at the move
     site, and `emit_free_unless_moved` wraps the free in an `if (flag)`.
@@ -27,7 +27,7 @@ class MoveTracker:
         self._flags: Dict['ir.Instruction', 'ir.AllocaInstr'] = {}
 
     def arm_if_conditional(self, name: str, slot: 'ir.Instruction') -> None:
-        """Arm a drop flag iff Pass 3 stamped `name` as conditionally moved (#414)."""
+        """Arm a drop flag iff the borrow pass stamped `name` as conditionally moved (#414)."""
         if name in getattr(self.codegen, 'current_conditional_moves', ()):
             self.arm(slot)
 

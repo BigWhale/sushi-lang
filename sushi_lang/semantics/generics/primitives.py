@@ -18,7 +18,7 @@ _ALL_PRIMITIVES = frozenset({
 # The primitives whose clone() this module owns. `string` is absent, and the split from
 # the string method table STAYS: a string clone deep-copies a heap buffer while every
 # other primitive's clone is the identity, so one name would cover two mechanisms. A
-# STRING row here would also be unreachable, because Pass 2 consults the string table
+# STRING row here would also be unreachable, because the typecheck pass consults the string table
 # first. The rule is one SEAM, not one table -- `builtin_method_exists` ORs both families,
 # and tests/unit/test_clone_totality.py asks only through it.
 _CLONE_PRIMITIVES = _ALL_PRIMITIVES - {BuiltinType.STRING}

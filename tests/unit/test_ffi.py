@@ -391,7 +391,7 @@ def test_contains_foreign_ptr_walk():
         ),
     )
     assert contains_foreign_ptr(result_ptr)
-    # Pass 2-era representation: an unresolved Result<ptr, E> annotation.
+    # the typecheck pass-era representation: an unresolved Result<ptr, E> annotation.
     assert contains_foreign_ptr(
         GenericTypeRef(base_name="Result", type_args=(ForeignPtrType(), BuiltinType.I32))
     )

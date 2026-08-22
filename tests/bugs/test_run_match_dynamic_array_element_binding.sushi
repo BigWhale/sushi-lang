@@ -2,7 +2,7 @@
 # array used to silently drop the arm's pattern binding and crash with the
 # internal CE0055 ("unknown variable or constant"). The backend could not
 # re-derive the scrutinee's concrete enum type for an IndexAccess scrutinee.
-# The type checker now resolves it (Pass 2) and annotates Match.resolved_scrutinee_type.
+# The type checker now resolves it (the typecheck pass) and annotates Match.resolved_scrutinee_type.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "got 1\ngot 2\n"
 

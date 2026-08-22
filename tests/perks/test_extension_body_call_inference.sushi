@@ -3,7 +3,7 @@
 # Monomorphized extension bodies are validated by a *fresh* TypeValidator
 # (semantic_analyzer.py, "Validate monomorphized generic extension methods"), built
 # without the unit context the per-unit validators get. Since the backend no longer
-# re-infers a match scrutinee's type -- it reads resolved_scrutinee_type, which Pass 2
+# re-infers a match scrutinee's type -- it reads resolved_scrutinee_type, which the typecheck pass
 # stamps -- an extension body is the place that annotation is most likely to go missing.
 # A miss silently drops the pattern bindings.
 #

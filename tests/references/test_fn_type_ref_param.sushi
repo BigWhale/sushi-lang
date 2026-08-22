@@ -5,7 +5,7 @@
 #
 # Note the call spelling: a borrow is created at the USE site, so forwarding a reference
 # parameter into such a call is written `f(peek v)`, never bare `f(v)`. The bare form is
-# CE2092 -- Pass 2 unwraps a reference-typed name at every mention, so it reports
+# CE2092 -- the typecheck pass unwraps a reference-typed name at every mention, so it reports
 # "expected 'peek i32', got 'i32'" for a name that IS a `peek i32`.
 # EXPECT_STDOUT_EXACT: "43\n43\n"
 # EXPECT_RUNTIME_EXIT: 0

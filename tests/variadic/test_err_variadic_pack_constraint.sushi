@@ -1,6 +1,6 @@
 # A perk-constrained type-pack '...Ts: Display' requires every element type
 # bound to the pack to implement Display. Here 'string' does not implement
-# Display, so the call must fail Pass 2 with CE2090 (per-element constraint).
+# Display, so the call must fail the typecheck pass with CE2090 (per-element constraint).
 # EXPECT_ERROR_CODE: CE2090
 perk Display:
     fn display() string

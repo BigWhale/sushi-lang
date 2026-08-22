@@ -1,4 +1,4 @@
-# Every instantiation of a generic-target extension used to SHARE one body AST, and Pass 3
+# Every instantiation of a generic-target extension used to SHARE one body AST, and the borrow pass
 # checked that body once with an abstract `self` -- so an owning field handed out of it was
 # classified PLAIN and no ownership decision was stamped. `return self.value` at
 # `Box@(string)` compiled clean and the binary exited 133: a compile-clean DOUBLE FREE,

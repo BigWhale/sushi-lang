@@ -1,4 +1,4 @@
-"""Constant definition collection for Phase 0."""
+"""Constant definition collection."""
 
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -13,7 +13,7 @@ from sushi_lang.semantics.typesys import Type
 
 @dataclass
 class ConstSig:
-    """Phase 0 constant signature."""
+    """A collected constant signature."""
     name: str
     loc: Optional[Span] = None
     name_span: Optional[Span] = None
@@ -24,7 +24,7 @@ class ConstSig:
 
 @dataclass
 class ConstantTable:
-    """Registry of all constants collected in Phase 0."""
+    """Registry of all constants collected by the collect pass."""
     by_name: Dict[str, ConstSig] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
 

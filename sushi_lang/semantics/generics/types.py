@@ -82,7 +82,7 @@ class GenericEnumType:
                 else:
                     # Not a type parameter (could be concrete type or nested generic).
                     # Nested generics are handled by Monomorphizer._substitute_type()
-                    # during Pass 1.6, so we just pass this through unchanged.
+                    # during the monomorphize pass, so we just pass this through unchanged.
                     concrete_associated_types.append(assoc_type)
 
             concrete_variants.append(EnumVariantInfo(
@@ -172,7 +172,7 @@ def substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
     The PURE substitution: it rewrites a type and interns nothing, so a `Maybe@(T)` comes
     back as `Maybe@(i32)` rather than as the monomorphized `EnumType`. Its counterpart is
     `monomorphize.TypeSubstitutor.substitute_type`, which substitutes AND monomorphizes on
-    demand, and is what Pass 1.6 uses.
+    demand, and is what the monomorphize pass uses.
 
     An unbound name passes through, rather than raising: a signature may legitimately name
     a type parameter this substitution does not bind.

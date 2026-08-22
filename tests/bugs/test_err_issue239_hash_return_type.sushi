@@ -1,4 +1,4 @@
-# Issue #239: `.hash()` is auto-derived for every struct in Pass 1.8 and deposited in the
+# Issue #239: `.hash()` is auto-derived for every struct in the derive pass and deposited in the
 # BuiltinMethodRegistry, but METHOD_TYPE_REGISTRY had no checker for a plain StructType --
 # so visit_methodcall inferred None for `p.hash()`, validate_assignment_compatibility took
 # its `value_type is None: return` early exit, and the bad annotation sailed into codegen.

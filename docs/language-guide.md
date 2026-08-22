@@ -909,7 +909,7 @@ fn read_only(peek LargeData data) i32:
     return Result.Ok(data.values[0])
 ```
 
-The borrow checker runs at compile time (Pass 3 in the semantic analysis pipeline), so there's no runtime cost to these safety guarantees.
+The borrow checker runs at compile time (the `borrow` pass of the semantic analysis pipeline), so there's no runtime cost to these safety guarantees.
 
 ### RAII (Automatic Cleanup)
 

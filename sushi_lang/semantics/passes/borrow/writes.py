@@ -56,7 +56,7 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
     ),
     ReadOnlyReceiver(
         # A reference parameter carries its full `ReferenceType` as `var_type`, so the
-        # question is answerable here and nowhere else: Pass 2 unwraps a reference at
+        # question is answerable here and nowhere else: the typecheck pass unwraps a reference at
         # every mention, so no inferred type downstream can tell a borrow from a value.
         code=er.ERR.CE2408,
         matches=lambda state: (isinstance(state.var_type, ReferenceType)
@@ -115,7 +115,7 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
 def maybe_reject_mutation(checker: 'BorrowChecker', expr: Expr) -> None:
     """Reject `c.push(x)` while a `let`-borrow binding reads out of `c` (#242)."""
     # A call to a `poke self` method (#327) IS a write to the receiver root --
-    # Pass 2 stamps the resolution on the node, so this pass never re-resolves.
+    # the typecheck pass stamps the resolution on the node, so this pass never re-resolves.
     is_poke_self_call = getattr(expr, "callee_self_mode", None) == "poke"
     if getattr(expr, "method", None) not in MUTATING_METHODS and not is_poke_self_call:
         return
@@ -179,7 +179,7 @@ def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[str],
             binding.invalidated_at = span
             binding.invalidated_by = (owner, what)
             binding.bound_at_span = binding.bound_at_span or bound_at
-    # Invalidate ONCE, but NOT during a suppressed (loop-discovery) pass: clearing in
-    # pass 1 leaves pass 2 with no live borrows to invalidate.
+    # Invalidate ONCE, but NOT during a suppressed (loop-discovery) round: clearing in
+    # round 1 leaves round 2 with no live borrows to invalidate.
     if not checker.err.suppressed:
         state.binding_borrows = []

@@ -1,5 +1,5 @@
 # E2 (#71): repeated same-enum-type pack args. `Color.Red()`/`Color.Green()`
-# parse to DotCalls (pre-lowering enum constructors); Pass 1.5 must infer their
+# parse to DotCalls (pre-lowering enum constructors); the instantiate pass must infer their
 # enum type so the pack instantiation ('show_all', (Color, Color)) registers.
 # EXPECT_STDOUT_EXACT: "red\ngreen\n"
 perk Display:

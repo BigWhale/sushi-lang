@@ -57,8 +57,8 @@ def is_dynamic_array_pointer(codegen: 'LLVMCodegen', llvm_type: ir.Type) -> bool
 def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
     """Infer the semantic type of an expression at codegen time.
 
-    Pass 2's stamp is the first answer, because the backend must not re-derive a type the
-    checker already decided. Everything below is reconstruction for the shapes Pass 2
+    The typecheck pass's stamp is the first answer, because the backend must not re-derive a type the
+    checker already decided. Everything below is reconstruction for the shapes the typecheck pass
     stamps nothing on. A shape this function cannot answer for is not merely unformatted:
     the callers read signedness off it, so `None` renders an unsigned value as SIGNED --
     `u8 255` printed `-1` through an index, a field or a `get()` (#379).
@@ -93,7 +93,7 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
         return expr.target_type
 
     elif isinstance(expr, IntLit):
-        # The context type Pass 2 stamped, else the default. A literal in an `i64[]`
+        # The context type the typecheck pass stamped, else the default. A literal in an `i64[]`
         # element position is i64, and answering i32 for it would report the array's
         # element type wrongly to every caller that asks.
         return expr.resolved_type or BuiltinType.I32
@@ -117,7 +117,7 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
         if expr.op in ["&", "|", "^", "<<", ">>"]:
             return infer_expr_semantic_type(codegen, expr.left)
 
-        # Arithmetic operators: strict same-type rule (mirrors Pass 2) -
+        # Arithmetic operators: strict same-type rule (mirrors the typecheck pass) -
         # the result is the common operand type; trust the known side when
         # only one can be reconstructed here.
         elif expr.op in ["+", "-", "*", "/", "%"]:

@@ -81,7 +81,7 @@ def emit_fixed_array_get_maybe(
     element_value = codegen.builder.load(element_ptr, name="element")
 
     # `.get()` READS. It does not detach (#242): the array keeps the element and still
-    # frees it, so the `Maybe.Some(...)` carries a BORROW. Pass 3 classifies it BORROWED,
+    # frees it, so the `Maybe.Some(...)` carries a BORROW. The borrow pass classifies it BORROWED,
     # a `let` of it binds without owning, and a position that takes ownership rejects it
     # (CE2411). `.pop()` is the one that still moves, because it removes the element.
 
@@ -150,7 +150,7 @@ def emit_dynamic_array_get_maybe(
     element_value = codegen.builder.load(element_ptr, name="element")
 
     # `.get()` READS. It does not detach (#242): the array keeps the element and still
-    # frees it, so the `Maybe.Some(...)` carries a BORROW. Pass 3 classifies it BORROWED,
+    # frees it, so the `Maybe.Some(...)` carries a BORROW. The borrow pass classifies it BORROWED,
     # a `let` of it binds without owning, and a position that takes ownership rejects it
     # (CE2411). `.pop()` is the one that still moves, because it removes the element.
 

@@ -1,4 +1,4 @@
-"""The type algebra the borrow checker needs, answered from Pass 0's tables alone."""
+"""The type algebra the borrow checker needs, answered from the collect pass's tables alone."""
 
 from __future__ import annotations
 from typing import Optional
@@ -43,7 +43,7 @@ class TypeQueries:
     """Resolves and classifies types for the checker. Reads `tables`, nothing else."""
 
     def __init__(self, tables=None) -> None:
-        """Hold Pass 0's tables -- the sole authority for a named type's contents."""
+        """Hold the collect pass's tables -- the sole authority for a named type's contents."""
         self.tables = tables
 
     def resolve_named(self, ty: Optional[Type]):

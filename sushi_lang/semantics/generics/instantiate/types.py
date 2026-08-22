@@ -111,7 +111,7 @@ class TypeInferrer:
         return None
 
     def unify_types(self, param_type: "Type", arg_type: "Type", type_param_map: dict[str, "Type"]) -> bool:
-        """Unify parameter type with argument type (Pass 1.5 instantiation collection)."""
+        """Unify parameter type with argument type (the instantiate pass)."""
         from sushi_lang.semantics.generics.unify import unify_types
         return unify_types(param_type, arg_type, type_param_map)
 

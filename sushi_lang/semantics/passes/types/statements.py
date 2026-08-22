@@ -76,7 +76,7 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
     if stmt.value:
         validate_assignment_compatibility(validator, stmt.ty, stmt.value, stmt.type_span, stmt.value.loc)
 
-    # Phase 4.2: Validate Result<T> handling
+    # Validate Result@(T) handling
     # If RHS is a function call that returns Result<T>, LHS must also be Result<T>
     # (unless RHS is already .realise() or other handling method)
     if stmt.value:
@@ -311,7 +311,7 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
     previous = validator.variable_types.get(stmt.item_name, _MISSING)
     if stmt.item_borrow is not None:
         # The binding's registered type is the REFERENCE, so every consumer that asks
-        # "is this name a borrow?" (Pass 3 rules, backend deref machinery) gets the
+        # "is this name a borrow?" (the borrow pass's rules, backend deref machinery) gets the
         # truthful answer; expression inference auto-derefs a reference-typed name.
         from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
         mode = BorrowMode.POKE if stmt.item_borrow == "poke" else BorrowMode.PEEK

@@ -1,4 +1,4 @@
-"""P1-T1 parse spike: grammar for variadic-generic type packs + ``expand(...)``."""
+"""Grammar for variadic-generic type packs + ``expand(...)``."""
 from __future__ import annotations
 
 import pytest

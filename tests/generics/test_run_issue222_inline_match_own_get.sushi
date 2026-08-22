@@ -1,5 +1,5 @@
 # Regression for #222: an inline `match Own@(GenericEnum).get()` failed with CE0121 because
-# Pass 2 had no return-type inferrer for Own methods, so infer_expression_type(t.get())
+# the typecheck pass had no return-type inferrer for Own methods, so infer_expression_type(t.get())
 # returned None and the match scrutinee's concrete generic-enum type was never resolved
 # (the backend then could not extract the pattern bindings). An OwnMethodInferrer now
 # infers Own@(T).get() -> T, so the scrutinee resolves like the typed-local workaround did.

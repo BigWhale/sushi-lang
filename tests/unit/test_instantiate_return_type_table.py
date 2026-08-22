@@ -1,4 +1,4 @@
-"""Pass 1.5's chained-call inference reads the owning family's return-type table.
+"""The instantiate pass's chained-call inference reads the owning family's return-type table.
 
 Issue #269: `TypeInferrer.get_builtin_method_return_type` was a third, independent
 return-type table -- it knew some string methods and Maybe, and nothing about

@@ -18,8 +18,8 @@ from sushi_lang.semantics.generics.type_display import display_type
 # Named StructTypes that own heap through their own registries/method paths; a top-level
 # .clone() on these must fall through, not route through the auto-derived struct clone.
 # Also the one authority on "is this named struct a container?" for method-type inference
-# (passes/types/method_registry.py) -- Pass 1.8's hash registration has no such exclusion,
-# so a List<i32> monomorph does carry a registered hash that Pass 2 nonetheless rejects.
+# (passes/types/method_registry.py) -- the derive pass's hash registration has no such exclusion,
+# so a List<i32> monomorph does carry a registered hash that the typecheck pass nonetheless rejects.
 CONTAINER_PREFIXES = ("Own<", "List<", "HashMap<")
 
 

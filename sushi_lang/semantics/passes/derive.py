@@ -1,4 +1,4 @@
-"""Pass 1.8: Hash Registration Pass"""
+"""The derive pass: auto-derived hash() and clone() for every struct and enum."""
 
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.generics.hashing import can_struct_be_hashed, register_struct_hash_method
@@ -60,7 +60,7 @@ def topological_sort_structs(struct_table: StructTable) -> List[str]:
             if in_degree[dependent] == 0:
                 queue.append(dependent)
 
-    # Unreachable by construction: Pass 1.75 (semantics/passes/infinite_types.py)
+    # Unreachable by construction: the finite-types pass (semantics/passes/finite_types.py)
     # reports any by-value containment cycle as CE2095 and stops the analysis before
     # this pass runs. A cycle here is a gap in that check, so it fails loud as a
     # registered internal diagnostic rather than the bare ValueError it used to be
@@ -98,7 +98,7 @@ def topological_sort_enums(enum_table: EnumTable, reporter: Reporter) -> List[st
     for enum_name, enum_type in enum_table.by_name.items():
         # Check each variant's associated types for enum dependencies
         # Note: We only track enum dependencies, not struct dependencies, because
-        # struct hashes are already registered in Pass 1.8 before enum hashes
+        # this pass registers struct hashes before enum hashes
         for variant in enum_type.variants:
             for assoc_type in variant.associated_types:
                 if isinstance(assoc_type, EnumType):
@@ -237,4 +237,21 @@ def register_all_array_hashes(struct_table: StructTable, enum_table: EnumTable) 
             registered_count += 1
         else:
             skipped_count += 1
+
+
+def register_all_clones(struct_table: StructTable, enum_table: EnumTable) -> None:
+    """Auto-derive clone() for every struct and enum (#134).
+
+    No ordering constraint -- the clone emitter resolves nested and recursive types at
+    emission time -- so a flat walk over both tables is enough.
+    """
+    from sushi_lang.semantics.generics.cloning import (
+        register_struct_clone_method, register_enum_clone_method
+    )
+
+    for struct_type in struct_table.by_name.values():
+        register_struct_clone_method(struct_type)
+
+    for enum_type in enum_table.by_name.values():
+        register_enum_clone_method(enum_type)
 

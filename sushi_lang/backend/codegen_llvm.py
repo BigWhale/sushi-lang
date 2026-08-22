@@ -30,7 +30,7 @@ from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
 # Registers the hash() emitter factories that semantics/generics/hashing.py
-# resolves when it emits an auto-derived hash(). Pass 1.8 registers the method
+# resolves when it emits an auto-derived hash(). The derive pass registers the method
 # itself without knowing anything about LLVM.
 import sushi_lang.backend.types  # noqa: F401
 
@@ -573,7 +573,7 @@ class LLVMCodegen:
             for const in unit.ast.constants:
                 self._emit_global_constant(const)
 
-        # Pass 1: Declare function prototypes
+        # First round: declare function prototypes
         # For the target unit: declare ALL functions (public + private, they'll get bodies)
         # For other units: only declare PUBLIC functions (private ones can't be cross-referenced)
         for unit in all_units:
@@ -980,7 +980,7 @@ class LLVMCodegen:
         if isinstance(expr, StringLit):
             return None
 
-        # A silent reporter: Pass 2 has already reported anything wrong with this.
+        # A silent reporter: the typecheck pass has already reported anything wrong with this.
         silent_reporter = Reporter()
         evaluator = ConstantEvaluator(silent_reporter, self.const_table, self.ast_constants)
         const_value = evaluator.evaluate(expr, expected_type, None)
