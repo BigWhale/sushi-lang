@@ -24,7 +24,7 @@ run() {
 # Ratcheted mypy package list -- keep in sync with test.yml.
 MYPY_PKGS=(sushi_lang/internals sushi_lang/compiler sushi_lang/packager sushi_lang/sushi_stdlib)
 
-run "ruff"   uv run ruff check sushi_lang tests .github/scripts
+run "ruff"   uv run ruff check sushi_lang tests .github/scripts docs/hooks
 run "mypy"   uv run mypy "${MYPY_PKGS[@]}"
 # Force the local tree onto sys.path so the checkout being pushed is what gets
 # tested (matters when this repo is checked out as a git worktree).
