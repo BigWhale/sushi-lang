@@ -47,7 +47,7 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          uv run ruff check sushi_lang tests .github/scripts docs/hooks
+          uv run ruff check sushi_lang tests .github/scripts docs/hooks docs/sushi-pygments
 
       # Tier 4.1 layering gate (#276): semantics must never import backend.
       # The documented grep, run for real. tests/unit/test_layering_gate.py

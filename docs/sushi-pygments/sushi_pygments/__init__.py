@@ -1,6 +1,13 @@
-"""A Pygments lexer for the Sushi programming language (targets Sushi 0.11.0 syntax)."""
+"""A Pygments lexer for the Sushi programming language.
 
-from pygments.lexer import RegexLexer, bygroups, words
+The lexer is not on the compiler's path, so the language can move under it in
+silence -- and did, twice. `tests/unit/test_pygments_lexer.py` is the gate: the
+grammar's keywords must all be known here, every numeric shape must lex whole,
+and no character in the corpus may reach the catch-all rule. The numeric rules
+below mirror the grammar terminals deliberately.
+"""
+
+from pygments.lexer import RegexLexer, bygroups, include, words
 from pygments.token import (
     Comment,
     Keyword,
@@ -21,6 +28,9 @@ _KEYWORDS = (
     "public", "unsafe", "external", "because", "break", "continue", "as", "new",
     "peek", "poke", "nom",
 )
+
+# The match wildcard and the discard binding. A bare `_` only -- `_foo` is a name.
+_WILDCARD = ("_",)
 
 # Word-form operators.
 _WORD_OPERATORS = ("and", "or", "xor", "not")
@@ -70,15 +80,22 @@ class SushiLexer(RegexLexer):
             (r"(fn)(\s+)([a-zA-Z_]\w*)",
              bygroups(Keyword, Text, Name.Function)),
 
-            # Numeric literals (radix-prefixed first, then float, then int).
-            (r"0[xX][0-9a-fA-F][0-9a-fA-F_]*", Number.Hex),
-            (r"0[bB][01][01_]*", Number.Bin),
-            (r"0[oO][0-7][0-7_]*", Number.Oct),
-            (r"\d[\d_]*\.\d[\d_]*([eE][+-]?\d+)?", Number.Float),
+            # Numeric literals, mirroring the grammar terminals (radix-prefixed
+            # first, then float, then int). Like the grammar these match a
+            # PERMISSIVE superset: one underscore between two digits is the rule,
+            # and the compiler checks placement in its own seam (CE6006). A
+            # highlighter that split `1__0` would only hide the error.
+            # The float has two shapes -- with a point, and exponent-only (`1e10`).
+            (r"0[xX][0-9a-fA-F_]+", Number.Hex),
+            (r"0[bB][01_]+", Number.Bin),
+            (r"0[oO][0-7_]+", Number.Oct),
+            (r"\d[\d_]*\.[\d_]+([eE][+-]?[\d_]+)?|\d[\d_]*[eE][+-]?[\d_]+",
+             Number.Float),
             (r"\d[\d_]*", Number.Integer),
 
             # Identifiers by category.
             (words(_KEYWORDS, suffix=r"\b"), Keyword),
+            (words(_WILDCARD, suffix=r"\b"), Keyword),
             (words(_WORD_OPERATORS, suffix=r"\b"), Operator.Word),
             (words(_KEYWORD_CONSTANTS, suffix=r"\b"), Keyword.Constant),
             (words(_TYPES, suffix=r"\b"), Keyword.Type),
@@ -103,7 +120,9 @@ class SushiLexer(RegexLexer):
             (r"[A-Z]\w*", Name.Class),
             (r"[a-zA-Z_]\w*", Name),
 
-            (r"[()\[\]{},:.]", Punctuation),
+            # `@` opens a type-argument list (`List@(i32)`), the 0.11.0 generic
+            # form. It delimits, like the parenthesis it always precedes.
+            (r"[()\[\]{},:.@]", Punctuation),
             (r".", Text),
         ],
 
@@ -116,16 +135,12 @@ class SushiLexer(RegexLexer):
             (r".", String.Double),
         ],
 
-        # Interpolated expression inside a double-quoted string.
+        # Interpolated expression inside a double-quoted string. `{...}` holds an
+        # ordinary expression, so it is lexed as one: the state used to carry a
+        # second, smaller expression lexer that knew neither `[`, `??` nor `==`.
         "interp": [
             (r"\}", String.Interpol, "#pop"),
-            (r"'[^']*'", String.Single),
-            (r"\d[\d_]*", Number),
-            (r"[a-zA-Z_]\w*", Name),
-            (r"[.,()]", Punctuation),
-            (r"[+\-*/%]", Operator),
-            (r"\s+", Text),
-            (r".", Text),
+            include("root"),
         ],
 
         # Single-quoted strings are literal (no interpolation).
