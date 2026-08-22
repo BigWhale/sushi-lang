@@ -92,12 +92,22 @@ def test_commit_is_none_outside_a_checkout(tmp_path):
     assert vf.read_commit(tmp_path) is None
 
 
-def test_commit_is_the_short_head_in_a_checkout():
-    head = subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD"],
-        cwd=PROJECT_ROOT, capture_output=True, text=True, check=True,
-    ).stdout.strip()
-    assert vf.read_commit(PROJECT_ROOT) == head
+def test_commit_is_git_answer_or_nothing():
+    """The stamp is git's answer, or nothing at all. It never invents a commit.
+
+    A CI job that runs in a container checks the repository out as another user, and
+    git refuses to read it. The hook must report nothing there, not crash and not guess.
+    """
+    probe = subprocess.run(
+        ["git", "-c", "safe.directory=*", "-C", str(PROJECT_ROOT),
+         "rev-parse", "--short", "HEAD"],
+        capture_output=True, text=True,
+    )
+    commit = vf.read_commit(PROJECT_ROOT)
+    if probe.returncode == 0:
+        assert commit == probe.stdout.strip()
+    else:
+        assert commit is None
 
 
 def test_on_config_stamps_the_copyright():

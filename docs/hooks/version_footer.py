@@ -43,10 +43,16 @@ def read_version(repo_root: Path) -> str:
 
 
 def read_commit(repo_root: Path) -> str | None:
-    """Read the short commit of HEAD. Returns None when there is no checkout."""
+    """Read the short commit of HEAD. Returns None when git cannot answer.
+
+    `safe.directory` is set because a CI job that runs in a container checks the
+    repository out as another user, and git then refuses to read it. The
+    repository is already trusted here: this file runs from it.
+    """
     try:
         result = subprocess.run(
-            ["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"],
+            ["git", "-c", "safe.directory=*", "-C", str(repo_root),
+             "rev-parse", "--short", "HEAD"],
             capture_output=True, text=True, check=True,
         )
     except (OSError, subprocess.CalledProcessError):
