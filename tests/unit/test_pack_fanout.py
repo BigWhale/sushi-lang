@@ -1,4 +1,4 @@
-"""P0-T3: pack value-parameter fan-out in the monomorphizer."""
+"""Pack value-parameter fan-out in the monomorphizer."""
 
 from sushi_lang.semantics.generics.types import TypeParameter, TypePack
 from sushi_lang.semantics.generics.monomorphize.transformer import TypeSubstitutor

@@ -1,6 +1,6 @@
 # An extension method returns a bare value (CE2091), so it has no error channel.
 # A `??` in its body has nothing to propagate into. The rejection is structural
-# and gets its own code, emitted from Phase 0 (#398). It used to be CE2508 by
+# and gets its own code, emitted from the collect pass (#398). It used to be CE2508 by
 # accident of `current_function is None`, which told the user to change the
 # return type -- and no return spelling can satisfy that.
 # TEST_TYPE: error

@@ -1,4 +1,4 @@
-"""P0-T2: pack-aware generic name mangling."""
+"""Pack-aware generic name mangling."""
 import pytest
 
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name

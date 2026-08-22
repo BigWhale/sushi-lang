@@ -78,7 +78,7 @@ def consume(codegen: 'LLVMCodegen', source, value: ir.Value,
     if decision is Ownership.ADOPT:
         return value
 
-    # REJECT is CE2411, which Pass 3 reports before codegen ever runs. Reaching it here
+    # REJECT is CE2411, which the borrow pass reports before codegen ever runs. Reaching it here
     # means the borrow checker classified the same source differently from this call --
     # impossible while both go through `classify`, so it is a real internal error.
     raise_internal_error("CE0129", use=use.value, node=type(source).__name__)
@@ -101,7 +101,7 @@ def resolver_for(codegen: 'LLVMCodegen'):
 
 
 def _provenance_of(source, use: ConsumingUse) -> Provenance:
-    """The `Provenance` Pass 3 stamped on `source`, or CE0129 if there is none."""
+    """The `Provenance` the borrow pass stamped on `source`, or CE0129 if there is none."""
     provenance = getattr(source, "ownership_provenance", None)
     if provenance is None:
         raise_internal_error("CE0129", use=use.value, node=type(source).__name__)

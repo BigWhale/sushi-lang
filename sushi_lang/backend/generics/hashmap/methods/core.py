@@ -152,7 +152,7 @@ def emit_hashmap_get(
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
     # `.get()` READS. It does not detach (#242): the entry stays OCCUPIED and `map.free()`
-    # still destroys it, so the returned `Maybe.Some(V)` carries a BORROW. Pass 3
+    # still destroys it, so the returned `Maybe.Some(V)` carries a BORROW. The borrow pass
     # classifies it BORROWED, a `let` of it binds without owning, and a position that
     # takes ownership rejects it (CE2411) with `.clone()` as the escape. The deep copy
     # that used to happen here was the compiler inserting one the user did not ask for.

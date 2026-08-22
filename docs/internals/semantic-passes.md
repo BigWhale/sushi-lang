@@ -6,25 +6,42 @@ Detailed documentation of Sushi's multi-pass semantic analysis pipeline.
 
 ## Pass Overview
 
-```
-Phase 0: Constants, Function Headers, Generic Types
-    ↓
-Phase 1: Scope and Variable Analysis
-    ↓
-Phase 1.5: Generic Instantiation Collection
-    ↓
-Phase 1.6: Monomorphization (Generic → Concrete)
-    ↓
-Phase 1.7: AST Transformation, Type Resolution
-    ↓
-Phase 1.8: Hash Function Auto-Derivation
-    ↓
-Phase 2: Type Validation
-    ↓
-Phase 3: Borrow Checking
-```
+The passes have NAMES, not numbers. A number goes out of order the moment a pass is
+inserted between two others, which is what the old numbered scheme did to itself.
+`SemanticAnalyzer.check()` (`semantics/semantic_analyzer.py`) is the code authority on the
+order; this list mirrors it.
 
-## Phase 0: Headers and Constants
+| Pass | What it does | Where |
+|---|---|---|
+| `collect` | constants, function headers, generic types, externals | `semantics/passes/collect/` |
+| `externs` | extern signatures (CE5003), `CW5001`, the `ptr` unit gate (CE5009) | `semantics/passes/types/externals.py` |
+| `libraries` | register every symbol a `.slib` exports | `semantics/semantic_analyzer.py` |
+| `entrypoint` | `main()`'s signature and its `string[] args` | `semantics/semantic_analyzer.py` |
+| `instantiate` | collect every generic instantiation the program asks for | `semantics/generics/instantiate/` |
+| `monomorphize` | generic definitions become concrete instances | `semantics/generics/monomorphize/` |
+| `resolve` | struct field and enum variant types become concrete | `semantics/passes/resolve.py` |
+| `finite-types` | reject a type that contains itself by value (CE2095) | `semantics/passes/finite_types.py` |
+| `derive` | auto-derive `hash()` and `clone()` | `semantics/passes/derive.py` |
+| `shadowing` | reject an extension method that collides with a built-in (CE2097) | `semantics/semantic_analyzer.py` |
+| `effects` | which functions destroy a `poke` parameter, transitively | `semantics/passes/borrow/destroy_effects.py` |
+| `scope` | scope and variable analysis | `semantics/passes/scope.py` |
+| `typecheck` | type validation and inference | `semantics/passes/types/` |
+| `lift` | each lambda becomes a top-level function plus an environment | `semantics/passes/lift.py` |
+| `borrow` | borrow checking | `semantics/passes/borrow/` |
+
+The last four run per unit, in one loop, so the whole-program passes above them see every
+unit before any function body is walked.
+
+`semantics/passes/const_eval.py` is **not** a pass. The `typecheck` pass and the backend
+both call it as a helper.
+
+### The word "phase"
+
+"Phase" names the three sub-steps of the `typecheck` pass per statement — resolution →
+propagation → validation. It never names a pass. Where you meet `#300 phase 2` or
+"Phase 9" in the tree, those are work phases of an issue or of a past project, not passes.
+
+## The `collect` pass: headers and constants
 
 **Files:** `semantics/passes/collect/*.py`
 
@@ -74,7 +91,251 @@ The C-ABI allowlist check (`CE5003`) and the `CW5001` four-guarantee warning liv
 in `semantics/passes/types/externals.py::validate_external_signatures`, run right
 after collection.
 
-## Phase 1: Scope and Variable Analysis
+## The `externs` pass: FFI signature validation
+
+**File:** `semantics/passes/types/externals.py`
+
+Runs over every unit right after `collect`, so no later pass ever meets an extern the
+C ABI cannot carry.
+
+- `validate_external_signatures()` — the C-ABI allowlist (`CE5003`) and the `CW5001`
+  four-guarantee warning. A variadic libc extern must be declared `var_arg`; a fixed
+  declaration reads garbage on Apple arm64.
+- `validate_ptr_unit_gate()` — `ptr` is opaque and quarantined to a unit that declares
+  the extern block it came from (`CE5009`).
+
+See `docs/ffi.md`.
+
+## The `libraries` pass: library symbol registration
+
+**File:** `semantics/semantic_analyzer.py` (`_register_library_*`)
+
+Every symbol a linked `.slib` exports enters the same tables the consumer's own `collect`
+filled: structs, enums, functions, export-closure private helpers and constants, perk
+implementations, and generic templates.
+
+Placement is load-bearing at both ends. Perk DEFINITIONS are seeded BEFORE the `collect`
+loop, because perk-impl collection validates each impl against the visible definitions
+(`CE4003`). Perk IMPLEMENTATIONS register here, after the consumer's own (local wins) and
+before `instantiate`, so the constraint validator sees them. Generic structs register
+before generic enums, because an enum payload may name a struct.
+
+A clash between a library's export-closure helper and a local name is `CE5007`:
+local-wins would silently change what the library's monomorphized bodies call. See
+`docs/design/libraries.md`.
+
+## The `entrypoint` pass: `main()`'s signature
+
+**File:** `semantics/semantic_analyzer.py` (`_check_main_function_args_multi_file`)
+
+`main` takes no parameters or exactly one `string[] args`. The `args` array is a BORROWED
+view of argv, so moving it is `CE2410`.
+
+## The `instantiate` pass: generic instantiation collection
+
+**Files:** `semantics/generics/instantiate/*.py`
+
+### Purpose
+
+Detect which generic instantiations are needed.
+
+### How It Works
+
+1. Traverse AST looking for generic types
+2. When `List@(i32)` appears, record it
+3. When `.push()` is called on `List@(i32)`, record `List@(i32).push`
+4. Build complete set of required instantiations
+
+### Example
+
+```sushi
+let List@(i32) nums = List.new()  # Collect: List@(i32), List@(i32).new
+nums.push(42)                     # Collect: List@(i32).push
+
+let List@(string) names = List.new()  # Collect: List@(string), List@(string).new
+names.push("Alice")                   # Collect: List@(string).push
+```
+
+**Collected instantiations:**
+- `List@(i32)`
+- `List@(i32).new()`
+- `List@(i32).push()`
+- `List@(string)`
+- `List@(string).new()`
+- `List@(string).push()`
+
+## The `monomorphize` pass: generic to concrete
+
+**Files:** `semantics/generics/monomorphize/*.py`
+
+### Purpose
+
+Generate concrete types from generic definitions.
+
+### Process
+
+1. For each collected instantiation (e.g., `List@(i32)`)
+2. Substitute type parameters (`T` → `i32`)
+3. Create specialized struct/function
+4. Add to AST as concrete definition
+
+### Example
+
+**Generic definition:**
+```sushi
+struct Pair@(T, U):
+    T first
+    U second
+
+extend Pair@(T, U) swap@(T, U)() Pair@(U, T):
+    return Result.Ok(Pair(first: self.second, second: self.first))
+```
+
+**After monomorphization for `Pair@(i32, string)`:**
+```sushi
+struct Pair__i32__string:
+    i32 first
+    string second
+
+extend Pair__i32__string swap() Pair__string__i32:
+    return Result.Ok(Pair__string__i32(first: self.second, second: self.first))
+```
+
+### Name Mangling
+
+- `Pair@(i32, string)` → `Pair__i32__string`
+- `List@(T)` → `List__i32`, `List__string`
+- Nested: `Maybe@(Maybe@(i32))` → `Maybe__Maybe__i32`
+
+## The `resolve` pass: field and variant type resolution
+
+**File:** `semantics/passes/resolve.py`
+
+### Purpose
+
+Every named type a declaration mentions becomes the one interned type object for that
+name. The pass runs AFTER `monomorphize`, so every struct and enum a generic produced is
+already in the tables.
+
+### What it resolves
+
+1. **Struct fields** — `resolve_struct_field_types()` walks every entry of the struct
+   table and replaces each `UnknownType("Point")` field with the `StructType` (or
+   `EnumType`) the tables hold under that name.
+2. **Enum variants** — `resolve_enum_variant_types()` does the same for every variant's
+   associated types.
+
+```sushi
+struct Point:
+    i32 x
+    i32 y
+
+struct Rectangle:
+    Point top_left      # collected as UnknownType("Point")
+    Point bottom_right  # resolved here to the interned StructType
+```
+
+### Why it matters
+
+Type identity is NOMINAL (`docs/design/type-identity.md`): a `StructType` compares and
+hashes on its name alone. Two spellings of one name therefore hash alike and compare
+unequal, which poisons the enum table (CE0126). This pass is what makes the table entry
+the single authority, so every later pass reads a resolved type and never rebuilds one.
+
+## The `finite-types` pass: reject a by-value containment cycle
+
+**File:** `semantics/passes/finite_types.py`
+
+A type that contains itself by value has no finite size, and is rejected with `CE2095`. The
+escape is indirection: `Own@(T)`, or a dynamic array.
+
+```sushi
+struct Node:
+    i32 value
+    Node next          # CE2095: infinite size
+
+struct Chain:
+    i32 value
+    Own@(Chain) next   # legal: a pointer has a size
+```
+
+Placement is load-bearing on both sides. It runs AFTER `resolve`, because it needs the
+resolved field types, and BEFORE `derive`, whose topological sort would report the same
+cycle as an internal error (`CE0128`). It is also the one pass that STOPS the analysis on
+failure: every later pass assumes a finitely-sized type.
+
+## The `derive` pass: hash and clone auto-derivation
+
+**File:** `semantics/passes/derive.py`
+
+### Purpose
+
+Auto-generate `.hash() -> u64` and `.clone()` for all types.
+
+### Algorithm
+
+**Primitives:**
+- Integers: FxHash
+- Floats: Normalized to u64, then FxHash
+- Strings: FNV-1a
+- Booleans: 0 or 1
+
+**Structs:**
+```python
+hash = FNV_OFFSET_BASIS
+for field in fields:
+    hash ^= field.hash()
+    hash *= FNV_PRIME
+return hash
+```
+
+**Enums:**
+```python
+hash = discriminant.hash()
+hash ^= variant_data.hash()
+return hash
+```
+
+**Arrays:**
+```python
+hash = FNV_OFFSET_BASIS
+for element in elements:
+    hash ^= element.hash()
+    hash *= FNV_PRIME
+return hash
+```
+
+### Limitations
+
+Nested arrays cannot be hashed (type system constraint).
+
+## The `shadowing` pass: an extension may not shadow a built-in
+
+**File:** `semantics/semantic_analyzer.py` (`_check_extension_shadows_builtin`)
+
+All three resolution layers pick a built-in method before an extension method, so an
+extension whose name collides with one could never be called. That is `CE2097` rather than
+silent dead code (#239).
+
+Placement is load-bearing at BOTH ends: after `derive`, which registers the struct and enum
+`hash`/`clone`, and after the generic-extension table merge, which is where a monomorphized
+`extend Box@(i32) hash()` enters the extension table.
+
+A perk implementation is unaffected by construction — an `ExtendWithDef` never enters the
+extension table. It is the sanctioned way to replace a built-in. See
+`docs/design/method-resolution.md`.
+
+## The `effects` pass: the destroy-effect summary
+
+**File:** `semantics/passes/borrow/destroy_effects.py`
+
+Which functions destroy a `poke` parameter, transitively (#168). The `borrow` pass reads
+the summary to decide whether a call invalidates the caller's value.
+
+Computed ONCE over EVERY unit, because `borrow` runs per unit: a per-unit summary would
+make a cross-unit callee invisible.
+
+## The `scope` pass: scope and variable analysis
 
 **File:** `semantics/passes/scope.py`
 
@@ -126,174 +387,7 @@ fn example() i32:
     return Result.Ok(0)
 ```
 
-## Phase 1.5: Generic Instantiation Collection
-
-**Files:** `semantics/generics/instantiate/*.py`
-
-### Purpose
-
-Detect which generic instantiations are needed.
-
-### How It Works
-
-1. Traverse AST looking for generic types
-2. When `List@(i32)` appears, record it
-3. When `.push()` is called on `List@(i32)`, record `List@(i32).push`
-4. Build complete set of required instantiations
-
-### Example
-
-```sushi
-let List@(i32) nums = List.new()  # Collect: List@(i32), List@(i32).new
-nums.push(42)                     # Collect: List@(i32).push
-
-let List@(string) names = List.new()  # Collect: List@(string), List@(string).new
-names.push("Alice")                   # Collect: List@(string).push
-```
-
-**Collected instantiations:**
-- `List@(i32)`
-- `List@(i32).new()`
-- `List@(i32).push()`
-- `List@(string)`
-- `List@(string).new()`
-- `List@(string).push()`
-
-## Phase 1.6: Monomorphization
-
-**Files:** `semantics/generics/monomorphize/*.py`
-
-### Purpose
-
-Generate concrete types from generic definitions.
-
-### Process
-
-1. For each collected instantiation (e.g., `List@(i32)`)
-2. Substitute type parameters (`T` → `i32`)
-3. Create specialized struct/function
-4. Add to AST as concrete definition
-
-### Example
-
-**Generic definition:**
-```sushi
-struct Pair@(T, U):
-    T first
-    U second
-
-extend Pair@(T, U) swap@(T, U)() Pair@(U, T):
-    return Result.Ok(Pair(first: self.second, second: self.first))
-```
-
-**After monomorphization for `Pair@(i32, string)`:**
-```sushi
-struct Pair__i32__string:
-    i32 first
-    string second
-
-extend Pair__i32__string swap() Pair__string__i32:
-    return Result.Ok(Pair__string__i32(first: self.second, second: self.first))
-```
-
-### Name Mangling
-
-- `Pair@(i32, string)` → `Pair__i32__string`
-- `List@(T)` → `List__i32`, `List__string`
-- Nested: `Maybe@(Maybe@(i32))` → `Maybe__Maybe__i32`
-
-## Phase 1.7: AST Transformation
-
-**File:** `semantics/passes/ast_transform.py`
-
-### Purpose
-
-Transform high-level constructs into simpler forms.
-
-### Transformations
-
-1. **Extension Method → Function Call**
-
-```sushi
-# Before:
-arr.len()
-
-# After:
-array_len(arr)
-```
-
-2. **Type Inference**
-
-```sushi
-# Before:
-let Result@(i32) r = get_value()
-
-# After: (type explicitly resolved)
-let Result@(i32) r = get_value()  # Type: Result@(i32)
-```
-
-3. **UFCS (Uniform Function Call Syntax)**
-
-```sushi
-# Before:
-"hello".len()
-
-# After:
-string_len("hello")
-```
-
-### Benefits
-
-- Simpler backend (only handles function calls)
-- Easier optimization
-- Clearer semantics
-
-## Phase 1.8: Hash Function Derivation
-
-**File:** `semantics/passes/hash_registration.py`
-
-### Purpose
-
-Auto-generate `.hash() -> u64` for all types.
-
-### Algorithm
-
-**Primitives:**
-- Integers: FxHash
-- Floats: Normalized to u64, then FxHash
-- Strings: FNV-1a
-- Booleans: 0 or 1
-
-**Structs:**
-```python
-hash = FNV_OFFSET_BASIS
-for field in fields:
-    hash ^= field.hash()
-    hash *= FNV_PRIME
-return hash
-```
-
-**Enums:**
-```python
-hash = discriminant.hash()
-hash ^= variant_data.hash()
-return hash
-```
-
-**Arrays:**
-```python
-hash = FNV_OFFSET_BASIS
-for element in elements:
-    hash ^= element.hash()
-    hash *= FNV_PRIME
-return hash
-```
-
-### Limitations
-
-Nested arrays cannot be hashed (type system constraint).
-
-## Phase 2: Type Validation
+## The `typecheck` pass: type validation
 
 **Files:** `semantics/passes/types/*.py`
 
@@ -373,7 +467,18 @@ let i32 x = get_value()
 let i32 y = get_value().realise(0)
 ```
 
-## Phase 3: Borrow Checking
+## The `lift` pass: lambda lifting
+
+**File:** `semantics/passes/lift.py`
+
+Each lambda literal becomes a top-level function plus a captured environment. It runs
+BETWEEN `typecheck` and `borrow`, per unit: the lifted body needs the types `typecheck`
+stamped, and the lifted function must be borrow-checked like any other.
+
+The environment parameter is a `poke` borrow, never a `peek` one. See
+`docs/design/closures.md`.
+
+## The `borrow` pass: borrow checking
 
 **File:** `semantics/passes/borrow/` (`__init__.py` holds `BorrowChecker`)
 
@@ -496,33 +601,46 @@ if var in moved_variables:
 ## Pass Interdependencies
 
 ```
-Phase 0 → Phase 1 → Phase 1.5 → Phase 1.6 → Phase 1.7 → Phase 1.8 → Phase 2 → Phase 3
-   ↓        ↓          ↓            ↓            ↓           ↓          ↓        ↓
-Constants  Vars   Instantiate  Monomorphize  Transform    Hash     Types   Borrows
-  +Sigs    +Moves    Generics    Generics      AST       Funcs    Check    Check
+whole program, once:
+
+  collect → externs → libraries → entrypoint → instantiate → monomorphize
+     → resolve → finite-types → derive → shadowing → effects
+
+then per unit, in one loop:
+
+  scope → typecheck → lift → borrow
 ```
 
 **Dependencies:**
-- Phase 1 needs Phase 0 (function signatures)
-- Phase 1.5 needs Phase 1 (variable types)
-- Phase 1.6 needs Phase 1.5 (instantiations to generate)
-- Phase 1.7 needs Phase 1.6 (concrete types for resolution)
-- Phase 1.8 needs Phase 1.7 (resolved types for hashing)
-- Phase 2 needs Phase 1.7 (transformed AST)
-- Phase 3 needs Phase 2 (type-checked borrows)
+- `externs`, `libraries` and `entrypoint` need `collect` (the tables and the signatures)
+- `instantiate` needs `libraries` (a library template must be visible to instantiate at
+  the consumer)
+- `monomorphize` needs `instantiate` (the set of instantiations to generate)
+- `resolve` needs `monomorphize` (every struct and enum a generic produced must exist)
+- `finite-types` needs `resolve` (the resolved field types), and STOPS the analysis on
+  failure
+- `derive` needs `finite-types` (a cycle would otherwise reach its topological sort as
+  `CE0128`)
+- `shadowing` needs `derive` (the auto-derived pair must be registered before a collision
+  can be seen)
+- `scope` needs `collect` (function signatures), and runs AFTER every whole-program pass,
+  because the body walks need concrete, monomorphized types
+- `typecheck` needs `resolve` and `scope`
+- `lift` needs `typecheck` (the lifted body reads its stamps)
+- `borrow` needs `typecheck` (the stamps) and `effects` (the cross-unit summary)
 
 ## Error Examples by Pass
 
-**Phase 1:**
+**`scope`:**
 - CE1003: Undefined variable
 - CE2405: Use of moved variable
 
-**Phase 2:**
+**`typecheck`:**
 - CE2xxx: Type mismatch
 - CE2502: `.realise()` wrong argument count
 - CE2505: Assigning Result@(T) without handling
 
-**Phase 3:**
+**`borrow`:**
 - CE1007: Cannot rebind while borrowed
 - CE2406: Use of destroyed variable
 

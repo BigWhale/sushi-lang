@@ -1,5 +1,5 @@
 # An extension whose TARGET is a generic type may name a generic type in its signature
-# (issue #389). Pass 1.5 walks `program.extensions` but not `program.generic_extensions`,
+# (issue #389). The instantiate pass walks `program.extensions` but not `program.generic_extensions`,
 # and the AST builder puts every extension with a `@(...)` target in the second list -- so
 # `Maybe<i32>` was never collected and the declaration was a false CE2001 unknown type.
 # Naming the same type anywhere else in the program was the workaround.

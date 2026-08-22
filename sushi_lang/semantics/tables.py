@@ -21,7 +21,7 @@ from sushi_lang.semantics.passes.collect import (
 
 @dataclass
 class SymbolTables:
-    """Whole-program symbol tables collected in Pass 0."""
+    """Whole-program symbol tables collected by the collect pass."""
 
     constants: ConstantTable = field(default_factory=ConstantTable)
     structs: StructTable = field(default_factory=StructTable)

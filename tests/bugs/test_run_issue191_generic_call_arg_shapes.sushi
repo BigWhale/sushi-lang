@@ -1,7 +1,7 @@
 # Issue #191: a generic call whose argument is a method call, a field access, an index,
-# a unary op, or a nested call was dropped by Pass 1.5's thin inferrer (it had no arm
-# for any of them), so identity__i32 was never monomorphized and Pass 2 raised CE2061.
-# Pass 1.5 now infers argument types through Pass 2's inferrer. All five shapes below
+# a unary op, or a nested call was dropped by the instantiate pass's thin inferrer (it had no arm
+# for any of them), so identity__i32 was never monomorphized and the typecheck pass raised CE2061.
+# The instantiate pass now infers argument types through the typecheck pass's inferrer. All five shapes below
 # unify T = i32; the summed result is 3 + 3 + 3 + 5 + 7 = 21.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "21\n"

@@ -37,14 +37,14 @@ def test_semantics_table_is_registered_by_the_backend(method_name):
 
 @pytest.mark.parametrize("method_name", sorted(PRIMITIVE_METHOD_TYPES))
 def test_backend_registers_nothing_semantics_does_not_know_about(method_name):
-    """The backend must not register a primitive method Pass 2 would reject as unknown."""
+    """The backend must not register a primitive method the typecheck pass would reject as unknown."""
     carriers = PRIMITIVE_METHOD_TYPES[method_name]
     for prim_type in ALL_PRIMITIVES:
         if prim_type in carriers:
             continue
         assert get_builtin_method(prim_type, method_name) is None, (
             f"the backend registers {prim_type}.{method_name}(), but semantics does not "
-            f"list {prim_type} as a carrier -- Pass 2 would report it undefined"
+            f"list {prim_type} as a carrier -- the typecheck pass would report it undefined"
         )
 
 
@@ -58,9 +58,9 @@ def test_to_bits_is_float_only():
 #
 # The tests above assert method NAMES only, and they warm the registry themselves with the
 # backend import at the top of this file. Both properties held perfectly while primitive
-# return-type inference was dead for eight weeks: Pass 2 reads the semantics-side table, and
+# return-type inference was dead for eight weeks: the typecheck pass reads the semantics-side table, and
 # in the real pipeline the registry is still empty when it does. These pin the axis that
-# actually broke, on the table Pass 2 actually reads.
+# actually broke, on the table the typecheck pass actually reads.
 
 
 def test_returns_table_is_the_authority_for_carriers():

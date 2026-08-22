@@ -92,10 +92,10 @@ not rewrite those name-prefix checks to `@(`.)
 **Placement and timing.** The predicate lives in **semantics** (`typesys.py`, next to
 `is_owning_type`) — the borrow checker needs it and `semantics` must never import `backend` (the
 Tier 4.1 invariant, enforced by grep). It needs no type table: `StructType.fields` and
-`EnumType.variants` carry resolved types inline after Pass 1.7, and the borrow checker runs as
-Pass 3, so every type it sees is concrete (monomorphized generics included — `Pair@(i32, List@(i32))`
+`EnumType.variants` carry resolved types inline after the resolve pass, and the borrow pass runs
+last, so every type it sees is concrete (monomorphized generics included — `Pair@(i32, List@(i32))`
 is an ordinary concrete `StructType` by then). Guard the `UnknownType` case explicitly: treat it as
-non-moving and rely on Pass 2 having already rejected unresolved types.
+non-moving and rely on the typecheck pass having already rejected unresolved types.
 
 **Sync risk (the one real hazard).** The borrow checker (semantics) decides *what is an error*;
 the backend decides *what code is emitted*. If they ever disagree about a type's move-ness, the
@@ -214,10 +214,10 @@ working program's meaning changed silently — every behavior change here is a n
 ## 4. Auto-derived `.clone()` for structs and enums
 
 The explicit escape hatch, so `take(buf.clone())` keeps working code working. Mirror the **hash
-auto-derivation pipeline** (Pass 1.8) exactly — it is the established pattern for "synthesize a
+auto-derivation pipeline** (the derive pass) exactly — it is the established pattern for "synthesize a
 method on every user type with a lazily-bound backend emitter":
 
-1. **Registration pass** (extend `semantics/passes/hash_registration.py` or a sibling): for every
+1. **Registration pass** (extend `semantics/passes/derive.py` or a sibling): for every
    struct and enum in the table, `register_builtin_method(type, BuiltinMethod(name="clone",
    return_type=<same type>, arity 0, llvm_emitter=_lazy_clone_emitter(kind, type)))`. Register for
    **all** structs/enums, not only owning ones — a plain-data clone is trivially the value itself,
@@ -237,7 +237,7 @@ method on every user type with a lazily-bound backend emitter":
 4. **Dispatch**: a `try_emit_struct_clone` / `try_emit_enum_clone` slot in the method dispatch
    chain (`backend/expressions/calls/dispatcher.py:355-363`, next to the hash slots). **Order
    matters** (V3/#199): the dispatcher must gate on the receiver's *type* before the method name.
-5. **Semantics validation**: Pass 2 must know `clone()` takes no args and returns the receiver's
+5. **Semantics validation**: the typecheck pass must know `clone()` takes no args and returns the receiver's
    type (extension-ABI style bare value, not Result — matching `.hash()`).
 
 Arrays and `List` keep their existing `.clone()`; `Own@(T)` gains one only if the implementation
@@ -259,7 +259,7 @@ Ordered so each step is independently verifiable. One PR, red-first tests per pr
   already carries the two-location "moved here" note (`_emit_use_after_move`, `:822-832`).
   Verify the branch-join reconciliation (`:427`) behaves for struct moves in `if` arms — the
   T2.1 machinery is type-agnostic but has only ever been exercised by arrays/List/Own.
-- Clone registration pass (§4, step 1) + Pass 2 arity/return validation (step 5).
+- Clone registration pass (§4, step 1) + the typecheck pass's arity/return validation (step 5).
 
 ### 5.2 Backend (every site consumes the semantics predicate — §2.1 sync rule)
 - `backend/expressions/calls/dispatcher.py` — `_deep_copy_struct_value_args` (`:199`): remove the

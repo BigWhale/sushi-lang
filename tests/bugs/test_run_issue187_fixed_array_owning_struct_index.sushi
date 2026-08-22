@@ -1,6 +1,6 @@
 # Regression for #187: reading a struct field through an index into a FIXED array (a[0].data) was an
 # ICE -- CE0067, "cannot infer struct type from expression: IndexAccess". infer_struct_type in the
-# backend has arms for Name, MemberAccess, MethodCall and DotCall, and its else branch raises. Pass 2
+# backend has arms for Name, MemberAccess, MethodCall and DotCall, and its else branch raises. The typecheck pass
 # already infers this correctly (infer_index_access_type); the backend simply never grew the arm.
 # This is a type-inference gap, NOT the RAII gap in #185 -- deliberately a separate issue and test.
 # EXPECT_RUNTIME_EXIT: 0

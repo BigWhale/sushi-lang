@@ -157,7 +157,7 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
                 # A `...Ts` whose element type is a bare NAME matching one of the
                 # function's declared type-pack type-params is a v2 type-pack
                 # value-param: keep `ty` as the bare pack-name reference (the same
-                # representation `_parse_type` produced) so Phase 0 recognizes it.
+                # representation `_parse_type` produced) so the collect pass recognizes it.
                 elem_name = None
                 if ty_node.data == "name_t":
                     elem_tok = _first_name(ty_node.children)

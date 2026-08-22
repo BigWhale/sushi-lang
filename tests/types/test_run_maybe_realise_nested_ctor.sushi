@@ -1,6 +1,6 @@
 # A generic-enum constructor nested inside a built-in method's argument.
 #
-# `realise(default)` takes the payload type T, but Pass 2 never pushed T into
+# `realise(default)` takes the payload type T, but the typecheck pass never pushed T into
 # that argument, so the `Maybe.None()` buried inside it was never annotated with
 # its concrete enum type and the backend reported its own missing annotation:
 #

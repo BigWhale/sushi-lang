@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from sushi_lang.semantics.ast import FuncDef
-from sushi_lang.semantics.passes.lambda_lift import ENV_PARAM_NAME
+from sushi_lang.semantics.passes.lift import ENV_PARAM_NAME
 from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
 
 

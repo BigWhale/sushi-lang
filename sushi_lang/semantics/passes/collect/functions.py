@@ -1,4 +1,4 @@
-"""Function and extension method collection for Phase 0."""
+"""Function and extension method collection."""
 
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -154,7 +154,7 @@ class Param:
 
 @dataclass
 class FuncSig:
-    """Phase 0 function signature."""
+    """A collected function signature."""
     name: str
     loc: Optional[Span] = None
     name_span: Optional[Span] = None
@@ -163,9 +163,9 @@ class FuncSig:
     params: List[Param] = field(default_factory=list)
     is_public: bool = False              # True if declared with 'public' keyword
     unit_name: Optional[str] = None      # Which unit this function belongs to (for multi-file)
-    filename: Optional[str] = None       # The file it was declared in. Phase 0 collects every
-                                         # unit through ONE reporter (unlike passes 1-3, which
-                                         # build a per-unit one), so a cross-unit duplicate has
+    filename: Optional[str] = None       # The file it was declared in. This pass walks every
+                                         # unit through ONE reporter (unlike the per-unit passes,
+                                         # which build their own), so a cross-unit duplicate has
                                          # to name its file explicitly or it renders against
                                          # whichever file the reporter happens to be pointing at.
     err_type: Optional[Type] = None      # Error type for Result<T, E> (None = StdError default)
@@ -189,7 +189,7 @@ class GenericFuncDef:
 
 @dataclass
 class FunctionTable:
-    """Table of function signatures collected in Phase 0."""
+    """Table of function signatures collected by the collect pass."""
     by_name: Dict[str, FuncSig] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     _stdlib_functions: Dict[Tuple[str, str], Any] = field(default_factory=dict)
@@ -214,7 +214,7 @@ class FunctionTable:
 
 @dataclass
 class GenericFunctionTable:
-    """Table of generic function definitions collected in Pass 0."""
+    """Table of generic function definitions collected by the collect pass."""
     by_name: Dict[str, GenericFuncDef] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
 
@@ -229,7 +229,7 @@ class GenericFunctionTable:
 
 @dataclass
 class ExtensionMethod:
-    """Phase 0 extension method signature."""
+    """A collected extension method signature."""
     target_type: Optional[Type]  # Type being extended (i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool, string)
     name: str                    # Method name (add, multiply, etc.)
     loc: Optional[Span] = None
@@ -260,7 +260,7 @@ class ExtensionTable:
 
 @dataclass
 class GenericExtensionMethod:
-    """Phase 0 generic extension method signature."""
+    """A collected generic extension method signature."""
     base_type_name: str              # Generic type name (e.g., "HashMap", "Box")
     type_params: Tuple[str, ...]     # Type parameter names (e.g., ("K", "V")), () if concrete
     name: str                        # Method name (get, insert, etc.)
@@ -638,7 +638,7 @@ class FunctionCollector:
             base_type_name = target_type.base_name
 
             # A concrete argument is a CONSTRAINT, a bare name is a type PARAMETER, and a mix
-            # of the two is partial specialization, which Sushi does not have (#393). Phase 0
+            # of the two is partial specialization, which Sushi does not have (#393). The collect pass
             # is the pass that can tell them apart, because the struct and enum tables say
             # which names are declared types -- so the answer is decided here and carried.
             shape = classify_extension_target(target_type, self._is_declared_type)
@@ -728,7 +728,7 @@ class FunctionCollector:
     def _is_declared_type(self, name: str) -> bool:
         """Whether a bare name in a type position names a declared type.
 
-        The tables accumulate in compilation order, and library symbols register after Phase 0,
+        The tables accumulate in compilation order, and library symbols register after the collect pass,
         so a name this cannot see yet is read as a type PARAMETER. That is the safe direction:
         a name IN the tables is certainly a type, so the only reachable mistake is the old
         behaviour (the declaration applies to every instantiation), never a false rejection.

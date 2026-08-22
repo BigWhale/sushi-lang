@@ -3,7 +3,7 @@
 #
 # This test defines a generic swap function that takes two values
 # of different types (T and U). The function definition is collected
-# in Pass 0 and added to the GenericFunctionTable.
+# in the collect pass and added to the GenericFunctionTable.
 #
 # Note: Actual calls to generic functions will work in Phase 3
 # when monomorphization is implemented.

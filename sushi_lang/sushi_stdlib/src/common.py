@@ -69,7 +69,7 @@ def has_builtin_method(target_type: Type, method_name: str) -> bool:
 
 # Hash emitter factories, keyed by type kind ("struct" / "enum" / "array").
 #
-# Hashability is a semantic property, so Pass 1.8 decides it and registers the
+# Hashability is a semantic property, so the derive pass decides it and registers the
 # hash() BuiltinMethod (semantics/generics/hashing.py). The matching LLVM emitter
 # is backend code, and semantics must not import the backend -- so the backend
 # types modules deposit their emitter *factories* here at import time and
@@ -94,7 +94,7 @@ def get_hash_emitter_factory(kind: str) -> Optional[Callable[[Type], Callable]]:
 
 
 # Clone emitter factories, keyed by type kind ("struct" / "enum"). Same deferred,
-# import-order-independent pattern as the hash factories above (#134): Pass 1.8 registers
+# import-order-independent pattern as the hash factories above (#134): the derive pass registers
 # the clone() BuiltinMethod in semantics (semantics/generics/cloning.py), and the backend
 # types modules deposit the matching LLVM emitter factory here at import time. The factory
 # takes the concrete type and returns its emitter closure (a thin wrapper over the existing

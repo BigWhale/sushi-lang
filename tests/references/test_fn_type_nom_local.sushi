@@ -2,7 +2,7 @@
 #
 # `peek` and `poke` ride on the parameter's own ReferenceType, so a rebuild of the fn type
 # keeps them. `nom` lives in `param_modes`, and `resolve_type_recursively` rebuilt the
-# annotation to resolve `StdError` inside it and dropped that field -- so Pass 3 read a
+# annotation to resolve `StdError` inside it and dropped that field -- so the borrow pass read a
 # BORROW, and the marker written at both ends became a false CE2427.
 # EXPECT_STDOUT_CONTAINS: owned: Ford Prefect
 # EXPECT_STDOUT_CONTAINS: len: 12

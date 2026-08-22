@@ -1,4 +1,4 @@
-"""P0-T1: pack-capable monomorphization substitution model."""
+"""Pack-capable monomorphization substitution model."""
 import types as _pytypes
 
 import pytest
@@ -29,7 +29,7 @@ def _generic(name, type_params):
 def _param(name, is_pack=False):
     tp = TypeParameter(name)
     if is_pack:
-        # Phase 0 sets the pack marker as an attribute on synthetic fixtures;
+        # The collect pass sets the pack marker as an attribute on synthetic fixtures;
         # ast.py is intentionally untouched. object.__setattr__ because
         # TypeParameter is a frozen dataclass.
         object.__setattr__(tp, "is_pack", True)

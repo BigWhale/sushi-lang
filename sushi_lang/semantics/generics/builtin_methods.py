@@ -16,7 +16,7 @@ _STDIO_RECEIVERS = (BuiltinType.STDIN, BuiltinType.STDOUT, BuiltinType.STDERR)
 
 
 def _struct_enum_derived(receiver_type: Type, method_name: str) -> bool:
-    """The Pass 1.8 auto-derived pair (hash, clone), read from the registry."""
+    """The derive pass's auto-derived pair (hash, clone), read from the registry."""
     from sushi_lang.sushi_stdlib.src.common import get_builtin_method
     return get_builtin_method(receiver_type, method_name) is not None
 
@@ -83,7 +83,7 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str) -> bool:
             from sushi_lang.semantics.generics.list import is_builtin_list_method
             if is_builtin_list_method(method_name):
                 return True
-        # A container still carries the auto-derived hash (Pass 1.8's registration has no
+        # A container still carries the auto-derived hash (the derive pass's registration has no
         # container exclusion), and codegen's auto-derived step precedes the extension
         # fallback -- so an extension of that name would be dead there too.
         return _struct_enum_derived(receiver_type, method_name)

@@ -67,13 +67,40 @@ class SemanticAnalyzer:
         self.extensions: Optional[ExtensionTable] = None
         self.generic_extensions: Optional['GenericExtensionTable'] = None
         self.generic_funcs: Optional[GenericFunctionTable] = None
-        self.tables: Optional['SymbolTables'] = None  # Aggregate of the above, threaded to Pass 2 and backend
+        self.tables: Optional['SymbolTables'] = None  # Aggregate of the above, threaded to typecheck and backend
         self.monomorphized_extensions: list['ExtendDef'] = []  # Concrete ExtendDef nodes for codegen
         self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
 
     def check(self, program: Program) -> None:
-        """Entry point for semantic analysis. Runs all semantic analysis passes in sequence."""
+        """Entry point for semantic analysis. Runs every pass in sequence.
+
+        This docstring is the authority on the pass order. The passes have NAMES, not
+        numbers -- a number goes out of order the moment a pass is inserted, which is how
+        the old scheme ended up running the scope pass after the derive pass.
+
+            collect       constants, headers, generic types      passes/collect/
+            externs       extern signatures, ptr unit gate       passes/types/externals.py
+            libraries     library symbol registration            _register_library_*
+            entrypoint    main()'s signature                     _check_main_function_args*
+            instantiate   generic instantiation collection       generics/instantiate/
+            monomorphize  generic -> concrete                    generics/monomorphize/
+            resolve       field and variant type resolution      passes/resolve.py
+            finite-types  reject by-value containment cycles     passes/finite_types.py
+            derive        auto-derived hash() and clone()        passes/derive.py
+            shadowing     reject an extension over a built-in    _check_extension_shadows_builtin
+            effects       destroy-effect summary                 passes/borrow/destroy_effects.py
+            scope         scope and variable analysis            passes/scope.py
+            typecheck     type validation and inference          passes/types/
+            lift          lambda lifting                         passes/lift.py
+            borrow        borrow checking                        passes/borrow/
+
+        The last four run per unit, in one loop. `_check_monomorphized_extensions` repeats
+        those four for each instantiation of a generic-target extension.
+
+        `passes/const_eval.py` is NOT a pass: the typecheck pass and the backend both call
+        it as a helper.
+        """
         self._check_multi_file()
 
     def _check_multi_file(self) -> None:
@@ -142,12 +169,12 @@ class SemanticAnalyzer:
             self._register_library_private_functions()
             self._register_library_constants(compilation_order)
             # Library perk IMPLEMENTATIONS register here: after the consumer's own impls
-            # (local wins) and before Pass 1.5/1.6, so the constraint validator sees them.
-            # The DEFINITIONS were seeded earlier, in the Phase 0 loop above.
+            # (local wins) and before instantiate/monomorphize, so the constraint validator
+            # sees them. The DEFINITIONS were seeded earlier, in the collect loop above.
             self._register_library_perk_impls()
             self._register_library_generic_functions()
             # Structs before enums (an enum payload may reference a struct), and both
-            # before Pass 1.5 so the consumer's instantiations monomorphize locally.
+            # before instantiate so the consumer's instantiations monomorphize locally.
             self._register_library_generic_structs()
             self._register_library_generic_enums()
 
@@ -234,12 +261,11 @@ class SemanticAnalyzer:
             self.structs.by_name[struct_name] = struct_type
             self.structs.order.append(struct_name)
 
-        # Pass 1.6 (cont.): extensions on generic targets, BEFORE Pass 1.7/1.8. A generic
-        # call in a substituted body has its argument types only now -- they come from
-        # `self` (#392) -- and what the second function round below interns must still
-        # receive field resolution (1.7) and hash/clone derivation (1.8). The extension
-        # TABLE merge and the CE2097 check stay after 1.8, where their placement is
-        # load-bearing.
+        # monomorphize (cont.): extensions on generic targets, BEFORE resolve and derive. A
+        # generic call in a substituted body has its argument types only now -- they come
+        # from `self` (#392) -- and what the second function round below interns must still
+        # receive field resolution and hash/clone derivation. The extension TABLE merge and
+        # the CE2097 check stay after derive, where their placement is load-bearing.
         concrete_extension_defs = monomorphize_all_extension_methods(
             self.generic_extensions.by_type,
             struct_instantiations,
@@ -255,22 +281,23 @@ class SemanticAnalyzer:
         if extension_fn_instantiations:
             monomorphizer.monomorphize_all_functions(extension_fn_instantiations, compilation_order)
 
-        # Pass 1.7: AFTER monomorphization, so every struct/enum exists in the tables.
-        from sushi_lang.semantics.passes.ast_transform import resolve_struct_field_types, resolve_enum_variant_types
+        # resolve: AFTER monomorphization, so every struct/enum exists in the tables.
+        from sushi_lang.semantics.passes.resolve import resolve_struct_field_types, resolve_enum_variant_types
         resolve_struct_field_types(self.structs, self.enums)
         resolve_enum_variant_types(self.structs, self.enums)
 
-        # Pass 1.75: reject types that contain themselves by value (CE2095). Must precede
-        # Pass 1.8, whose topological sort would report a cycle as an internal error, and
-        # must stop on failure -- every later pass assumes finitely-sized types.
-        from sushi_lang.semantics.passes.infinite_types import check_infinite_size_types
+        # finite-types: reject types that contain themselves by value (CE2095). Must precede
+        # derive, whose topological sort would report a cycle as an internal error, and must
+        # stop on failure -- every later pass assumes finitely-sized types.
+        from sushi_lang.semantics.passes.finite_types import check_infinite_size_types
         if check_infinite_size_types(self.structs, self.enums, self.reporter):
             return
 
-        # Pass 1.8: AFTER type resolution, and structs/enums before arrays, which may
-        # contain them.
-        from sushi_lang.semantics.passes.hash_registration import (
-            register_all_struct_hashes, register_all_enum_hashes, register_all_array_hashes
+        # derive: AFTER type resolution, and structs/enums before arrays, which may
+        # contain them. The clone half carries no ordering constraint (#134).
+        from sushi_lang.semantics.passes.derive import (
+            register_all_struct_hashes, register_all_enum_hashes, register_all_array_hashes,
+            register_all_clones,
         )
         register_all_struct_hashes(self.structs)
 
@@ -278,16 +305,7 @@ class SemanticAnalyzer:
 
         register_all_array_hashes(self.structs, self.enums)
 
-        # Pass 1.8 (cont.): auto-derive clone() for every struct and enum (#134). No
-        # ordering constraint -- the clone emitter resolves nested/recursive types at
-        # emission time -- so a flat pass over both tables suffices.
-        from sushi_lang.semantics.generics.cloning import (
-            register_struct_clone_method, register_enum_clone_method
-        )
-        for struct_type in self.structs.by_name.values():
-            register_struct_clone_method(struct_type)
-        for enum_type in self.enums.by_name.values():
-            register_enum_clone_method(enum_type)
+        register_all_clones(self.structs, self.enums)
 
         for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
             self.monomorphized_extensions.append(extend_def)
@@ -309,7 +327,7 @@ class SemanticAnalyzer:
         # layers resolve the built-in first -- so it is CE2097 rather than silent dead code
         # (#239). See docs/design/method-resolution.md.
         #
-        # Placement is load-bearing at BOTH ends: after Pass 1.8, which registers the
+        # Placement is load-bearing at BOTH ends: after derive, which registers the
         # struct/enum hash/clone, and after the generic-extension merge above, which is
         # where a monomorphized `extend Box@(i32) hash()` enters the extension table.
         #
@@ -317,19 +335,19 @@ class SemanticAnalyzer:
         # ExtensionTable. It is the sanctioned way to replace a built-in.
         self._check_extension_shadows_builtin()
 
-        # Phase 1 & 2: Run scope and type analysis on all units with global context
-        # Unlike single-file mode, we need to analyze all units together since they can reference each other
-        # However, we use unit-specific reporters to properly attribute errors to the correct files
+        # The per-unit passes run below: scope, typecheck, lift, borrow. Every unit is
+        # analysed with the global context, because units reference each other, but each
+        # gets its own reporter so a diagnostic names the right file.
 
-        # Destroy-effect summary for Pass 3 (#168): which functions destroy a `poke`
-        # parameter, transitively. Computed ONCE across EVERY unit -- the borrow checker
-        # runs per unit, so a per-unit summary would make a cross-unit callee invisible.
+        # effects: which functions destroy a `poke` parameter, transitively (#168).
+        # Computed ONCE across EVERY unit -- the borrow pass runs per unit, so a per-unit
+        # summary would make a cross-unit callee invisible.
         from sushi_lang.semantics.passes.borrow import compute_destroy_effects
         destroy_effects = compute_destroy_effects(
             unit.ast for unit in compilation_order if unit.ast is not None
         )
 
-        # Enum type names for the borrow checker's ownership-sink test, stripped to their
+        # Enum type names for the borrow pass's ownership-sink test, stripped to their
         # base name: a monomorphized generic enum is interned as "Result<i32, StdError>"
         # while its constructor is written `Result.Ok(...)`.
         enum_names = enum_base_names(self.enums, self.generic_enums)
@@ -351,11 +369,11 @@ class SemanticAnalyzer:
             type_validator = TypeValidator(unit_reporter, self.tables, current_unit_name=unit.name, monomorphized_functions=monomorphizer.monomorphized_functions)
             type_validator.run(unit.ast)
 
-            from sushi_lang.semantics.passes.lambda_lift import LambdaLifter
+            from sushi_lang.semantics.passes.lift import LambdaLifter
             LambdaLifter(self.structs, self.funcs, unit.ast,
                          annotate=type_validator._validate_function).run()
 
-            # Pass 3. The enum names let the checker tell `Box.Full(a)` from a method call
+            # borrow. The enum names let the checker tell `Box.Full(a)` from a method call
             # -- both are DotCall here. BASE names only: the receiver is written bare.
             borrow_checker = BorrowChecker(unit_reporter, destroy_effects=destroy_effects,
                                            enum_names=enum_names, tables=self.tables)
@@ -374,15 +392,15 @@ class SemanticAnalyzer:
         This is where a generic extension's per-instantiation truth is decided: `self` is
         concrete here, so an owning field handed out of the body is the CE2411 it is, while
         the same body over a plain type argument stays legal (#391). The template itself is
-        walked by Pass 1 and Pass 3 for what does not depend on the type argument.
+        walked by scope and borrow for what does not depend on the type argument.
 
         One body error would otherwise be reported once per instantiation, plus once from
         the template -- so the run collects into its own reporter and merges what is new.
 
-        The copies mirror the per-unit pass order 1 -> 2 -> 2.5 -> 3 (#399). They were
-        deep-copied BEFORE Pass 1 ran, so no walk ever stamped their lambda captures; the
-        scope run here exists only for that stamp and reports into a throwaway -- the
-        template's own Pass 1 already reported scope findings once. The lifted functions
+        The copies mirror the per-unit order scope -> typecheck -> lift -> borrow (#399).
+        They were deep-copied BEFORE scope ran, so no walk ever stamped their lambda
+        captures; the scope run here exists only for that stamp and reports into a throwaway
+        -- the template's own scope run already reported its findings once. The lifted functions
         land in `lift_target` (the first unit's AST) marked public, because every unit
         module DEFINES the monomorphized extension bodies and only public functions of
         another unit are declared there.
@@ -400,7 +418,7 @@ class SemanticAnalyzer:
 
         lifter = None
         if lift_target is not None:
-            from sushi_lang.semantics.passes.lambda_lift import LambdaLifter
+            from sushi_lang.semantics.passes.lift import LambdaLifter
             lifter = LambdaLifter(self.structs, self.funcs, lift_target,
                                   annotate=type_validator._validate_function)
 

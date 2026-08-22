@@ -1,4 +1,4 @@
-"""Pass 3: borrow checking. The pass object holds the state; siblings hold the rules."""
+"""The borrow pass. The pass object holds the state; siblings hold the rules."""
 
 from __future__ import annotations
 from typing import Dict, FrozenSet, List, Optional, Set
@@ -22,7 +22,7 @@ from .writes import MUTATING_METHODS, READONLY_RECEIVERS
 
 
 def _build_callee_modes(tables) -> CalleeModes:
-    """Build the mode resolver from Pass 0's tables."""
+    """Build the mode resolver from the collect pass's tables."""
     if tables is None:
         return CalleeModes()
     funcs = getattr(tables, "funcs", None)

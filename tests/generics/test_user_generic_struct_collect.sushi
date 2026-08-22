@@ -1,5 +1,5 @@
 # TEST_TYPE: compilation
-# Test that generic struct definitions are collected correctly in Pass 0
+# Test that generic struct definitions are collected correctly in the collect pass
 
 struct Pair@(T, U):
     T first

@@ -1,4 +1,4 @@
-"""Pass 1.5: Generic Type Instantiation Collector"""
+"""The instantiate pass: collect every generic instantiation the program asks for."""
 from __future__ import annotations
 from typing import Set, Tuple, TYPE_CHECKING
 from dataclasses import dataclass, field
@@ -43,10 +43,10 @@ class InstantiationCollector:
     # FunctionType for a bare function reference passed as a higher-order argument.
     func_table: dict | None = field(default=None)
 
-    # The whole-program SymbolTables. When present, Pass 1.5 infers generic-call
-    # argument and receiver types through Pass 2's own TypeValidator instead of a thin
-    # parallel inferrer -- the two used to disagree, and every method Pass 2 knew and
-    # Pass 1.5 did not dropped an instantiation on the floor (CE2061; issues #171/#191).
+    # The whole-program SymbolTables. When present, the instantiate pass infers generic-call
+    # argument and receiver types through the typecheck pass's own TypeValidator instead of a thin
+    # parallel inferrer -- the two used to disagree, and every method the typecheck pass knew and
+    # the instantiate pass did not dropped an instantiation on the floor (CE2061; issues #171/#191).
     tables: object | None = field(default=None)
 
     variable_types: dict[str, "Type"] = field(default_factory=dict)
@@ -62,8 +62,8 @@ class InstantiationCollector:
             func_table=self.func_table or {},
         )
 
-        # Build Pass 2's real inferrer over the same tables, with a discard reporter so
-        # any diagnostics it raises never reach the user (they belong to Pass 2, which
+        # Build the typecheck pass's real inferrer over the same tables, with a discard reporter so
+        # any diagnostics it raises never reach the user (they belong to the typecheck pass, which
         # runs later and emits them for real). It shares this collector's variable_types
         # dict, so the scope the collector builds as it walks is the scope the inferrer
         # sees. Constructed only when the whole SymbolTables is available.
@@ -187,7 +187,7 @@ class InstantiationCollector:
                 return
 
     def _build_shared_inferrer(self):
-        """Pass 2's TypeValidator over the same tables, wired to discard diagnostics."""
+        """The typecheck pass's TypeValidator over the same tables, wired to discard diagnostics."""
         if self.tables is None:
             return None
         from sushi_lang.internals.report import Reporter

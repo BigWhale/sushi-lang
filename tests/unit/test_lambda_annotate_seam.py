@@ -1,4 +1,4 @@
-"""The Pass 1.5 lambda annotate seam must not mutate the node (issue #214)."""
+"""The instantiate pass's lambda annotate seam must not mutate the node (issue #214)."""
 from __future__ import annotations
 
 from sushi_lang.semantics.passes.types.visitor import infer_lambda_type
@@ -47,5 +47,5 @@ def test_stamp_true_does_memoize():
 
     ft = infer_lambda_type(v, lam, stamp=True)
 
-    # Pass 2's form persists the result for the lift pass / backend.
+    # The typecheck pass's form persists the result for the lift pass / backend.
     assert lam.resolved_type is ft

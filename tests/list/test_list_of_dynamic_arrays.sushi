@@ -5,7 +5,7 @@
 # a Name yields the descriptor. One convention now: `emit_expr` yields the value, and
 # `as_array_address` is the one seam that takes an address.
 #
-# `get(0)??` is the other half: Pass 2 did not stamp the unwrapped type when the element is
+# `get(0)??` is the other half: the typecheck pass did not stamp the unwrapped type when the element is
 # a dynamic array, so the backend reported CE0124.
 # EXPECT_STDOUT_EXACT: "len=2\nrow0=2 row1=3\nfirst=1 last=5\n"
 # EXPECT_NO_LEAKS

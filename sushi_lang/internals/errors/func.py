@@ -105,15 +105,15 @@ _add(ErrorMessage("CE0122", Severity.ERROR,
 
 _add(ErrorMessage("CE0123", Severity.ERROR,
     "no hash emitter registered for kind '{kind}'",
-    Category.INTERNAL, "Pass 1.8 registered a hash() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load."))
+    Category.INTERNAL, "The derive pass registered a hash() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load."))
 
 _add(ErrorMessage("CE0127", Severity.ERROR,
     "no clone emitter registered for kind '{kind}'",
-    Category.INTERNAL, "Pass 1.8 registered a clone() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load."))
+    Category.INTERNAL, "The derive pass registered a clone() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load."))
 
 _add(ErrorMessage("CE0124", Severity.ERROR,
     "'??' expression reached codegen without a type annotation from semantic analysis",
-    Category.INTERNAL, "Pass 2 annotates every TryExpr it validates (inner type, unwrapped type, success tag). Reaching the backend without one means the expression's type was never inferred - the backend no longer re-infers types, so this is a gap in Pass 2, not a user error."))
+    Category.INTERNAL, "The typecheck pass annotates every TryExpr it validates (inner type, unwrapped type, success tag). Reaching the backend without one means the expression's type was never inferred - the backend no longer re-infers types, so this is a gap in the typecheck pass, not a user error."))
 
 _add(ErrorMessage("CE0125", Severity.ERROR,
     "internal error: borrow checker has no arm for expression node '{node}'",
@@ -121,7 +121,7 @@ _add(ErrorMessage("CE0125", Severity.ERROR,
 
 _add(ErrorMessage("CE0131", Severity.ERROR,
     "'??' operator not allowed in {context}: the method returns a bare value and has no error channel",
-    Category.FUNC, "An extension method and a perk-impl method return a bare value (CE2091), so a '??' has no Result return to propagate into. Handle the Result in the method body with match or .realise(). Emitted from Phase 0 collection, so it fires once per declaration and covers templates nobody instantiates. A ?? inside a LAMBDA in such a body is legal - the lambda has its own Result channel (#399)."))
+    Category.FUNC, "An extension method and a perk-impl method return a bare value (CE2091), so a '??' has no Result return to propagate into. Handle the Result in the method body with match or .realise(). Emitted from the collect pass collection, so it fires once per declaration and covers templates nobody instantiates. A ?? inside a LAMBDA in such a body is legal - the lambda has its own Result channel (#399)."))
 
 _add(ErrorMessage("CE0130", Severity.ERROR,
     "internal error: scope checker has no arm for node '{node}'",

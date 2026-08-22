@@ -3,7 +3,7 @@
 # unusable: you could not push into it, and you could not call a method on what you read
 # out of it.
 #
-# The backend does not re-derive a receiver's type, it reads what Pass 2 stamped. A
+# The backend does not re-derive a receiver's type, it reads what the typecheck pass stamped. A
 # `MethodCall`, a `DotCall` and a `TryExpr` all carry one; an `IndexAccess` carried none,
 # so a struct or enum element reached the extension-method fallback with no semantic type
 # and fell through to mapping the LLVM layout back to a language type, which cannot be

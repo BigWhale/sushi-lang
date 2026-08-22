@@ -1,4 +1,4 @@
-"""Pass 1.7: AST Transformation and Type Resolution"""
+"""The resolve pass: resolve every struct field and enum variant type to a concrete type."""
 
 from typing import Dict
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable

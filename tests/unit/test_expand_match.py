@@ -1,4 +1,4 @@
-"""P1-T7b: ``expand(...)`` unroll robustness around frozen Type nodes and ``match`` arm
+"""``expand(...)`` unroll robustness around frozen Type nodes and ``match`` arm
 pattern-binding shadowing.
 """
 from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands

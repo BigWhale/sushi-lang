@@ -1,5 +1,5 @@
 # EXPECT_STDOUT_EXACT: "Rectangle hash: 12303218980686071687\n"
-# Test that nested structs can now be hashed (Pass 1.8 uses topological sort)
+# Test that nested structs can now be hashed (the derive pass uses topological sort)
 
 struct Point:
     i32 x

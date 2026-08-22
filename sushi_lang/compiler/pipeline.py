@@ -363,7 +363,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
 
     # Digest every imported `.slib` once. These feed both the consumer unit
     # fingerprints (so a library template change invalidates consumers that
-    # monomorphize it -- Phase 2 cross-library generics) and the library `.o`
+    # monomorphize it -- cross-library generics) and the library `.o`
     # cache below.
     library_fingerprints: dict[str, str] = {}
     if library_linker is not None:

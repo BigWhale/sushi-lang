@@ -1,6 +1,6 @@
 """Every DECLARED type position propagates into the value it types (issue #387).
 
-A generic enum or struct constructor carries no type of its own: Pass 2 must stamp
+A generic enum or struct constructor carries no type of its own: the typecheck pass must stamp
 `resolved_enum_type` / `resolved_struct_type` on it from the position's declared type, and
 the backend reports **CE0113** for one that arrives unstamped. The extension and perk
 callables had three positions that stamped nothing -- the return value, and an argument at
@@ -173,7 +173,7 @@ def _generic_constructors(program):
 
 @pytest.mark.parametrize("case_id,body", _CASES, ids=[c[0] for c in _CASES])
 def test_declared_position_stamps_its_constructor(analyze_program, case_id, body):
-    """A generic constructor in a declared position leaves Pass 2 with its type stamped."""
+    """A generic constructor in a declared position leaves the typecheck pass with its type stamped."""
     analysis = analyze_program(_PRELUDE + body + _TAIL, name=case_id)
 
     assert not analysis.reporter.has_errors, (
@@ -186,6 +186,6 @@ def test_declared_position_stamps_its_constructor(analyze_program, case_id, body
 
     unstamped = [name for name, stamp in constructors if stamp is None]
     assert not unstamped, (
-        f"{case_id}: {unstamped} left Pass 2 with no resolved type. "
+        f"{case_id}: {unstamped} left the typecheck pass with no resolved type. "
         "The backend reports CE0113 for exactly this."
     )

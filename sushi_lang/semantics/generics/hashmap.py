@@ -125,8 +125,8 @@ def _validate_hashmap_new(
         er.emit(reporter, er.ERR.CE2058, call.loc, key_type=display_type(key_type))
         return
 
-    # The seam, not the backend-populated registry: during Pass 2 the registry holds
-    # only what Pass 1.8 derived, so reading it directly rejected every primitive key
+    # The seam, not the backend-populated registry: during the typecheck pass the registry holds
+    # only what the derive pass derived, so reading it directly rejected every primitive key
     # (#272). A perk implementation is the sanctioned hash override and counts too.
     from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
     has_hash = (builtin_method_exists(key_type, "hash")
@@ -411,7 +411,7 @@ def _validate_hashmap_entries(
 
 
 def hashmap_generic_struct() -> 'GenericStructType':
-    """The HashMap<K, V> generic struct, as Pass 0 registers it."""
+    """The HashMap<K, V> generic struct, as the collect pass registers it."""
     from sushi_lang.semantics.generics.types import GenericStructType, TypeParameter
     from sushi_lang.semantics.typesys import DynamicArrayType
 

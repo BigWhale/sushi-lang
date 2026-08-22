@@ -350,8 +350,8 @@ _add(ErrorMessage("CE0091", Severity.ERROR,
 _add(ErrorMessage("CE0128", Severity.ERROR,
     "circular struct dependency reached hash registration: {names}",
     Category.INTERNAL,
-    "Pass 1.8 topologically sorts the struct graph so a nested struct's hash is registered "
-    "before its parent's. A cycle there means a by-value containment cycle survived Pass 1.75, "
+    "The derive pass topologically sorts the struct graph so a nested struct's hash is registered "
+    "before its parent's. A cycle there means a by-value containment cycle survived the finite-types pass, "
     "which reports it as CE2095 and stops the analysis -- so reaching this is a gap in that "
     "check, not a user error. It used to be a bare ValueError rendered as CE0000."))
 
@@ -360,7 +360,7 @@ _add(ErrorMessage("CE0129", Severity.ERROR,
     Category.INTERNAL,
     "Every position that takes ownership routes through backend/ownership.py::consume, which "
     "reads the Provenance semantics stamped on the source expression. A missing stamp means "
-    "Pass 3 did not classify this position -- a gap in the borrow checker's coverage of the "
+    "The borrow pass did not classify this position -- a gap in the borrow checker's coverage of the "
     "ConsumingUse set, not a user error. It is fatal ON PURPOSE: a fallback that guessed the "
     "decision would be a twelfth derivation of the rule, which is the thing the seam exists to "
     "make impossible. Same treatment CE0124 gives a missing try-expression annotation."))

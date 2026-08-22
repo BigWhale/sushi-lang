@@ -1,6 +1,6 @@
 # Issue #171: a generic call whose argument is `self`, inside an extension body, was
-# not collected by Pass 1.5 (it never bound `self`), so the monomorphized identity__i32
-# did not exist and Pass 2 raised CE2061. Pass 1.5 now infers through Pass 2's own
+# not collected by the instantiate pass (it never bound `self`), so the monomorphized identity__i32
+# did not exist and the typecheck pass raised CE2061. The instantiate pass now infers through the typecheck pass's own
 # inferrer with `self` bound, so the instantiation is recorded.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "42\n"

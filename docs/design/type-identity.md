@@ -67,8 +67,8 @@ All three are one defect. Nominal identity removes the category.
 
 ## Consequences
 
-- **Never rebuild a named type.** If you have a name, look it up. Pass 1.7
-  (`ast_transform.resolve_struct_field_types`) resolves table entries **in
+- **Never rebuild a named type.** If you have a name, look it up. The resolve pass
+  (`resolve.resolve_struct_field_types`) resolves table entries **in
   place**; the monomorphizer publishes a shell into the cache and patches it in
   place. Both are correct because the table entry is the identity.
 - **Resolution stops at a named type.** `resolve_type_recursively` returns the
@@ -84,7 +84,7 @@ All three are one defect. Nominal identity removes the category.
 
 Whether a recursive type is well-*formed* is a separate question, answered by a
 separate pass. A type that contains itself **by value** has no finite size and is
-rejected with **CE2095** (`semantics/passes/infinite_types.py`), the way Rust
+rejected with **CE2095** (`semantics/passes/finite_types.py`), the way Rust
 reports E0072 and Go reports "invalid recursive type". Unbounded *generic*
 instantiation is a third mechanism again, **CE0122**.
 

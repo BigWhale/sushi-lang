@@ -161,7 +161,7 @@ class StatementValidator(RecursiveVisitor):
         self.type_validator._validate_foreach_statement(node)
 
     def visit_expand(self, node) -> None:
-        """Reject an Expand that survived to Pass 2 (CE0119)."""
+        """Reject an Expand that survived to the typecheck pass (CE0119)."""
         er.emit(self.type_validator.reporter, er.ERR.CE0119, node.loc,
                 message="expand(...) is only valid inside a function with a ...Ts type-pack parameter")
 
@@ -465,13 +465,13 @@ class ExpressionValidator(RecursiveVisitor):
         if hasattr(temp_method_call, 'resolved_enum_type') and temp_method_call.resolved_enum_type is not None:
             node.resolved_enum_type = temp_method_call.resolved_enum_type
 
-        # CRITICAL: Copy the receiver-mode stamp back (#327) -- Pass 3 and the backend
+        # CRITICAL: Copy the receiver-mode stamp back (#327) -- the borrow pass and the backend
         # read it off THIS node, and losing it here would pass a poke-self receiver by
         # value (the silently lost write of #326).
         if getattr(temp_method_call, 'callee_self_mode', None) is not None:
             node.callee_self_mode = temp_method_call.callee_self_mode
 
-        # The parameter-mode stamp travels with it: Pass 3 reads it off THIS node, so
+        # The parameter-mode stamp travels with it: the borrow pass reads it off THIS node, so
         # losing it makes every `nom` parameter of a method inert.
         if getattr(temp_method_call, 'callee_param_modes', None) is not None:
             node.callee_param_modes = temp_method_call.callee_param_modes

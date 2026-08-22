@@ -148,7 +148,7 @@ class ExtendDef(Node):
     self_mode: Optional[str] = None  # "peek"/"poke" when declared `(poke self, ...)` (#327);
     self_mode_span: Optional[Span] = None
     # What a `@(...)` target's arguments mean: a constraint, parameter names, or a mix.
-    # Stamped by Phase 0, which is the pass that knows which names are declared types (#393).
+    # Stamped by the collect pass, which knows which names are declared types (#393).
     target_shape: Optional["ExtensionTarget"] = None
 
 @dataclass
@@ -330,7 +330,7 @@ class Match(Stmt):
     scrutinee: "Expr"
     arms: List[MatchArm]
     # Concrete monomorphized enum type of the scrutinee, resolved by the type
-    # checker (Pass 2) and consumed by the backend. Stored here because the
+    # checker (the typecheck pass) and consumed by the backend. Stored here because the
     # backend cannot always re-derive it from the scrutinee expression alone
     # (e.g. an indexed element, a fn-field call, or a user method returning
     # Maybe/Result), and a miss would otherwise silently drop pattern bindings.
@@ -378,8 +378,8 @@ class ArrayLiteral(Node):
 class IndexAccess(Node):
     array: "Expr"
     index: "Expr"
-    inferred_element_type: Optional["Type"] = None  # Element type inferred by Pass 2.
-                                            # The backend reads Pass 2's stamp rather than
+    inferred_element_type: Optional["Type"] = None  # Element type inferred by the typecheck pass.
+                                            # The backend reads the typecheck pass's stamp rather than
                                             # re-deriving; with none, `rows[0].hash()` died
                                             # as CE0019 (#286). Siblings:
                                             # `inferred_return_type`,
@@ -452,8 +452,8 @@ class MethodCall(Node):
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
     resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type (populated by type checker)
     callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
-                                            # `poke self` (#327); stamped by Pass 2, read
-                                            # by Pass 3 (a poke call is a receiver WRITE)
+                                            # `poke self` (#327); stamped by the typecheck pass, read
+                                            # by the borrow pass (a poke call is a receiver WRITE)
                                             # and the backend (pass a pointer)
 
 @dataclass
@@ -497,7 +497,7 @@ class DynamicArrayFrom(Node):
 class CastExpr(Node):
     expr: "Expr"
     target_type: Type
-    source_type: Optional[Type] = None  # Operand's semantic type, stamped in Pass 2 (signedness for codegen)
+    source_type: Optional[Type] = None  # Operand's semantic type, stamped by the typecheck pass (signedness for codegen)
 
 @dataclass
 class Borrow(Node):

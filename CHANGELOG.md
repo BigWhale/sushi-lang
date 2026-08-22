@@ -8,8 +8,8 @@ All notable changes to Sushi Lang will be documented in this file.
 - **A conditional move no longer leaks the non-moving paths** (#414). A move inside an if
   arm, a match arm, or a loop body cancelled the owner's scope-exit free statically, so
   every path that skipped the move leaked the value — returning a local from one match
-  arm leaked it on the other arm, and which arm leaked depended on emission order. Pass 3
-  now stamps conditionally moved owners, and the backend guards exactly their frees with
+  arm leaked it on the other arm, and which arm leaked depended on emission order. The
+  borrow pass now stamps conditionally moved owners, and the backend guards exactly their frees with
   a runtime drop flag; an unconditional move keeps the zero-cost static skip.
 
 ### Added
@@ -42,6 +42,20 @@ All notable changes to Sushi Lang will be documented in this file.
   the same seam as an expression.
 
 ### Changed
+- **The semantic passes have names, not numbers.** The numbering had gone out of order:
+  `Pass 1` ran after `Pass 1.5`, `1.6`, `1.7`, `1.75` and `1.8`, five steps carried no
+  number at all, and `Pass 0` and `Phase 0` named one pass in two spellings. The fifteen
+  passes are now `collect`, `externs`, `libraries`, `entrypoint`, `instantiate`,
+  `monomorphize`, `resolve`, `finite-types`, `derive`, `shadowing` and `effects` over the
+  whole program, then `scope`, `typecheck`, `lift` and `borrow` per unit. A name cannot go
+  out of order. Four modules take their pass's name (`passes/resolve.py`,
+  `finite_types.py`, `derive.py`, `lift.py`), and the `derive` pass drives both halves of
+  its work — the clone loops moved out of `semantic_analyzer.py` into
+  `derive.register_all_clones`. "Phase" is now reserved for the three sub-steps of the
+  `typecheck` pass. The order lives in the `SemanticAnalyzer.check()` docstring;
+  `docs/internals/semantic-passes.md` documents each pass and no longer states the wrong
+  order. No compiler behaviour changed: no diagnostic, CLI flag or `EXPECT_*` directive
+  ever carried a pass number.
 - **The underscore rule is now one underscore between two digits**, checked for every
   base. The old terminals allowed any run of underscores in the interior, so `0xD__E`
   compiled and meant 222, and `0o7__7` meant 63; both are now **CE6006**. The rule

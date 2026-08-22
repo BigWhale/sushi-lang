@@ -1,6 +1,6 @@
 # The read shapes that already printed unsigned before issue #379 was fixed --
 # a `foreach` binding, a `match` binding, and a `const`. They are the control
-# column: the bug was in the shapes with no Pass 2 stamp, not in the formatter.
+# column: the bug was in the shapes with no the typecheck pass stamp, not in the formatter.
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

@@ -1,5 +1,5 @@
 # TWO instantiations of one generic-target extension, whose signature types have different
-# layouts. Pass 2 stamps a resolved type on the nodes of every monomorphized copy, so a
+# layouts. The typecheck pass stamps a resolved type on the nodes of every monomorphized copy, so a
 # shared body kept only the LAST instantiation's stamps and the function emitted for the
 # other returned a value of the wrong shape -- invalid IR ("value doesn't match function
 # result type"). Each instantiation owns its body now (#391), which is also what lets a

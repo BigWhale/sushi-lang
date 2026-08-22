@@ -1,4 +1,4 @@
-"""Pass 2 stamps the return type of a method call, and the backend may rely on it."""
+"""The typecheck pass stamps the return type of a method call, and the backend may rely on it."""
 from __future__ import annotations
 
 import dataclasses
@@ -76,7 +76,7 @@ def test_own_get_receiver_carries_its_struct_type(analyze_program):
 
     stamped = _find_get_call(analysis.program).inferred_return_type
 
-    assert stamped is not None, "Pass 2 left the receiver of .clone() untyped"
+    assert stamped is not None, "the typecheck pass left the receiver of .clone() untyped"
     assert isinstance(stamped, StructType), f"expected a StructType, got {type(stamped)}"
     assert stamped.name == "Holder"
     # Nominal identity (#240): the stamp must BE the table entry.
@@ -90,7 +90,7 @@ def test_list_get_receiver_carries_its_interned_maybe(analyze_program):
 
     stamped = _find_get_call(analysis.program).inferred_return_type
 
-    assert stamped is not None, "Pass 2 left the receiver of .clone() untyped"
+    assert stamped is not None, "the typecheck pass left the receiver of .clone() untyped"
     assert isinstance(stamped, EnumType), f"expected an EnumType, got {type(stamped)}"
     assert stamped.name == "Maybe<i32>"
     assert stamped is analysis.analyzer.enums.by_name["Maybe<i32>"]
@@ -149,7 +149,7 @@ def test_indexed_struct_receiver_carries_its_element_type(analyze_program):
 
     stamped = _find_index_access(analysis.program).inferred_element_type
 
-    assert stamped is not None, "Pass 2 left the indexed receiver untyped"
+    assert stamped is not None, "the typecheck pass left the indexed receiver untyped"
     assert isinstance(stamped, StructType), f"expected a StructType, got {type(stamped)}"
     assert stamped.name == "Row"
     assert stamped is analysis.analyzer.structs.by_name["Row"]
@@ -162,7 +162,7 @@ def test_indexed_enum_receiver_carries_its_element_type(analyze_program):
 
     stamped = _find_index_access(analysis.program).inferred_element_type
 
-    assert stamped is not None, "Pass 2 left the indexed receiver untyped"
+    assert stamped is not None, "the typecheck pass left the indexed receiver untyped"
     assert isinstance(stamped, EnumType), f"expected an EnumType, got {type(stamped)}"
     assert stamped.name == "E"
     assert stamped is analysis.analyzer.enums.by_name["E"]

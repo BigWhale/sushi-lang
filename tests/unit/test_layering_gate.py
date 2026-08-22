@@ -9,7 +9,7 @@ Two checks, because the invariant fails in two shapes:
 
 2. The shape the grep cannot see: a semantics pass that reads state only the
    backend populates (#239 -- the builtin-method registry was filled by
-   `backend/types/primitives/*` as an import side effect, so Pass 2 saw an
+   `backend/types/primitives/*` as an import side effect, so the typecheck pass saw an
    empty registry for 19 days, with no backend import anywhere). The
    discriminator: a full semantic run in a process where the backend was
    NEVER imported must produce the same diagnostics as a run where it was.
@@ -135,7 +135,7 @@ _ISOLATION_SCRIPT = textwrap.dedent('''
     }))
 ''')
 
-# A primitive-method call whose RETURN TYPE Pass 2 must infer from the
+# A primitive-method call whose RETURN TYPE the typecheck pass must infer from the
 # builtin-method registry -- the exact state #239 left unpopulated.
 _PROBE_PROGRAM = (
     "fn main() i32:\n"

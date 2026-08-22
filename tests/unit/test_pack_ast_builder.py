@@ -1,4 +1,4 @@
-"""P1-T3 AST-builder gate: type-pack params, v2 pack value-params, expand nodes."""
+"""AST-builder gate: type-pack params, v2 pack value-params, expand nodes."""
 from __future__ import annotations
 
 from sushi_lang.internals.parser import parse_to_ast

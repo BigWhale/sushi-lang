@@ -298,9 +298,10 @@ and run. Two gaps were closed to make this possible:
 
 - **Gap C — infer type params through function-typed arguments.** Generic call-site inference walks
   each declared parameter type against the argument type to bind type params; a `FunctionType`
-  branch was added to both twin unification routines (Pass 1.5 collection and Pass 2 validation) so
+  branch was added to both twin unification routines (`instantiate` collection and
+  `typecheck` validation) so
   a `fn(T) -> U` parameter recurses into its parameter types and return type, reaching the existing
-  binding logic for the nested `T`/`U`. Pass 1.5 additionally learned to *present* a `FunctionType`
+  binding logic for the nested `T`/`U`. The instantiate pass additionally learned to *present* a `FunctionType`
   for a **typed-param lambda** (`|i32 x| x * k`, params from the annotation, `ok_type` from the `->
   T` annotation or best-effort body inference) and for a **bare function reference** (`inc`, built
   from its `FuncSig`).
@@ -480,7 +481,7 @@ fn run() i32:
     return Result.Ok(g(41)?? + 1)     # 42
 ```
 
-This is a **minimal, expected-type-driven slice**, not a general lift of CE2093: Pass 1.5 collects
+This is a **minimal, expected-type-driven slice**, not a general lift of CE2093: the instantiate pass collects
 the instantiation from a `let` whose declared type is a `FunctionType` and whose value is a
 generic-fn name (unifying the signature against the expected type); the type pass then solves the
 type args, rewrites the `Name` to the mangled concrete name, and infers the concrete `FunctionType`.
@@ -539,7 +540,7 @@ Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
 | Capture analysis | `semantics/passes/scope.py` |
 | Lambda type-check, CE2094, bare-param inference | `semantics/passes/types/visitor.py` |
 | Expected-type propagation to bare-param lambdas | `semantics/passes/types/propagation.py` |
-| Lambda-lifting pass | `semantics/passes/lambda_lift.py` |
+| The `lift` pass | `semantics/passes/lift.py` |
 | Shared fn-synthesis wiring | `semantics/generics/synthesis.py:register_synthesized_function` |
 | Ownership predicate (single source of truth) | `semantics/typesys.py:owns_heap` (Phase 9 merged `is_owning_type` into it — see `docs/design/ownership-conventions.md` §6) |
 | Ownership seam (consume/bind/copy_out) | `semantics/ownership.py` (the `classify()` table), `backend/ownership.py` (the seam functions) |
@@ -547,7 +548,7 @@ Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
 | Runtime API (thunk, build value, indirect call, `emit_lambda`) | `backend/runtime/closures.py` |
 | Backend expr dispatch -> `emit_lambda` | `backend/expressions/__init__.py` (`case Lambda()`) |
 | Indirect call, non-`Name` callee routing | `backend/expressions/calls/dispatcher.py`, `backend/expressions/calls/utils.py` |
-| Generic higher-order unification (Pass 2 / Pass 1.5) | `semantics/passes/types/calls/generics.py:_unify_types_for_inference`; `semantics/generics/instantiate/types.py:unify_types` |
+| Generic higher-order unification (`typecheck` / `instantiate`) | `semantics/passes/types/calls/generics.py:_unify_types_for_inference`; `semantics/generics/instantiate/types.py:unify_types` |
 | `FunctionType` substitution (monomorphization) | `semantics/generics/monomorphize/transformer.py`; `semantics/generics/types.py`; `semantics/generics/extensions.py` |
 | Gap D (`List@(T)` extensibility) | `semantics/passes/collect/__init__.py:373` (List as generic struct); `backend/expressions/calls/dispatcher.py:268,308,355` (provider-first dispatch + receiver reconcile) |
 | T2.3 generic-fn-ref-under-annotation | `semantics/generics/instantiate/expressions.py`; `semantics/generics/instantiate/functions.py`; `semantics/passes/types/calls/generics.py` |
@@ -559,7 +560,7 @@ Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
 Where the passes actually run (worth knowing before touching any of the above): the live semantic
 pipeline is `semantics/semantic_analyzer.py`. (The old `semantics/pipeline.py` scaffold and the
 `_check_single_file` path were both deleted in Tier 3 — a single-file compile is a one-unit
-multi-file compile.) The lambda-lift pass (Pass 2.5, `passes/lambda_lift.py`) is inserted in
+multi-file compile.) The `lift` pass (`passes/lift.py`) is inserted in
 `_check_multi_file`, per unit, after type validation and before the borrow checker.
 
 ---

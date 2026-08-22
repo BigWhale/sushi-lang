@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Value:
     """Emit function call with argument type casting."""
-    # Call-through any expression yielding a function value. Pass 2 annotated the resolved
+    # Call-through any expression yielding a function value. The typecheck pass annotated the resolved
     # FunctionType, so emit the callee to a fat value and dispatch indirectly.
     if not isinstance(expr.callee, Name):
         from sushi_lang.semantics.typesys import FunctionType
@@ -187,7 +187,7 @@ def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
 
 
 def _settle_method_call_arguments(codegen: 'LLVMCodegen', expr, args: list) -> None:
-    """Settle a method call's arguments from the modes Pass 2 resolved."""
+    """Settle a method call's arguments from the modes the typecheck pass resolved."""
     modes = getattr(expr, "callee_param_modes", None)
     if modes is None:
         return
@@ -213,7 +213,7 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     """Emit a method call as a function call with the receiver as first argument (UFCS).
 
     Every built-in is resolved BEFORE the user-extension fallback, which is why an extension
-    method whose name collides with a built-in can never run -- Pass 2 rejects one as CE2097
+    method whose name collides with a built-in can never run -- the typecheck pass rejects one as CE2097
     rather than letting it be emitted and never called. The same precedence is implemented in
     validation and inference; see docs/design/method-resolution.md.
     """
@@ -342,9 +342,9 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
         raise KeyError(f"Extension method not found: {func_name}")
 
     # A `poke self` / `peek self` method (#327) takes its receiver by POINTER, so a
-    # write through `self` reaches the caller's value. Pass 2 stamped the resolution on
+    # write through `self` reaches the caller's value. The typecheck pass stamped the resolution on
     # the node; `emit_receiver_as_pointer` returns the receiver's slot address (with the
-    # load-through for a reference-parameter receiver). Pass 2/3 reject the shapes with
+    # load-through for a reference-parameter receiver). The typecheck and borrow passes reject the shapes with
     # no address (a temporary, a constant, a read-only root) before codegen.
     if getattr(expr, "callee_self_mode", None) is not None:
         from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer

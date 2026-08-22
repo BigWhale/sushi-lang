@@ -1,6 +1,6 @@
 # A generic function called from a TEMPLATE-target extension body, with the
 # argument's type coming from `self` (#392). The instantiation is known only at
-# Pass 1.6, when the body is substituted per instantiation -- so collection has
+# the monomorphize pass, when the body is substituted per instantiation -- so collection has
 # to read each monomorphized copy, not the template.
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0

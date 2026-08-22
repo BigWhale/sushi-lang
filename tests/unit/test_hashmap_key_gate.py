@@ -2,7 +2,7 @@
 
 Issue #272: CE2054 was dead code -- `HashMap.new()` never reached
 `_validate_hashmap_new`, and the gate read the backend-populated builtin registry,
-which is empty during Pass 2. The .sushi twins in tests/stdlib/generics/hashmap/
+which is empty during the typecheck pass. The .sushi twins in tests/stdlib/generics/hashmap/
 pin the diagnostics; this file pins the half stdout cannot show -- that the map's
 own key hashing calls the perk implementation instead of the derived inline hash.
 """

@@ -1,6 +1,6 @@
 # A perk-implementation method body must use a bare 'return <value>', not a
 # Result.Ok(...) wrapper. The perk/extension ABI returns the value unwrapped,
-# so wrapping it must fail Pass 2 with CE2091.
+# so wrapping it must fail the typecheck pass with CE2091.
 # EXPECT_ERROR_CODE: CE2091
 perk Display:
     fn display() string

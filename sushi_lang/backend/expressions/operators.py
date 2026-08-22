@@ -104,7 +104,7 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
         i1v = codegen.builder.fcmp_ordered(op, lhs, rhs)
         return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
 
-    # Integer comparisons at operand width. Pass 2's strict same-type rule
+    # Integer comparisons at operand width. The typecheck pass's strict same-type rule
     # (CE2510) guarantees equal widths; the i32 squeeze is kept only as a
     # defensive fallback for mismatched widths (it would truncate i64).
     if (isinstance(lhs.type, ir.IntType) and isinstance(rhs.type, ir.IntType)

@@ -369,7 +369,7 @@ def check_primitive_methods(receiver_type, method_name, validator):
     if not has_primitive_method(receiver_type, method_name):
         return None
     # A perk impl wins at validation and at codegen, so inference must let it win too, or
-    # Pass 2 types the call as the built-in's return while the backend calls the perk.
+    # the typecheck pass types the call as the built-in's return while the backend calls the perk.
     if validator.perk_impl_table.get_method(receiver_type, method_name) is not None:
         return None
     return PrimitiveMethodInferrer(receiver_type, method_name, validator)

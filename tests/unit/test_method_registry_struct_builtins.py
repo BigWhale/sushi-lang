@@ -94,7 +94,7 @@ def _infer(receiver_type, method_name, validator=None):
 
 @pytest.fixture
 def struct_p(analyze):
-    """The StructType `P` after a full analysis (so Pass 1.8 has run)."""
+    """The StructType `P` after a full analysis (so the derive pass has run)."""
     analyze(STRUCT_SRC)
     return StructType(name="P", fields=())
 
@@ -164,7 +164,7 @@ def test_list_monomorph_really_does_carry_a_registered_hash(analyze):
 
 def test_declines_when_a_perk_impl_of_that_name_exists(analyze):
     """Perk methods win at codegen (dispatcher step 12, before step 13), so inference must let them
-    win too -- otherwise Pass 2 would type the call as the auto-derived u64 while the backend
+    win too -- otherwise the typecheck pass would type the call as the auto-derived u64 while the backend
     emitted the perk body.
     """
     analyze(PERK_SRC)
@@ -239,7 +239,7 @@ fn main() i32:
 
 
 def test_ce2097_covers_a_monomorphized_generic_extension(analyze):
-    """The ordering hole: these enter the extension table after Pass 1.8, so the check has to run
+    """The ordering hole: these enter the extension table after the derive pass, so the check has to run
     after the merge loop, not immediately after 1.8.
     """
     reporter = analyze("""

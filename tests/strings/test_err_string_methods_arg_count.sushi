@@ -1,4 +1,4 @@
-# Test wrong argument counts for Phase 2 string methods
+# Test wrong argument counts for the string methods
 # EXPECT_ERROR_CODE: CE2009
 use <collections/strings>
 

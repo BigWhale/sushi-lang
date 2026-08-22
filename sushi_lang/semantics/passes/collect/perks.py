@@ -1,4 +1,4 @@
-"""Perk definition and implementation collection for Phase 0."""
+"""Perk definition and implementation collection."""
 
 from __future__ import annotations
 from dataclasses import dataclass, field

@@ -82,8 +82,8 @@ def test_ce0116_public_variadic_aborts_manifest(tmp_path):
     assert any(item.code == "CE0116" for item in reporter.items)
 
 
-# E2 (#71) coverage note: Pass 1.5's inference of an enum/struct-constructor DotCall
-# pack argument (`Color.Red()`) is done by Pass 2's shared inferrer. The three unit tests
+# E2 (#71) coverage note: the instantiate pass's inference of an enum/struct-constructor DotCall
+# pack argument (`Color.Red()`) is done by the typecheck pass's shared inferrer. The three unit tests
 # that used to pin the thin parallel inferrer's DotCall arm directly were removed with that
-# inferrer in #214; the behaviour is covered by test_p1t5_shared_inference.py,
-# test_p1t5_pack_inference.py, and the end-to-end pack tests under tests/generics/.
+# inferrer in #214; the behaviour is covered by test_shared_type_arg_inference.py,
+# test_pack_inference.py, and the end-to-end pack tests under tests/generics/.

@@ -259,9 +259,9 @@ def consume(codegen, source, value: ir.Value,
             target_type: Optional[Type], use: ConsumingUse) -> ir.Value:
     """Give `value` to a new owner, and return what the caller should store.
 
-    Reads the Provenance Pass 3 stamped on `source`, asks classify() what that means for
+    Reads the Provenance the borrow pass stamped on `source`, asks classify() what that means for
     `target_type`, and performs the answer: MOVE marks the source moved and returns the
-    value as-is; ADOPT returns it as-is; REJECT raises CE0129 (internal -- Pass 3 should
+    value as-is; ADOPT returns it as-is; REJECT raises CE0129 (internal -- the borrow pass should
     already have reported CE2411 for the same source before codegen runs).
     """
 
@@ -286,7 +286,7 @@ them (§5.2).
 
 **A conditional move carries a runtime drop flag (#414).** "Mark the source moved" is a
 compile-time fact, but a move inside an if arm, a match arm, or a loop body does not dominate the
-owner's scope exit: on the paths that skip the move, the static skip leaked the value. Pass 3
+owner's scope exit: on the paths that skip the move, the static skip leaked the value. The borrow pass
 counts branch depth; a move recorded deeper than its owner's declaration lands the name in the
 callable's `conditional_move_names` stamp (on the BODY block, so the perk-method wrapper shares
 it). The backend arms those bindings with an entry-block `i1` drop flag — set live at declaration
@@ -308,7 +308,7 @@ scopes and `borrow_state` — it *knows* a match binding is a binding, which is 
 be computed there.
 
 **What is shipped stamps `Provenance`, not the final `Ownership` decision** — a half-step short of
-what this section originally proposed, and a better split. Pass 3 (the borrow checker) is the only
+what this section originally proposed, and a better split. The borrow pass is the only
 side that can compute *where a value came from* — it has the AST, the scopes and `borrow_state` — so
 it stamps `Provenance` on the source node (`expr.ownership_provenance`). The backend supplies the
 other half, the resolved *target type* at its position, and both sides call the identical
@@ -319,7 +319,7 @@ binding borrows instead, §8); the backend uses its answer to decide what to emi
 reaches the backend with no `Provenance` stamped, the seam raises **CE0129** (internal) rather than
 guessing — this is the same transformation Tier 4.6 applied to try-expression types (CE0124), and it
 is the correct direction here for the identical reason: reaching this code path with no stamp means
-Pass 3 disagreed with itself.
+The borrow pass disagreed with itself.
 
 That single computation closed two defects no amount of backend tidying alone could have reached:
 `l.push(a)` followed by a use of `a` used to compile clean (the backend moved, but semantics never
@@ -413,7 +413,7 @@ through it was silently discarded (#253), re-wrapping it double-freed (#277), an
 it read the wrong field index (#279).
 
 **What it is now:** typed. `register_pattern_bindings` (`semantics/passes/borrow/bindings.py`) stamps each
-`match` binding's `var_type` from the variant Pass 2 already resolved, and the `foreach` binding is
+`match` binding's `var_type` from the variant the typecheck pass already resolved, and the `foreach` binding is
 stamped from the container's element type — `owns_heap` finally has something to answer on, and
 the three bugs above are closed rather than patched individually: #277 and #279 by the typing
 itself, and #253 by **CE2414**, which rejects every write through a binding (the read-only rule
@@ -685,8 +685,8 @@ that backs each rule — are `docs/design/borrowing.md`.
 
 ## 9. Risks, and how they resolved
 
-**Annotation completeness was a new failure mode.** `Provenance` had to survive Pass 1.6
-monomorphization and Pass 1.7 transformation, with the same going-wrong shape as
+**Annotation completeness was a new failure mode.** `Provenance` had to survive both
+monomorphization and field resolution, with the same going-wrong shape as
 `resolved_scrutinee_type`'s **CE0121**. It resolved the intended way: a missing stamp is **CE0129**
 (internal), so a latent gap surfaces loudly during rollout rather than silently misclassifying —
 exactly the trade the design accepted going in.

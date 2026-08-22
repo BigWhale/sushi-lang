@@ -1,4 +1,4 @@
-"""Declaration signature validation for type validation (Pass 2)."""
+"""Declaration signature validation for type validation (the typecheck pass)."""
 from __future__ import annotations
 
 from sushi_lang.internals import errors as er

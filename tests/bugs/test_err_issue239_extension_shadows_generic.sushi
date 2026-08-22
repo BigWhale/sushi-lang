@@ -1,5 +1,5 @@
 # Issue #239: the generic-monomorph hole was pure ordering. `_check_extension_shadows_builtin`
-# ran immediately after Pass 1.8, but monomorphized generic extension methods are merged into
+# ran immediately after the derive pass, but monomorphized generic extension methods are merged into
 # the extension table a few lines LATER -- so `extend Box@(i32) hash()` was never examined.
 # It compiled, and `b.hash()` printed the auto-derived FNV hash rather than `1`.
 #

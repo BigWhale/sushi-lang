@@ -1,4 +1,4 @@
-"""Return-reachability analysis for type validation (Pass 2)."""
+"""Return-reachability analysis for type validation (the typecheck pass)."""
 from __future__ import annotations
 
 from sushi_lang.semantics.ast import Block, Stmt, Return, If, Match

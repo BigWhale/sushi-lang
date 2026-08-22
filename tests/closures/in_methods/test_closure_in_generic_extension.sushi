@@ -1,6 +1,6 @@
 # A lambda in a generic-target extension body lifts once PER INSTANTIATION:
 # each monomorphized copy owns its body, so each copy owns its lambda (#399).
-# The copies get no Pass 1 walk of their own, so their captures must be
+# The copies get no scope-pass walk of their own, so their captures must be
 # stamped before lifting.
 # EXPECT_STDOUT_EXACT: "11 21\n"
 struct Box@(T):

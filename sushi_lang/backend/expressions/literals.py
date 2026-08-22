@@ -115,7 +115,7 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                             infer_expr_semantic_type, is_unsigned_type,
                         )
                         # bool-returning string methods lower to i8, not i1, so they reach
-                        # the integer path. Gated on Pass 2's stamp, so a plain bool keeps
+                        # the integer path. Gated on the typecheck pass's stamp, so a plain bool keeps
                         # its 1/0 rendering.
                         inferred = getattr(part, 'inferred_return_type', None)
                         if inferred == BuiltinType.BOOL:
@@ -124,7 +124,7 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                             continue
 
                         # Signedness from the part's semantic type - the same source the
-                        # print statements use; it reads Pass 2's stamp before falling back
+                        # print statements use; it reads the typecheck pass's stamp before falling back
                         # to its own reconstruction.
                         part_type = infer_expr_semantic_type(codegen, part)
                         is_signed = not is_unsigned_type(part_type)

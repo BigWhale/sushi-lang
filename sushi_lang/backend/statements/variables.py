@@ -274,12 +274,12 @@ def _emit_element_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     # the freed buffer. Rust orders `a[i] = v` the same way.
     val = codegen.expressions.emit_expr(stmt.value)
 
-    # The element type is the stamp Pass 2 put on the target while inferring it. The
-    # backend never re-derives it: a miss is a gap in Pass 2, not a user error.
+    # The element type is the stamp the typecheck pass put on the target while inferring it. The
+    # backend never re-derives it: a miss is a gap in the typecheck pass, not a user error.
     element_type = getattr(target, 'inferred_element_type', None)
     if element_type is None:
         raise_internal_error("CE0015", message="indexed assignment target carries no "
-                                               "element type from Pass 2")
+                                               "element type from the typecheck pass")
 
     val = consume(codegen, stmt.value, val, element_type, ConsumingUse.ELEMENT_ASSIGN)
 

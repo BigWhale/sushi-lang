@@ -1,4 +1,4 @@
-# Issue #341: the foreach ITEM's type must not outlive the loop in Pass 2. The item
+# Issue #341: the foreach ITEM's type must not outlive the loop in the typecheck pass. The item
 # `p` (an i32 here) shadows the outer `i32[] p` for the LOOP ONLY; after the loop the
 # outer local's type is back, so `eat(p)` type-checks. It used to be a false CE2006
 # ("expected i32[], got i32") because `validator.variable_types` kept the item's entry.

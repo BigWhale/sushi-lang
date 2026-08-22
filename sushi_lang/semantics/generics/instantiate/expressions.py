@@ -113,7 +113,7 @@ class ExpressionScanner:
             self.scan_expression(expr.elements)
 
         elif isinstance(expr, Lambda):
-            # Lambda bodies are still present at Pass 1.5 (lambda-lifting is Pass 2.5), so a
+            # Lambda bodies are still present at the instantiate pass (lambda-lifting is the lift pass), so a
             # generic call inside one must be collected. An expression body scans directly; a
             # block body (only valid as a `let` RHS) is walked through the injected block
             # scanner. Types depending on the lambda's own (possibly bare) params can't be
@@ -184,7 +184,7 @@ class ExpressionScanner:
         generic_func = self.generic_funcs[function_name]
 
         # Explicit `@(...)` type args (issue #137) override inference. If the arity
-        # is wrong we collect nothing here and let Pass 2 report CE2062.
+        # is wrong we collect nothing here and let the typecheck pass report CE2062.
         explicit = call.type_args
         if explicit:
             from sushi_lang.semantics.generics.explicit_type_args import (
@@ -217,10 +217,10 @@ class ExpressionScanner:
                         self.instantiations.add(("Result", (ret_type, std_error)))
 
             # Note: We don't emit errors here if inference fails
-            # Type validation will catch that in Pass 2
+            # Type validation will catch that in the typecheck pass
 
     def _infer_arg_type(self, arg_expr):
-        """Infer a generic call argument's type through Pass 2's real inferrer."""
+        """Infer a generic call argument's type through the typecheck pass's real inferrer."""
         from sushi_lang.semantics.ast import Lambda
         if self.type_validator is None:
             return None
@@ -230,8 +230,8 @@ class ExpressionScanner:
         arg_type = self.type_validator.infer_expression_type(arg_expr)
         if arg_type is None and getattr(arg_expr, "method", None) == "clone":
             # `.clone()` returns its receiver's type BY DEFINITION (it is total over
-            # types), but at Pass 1.5 the receiver's type is still a GenericTypeRef --
-            # the interned instance does not exist until Pass 1.6 -- so Pass 2's clone
+            # types), but at the instantiate pass the receiver's type is still a GenericTypeRef --
+            # the interned instance does not exist until the monomorphize pass -- so the typecheck pass's clone
             # inference (keyed on StructType/EnumType) declines it and `f(p.clone())`
             # was never collected (F8; the pin was CE2061). Fall back to the receiver.
             receiver = getattr(arg_expr, "receiver", None)

@@ -70,7 +70,7 @@ def emit_array_method(
                 # Deliberately NOT through resolve_name_slot (#248), unlike every other
                 # address site: fill/reverse WRITE through the pointer, and a constant's
                 # global is .rodata, where a store is undefined behaviour rather than a
-                # diagnostic. CE2096 rejects it in Pass 2; the locals-only lookup here
+                # diagnostic. CE2096 rejects it in the typecheck pass; the locals-only lookup here
                 # means no such binary can be produced even if that check is bypassed.
                 from sushi_lang.semantics.ast import Name
                 if isinstance(expr.receiver, Name):

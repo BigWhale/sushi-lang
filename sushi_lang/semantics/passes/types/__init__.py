@@ -1,4 +1,4 @@
-"""Pass 2: Type validation and inference."""
+"""The typecheck pass: type validation and inference."""
 from __future__ import annotations
 from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
@@ -56,7 +56,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 
 
 class TypeValidator:
-    """Pass 2: Type validation and inference."""
+    """The typecheck pass: type validation and inference."""
 
     def __init__(self, reporter: Reporter, tables: 'SymbolTables', current_unit_name: Optional[str] = None, monomorphized_functions: Optional[Dict[str, tuple]] = None) -> None:
         self.reporter = reporter

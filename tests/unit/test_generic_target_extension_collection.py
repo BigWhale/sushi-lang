@@ -1,9 +1,9 @@
-"""Pass 1.5 reads every extension declaration, whichever list it is filed under (#389).
+"""The instantiate pass reads every extension declaration, whichever list it is filed under (#389).
 
 The AST builder splits extensions two ways: a plain target goes to `program.extensions`, and
 a target spelled `@(...)` goes to `program.generic_extensions` -- CONCRETE arguments
 included, so `extend List@(i32)` is in the second list beside the `extend Box@(T)`
-templates. Pass 1.5 walked the first list only, so a generic type named in such a
+templates. The instantiate pass walked the first list only, so a generic type named in such a
 declaration was never collected and the declaration reported a false CE2001, for a type the
 program declares.
 
@@ -90,7 +90,7 @@ def test_a_generic_target_declaration_interns_the_types_it_names(
 
     assert interned in _interned_names(analysis), (
         f"{case_id}: '{interned}' is named by the declaration and was never interned, so "
-        "Pass 1.5 did not read it. The declaration reports a false CE2001."
+        "the instantiate pass did not read it. The declaration reports a false CE2001."
     )
     assert not analysis.reporter.has_errors, (
         f"{case_id}: semantic analysis reported an error:\n"

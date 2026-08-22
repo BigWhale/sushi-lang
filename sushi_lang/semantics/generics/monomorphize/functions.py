@@ -396,7 +396,7 @@ class FunctionMonomorphizer:
             pass
 
     def _get_arg_inferrer(self, var_types: Dict[str, Type]):
-        """Pass 2's TypeValidator over the whole program, seeded with this scope."""
+        """The typecheck pass's TypeValidator over the whole program, seeded with this scope."""
         tables = getattr(self.monomorphizer, "tables", None)
         if tables is None:
             return None
@@ -428,7 +428,7 @@ class FunctionMonomorphizer:
         inferrer = self._get_arg_inferrer(var_types)
 
         for arg_expr, param in zip(call_args, generic_func.params, strict=False):
-            # Pass 2's shared inferrer types any expression, not just a bare Name. The
+            # The typecheck pass's shared inferrer types any expression, not just a bare Name. The
             # var-type map is the fallback for unit-test paths with no SymbolTables; a
             # Names-only walk aborted on the FIRST non-Name argument
             # argument still supplied the type parameter (issue #214).

@@ -23,7 +23,7 @@ def monomorphize_extension_method(
 
     The substitutor is REQUIRED, and it is what gives this instantiation its own body.
     An optional one would default to sharing the template's body with every other
-    instantiation, which is the defect (#391): Pass 2's stamps and Pass 3's ownership
+    instantiation, which is the defect (#391): the typecheck pass's stamps and the borrow pass's ownership
     decisions are per instantiation and would land on the same nodes.
     """
     if len(type_args) != len(generic_method.type_params):

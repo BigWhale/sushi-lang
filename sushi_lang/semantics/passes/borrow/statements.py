@@ -220,7 +220,7 @@ def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:
     paths: list[FlowFacts] = []
     for arm in stmt.arms:
         restore_flow(checker, entry)
-        # The scrutinee type gives each binding its var_type; Pass 2 stamps it (CE0121
+        # The scrutinee type gives each binding its var_type; the typecheck pass stamps it (CE0121
         # guards that). The scope closes BEFORE the path snapshot, so the join sees the
         # outer local's facts, never the binding's.
         with BindingScope(checker) as scope, _branch(checker):
@@ -235,7 +235,7 @@ def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:
                 clear_borrows(checker)
         if not terminates(arm.body):
             paths.append(snapshot_flow(checker))
-    # A `match` is exhaustive (Pass 2 enforces it), so unlike an `if` with no else there
+    # A `match` is exhaustive (the typecheck pass enforces it), so unlike an `if` with no else there
     # is no fall-through path to add: some arm always runs.
     restore_flow(checker, FlowFacts.join(paths))
 

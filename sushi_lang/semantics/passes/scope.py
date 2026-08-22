@@ -21,7 +21,7 @@ class VariableInfo:
 
 
 class ScopeAnalyzer:
-    """Pass 1: Scope and variable usage analysis."""
+    """The scope pass: scope and variable usage analysis."""
 
     def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None) -> None:
         self.reporter = reporter
@@ -510,7 +510,7 @@ class ScopeAnalyzer:
                 if isinstance(base, Name):
                     self._borrow_variable(base.id, base.loc)
                 else:
-                    # Not a place at all (a call result, a literal). Pass 3 rejects it as
+                    # Not a place at all (a call result, a literal). The borrow pass rejects it as
                     # CE2404; here it is just an ordinary expression to walk.
                     self._check_expression(expr.expr)
             case RangeExpr():
