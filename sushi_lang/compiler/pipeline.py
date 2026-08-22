@@ -17,9 +17,19 @@ from sushi_lang.semantics.units import Unit, UnitManager
 
 
 def _check_library_platform(metadata: dict, lib_path: str) -> None:
-    """Reject a `.slib` built for a different platform (CE3504)."""
+    """Reject a `.slib` carrying bitcode built for a different platform (CE3504).
+
+    A source library states a platform too -- the machine that produced it -- but
+    nothing in it is machine code, so the field says nothing about where it can be
+    used. Skipping the check for `kind == "source"` is the whole cross-platform fix
+    (`TODO.md` A3): the gate used to reject the WHOLE file over one field, so a
+    library carrying nothing platform-bound was refused anyway.
+    """
     from sushi_lang.backend.library_errors import LibraryError
     from sushi_lang.backend.platform_detect import current_platform_name
+
+    if metadata.get("kind") == "source":
+        return
 
     lib_platform = metadata.get("platform")
     host = current_platform_name()
@@ -301,7 +311,7 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
         # link time), and any CE5006 rejection aborts before the expensive
         # bitcode compilation.
         from sushi_lang.backend.library_manifest import (
-            LibraryManifestGenerator, resolve_library_version,
+            LibraryManifestGenerator, collect_unit_source, resolve_library_version,
         )
         # Resolve the library's own version FIRST: a missing or contradicted version is
         # CE3505, and there is no point compiling bitcode for a library that cannot be
@@ -314,14 +324,22 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
             (templates.get("closure_summary") or {}).get("private_functions", [])
         )
 
-        bitcode = cg.compile_to_bitcode(compilation_order,
-                                        debug=bool(args.dump_ll), opt=args.opt,
-                                        verify=not args.no_verify,
-                                        monomorphized_extensions=monomorphized_extensions,
-                                        exported_private_functions=closure_fn_names)
+        kind = args.lib_kind
+        # A source library needs no bitcode at all. A hybrid still compiles it, and so
+        # does a binary library, which is what every build produced before v4.
+        if kind == "source":
+            bitcode = b""
+        else:
+            bitcode = cg.compile_to_bitcode(compilation_order,
+                                            debug=bool(args.dump_ll), opt=args.opt,
+                                            verify=not args.no_verify,
+                                            monomorphized_extensions=monomorphized_extensions,
+                                            exported_private_functions=closure_fn_names)
+
+        source = collect_unit_source(compilation_order) if kind != "binary" else None
 
         manifest_gen.generate(compilation_order, out_path, bitcode, templates=templates,
-                              library_version=library_version, kind="binary")
+                              library_version=library_version, kind=kind, source=source)
 
         if args.write_ll:
             try:

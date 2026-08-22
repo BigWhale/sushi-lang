@@ -1,18 +1,21 @@
 # Design: `.slib` Libraries — source-first distribution
 
-**Status: DESIGN, landing in phases.** §1–§4 and §6 describe the target state and are
-**not built yet**. §5 describes the binary path, which is the code that runs today.
-Each phase below moves one part from DESIGN to BUILT; this banner records where the
-line is.
+**Status: landing in phases.** §1–3, §5 and §6 describe code that runs today. §4 is the
+consumer half and is **not built yet**: a source library can be produced, and nothing
+reads one back. Each phase below moves one part from DESIGN to BUILT; this banner
+records where the line is.
 
 | Phase | Content | State |
 |---|---|---|
 | 1 | This document | BUILT |
-| 2 | Container VERSION 4, manifest fields, a `semver` module under `sushi_lang/internals/`, CE3503/CE3505 | DESIGN |
-| 3 | `--lib-kind source` writes the source section | DESIGN |
+| 2 | Container VERSION 4, manifest fields, a `semver` module under `sushi_lang/internals/`, CE3503/CE3505/CE3506 | BUILT |
+| 3 | `--lib-kind source` writes the source section; the platform gate becomes kind-conditional | BUILT |
 | 4 | The consumer compiles library source as ordinary units | DESIGN |
-| 5 | `slib-info` and the `sushic` fallback read v4 | DESIGN |
+| 5 | `slib-info` and the `sushic` fallback report the v4 fields | DESIGN |
 | 6 | User-facing docs | DESIGN |
+
+Until phase 4 lands, `--lib-kind` still defaults to `binary`: a default that produced
+libraries nothing could consume would be worse than no flag.
 
 Written for a compiler contributor. The user-facing guide is
 [`docs/libraries.md`](../libraries.md), and the on-disk byte format is specified in
@@ -87,8 +90,10 @@ Integrity is checked strictly in order, one code per failure mode, all in
 - **CE3509** — version mismatch. The reader accepts `VERSION == 4` only. There is no
   backward-compat shim and none is needed: Sushi has no users in the wild, so an
   older `.slib` is rejected, not upgraded.
-- **CE3510** / **CE3511** — a section is truncated (`f.read(n)` returned fewer bytes
-  than the length prefix promised)
+- **CE3510** / **CE3506** / **CE3511** — the metadata, source or bitcode section is
+  truncated (`f.read(n)` returned fewer bytes than the length prefix promised). One
+  code per section rather than one shared code: the text names which section is short,
+  which is what tells a reader where the file was cut.
 - **CE3512** — a blob is present but is not valid MessagePack
 - **CE3513** — total file size exceeds the 1 GiB sanity limit
 
