@@ -48,10 +48,16 @@ extra_css:
 plugins:
   - search
 
+# Stamps the version, the build date and the commit into the footer.
+# The site is not versioned: it always shows main, and the stamp says which main.
+hooks:
+  - docs/hooks/version_footer.py
+
 # Kept in the repo but not built as site pages.
 exclude_docs: |
   /README.md
   sushi-pygments/
+  hooks/
   **/__pycache__/
 
 # Present in the build but intentionally not nav pages (no --strict warning).

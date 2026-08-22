@@ -42,6 +42,14 @@ All notable changes to Sushi Lang will be documented in this file.
   the same seam as an expression.
 
 ### Changed
+- **The documentation site names its version.** The footer of every page on
+  <https://bigwhale.github.io/sushi-lang> now reads
+  `Sushi Lang <version> - documentation generated <date> - commit <sha>`. The site is
+  built from main and carried no version, so a reader could not tell which compiler the
+  pages describe. A MkDocs hook (`docs/hooks/version_footer.py`) reads the version from
+  `pyproject.toml`, because the docs build has no `sushi_lang` install; a version it
+  cannot read stops the build rather than publishing "unknown". The site stays
+  unversioned: it always shows main, and the stamp says which main.
 - **The semantic passes have names, not numbers.** The numbering had gone out of order:
   `Pass 1` ran after `Pass 1.5`, `1.6`, `1.7`, `1.75` and `1.8`, five steps carried no
   number at all, and `Pass 0` and `Phase 0` named one pass in two spellings. The fifteen
