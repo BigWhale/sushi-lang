@@ -215,6 +215,21 @@ def test_docs_present():
     assert not missing, f"documented stdlib pages missing under {DOCS_ROOT}: {missing}"
 
 
+def test_semantic_layer_skips_are_covered_by_the_compile_layer():
+    """A module excused from the semantic layer must still be a case the compile layer runs.
+
+    The excuse for skipping these two is "the compile layer below covers them". That claim
+    is only true while they remain in CASES -- drop one from CASES and the skip silently
+    becomes zero coverage rather than one layer of it.
+    """
+    orphaned = SEMANTIC_LAYER_SKIP - set(CASE_IDS)
+    assert not orphaned, (
+        f"{sorted(orphaned)} are excused from the semantic layer but are not compile-layer "
+        f"cases either, so nothing covers them. Remove them from SEMANTIC_LAYER_SKIP or "
+        f"restore them to CASES."
+    )
+
+
 @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
 def test_documented_module_resolves(case, analyze):
     """Semantic layer: the documented program resolves with no semantic errors."""

@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "Point hash: 14687699039417897699\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Test that basic struct hashing still works (should pass even before we wire up the derive pass)
+# Basic struct hashing under dual registration (the collect pass + the derive pass).
 
 struct Point:
     i32 x
@@ -8,7 +8,6 @@ struct Point:
 
 fn main() i32:
     let Point p = Point(10, 20)
-    # This should work if old the collect pass registration is still active
     let u64 h = p.hash()
     println("Point hash: {h}")
     return Result.Ok(0)

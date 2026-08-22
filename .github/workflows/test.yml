@@ -14,7 +14,6 @@ jobs:
   # Stage 0: lint. Cheap (seconds) and blocking - the quality gate Tier 5.1
   # installed so the F821/F841 bug class cannot regenerate.
   lint:
-    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     container:
       image: debian:trixie-slim
@@ -48,7 +47,7 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          uv run ruff check sushi_lang tests
+          uv run ruff check sushi_lang tests .github/scripts
 
       # Tier 4.1 layering gate (#276): semantics must never import backend.
       # The documented grep, run for real. tests/unit/test_layering_gate.py
@@ -79,7 +78,6 @@ jobs:
           uv run mypy sushi_lang | tail -2 || true
 
   pytest:
-    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     container:
       image: debian:trixie-slim
@@ -110,17 +108,29 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          uv run pytest -q
+          # Absolute path: --junit-xml has resolved relative to cwd vs rootdir differently
+          # across pytest majors, and the badges job has to find the file afterwards.
+          uv run pytest -q --junit-xml="$GITHUB_WORKSPACE/pytest-report.xml"
+
+      # !cancelled(), not success(): a FAILING pytest run is precisely the run whose
+      # numbers the badge must publish. Only a cancellation leaves nothing worth reading.
+      - name: Upload pytest report
+        if: ${{ !cancelled() && github.event_name == 'push' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: pytest-report
+          path: pytest-report.xml
+          retention-days: 1
+          if-no-files-found: error
 
   # Stage 2: leak gate on both platforms, after pytest and before the full suites.
   # Uses the malloc-interposer (tests/leakcheck), which runs in hosted CI on both
   # Linux and macOS (unlike `leaks`, which cannot attach on the hosted macOS runner).
   # --leaks-only is a SELECTOR, not a stronger check: the stage 3 full suites enforce
-  # EXPECT_NO_LEAKS too. This stage exists to fail in ~1 minute over the 96 annotated
-  # tests instead of ~7 over all 1293.
+  # EXPECT_NO_LEAKS too. This stage exists to fail fast over the ~350 annotated tests
+  # instead of the whole corpus.
   leaks-linux:
     needs: pytest
-    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     container:
       image: debian:trixie-slim
@@ -155,7 +165,6 @@ jobs:
 
   leaks-macos:
     needs: pytest
-    if: github.event_name != 'push'
     runs-on: macos-15
 
     steps:
@@ -191,7 +200,6 @@ jobs:
   # Stage 3: the full suites, only after the leak gate passes on both platforms.
   test-linux:
     needs: [leaks-linux, leaks-macos]
-    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     container:
       image: debian:trixie-slim
@@ -222,11 +230,24 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          uv run python tests/run_tests.py --enhanced
+          # pipefail so a failing runner is not masked by tee's exit status. This job is
+          # the gate AND the source of the sushi badge, so both have to stay honest.
+          set -o pipefail
+          uv run python tests/run_tests.py --enhanced --json | tee corpus-results.json
+
+      # if-no-files-found: error is load-bearing. A runner that died before emitting
+      # anything must fail this job, not hand the badge step an empty file to guess at.
+      - name: Upload corpus results
+        if: ${{ !cancelled() && github.event_name == 'push' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: corpus-results
+          path: corpus-results.json
+          retention-days: 1
+          if-no-files-found: error
 
   test-macos:
     needs: [leaks-linux, leaks-macos]
-    if: github.event_name != 'push'
     runs-on: macos-15
 
     steps:
@@ -265,147 +286,81 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run --python 3.13 python -m pytest tests/unit/test_docs_stdlib_smoke.py -q
 
+  # Badge publication. Three properties the job this replaced did not have:
+  #   - it never runs a suite itself; it consumes THIS run's artifacts, so the badge
+  #     cannot disagree with the gate it claims to describe;
+  #   - it publishes on a failing run too, because that is the run whose numbers matter;
+  #   - every failure is fatal. A badge that cannot be computed is not published, since a
+  #     stale green is worse than a missing badge.
   badges:
-    if: github.event_name == 'push'
+    needs: [pytest, test-linux, test-macos]
+    if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
-    container:
-      image: debian:trixie-slim
+    # No container and no setup-sushi: make_badges.py is stdlib-only, so the runner's
+    # system python3 is enough -- seconds instead of a full toolchain install.
+    concurrency:
+      # Two quick merges must not race on the gist PATCH; the older publish loses.
+      group: badges-${{ github.ref }}
+      cancel-in-progress: true
+    env:
+      GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout badge script
         uses: actions/checkout@v6
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
 
-      - name: Set up Sushi toolchain
-        uses: ./.github/actions/setup-sushi
-
-      - name: Run tests
-        id: run_tests
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          uv run python tests/run_tests.py --json > test_results.json || true
-          cat test_results.json
+      # continue-on-error, deliberately: a missing artifact means the producing job died,
+      # and the badge must then go RED rather than the workflow failing and leaving
+      # yesterday's green in place. make_badges.py separates "missing because the job
+      # failed" (render red) from "missing although the job succeeded" (fatal).
+      - name: Download pytest report
+        uses: actions/download-artifact@v8
         continue-on-error: true
+        with:
+          name: pytest-report
 
-      - name: Generate badge data
+      - name: Download corpus results
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: corpus-results
+
+      - name: Render badges
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          uv run python << 'EOF'
-          import json
+          python3 .github/scripts/make_badges.py \
+            --corpus corpus-results.json \
+            --corpus-job-result "${{ needs['test-linux'].result }}" \
+            --pytest pytest-report.xml \
+            --pytest-job-result "${{ needs.pytest.result }}" \
+            --macos-job-result "${{ needs['test-macos'].result }}" \
+            --payload gist_payload.json \
+            --summary "$GITHUB_STEP_SUMMARY"
 
-          # Read test results
-          with open('test_results.json', 'r') as f:
-              results = json.load(f)
-
-          total = results['total_tests']
-          passed = results['passed']
-          failed = results['failed']
-
-          # Badge 1: Status (Pass/Fail)
-          if failed == 0:
-              status_badge = {
-                  "schemaVersion": 1,
-                  "label": "tests",
-                  "message": "passing",
-                  "color": "brightgreen"
-              }
-          else:
-              status_badge = {
-                  "schemaVersion": 1,
-                  "label": "tests",
-                  "message": "failing",
-                  "color": "red"
-              }
-
-          # Badge 2: Total tests
-          total_badge = {
-              "schemaVersion": 1,
-              "label": "total tests",
-              "message": str(total),
-              "color": "blue"
-          }
-
-          # Badge 3: Passed tests
-          passed_badge = {
-              "schemaVersion": 1,
-              "label": "passed",
-              "message": str(passed),
-              "color": "brightgreen"
-          }
-
-          # Badge 4: Failed tests
-          if failed == 0:
-              failed_badge = {
-                  "schemaVersion": 1,
-                  "label": "failed",
-                  "message": "0",
-                  "color": "brightgreen"
-              }
-          else:
-              failed_badge = {
-                  "schemaVersion": 1,
-                  "label": "failed",
-                  "message": str(failed),
-                  "color": "red"
-              }
-
-          # Save badge data
-          with open('badge_status.json', 'w') as f:
-              json.dump(status_badge, f)
-
-          with open('badge_total.json', 'w') as f:
-              json.dump(total_badge, f)
-
-          with open('badge_passed.json', 'w') as f:
-              json.dump(passed_badge, f)
-
-          with open('badge_failed.json', 'w') as f:
-              json.dump(failed_badge, f)
-
-          print(f"Generated badges: {total} total, {passed} passed, {failed} failed")
-          EOF
-
-      - name: Update Gist with badge data
-        env:
-          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+      - name: Select the Gist for this repository
         run: |
-          # Determine which Gist to use based on repository
           if [ "${{ github.repository }}" = "BigWhale/sushi-lang" ]; then
-            GIST_ID="5bfbd5156dec23acfe18dd7956e251ba"
-            echo "Using public Gist for sushi-lang repository"
+            echo "GIST_ID=5bfbd5156dec23acfe18dd7956e251ba" >> "$GITHUB_ENV"
           else
-            GIST_ID="e893b92ba7b7561fae565f832f83159d"
-            echo "Using dev Gist for sushi repository"
+            echo "GIST_ID=e893b92ba7b7561fae565f832f83159d" >> "$GITHUB_ENV"
           fi
 
-          # Update all badge files in a single API call
-          echo "Updating Gist $GIST_ID with badge data..."
+      # env (not secrets) in a step `if:` is the fork-safe idiom: a fork pushing to its own
+      # main still renders and validates the badges, and skips only the publish.
+      # --fail-with-body matters -- the old curl had no --fail, so a 401 from an expired
+      # token printed "Successfully updated Gist".
+      - name: Publish badges to Gist
+        if: ${{ env.GIST_TOKEN != '' }}
+        run: |
+          curl --fail-with-body -sS -X PATCH \
+            -H "Authorization: Bearer $GIST_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/gists/$GIST_ID" \
+            --data @gist_payload.json
 
-          STATUS_CONTENT=$(cat badge_status.json | jq -R -s '.')
-          TOTAL_CONTENT=$(cat badge_total.json | jq -R -s '.')
-          PASSED_CONTENT=$(cat badge_passed.json | jq -R -s '.')
-          FAILED_CONTENT=$(cat badge_failed.json | jq -R -s '.')
-
-          curl -X PATCH \
-            -H "Authorization: token $GIST_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/gists/$GIST_ID \
-            -d @- << EOF
-          {
-            "files": {
-              "badge_status.json": {
-                "content": $STATUS_CONTENT
-              },
-              "badge_total.json": {
-                "content": $TOTAL_CONTENT
-              },
-              "badge_passed.json": {
-                "content": $PASSED_CONTENT
-              },
-              "badge_failed.json": {
-                "content": $FAILED_CONTENT
-              }
-            }
-          }
-          EOF
-
-          echo "Successfully updated Gist with badge data"
+      - name: Note skipped publish
+        if: ${{ env.GIST_TOKEN == '' }}
+        run: echo "No GIST_TOKEN in this repository -- badges were rendered but not published."

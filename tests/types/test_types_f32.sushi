@@ -1,6 +1,14 @@
-fn main() i32:
-  # For now, f32 support is limited since literals default to f64
-  # This test just verifies f32 variables can be declared
+# EXPECT_STDOUT_EXACT: "1.5\n4.5\n2.25\n"
+# f32 declaration, arithmetic and printing. A bare float literal is f64, so an f32
+# binding needs the cast (Known Limitation 12).
 
-  # Test that we can compile without crashing - basic validation
-  return Result.Ok(0)
+fn main() i32:
+    let f32 half = 1.5 as f32
+    let f32 triple = half * (3.0 as f32)
+    let f32 square = half * half
+
+    println(half)
+    println(triple)
+    println(square)
+
+    return Result.Ok(0)

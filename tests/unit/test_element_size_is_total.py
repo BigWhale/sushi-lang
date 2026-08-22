@@ -69,15 +69,16 @@ def test_a_pointer_element_has_a_size(codegen):
     assert int(size.constant) == 8
 
 
-@pytest.mark.parametrize("width", [1, 8, 16, 32, 64])
+# i1 is absent by construction, not by exception: it is not an element type, because `bool`
+# is lowered to i8. Filtering it out beats skipping it, so a reported skip always means the
+# environment could not run the case.
+@pytest.mark.parametrize("width", [8, 16, 32, 64])
 def test_the_two_size_helpers_agree_on_integers(codegen, width):
     """The sibling was total over integer widths; this one must be too.
 
     They disagreeing IS the bug: one is a hand-written chain of `==` comparisons, the
     other reads the width off the type.
     """
-    if width == 1:
-        pytest.skip("i1 is not an element type; bool is lowered to i8")
     llvm_type = ir.IntType(width)
     assert int(get_element_size_constant(codegen, llvm_type).constant) == (
         calculate_llvm_type_size(llvm_type)

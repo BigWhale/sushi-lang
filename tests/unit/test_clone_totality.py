@@ -76,12 +76,16 @@ EXEMPT_REASONS: dict[str, str] = {
 
 
 # Clause 1 -- the escape must exist
+#
+# Only a MOVE type reaches REJECT, so clause 1 is filtered rather than skipped: a skip means
+# "this environment cannot run it", and a type that is PLAIN by construction is not that.
+# `test_the_gate_can_actually_see_types` keeps the filter from silently emptying the list.
+MOVE_TYPES = [(n, t) for n, t in REPRESENTATIVE_TYPES if type_class_of(t) is TypeClass.MOVE]
 
-@pytest.mark.parametrize("name,ty", REPRESENTATIVE_TYPES, ids=[n for n, _ in REPRESENTATIVE_TYPES])
+
+@pytest.mark.parametrize("name,ty", MOVE_TYPES, ids=[n for n, _ in MOVE_TYPES])
 def test_a_move_type_has_a_clone(name, ty):
     """If consuming a borrow of `T` is CE2411, `T.clone()` must exist."""
-    if type_class_of(ty) is not TypeClass.MOVE:
-        pytest.skip(f"{name} is not a MOVE type, so it never reaches REJECT")
     assert builtin_method_exists(ty, "clone"), (
         f"{name} is a MOVE type, so consuming a borrow of it is CE2411 -- and CE2411's help "
         f"text tells the user to call .clone(), which does not exist on it. That is a "
