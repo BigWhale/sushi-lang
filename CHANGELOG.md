@@ -2,38 +2,22 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
-## [Unreleased]
+## [0.11.1] - 2026-08-22
 
-### Fixed
-- **The documentation highlighter knows the current syntax again.** The Pygments lexer
-  is not on the compiler's path, so the language moved under it in silence: its last real
-  refresh targeted 0.10.0, and the version in its docstring was bumped twice over a lexer
-  nobody had read. Three defects, all now fixed and gated:
-  - **`@` had no rule at all.** The 0.11.0 generic form renders it unstyled, 1679 times
-    across the corpus -- every `List@(i32)`, every `fn id@(T)`. It is punctuation now,
-    like the parenthesis it always precedes.
-  - **Two numeric shapes split in half.** An exponent-only float lexed as an integer
-    followed by an identifier (`1e10` was `1` and `e10`), and the underscores 0.11.1
-    added never reached the exponent (`1_0.2_5e1_0` lost its `_0`). The numeric rules
-    mirror the grammar terminals now, in one place and with the same permissive
-    superset.
-  - **An interpolation was lexed by a second, smaller expression lexer** that knew
-    neither `[`, `??` nor `==`, so `"{arr[0]}"` and `"{x.get(0)??}"` came out unstyled.
-    `{...}` holds an ordinary expression and is lexed as one.
-
-  `tests/unit/test_pygments_lexer.py` is what stops the next drift: every keyword in the
-  grammar must be known to the lexer, every numeric shape the grammar accepts must lex as
-  one token, and no character in the 1840-file corpus may reach the catch-all rule. The
-  version claim is gone from the docstring -- it lied twice, and the gate is the honest
-  version of it.
-- **A conditional move no longer leaks the non-moving paths** (#414). A move inside an if
-  arm, a match arm, or a loop body cancelled the owner's scope-exit free statically, so
-  every path that skipped the move leaked the value — returning a local from one match
-  arm leaked it on the other arm, and which arm leaked depended on emission order. The
-  borrow pass now stamps conditionally moved owners, and the backend guards exactly their frees with
-  a runtime drop flag; an unconditional move keeps the zero-cost static skip.
+The clean-up release after 0.11.0: the first two libraries written in Sushi itself, the
+conditional-move leak, digit grouping in every numeric base, named semantic passes, and a
+documentation site that says which version it documents -- with a highlighter that
+knows the syntax it renders.
 
 ### Added
+- **`use <encoding/msgpack>`: a MessagePack decoder written in Sushi** (R1.1). The first
+  library written in the language itself, bundled as a Sushi-source stdlib module.
+  `mp_decode` turns one buffer into a `MsgValue` tree, `mp_map_get` scans a map in wire
+  order and clones the value out, and `mp_show` renders a value on one line (a float
+  prints its IEEE-754 bits, so the rendering is deterministic). A decode error is a
+  value, not a trap: `MpError` is one of Truncated, Unsupported, BadUtf8 or Trailing.
+  Decode only. The single-byte tags dispatch through one integer `match`, which is why
+  that feature landed first.
 - **`use <toolchain/slib>`: a `.slib` metadata reader in Sushi.** Reads the 52-byte
   header and the msgpack metadata map of a version-3 library into a `MsgValue` tree
   (`slib_read_metadata`), plus the bitcode length (`slib_bitcode_size`); mirrors the
@@ -96,6 +80,71 @@ All notable changes to Sushi Lang will be documented in this file.
   superset and placement is checked in one seam, because a terminal that simply fails to
   match reports the NEXT token: `0x_FF` used to be "unexpected token 'x_FF'" and `1_`
   was "unexpected token '_'". Each diagnostic carries the corrected spelling as a `help`.
+
+### Removed
+- **CW2409 (re-borrowing as `poke`) is retired.** Its only trigger was forwarding a whole
+  `poke` parameter to another function -- the composition idiom the borrow model
+  mandates. The call-site borrow dies with the statement, and CE2403, CE2407 and CE2411
+  carry the safety, so the warning marked idiomatic code and guarded nothing. The first
+  stdlib consumer fired it 40 times in every importing program. The clean-compile gate is
+  `tests/memory/poke_forwarding/test_poke_pass_through_clean.sushi`.
+
+### Fixed
+- **A recursive type destroyed in two units no longer crashes the compiler.** The
+  out-of-line destructor and clone caches held `ir.Function` handles across unit modules,
+  so every fresh-cache multi-unit build that destroys such a type died with a CE0000 ICE
+  ("use of undefined value @__sushi_dtor_..."). The caches are per unit now. A
+  source-stdlib import makes every consumer a multi-unit build, so the first Sushi
+  library met this first.
+- **A conditional move no longer leaks the non-moving paths** (#414). A move inside an if
+  arm, a match arm, or a loop body cancelled the owner's scope-exit free statically, so
+  every path that skipped the move leaked the value — returning a local from one match
+  arm leaked it on the other arm, and which arm leaked depended on emission order. The
+  borrow pass now stamps conditionally moved owners, and the backend guards exactly their frees with
+  a runtime drop flag; an unconditional move keeps the zero-cost static skip.
+- **The documentation highlighter knows the current syntax again.** The Pygments lexer
+  is not on the compiler's path, so the language moved under it in silence: its last real
+  refresh targeted 0.10.0, and the version in its docstring was bumped twice over a lexer
+  nobody had read. Three defects, all now fixed and gated:
+  - **`@` had no rule at all.** The 0.11.0 generic form renders it unstyled, 1679 times
+    across the corpus -- every `List@(i32)`, every `fn id@(T)`. It is punctuation now,
+    like the parenthesis it always precedes.
+  - **Two numeric shapes split in half.** An exponent-only float lexed as an integer
+    followed by an identifier (`1e10` was `1` and `e10`), and the underscores 0.11.1
+    added never reached the exponent (`1_0.2_5e1_0` lost its `_0`). The numeric rules
+    mirror the grammar terminals now, in one place and with the same permissive
+    superset.
+  - **An interpolation was lexed by a second, smaller expression lexer** that knew
+    neither `[`, `??` nor `==`, so `"{arr[0]}"` and `"{x.get(0)??}"` came out unstyled.
+    `{...}` holds an ordinary expression and is lexed as one.
+
+  `tests/unit/test_pygments_lexer.py` is what stops the next drift: every keyword in the
+  grammar must be known to the lexer, every numeric shape the grammar accepts must lex as
+  one token, and no character in the 1840-file corpus may reach the catch-all rule. The
+  version claim is gone from the docstring -- it lied twice, and the gate is the honest
+  version of it.
+
+### Testing
+- **The badges report both test suites, and report the run that gated the commit.** The
+  `badges` job ran the corpus without `--enhanced`, so "Total Tests" counted compile-only
+  checks while the real gate ran the binaries; pytest was not in the badges at all; and
+  `|| true` plus `continue-on-error` plus a bare `json.load` left a crashed run showing
+  its last green. Four badges become three -- `tests`, `sushi tests`, `python tests` --
+  fed by the artifacts of the gating run. The badge goes red if either layer fails or if
+  a job dies with nothing to say, and yellow when a leak check is skipped rather than run.
+  The job publishes from main only, and the test jobs now run on a push to main as well,
+  which closes a hole where a merge to main ran no test job at all. The renderer moved
+  out of a heredoc into `.github/scripts/make_badges.py`, with tests.
+- **Nine dead test files removed, and the eleven unexplained pytest skips resolved.** A
+  measurement of the suite prompted this: pytest is 651 hand-written functions (the
+  larger count is `parametrize` expansion), about 37 of 114 modules are the one-seam
+  gates, and 14 assert-free candidates were all false positives. The `.sushi` corpus lost
+  eight near-duplicates out of 1707 files, and `tests/types/test_types_f32.sushi` -- which
+  claimed to verify an f32 declaration and had an empty body -- got a real one. Nine of
+  the eleven skips were vacuous-case filters and left their `parametrize` lists. CI now
+  fails when `sushic` is off PATH instead of skipping silently, the bug-dodging gate reads
+  Python skip reasons and `xfail` markers as well as `.sushi` comments, and a `slow`
+  marker gives `pytest -m "not slow"` in 67s against 162s.
 
 ## [0.11.0] - 2026-08-20
 
@@ -640,6 +689,16 @@ emptied the ranked bug table. Everything below landed after the 0.10.0 release o
 - Extension and perk-impl return expressions are now type-checked
 - Quality gates: `ruff` clean at F,E,W,B and `mypy` clean over `internals`/`compiler`/`packager`/
   `sushi_stdlib`, both blocking in CI, alongside the cross-platform malloc-interposer leak gate
+- **The wheel ships the stdlib bitcode** (#413; fixed after the section above was written,
+  and shipped in the published 0.11.0). hatchling honours `.gitignore` when it selects
+  files and the prebuilt bitcode has been gitignored since #155, so the first wheel carried
+  zero `.bc` files and every stdlib-using program died at the missing-module rebuild.
+  `tool.hatch.build.targets.wheel.artifacts` is the designed escape for a VCS-ignored build
+  output. Two more holes went with it: `upload-artifact` drops hidden files, so the
+  `.build_fingerprint` marker never reached the wheel; and excluding `sushi_stdlib/build.py`
+  made an installed wheel compute a digest its own marker did not match, because the
+  freshness fingerprint hashes that file. The release workflow now asserts all three on the
+  built wheel before it publishes, and prints the inventory when one is missing.
 
 ### Testing
 - The leak gate tells the truth in three more cases: a freed address reallocated by an untracked
