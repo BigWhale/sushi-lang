@@ -115,7 +115,9 @@ jobs:
       # !cancelled(), not success(): a FAILING pytest run is precisely the run whose
       # numbers the badge must publish. Only a cancellation leaves nothing worth reading.
       - name: Upload pytest report
-        if: ${{ !cancelled() && github.event_name == 'push' }}
+        # Must match the `badges` job's trigger set exactly: an event that publishes a
+        # badge but uploads nothing renders "unavailable" and publishes that as red.
+        if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
         uses: actions/upload-artifact@v7
         with:
           name: pytest-report
@@ -238,7 +240,9 @@ jobs:
       # if-no-files-found: error is load-bearing. A runner that died before emitting
       # anything must fail this job, not hand the badge step an empty file to guess at.
       - name: Upload corpus results
-        if: ${{ !cancelled() && github.event_name == 'push' }}
+        # Must match the `badges` job's trigger set exactly: an event that publishes a
+        # badge but uploads nothing renders "unavailable" and publishes that as red.
+        if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
         uses: actions/upload-artifact@v7
         with:
           name: corpus-results
