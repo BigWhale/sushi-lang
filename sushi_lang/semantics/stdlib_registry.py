@@ -19,6 +19,7 @@ _SRC_SUSHI_ROOT = Path(__file__).resolve().parent.parent / "sushi_stdlib" / "src
 SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "collections/iter": _SRC_SUSHI_ROOT / "collections" / "iter.sushi",
     "encoding/msgpack": _SRC_SUSHI_ROOT / "encoding" / "msgpack.sushi",
+    "toolchain/slib": _SRC_SUSHI_ROOT / "toolchain" / "slib.sushi",
 }
 
 

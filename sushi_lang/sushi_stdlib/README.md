@@ -34,7 +34,7 @@ present locally). `src/_platform/` splits OS-specific declarations into
 ## 2. Bundled Sushi-source modules (`src_sushi/`)
 
 A small second class of stdlib module ships as plain `.sushi` source, parsed and
-compiled like user code instead of precompiled to bitcode. Two exist today:
+compiled like user code instead of precompiled to bitcode. Three exist today:
 
 - `collections/iter` (`src_sushi/collections/iter.sushi`) — generic combinators
   (`map`/`filter`/`fold`); nothing is emitted unless a program instantiates one.
@@ -42,6 +42,10 @@ compiled like user code instead of precompiled to bitcode. Two exist today:
   decoder, and the first source module with CONCRETE public functions: an
   injected module is an ordinary compilation unit, so `public fn` exports work
   exactly as they do between user units.
+- `toolchain/slib` (`src_sushi/toolchain/slib.sushi`) — a `.slib` metadata
+  reader on top of the decoder, and the first source module that imports
+  another source module (`encoding/msgpack`) plus a `.bc` module (`io/files`);
+  the injection fixpoint in `compiler/pipeline.py` resolves both.
 
 Registration is two entries per module: `SOURCE_STDLIB_MODULES`
 (`sushi_lang/semantics/stdlib_registry.py`) maps the import path to the bundled

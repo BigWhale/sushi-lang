@@ -16,6 +16,49 @@ from sushi_lang.internals.report import Reporter
 from sushi_lang.internals.version import print_banner
 
 
+def _find_toolchain_tool(name: str) -> Optional[Path]:
+    """Locate a built toolchain binary (repo checkouts only; a wheel has none).
+
+    SUSHI_TOOLCHAIN=off (or 0) skips the tools; SUSHI_TOOLCHAIN_BIN overrides
+    the toolchain/bin/ directory.
+    """
+    import os
+
+    if os.environ.get("SUSHI_TOOLCHAIN", "").lower() in ("0", "off"):
+        return None
+    override = os.environ.get("SUSHI_TOOLCHAIN_BIN")
+    if override:
+        bin_dir = Path(override)
+    else:
+        import sushi_lang
+        bin_dir = Path(sushi_lang.__file__).resolve().parent.parent / "toolchain" / "bin"
+    tool = bin_dir / name
+    if tool.is_file() and os.access(tool, os.X_OK):
+        return tool
+    return None
+
+
+def library_info_command(library_path: Path) -> int:
+    """--lib-info: run the toolchain slib-info tool, or the Python fallback.
+
+    The tool owns the report and its exit code propagates. Only a failure to
+    execute the binary at all falls back to print_library_info.
+    """
+    from sushi_lang.compiler.loader import get_effective_cwd
+
+    if not library_path.is_absolute():
+        library_path = get_effective_cwd() / library_path
+
+    tool = _find_toolchain_tool("slib-info")
+    if tool is not None:
+        import subprocess
+        try:
+            return subprocess.run([str(tool), str(library_path)]).returncode
+        except OSError:
+            pass
+    return print_library_info(library_path)
+
+
 def print_library_info(library_path: Path) -> int:
     """Print formatted metadata from a .slib library file."""
     from sushi_lang.backend.library_format import LibraryFormat
@@ -309,7 +352,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.lib_info:
-        return print_library_info(Path(args.lib_info))
+        return library_info_command(Path(args.lib_info))
 
     session = Session(args=args)
 

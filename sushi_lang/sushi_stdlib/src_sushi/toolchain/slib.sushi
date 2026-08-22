@@ -1,0 +1,90 @@
+# toolchain/slib -- a .slib metadata reader, pure Sushi.
+#
+# The module ships as bundled .sushi source and is merged as a compilation
+# unit when imported (`use <toolchain/slib>`). It reads the fixed 52-byte
+# little-endian header and the msgpack metadata map of a version-3 .slib
+# library. It mirrors the Python reader LibraryFormat.read_metadata_only and
+# never reads the bitcode itself; slib_bitcode_size reads only the length
+# field that follows the metadata blob.
+#
+# Limitations: the four spare header fields are read and not validated. The
+# reader targets metadata below 2 GiB; a hostile length casts to a negative
+# count, reads nothing, and reports a decode error on the empty blob.
+
+use <io/files>
+use <encoding/msgpack>
+
+enum SlibError:
+    OpenFailed(string)
+    BadMagic()
+    BadVersion(u32)
+    Truncated()
+    Decode(MpError)
+
+# slib_le_uint: read nbytes little-endian bytes at off into a u64. The caller
+# has already length-checked the buffer. The SlibError channel lets ?? compose.
+fn slib_le_uint(peek u8[] h, i32 off, i32 nbytes) u64 | SlibError:
+    let u64 acc = 0
+    let i32 i = 0
+    while (i < nbytes):
+        acc := acc | ((h[off + i] as u64) << ((8 * i) as u64))
+        i := i + 1
+    return Result.Ok(acc)
+
+# slib_header_check: validate the magic and the version of a full 52-byte header.
+fn slib_header_check(peek u8[] header) ~ | SlibError:
+    let u8[] magic = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
+    let i32 i = 0
+    while (i < 16):
+        if (header[i] != magic[i]):
+            return Result.Err(SlibError.BadMagic())
+        i := i + 1
+    let u64 version = slib_le_uint(peek header, 16, 4)??
+    if (version != 3):
+        return Result.Err(SlibError.BadVersion(version as u32))
+    return Result.Ok(~)
+
+# slib_read_metadata: decode the metadata map of a .slib file into a MsgValue.
+public fn slib_read_metadata(string path) MsgValue | SlibError:
+    match open(path, FileMode.ReadB()):
+        FileResult.Ok(f) ->
+            let u8[] header = f.read_bytes(52)
+            if (header.len() < 52):
+                f.close()
+                return Result.Err(SlibError.Truncated())
+            let i32 mlen = slib_le_uint(peek header, 44, 8)?? as i32
+            let u8[] blob = f.read_bytes(mlen)
+            f.close()
+            slib_header_check(peek header)??
+            if (blob.len() < mlen):
+                return Result.Err(SlibError.Truncated())
+            match mp_decode(blob):
+                Result.Ok(v) ->
+                    return Result.Ok(v.clone())
+                Result.Err(e) ->
+                    return Result.Err(SlibError.Decode(e))
+        FileResult.Err(_) ->
+            return Result.Err(SlibError.OpenFailed(path.clone()))
+    return Result.Err(SlibError.OpenFailed(path.clone()))
+
+# slib_bitcode_size: the u64 length of the bitcode that follows the metadata.
+public fn slib_bitcode_size(string path) u64 | SlibError:
+    match open(path, FileMode.ReadB()):
+        FileResult.Ok(f) ->
+            let u8[] header = f.read_bytes(52)
+            if (header.len() < 52):
+                f.close()
+                return Result.Err(SlibError.Truncated())
+            let i32 mlen = slib_le_uint(peek header, 44, 8)?? as i32
+            let u8[] blob = f.read_bytes(mlen)
+            let u8[] size_field = f.read_bytes(8)
+            f.close()
+            slib_header_check(peek header)??
+            if (blob.len() < mlen):
+                return Result.Err(SlibError.Truncated())
+            if (size_field.len() < 8):
+                return Result.Err(SlibError.Truncated())
+            return Result.Ok(slib_le_uint(peek size_field, 0, 8)??)
+        FileResult.Err(_) ->
+            return Result.Err(SlibError.OpenFailed(path.clone()))
+    return Result.Err(SlibError.OpenFailed(path.clone()))

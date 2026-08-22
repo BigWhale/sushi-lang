@@ -1,0 +1,91 @@
+# Reader errors are values, not exits. Each case prints the matched SlibError
+# arm: a wrong magic byte, a v2 header, a truncated file, a missing path, and
+# a metadata blob the msgpack decoder rejects.
+# EXPECT_STDOUT_EXACT: "BadMagic\nBadVersion(2)\nTruncated\nOpenFailed(test_slib_missing_gone.slib)\nDecode(Unsupported(193))\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+use <encoding/msgpack>
+use <toolchain/slib>
+
+fn fixture_header(u8 version, u8 mlen) u8[]:
+    let u8[] h = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
+    h.push(version)
+    let i32 i = 0
+    while (i < 27):
+        h.push(0)
+        i := i + 1
+    h.push(mlen)
+    let i32 j = 0
+    while (j < 7):
+        h.push(0)
+        j := j + 1
+    return Result.Ok(h)
+
+fn write_fixture(string path, u8[] bytes) i32:
+    match open(path, FileMode.WriteB()):
+        FileResult.Ok(out) ->
+            out.write_bytes(bytes)
+            out.close()
+            return Result.Ok(0)
+        FileResult.Err(_) ->
+            return Result.Ok(1)
+    return Result.Ok(1)
+
+fn show_err(SlibError e) string:
+    match e:
+        SlibError.OpenFailed(p) ->
+            return Result.Ok("OpenFailed({p})")
+        SlibError.BadMagic() ->
+            return Result.Ok("BadMagic")
+        SlibError.BadVersion(v) ->
+            return Result.Ok("BadVersion({v})")
+        SlibError.Truncated() ->
+            return Result.Ok("Truncated")
+        SlibError.Decode(me) ->
+            match me:
+                MpError.Truncated(off) ->
+                    return Result.Ok("Decode(Truncated({off}))")
+                MpError.Unsupported(t) ->
+                    return Result.Ok("Decode(Unsupported({t}))")
+                MpError.BadUtf8(off) ->
+                    return Result.Ok("Decode(BadUtf8({off}))")
+                MpError.Trailing(p) ->
+                    return Result.Ok("Decode(Trailing({p}))")
+    return Result.Ok("unknown")
+
+fn check(string path) ~:
+    match slib_read_metadata(path):
+        Result.Ok(meta) ->
+            println(mp_show(meta)??)
+        Result.Err(e) ->
+            println(show_err(e)??)
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let u8[] wrong_magic = fixture_header(3, 1)??
+    wrong_magic[0] := 0x00
+    wrong_magic.push(0xc0)
+    write_fixture("test_slib_wrong_magic.slib", wrong_magic)??
+
+    let u8[] old_version = fixture_header(2, 1)??
+    old_version.push(0xc0)
+    write_fixture("test_slib_old_version.slib", old_version)??
+
+    let u8[] short_file = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3, 0x03, 0x00, 0x00, 0x00])
+    write_fixture("test_slib_short.slib", short_file)??
+
+    let u8[] bad_blob = fixture_header(3, 1)??
+    bad_blob.push(0xc1)
+    write_fixture("test_slib_bad_blob.slib", bad_blob)??
+
+    check("test_slib_wrong_magic.slib")??
+    check("test_slib_old_version.slib")??
+    check("test_slib_short.slib")??
+    check("test_slib_missing_gone.slib")??
+    check("test_slib_bad_blob.slib")??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

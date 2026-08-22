@@ -14,6 +14,7 @@ a.out
 /test_*
 /tests/bin/
 /tests/libs/bin/
+/toolchain/bin/
 /tests/*.bin
 /tests/*.txt
 
