@@ -115,9 +115,11 @@ jobs:
       # !cancelled(), not success(): a FAILING pytest run is precisely the run whose
       # numbers the badge must publish. Only a cancellation leaves nothing worth reading.
       - name: Upload pytest report
-        # Must match the `badges` job's trigger set exactly: an event that publishes a
-        # badge but uploads nothing renders "unavailable" and publishes that as red.
-        if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+        # Must match the `badges` job's condition exactly, main-only ref check included: an
+        # event that publishes a badge but uploads nothing renders "unavailable" and
+        # publishes that as red, and uploading where nothing publishes is dead weight.
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main'
+                && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
         uses: actions/upload-artifact@v7
         with:
           name: pytest-report
@@ -240,9 +242,11 @@ jobs:
       # if-no-files-found: error is load-bearing. A runner that died before emitting
       # anything must fail this job, not hand the badge step an empty file to guess at.
       - name: Upload corpus results
-        # Must match the `badges` job's trigger set exactly: an event that publishes a
-        # badge but uploads nothing renders "unavailable" and publishes that as red.
-        if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+        # Must match the `badges` job's condition exactly, main-only ref check included: an
+        # event that publishes a badge but uploads nothing renders "unavailable" and
+        # publishes that as red, and uploading where nothing publishes is dead weight.
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main'
+                && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
         uses: actions/upload-artifact@v7
         with:
           name: corpus-results
@@ -296,9 +300,18 @@ jobs:
   #   - it publishes on a failing run too, because that is the run whose numbers matter;
   #   - every failure is fatal. A badge that cannot be computed is not published, since a
   #     stale green is worse than a missing badge.
+  #
+  # main ONLY, and that is a correctness rule rather than a preference. The README embeds
+  # three fixed gist URLs holding one value each, so a branch that published would repaint
+  # the public README with its own numbers -- a red WIP branch over a green main. `on.push`
+  # is already pinned to main; the ref check is what stops workflow_dispatch, which can be
+  # fired from any branch, from doing the same through the back door. Note also that the
+  # concurrency group below is keyed on the ref, so it would NOT serialise two different
+  # branches against each other.
   badges:
     needs: [pytest, test-linux, test-macos]
-    if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main'
+            && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     # No container and no setup-sushi: make_badges.py is stdlib-only, so the runner's
     # system python3 is enough -- seconds instead of a full toolchain install.
