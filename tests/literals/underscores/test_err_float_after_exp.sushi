@@ -1,0 +1,7 @@
+# Nor follow the exponent marker.
+# EXPECT_ERROR_CODE: CE6006
+
+fn main() i32:
+    let f64 bad = 1e_5
+    println("{bad}")
+    return Result.Ok(0)

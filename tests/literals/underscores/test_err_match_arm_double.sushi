@@ -1,0 +1,14 @@
+# A match-arm literal is the third consumer. It delegates to the same seam, so
+# it reports the same code.
+# EXPECT_ERROR_CODE: CE6006
+
+fn classify(i32 n) string:
+    match n:
+        1__0 ->
+            return Result.Ok("ten")
+        _ ->
+            return Result.Ok("other")
+
+fn main() i32:
+    println(classify(10).realise("err"))
+    return Result.Ok(0)

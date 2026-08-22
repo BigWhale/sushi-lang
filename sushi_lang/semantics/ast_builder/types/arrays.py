@@ -26,8 +26,15 @@ def parse_array_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[ArrayTyp
     if base_type is None:
         return None
 
+    # An array size is the second consumer of an INT token, so it normalizes
+    # through the same seam. Reading `int(size_token.value)` directly would let
+    # Python's own underscore rules decide -- and they are looser than ours, since
+    # `int()` accepts `0x_FF`. A malformed underscore must be CE6006 here too,
+    # not a silent None that surfaces as a failure to parse the type.
+    from sushi_lang.semantics.ast_builder.expressions.literals import normalize_numeric
+
     try:
-        size = int(size_token.value)
+        size = int(normalize_numeric(size_token))
         if size <= 0:
             return None  # Invalid array size
         return ArrayType(base_type=base_type, size=size)

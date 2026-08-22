@@ -30,6 +30,12 @@ _add(ErrorMessage("CE6005", Severity.ERROR,
     "could not tokenize input",
     Category.SYNTAX, "The lexer failed on this input."))
 
+_add(ErrorMessage("CE6006", Severity.ERROR,
+    "malformed numeric literal '{literal}': {reason}",
+    Category.SYNTAX, "An underscore groups the digits of a numeric literal. One underscore, "
+                     "between two digits -- so not after the base prefix, not doubled, and "
+                     "not next to a point or an exponent marker."))
+
 _add(ErrorMessage("CE6010", Severity.ERROR,
     "could not parse the interpolated expression '{expr}'",
     Category.SYNTAX, "The text between {braces} in a string literal must be a valid expression."))

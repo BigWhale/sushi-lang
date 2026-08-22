@@ -1,0 +1,9 @@
+# The tightening: a run of underscores used to be ACCEPTED in hex, binary and
+# octal, because the old terminal allowed anything between the first and last
+# digit. `0xD__E` compiled and meant 222.
+# EXPECT_ERROR_CODE: CE6006
+
+fn main() i32:
+    let i32 bad = 0xD__E
+    println("{bad}")
+    return Result.Ok(0)

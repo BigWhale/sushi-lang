@@ -83,8 +83,17 @@ let i32 perm = 0o644         # 420
 
 **Note**: C-style octals with leading zeros (e.g., `077`) are **not supported** and will cause a compilation error. Use the explicit `0o` prefix instead.
 
+**Decimal literals** (base 10, no prefix):
+```sushi
+let i32 grouped = 1_000_000   # underscores allowed
+let f64 pi = 3.141_592        # in a float's fraction too
+let f64 big = 1_0.2_5e1_0     # and in all three parts at once
+```
+
 **Common features**:
-- All literal formats support underscore separators for readability
+- Every literal format supports underscore separators for readability, decimal and
+  float included. One underscore, and it must have a digit on each side — so `1__0`,
+  `1_`, `0x_FF` and `3._14` are rejected (**CE6006**), each naming the fix
 - Prefixes are case insensitive (`0xFF` == `0xff`, `0B1111` == `0b1111`)
 - A literal is **context-typed**: it takes its type from context (annotation,
   argument, field, operand). With no numeric context it defaults to `i32`.

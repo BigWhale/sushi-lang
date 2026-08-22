@@ -11,8 +11,12 @@ fn main() i32:
 
     let u32 flags = 0xDEAD_BEEF as u32
     let i32 nibbles = 0b1010_1010
+    let i32 million = 1_000_000
+    let f64 pi = 3.141_592
 
     println("grouped hex 0xDEAD_BEEF: {flags}")
     println("grouped binary 0b1010_1010: {nibbles}")
+    println("grouped decimal 1_000_000: {million}")
+    println("grouped float 3.141_592: {pi}")
 
     return Result.Ok(0)

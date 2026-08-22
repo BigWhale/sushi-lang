@@ -79,7 +79,7 @@ other hint, its default type is `i32`.
 
 Integers can be written in four bases. Hexadecimal uses a `0x` prefix, binary `0b`, and
 octal `0o` (the C-style bare leading zero, like `0755`, is deliberately rejected to avoid
-confusion). The prefixes are case-insensitive. In the prefixed forms you may group digits
+confusion). The prefixes are case-insensitive. In every base you may group digits
 with underscores for readability:
 
 ```sushi
@@ -95,16 +95,19 @@ binary 0b101010: 42
 octal 0o52: 42
 grouped hex 0xDEAD_BEEF: 3735928559
 grouped binary 0b1010_1010: 170
+grouped decimal 1_000_000: 1000000
+grouped float 3.141_592: 3.14159
 ```
 
-The first four lines are the same value, `42`, written four ways. The underscores in
-`0xDEAD_BEEF` and `0b1010_1010` are purely cosmetic — the compiler ignores them. (We cast
-`0xDEAD_BEEF` to `u32` because it's larger than a signed `i32` can hold without wrapping
-to a negative number.)
+The first four lines are the same value, `42`, written four ways. The underscores in the
+last four are purely cosmetic — the compiler ignores them. (We cast `0xDEAD_BEEF` to `u32`
+because it's larger than a signed `i32` can hold without wrapping to a negative number.)
 
-!!! note "Underscores need a radix prefix"
-    Digit grouping with `_` works in the `0x`, `0b`, and `0o` forms. A plain decimal like
-    `1_000_000` is *not* accepted, so write large decimals without underscores.
+!!! note "One underscore, between two digits"
+    Digit grouping with `_` works in every base — `1_000_000` and `3.141_592` as much as
+    `0xDEAD_BEEF` — and in all three parts of a float, so `1_0.2_5e1_0` is legal. The rule
+    is that an underscore must have a digit on each side. So `1__0`, `1_`, `0x_FF` and
+    `3._14` are all rejected, each with a message naming the problem and the fix.
 
 ## Casting with `as`
 

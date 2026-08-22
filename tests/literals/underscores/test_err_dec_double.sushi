@@ -1,0 +1,7 @@
+# Only one underscore may sit between two digits.
+# EXPECT_ERROR_CODE: CE6006
+
+fn main() i32:
+    let i32 bad = 1__0
+    println("{bad}")
+    return Result.Ok(0)

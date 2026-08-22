@@ -1,0 +1,15 @@
+# EXPECT_STDOUT_EXACT: "1000000 10 2147483647 1000000 -1000 4294967296\n"
+# A decimal literal takes single underscores between digits, in every position a
+# literal can appear: a let, a const, a negation and a wide context type.
+
+const i32 GROUPED = 1_000_000
+
+fn main() i32:
+    let i32 a = 1_000_000
+    let i32 b = 1_0
+    let i32 c = 2_147_483_647
+    let i32 d = GROUPED
+    let i32 e = -1_000
+    let i64 f = 4_294_967_296
+    println("{a} {b} {c} {d} {e} {f}")
+    return Result.Ok(0)

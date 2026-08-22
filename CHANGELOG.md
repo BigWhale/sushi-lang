@@ -33,6 +33,26 @@ All notable changes to Sushi Lang will be documented in this file.
   trailing `_` arm), CE2075 (duplicate literal arm by value), CE2076 (literal arm on an
   enum scrutinee, or enum-pattern arm on an integer scrutinee). Motivated by the tag
   dispatch in the first Sushi stdlib decoder.
+- **Underscores in decimal and float literals**. `1_000_000`, `3.141_592` and
+  `1_0.2_5e1_0` now group their digits like the prefixed bases always could. Decimal was
+  the one base without them because the grammar imported Lark's stock `INT` (`/\d+/`)
+  while hex, binary and octal were written by hand — an omission rather than a decision,
+  and it landed on the common case. Underscores work in all three parts of a float, and
+  in every position a literal appears: an array size and a match arm normalize through
+  the same seam as an expression.
+
+### Changed
+- **The underscore rule is now one underscore between two digits**, checked for every
+  base. The old terminals allowed any run of underscores in the interior, so `0xD__E`
+  compiled and meant 222, and `0o7__7` meant 63; both are now **CE6006**. The rule
+  matches Java, Python, Go, Ruby and JavaScript; Rust and Swift are the permissive
+  camp Sushi has left. No literal in the test suite or the docs used a doubled
+  underscore, so nothing valid changed meaning.
+- **A malformed underscore reports what is wrong** (**CE6006**), instead of the token the
+  lexer happened to stop on. The grammar's numeric terminals now match a permissive
+  superset and placement is checked in one seam, because a terminal that simply fails to
+  match reports the NEXT token: `0x_FF` used to be "unexpected token 'x_FF'" and `1_`
+  was "unexpected token '_'". Each diagnostic carries the corrected spelling as a `help`.
 
 ## [0.11.0] - 2026-08-20
 
