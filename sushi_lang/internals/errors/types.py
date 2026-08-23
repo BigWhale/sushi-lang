@@ -24,7 +24,7 @@ _add(ErrorMessage("CE2003", Severity.ERROR,
 
 _add(ErrorMessage("CE2004", Severity.ERROR,
     "invalid operand types for operator '{op}'",
-    Category.TYPE, "An operator was applied to operands of incompatible types."))
+    Category.TYPE, "The operand rule of a bitwise operator, which is the only site that emits this: & | ^ ~ << >> combine or move BITS, so every operand must be an integer. A string has none, and a float keeps its own behind f64.to_bits()/f32.to_bits() -- the escape is to convert first, operate on the integer, and go back through from_bits(). The gate used to ask for a numeric type, which let a float through to the backend and turned a user's program into a CE0000 internal error."))
 
 _add(ErrorMessage("CE2005", Severity.ERROR,
     "condition must be bool",

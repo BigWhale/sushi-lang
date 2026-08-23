@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODE: CE2004
+# A float beside an integer is not a width to reconcile: it is an operand that has
+# no bits. The operand rule is read before the width rule, so this is CE2004 and
+# not the CE2510 it used to report.
+
+fn main() i32:
+    let f64 a = 1.5
+    let i32 b = 2
+    let f64 mixed = a & b
+    println("{mixed}")
+    return Result.Ok(0)

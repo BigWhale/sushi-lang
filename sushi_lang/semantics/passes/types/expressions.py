@@ -6,7 +6,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, IntLit, RangeExpr
-from sushi_lang.semantics.type_predicates import is_numeric_type
+from sushi_lang.semantics.type_predicates import is_integer_type, is_numeric_type
 from .compatibility import is_valid_cast
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -283,15 +283,21 @@ def reject_mixed_numeric_operands(validator: 'TypeValidator', expr: BinaryOp,
 
 
 def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> None:
-    """Validate the operands of a bitwise operator: numeric, and of one width."""
+    """Validate the operands of a bitwise operator: integer, and of one width.
+
+    An integer, not merely a number: a float has no bits to combine, and its bits
+    are reached through `.to_bits()`. The gate asked for a numeric type, so a float
+    passed it and the backend met an operand LLVM has no such instruction for
+    (CE0000, "instruction requires integer or integer vector operands").
+    """
     left_type = validator.infer_expression_type(expr.left)
     right_type = validator.infer_expression_type(expr.right)
 
-    if left_type is not None and not is_numeric_type(left_type):
+    if left_type is not None and not is_integer_type(left_type):
         er.emit(validator.reporter, er.ERR.CE2004, expr.left.loc, op=expr.op)
         return
 
-    if right_type is not None and not is_numeric_type(right_type):
+    if right_type is not None and not is_integer_type(right_type):
         er.emit(validator.reporter, er.ERR.CE2004, expr.right.loc, op=expr.op)
         return
 
@@ -347,10 +353,10 @@ def reject_impossible_shift_count(validator: 'TypeValidator', expr: BinaryOp,
 
 
 def validate_bitwise_unary(validator: 'TypeValidator', expr: UnaryOp) -> None:
-    """Validate that bitwise NOT (~) is used with numeric types only."""
+    """Validate that bitwise NOT (~) is used with an integer, floats included out."""
     operand_type = validator.infer_expression_type(expr.expr)
 
-    if operand_type is not None and not is_numeric_type(operand_type):
+    if operand_type is not None and not is_integer_type(operand_type):
         er.emit(validator.reporter, er.ERR.CE2004, expr.expr.loc, op=expr.op)
 
 

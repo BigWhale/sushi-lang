@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODE: CE2004
+# A float has no bits to combine -- its bits are behind .to_bits(). The operand
+# gate asked for a numeric type, which a float is, so this reached the backend and
+# died there as a CE0000 internal error.
+
+fn main() i32:
+    let f64 a = 1.5
+    let f64 b = 2.0
+    let f64 c = a & b
+    println("{c}")
+    return Result.Ok(0)

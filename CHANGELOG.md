@@ -130,6 +130,16 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **A bitwise operator on a float crashed the compiler.** `a & b` on two `f64` values
+  reached the backend, where LLVM has no such instruction, and a program a user wrote came
+  back as `CE0000: internal compiler error ... instruction requires integer or integer
+  vector operands`. The operand gate asked for a numeric type, and a float is one; the
+  test beside it has said "bitwise operators only work with integer types" since the day
+  it was written. `& | ^ ~ << >>` now require an integer on every operand and report
+  **CE2004** otherwise -- including a float next to an integer, which used to report the
+  width rule (CE2510) for an operand that has no width to reconcile. A float's bits are
+  reached the way they always were, through `f64.to_bits()` and `from_bits()`.
+
 - **An enum payload slot allocated inside a loop leaked stack until the function
   returned.** A `??` unwrap, an enum construction, a match that binds a payload, and
   `List.push`/`List.pop` each allocated their scratch slot at the point of use, so in a

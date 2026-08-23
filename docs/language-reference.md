@@ -426,6 +426,27 @@ forms for all logical operators.
 - `<<` - Left shift (zero-fill)
 - `>>` - Right shift (type-dependent, see below)
 
+Every operand of every one of them must be an **integer**. A float has no bits to
+combine: its bits are reached through `f64.to_bits()` / `f32.to_bits()`, which hand
+over a `u64` / `u32`, and `from_bits()` goes back. A float operand is **CE2004**.
+
+<!-- docs-sweep: error CE2004 -->
+```sushi
+fn main() i32:
+    let f64 value = 1.5
+    let f64 masked = value & 1.0    # CE2004: a float has no bits
+    return Result.Ok(0)
+```
+
+```sushi
+fn main() i32:
+    let f64 value = 1.5
+    let u64 bits = value.to_bits()
+    let u64 sign = (bits >> 63) & 1      # 0
+    let f64 back = f64.from_bits(bits)   # 1.5
+    return Result.Ok(0)
+```
+
 **Right shift behavior (matches Go/Rust):**
 - **Signed types** (`i8`, `i16`, `i32`, `i64`): Arithmetic shift (sign-extends)
   ```sushi

@@ -1,0 +1,20 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n0\n1023\nround trip\n"
+# The sanctioned path, which must keep working: .to_bits() hands over an integer,
+# and every bitwise operator applies to that.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let f64 value = 1.5
+    let u64 bits = value.to_bits()
+
+    let u64 sign = (bits >> 63) & 1
+    println("{sign}")
+
+    let u64 exponent = (bits >> 52) & 0x7FF
+    println("{exponent}")
+
+    if (f64.from_bits(bits) == value):
+        println("round trip")
+
+    return Result.Ok(0)
