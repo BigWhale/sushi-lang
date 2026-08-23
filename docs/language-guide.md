@@ -461,7 +461,8 @@ fn main() i32:
 
 **Writing one element**: `arr[i] := value` works on both array kinds and on every element type. The
 index is bounds-checked exactly like a read, so an index past the end aborts with `RE2020` (and a
-literal index past the end of a fixed array is rejected at compile time with `CE2012`):
+literal index is rejected at compile time: `CE2012` past the end of a fixed array, `CE2056`
+if it is negative):
 
 ```sushi
 fn main() i32:

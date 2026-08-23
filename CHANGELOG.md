@@ -12,10 +12,9 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
 - **A constant can index an array constant, and can compare two bools or two strings** (#441).
   `const i32 SMALLEST = PRIMES[0]` folds, because every element of an array constant is
   already an evaluated value. A bound is checked while compiling -- a constant cannot trap --
-  so past the end is **CE2012** and a negative index is **CE2014**, the same codes a constant
-  index in a body gets. `==` and `!=` on two bools and on two strings fold as well; both work
-  at run time and only the constant evaluator refused them. Ordering two strings stays
-  rejected (#449).
+  so past the end is **CE2012** and a negative index is **CE2056**. `==` and `!=` on two bools
+  and on two strings fold as well; both work at run time and only the constant evaluator
+  refused them. Ordering two strings stays rejected (#449).
 
   `+` on two strings in a constant now reports **CE2509**, the code the rest of the language
   reports, in place of CE0110 "arithmetic on non-numeric type". Sushi has no concatenation
@@ -166,6 +165,22 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **A negative array index compiled, and reached run time as a trap** (#450). `numbers[-1]`
+  and `numbers.get(-1)` both passed the compiler and RE2020 caught them at run time, although
+  the compiler held the answer the whole time. A `-1` parses as a unary negation over a
+  literal and not as a literal, so the guard in front of the bounds check asked for the wrong
+  node, never matched, and left the `index < 0` branch behind it as dead code -- in both
+  indexing forms, written out twice. One reader now takes a literal index, negated or not, and
+  one validator carries the pair of codes for every indexing form, so a third form cannot
+  inherit half the rule. A negative index is **CE2056**, whose text says exactly that; past
+  the end stays CE2012.
+
+  CE2056 had never been emitted anywhere. The constant evaluator in #441 reached for CE2014
+  instead, which is the CAST code, so a negative index in a constant rendered as
+  `invalid cast from '<missing:source>' to '<missing:target>'`. Its test asserted only the
+  code, which is what let a broken message through; the negative-index cases now assert the
+  text as well.
+
 - **A string constant that was not a bare literal reported an internal compiler error**
   (#441). The backend matched a string constant by the SHAPE of its expression, so
   `const string ALIAS = GREETING` -- a program the typecheck pass accepts -- registered no

@@ -84,8 +84,8 @@ scores[i] := 99            # the index may be any i32 expression
 ```
 
 The index is bounds-checked exactly like a read: an index past the end aborts with
-**RE2020** at run time, and a literal index past the end of a fixed array is rejected at
-compile time with **CE2012**.
+**RE2020** at run time, and a literal index is rejected at compile time -- **CE2012** past
+the end of a fixed array, **CE2056** if it is negative.
 
 If the element type owns heap -- a `string`, a struct with a dynamic-array field -- the
 element that the write replaces is freed first, so a write in a loop does not leak:

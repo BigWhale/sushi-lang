@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2056
+# EXPECT_STDERR_CONTAINS: "is negative"
+# '.get(-1)' had the same guard, and the same dead branch behind it (#450).
+
+fn main() i32:
+    let i32[3] numbers = [10, 20, 30]
+    let i32 before = numbers.get(-1)??
+    println("{before}")
+    return Result.Ok(0)

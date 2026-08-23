@@ -295,7 +295,7 @@ class ConstantEvaluator:
             return None
 
         if index.value < 0:
-            er.emit(self.reporter, er.ERR.CE2014, expr.index.loc, index=index.value)
+            er.emit(self.reporter, er.ERR.CE2056, expr.index.loc, index=index.value)
             return None
 
         if index.value >= len(base.value):
