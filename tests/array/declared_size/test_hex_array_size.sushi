@@ -1,0 +1,12 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n4\n40\n"
+# The grammar took a decimal INT only, so `u8[0x100]` came back as CE6001,
+# unexpected token, while `u8[256]` -- the same size -- compiled.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let u8[0x4] table = [10, 20, 30, 40]
+    println("{table.len()}")
+    println("{table[3]}")
+
+    return Result.Ok(0)

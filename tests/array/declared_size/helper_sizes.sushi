@@ -1,0 +1,4 @@
+public const i32 SHARED_SIZE = 4
+
+public fn shared_size() i32:
+    return Result.Ok(SHARED_SIZE)

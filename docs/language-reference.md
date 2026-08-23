@@ -528,6 +528,53 @@ let i32[5] arr = [1, 2, 3, 4, 5]
 let i32 first = arr.get(0)??  # .get returns Maybe@(i32); ?? unwraps it
 ```
 
+#### The size
+
+A fixed array's size is a positive integer the compiler can read. It may be a literal
+in any base:
+
+```sushi
+fn main() i32:
+    let u8[4] decimal = [1, 2, 3, 4]
+    let u8[0x4] hex = [1, 2, 3, 4]
+    let u8[0b1_00] binary = [1, 2, 3, 4]
+    let u8[0o4] octal = [1, 2, 3, 4]
+    return Result.Ok(0)
+```
+
+It may also name an integer constant, so a size that repeats across declarations can
+be written once. The constant may be an expression, and a named size works wherever a
+type does -- a local, a struct field, a parameter, a return type:
+
+```sushi
+const i32 MAX_BITS = 4
+
+struct Counts:
+    i32[MAX_BITS] slots
+
+fn walk(i32[MAX_BITS] counts) i32:
+    return Result.Ok(counts.len())
+
+fn main() i32:
+    let i32[MAX_BITS] counts = [1, 2, 3, 4]
+    return Result.Ok(walk(counts).realise(0))
+```
+
+The constant must be declared in the **same unit**. A size is read while that unit's
+AST is built, before any pass holds a program-wide constant table, so a constant in
+another unit is reachable as a value but not as a size.
+
+A size that cannot count elements is **CE2099**: a name that is no integer constant
+of this unit, a constant that is not an integer, or a zero. A zero-length array does
+not exist in Sushi.
+
+<!-- docs-sweep: error CE2099 -->
+```sushi
+fn main() i32:
+    let i32[0] nothing = [1]        # CE2099: an array holds at least one element
+    return Result.Ok(0)
+```
+
 ### Dynamic Arrays
 
 Heap-allocated, runtime size:

@@ -1,0 +1,14 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n4\n8\n"
+# Every base a numeric literal has, because the size goes through the same token
+# seam as any other literal -- underscore rules and all.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let i32[0b1_00] bits = [1, 2, 3, 4]
+    println("{bits.len()}")
+
+    let i32[0o10] eight = [1, 2, 3, 4, 5, 6, 7, 8]
+    println("{eight.len()}")
+
+    return Result.Ok(0)

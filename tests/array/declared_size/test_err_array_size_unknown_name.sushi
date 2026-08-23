@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE2099
+# A name that is no constant of this unit. The old answer was CE6001 about a token,
+# which said nothing about what belongs between the brackets.
+
+fn main() i32:
+    let i32[NOT_DECLARED] counts = [1, 2]
+    println("{counts.len()}")
+    return Result.Ok(0)

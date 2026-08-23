@@ -317,6 +317,10 @@ _add(ErrorMessage("CE2096", Severity.ERROR,
     "cannot {what} constant '{name}': constants are immutable",
     Category.TYPE, "A constant is emitted as a read-only global (.rodata), so a write that would reach it -- an in-place method, or an indexed assignment -- cannot target one; the store would be undefined behaviour rather than a diagnostic. Copy the constant into a local first and mutate that."))
 
+_add(ErrorMessage("CE2099", Severity.ERROR,
+    "invalid size '{size}' for a fixed array: {reason}",
+    Category.TYPE, "A fixed array's size is a count of elements, so it must be a positive integer the compiler can read: a literal in any base (256, 0x100, 0b1_0000_0000, 0o400) or the name of an integer constant. One code carries every way it can go wrong, because they share one rule and one fix. The size is read while the unit's AST is built, so the constant must be declared in the SAME unit -- a constant next door is reachable as a value but not as a size (#440). Before this code existed, hex and a name did not parse at all (CE6001, unexpected token) and a zero size left the type unbuilt, which surfaced as CE2007, a missing type annotation on a line that has one (#439)."))
+
 _add(ErrorMessage("CE2098", Severity.ERROR,
     "extension target '{target}' mixes concrete type arguments with type parameters",
     Category.TYPE, "An extension target names either every type parameter -- `extend Box@(T)`, which applies to every instantiation -- or a concrete type for every argument -- `extend Box@(i32)`, which applies to that instantiation alone. A partial form such as `extend Pair@(i32, U)` is partial specialization, and Sushi has none. Rejecting it is what keeps an ordering rule from ever being needed: two fully-concrete targets cannot overlap and template-versus-concrete is strictly ordered, so `Pair@(i32, U)` against `Pair@(T, string)` -- equally specific, neither more so -- cannot arise. That ambiguity is where Rust's specialization has stalled for years. Name every parameter, make every argument concrete, or implement a perk on the concrete target."))

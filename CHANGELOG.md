@@ -9,6 +9,27 @@ a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
 ### Added
+- **A fixed array's size may be written in any base, or name a constant** (#439, #440). The
+  grammar took a decimal literal and nothing else, so `u8[0x100]` came back as
+  `CE6001: unexpected token '0x100'` while `u8[256]`, the same size, compiled. Every base a
+  numeric literal has now works, with the underscore rule (CE6006) and the C-octal rule
+  (CE2071) applying exactly as they do to a literal anywhere else, because the size goes
+  through the same token seam.
+
+  A size may also name an integer constant, so a size that repeats across declarations can
+  be written once: `const i32 MAX_BITS = 15` then `i32[MAX_BITS]`, in a local, a struct
+  field, a parameter or a return type. The constant may be an expression
+  (`HALF * 2`) and may name another constant, because the real constant evaluator reads it.
+  It must be declared in the SAME unit: a size is read while that unit's AST is built, long
+  before any pass holds a program-wide constant table, so a constant next door is reachable
+  as a value but not as a size. That limit is now in the Known Limitations list, where #440
+  asked for it.
+
+  A size that cannot count elements is **CE2099**, one code carrying the reason: an unknown
+  name, a constant that is not an integer, or a zero. A zero used to leave the type unbuilt
+  and surface as CE2007, a missing type annotation on a line that has one. A zero-length
+  array stays illegal -- ruled, not overlooked.
+
 - **`use <compression/zlib>`: DEFLATE and the zlib container, written in Sushi.** No C
   library and no FFI -- the whole codec is Sushi. `zlib_compress` and `zlib_uncompress`
   handle the RFC 1950 container with its Adler-32 trailer; `deflate_raw` and

@@ -99,7 +99,7 @@ continue_stmt: CONTINUE _NEWLINE
 
 ?type: BORROW_MODE type -> reference_t
      | FN "(" [fn_param_types] ")" "->" type ["|" type] -> fn_type_t
-     | atom_type "[" INT "]" -> array_t
+     | atom_type "[" array_size "]" -> array_t
      | atom_type "[" "]" -> dynamic_array_t
      | atom_type
 
@@ -121,6 +121,10 @@ continue_stmt: CONTINUE _NEWLINE
           | NAME -> name_t
 
 type_list: type ("," type)*
+
+# A fixed array's size: every base a numeric literal has, or the name of an integer
+# constant. The builder reads it (CE2099); the grammar only says what may stand here.
+array_size: INT | HEX_INT | BIN_INT | OCT_INT | NAME
 
 # A function type's parameter list carries a mode per parameter, unlike a generic
 # argument list. `peek` / `poke` ride on the type; only `nom` needs a slot of its
