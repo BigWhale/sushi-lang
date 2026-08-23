@@ -1,4 +1,4 @@
-# toolchain/slib reads the metadata map back from a well-formed v3 .slib file.
+# toolchain/slib reads the metadata map back from a well-formed v4 .slib file.
 # The test writes its own fixture: a 52-byte header and a one-key msgpack map.
 # EXPECT_STDOUT_EXACT: "{"library_name":"demo"}\n"
 # EXPECT_NO_LEAKS: true
@@ -22,7 +22,7 @@ fn fixture_header(u8 version, u8 mlen) u8[]:
     return Result.Ok(h)
 
 fn valid_fixture() u8[]:
-    let u8[] b = fixture_header(3, 19)??
+    let u8[] b = fixture_header(4, 19)??
     b.push(0x81)
     b.push(0xac)
     b.push(0x6c)

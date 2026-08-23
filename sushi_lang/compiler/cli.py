@@ -214,9 +214,19 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Compile to library bitcode (no main() required)",
     )
     ap.add_argument(
+        "--lib-version",
+        metavar="X.Y.Z",
+        help="Version of the library being built (a nori.toml beside the sources wins)",
+    )
+    ap.add_argument(
         "--lib-info",
         metavar="FILE",
         help="Display metadata from a .slib library file",
+    )
+    ap.add_argument(
+        "--ignore-compiler-version",
+        action="store_true",
+        help="Load libraries whose requires_compiler excludes this compiler (CE3503)",
     )
     ap.add_argument(
         "--no-incremental",

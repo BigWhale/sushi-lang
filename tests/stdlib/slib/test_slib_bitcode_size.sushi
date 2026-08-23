@@ -1,5 +1,7 @@
-# slib_bitcode_size reads the u64 bitcode length that follows the metadata
-# blob. The fixture records 12345 (0x3039 little-endian) and no bitcode bytes.
+# slib_bitcode_size reads the u64 bitcode length. Container v4 puts a
+# length-prefixed SOURCE section between the metadata and the bitcode, so the
+# fixture carries an empty source section, then records 12345 (0x3039 little-
+# endian) and no bitcode bytes.
 # EXPECT_STDOUT_EXACT: "12345\n"
 # EXPECT_NO_LEAKS: true
 
@@ -21,8 +23,12 @@ fn fixture_header(u8 version, u8 mlen) u8[]:
     return Result.Ok(h)
 
 fn sized_fixture() u8[]:
-    let u8[] b = fixture_header(3, 1)??
+    let u8[] b = fixture_header(4, 1)??
     b.push(0xc0)
+    let i32 s = 0
+    while (s < 8):
+        b.push(0)
+        s := s + 1
     b.push(0x39)
     b.push(0x30)
     let i32 i = 0

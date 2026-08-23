@@ -63,7 +63,7 @@ fn check(string path) ~:
     return Result.Ok(~)
 
 fn run_test() i32:
-    let u8[] wrong_magic = fixture_header(3, 1)??
+    let u8[] wrong_magic = fixture_header(4, 1)??
     wrong_magic[0] := 0x00
     wrong_magic.push(0xc0)
     write_fixture("test_slib_wrong_magic.slib", wrong_magic)??
@@ -72,10 +72,10 @@ fn run_test() i32:
     old_version.push(0xc0)
     write_fixture("test_slib_old_version.slib", old_version)??
 
-    let u8[] short_file = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3, 0x03, 0x00, 0x00, 0x00])
+    let u8[] short_file = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3, 0x04, 0x00, 0x00, 0x00])
     write_fixture("test_slib_short.slib", short_file)??
 
-    let u8[] bad_blob = fixture_header(3, 1)??
+    let u8[] bad_blob = fixture_header(4, 1)??
     bad_blob.push(0xc1)
     write_fixture("test_slib_bad_blob.slib", bad_blob)??
 

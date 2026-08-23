@@ -12,6 +12,59 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 
 
+def _requires_compiler(compiler_version: str) -> str:
+    """The constraint a build stamps: the building compiler's minor, when it parses."""
+    from sushi_lang.internals.semver import InvalidVersion, Version, default_compiler_req
+
+    try:
+        return default_compiler_req(Version.parse(compiler_version))
+    except InvalidVersion:
+        # `sushi_lang.__version__` falls back to "unknown" when neither the package
+        # metadata nor pyproject.toml can be read. Stamp no constraint rather than a
+        # wrong one; the load-side check skips an unreadable field.
+        return ""
+
+
+def resolve_library_version(source_dir: Path, explicit: str | None,
+                            library_name: str) -> str:
+    """The library's own version: nori.toml when present, else --lib-version (CE3505).
+
+    A package IS one version, so a nori.toml beside the sources is the source of truth.
+    An explicit flag that contradicts it is rejected rather than silently preferred --
+    either way round, a package could otherwise ship under a version it does not claim.
+    """
+    from sushi_lang.backend.library_errors import LibraryError
+    from sushi_lang.internals.semver import InvalidVersion, Version
+
+    declared: str | None = None
+    try:
+        from sushi_lang.packager.manifest import ManifestError, load_manifest
+        from sushi_lang.packager.paths import find_project_root
+
+        root = find_project_root(source_dir)
+        if root is not None:
+            declared = load_manifest(root).version
+    except (ManifestError, OSError, ValueError):
+        # An unreadable or invalid nori.toml is the packager's problem to report, not a
+        # reason to fail a --lib build that carries its own --lib-version.
+        declared = None
+
+    if declared is not None and explicit is not None and declared != explicit:
+        raise LibraryError("CE3505", lib=library_name,
+                           reason=f"nori.toml says {declared}, --lib-version says {explicit}")
+
+    chosen = declared if declared is not None else explicit
+    if chosen is None:
+        raise LibraryError("CE3505", lib=library_name,
+                           reason="no nori.toml beside the sources and no --lib-version")
+
+    try:
+        Version.parse(chosen)
+    except InvalidVersion as e:
+        raise LibraryError("CE3505", lib=library_name, reason=str(e)) from e
+    return chosen
+
+
 class LibraryManifestGenerator:
     """Generates .slib library files."""
 
@@ -22,7 +75,8 @@ class LibraryManifestGenerator:
         self.enums = analyzer.enums
 
     def generate(self, units: list['Unit'], output_path: Path, bitcode: bytes,
-                 templates: dict | None = None) -> None:
+                 templates: dict | None = None, library_version: str = "0.0.0",
+                 kind: str = "binary", source: dict[str, str] | None = None) -> None:
         """Generate .slib library file."""
         from sushi_lang.backend.platform_detect import current_platform_name
         from sushi_lang.internals.version import _get_versions
@@ -34,8 +88,12 @@ class LibraryManifestGenerator:
         library_name = output_path.stem
 
         manifest = {
-            "sushi_lib_version": "1.0",
+            "sushi_lib_version": "2.0",
             "library_name": library_name,
+            "library_version": library_version,
+            "kind": kind,
+            "units": [unit.name for unit in units],
+            "requires_compiler": _requires_compiler(VERSION),
             "compiled_at": datetime.now(timezone.utc).isoformat(),
             "platform": platform_name,
             "compiler_version": VERSION,
@@ -47,7 +105,7 @@ class LibraryManifestGenerator:
             "dependencies": self._extract_dependencies(units),
         }
 
-        LibraryFormat.write(output_path, manifest, bitcode)
+        LibraryFormat.write(output_path, manifest, bitcode, source=source)
 
     def _contains_foreign_ptr(self, ty) -> bool:
         """Recursively check whether a type exposes a foreign `ptr` (ForeignPtrType)."""
