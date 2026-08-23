@@ -67,8 +67,13 @@ __all__ = [
 class CollectorPass:
     """Collect constants, structs, enums, functions, and perks from the AST."""
 
-    def __init__(self, reporter: Reporter) -> None:
-        """Initialize collector pass with all sub-collectors."""
+    def __init__(self, reporter: Reporter,
+                 library_units: Optional[Set[str]] = None) -> None:
+        """Initialize collector pass with all sub-collectors.
+
+        `library_units` names the units that arrived from a source library, so a
+        consumer definition of the same name shadows theirs instead of colliding.
+        """
         self.r = reporter
 
         self.constants = ConstantTable()
@@ -133,6 +138,8 @@ class CollectorPass:
             generic_structs=self.generic_structs,
             generic_enums=self.generic_enums
         )
+        self.function_collector.library_units = set(library_units or ())
+        self.perk_collector.library_units = set(library_units or ())
 
         self._register_predefined_structs()
         self._register_predefined_enums()
@@ -144,6 +151,7 @@ class CollectorPass:
         self.constant_collector.collect(root)
         self.struct_collector.collect(root)
         self.enum_collector.collect(root)
+        self.perk_collector.current_unit_name = unit_name
         self.perk_collector.collect_definitions(root)
         self.perk_collector.collect_implementations(root)
         self.perk_collector.register_synthetic_impls()

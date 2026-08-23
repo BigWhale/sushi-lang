@@ -69,7 +69,7 @@ def _build_lib(tmp_path: Path) -> dict[str, str]:
     lib_src = tmp_path / "impllib.sushi"
     _write(lib_src, LIB_SOURCE)
     build = subprocess.run(
-        ["sushic", "--lib", "--lib-version", "0.0.0", str(lib_src), "-o", str(libs_dir / "impllib.slib")],
+        ["sushic", "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(lib_src), "-o", str(libs_dir / "impllib.slib")],
         cwd=tmp_path, capture_output=True, text=True,
     )
     assert build.returncode == 0, f"Library build failed:\n{build.stderr}"

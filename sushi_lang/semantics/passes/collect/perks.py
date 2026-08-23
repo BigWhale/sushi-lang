@@ -146,6 +146,18 @@ class PerkCollector:
         self.r = reporter
         self.perks = perks
         self.perk_impls = perk_impls
+        # Which unit is being collected, which units came from a source library, and
+        # which unit registered each impl. Together they let a consumer impl replace a
+        # library one silently -- the rule a binary library already follows
+        # (docs/design/libraries.md section 7).
+        self.current_unit_name: Optional[str] = None
+        self.library_units: Set[str] = set()
+        self._impl_units: Dict[Tuple[str, str], Optional[str]] = {}
+        # Library impls a consumer replaced. Their bodies are real Sushi code in a real
+        # unit, so unless they are dropped from that unit's AST the backend emits both
+        # and the method symbol is defined twice. (A binary library has no such problem:
+        # its body is weak_odr in the .slib object and the linker discards it.)
+        self.shadowed_impls: List[ExtendWithDef] = []
 
     def collect_definitions(self, root: Program) -> None:
         """Collect all perk definitions from program AST."""
@@ -256,6 +268,17 @@ class PerkCollector:
             er.emit(self.r, ERR.CE4003, perk_name_span, perk=perk_name)
             return
 
+        key = (type_name, perk_name)
         if not self.perk_impls.register(impl, type_name):
-            er.emit(self.r, ERR.CE4002, getattr(impl, "loc", None), type=type_name, perk=perk_name)
-            return
+            owner = self._impl_units.get(key)
+            shadows_library = (owner is not None and owner in self.library_units
+                               and self.current_unit_name not in self.library_units)
+            if not shadows_library:
+                er.emit(self.r, ERR.CE4002, getattr(impl, "loc", None),
+                        type=type_name, perk=perk_name)
+                return
+            previous = self.perk_impls.implementations.get(key)
+            if previous is not None:
+                self.shadowed_impls.append(previous)
+            self.perk_impls.implementations[key] = impl
+        self._impl_units[key] = self.current_unit_name

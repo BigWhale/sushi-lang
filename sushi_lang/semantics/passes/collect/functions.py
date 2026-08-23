@@ -185,6 +185,7 @@ class GenericFuncDef:
     ret_span: Optional[Span] = None
     err_type: Optional[Type] = None              # Error type for Result<T, E> (None = StdError default)
     is_library_template: bool = False            # True if registered from a consumed library's .slib templates
+    unit_name: Optional[str] = None              # Unit that declared it; a monomorphized instance goes home to it
 
 
 @dataclass
@@ -330,6 +331,11 @@ class FunctionCollector:
         """Initialize function collector."""
         self.r = reporter
         self.current_unit_file: Optional[str] = None  # File of the unit being collected
+        # Unit names that came from a source library. A consumer definition that
+        # collides with one of theirs SHADOWS it silently, which is the rule a binary
+        # library already follows (docs/design/libraries.md section 7). Without this,
+        # `--lib-kind` would change program semantics rather than just distribution.
+        self.library_units: Set[str] = set()
         self.funcs = funcs
         self.generic_funcs = generic_funcs
         self.extensions = extensions
@@ -388,6 +394,13 @@ class FunctionCollector:
 
             for _const_name, stdlib_const in module.constants.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_const)
+
+    def _shadows_library(self, prev, unit_name: Optional[str]) -> bool:
+        """True when a consumer definition legitimately replaces a library one."""
+        prev_unit = getattr(prev, "unit_name", None)
+        return (prev_unit is not None
+                and prev_unit in self.library_units
+                and unit_name not in self.library_units)
 
     def _emit_duplicate_function(self, name: str, name_span: Optional[Span],
                                  prev: 'FuncSig') -> None:
@@ -468,11 +481,21 @@ class FunctionCollector:
         validate_type_pack_params(self.r, getattr(fn, "type_params", None), params, name_span)
 
         if name in self.funcs.by_name:
-            self._emit_duplicate_function(name, name_span, self.funcs.by_name[name])
+            prev = self.funcs.by_name[name]
+            if not self._shadows_library(prev, unit_name):
+                self._emit_duplicate_function(name, name_span, prev)
+                return
+            self.funcs.order.remove(name)
+            del self.funcs.by_name[name]
             return
 
         if name in self.generic_funcs.by_name:
-            self._emit_duplicate_function(name, name_span, self.generic_funcs.by_name[name])
+            prev = self.generic_funcs.by_name[name]
+            if not self._shadows_library(prev, unit_name):
+                self._emit_duplicate_function(name, name_span, prev)
+                return
+            self.generic_funcs.order.remove(name)
+            del self.generic_funcs.by_name[name]
             return
 
         sig = FuncSig(
@@ -510,15 +533,21 @@ class FunctionCollector:
 
         if name in self.generic_funcs.by_name:
             prev = self.generic_funcs.by_name[name]
-            er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
-                .note("first defined here", prev.name_span).emit()
-            return
+            if not self._shadows_library(prev, unit_name):
+                er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
+                    .note("first defined here", prev.name_span).emit()
+                return
+            self.generic_funcs.order.remove(name)
+            del self.generic_funcs.by_name[name]
 
         if name in self.funcs.by_name:
             prev = self.funcs.by_name[name]
-            er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
-                .note("first defined here", prev.name_span).emit()
-            return
+            if not self._shadows_library(prev, unit_name):
+                er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
+                    .note("first defined here", prev.name_span).emit()
+                return
+            self.funcs.order.remove(name)
+            del self.funcs.by_name[name]
 
         type_param_instances = tuple(
             tp if isinstance(tp, BoundedTypeParam)
@@ -580,7 +609,8 @@ class FunctionCollector:
             loc=getattr(fn, "loc", None),
             name_span=name_span,
             ret_span=ret_span,
-            err_type=fn.err_type
+            err_type=fn.err_type,
+            unit_name=unit_name,
         )
 
         self.generic_funcs.order.append(name)

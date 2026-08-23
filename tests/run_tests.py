@@ -41,6 +41,15 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
         return False
 
 
+# Helper libraries that must ship as BINARY. Source is the default everywhere else, so
+# most of tests/libs/ exercises the source path end to end. These do not, because their
+# tests assert binary-path behaviour that source distribution deliberately removes:
+# private_closure_lib backs test_err_lib_private_clash, which expects CE5007 -- a clash
+# with an export-closure private. A source library has no export closure and namespaced
+# units, so that clash cannot happen (docs/design/libraries.md section 4.2).
+BINARY_ONLY_HELPERS = {"private_closure_lib"}
+
+
 def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
     """Build test helper libraries. Returns True on success."""
     helpers_dir = project_root / "tests" / "libs" / "helpers"
@@ -75,6 +84,7 @@ def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
                 # A .slib must state its own version (CE3505). These helpers are not
                 # packages, so there is no nori.toml to read one from.
                 [str(sushic), "--lib", "--lib-version", "0.0.0",
+                 "--lib-kind", "binary" if name in BINARY_ONLY_HELPERS else "source",
                  str(lib_file), "-o", str(output_path)],
                 cwd=project_root,
                 capture_output=True,

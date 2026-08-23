@@ -73,27 +73,37 @@ class DiagnosticBuilder:
 
 
 class Reporter:
-    def __init__(self, source: Optional[str] = None, filename: str = "<input>") -> None:
+    def __init__(self, source: Optional[str] = None, filename: str = "<input>",
+                 provenance: Optional[str] = None) -> None:
         self.source = source
         self.filename = filename
+        # A one-line explanation of whose code this reporter covers, attached as a note
+        # to every diagnostic it raises. Set for a unit that came from a source library,
+        # where the failure is in code the consumer never wrote and an unattributed
+        # error would be unreadable.
+        self.provenance = provenance
         self.items: List[Diagnostic] = []
 
+    def _record(self, d: Diagnostic) -> Diagnostic:
+        if self.provenance:
+            d.sub.append(SubDiagnostic("note", self.provenance))
+        self.items.append(d)
+        return d
+
     def error(self, code: str, msg: str, span: Optional[Span], filename: Optional[str] = None):
-        self.items.append(Diagnostic("error", code, msg, span, filename=filename or self.filename))
+        self._record(Diagnostic("error", code, msg, span, filename=filename or self.filename))
 
     def warn(self, code: str, msg: str, span: Optional[Span], filename: Optional[str] = None):
-        self.items.append(Diagnostic("warning", code, msg, span, filename=filename or self.filename))
+        self._record(Diagnostic("warning", code, msg, span, filename=filename or self.filename))
 
     def error_with(self, code: str, msg: str, span: Optional[Span],
                    filename: Optional[str] = None) -> DiagnosticBuilder:
-        d = Diagnostic("error", code, msg, span, filename=filename or self.filename)
-        self.items.append(d)
+        d = self._record(Diagnostic("error", code, msg, span, filename=filename or self.filename))
         return DiagnosticBuilder(self, d)
 
     def warn_with(self, code: str, msg: str, span: Optional[Span],
                   filename: Optional[str] = None) -> DiagnosticBuilder:
-        d = Diagnostic("warning", code, msg, span, filename=filename or self.filename)
-        self.items.append(d)
+        d = self._record(Diagnostic("warning", code, msg, span, filename=filename or self.filename))
         return DiagnosticBuilder(self, d)
 
     @property

@@ -251,6 +251,18 @@ def _hash_ast_structure(hasher: hashlib._Hash, ast: Program) -> None:
             ret = str(method.ret) if method.ret else "~"
             hasher.update(f"{perk_impl.target_type}::{method.name}({params})->{ret}".encode())
 
+    # Monomorphized instances appended to this unit. The unit's own source hash cannot
+    # cover them: the generic may be declared here while the INSTANTIATION comes from
+    # anywhere in the program, so two builds of the same source can legitimately need
+    # different objects. Signature and body both, for the same reason MONO_EXT hashes
+    # both -- an edit to the generic's body must flip the key.
+    hasher.update(b"SYNTHESIZED:")
+    for fn in sorted((f for f in ast.functions if getattr(f, "is_synthesized", False)),
+                     key=lambda f: f.name):
+        params = ",".join(f"{p.ty}:{p.name}" for p in fn.params)
+        ret = str(fn.ret) if fn.ret else "~"
+        hasher.update(f"{fn.name}({params})->{ret}|{_node_digest(fn.body)}".encode())
+
     hasher.update(b"USES:")
     for use_stmt in sorted(ast.uses, key=lambda u: u.path):
         hasher.update(f"{use_stmt.path}:{use_stmt.is_stdlib}:{use_stmt.is_library}".encode())

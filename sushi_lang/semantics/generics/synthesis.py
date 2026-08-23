@@ -11,8 +11,22 @@ def register_synthesized_function(
     *,
     program: Optional[Program] = None,
     units: Optional[List] = None,
+    home_unit: Optional[str] = None,
 ) -> bool:
-    """Register a synthesized concrete function and queue it for backend emission."""
+    """Register a synthesized concrete function and queue it for backend emission.
+
+    `home_unit` names the unit that declared the generic this instance came from. It is
+    honoured only for a SOURCE-LIBRARY unit, where the body is the library's code and
+    has to be type-checked as such: a library generic calling a library-private helper
+    is then an intra-unit call, which is what lets a source library work without the
+    binary path's export closure.
+
+    Deliberately not applied to every unit. The same reasoning would hold for an
+    ordinary multi-unit program and for the bundled source stdlib, but moving those
+    instances breaks lookup of a monomorphized `<collections/iter>` combinator, and
+    chasing that down is its own change. Everything outside a source library keeps
+    landing in the first unit, as before.
+    """
     from sushi_lang.semantics.passes.collect import FuncSig
 
     name = funcdef.name
@@ -32,9 +46,22 @@ def register_synthesized_function(
     func_table.by_name[name] = sig
     func_table.order.append(name)
 
+    # Marked so the unit fingerprint can see it: a synthesized body is NOT covered by
+    # the unit's source hash, and which instances a unit carries depends on what the
+    # rest of the program asked for.
+    funcdef.is_synthesized = True
+
     if program is not None:
         program.functions.append(funcdef)
-    elif units and len(units) > 0 and units[0].ast:
-        units[0].ast.functions.append(funcdef)
+    elif units:
+        target = None
+        if home_unit is not None:
+            target = next((u for u in units
+                           if u.name == home_unit and u.ast
+                           and getattr(u, "provenance", None) is not None), None)
+        if target is None and units[0].ast:
+            target = units[0]
+        if target is not None and target.ast:
+            target.ast.functions.append(funcdef)
 
     return True

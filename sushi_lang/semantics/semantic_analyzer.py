@@ -45,6 +45,17 @@ def _diagnostic_identity(diagnostic):
     )
 
 
+def _library_units_first(compilation_order):
+    """Compilation order with source-library units moved to the front.
+
+    Only collection needs this. A library unit is a dependency of everything the
+    consumer wrote, and declarations have to be in the table before the units that
+    name them are checked.
+    """
+    return ([u for u in compilation_order if u.provenance is not None]
+            + [u for u in compilation_order if u.provenance is None])
+
+
 class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
 
@@ -112,7 +123,10 @@ class SemanticAnalyzer:
         if compilation_order is None:
             return  # Error already reported
 
-        collector = CollectorPass(self.reporter)
+        collector = CollectorPass(
+            self.reporter,
+            library_units={u.name for u in compilation_order if u.provenance is not None},
+        )
         from sushi_lang.semantics.tables import SymbolTables
         global_tables = SymbolTables()
 
@@ -123,7 +137,14 @@ class SemanticAnalyzer:
         if self.library_linker is not None:
             self._seed_library_perks(collector.perks)
 
-        for unit in compilation_order:
+        # A source library's units are collected first. The compilation order puts
+        # dependents before dependencies, which is wrong for collection: a consumer's
+        # `extend i32 with Display` is checked against the perks visible when its own
+        # unit is collected, so a perk the library defines has to be in the table
+        # already. Seeding it instead would register the same perk twice (CE4001),
+        # because unlike a binary library's manifest records, these arrive in a real
+        # unit that the loop below collects on its own.
+        for unit in _library_units_first(compilation_order):
             if unit.ast is None:
                 continue
 
@@ -131,6 +152,17 @@ class SemanticAnalyzer:
                                         unit_file=str(unit.file_path))
 
             symbol_merger.merge_all(unit, unit_tables, global_tables)
+
+        # A library impl the consumer replaced must not be emitted: both bodies are
+        # ordinary Sushi in ordinary units, so leaving it in place defines the method
+        # symbol twice.
+        shadowed = collector.perk_collector.shadowed_impls
+        if shadowed:
+            dropped = {id(impl) for impl in shadowed}
+            for unit in compilation_order:
+                if unit.ast is not None and unit.ast.perk_impls:
+                    unit.ast.perk_impls = [i for i in unit.ast.perk_impls
+                                           if id(i) not in dropped]
 
         self.tables = global_tables
         self.constants = global_tables.constants
@@ -361,7 +393,8 @@ class SemanticAnalyzer:
             except Exception:
                 unit_source = ""  # Fallback if we can't read the source
 
-            unit_reporter = Reporter(source=unit_source, filename=str(unit.file_path))
+            unit_reporter = Reporter(source=unit_source, filename=str(unit.file_path),
+                                     provenance=unit.provenance)
 
             scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals)
             scope_analyzer.run(unit.ast)
