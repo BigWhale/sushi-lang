@@ -12,10 +12,15 @@ TOPLEVEL="$(git rev-parse --show-toplevel)" || exit 1
 cd "$TOPLEVEL" || exit 1
 
 fail=0
+# Git exports its own location variables to every hook it runs, and a push from a
+# worktree sets GIT_DIR. GIT_DIR overrides an explicit -C, so any check that asks
+# git about a path is answered about the repository being pushed instead. CI runs
+# these same checks with none of it set, and this hook exists to predict CI, so it
+# removes them here -- once, for every check.
 run() {
   local label="$1"; shift
   echo "== pre-push: $label =="
-  if ! "$@"; then
+  if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX "$@"; then
     echo "!! pre-push: $label FAILED"
     fail=1
   fi

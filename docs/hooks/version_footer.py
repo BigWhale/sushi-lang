@@ -16,6 +16,7 @@ current state of main, and this stamp says which state that is.
 from __future__ import annotations
 
 import datetime
+import os
 import subprocess
 import tomllib
 from pathlib import Path
@@ -42,8 +43,21 @@ def read_version(repo_root: Path) -> str:
     return str(version)
 
 
+def _environment_without_git() -> dict[str, str]:
+    """The current environment with every GIT_* variable removed.
+
+    Git exports its own variables to any process it starts -- a hook gets GIT_DIR,
+    and a push from a worktree always sets it -- and GIT_DIR overrides an explicit
+    -C. Inherited, they turn the question below from "what is HEAD in this
+    directory" into "what is HEAD in whichever repository invoked us". The
+    argument is the question, so nothing in the environment may re-aim it.
+    """
+    return {name: value for name, value in os.environ.items()
+            if not name.startswith("GIT_")}
+
+
 def read_commit(repo_root: Path) -> str | None:
-    """Read the short commit of HEAD. Returns None when git cannot answer.
+    """Read the short commit of HEAD in `repo_root`. None when git cannot answer.
 
     `safe.directory` is set because a CI job that runs in a container checks the
     repository out as another user, and git then refuses to read it. The
@@ -54,6 +68,7 @@ def read_commit(repo_root: Path) -> str | None:
             ["git", "-c", "safe.directory=*", "-C", str(repo_root),
              "rev-parse", "--short", "HEAD"],
             capture_output=True, text=True, check=True,
+            env=_environment_without_git(),
         )
     except (OSError, subprocess.CalledProcessError):
         return None

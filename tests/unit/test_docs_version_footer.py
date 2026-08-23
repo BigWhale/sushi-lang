@@ -116,3 +116,50 @@ def test_on_config_stamps_the_copyright():
     vf.on_config(config)
     assert config["copyright"]
     assert vf.read_version(PROJECT_ROOT) in config["copyright"]
+
+
+# Git exports its own location variables to every hook it runs, and GIT_DIR overrides
+# an explicit -C. A push from a worktree therefore hands the whole pytest run a pointer
+# to the repository being pushed, which is how #442 turned this file red inside the
+# pre-push hook while CI, which runs pytest as an ordinary step, stayed green.
+def _hook_environment(root: Path) -> dict[str, str]:
+    """What git sets for a hook, aimed at `root`."""
+    return {
+        "GIT_DIR": str(root / ".git"),
+        "GIT_WORK_TREE": str(root),
+        "GIT_INDEX_FILE": str(root / ".git" / "index"),
+        "GIT_PREFIX": "",
+    }
+
+
+def _real_head() -> str | None:
+    probe = subprocess.run(
+        ["git", "-c", "safe.directory=*", "-C", str(PROJECT_ROOT),
+         "rev-parse", "--short", "HEAD"],
+        capture_output=True, text=True,
+    )
+    return probe.stdout.strip() if probe.returncode == 0 else None
+
+
+def test_commit_ignores_an_inherited_git_dir(tmp_path, monkeypatch):
+    """An inherited GIT_DIR must not answer for a directory that is not a checkout."""
+    monkeypatch.setenv("GIT_DIR", str(PROJECT_ROOT / ".git"))
+    assert vf.read_commit(tmp_path) is None
+
+
+def test_commit_ignores_a_whole_hook_environment(tmp_path, monkeypatch):
+    """The same, with every location variable git hands a hook set at once."""
+    for name, value in _hook_environment(PROJECT_ROOT).items():
+        monkeypatch.setenv(name, value)
+    assert vf.read_commit(tmp_path) is None
+
+
+def test_commit_answers_about_the_repository_it_is_given(tmp_path, monkeypatch):
+    """The argument is the question. A GIT_DIR pointing elsewhere cannot re-aim it.
+
+    The expected answer is read before the environment is dirtied, or the probe
+    would inherit the same GIT_DIR and the two would agree on being wrong.
+    """
+    expected = _real_head()
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "not-a-repository.git"))
+    assert vf.read_commit(PROJECT_ROOT) == expected
