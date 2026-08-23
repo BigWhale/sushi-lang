@@ -50,3 +50,11 @@ _add(ErrorMessage("CE2512", Severity.ERROR,
 _add(ErrorMessage("CE2511", Severity.ERROR,
     "error type mismatch in propagation: cannot propagate Result@({ok_type}, {inner_err}) to function returning Result@({ok_type}, {outer_err})",
     Category.TYPE, "The ?? operator requires error types to match exactly. Inner function returns Result@(T, {inner_err}) but outer function returns Result@(T, {outer_err}). Error type conversion is not supported yet."))
+
+_add(ErrorMessage("CE2513", Severity.ERROR,
+    "cannot compare '{left_type}' with '{right_type}' using operator '{op}'",
+    Category.TYPE, "A comparison asks one question of two values, so both operands must be of one type. Sushi converts nothing on its own, and there is no order between a string and a number to fall back on. Cast one operand with 'as' when both are numeric, or compare like with like. Two numeric operands that disagree are CE2510 instead, which says which widths met. This code arrived with #449: every pair the typecheck pass did not look at reached the backend, which then tried to compare a string or a struct value as an i32 and answered with a CE0017 internal error."))
+
+_add(ErrorMessage("CE2514", Severity.ERROR,
+    "operator '{op}' cannot compare two values of type '{type_name}'",
+    Category.TYPE, "Equality is defined for the numeric types, bool and string. An order (< > <= >=) is defined for the numeric types and string, where it reads the bytes. Nothing else carries a comparison. Use match to ask which variant an enum holds, and compare the fields of a struct one at a time. A bool is deliberately excluded from the order: false < true is almost always a typo for != or a missing 'and', and Rust and Go both accept it where Sushi does not. This code arrived with #449, where a struct, an enum and an array comparison each reached the backend and became a CE0017 internal error."))

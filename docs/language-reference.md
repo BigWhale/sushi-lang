@@ -407,6 +407,32 @@ constant.
 - `>` - Greater than
 - `>=` - Greater than or equal
 
+Equality accepts the numeric types, `bool` and `string`. An order (`<`, `<=`, `>`, `>=`)
+accepts the numeric types and `string`. Both operands must be of one type: a mixed pair is
+CE2513, two numeric types of different widths are CE2510, and a type that carries no such
+comparison is CE2514. A `bool` has no order, because `a < b` on two bools is almost always
+a typo for `!=`. Use `match` to ask which variant an enum holds, and compare the fields of a
+struct one at a time.
+
+**A string comparison reads bytes.** It walks the UTF-8 bytes of the two strings, and the
+length breaks the tie when the common bytes agree, so a prefix comes out below the longer
+string that starts with it. This matches Rust and Go.
+
+```sushi
+let string a = "apple"
+let string b = "apples"
+if (a < b):                 # true: a prefix is less
+    println("shorter first")
+if ("Zoo" < "apple"):       # true: 'Z' is 0x5A, 'a' is 0x61
+    println("capitals first")
+```
+
+Two consequences follow from reading bytes. The order is stable and cheap, which is what a
+map key or a binary search needs. It is not a collation: it puts every capital before every
+lowercase letter, and it does not normalize, so the two Unicode spellings of `é` are neither
+equal nor adjacent. A list that a person reads needs a locale-aware comparison, which Sushi
+does not provide yet.
+
 ### Logical
 
 - `and` (or `&&`) - Logical AND (short-circuits)
@@ -963,7 +989,8 @@ const bool IS_VALID = (100 > 50) and true # true
 - **Arithmetic**: `+`, `-`, `*`, `/`, `%` (numeric types)
 - **Bitwise**: `&`, `|`, `^`, `~`, `<<`, `>>` (integer types only)
 - **Logical**: `and`, `or`, `xor`, `not` (boolean type only)
-- **Comparison**: `==`, `!=`, `<`, `<=`, `>`, `>=` (compatible types)
+- **Comparison**: `==`, `!=` (numeric, `bool`, `string`); `<`, `<=`, `>`, `>=` (numeric,
+  `string` -- by bytes). Both operands must be of one type
 - **Type casts**: `as` (between compatible types)
 
 ### Constant References

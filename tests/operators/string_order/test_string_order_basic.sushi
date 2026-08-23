@@ -1,0 +1,20 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nlt\ngt\nle\nge\n"
+# The four order operators on two string variables. "abc" is below "abd" because
+# 'c' (0x63) is below 'd' (0x64).
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let string a = "abc"
+    let string b = "abd"
+
+    if (a < b):
+        println("lt")
+    if (b > a):
+        println("gt")
+    if (a <= b):
+        println("le")
+    if (b >= a):
+        println("ge")
+
+    return Result.Ok(0)

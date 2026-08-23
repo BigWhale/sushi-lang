@@ -404,12 +404,23 @@ class ConstantEvaluator:
     def _eval_comparison(self, left: ConstantValue, right: ConstantValue, op: str, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate comparison operation.
 
-        A bool and a string are equatable but not orderable, which is what a body gets
-        too: '<' on two strings is not implemented anywhere.
+        A bool is equatable but not orderable, and a string is both, which is exactly
+        what a body gets (#449). The typecheck pass owns that rule for a body; this
+        evaluator has to agree with it, or a constant refuses what a local accepts.
         """
         if op in ('==', '!=') and self._is_equatable_pair(left, right):
             same = left.value == right.value
             return ConstantValue(same if op == '==' else not same, BuiltinType.BOOL)
+
+        if op in ('<', '<=', '>', '>=') and self._is_orderable_pair(left, right):
+            # Compare the UTF-8 bytes, which is what emit_string_order does at run time.
+            # Python's str orders by code point and UTF-8 keeps code points in numerical
+            # order, so the two agree; encoding first makes them agree by construction.
+            lhs = left.value.encode('utf-8')
+            rhs = right.value.encode('utf-8')
+            ordered = {'<': lhs < rhs, '<=': lhs <= rhs,
+                       '>': lhs > rhs, '>=': lhs >= rhs}[op]
+            return ConstantValue(ordered, BuiltinType.BOOL)
 
         if not self._is_numeric_type(left.semantic_type) or not self._is_numeric_type(right.semantic_type):
             er.emit(self.reporter, er.ERR.CE0110, span, op=f'comparison {op} on non-comparable types')
@@ -437,6 +448,14 @@ class ConstantEvaluator:
         """Whether two non-numeric values of the same type compare for equality."""
         return left.semantic_type == right.semantic_type and left.semantic_type in (
             BuiltinType.BOOL, BuiltinType.STRING)
+
+    def _is_orderable_pair(self, left: ConstantValue, right: ConstantValue) -> bool:
+        """Whether two non-numeric values of the same type carry an order.
+
+        A string does and a bool does not, which is the rule a body follows.
+        """
+        return (left.semantic_type == right.semantic_type
+                and left.semantic_type == BuiltinType.STRING)
 
     def _is_integer_type(self, ty: Type) -> bool:
         """Check if type is an integer type."""

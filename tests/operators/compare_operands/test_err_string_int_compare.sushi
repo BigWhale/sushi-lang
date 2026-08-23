@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODE: CE2513
+# A string and an integer are not comparable. This pair reached the backend and
+# became a CE0017 internal error (#449).
+
+fn main() i32:
+    let string a = "abc"
+    let i32 n = 3
+    if (a < n):
+        return Result.Ok(1)
+    return Result.Ok(0)

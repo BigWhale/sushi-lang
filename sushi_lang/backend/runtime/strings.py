@@ -86,7 +86,62 @@ class StringOperations:
         elif op == "!=":
             return self.codegen.builder.not_(phi)
         else:
-            raise NotImplementedError(f"String comparison '{op}' not implemented")
+            raise_internal_error("CE0009")
+
+    def _emit_string_three_way(self, lhs: ir.Value, rhs: ir.Value) -> ir.Value:
+        """The i32 sign of `lhs - rhs` in byte order: memcmp, then the length.
+
+        memcmp compares as unsigned char, which is the byte order the four order
+        operators promise, and it agrees with Rust and Go. It reads only the common
+        prefix, so the length breaks the tie when those bytes agree and a prefix
+        comes out below the longer string that starts with it.
+        """
+        builder = self.codegen.builder
+
+        lhs_data = builder.extract_value(lhs, 0)
+        lhs_size = builder.extract_value(lhs, 1)
+        rhs_data = builder.extract_value(rhs, 0)
+        rhs_size = builder.extract_value(rhs, 1)
+
+        lhs_shorter = builder.icmp_unsigned('<', lhs_size, rhs_size)
+        common = builder.select(lhs_shorter, lhs_size, rhs_size)
+
+        # memcmp wants two valid pointers even for a length of zero, and an empty
+        # string may carry a null data pointer. Skip the call instead.
+        no_common_bytes = builder.icmp_unsigned('==', common,
+                                                ir.Constant(self.codegen.i32, 0))
+        compare_block = builder.append_basic_block(name="strcmp_bytes")
+        merge_block = builder.append_basic_block(name="strcmp_merge")
+        entry_block = builder.block
+        builder.cbranch(no_common_bytes, merge_block, compare_block)
+
+        builder.position_at_end(compare_block)
+        # memcmp's n is size_t (i64); zero-extend the i32 size so the full 64-bit
+        # length register is defined (issue #149).
+        common_n = builder.zext(common, self.codegen.types.i64)
+        byte_diff = builder.call(self.codegen.runtime.libc_strings.memcmp,
+                                 [lhs_data, rhs_data, common_n])
+        builder.branch(merge_block)
+
+        builder.position_at_end(merge_block)
+        bytes_phi = builder.phi(self.codegen.i32)
+        bytes_phi.add_incoming(ir.Constant(self.codegen.i32, 0), entry_block)
+        bytes_phi.add_incoming(byte_diff, compare_block)
+
+        # A size is a non-negative i32, so the difference cannot overflow.
+        length_diff = builder.sub(lhs_size, rhs_size)
+        bytes_differ = builder.icmp_signed('!=', bytes_phi,
+                                           ir.Constant(self.codegen.i32, 0))
+        return builder.select(bytes_differ, bytes_phi, length_diff)
+
+    def emit_string_order(self, op: str, lhs: ir.Value, rhs: ir.Value) -> ir.Value:
+        """Generate one of the four order operators for two strings, as an i1."""
+        if self.codegen.builder is None:
+            raise_internal_error("CE0009")
+
+        diff = self._emit_string_three_way(lhs, rhs)
+        return self.codegen.builder.icmp_signed(op, diff,
+                                                ir.Constant(self.codegen.i32, 0))
 
     def emit_string_null_termination(self, string_ptr: ir.Value, offset: ir.Value) -> None:
         """Add null terminator to string at specified offset."""

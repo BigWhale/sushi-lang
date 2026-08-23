@@ -297,6 +297,11 @@ class ExpressionValidator(RecursiveVisitor):
                 reject_mixed_numeric_operands)
             reject_mixed_numeric_operands(self.type_validator, node, left_type, right_type)
 
+        if node.op in ["==", "!=", "<", "<=", ">", ">="]:
+            from sushi_lang.semantics.passes.types.expressions import (
+                reject_uncomparable_operands)
+            reject_uncomparable_operands(self.type_validator, node, left_type, right_type)
+
         if node.op in ["&", "|", "^", "<<", ">>"]:
             self.type_validator._validate_bitwise_operation(node)
 

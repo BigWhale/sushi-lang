@@ -115,3 +115,31 @@ conservatively-registered borrow, a literal that flowed through a code path the 
 fully track — costs one branch and no `free()` call. Without the bit, "when in doubt, assume owning"
 would mean "when in doubt, actually free," which is unsound the moment the doubt is wrong. The bit
 is what lets the type system be conservative without being wrong.
+
+## Update (#449, 2026-08-24): the order operators read bytes
+
+`<`, `>`, `<=` and `>=` on two strings are a byte order, which agrees with Rust and Go.
+`emit_string_order` (`backend/runtime/strings.py`) builds one three-way `i32` and then applies
+the operator once, so all four operators share a single path:
+
+1. `n` is the smaller of the two sizes.
+2. When `n` is zero, no call is made and the byte difference is zero. `memcmp` requires two
+   valid pointers even for a length of zero, and an empty string may carry a null `data`.
+3. Otherwise the byte difference is `memcmp(lhs.data, rhs.data, n)`, with `n` zero-extended
+   from `i32` to `i64` — the standing rule of this document (#149).
+4. The answer is the byte difference when it is non-zero, and `lhs.size - rhs.size` otherwise.
+   A size is a non-negative `i32`, so that subtraction cannot overflow.
+
+`memcmp` compares as `unsigned char`. That is what makes the order a byte order rather than a
+signed-char order, and UTF-8 keeps code points in numerical order, so the byte order and the
+code-point order agree. The length tiebreak in step 4 is what makes a prefix less than the
+longer string that starts with it.
+
+The `owned` bit takes no part in a comparison. Both operands are read, never consumed, so a
+literal and a heap-backed string compare the same way and an owning temporary is still freed
+when its scope ends.
+
+What this order is NOT: a collation. It puts every capital before every lowercase letter, and
+it does not normalize, so the two spellings of `é` are neither equal nor adjacent. Equality
+(`==`, `!=`) keeps its own faster path, which answers from the two sizes alone when the lengths
+differ and never reaches `memcmp`.

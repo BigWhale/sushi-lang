@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE2513
+# The rule covers equality as well as order: the two operands must be of one type.
+
+fn main() i32:
+    let string a = "abc"
+    if (a == 3):
+        return Result.Ok(1)
+    return Result.Ok(0)

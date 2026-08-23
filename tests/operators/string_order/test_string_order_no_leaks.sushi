@@ -1,0 +1,15 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nordered\n"
+# EXPECT_NO_LEAKS
+# The left operand is an owning string built by interpolation. The comparison
+# only reads it, so the temporary must still be freed when the scope ends.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let string base = "zeta"
+    let string built = "{base}-one"
+
+    if (built > "alpha"):
+        println("ordered")
+
+    return Result.Ok(0)

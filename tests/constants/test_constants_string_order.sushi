@@ -1,0 +1,47 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "All constant string order tests passed\n"
+# The four order operators fold in a constant, and give the same byte order a body
+# gives (#449). Before this the evaluator answered CE0110 for a comparison the
+# language accepts everywhere else.
+
+const bool LT = "abc" < "abd"
+const bool LT_FALSE = "abd" < "abc"
+const bool GT = "abd" > "abc"
+const bool GT_FALSE = "abc" > "abd"
+
+const bool PREFIX_LT = "apple" < "apples"
+const bool PREFIX_GT = "apples" > "apple"
+
+const bool CAPS_FIRST = "Zoo" < "apple"
+const bool EMPTY_LT = "" < "a"
+
+const bool LE_EQUAL = "same" <= "same"
+const bool GE_EQUAL = "same" >= "same"
+const bool LT_EQUAL = "same" < "same"
+
+fn main() i32:
+    if (not LT):
+        return Result.Ok(1)
+    if (LT_FALSE):
+        return Result.Ok(2)
+    if (not GT):
+        return Result.Ok(3)
+    if (GT_FALSE):
+        return Result.Ok(4)
+    if (not PREFIX_LT):
+        return Result.Ok(5)
+    if (not PREFIX_GT):
+        return Result.Ok(6)
+    if (not CAPS_FIRST):
+        return Result.Ok(7)
+    if (not EMPTY_LT):
+        return Result.Ok(8)
+    if (not LE_EQUAL):
+        return Result.Ok(9)
+    if (not GE_EQUAL):
+        return Result.Ok(10)
+    if (LT_EQUAL):
+        return Result.Ok(11)
+
+    println("All constant string order tests passed")
+    return Result.Ok(0)

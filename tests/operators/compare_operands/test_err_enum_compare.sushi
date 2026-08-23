@@ -1,0 +1,13 @@
+# EXPECT_ERROR_CODE: CE2514
+# An enum has no comparison. A match is the way to ask which variant a value holds.
+
+enum Colour:
+    Red
+    Green
+
+fn main() i32:
+    let Colour a = Colour.Red()
+    let Colour b = Colour.Green()
+    if (a == b):
+        return Result.Ok(1)
+    return Result.Ok(0)
