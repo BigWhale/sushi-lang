@@ -107,6 +107,28 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   shares the consumer's flat namespace; namespaced units remove the shared namespace, and
   the instance-goes-home rule removes the need to ship privates at all.
 
+- **A shift by a count that empties the type answers 0.** The count that CE2512 cannot
+  read -- a loop index, a byte from a file -- used to reach LLVM as written, and a count
+  at or above the width made the result poison: the program printed whatever the
+  optimiser left behind, and on a signed `>>` the arm64 hardware answered with the value
+  unchanged. A shift now has an answer everywhere. A count at or above the width moves
+  every bit out, so the result is 0; an arithmetic right shift fills from the sign bit and
+  leaves it behind, 0 for a positive value and -1 for a negative one; a negative count is
+  out of range at the other end and answers the same way.
+
+  This is Go's rule, chosen over the masking that Java and Rust-in-release expose, because
+  masking answers `value << 8` on a u8 with the value itself -- a wrong answer that reads
+  like a working shift, and one that silently aliases every eighth iteration of a
+  byte-assembly loop onto the same result. Sushi now rejects more than any of the five
+  languages measured at compile time, and leaves no undefined shift at run time.
+
+  The range is read from the count as written, before it is narrowed to the value's width:
+  a u64 count of 256 narrowed to a u8 is 0, which would have answered with the value
+  unchanged. The shift itself is given a masked count so LLVM never emits an out-of-range
+  shift, whose poison it is free to use. The cost is one compare and one conditional move,
+  and nothing when the count is a constant -- a 5 MB zlib round trip measured 0.28s before
+  and 0.28s after.
+
 ### Fixed
 - **An enum payload slot allocated inside a loop leaked stack until the function
   returned.** A `??` unwrap, an enum construction, a match that binds a payload, and
@@ -174,6 +196,7 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   program (`deny(arithmetic_overflow)`), and the escape is a cast on the VALUE:
   `(high as u32) << 8`. A computed count is still not checked, at compile time or at run
   time; `docs/language-reference.md` says so where it states the rule.
+
 
 ## [0.11.1] - 2026-08-22
 

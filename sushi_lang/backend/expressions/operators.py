@@ -202,11 +202,13 @@ def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Valu
         if folded is not None:
             return folded
 
-    # A shift count may be of any width, and LLVM wants both shift operands of one
-    # type, so the count is brought to the value's width here. For & | ^ the widths
-    # already agree: a mixed pair is CE2510 in the typecheck pass. This was once the
-    # only thing standing between mixed operands and the binary, and it truncated
-    # silently (#438).
+    if (op in ("<<", ">>")
+            and isinstance(left.type, ir.IntType) and isinstance(right.type, ir.IntType)):
+        return _emit_shift(codegen, op, left, right, left_type)
+
+    # For & | ^ the widths already agree: a mixed pair is CE2510 in the typecheck
+    # pass. This reconciliation was once the only thing standing between mixed
+    # operands and the binary, and it truncated silently (#438).
     if left.type != right.type:
         if isinstance(left.type, ir.IntType) and isinstance(right.type, ir.IntType):
             if left.type.width > right.type.width:
@@ -214,34 +216,62 @@ def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Valu
             elif left.type.width < right.type.width:
                 right = codegen.builder.trunc(right, left.type)
 
-    if op == ">>":
-        from sushi_lang.semantics.typesys import BuiltinType
-
-        is_unsigned = False
-        if left_type is not None:
-            is_unsigned = left_type in [
-                BuiltinType.U8,
-                BuiltinType.U16,
-                BuiltinType.U32,
-                BuiltinType.U64
-            ]
-
-        if is_unsigned:
-            return codegen.builder.lshr(left, right)
-        else:
-            return codegen.builder.ashr(left, right)
-
     bitwise_ops = {
         "&": codegen.builder.and_,
         "|": codegen.builder.or_,
         "^": codegen.builder.xor,
-        "<<": codegen.builder.shl,
     }
 
     if op in bitwise_ops:
         return bitwise_ops[op](left, right)
 
     raise NotImplementedError(f"bitwise op not supported yet: {op!r}")
+
+
+def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Value,
+                value_type: 'Optional[Type]' = None) -> ir.Value:
+    """Emit a shift, with an answer for a count that leaves the type.
+
+    A count at or above the width of the value moves every bit out of it, so the
+    result is 0 -- or the sign bit repeated, when an arithmetic right shift fills
+    from it. That is what shifting one place at a time would reach, and it is Go's
+    rule. A count is never masked: masking answers `value << 8` on a u8 with the
+    value itself, which reads like a working shift.
+
+    Three details carry the rule:
+    - the range is read from the count AS WRITTEN, before it is brought to the
+      value's width, because a u64 count of 256 narrowed to a u8 is 0;
+    - the shift instruction is given a masked count, so LLVM never emits an
+      out-of-range shift, whose result is poison it may then use as it likes;
+    - a count the compiler can read never arrives out of range. That is CE2512,
+      and a constant in range folds this whole sequence back to one shift.
+    """
+    from .type_utils import is_unsigned_type
+
+    builder = codegen.builder
+    width = value.type.width
+
+    leaves_the_type = builder.icmp_unsigned(">=", count, ir.Constant(count.type, width))
+
+    if count.type.width > width:
+        places = builder.trunc(count, value.type)
+    elif count.type.width < width:
+        places = builder.zext(count, value.type)
+    else:
+        places = count
+    places = builder.and_(places, ir.Constant(value.type, width - 1))
+
+    if op == "<<":
+        shifted = builder.shl(value, places)
+        emptied = ir.Constant(value.type, 0)
+    elif is_unsigned_type(value_type):
+        shifted = builder.lshr(value, places)
+        emptied = ir.Constant(value.type, 0)
+    else:
+        shifted = builder.ashr(value, places)
+        emptied = builder.ashr(value, ir.Constant(value.type, width - 1))
+
+    return builder.select(leaves_the_type, emptied, shifted)
 
 
 def _fold_bitwise_constants(op: str, left: ir.Constant, right: ir.Constant) -> 'Optional[ir.Constant]':
@@ -266,6 +296,8 @@ def _fold_bitwise_constants(op: str, left: ir.Constant, right: ir.Constant) -> '
     elif op == "^":
         result = lval ^ rval
     elif op == "<<":
+        if not 0 <= rval < width:
+            return ir.Constant(left.type, 0)
         result = (lval << rval) & mask
 
     if result is None:

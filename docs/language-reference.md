@@ -366,9 +366,29 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-A computed count -- a loop index, a value read from a file -- is not checked, at
-compile time or at run time. A shift by such a count at or above the width has no
-defined answer today, so a bit reader must keep its own count in range.
+A computed count -- a loop index, a value read from a file -- cannot be read at
+compile time, so it is not an error. It has a defined answer instead: a shift by a
+count at or above the width moves every bit out of the type and gives **0**. An
+arithmetic right shift fills from the sign bit, so it leaves the sign behind: 0 for
+a positive value and -1 for a negative one. A negative count is out of range at the
+other end and answers the same way.
+
+```sushi
+fn shift(u8 value, u8 places) u8:
+    return Result.Ok(value << places)
+
+fn main() i32:
+    println("{shift(0x12, 3).realise(0)}")     # 144
+    println("{shift(0x12, 8).realise(0)}")     # 0 -- every bit has left the u8
+    return Result.Ok(0)
+```
+
+The count is never masked. Masking is what the hardware does and what Java and Rust
+expose, and it would answer `value << 8` on a `u8` with the value itself -- a wrong
+answer that reads like a working shift. Sushi follows Go here: shifting by one place
+at a time is the rule, so a count that empties the type gives an empty result. It
+costs one compare and one conditional move, and nothing at all when the count is a
+constant.
 
 ### Arithmetic
 

@@ -1,0 +1,16 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n0\n0\n72\n"
+# The count is brought to the width of the value before the shift, and a count of
+# 256 narrowed to a u8 is 0 -- which would have answered with the value unchanged.
+# The range is read from the count as it was written, not from what is left of it.
+
+fn shl_u8_wide(u8 value, u64 places) u8:
+    return Result.Ok(value << places)
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    println("{shl_u8_wide(0x12, 256).realise(0)}")
+    println("{shl_u8_wide(0x12, 8).realise(0)}")
+    println("{shl_u8_wide(0x12, 2).realise(0)}")
+
+    return Result.Ok(0)

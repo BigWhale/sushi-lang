@@ -1,0 +1,16 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n0\n0\n"
+# A negative count is refused when the compiler can read it (CE2512). One that
+# arrives at run time is out of range at the other end, and takes the same answer
+# as a count that is too large. Go panics here; Sushi has no shift trap, and a
+# defined 0 is the answer that follows from the rule above it.
+
+fn shl_i32(i32 value, i32 places) i32:
+    return Result.Ok(value << places)
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    println("{shl_i32(16, -1).realise(0)}")
+    println("{shl_i32(16, -33).realise(0)}")
+
+    return Result.Ok(0)
