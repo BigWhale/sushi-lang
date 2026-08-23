@@ -7,11 +7,49 @@ import sys
 import json
 import os
 import shutil
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from tqdm import tqdm
+
+
+DEFAULT_JOBS = 4
+JOBS_ENV_VAR = "SUSHI_TEST_JOBS"
+
+
+@lru_cache(maxsize=1)
+def default_jobs() -> int:
+    """The parallel-job count: SUSHI_TEST_JOBS, or DEFAULT_JOBS when it is unset.
+
+    Read once per process. Both parsers evaluate this default, and run_tests imports
+    the enhanced runner rather than spawning it, so without the cache a rejected
+    value announced itself twice.
+
+    ONE reader, for every entry point. The default used to be a literal in four
+    places, one of them a `!= 4` comparison on the hop from here to the enhanced
+    runner -- so moving the number would have quietly stopped an explicit `-j 4`
+    from being forwarded at all.
+
+    A GitHub standard runner has 4 vCPU on Linux and 3 on macOS, so 4 is the number
+    that suits CI. A development machine with more cores exports a bigger one.
+    """
+    raw = os.environ.get(JOBS_ENV_VAR)
+    if raw is None:
+        return DEFAULT_JOBS
+
+    try:
+        jobs = int(raw)
+    except ValueError:
+        jobs = 0
+
+    if jobs < 1:
+        print(f"Ignoring {JOBS_ENV_VAR}={raw!r}: expected a positive integer. "
+              f"Using {DEFAULT_JOBS}.")
+        return DEFAULT_JOBS
+
+    return jobs
 
 
 def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
@@ -249,8 +287,9 @@ def main():
                                      allow_abbrev=False)
     parser.add_argument("-v", "--verbose", action="store_true",
                        help="Show detailed output for each test")
-    parser.add_argument("-j", "--jobs", type=int, default=4,
-                       help="Number of parallel test jobs (default: 4)")
+    parser.add_argument("-j", "--jobs", type=int, default=default_jobs(),
+                       help=f"Number of parallel test jobs (default: {DEFAULT_JOBS}, "
+                            f"or ${JOBS_ENV_VAR})")
     parser.add_argument("--filter", type=str,
                        help="Only run tests matching this pattern")
     parser.add_argument("--enhanced", action="store_true",
@@ -284,8 +323,7 @@ def main():
                 sys.argv.append("--verbose")
             if args.filter:
                 sys.argv.extend(["--filter", args.filter])
-            if args.jobs != 4:
-                sys.argv.extend(["--jobs", str(args.jobs)])
+            sys.argv.extend(["--jobs", str(args.jobs)])
             if args.json:
                 sys.argv.append("--json")
             if args.skip_build:
