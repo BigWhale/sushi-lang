@@ -1,0 +1,18 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nvar-lt-lit\nlit-gt-var\nvar-ge-lit\nlit-le-var\n"
+# A string variable against a string literal, with the literal on each side.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let string name = "banana"
+
+    if (name < "cherry"):
+        println("var-lt-lit")
+    if ("cherry" > name):
+        println("lit-gt-var")
+    if (name >= "banana"):
+        println("var-ge-lit")
+    if ("banana" <= name):
+        println("lit-le-var")
+
+    return Result.Ok(0)

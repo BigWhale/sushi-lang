@@ -1,0 +1,13 @@
+# EXPECT_ERROR_CODE: CE2514
+# A struct has no comparison. Compare the fields instead.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point a = Point(1, 2)
+    let Point b = Point(1, 3)
+    if (a == b):
+        return Result.Ok(1)
+    return Result.Ok(0)

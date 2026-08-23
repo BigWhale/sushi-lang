@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType
+from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, RangeExpr
 from sushi_lang.semantics.type_predicates import is_integer_type, is_numeric_type
@@ -276,6 +276,66 @@ def reject_mixed_numeric_operands(validator: 'TypeValidator', expr: BinaryOp,
 
     er.emit(validator.reporter, er.ERR.CE2510, expr.loc,
             left_type=display_type(left_type), right_type=display_type(right_type))
+
+
+_EQUALITY_OPS = ("==", "!=")
+
+# The non-numeric types each operator group accepts. A numeric pair never reaches
+# these sets: it belongs to CE2510, which says which two widths met. Both sets are
+# closed, so a type kind nobody thought about is a diagnostic and not a crash.
+_EQUALITY_NON_NUMERIC = frozenset({BuiltinType.BOOL, BuiltinType.STRING})
+_ORDER_NON_NUMERIC = frozenset({BuiltinType.STRING})
+
+
+def _comparison_escape(ty: 'Type') -> Optional[str]:
+    """The way to ask the question that a comparison of this type cannot answer."""
+    if isinstance(ty, EnumType):
+        return "use match to ask which variant the value holds"
+    if ty == BuiltinType.BOOL:
+        return "use != to ask whether two bools differ"
+    if isinstance(ty, (ArrayType, DynamicArrayType)):
+        return "compare the elements, or the lengths"
+    if isinstance(ty, StructType):
+        return "compare the fields one at a time"
+    return None
+
+
+def reject_uncomparable_operands(validator: 'TypeValidator', expr: BinaryOp,
+                                 left_type: 'Optional[Type]',
+                                 right_type: 'Optional[Type]') -> None:
+    """CE2513 for a mixed pair, CE2514 for a type that carries no such comparison.
+
+    One rule for all six comparison operators. Equality is defined for the numeric
+    types, bool and string; an order is defined for the numeric types and string,
+    where it reads the bytes. A bool is deliberately left out of the order, because
+    `a < b` on two bools is almost always a typo for `!=`.
+
+    Before #449 the pass asked nothing here, so every other operand pair reached the
+    backend, which tried to compare a string, a struct or an array value as an i32
+    and answered with a CE0017 internal error.
+    """
+    if left_type is None or right_type is None:
+        return
+    if is_numeric_type(left_type) and is_numeric_type(right_type):
+        return
+
+    if left_type != right_type:
+        er.emit(validator.reporter, er.ERR.CE2513, expr.loc,
+                left_type=display_type(left_type),
+                right_type=display_type(right_type), op=expr.op)
+        return
+
+    permitted = (_EQUALITY_NON_NUMERIC if expr.op in _EQUALITY_OPS
+                 else _ORDER_NON_NUMERIC)
+    if left_type in permitted:
+        return
+
+    builder = er.emit_with(validator.reporter, er.ERR.CE2514, expr.loc,
+                           op=expr.op, type_name=display_type(left_type))
+    escape = _comparison_escape(left_type)
+    if escape is not None:
+        builder = builder.help(escape)
+    builder.emit()
 
 
 def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> None:

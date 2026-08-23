@@ -1,0 +1,20 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\ncapital-first\nnon-ascii-last\n"
+# The comparison reads bytes, so every capital sorts before every lowercase
+# letter: 'Z' is 0x5A and 'a' is 0x61. This is a byte order and not a collation.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let string capital = "Zoo"
+    let string lower = "apple"
+    if (capital < lower):
+        println("capital-first")
+
+    # The first byte of "e" with an acute accent is 0xC3, which is above every
+    # ASCII byte. memcmp compares as unsigned char, so the accent sorts last.
+    let string ascii = "zebra"
+    let string accented = "égalité"
+    if (ascii < accented):
+        println("non-ascii-last")
+
+    return Result.Ok(0)

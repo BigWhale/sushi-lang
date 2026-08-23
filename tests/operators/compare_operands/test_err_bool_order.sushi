@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODE: CE2514
+# A bool has no order. This compiled quietly and answered false < true, which is
+# almost always a typo for != or a missing `and`.
+
+fn main() i32:
+    let bool a = true
+    let bool b = false
+    if (a < b):
+        return Result.Ok(1)
+    return Result.Ok(0)

@@ -9,12 +9,36 @@ a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
 ### Added
+- **`<`, `>`, `<=` and `>=` order two strings, and a comparison now decides its operands**
+  (#449). The four order operators read the UTF-8 bytes, which is what Rust and Go do:
+  `memcmp` over the common prefix, then the length as the tiebreak, so `"apple" < "apples"`
+  is true and `"Zoo" < "apple"` is true because a capital is a lower byte. This is a byte
+  order and never a collation -- it does not normalize, so the two spellings of `é` are
+  neither equal nor adjacent, and a list a person reads still needs a locale-aware
+  comparison. Both a variable and a literal work on either side, and a constant folds the
+  same answer a body computes.
+
+  The crash this closes was one hole in a wider one: the typecheck pass never asked what a
+  comparison may compare, so every pair it did not look at reached the backend and tried to
+  compare a string, a struct, an enum or an array value as an `i32`. `"a" < "b"` was
+  **CE0000**, and `string < i32`, `struct == struct`, `enum == enum` and `i32[] < i32[]`
+  were each **CE0017** -- four internal errors telling the user to report a compiler bug for
+  ordinary invalid code. One closed rule now answers all six operators: equality takes the
+  numeric types, `bool` and `string`, an order takes the numeric types and `string`, a mixed
+  pair is **CE2513** and a type carrying no such comparison is **CE2514**, which names the
+  escape (`match` for an enum, the fields for a struct). Two numeric widths keep CE2510.
+
+  A `bool` deliberately loses its order. It compiled quietly before and answered
+  `false < true`, where the code almost always meant `!=` or a missing `and`. Rust and Go
+  both accept it; Sushi does not.
+
 - **A constant can index an array constant, and can compare two bools or two strings** (#441).
   `const i32 SMALLEST = PRIMES[0]` folds, because every element of an array constant is
   already an evaluated value. A bound is checked while compiling -- a constant cannot trap --
   so past the end is **CE2012** and a negative index is **CE2056**. `==` and `!=` on two bools
   and on two strings fold as well; both work at run time and only the constant evaluator
-  refused them. Ordering two strings stays rejected (#449).
+  refused them. Ordering two strings was still rejected here, and #449 has since made it
+  work in a constant and in a body alike.
 
   `+` on two strings in a constant now reports **CE2509**, the code the rest of the language
   reports, in place of CE0110 "arithmetic on non-numeric type". Sushi has no concatenation

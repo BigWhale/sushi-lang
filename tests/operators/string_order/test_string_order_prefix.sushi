@@ -1,0 +1,27 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nprefix-lt\nprefix-gt\nempty-lt\nempty-gt\nempty-le\n"
+# A prefix is below the longer string that starts with it: the length is the
+# tiebreak after the common bytes agree. An empty operand covers the zero-length
+# path, where the comparison makes no memcmp call at all.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let string short_word = "apple"
+    let string long_word = "apples"
+
+    if (short_word < long_word):
+        println("prefix-lt")
+    if (long_word > short_word):
+        println("prefix-gt")
+
+    let string empty = ""
+    let string also_empty = ""
+
+    if (empty < short_word):
+        println("empty-lt")
+    if (short_word > empty):
+        println("empty-gt")
+    if (empty <= also_empty):
+        println("empty-le")
+
+    return Result.Ok(0)

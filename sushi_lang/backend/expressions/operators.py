@@ -95,9 +95,9 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
         codegen.types.is_string_type(rhs.type)):
         if op in ("==", "!="):
             i1v = codegen.runtime.strings.emit_string_comparison(op, lhs, rhs)
-            return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
         else:
-            raise NotImplementedError(f"String comparison '{op}' not yet supported")
+            i1v = codegen.runtime.strings.emit_string_order(op, lhs, rhs)
+        return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
 
     is_float = str(lhs.type) in ('double', 'float')
     if is_float:

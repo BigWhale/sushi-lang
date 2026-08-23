@@ -57,7 +57,7 @@ fn main() i32:
         println("✓ Correct size after resize (10 items)")
 
     # Verify removed keys are still gone
-    if (map.contains_key(2) == 0):
+    if (not map.contains_key(2)):
         println("✓ Removed key 2 still not present")
 
     # Verify new key exists
