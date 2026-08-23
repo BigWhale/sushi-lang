@@ -1,8 +1,6 @@
 # Design: `.slib` Libraries — source-first distribution
 
-**Status: landing in phases.** §1–6 describe code that runs today; only the tooling and
-user-facing doc passes are left. Each phase below moves one part from DESIGN to BUILT;
-this banner records where the line is.
+**Status: BUILT.** Every phase has landed; this document describes code that runs today.
 
 | Phase | Content | State |
 |---|---|---|
@@ -10,8 +8,8 @@ this banner records where the line is.
 | 2 | Container VERSION 4, manifest fields, a `semver` module under `sushi_lang/internals/`, CE3503/CE3505/CE3506 | BUILT |
 | 3 | `--lib-kind source` writes the source section; the platform gate becomes kind-conditional | BUILT |
 | 4 | The consumer compiles library source as ordinary units; `--lib-kind` defaults to `source` | BUILT |
-| 5 | `slib-info` and the `sushic` fallback report the v4 fields | DESIGN |
-| 6 | User-facing docs | DESIGN |
+| 5 | `slib-info` and the `sushic` fallback report the v4 fields | BUILT |
+| 6 | User-facing docs | BUILT |
 
 Written for a compiler contributor. The user-facing guide is
 [`docs/libraries.md`](../libraries.md), and the on-disk byte format is specified in
@@ -75,9 +73,10 @@ BITCODE_LENGTH  (u64 LE) | BITCODE_BLOB  (LLVM bitcode)
 `SOURCE_LENGTH` is zero when `KIND = binary`. `BITCODE_LENGTH` is zero when
 `KIND = source`. A hybrid carries both.
 
-Entry points: `write()`, `read()`, `read_metadata_only()`, and a new
-`read_source_only()` so the consumer can take the index and the source without
-touching the bitcode.
+Entry points: `write()`, `read()`, `read_metadata_only()`, `read_source_only()` so the
+consumer can take the index and the source without touching the bitcode, and
+`read_section_sizes()` so `--lib-info` can report how big each payload is without holding
+either one.
 
 Integrity is checked strictly in order, one code per failure mode, all in
 `sushi_lang/internals/errors/library.py`:
@@ -130,7 +129,7 @@ authority, and the index is a cache of it.
 | `platform` | meaningful only when `kind != "source"` |
 | `compiled_at` | ISO-8601 UTC |
 | `public_functions`, `public_constants`, `structs`, `enums` | the index |
-| `templates` | written only when `kind != "source"` (§5) |
+| `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |
 | `dependencies` | see `TODO.md` 6b |
 
 `structs` / `enums` / `public_functions` carry **only concrete, non-generic**
@@ -154,8 +153,10 @@ this path.
 Everything ships, private declarations included. There is no export closure to
 compute, because there is nothing to leave out.
 
-The index is generated from the same units, so `--lib-info` output is unchanged in
-shape.
+The index is generated from the same units, so nothing about `--lib-info` has to parse
+source. The report states the kind, the library version, the compiler constraint and the
+unit list, and it prints only the lines the kind can answer for: no `Platform` and no
+`Bitcode` for a source library, no `Source` for a binary one.
 
 ### 4.2 Consumption
 
@@ -608,13 +609,13 @@ Rules marked **binary** apply only when `kind != "source"`.
 | Consumer name == **export-closure private** symbol (**binary**) | **CE5007**, hard error | the library's own monomorphized bodies call that private symbol by name; silently shadowing it would change what the library's shipped code does. Cannot arise on the source path — library units are namespaced |
 | Consumer perk-impl `(type, perk)` == library-shipped perk-impl (**binary**) | local wins, silent, both semantically and at link time (§5.4, §5.7) | a consumer providing its own impl is expected, not an error |
 | Consumer extension method name == library perk-impl method name (**binary**) | library impl skipped entirely (no error) | avoids recreating CE4007 as a breaking change on every library update |
-| Exported generic references an `unsafe external` namespace (**binary**) | **CE5006** | FFI bindings cannot be re-declared at a consumer that never saw the block |
-| Exported generic (transitively) references a `ptr`-exposing private signature (**binary**) | **CE5006** | same rationale as CE5002 — `ptr` is unit-confined |
+| Exported generic references an `unsafe external` namespace | **CE5006** | FFI bindings cannot be re-declared at a consumer that never saw the block. Fires on EVERY kind: `_extract_templates` runs the export-closure walk before the kind branch in `compiler/pipeline.py`. Arguably wrong on the source path, where the `unsafe external` block ships inside its own unit — see §9 |
+| Exported generic (transitively) references a `ptr`-exposing private signature | **CE5006** | same rationale as CE5002 — `ptr` is unit-confined. Every kind, as above |
 | Public function/private-closure helper exposes `ptr` in its own signature | **CE5002** | `ptr` cannot appear in any public library signature |
 | Public `fn` (non-library, ordinary unit boundary) exposes `ptr` | **CE5008** | the general unit-boundary form of the same rule; CE5002 is its library-specific sibling |
 | A template snippet fails to re-parse (**binary**) | perk-impl: **CW3506** (skip); generic fn/type/constant: silently skipped, no diagnostic | never let a malformed shipped snippet crash or pollute the consumer's own build |
 | A **source** library unit fails to compile | the real diagnostic, plus a `note` naming the library and the `use` that pulled it in (§4.4) | the consumer must never see a bare error about code they did not write |
-| Public v1 native `...T` variadic function (**binary**) | **CE0116** | the variadic flag is not serialized into the library format |
+| Public v1 native `...T` variadic function | **CE0116** | the variadic flag is not serialized into the library format. Fires on EVERY kind: the check lives in `_extract_public_functions`, which builds the index for every kind — see §9 |
 | Platform mismatch (**binary**) | **CE3504** | bitcode is platform-specific; caught early with a clear message instead of an incomprehensible late `cc`/LLVM failure. Never raised for a source library |
 | Container version is not 4 | **CE3509** | no backward-compat shim; there are no users in the wild |
 | `requires_compiler` not satisfied | **CE3503** | see §6.2; the escape is `--ignore-compiler-version` |
@@ -641,6 +642,52 @@ Rules marked **binary** apply only when `kind != "source"`.
 | `sushi_lang/internals/errors/library.py` | CE35xx: the container/link/version family. |
 | `sushi_lang/internals/errors/ffi.py` | CE50xx: CE5002/CE5006/CE5007/CE5008 — the export-safety family, despite living in the "ffi" module (historical: `ptr`-confinement was the first reason a symbol could be un-shippable). |
 
+## 9. Measured during the phase-6 doc pass
+
+Three things the code does that this document said it did not. All measured at 0.11.1
+against a `--lib-kind source` build.
+
+**`templates` is written for every kind.** `generate()` always builds the section, and
+`_extract_templates` always runs. On the source path it is redundant, because the same
+generics are in the source section as whole units. It is also the reason `--lib-info` can
+list a source library's generic functions at all, so it earns its place; §3 now says so.
+
+**CE5006 and CE0116 fire on the source path.** Both checks live in the manifest producer --
+CE5006 in the export-closure walk `_extract_templates` drives, CE0116 in
+`_extract_public_functions` -- and the producer builds the index for every kind. So a source
+library that exports a generic touching an `unsafe external` namespace is rejected, and so is
+one that exports a public `...T` variadic.
+
+For CE0116 that is right for a reason that has nothing to do with kind: the index cannot
+describe a native variadic signature, and the index ships in every kind.
+
+For CE5006 it is questionable. The rule exists because a binary library ships a *slice* of
+its source and the consumer never sees the `unsafe external` block. A source library ships
+the whole unit, block included, so the consumer can compile the call. Whether to make the
+CE5006 walk conditional on `kind != "source"` is an open question, not a decided one: it
+would let an FFI-touching generic export, and §4.7 is the reason to be careful -- the library
+would compile at a consumer on the author's platform and fail on any other, which is exactly
+the failure conditional compilation is supposed to describe. Leaving CE5006 as it is keeps
+the honest answer ("this cannot be portable yet") until there is a way to say so.
+
+**A rejected library build reports a spurious CE0000 after the real diagnostic.** The three
+rejection sites in `sushi_lang/backend/library_manifest.py` emit their diagnostic into the
+reporter and then `raise ValueError` to stop the build. Nothing catches it, so the top-level
+guard in `sushi_lang/compiler/cli.py` renders it as an internal compiler error on top of the
+correct message:
+
+```
+varlib.sushi:1:11: error [CE0116]: public function 'total' is variadic and cannot appear ...
+varlib.sushi: error [CE0000]: internal compiler error: ValueError: CE0116: public function ...
+  = note: this is a bug in the Sushi compiler, not in your program
+```
+
+The exit code is already 2 and the real diagnostic is already correct, so this is cosmetic --
+but it tells a user to report a compiler bug that is not one. The fix is not a `try/except`
+around the raise: it is for the producer to emit and return, and for `pipeline.py` to gate on
+`reporter.has_errors` the way it already does before codegen. That is a behaviour change in
+the library build path, so it is its own change rather than part of a doc pass.
+
 ## Rejected alternatives
 
 **Fat `.slib` (per-platform binary slices).** Add a slice table to the reserved fields:
@@ -664,11 +711,15 @@ an internal simplification.
 
 ## Disagreements found while writing this document
 
-- **CLAUDE.md Known Limitation #12**, "whether it crosses a `.slib` boundary is
-  untested" (recursive generic enum via `Own@(Tree@(T))`): false as written — verified
-  to work today, both in-program and across a library boundary. A library exporting
+- **The recursive-generic-enum limitation** (`Own@(Tree@(T))`, "whether it crosses a
+  `.slib` boundary is untested") was CLAUDE.md Known Limitation #12 when this document
+  was written. It is false as written — verified to work today, both in-program and
+  across a library boundary: a library exporting
   `enum Tree@(T): Leaf(T) / Node(Own@(Tree@(T)))` compiles as a `.slib`, and a consumer
-  that does `use <lib/treelib>` and constructs `Tree.Leaf(5)` compiles and runs.
+  that does `use <lib/treelib>` and constructs `Tree.Leaf(5)` compiles and runs. The
+  claim has since left CLAUDE.md on its own, and #12 there is now an unrelated (and
+  true) note about i32 range bounds. Nothing to narrow; the verification is recorded
+  here so it is not re-discovered.
 - **`tests/libs/helpers/generic_types_lib.sushi`**, comment claiming a recursive generic
   enum "infinite-loops the monomorphizer's type substitutor... even for a purely
   in-program definition": stale — the same definition compiles and runs correctly today.

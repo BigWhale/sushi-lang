@@ -488,11 +488,18 @@ __sushi_cache__/
     main.o.fingerprint          ← semantic fingerprint
     helpers/math.o
     helpers/math.o.fingerprint
+    lib/mylib/mylib.o           ← a SOURCE library's unit, cached like any other
   stdlib/
     io_stdio.o                  ← compiled stdlib bitcode
+  libsrc/
+    mylib/mylib.sushi           ← a source library's materialized units
   libs/
-    mylib.o                     ← compiled library bitcode
+    mylib.o                     ← a BINARY library's bitcode, compiled once
 ```
+
+A source library has no separate object of its own: its units are ordinary units, so they
+land under `units/` (namespaced `lib/<library>/`) and are invalidated by the same fingerprint
+machinery as the consumer's own files.
 
 ### Fingerprint Computation
 

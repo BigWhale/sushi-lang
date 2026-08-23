@@ -4,6 +4,10 @@
 
 Sushi supports compiling code to reusable libraries and linking them into programs. This enables code sharing, modular architecture, and faster incremental builds.
 
+**A `.slib` is Sushi source plus an index.** The consumer compiles that source as ordinary
+compilation units and caches the object files, so one library file works on every platform:
+text carries no target triple. Binary distribution stays available as an opt-in.
+
 > Contributor-level design: see [design/libraries.md](design/libraries.md) for how the
 > `.slib` container, manifest, and export-closure machinery work internally.
 
@@ -15,23 +19,29 @@ Sushi supports compiling code to reusable libraries and linking them into progra
 - [Library Search Path](#library-search-path)
 - [Inspecting Libraries](#inspecting-libraries)
 - [Library Format](#library-format)
+- [Versions and Compatibility](#versions-and-compatibility)
 - [Symbol Resolution](#symbol-resolution)
 - [Best Practices](#best-practices)
 
 ## Overview
 
-The library system has two main operations:
+The library system has two operations:
 
-1. **Compile to library**: Convert Sushi source files to a binary library file (`.slib`)
-2. **Use libraries**: Import precompiled libraries using `use <lib/...>` syntax
+1. **Compile to a library**: turn Sushi source files into one `.slib` file
+2. **Use a library**: import it with `use <lib/...>`
 
 ```bash
 # Create a library
-./sushic --lib mathutils.sushi -o mathutils.slib
+./sushic --lib --lib-version 1.0.0 mathutils.sushi -o mathutils.slib
 
 # Use the library in a program (via use statement in source)
 ./sushic program.sushi -o program
 ```
+
+The consumer does the compiling. A library's units enter the build as ordinary units, they
+are type-checked and borrow-checked with everything else, and each one caches its own object
+file in `__sushi_cache__/`. The first build against a library pays for it; later builds do
+not.
 
 ## Creating Libraries
 
@@ -40,12 +50,39 @@ The library system has two main operations:
 Use `--lib` to compile source files into a library instead of an executable:
 
 ```bash
-./sushic --lib mylib.sushi -o mylib.slib
+./sushic --lib --lib-version 1.0.0 mylib.sushi -o mylib.slib
 ```
 
-This generates a single `.slib` file containing both:
-- LLVM bitcode (compiled functions)
-- Binary metadata (type signatures, function declarations)
+This writes one `.slib` file containing:
+- the complete source text of every unit in the library
+- a MessagePack index of everything it declares, which `--lib-info` and the consumer read
+
+Every library states its own version. The value comes from a `nori.toml` beside the sources
+when there is one, and from `--lib-version` otherwise; neither is **CE3505**. See
+[Versions and Compatibility](#versions-and-compatibility).
+
+### Library Kinds
+
+`--lib-kind` chooses what the file carries. The default is `source`.
+
+| Kind | Ships | Portable | Notes |
+|--------|--------------------------|-----|--------------------------------------------|
+| `source` | unit source text | yes | the default; the consumer compiles it |
+| `binary` | LLVM bitcode | no | platform-bound (**CE3504** elsewhere) |
+| `hybrid` | both | no | the bitcode still binds it to one platform |
+
+```bash
+# The default: one artifact for every platform
+./sushic --lib --lib-version 1.0.0 mylib.sushi -o mylib.slib
+
+# The opt-in: compiled bitcode, for this platform only
+./sushic --lib --lib-kind binary --lib-version 1.0.0 mylib.sushi -o mylib.slib
+```
+
+Choose `binary` when you want to ship a library without shipping its source. Note what that
+does **not** buy: a generic cannot be pre-compiled, because monomorphization needs the
+consumer's concrete type arguments, so a binary library carries the source text of its
+generics in the index regardless. Binary distribution hides concrete bodies only.
 
 ### Public Functions
 
@@ -95,7 +132,7 @@ public fn make_point(i32 x, i32 y) Point:
 
 ### The `use <lib/...>` Statement
 
-To use a precompiled library, add a `use` statement with the `lib/` prefix:
+To use a library, add a `use` statement with the `lib/` prefix:
 
 <!-- docs-sweep: skip (needs a .slib library built from the page's earlier example) -->
 ```sushi
@@ -230,25 +267,78 @@ This is useful for:
 
 ## Library Format
 
-### Binary `.slib` Format
+### The `.slib` Container
 
-Libraries use a binary format that combines metadata and bitcode in a single file:
+One file holds a MessagePack index next to a payload, framed by a fixed 52-byte header:
 
 ```
-[Magic: 16 bytes] [Version: 4 bytes] [Reserved: 24 bytes]
+[Magic: 16 bytes] [Version: 4 bytes] [Flags: 4 bytes] [Kind: 4 bytes] [Reserved: 16 bytes]
 [Metadata Length: 8 bytes] [Metadata: MessagePack]
-[Bitcode Length: 8 bytes] [Bitcode: LLVM]
+[Source Length: 8 bytes]   [Source: MessagePack map, unit name -> source text]
+[Bitcode Length: 8 bytes]  [Bitcode: LLVM]
 ```
 
-The format uses MessagePack for efficient metadata serialization.
+The `Kind` field states which payload is present, so a reader can branch before it unpacks
+anything. A source library has an empty bitcode section, a binary one an empty source
+section, and a hybrid carries both. See [Library Format](library-format.md) for the full
+specification.
 
 ### Platform Compatibility
 
-Libraries are compiled for a specific platform. The compiler warns if you use a library compiled for a different platform:
+**A source library is portable.** It carries text, and text has no target triple, so the
+same `.slib` builds on macOS and on Linux.
+
+**A binary library is not.** LLVM bitcode looks target-neutral and is not: it carries a
+target triple and a data layout, and the C ABI is already lowered into it. Loading a binary
+library built for another platform is a hard error:
 
 ```
-CW3505: platform mismatch: library compiled for 'linux', current platform is 'darwin'
+CE3504: platform mismatch: library compiled for 'linux', current platform is 'darwin'
 ```
+
+The check is skipped entirely for a source library, and `--lib-info` prints no `Platform`
+line for one, because the field means nothing there.
+
+Portable as text is not the same as portable in behaviour. See Limitation #2 below.
+
+## Versions and Compatibility
+
+A `.slib` records two versions, with two different jobs.
+
+### `library_version` — the library's own version
+
+`major.minor.patch`, taken from the first of these that exists:
+
+1. `[package] version` in a `nori.toml` beside the sources
+2. the `--lib-version X.Y.Z` flag
+
+Neither present is **CE3505**, and so is a `--lib-version` that contradicts the
+`nori.toml` — silently preferring one would let a package ship under a version it does not
+claim. The packager stays the source of truth for a real package, without forcing a manifest
+on a bare `./sushic --lib` build.
+
+### `requires_compiler` — which compilers can build it
+
+A source library is compiled by **the consumer's** compiler, not the author's. So a library
+that built cleanly under one compiler can fail under a later one. That is the standard cost
+of source distribution, and it is not fixable — only declarable.
+
+Every build stamps a constraint. The default is `~<major>.<minor>` of the building compiler,
+so a compiler at 0.11.1 writes `~0.11`: every `0.11.z` is accepted and `0.12.0` is not.
+Pre-1.0 semver makes the minor the breaking unit, which is how Sushi's 0.x releases already
+behave.
+
+A library the running compiler does not satisfy is a hard error:
+
+```
+CE3503: library 'mylib' accepts compiler ~0.11, this is 0.12.0
+```
+
+Not a warning. A real incompatibility that is only warned about surfaces later as a
+confusing error deep inside library source you never wrote.
+
+The escape is `--ignore-compiler-version`, for an author testing a library forward against a
+new compiler. It is build-wide and obviously temporary, on purpose.
 
 ## Symbol Resolution
 
@@ -318,12 +408,13 @@ myproject/
       files.slib
 ```
 
-### 4. Version Your Libraries
+### 4. State a Version
 
-Include version information in your library names:
+Every library records its own version, so it does not belong in the filename. Let a
+`nori.toml` supply it for a real package, and pass `--lib-version` for a one-off build:
 
 ```bash
-./sushic --lib mylib.sushi -o mylib-1.0.slib
+./sushic --lib --lib-version 1.0.0 mylib.sushi -o mylib.slib
 ```
 
 ### 5. Test Libraries Independently
@@ -350,11 +441,30 @@ fn main() i32:
 
 Current limitations of the library system:
 
-1. **No transitive dependencies**: If library A depends on library B, you must import both explicitly
-2. **Platform-specific**: Libraries compiled on macOS cannot be used on Linux (and vice versa)
-3. **Generic instantiation across libraries**: Regular generic *functions*, *variadic-generic
-   pack* functions (`...Ts`), and generic *structs*/*enums* can be instantiated across `.slib`
-   boundaries. The library producer ships a re-parsable source template in the `.slib` `templates`
+1. **No transitive dependencies**: If library A depends on library B, you must import both
+   explicitly. A library's own `use <lib/...>` is not followed.
+2. **Portable as text, not automatically in behaviour**: a source library compiles anywhere,
+   but Sushi has no conditional compilation — no `cfg`, no build tags, no per-platform source
+   files. A library that binds a platform-specific C function through `unsafe external` still
+   only builds where that function exists, and it cannot yet say so.
+3. **A binary library is platform-bound**: `--lib-kind binary` or `hybrid` ships bitcode,
+   which is bound to the platform that produced it (**CE3504**).
+4. **A public generic cannot reach FFI**: a public generic whose body (transitively)
+   references an `unsafe external` namespace, or a private helper whose signature exposes a
+   foreign `ptr`, cannot be exported (**CE5006**; see also **CE5002**). Wrap the foreign
+   detail behind a private helper with a C-ABI-free signature. This applies to every kind,
+   source included.
+5. **A public native variadic cannot be exported**: a `...T` variadic collects into a runtime
+   `T[]` inside one concrete function, so there is no template to monomorphize and public
+   export is **CE0116**. A type pack (`...Ts`) is different: it exports as a template. This
+   applies to every kind, source included.
+6. **Generic instantiation across a BINARY boundary**: the notes below describe how generics
+   cross a `--lib-kind binary` library. A source library needs none of this machinery — its
+   generics are ordinary source in ordinary units, so they monomorphize exactly as they would
+   in a multi-file program. Regular generic *functions*, *variadic-generic pack* functions
+   (`...Ts`), and generic *structs*/*enums* can be instantiated across `.slib` boundaries.
+
+   The library producer ships a re-parsable source template in the `.slib` `templates`
    section (templates version 4); the consumer re-parses it, registers it alongside its own
    definitions, and monomorphizes it at consumer call sites using the standard `instantiate`/`monomorphize`
    machinery. A pack function carries `type_params` (the `...Ts` is recorded with `is_pack`), so it
@@ -386,18 +496,13 @@ Current limitations of the library system:
    consumer, a local symbol with the same name as a shipped private is an error (**CE5007**,
    not local-wins): shadowing it would silently change what the library's monomorphized bodies
    call. Note that shipped private helpers become callable by name from consumer code - they
-   are not advertised in the public API, but they are not hidden either.
+   are not advertised in the public API, but they are not hidden either. None of this can
+   arise on the source path: library units are namespaced, so there is no shared namespace to
+   clash in, and nothing has to be shipped ahead of need.
 
-   Remaining restrictions:
-   - **CE5006 (narrowed)**: a generic that (transitively) references an `unsafe external`
-     namespace, or a private helper whose signature exposes a foreign `ptr`, still cannot be
-     exported - foreign bindings cannot be re-declared at the consumer (see CE5002). Wrap the
-     foreign detail behind a private helper with a C-ABI-free signature.
+   Remaining restriction on the binary path:
    - **Generic-target perk impls do not ship**: `extend <Generic@(T)> with <Perk>` is not supported
      in-program, so only concrete-target impls cross the boundary.
-   - **Native variadics (`...T`) are not exportable**: a v1 native variadic collects into a runtime
-     `T[]` inside one concrete function (no template to monomorphize), so public export is rejected
-     with **CE0116**. This is distinct from a v2 type pack (`...Ts`), which exports as a template.
 
 These limitations may be addressed in future versions.
 

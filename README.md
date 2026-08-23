@@ -100,7 +100,7 @@ and LLVM-powered code generation.
 ./sushic --opt O3 program.sushi       # Maximum performance
 
 # Create and use libraries
-./sushic --lib mylib.sushi -o mylib.slib  # Compile to library
+./sushic --lib --lib-version 1.0.0 mylib.sushi -o mylib.slib  # Compile to library
 export SUSHI_LIB_PATH=.                   # Set library path
 ./sushic main.sushi                       # use <lib/mylib> in source
 ```
@@ -141,7 +141,7 @@ fn main() i32:
 ### Compiler
 - [Compiler Reference](https://bigwhale.github.io/sushi-lang/compiler-reference/) - CLI options and
   optimization levels
-- [Libraries](https://bigwhale.github.io/sushi-lang/libraries/) - Creating and using precompiled libraries
+- [Libraries](https://bigwhale.github.io/sushi-lang/libraries/) - Creating and using reusable libraries
 - [Architecture](https://bigwhale.github.io/sushi-lang/internals/architecture/) - Compiler design
   and structure
 - [Semantic Passes](https://bigwhale.github.io/sushi-lang/internals/semantic-passes/) - Pass-by-

@@ -107,7 +107,7 @@ Implementing a linked list with `Own@(T)` for recursive structures.
 ## Libraries
 
 ### 26-libraries.sushi
-Using precompiled libraries - demonstrates library linking.
+Using libraries - demonstrates library linking.
 
 ### mathlib.sushi
 Sample library source - compile with `--lib` to create reusable bitcode.
