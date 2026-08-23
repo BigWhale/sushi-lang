@@ -1,10 +1,11 @@
 """Built-in extension methods for array types (fixed and dynamic arrays)."""
 
 from typing import Any
-from sushi_lang.semantics.ast import MethodCall, IntLit, Name
+from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.typesys import Type, ArrayType, DynamicArrayType, BuiltinType, IteratorType
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
+from .utils import validate_constant_array_index
 
 
 # Array methods that mutate their receiver in place. A constant is emitted as a
@@ -88,13 +89,7 @@ def _validate_fixed_array_get(call: MethodCall, array_type: ArrayType, reporter:
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
                    index=1, expected="integer type", got=display_type(arg_type))
 
-    if isinstance(call.args[0], IntLit):
-        index_value = call.args[0].value
-        array_size = array_type.size
-
-        if index_value < 0 or index_value >= array_size:
-            er.emit(reporter, er.ERR.CE2012, call.args[0].loc,
-                   index=index_value, size=array_size)
+    validate_constant_array_index(call.args[0], array_type.size, reporter)
 
 
 def _validate_dynamic_array_len(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:

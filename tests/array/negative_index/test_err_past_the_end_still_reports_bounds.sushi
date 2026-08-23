@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2012
+# EXPECT_STDERR_CONTAINS: "out of bounds"
+# Splitting the negative case off must leave the past-the-end case alone.
+
+fn main() i32:
+    let i32[3] numbers = [10, 20, 30]
+    let i32 past = numbers[3]
+    println("{past}")
+    return Result.Ok(0)

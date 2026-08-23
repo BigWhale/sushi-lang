@@ -91,6 +91,38 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
         validate_type_name(validator, type_obj.base_type, span)
 
 
+def read_constant_index(expr: 'Expr') -> Optional[int]:
+    """The value of a literal array index, a negated one included.
+
+    A `-1` parses as a UnaryOp over an IntLit and not as an IntLit, so a guard that
+    asks only for IntLit never sees a negative index and the check behind it is dead
+    code (#450).
+    """
+    from sushi_lang.semantics.ast import IntLit, UnaryOp
+
+    if isinstance(expr, IntLit):
+        return expr.value
+    if isinstance(expr, UnaryOp) and expr.op == 'neg' and isinstance(expr.expr, IntLit):
+        return -expr.expr.value
+    return None
+
+
+def validate_constant_array_index(expr: 'Expr', array_size: int, reporter) -> None:
+    """Report a literal array index that cannot be in range.
+
+    One reader and one pair of codes for every indexing form -- `a[i]`, `a.get(i)` --
+    so a new form cannot inherit half the rule.
+    """
+    index_value = read_constant_index(expr)
+    if index_value is None:
+        return
+
+    if index_value < 0:
+        er.emit(reporter, er.ERR.CE2056, expr.loc, index=index_value)
+    elif index_value >= array_size:
+        er.emit(reporter, er.ERR.CE2012, expr.loc, index=index_value, size=array_size)
+
+
 def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Optional[Type]:
     """The concrete type that a DECLARED type names."""
     from sushi_lang.semantics.generics.types import GenericTypeRef

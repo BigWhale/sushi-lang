@@ -5,9 +5,10 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType
 from sushi_lang.semantics.generics.types import GenericTypeRef
-from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, IntLit, RangeExpr
+from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, RangeExpr
 from sushi_lang.semantics.type_predicates import is_integer_type, is_numeric_type
 from .compatibility import is_valid_cast
+from .utils import validate_constant_array_index
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
@@ -49,13 +50,8 @@ def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None
         er.emit(validator.reporter, er.ERR.CE2002, expr.array.loc,
                got=display_type(array_type), expected="array type")
 
-    if isinstance(array_type, ArrayType) and isinstance(expr.index, IntLit):
-        index_value = expr.index.value
-        array_size = array_type.size
-
-        if index_value < 0 or index_value >= array_size:
-            er.emit(validator.reporter, er.ERR.CE2012, expr.index.loc,
-                   index=index_value, size=array_size)
+    if isinstance(array_type, ArrayType):
+        validate_constant_array_index(expr.index, array_type.size, validator.reporter)
 
 
 def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None:

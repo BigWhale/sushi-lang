@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2056
+# EXPECT_STDERR_CONTAINS: "is negative"
+# Indexed assignment validates its target through the same reader, so it inherits
+# the rule rather than repeating it.
+
+fn main() i32:
+    let i32[3] numbers = [10, 20, 30]
+    numbers[-1] := 99
+    return Result.Ok(0)
