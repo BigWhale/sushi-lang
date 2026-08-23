@@ -66,7 +66,7 @@ def built(tmp_path_factory):
     src = tmp / "demolib.sushi"
     src.write_text(DEMO_LIB, encoding="utf-8")
     slib = tmp / "demolib.slib"
-    r = _run(["sushic", "--lib", "--lib-version", "0.0.0", str(src), "-o", str(slib)], cwd=tmp)
+    r = _run(["sushic", "--lib", "--lib-version", "1.2.3", str(src), "-o", str(slib)], cwd=tmp)
     assert r.returncode == 0, r.stdout + r.stderr
     tool = tmp / "slib-info"
     r = _run(["sushic", str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
@@ -97,7 +97,65 @@ def test_the_tool_renders_every_section(built):
     assert "enum Shade:" in out
     assert "Custom(i32)" in out
     assert "<collections/strings>" in out
+    assert "Source: " in out
+
+
+def _requires_compiler() -> str:
+    from sushi_lang.internals.semver import Version, default_compiler_req
+    from sushi_lang.internals.version import _get_versions
+
+    return default_compiler_req(Version.parse(_get_versions()["app"]))
+
+
+def test_a_source_report_carries_the_v4_fields(built):
+    """kind, library_version, requires_compiler and the unit index all show."""
+    _tmp, slib, tool = built
+    out = _run([str(tool), str(slib)]).stdout
+    assert "Version: 1.2.3" in out
+    assert "Kind: source" in out
+    assert f"Requires compiler: {_requires_compiler()}" in out
+    assert "Units (1):" in out
+    assert "\n  demolib\n" in out
+
+
+def test_a_source_report_suppresses_the_binary_only_fields(built):
+    """A source library has no platform and no bitcode, so neither line prints."""
+    _tmp, slib, tool = built
+    out = _run([str(tool), str(slib)]).stdout
+    assert "Platform:" not in out
+    assert "Bitcode:" not in out
+
+
+@pytest.fixture(scope="module")
+def built_binary(built, tmp_path_factory):
+    """The same declarations, shipped the opt-in binary way."""
+    _tmp, _slib, tool = built
+    tmp = tmp_path_factory.mktemp("slibinfobin")
+    src = tmp / "binlib.sushi"
+    src.write_text(DEMO_LIB, encoding="utf-8")
+    slib = tmp / "binlib.slib"
+    r = _run(["sushic", "--lib", "--lib-kind", "binary", "--lib-version", "1.2.3",
+              str(src), "-o", str(slib)], cwd=tmp)
+    assert r.returncode == 0, r.stdout + r.stderr
+    return tmp, slib, tool
+
+
+def test_a_binary_report_keeps_platform_and_bitcode(built_binary):
+    _tmp, slib, tool = built_binary
+    out = _run([str(tool), str(slib)]).stdout
+    assert "Kind: binary" in out
+    assert "Platform: " in out
     assert "Bitcode: " in out
+    assert "Source:" not in out
+
+
+def test_the_fallback_matches_the_tool_on_a_binary_library(built_binary):
+    _tmp, slib, tool = built_binary
+    tool_run = _run([str(tool), str(slib)])
+    assert tool_run.returncode == 0, tool_run.stdout + tool_run.stderr
+    py_run = _run(["sushic", "--lib-info", str(slib)], env=_env(SUSHI_TOOLCHAIN="off"))
+    assert py_run.returncode == 0, py_run.stdout + py_run.stderr
+    assert py_run.stdout.endswith(tool_run.stdout)
 
 
 @pytest.mark.parametrize("surgery,label", [

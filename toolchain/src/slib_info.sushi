@@ -235,6 +235,22 @@ fn print_enums(MsgValue meta) ~:
     println("")
     return Result.Ok(~)
 
+# print_units: the unit index a v4 library carries.
+fn print_units(MsgValue meta) ~:
+    let MsgValue units = ml_get(meta, "units")??
+    let i32 n = ml_len(units)??
+    if (n == 0):
+        return Result.Ok(~)
+    println("Units ({n}):")
+    let i32 i = 0
+    while (i < n):
+        let MsgValue u = ml_at(units, i)??
+        let string name = ml_str(u)??
+        println("  {name}")
+        i := i + 1
+    println("")
+    return Result.Ok(~)
+
 fn print_dependencies(MsgValue meta) ~:
     let MsgValue deps = ml_get(meta, "dependencies")??
     let i32 n = ml_len(deps)??
@@ -263,26 +279,43 @@ fn group_thousands(u64 n) string:
         return Result.Ok("{hs},0{tail}")
     return Result.Ok("{hs},{tail}")
 
-fn print_report(MsgValue meta, u64 bitcode_size) ~:
+# print_report: the header block, then one section per declaration kind, then
+# the size of every payload section the kind actually has. A field that the kind
+# makes meaningless does not print: a source library has no platform, and a
+# binary one has no source.
+fn print_report(MsgValue meta, SlibSizes sizes) ~:
     let string libname = ml_get_str(meta, "library_name")??
+    let string libver = ml_get_str(meta, "library_version")??
+    let string kind = ml_get_str(meta, "kind")??
     let string plat = ml_get_str(meta, "platform")??
     let string comp = ml_get_str(meta, "compiler_version")??
+    let string req = ml_get_str(meta, "requires_compiler")??
     let string at = ml_get_str(meta, "compiled_at")??
     let string proto = ml_get_str(meta, "sushi_lib_version")??
     println("Library: {libname}")
-    println("Platform: {plat}")
+    println("Version: {libver}")
+    println("Kind: {kind}")
+    if (kind != "source"):
+        println("Platform: {plat}")
     println("Compiler: {comp}")
+    if (req != ""):
+        println("Requires compiler: {req}")
     println("Compiled: {at}")
     println("Protocol: {proto}")
     println("")
+    print_units(meta)??
     print_functions(meta)??
     print_generic_functions(meta)??
     print_constants(meta)??
     print_structs(meta)??
     print_enums(meta)??
     print_dependencies(meta)??
-    let string bc = group_thousands(bitcode_size)??
-    println("Bitcode: {bc} bytes")
+    if (kind != "binary"):
+        let string src = group_thousands(sizes.source)??
+        println("Source: {src} bytes")
+    if (kind != "source"):
+        let string bc = group_thousands(sizes.bitcode)??
+        println("Bitcode: {bc} bytes")
     return Result.Ok(~)
 
 fn print_read_error(string path, SlibError e) ~:
@@ -292,7 +325,7 @@ fn print_read_error(string path, SlibError e) ~:
         SlibError.BadMagic() ->
             stderr.write("Error: {path} is not a .slib library (bad magic)\n")
         SlibError.BadVersion(v) ->
-            stderr.write("Error: {path} has library format version {v}; the supported version is 3\n")
+            stderr.write("Error: {path} has library format version {v}; the supported version is 4\n")
         SlibError.Truncated() ->
             stderr.write("Error: {path} is truncated\n")
         SlibError.Decode(_) ->
@@ -309,9 +342,9 @@ fn run_tool(peek string[] args) i32:
         return Result.Ok(2)
     match slib_read_metadata(path):
         Result.Ok(meta) ->
-            match slib_bitcode_size(path):
-                Result.Ok(size) ->
-                    print_report(meta, size)??
+            match slib_sizes(path):
+                Result.Ok(sizes) ->
+                    print_report(meta, sizes)??
                     return Result.Ok(0)
                 Result.Err(e2) ->
                     print_read_error(path, e2)??

@@ -233,10 +233,15 @@ Example output:
 
 ```
 Library: mylib
-Platform: darwin
-Compiler: 0.6.0
-Compiled: 2025-12-20T10:30:00+00:00
-Protocol: 1.0
+Version: 1.0.0
+Kind: source
+Compiler: 0.11.1
+Requires compiler: ~0.11
+Compiled: 2026-08-23T10:30:00+00:00
+Protocol: 2.0
+
+Units (1):
+  mylib
 
 Public Functions (2):
   fn add(i32 a, i32 b) i32
@@ -247,7 +252,7 @@ Structs (1):
     i32 x
     i32 y
 
-Bitcode: 5,432 bytes
+Source: 1,204 bytes
 ```
 
 ## Implementation Notes

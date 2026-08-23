@@ -161,6 +161,22 @@ class LibraryFormat:
             return metadata, _read_source_section(f, path)
 
     @staticmethod
+    def read_section_sizes(library_path: Path) -> Tuple[dict, int, int]:
+        """Read (metadata, source length, bitcode length), keeping neither payload.
+
+        The `--lib-info` report states how big each section is, and nothing more, so it
+        never pays to hold a whole library in memory. The bitcode LENGTH FIELD is what
+        it reports -- the Sushi reader `slib_sizes` reads that same field and stops, and
+        the two must agree byte for byte.
+        """
+        path = str(library_path)
+        with open(library_path, 'rb') as f:
+            metadata = _read_header_and_metadata(f, path)
+            source_len = len(_skip_source_section(f, path))
+            bc_len = struct.unpack("<Q", _read_bytes(f, 8, path, "bitcode"))[0]
+            return metadata, source_len, bc_len
+
+    @staticmethod
     def read_metadata_only(library_path: Path) -> dict:
         """Read only metadata from .slib file (for introspection)."""
         with open(library_path, 'rb') as f:

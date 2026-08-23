@@ -73,17 +73,34 @@ def print_library_info(library_path: Path) -> int:
         return 2
 
     try:
-        metadata, bitcode = LibraryFormat.read(library_path)
+        metadata, source_size, bitcode_size = LibraryFormat.read_section_sizes(library_path)
     except LibraryError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 2
 
+    # A field the kind makes meaningless is not printed: a source library runs
+    # everywhere, so it has no platform, and it carries no bitcode to measure.
+    kind = metadata.get('kind', '')
+    requires = metadata.get('requires_compiler', '')
+
     print(f"Library: {metadata['library_name']}")
-    print(f"Platform: {metadata['platform']}")
+    print(f"Version: {metadata['library_version']}")
+    print(f"Kind: {kind}")
+    if kind != 'source':
+        print(f"Platform: {metadata['platform']}")
     print(f"Compiler: {metadata['compiler_version']}")
+    if requires:
+        print(f"Requires compiler: {requires}")
     print(f"Compiled: {metadata['compiled_at']}")
     print(f"Protocol: {metadata['sushi_lib_version']}")
     print()
+
+    units = metadata.get('units', [])
+    if units:
+        print(f"Units ({len(units)}):")
+        for unit in units:
+            print(f"  {unit}")
+        print()
 
     funcs = metadata.get('public_functions', [])
     if funcs:
@@ -155,7 +172,10 @@ def print_library_info(library_path: Path) -> int:
             print(f"  <{dep}>")
         print()
 
-    print(f"Bitcode: {len(bitcode):,} bytes")
+    if kind != 'binary':
+        print(f"Source: {source_size:,} bytes")
+    if kind != 'source':
+        print(f"Bitcode: {bitcode_size:,} bytes")
 
     return 0
 
