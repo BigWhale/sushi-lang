@@ -4,35 +4,9 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
-### Fixed
-- **The pre-push hook blocked every push** (#442). Git exports `GIT_DIR` to every hook
-  it runs, and a push from a worktree always sets it. `GIT_DIR` overrides an explicit
-  `-C`, so `read_commit` in the documentation-footer hook stopped answering about the
-  directory it was given and answered about the repository being pushed. Its unit test
-  hands it an empty directory and expects no commit, so the test failed, the hook's
-  pytest gate failed with it, and `git push --no-verify` became the only way through --
-  which turns off the whole gate, including the parts that work. CI never saw it, because
-  there pytest is an ordinary step with no `GIT_*` set.
-
-  `read_commit` now runs git with the `GIT_*` variables removed, so the argument it takes
-  is the question it asks. `.githooks/pre-push` scrubs the same variables from every check
-  it starts, which keeps the hook an honest mirror of CI.
-
-- **An enum payload slot allocated inside a loop leaked stack until the function
-  returned.** A `??` unwrap, an enum construction, a match that binds a payload, and
-  `List.push`/`List.pop` each allocated their scratch slot at the point of use, so in a
-  loop the `alloca` landed in the loop body. LLVM only releases an alloca at function
-  return, so every iteration took another 16 or 32 bytes and a loop of a few hundred
-  thousand walked off the stack guard page with SIGSEGV. Optimisation did not help.
-
-  All seven sites now take the slot from `entry_alloca`, which puts it in the function
-  entry block and reuses it. Reuse is safe because each slot is scratch: the payload is
-  loaded back out before the expression finishes, and a reference binding deliberately
-  points into the scrutinee rather than the copy.
-
-  The regression test drives all four shapes past a million iterations
-  (`tests/error_handling/stack/test_run_try_in_long_loop.sushi`). Found while building
-  `compression/zlib`, whose encoder died above 53 KB of ordinary text.
+Two libraries written in Sushi itself, and the distribution form that carries them:
+a `.slib` is now Sushi source plus an index, so one library file works on every
+platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
 ### Added
 - **`use <compression/zlib>`: DEFLATE and the zlib container, written in Sushi.** No C
@@ -53,6 +27,124 @@ All notable changes to Sushi Lang will be documented in this file.
   Validated differentially against Python `zlib` in both directions
   (`tests/unit/test_zlib_differential.py`, 318 cases): every stream Sushi writes is read
   back by a real zlib, and every stream a real zlib writes is read back by Sushi.
+
+- **Source is the primary distribution form for a Sushi library.** A `.slib` carries the
+  complete source text of its units next to the MessagePack index, and the consumer
+  compiles those units and caches their object files. One artifact works on every
+  platform, because text has no target triple. No AOT-compiled language ships a portable
+  binary library: Rust, Go and Zig ship source, Apple ships per-platform slices, and only
+  bytecode ecosystems have portable binaries. Sushi had already crossed half the line --
+  a generic can never be pre-compiled, so generics always travelled as source text, and
+  the compiler already compiled bundled stdlib modules that arrive as text. The design is
+  `docs/design/libraries.md`.
+- **`--lib-kind {source,binary,hybrid}`**, defaulting to `source`. Binary distribution is
+  the opt-in and keeps the old behaviour exactly: concrete bodies as bitcode, generics as
+  source slices. It buys less than it looks: a binary library still carries the source of
+  its generics, because monomorphization needs the consumer's type arguments, so only
+  concrete bodies are hidden.
+- **A library states its own version.** `--lib-version X.Y.Z` supplies it, unless a
+  `nori.toml` beside the sources does; the manifest never recorded one before, because
+  `library_name` came from the output filename and nothing stated a version at all.
+  Neither present is **CE3505**, and so is a `--lib-version` that contradicts the
+  `nori.toml` -- silently preferring one would let a package ship under a version it does
+  not claim.
+- **A library states which compilers can build it.** A source library is compiled by the
+  CONSUMER's compiler, so one that built cleanly under 0.11 can fail under 0.12. That is
+  the standard cost of source distribution and it is not fixable, only declarable. Every
+  build stamps `requires_compiler`, by default `~<major>.<minor>` of the building
+  compiler, because pre-1.0 semver makes the minor the breaking unit. A consumer outside
+  that range is **CE3503**, a hard error rather than a warning: an incompatibility that is
+  only warned about surfaces later as a confusing error inside library source the consumer
+  never wrote. The escape is **`--ignore-compiler-version`**, build-wide and obviously
+  temporary.
+- **`sushi_lang/internals/semver.py`**: `Version` with parsing and ordering, and a
+  constraint matcher covering exact, `~X.Y`, caret and comparator ranges. It sits in
+  `internals` rather than `packager` because the compiler needs it on the library-load
+  path; the Nori resolver reuses it rather than growing a second implementation.
+- **`--lib-info` reports the version-4 fields.** The report states the kind, the library
+  version, the compiler constraint and the unit index, and prints only the lines the kind
+  can answer for: no `Platform` and no `Bitcode` for a source library, no `Source` for a
+  binary one. Both readers changed together -- the Sushi tool `toolchain/src/slib_info.sushi`
+  and the Python fallback -- and `tests/unit/test_slib_info_parity.py` locks them to the
+  same bytes.
+- **`slib_sizes` in `use <toolchain/slib>`**, which reads the length of both payload
+  sections in one pass and never reads a blob. `slib_bitcode_size` is now one line on top
+  of it.
+- **CE3506**, the source section's sibling of CE3510 and CE3511. One truncation code per
+  section, because the message names which section is short, and that is what tells a
+  reader where the file was cut.
+
+### Changed
+- **The `.slib` container is at version 4.** `SPARE_1` and `SPARE_2` became `FLAGS` and
+  `KIND`, so the fixed 52-byte header did not change size, and a length-prefixed source
+  section sits between the metadata and the bitcode. `KIND` states which payload is
+  present, so a reader can branch before it unpacks any MessagePack. `FLAGS` bit 0 is
+  reserved for source compression and is always written as zero: Nori archives are already
+  `tar.gz`, so the wire is compressed regardless. A version-3 file is **CE3509**; there is
+  no upgrade shim, because Sushi has no users in the wild.
+- **The platform gate applies to a binary library only.** `_check_library_platform` read
+  one `platform` field and rejected the whole file, so a library carrying nothing
+  platform-bound was refused anyway. **CE3504** is now never raised for a source library,
+  and `--lib-info` prints no `Platform` line for one. That single condition is the whole
+  cross-platform fix.
+- **A bare `./sushic --lib` no longer builds.** A library must state a version, so a build
+  with no `nori.toml` and no `--lib-version` is CE3505.
+- **A source library's units are ordinary compilation units at the consumer.** They enter
+  as `lib/<library>/<unit>`, so they can never collide with a consumer unit name; privacy
+  stays the existing unit mechanism, with no new machinery; each one caches its own `.o`
+  under `__sushi_cache__/units/lib/<library>/`, with the materialized source in
+  `__sushi_cache__/libsrc/`. Four rules make it sound, and not one of them was in the
+  plan -- each appeared when real libraries went through the new path: library units are
+  COLLECTED first, because
+  the compilation order puts dependents before dependencies; a consumer definition SHADOWS
+  a library one silently, for functions, generics and perk impls, so `--lib-kind` changes
+  distribution and never semantics; a monomorphized instance of a library generic goes
+  home to the unit that DECLARED the generic, which makes its call to a library-private
+  helper an intra-unit call and is what replaces the export closure; and that instance is
+  folded into the unit's fingerprint, because which instances a library unit carries
+  depends on what the consumer asked for and its own source hash cannot say so.
+- **CE5007 cannot arise on the source path.** It exists because an export-closure private
+  shares the consumer's flat namespace; namespaced units remove the shared namespace, and
+  the instance-goes-home rule removes the need to ship privates at all.
+
+### Fixed
+- **An enum payload slot allocated inside a loop leaked stack until the function
+  returned.** A `??` unwrap, an enum construction, a match that binds a payload, and
+  `List.push`/`List.pop` each allocated their scratch slot at the point of use, so in a
+  loop the `alloca` landed in the loop body. LLVM only releases an alloca at function
+  return, so every iteration took another 16 or 32 bytes and a loop of a few hundred
+  thousand walked off the stack guard page with SIGSEGV. Optimisation did not help.
+
+  All seven sites now take the slot from `entry_alloca`, which puts it in the function
+  entry block and reuses it. Reuse is safe because each slot is scratch: the payload is
+  loaded back out before the expression finishes, and a reference binding deliberately
+  points into the scrutinee rather than the copy.
+
+  The regression test drives all four shapes past a million iterations
+  (`tests/error_handling/stack/test_run_try_in_long_loop.sushi`). Found while building
+  `compression/zlib`, whose encoder died above 53 KB of ordinary text.
+
+- **The library documentation described a container that no longer exists.**
+  `docs/library-format.md` disagreed with itself about the version -- the layout diagram
+  said 2 and two other places said 3 -- and its manifest schema presented
+  `is_generic`/`type_params` on the concrete declaration lists as if they vary, when the
+  producer filters every generic out of those lists. `docs/libraries.md` still cited
+  `CW3505` for a platform mismatch, a warning deleted long ago; the error is CE3504, and a
+  source library is not checked at all. Every bare `./sushic --lib` example in the docs was
+  a command that now fails with CE3505, in six files.
+
+- **The pre-push hook blocked every push** (#442). Git exports `GIT_DIR` to every hook
+  it runs, and a push from a worktree always sets it. `GIT_DIR` overrides an explicit
+  `-C`, so `read_commit` in the documentation-footer hook stopped answering about the
+  directory it was given and answered about the repository being pushed. Its unit test
+  hands it an empty directory and expects no commit, so the test failed, the hook's
+  pytest gate failed with it, and `git push --no-verify` became the only way through --
+  which turns off the whole gate, including the parts that work. CI never saw it, because
+  there pytest is an ordinary step with no `GIT_*` set.
+
+  `read_commit` now runs git with the `GIT_*` variables removed, so the argument it takes
+  is the question it asks. `.githooks/pre-push` scrubs the same variables from every check
+  it starts, which keeps the hook an honest mirror of CI.
 
 ## [0.11.1] - 2026-08-22
 
