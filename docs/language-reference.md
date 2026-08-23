@@ -802,7 +802,7 @@ Sushi uses a unit system where each source file is a unit:
 
 ```sushi
 # file: math.sushi
-unit math
+use "math"
 
 fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
@@ -813,7 +813,7 @@ fn add(i32 a, i32 b) i32:
 Functions are private by default. Use `public` for external access:
 
 ```sushi
-unit utils
+use "utils"
 
 public fn helper() i32:
     return Result.Ok(private_helper())
