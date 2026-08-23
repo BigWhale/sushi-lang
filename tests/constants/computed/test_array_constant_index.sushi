@@ -1,0 +1,19 @@
+# EXPECT_STDOUT_EXACT: "2\n5\n7\nHarmless\n"
+# Every element of an array constant is already an evaluated value, so indexing one
+# with a constant index folds (#441).
+
+const i32[3] PRIMES = [2, 3, 5]
+const i32 FIRST = PRIMES[0]
+const i32 LAST = PRIMES[2]
+const i32 SUM = PRIMES[0] + PRIMES[2]
+const i32 PICK = 1
+
+const string[2] WORDS = ["Mostly", "Harmless"]
+const string SECOND = WORDS[PICK]
+
+fn main() i32:
+    println("{FIRST}")
+    println("{LAST}")
+    println("{SUM}")
+    println(SECOND)
+    return Result.Ok(0)

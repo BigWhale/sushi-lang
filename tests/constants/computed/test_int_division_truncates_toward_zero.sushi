@@ -1,0 +1,26 @@
+# EXPECT_STDOUT_EXACT: "-3 -3\n1 1\n-1 -1\n-1 -1\n3 3\n1 1\n"
+# A constant and a local must agree. The evaluator used Python's floor division and
+# floor modulo, so '-7 / 2' was -4 in a constant and -3 in a body (#441).
+
+const i32 QUOTIENT = -7 / 2
+const i32 POSITIVE_QUOTIENT = 3 / 2
+const i32 REMAINDER = -7 % 2
+const i32 NEGATIVE_DIVISOR = 7 / -4
+const i32 BOTH_NEGATIVE = -7 / -2
+const i32 POSITIVE_LEFT = 7 % -2
+
+fn main() i32:
+    let i32 a = -7
+    let i32 b = 2
+    let i32 c = 3
+    let i32 d = -4
+    let i32 e = 7
+    let i32 f = -2
+
+    println("{QUOTIENT} {a / b}")
+    println("{POSITIVE_QUOTIENT} {c / b}")
+    println("{REMAINDER} {a % b}")
+    println("{NEGATIVE_DIVISOR} {e / d}")
+    println("{BOTH_NEGATIVE} {a / f}")
+    println("{POSITIVE_LEFT} {e % f}")
+    return Result.Ok(0)

@@ -1,0 +1,13 @@
+# EXPECT_STDOUT_EXACT: "Mostly\nHarmless\nMostly\n"
+# A string ARRAY constant whose elements are not all bare literals takes the same
+# route, one fat pointer per element (#441).
+
+const string FIRST = "Mostly"
+
+const string[3] WORDS = [FIRST, "Harmless", FIRST]
+
+fn main() i32:
+    println(WORDS[0])
+    println(WORDS[1])
+    println(WORDS[2])
+    return Result.Ok(0)

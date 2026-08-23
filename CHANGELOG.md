@@ -9,6 +9,21 @@ a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
 ### Added
+- **A constant can index an array constant, and can compare two bools or two strings** (#441).
+  `const i32 SMALLEST = PRIMES[0]` folds, because every element of an array constant is
+  already an evaluated value. A bound is checked while compiling -- a constant cannot trap --
+  so past the end is **CE2012** and a negative index is **CE2014**, the same codes a constant
+  index in a body gets. `==` and `!=` on two bools and on two strings fold as well; both work
+  at run time and only the constant evaluator refused them. Ordering two strings stays
+  rejected (#449).
+
+  `+` on two strings in a constant now reports **CE2509**, the code the rest of the language
+  reports, in place of CE0110 "arithmetic on non-numeric type". Sushi has no concatenation
+  operator anywhere -- interpolation is the way to combine strings -- so the old wording read
+  as a constant-only limit rather than the language rule it is. Interpolation inside a
+  constant is still not evaluated (#447), and there is still no compile-time loop, so a
+  generated table has to be spelled out (#446).
+
 - **A fixed array's size may be written in any base, or name a constant** (#439, #440). The
   grammar took a decimal literal and nothing else, so `u8[0x100]` came back as
   `CE6001: unexpected token '0x100'` while `u8[256]`, the same size, compiled. Every base a
@@ -151,6 +166,23 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **A string constant that was not a bare literal reported an internal compiler error**
+  (#441). The backend matched a string constant by the SHAPE of its expression, so
+  `const string ALIAS = GREETING` -- a program the typecheck pass accepts -- registered no
+  global at all, and every use of `ALIAS` came back as `CE0055: unknown variable or constant`,
+  a diagnostic that asks the user to report a compiler bug. A string array holding one
+  non-literal element failed the same way. Constant emission now routes on the VALUE the
+  evaluator produced and never on the expression that produced it, which is the same fix #260
+  made for a literal array, applied at the seam instead of one shape at a time. A string is
+  still finished in the backend: its bytes need a module to live in, and the evaluator has
+  none.
+
+- **A constant divided and took a remainder differently than a body did** (#441). The
+  evaluator used Python's floor division and floor modulo, so `-7 / 2` was `-4` in a constant
+  and `-3` everywhere else, and `-7 % 2` was `1` against `-1`. Integer division now truncates
+  toward zero and a remainder takes the sign of its dividend, as `sdiv` and `srem` do; a float
+  remainder is `fmod`, as `frem` is.
+
 - **A bitwise operator on a float crashed the compiler.** `a & b` on two `f64` values
   reached the backend, where LLVM has no such instruction, and a program a user wrote came
   back as `CE0000: internal compiler error ... instruction requires integer or integer

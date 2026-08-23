@@ -1,0 +1,20 @@
+# EXPECT_STDOUT_EXACT: "0\n1\n0\n1\n1\n"
+# '==' and '!=' work on a bool and on a string at run time, so a constant that
+# compares two known values must fold them too (#441).
+
+const bool YES = true
+const bool SAME = YES == false
+const bool DIFFERENT = YES != false
+
+const string GREETING = "Mostly Harmless"
+const bool STRINGS_MATCH = GREETING == "Mostly"
+const bool STRINGS_DIFFER = GREETING != "Mostly"
+const bool ALIAS_MATCHES = GREETING == "Mostly Harmless"
+
+fn main() i32:
+    println("{SAME}")
+    println("{DIFFERENT}")
+    println("{STRINGS_MATCH}")
+    println("{STRINGS_DIFFER}")
+    println("{ALIAS_MATCHES}")
+    return Result.Ok(0)

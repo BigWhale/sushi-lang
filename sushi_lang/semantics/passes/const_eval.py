@@ -1,5 +1,6 @@
 """Compile-time constant expression evaluator."""
 from __future__ import annotations
+import math
 from dataclasses import dataclass
 from typing import List, Optional, Union
 
@@ -9,7 +10,7 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
     Expr, IntLit, FloatLit, BoolLit, StringLit, ArrayLiteral,
-    BinaryOp, UnaryOp, Name, CastExpr
+    BinaryOp, UnaryOp, Name, CastExpr, IndexAccess
 )
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.collect import ConstantTable
@@ -95,6 +96,9 @@ class ConstantEvaluator:
         elif isinstance(expr, CastExpr):
             return self._evaluate_cast(expr, span)
 
+        elif isinstance(expr, IndexAccess):
+            return self._evaluate_index(expr, span)
+
         else:
             er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
             return None
@@ -123,6 +127,11 @@ class ConstantEvaluator:
             return None
 
         if expr.op == '+':
+            # Sushi has no concatenation operator anywhere, so a constant reports the
+            # language rule and not a constant-only one (#441).
+            if BuiltinType.STRING in (left_val.semantic_type, right_val.semantic_type):
+                er.emit(self.reporter, er.ERR.CE2509, span)
+                return None
             return self._eval_arithmetic(left_val, right_val, lambda a, b: a + b, span)
         elif expr.op == '-':
             return self._eval_arithmetic(left_val, right_val, lambda a, b: a - b, span)
@@ -263,6 +272,39 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0111, span, from_type=display_type(from_type), to_type=display_type(to_type))
             return None
 
+    def _evaluate_index(self, expr: IndexAccess, span: Optional[Span]) -> Optional[ConstantValue]:
+        """Evaluate an index into an array constant.
+
+        A constant cannot trap, so the bounds a body leaves to run time (RE2020) are
+        compile-time diagnostics here, the same codes a constant index in a body gets.
+        """
+        base = self.evaluate(expr.array, None, expr.array.loc)
+        if base is None:
+            return None
+
+        if not isinstance(base.value, list):
+            er.emit(self.reporter, er.ERR.CE0110, span, op='index of a non-array constant')
+            return None
+
+        index = self.evaluate(expr.index, BuiltinType.I32, expr.index.loc)
+        if index is None:
+            return None
+
+        if not self._is_integer_type(index.semantic_type):
+            er.emit(self.reporter, er.ERR.CE0110, span, op='array index that is not an integer')
+            return None
+
+        if index.value < 0:
+            er.emit(self.reporter, er.ERR.CE2014, expr.index.loc, index=index.value)
+            return None
+
+        if index.value >= len(base.value):
+            er.emit(self.reporter, er.ERR.CE2012, expr.index.loc,
+                    index=index.value, size=len(base.value))
+            return None
+
+        return base.value[index.value]
+
     def _eval_arithmetic(self, left: ConstantValue, right: ConstantValue, op, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate arithmetic operation."""
         if not self._is_numeric_type(left.semantic_type) or not self._is_numeric_type(right.semantic_type):
@@ -283,7 +325,7 @@ class ConstantEvaluator:
             return None
 
         if self._is_integer_type(left.semantic_type):
-            result = left.value // right.value
+            result = _truncated_quotient(left.value, right.value)
         else:
             result = left.value / right.value
 
@@ -299,7 +341,11 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0112, span)
             return None
 
-        result = left.value % right.value
+        if self._is_integer_type(left.semantic_type):
+            result = _truncated_remainder(left.value, right.value)
+        else:
+            result = math.fmod(left.value, right.value)
+
         return ConstantValue(result, left.semantic_type)
 
     def _eval_bitwise(self, left: ConstantValue, right: ConstantValue, op, op_name: str, span: Optional[Span]) -> Optional[ConstantValue]:
@@ -356,7 +402,15 @@ class ConstantEvaluator:
         return ConstantValue(result, BuiltinType.BOOL)
 
     def _eval_comparison(self, left: ConstantValue, right: ConstantValue, op: str, span: Optional[Span]) -> Optional[ConstantValue]:
-        """Evaluate comparison operation."""
+        """Evaluate comparison operation.
+
+        A bool and a string are equatable but not orderable, which is what a body gets
+        too: '<' on two strings is not implemented anywhere.
+        """
+        if op in ('==', '!=') and self._is_equatable_pair(left, right):
+            same = left.value == right.value
+            return ConstantValue(same if op == '==' else not same, BuiltinType.BOOL)
+
         if not self._is_numeric_type(left.semantic_type) or not self._is_numeric_type(right.semantic_type):
             er.emit(self.reporter, er.ERR.CE0110, span, op=f'comparison {op} on non-comparable types')
             return None
@@ -379,6 +433,11 @@ class ConstantEvaluator:
 
         return ConstantValue(result, BuiltinType.BOOL)
 
+    def _is_equatable_pair(self, left: ConstantValue, right: ConstantValue) -> bool:
+        """Whether two non-numeric values of the same type compare for equality."""
+        return left.semantic_type == right.semantic_type and left.semantic_type in (
+            BuiltinType.BOOL, BuiltinType.STRING)
+
     def _is_integer_type(self, ty: Type) -> bool:
         """Check if type is an integer type."""
         return ty in (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
@@ -391,3 +450,18 @@ class ConstantEvaluator:
     def _is_numeric_type(self, ty: Type) -> bool:
         """Check if type is numeric (integer or float)."""
         return self._is_integer_type(ty) or self._is_float_type(ty)
+
+
+def _truncated_quotient(left: int, right: int) -> int:
+    """Integer division that truncates toward zero, as the backend's sdiv does.
+
+    Python floors instead, so '-7 / 2' read -4 in a constant and -3 in a body (#441).
+    """
+    magnitude = abs(left) // abs(right)
+    return -magnitude if (left < 0) != (right < 0) else magnitude
+
+
+def _truncated_remainder(left: int, right: int) -> int:
+    """Integer remainder whose sign follows the dividend, as the backend's srem does."""
+    magnitude = abs(left) % abs(right)
+    return -magnitude if left < 0 else magnitude

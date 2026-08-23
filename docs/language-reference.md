@@ -1053,20 +1053,37 @@ fn main() i32:
 
 ### Restrictions
 
+A constant is built from literals, other constants, operators and `as`. Referring to another
+constant is allowed and the order of declaration does not matter, so a constant may name one
+declared further down the file. Indexing an array constant with a constant index works too,
+and every bound is checked while compiling -- a constant cannot trap.
+
+```sushi
+const i32[3] PRIMES = [2, 3, 5]
+const i32 SMALLEST = PRIMES[0]      # 2
+const bool IS_TWO = SMALLEST == 2   # bool and string compare for equality
+```
+
 Constants cannot use:
-- Function calls (including constructors)
-- Variable references (only other constants)
-- String concatenation with `+` (not yet supported)
+- Function calls (including constructors) and method calls
+- Local variables (only other constants)
 - Struct or enum construction
-- Method calls
 - Dynamic arrays
+- Interpolation -- `"{OTHER}"` in a constant is not evaluated yet
+- A compile-time loop, so a generated table has to be spelled out element by element
 
 ```sushi
 # ERROR: Not allowed in constants
 const i32 X = get_value()     # CE0108: function calls forbidden
-const i32 Y = some_variable   # CE0108: variable references forbidden
+const i32 Y = some_local      # CE1001: the name is not a constant
 const i32[] DYNAMIC = from([1, 2])  # CE2015: dynamic arrays forbidden
 ```
+
+`+` on two strings is **CE2509** in a constant exactly as it is in a body: Sushi has no
+concatenation operator anywhere, interpolation is the way to combine strings.
+
+Integer `/` and `%` in a constant mean what they mean in a body: division truncates toward
+zero and a remainder takes the sign of its dividend, so `-7 / 2` is `-3` and `-7 % 2` is `-1`.
 
 ---
 

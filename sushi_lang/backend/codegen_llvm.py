@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.ast import ExtendWithDef, FuncDef
     from sushi_lang.semantics.typesys import Type
     from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
+    from sushi_lang.semantics.passes.const_eval import ConstantValue
 
 from sushi_lang.semantics.ast import ConstDef, ExtendDef
 from sushi_lang.semantics.units import Unit
@@ -930,66 +931,59 @@ class LLVMCodegen:
         self.constants[name] = global_const
 
     def _emit_global_constant(self, const: ConstDef) -> None:
-        """Emit a global constant definition."""
-        from sushi_lang.semantics.ast import ArrayLiteral, StringLit
+        """Emit a global constant definition.
 
+        The route is the VALUE the evaluator produced, never the shape of the
+        expression that produced it. Matching a string constant syntactically meant
+        `const string ALIAS = GREETING` registered no global at all and every use said
+        CE0055, an internal error, on a valid program (#441; #260 was the same hazard
+        for a literal array).
+        """
         if const.ty is None:
             return  # Skip constants with no type (should be caught in semantic analysis)
 
-        if isinstance(const.value, StringLit):
-            self._register_global_constant(
-                const.name, self.types.string_struct,
-                self._constant_string_value(const.value.value, f".str_data.{const.name}"))
-            return
-
-        # An ARRAY of strings takes the same route, one fat pointer per element. The
-        # constant evaluator cannot build these -- a string value needs a global to
-        # point at, and the evaluator has no module -- so it returned None and the
-        # constant was never registered at all, which is why every use said CE0055
-        # rather than the declaration saying anything (#260).
-        if (isinstance(const.value, ArrayLiteral) and const.value.elements
-                and all(isinstance(e, StringLit) for e in const.value.elements)):
-            elements = [
-                self._constant_string_value(e.value, f".str_data.{const.name}.{i}")
-                for i, e in enumerate(const.value.elements)
-            ]
-            array_type = ir.ArrayType(self.types.string_struct, len(elements))
-            self._register_global_constant(const.name, array_type,
-                                           ir.Constant(array_type, elements))
-            return
-
-        llvm_type = self.types.ll_type(const.ty)
-        if llvm_type is None:
-            return  # Skip unsupported types
-
-        # Evaluate the constant value expression at compile time, materializing the
-        # value at the declared type's width (so a context-typed literal such as
-        # `const u8 MAX = 200` yields a u8 initializer, not an i32 one).
+        # Materializing at the DECLARED type keeps a context-typed literal at its own
+        # width: `const u8 MAX = 200` yields a u8 initializer, not an i32 one.
         const_value = self._evaluate_constant_expression(const.value, const.ty)
         if const_value is None:
             return  # Skip non-constant expressions
 
-        self._register_global_constant(const.name, llvm_type, const_value)
+        initializer = self._materialize_constant(const_value, f".str_data.{const.name}")
+        if initializer is None:
+            return  # Skip unsupported types
 
-    def _evaluate_constant_expression(self, expr, expected_type=None) -> Optional[ir.Constant]:
-        """Evaluate a constant expression at compile time."""
-        from sushi_lang.semantics.ast import StringLit
+        self._register_global_constant(const.name, self.types.ll_type(const.ty), initializer)
+
+    def _evaluate_constant_expression(self, expr, expected_type=None) -> Optional["ConstantValue"]:
+        """Evaluate a constant expression at compile time, as a value not an initializer."""
         from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
         from sushi_lang.internals.report import Reporter
-
-        if isinstance(expr, StringLit):
-            return None
 
         # A silent reporter: the typecheck pass has already reported anything wrong with this.
         silent_reporter = Reporter()
         evaluator = ConstantEvaluator(silent_reporter, self.const_table, self.ast_constants)
-        const_value = evaluator.evaluate(expr, expected_type, None)
+        return evaluator.evaluate(expr, expected_type, None)
 
-        if const_value is None:
-            return None
+    def _materialize_constant(self, value, data_name: str) -> Optional[ir.Constant]:
+        """An evaluated constant as an LLVM initializer.
 
-        llvm_const = const_value.to_llvm_constant(self.types)
-        return llvm_const
+        A string is finished here rather than in the evaluator: its bytes need a module
+        to live in, and the evaluator has none, which is why `to_llvm_constant` hands
+        back None for one.
+        """
+        from sushi_lang.semantics.typesys import BuiltinType
+
+        if value.semantic_type == BuiltinType.STRING:
+            return self._constant_string_value(value.value, data_name)
+
+        if isinstance(value.value, list):
+            elements = [self._materialize_constant(element, f"{data_name}.{i}")
+                        for i, element in enumerate(value.value)]
+            if not elements or any(e is None for e in elements):
+                return None
+            return ir.Constant(ir.ArrayType(elements[0].type, len(elements)), elements)
+
+        return value.to_llvm_constant(self.types)
 
 
 _INLINE_RUNTIME_FUNCTIONS = frozenset({

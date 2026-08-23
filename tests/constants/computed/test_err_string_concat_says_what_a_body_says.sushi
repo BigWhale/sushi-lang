@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODE: CE2509
+# Sushi has no '+' on strings anywhere -- interpolation is the way. A constant used
+# to report CE0110, 'arithmetic on non-numeric type', which reads as a constant-only
+# limit rather than the language rule it is (#441).
+
+const string FIRST = "Mostly"
+const string GREETING = FIRST + " Harmless"
+
+fn main() i32:
+    println(GREETING)
+    return Result.Ok(0)
