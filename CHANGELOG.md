@@ -5,6 +5,19 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **The pre-push hook blocked every push** (#442). Git exports `GIT_DIR` to every hook
+  it runs, and a push from a worktree always sets it. `GIT_DIR` overrides an explicit
+  `-C`, so `read_commit` in the documentation-footer hook stopped answering about the
+  directory it was given and answered about the repository being pushed. Its unit test
+  hands it an empty directory and expects no commit, so the test failed, the hook's
+  pytest gate failed with it, and `git push --no-verify` became the only way through --
+  which turns off the whole gate, including the parts that work. CI never saw it, because
+  there pytest is an ordinary step with no `GIT_*` set.
+
+  `read_commit` now runs git with the `GIT_*` variables removed, so the argument it takes
+  is the question it asks. `.githooks/pre-push` scrubs the same variables from every check
+  it starts, which keeps the hook an honest mirror of CI.
+
 - **An enum payload slot allocated inside a loop leaked stack until the function
   returned.** A `??` unwrap, an enum construction, a match that binds a payload, and
   `List.push`/`List.pop` each allocated their scratch slot at the point of use, so in a
