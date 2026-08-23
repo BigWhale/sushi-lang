@@ -293,21 +293,9 @@ class ExpressionValidator(RecursiveVisitor):
                     .help("use string interpolation: \"{a}{b}\"").emit()
 
         if node.op in ["==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "%"]:
-            if left_type is not None and right_type is not None:
-                left_is_numeric = isinstance(left_type, BuiltinType) and left_type in [
-                    BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-                    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-                    BuiltinType.F32, BuiltinType.F64
-                ]
-                right_is_numeric = isinstance(right_type, BuiltinType) and right_type in [
-                    BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-                    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-                    BuiltinType.F32, BuiltinType.F64
-                ]
-
-                if left_is_numeric and right_is_numeric and left_type != right_type:
-                    er.emit(self.type_validator.reporter, er.ERR.CE2510, node.loc,
-                           left_type=display_type(left_type), right_type=display_type(right_type))
+            from sushi_lang.semantics.passes.types.expressions import (
+                reject_mixed_numeric_operands)
+            reject_mixed_numeric_operands(self.type_validator, node, left_type, right_type)
 
         if node.op in ["&", "|", "^", "<<", ">>"]:
             self.type_validator._validate_bitwise_operation(node)

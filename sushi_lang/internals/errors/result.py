@@ -41,7 +41,11 @@ _add(ErrorMessage("CE2509", Severity.ERROR,
 
 _add(ErrorMessage("CE2510", Severity.ERROR,
     "cannot use operator with mixed numeric types: {left_type} and {right_type} (use 'as' to explicitly cast one operand)",
-    Category.TYPE, "Sushi does not allow implicit numeric type conversions in comparisons or arithmetic operations. Use the 'as' keyword to explicitly cast one operand to match the other's type. Example: if (x == 3.14 as f32) { ... }"))
+    Category.TYPE, "Sushi converts no numeric type on its own, so two numeric operands of one operator must have the same type. This covers arithmetic (+ - * / %), the comparisons (== != < <= > >=) and the bitwise & | ^. Use 'as' to cast one operand to the other's type: (low as u32) | wide. A shift is the exception: its right operand is a count, not a second value, so its type is free and the result keeps the type of the left operand. The bitwise half of the rule arrived with #438, where a mixed pair was silently widened or TRUNCATED by the backend and the wrong answer reached the binary."))
+
+_add(ErrorMessage("CE2512", Severity.ERROR,
+    "shift count {count} is out of range for {value_type}: a count must be from 0 to {max_count}",
+    Category.TYPE, "A shift moves the bits of its left operand, so the width of that operand is what limits the count. A count at or above the width moves every bit out of the type, and a negative count is no shift at all. Neither is a large answer: LLVM makes the result poison and the hardware promises nothing, so the program prints whatever is left behind -- 0x12 << 8 on a u8 answered 32 (#438). Cast the value to a wider type when the shift is meant to reach further: (high as u32) << 8. Only a count the compiler can read is an error. A computed count is defined instead of checked: a shift that empties the type answers 0, and an arithmetic right shift leaves the sign behind, which is Go's rule rather than the masking Java and Rust expose."))
 
 _add(ErrorMessage("CE2511", Severity.ERROR,
     "error type mismatch in propagation: cannot propagate Result@({ok_type}, {inner_err}) to function returning Result@({ok_type}, {outer_err})",

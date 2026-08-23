@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE2004
+# A shift moves bits, so it wants a value made of bits.
+
+fn main() i32:
+    let f64 a = 1.5
+    let f64 moved = a << 1
+    println("{moved}")
+    return Result.Ok(0)

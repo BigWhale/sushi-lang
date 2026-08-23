@@ -1,0 +1,24 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n4\n4\n4\n"
+# A size that repeats across declarations can be written once and named. The name
+# has to work in every position a type does, which is what these three cover.
+
+const i32 MAX_BITS = 4
+
+struct Counts:
+    i32[MAX_BITS] slots
+
+fn walk(i32[MAX_BITS] counts) i32:
+    return Result.Ok(counts.len())
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let i32[MAX_BITS] counts = [1, 2, 3, 4]
+    println("{counts.len()}")
+
+    let Counts held = Counts([5, 6, 7, 8])
+    println("{held.slots.len()}")
+
+    println("{walk(counts).realise(0)}")
+
+    return Result.Ok(0)

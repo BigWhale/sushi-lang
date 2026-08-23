@@ -110,6 +110,11 @@ _INT_WIDTHS = {
 _F32_MAX = 3.4028234663852886e38
 
 
+def integer_bit_width(target_type: Type) -> Optional[int]:
+    """The bit width of an integer type, None when the type is not an integer."""
+    return _INT_WIDTHS.get(target_type)
+
+
 def int_literal_fits(value: int, radix: int, target_type: BuiltinType) -> bool:
     """Check whether an integer literal fits its context-typed target."""
     width = _INT_WIDTHS.get(target_type)

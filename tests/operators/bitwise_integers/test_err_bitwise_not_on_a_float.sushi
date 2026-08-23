@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE2004
+# The unary complement has the same operand rule as the binary operators.
+
+fn main() i32:
+    let f64 a = 1.5
+    let f64 flipped = ~a
+    println("{flipped}")
+    return Result.Ok(0)

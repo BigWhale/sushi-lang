@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2510
+# `^` is the third of the three operators whose operands must agree.
+
+fn main() i32:
+    let u16 a = 0xFF00
+    let u64 b = 0x00FF
+    let u16 c = a ^ b
+    println("{c}")
+    return Result.Ok(0)

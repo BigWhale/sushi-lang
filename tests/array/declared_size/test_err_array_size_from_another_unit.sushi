@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODE: CE2099
+# The rule and its edge: a size names a constant of THIS unit. The size is read
+# while this unit's AST is built, before any other unit's constants exist, so a
+# constant that lives next door cannot count these elements. The value is still
+# reachable as a value -- it is the type position that cannot see it.
+
+use "helper_sizes"
+
+fn main() i32:
+    let i32[SHARED_SIZE] counts = [1, 2, 3, 4]
+    println("{counts.len()}")
+    return Result.Ok(0)

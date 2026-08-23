@@ -4,37 +4,32 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
-### Fixed
-- **The pre-push hook blocked every push** (#442). Git exports `GIT_DIR` to every hook
-  it runs, and a push from a worktree always sets it. `GIT_DIR` overrides an explicit
-  `-C`, so `read_commit` in the documentation-footer hook stopped answering about the
-  directory it was given and answered about the repository being pushed. Its unit test
-  hands it an empty directory and expects no commit, so the test failed, the hook's
-  pytest gate failed with it, and `git push --no-verify` became the only way through --
-  which turns off the whole gate, including the parts that work. CI never saw it, because
-  there pytest is an ordinary step with no `GIT_*` set.
-
-  `read_commit` now runs git with the `GIT_*` variables removed, so the argument it takes
-  is the question it asks. `.githooks/pre-push` scrubs the same variables from every check
-  it starts, which keeps the hook an honest mirror of CI.
-
-- **An enum payload slot allocated inside a loop leaked stack until the function
-  returned.** A `??` unwrap, an enum construction, a match that binds a payload, and
-  `List.push`/`List.pop` each allocated their scratch slot at the point of use, so in a
-  loop the `alloca` landed in the loop body. LLVM only releases an alloca at function
-  return, so every iteration took another 16 or 32 bytes and a loop of a few hundred
-  thousand walked off the stack guard page with SIGSEGV. Optimisation did not help.
-
-  All seven sites now take the slot from `entry_alloca`, which puts it in the function
-  entry block and reuses it. Reuse is safe because each slot is scratch: the payload is
-  loaded back out before the expression finishes, and a reference binding deliberately
-  points into the scrutinee rather than the copy.
-
-  The regression test drives all four shapes past a million iterations
-  (`tests/error_handling/stack/test_run_try_in_long_loop.sushi`). Found while building
-  `compression/zlib`, whose encoder died above 53 KB of ordinary text.
+Two libraries written in Sushi itself, and the distribution form that carries them:
+a `.slib` is now Sushi source plus an index, so one library file works on every
+platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
 ### Added
+- **A fixed array's size may be written in any base, or name a constant** (#439, #440). The
+  grammar took a decimal literal and nothing else, so `u8[0x100]` came back as
+  `CE6001: unexpected token '0x100'` while `u8[256]`, the same size, compiled. Every base a
+  numeric literal has now works, with the underscore rule (CE6006) and the C-octal rule
+  (CE2071) applying exactly as they do to a literal anywhere else, because the size goes
+  through the same token seam.
+
+  A size may also name an integer constant, so a size that repeats across declarations can
+  be written once: `const i32 MAX_BITS = 15` then `i32[MAX_BITS]`, in a local, a struct
+  field, a parameter or a return type. The constant may be an expression
+  (`HALF * 2`) and may name another constant, because the real constant evaluator reads it.
+  It must be declared in the SAME unit: a size is read while that unit's AST is built, long
+  before any pass holds a program-wide constant table, so a constant next door is reachable
+  as a value but not as a size. That limit is now in the Known Limitations list, where #440
+  asked for it.
+
+  A size that cannot count elements is **CE2099**, one code carrying the reason: an unknown
+  name, a constant that is not an integer, or a zero. A zero used to leave the type unbuilt
+  and surface as CE2007, a missing type annotation on a line that has one. A zero-length
+  array stays illegal -- ruled, not overlooked.
+
 - **`use <compression/zlib>`: DEFLATE and the zlib container, written in Sushi.** No C
   library and no FFI -- the whole codec is Sushi. `zlib_compress` and `zlib_uncompress`
   handle the RFC 1950 container with its Adler-32 trailer; `deflate_raw` and
@@ -53,6 +48,186 @@ All notable changes to Sushi Lang will be documented in this file.
   Validated differentially against Python `zlib` in both directions
   (`tests/unit/test_zlib_differential.py`, 318 cases): every stream Sushi writes is read
   back by a real zlib, and every stream a real zlib writes is read back by Sushi.
+
+- **Source is the primary distribution form for a Sushi library.** A `.slib` carries the
+  complete source text of its units next to the MessagePack index, and the consumer
+  compiles those units and caches their object files. One artifact works on every
+  platform, because text has no target triple. No AOT-compiled language ships a portable
+  binary library: Rust, Go and Zig ship source, Apple ships per-platform slices, and only
+  bytecode ecosystems have portable binaries. Sushi had already crossed half the line --
+  a generic can never be pre-compiled, so generics always travelled as source text, and
+  the compiler already compiled bundled stdlib modules that arrive as text. The design is
+  `docs/design/libraries.md`.
+- **`--lib-kind {source,binary,hybrid}`**, defaulting to `source`. Binary distribution is
+  the opt-in and keeps the old behaviour exactly: concrete bodies as bitcode, generics as
+  source slices. It buys less than it looks: a binary library still carries the source of
+  its generics, because monomorphization needs the consumer's type arguments, so only
+  concrete bodies are hidden.
+- **A library states its own version.** `--lib-version X.Y.Z` supplies it, unless a
+  `nori.toml` beside the sources does; the manifest never recorded one before, because
+  `library_name` came from the output filename and nothing stated a version at all.
+  Neither present is **CE3505**, and so is a `--lib-version` that contradicts the
+  `nori.toml` -- silently preferring one would let a package ship under a version it does
+  not claim.
+- **A library states which compilers can build it.** A source library is compiled by the
+  CONSUMER's compiler, so one that built cleanly under 0.11 can fail under 0.12. That is
+  the standard cost of source distribution and it is not fixable, only declarable. Every
+  build stamps `requires_compiler`, by default `~<major>.<minor>` of the building
+  compiler, because pre-1.0 semver makes the minor the breaking unit. A consumer outside
+  that range is **CE3503**, a hard error rather than a warning: an incompatibility that is
+  only warned about surfaces later as a confusing error inside library source the consumer
+  never wrote. The escape is **`--ignore-compiler-version`**, build-wide and obviously
+  temporary.
+- **`sushi_lang/internals/semver.py`**: `Version` with parsing and ordering, and a
+  constraint matcher covering exact, `~X.Y`, caret and comparator ranges. It sits in
+  `internals` rather than `packager` because the compiler needs it on the library-load
+  path; the Nori resolver reuses it rather than growing a second implementation.
+- **`--lib-info` reports the version-4 fields.** The report states the kind, the library
+  version, the compiler constraint and the unit index, and prints only the lines the kind
+  can answer for: no `Platform` and no `Bitcode` for a source library, no `Source` for a
+  binary one. Both readers changed together -- the Sushi tool `toolchain/src/slib_info.sushi`
+  and the Python fallback -- and `tests/unit/test_slib_info_parity.py` locks them to the
+  same bytes.
+- **`slib_sizes` in `use <toolchain/slib>`**, which reads the length of both payload
+  sections in one pass and never reads a blob. `slib_bitcode_size` is now one line on top
+  of it.
+- **CE3506**, the source section's sibling of CE3510 and CE3511. One truncation code per
+  section, because the message names which section is short, and that is what tells a
+  reader where the file was cut.
+
+### Changed
+- **The `.slib` container is at version 4.** `SPARE_1` and `SPARE_2` became `FLAGS` and
+  `KIND`, so the fixed 52-byte header did not change size, and a length-prefixed source
+  section sits between the metadata and the bitcode. `KIND` states which payload is
+  present, so a reader can branch before it unpacks any MessagePack. `FLAGS` bit 0 is
+  reserved for source compression and is always written as zero: Nori archives are already
+  `tar.gz`, so the wire is compressed regardless. A version-3 file is **CE3509**; there is
+  no upgrade shim, because Sushi has no users in the wild.
+- **The platform gate applies to a binary library only.** `_check_library_platform` read
+  one `platform` field and rejected the whole file, so a library carrying nothing
+  platform-bound was refused anyway. **CE3504** is now never raised for a source library,
+  and `--lib-info` prints no `Platform` line for one. That single condition is the whole
+  cross-platform fix.
+- **A bare `./sushic --lib` no longer builds.** A library must state a version, so a build
+  with no `nori.toml` and no `--lib-version` is CE3505.
+- **A source library's units are ordinary compilation units at the consumer.** They enter
+  as `lib/<library>/<unit>`, so they can never collide with a consumer unit name; privacy
+  stays the existing unit mechanism, with no new machinery; each one caches its own `.o`
+  under `__sushi_cache__/units/lib/<library>/`, with the materialized source in
+  `__sushi_cache__/libsrc/`. Four rules make it sound, and not one of them was in the
+  plan -- each appeared when real libraries went through the new path: library units are
+  COLLECTED first, because
+  the compilation order puts dependents before dependencies; a consumer definition SHADOWS
+  a library one silently, for functions, generics and perk impls, so `--lib-kind` changes
+  distribution and never semantics; a monomorphized instance of a library generic goes
+  home to the unit that DECLARED the generic, which makes its call to a library-private
+  helper an intra-unit call and is what replaces the export closure; and that instance is
+  folded into the unit's fingerprint, because which instances a library unit carries
+  depends on what the consumer asked for and its own source hash cannot say so.
+- **CE5007 cannot arise on the source path.** It exists because an export-closure private
+  shares the consumer's flat namespace; namespaced units remove the shared namespace, and
+  the instance-goes-home rule removes the need to ship privates at all.
+
+- **A shift by a count that empties the type answers 0.** The count that CE2512 cannot
+  read -- a loop index, a byte from a file -- used to reach LLVM as written, and a count
+  at or above the width made the result poison: the program printed whatever the
+  optimiser left behind, and on a signed `>>` the arm64 hardware answered with the value
+  unchanged. A shift now has an answer everywhere. A count at or above the width moves
+  every bit out, so the result is 0; an arithmetic right shift fills from the sign bit and
+  leaves it behind, 0 for a positive value and -1 for a negative one; a negative count is
+  out of range at the other end and answers the same way.
+
+  This is Go's rule, chosen over the masking that Java and Rust-in-release expose, because
+  masking answers `value << 8` on a u8 with the value itself -- a wrong answer that reads
+  like a working shift, and one that silently aliases every eighth iteration of a
+  byte-assembly loop onto the same result. Sushi now rejects more than any of the five
+  languages measured at compile time, and leaves no undefined shift at run time.
+
+  The range is read from the count as written, before it is narrowed to the value's width:
+  a u64 count of 256 narrowed to a u8 is 0, which would have answered with the value
+  unchanged. The shift itself is given a masked count so LLVM never emits an out-of-range
+  shift, whose poison it is free to use. The cost is one compare and one conditional move,
+  and nothing when the count is a constant -- a 5 MB zlib round trip measured 0.28s before
+  and 0.28s after.
+
+### Fixed
+- **A bitwise operator on a float crashed the compiler.** `a & b` on two `f64` values
+  reached the backend, where LLVM has no such instruction, and a program a user wrote came
+  back as `CE0000: internal compiler error ... instruction requires integer or integer
+  vector operands`. The operand gate asked for a numeric type, and a float is one; the
+  test beside it has said "bitwise operators only work with integer types" since the day
+  it was written. `& | ^ ~ << >>` now require an integer on every operand and report
+  **CE2004** otherwise -- including a float next to an integer, which used to report the
+  width rule (CE2510) for an operand that has no width to reconcile. A float's bits are
+  reached the way they always were, through `f64.to_bits()` and `from_bits()`.
+
+- **An enum payload slot allocated inside a loop leaked stack until the function
+  returned.** A `??` unwrap, an enum construction, a match that binds a payload, and
+  `List.push`/`List.pop` each allocated their scratch slot at the point of use, so in a
+  loop the `alloca` landed in the loop body. LLVM only releases an alloca at function
+  return, so every iteration took another 16 or 32 bytes and a loop of a few hundred
+  thousand walked off the stack guard page with SIGSEGV. Optimisation did not help.
+
+  All seven sites now take the slot from `entry_alloca`, which puts it in the function
+  entry block and reuses it. Reuse is safe because each slot is scratch: the payload is
+  loaded back out before the expression finishes, and a reference binding deliberately
+  points into the scrutinee rather than the copy.
+
+  The regression test drives all four shapes past a million iterations
+  (`tests/error_handling/stack/test_run_try_in_long_loop.sushi`). Found while building
+  `compression/zlib`, whose encoder died above 53 KB of ordinary text.
+
+- **The library documentation described a container that no longer exists.**
+  `docs/library-format.md` disagreed with itself about the version -- the layout diagram
+  said 2 and two other places said 3 -- and its manifest schema presented
+  `is_generic`/`type_params` on the concrete declaration lists as if they vary, when the
+  producer filters every generic out of those lists. `docs/libraries.md` still cited
+  `CW3505` for a platform mismatch, a warning deleted long ago; the error is CE3504, and a
+  source library is not checked at all. Every bare `./sushic --lib` example in the docs was
+  a command that now fails with CE3505, in six files.
+
+- **The pre-push hook blocked every push** (#442). Git exports `GIT_DIR` to every hook
+  it runs, and a push from a worktree always sets it. `GIT_DIR` overrides an explicit
+  `-C`, so `read_commit` in the documentation-footer hook stopped answering about the
+  directory it was given and answered about the repository being pushed. Its unit test
+  hands it an empty directory and expects no commit, so the test failed, the hook's
+  pytest gate failed with it, and `git push --no-verify` became the only way through --
+  which turns off the whole gate, including the parts that work. CI never saw it, because
+  there pytest is an ordinary step with no `GIT_*` set.
+
+  `read_commit` now runs git with the `GIT_*` variables removed, so the argument it takes
+  is the question it asks. `.githooks/pre-push` scrubs the same variables from every check
+  it starts, which keeps the hook an honest mirror of CI.
+
+- **A bitwise operator did not check operand width** (#438). `& | ^` accepted two
+  different numeric types where `+` refuses them, and the backend then made the two sides
+  agree without a word: it widened or **truncated** the right operand to the width of the
+  left, and gave the result the type of the left operand. `low | wide`, a `u8` and a
+  `u32`, compiled clean and printed 255, because 0x1FF had been cut to 0xFF. So did the
+  byte-assembly shape behind every bit reader, checksum and length field:
+  `accumulator := accumulator | (byte << 8)` never moved the accumulator, because the
+  shift kept the `u8` width of `byte`.
+
+  CE2510 is now one rule for every operator whose two operands must agree -- arithmetic,
+  comparison and `& | ^` all reach `reject_mixed_numeric_operands`, which also retires the
+  copy of the numeric-type list that the arithmetic path carried. `as` is the escape, as it
+  is everywhere else. A shift is deliberately exempt: its right operand is a count, not a
+  second value, so `value << places` with two widths stays legal and the result keeps the
+  type of the left operand. `docs/language-reference.md` states the rule under Operators,
+  where it was not written down before.
+
+- **A shift count at or above the width of the value was accepted.** Found while fixing
+  the mixed-width defect above, and it is what makes that report's own example wrong:
+  `high << 8` on a `u8` moves every bit out of the type. LLVM answers such a shift with
+  poison, so nothing was lost loudly -- the program printed whatever the optimiser left
+  behind, 32 for `0x12 << 8` and 255 once an `|` was wrapped around it.
+
+  A count the compiler can read -- a literal, a constant, an expression of them -- is now
+  **CE2512**, which also covers a negative count. This is the rule Rust applies to the same
+  program (`deny(arithmetic_overflow)`), and the escape is a cast on the VALUE:
+  `(high as u32) << 8`. A computed count is still not checked, at compile time or at run
+  time; `docs/language-reference.md` says so where it states the rule.
+
 
 ## [0.11.1] - 2026-08-22
 

@@ -1,0 +1,17 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n-1\n0\n-1\n0\n"
+# A right shift on a signed value fills from the sign bit, so moving every bit out
+# leaves the sign behind: -1 for a negative value and 0 for a positive one. Shifting
+# one place at a time would reach the same place.
+
+fn shr_i32(i32 value, i32 places) i32:
+    return Result.Ok(value >> places)
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    println("{shr_i32(-2, 32).realise(0)}")
+    println("{shr_i32(100, 32).realise(0)}")
+    println("{shr_i32(-2, 200).realise(0)}")
+    println("{shr_i32(100, 200).realise(0)}")
+
+    return Result.Ok(0)

@@ -27,6 +27,38 @@ class ASTBuilder:
         self._type_parser = None
         self._expr_parser = None
         self._stmt_parser = None
+        # This unit's constants, by name. A fixed array's size may name one, and a
+        # type is read while the AST is built -- long before the collect pass has a
+        # constant table -- so the builder keeps its own.
+        self.unit_constants: dict = {}
+
+    def integer_constant(self, name: str) -> Optional[int]:
+        """The value of an integer constant of this unit, None when there is none.
+
+        The real evaluator does the reading, so a constant that is an expression
+        (`HALF * 2`) or that names another constant counts exactly as a literal one
+        does. Its reporter is silent: a name that is not a constant here is the
+        caller's diagnostic to raise, with the array size in hand to name.
+        """
+        from sushi_lang.internals.report import Reporter
+        from sushi_lang.semantics.passes.collect.constants import ConstantTable, ConstSig
+        from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+        from sushi_lang.semantics.type_predicates import is_integer_type
+
+        const_def = self.unit_constants.get(name)
+        if const_def is None or const_def.ty is None or not is_integer_type(const_def.ty):
+            return None
+
+        table = ConstantTable()
+        for known in self.unit_constants.values():
+            table.by_name[known.name] = ConstSig(name=known.name, loc=known.loc,
+                                                 const_type=known.ty)
+
+        evaluated = ConstantEvaluator(Reporter(), table, self.unit_constants).evaluate(
+            const_def.value, const_def.ty, const_def.loc)
+        if evaluated is None or not isinstance(evaluated.value, int) or isinstance(evaluated.value, bool):
+            return None
+        return evaluated.value
 
     @property
     def type_parser(self):
@@ -68,6 +100,19 @@ class ASTBuilder:
         perk_impls: List[ExtendWithDef] = []
         externals_list: List[ExternalBlock] = []
 
+        # Constants come first, whatever order they were written in: a fixed array's
+        # size may name one, and every other declaration can hold such a type.
+        for ch in tree.children:
+            if not isinstance(ch, Tree):
+                continue
+            const = (_first_tree(ch.children, "const_def") or _find_tree_recursive(ch, "const_def")
+                     if ch.data == "toplevel" else
+                     ch if ch.data == "const_def" else None)
+            if const is not None:
+                const_def = constants.parse_constdef(const, self)
+                constants_list.append(const_def)
+                self.unit_constants[const_def.name] = const_def
+
         for ch in tree.children:
             if not isinstance(ch, Tree):
                 continue
@@ -80,7 +125,6 @@ class ASTBuilder:
 
                 const = _first_tree(node.children, "const_def") or _find_tree_recursive(node, "const_def")
                 if const is not None:
-                    constants_list.append(constants.parse_constdef(const, self))
                     continue
 
                 struct = _first_tree(node.children, "struct_def") or _find_tree_recursive(node, "struct_def")
@@ -141,7 +185,7 @@ class ASTBuilder:
             elif node.data == "use_stmt":
                 uses.append(imports.parse_usestatement(node, self))
             elif node.data == "const_def":
-                constants_list.append(constants.parse_constdef(node, self))
+                continue
             elif node.data == "struct_def":
                 structs_list.append(structs.parse_structdef(node, self))
             elif node.data == "enum_def":

@@ -1,0 +1,24 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n144\n0\n0\n15\n0\n0\n"
+# A count the compiler cannot read is not refused, so the operator has to answer
+# something. It answers as though the bits moved one place at a time: everything
+# has left the type, so the result is 0. This is Go's rule, and it is the reason a
+# count is never masked -- masking would give the value back at count 8.
+
+fn shl_u8(u8 value, u8 places) u8:
+    return Result.Ok(value << places)
+
+fn shr_u8(u8 value, u8 places) u8:
+    return Result.Ok(value >> places)
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    println("{shl_u8(0x12, 3).realise(0)}")
+    println("{shl_u8(0x12, 8).realise(0)}")
+    println("{shl_u8(0x12, 17).realise(0)}")
+
+    println("{shr_u8(0xF0, 4).realise(0)}")
+    println("{shr_u8(0xF0, 8).realise(0)}")
+    println("{shr_u8(0xF0, 200).realise(0)}")
+
+    return Result.Ok(0)

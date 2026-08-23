@@ -1,0 +1,18 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n4\n4\n"
+# A constant may be an expression, and a size that names one is worth no less than
+# a size that names a literal.
+
+const i32 HALF = 2
+const i32 WHOLE = HALF * 2
+const i32 HEX_WIDE = 0x4
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let i32[WHOLE] computed = [1, 2, 3, 4]
+    println("{computed.len()}")
+
+    let i32[HEX_WIDE] hex_named = [1, 2, 3, 4]
+    println("{hex_named.len()}")
+
+    return Result.Ok(0)

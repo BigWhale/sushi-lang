@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODE: CE2004
+# The same for f32, and for the other two of & | ^.
+
+fn main() i32:
+    let f32 a = 1.5
+    let f32 b = 2.0
+    let f32 either = a | b
+    let f32 both = a ^ b
+    println("{either} {both}")
+    return Result.Ok(0)

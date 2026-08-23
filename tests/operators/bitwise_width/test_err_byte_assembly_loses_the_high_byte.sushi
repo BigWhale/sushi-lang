@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODE: CE2510
+# The byte-assembly loop, which is where this defect is met in real code. The
+# shift keeps the u8 width of `byte`, so `byte << 8` is 0 and the accumulator
+# never moves. A rebind is not a declared type, so nothing else looked at it.
+
+fn main() i32:
+    let u8 byte = 0x12
+    let u32 accumulator = 0x34
+    accumulator := accumulator | (byte << 8)
+    println("{accumulator}")
+    return Result.Ok(0)

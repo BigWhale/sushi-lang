@@ -4,7 +4,6 @@
 
 fn run_test() i32:
   let i32[1] single = [42]        # Array with single element
-  let string[0] empty = []        # Empty array (if allowed)
 
   # Test boundary conditions for single element array
   let i32 valid = single[0]       # Valid: 0 < 1

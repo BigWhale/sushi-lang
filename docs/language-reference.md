@@ -307,6 +307,89 @@ The rule and its reasoning are [docs/design/borrow-model.md](design/borrow-model
 
 ## Operators
 
+### Operand types
+
+Two numeric operands of one operator must have the same type. Sushi converts no
+numeric type on its own, so the operands say what the result is: `+ - * / %`, the
+comparisons `== != < <= > >=`, and the bitwise `& | ^` all refuse a mixed pair
+with **CE2510**.
+
+<!-- docs-sweep: error CE2510 -->
+```sushi
+fn main() i32:
+    let u8 low = 0x34
+    let u32 wide = 0x1200
+    let u32 both = low | wide          # CE2510: u8 and u32
+    return Result.Ok(0)
+```
+
+`as` makes the widths agree, and then the operation says what it means:
+
+```sushi
+fn main() i32:
+    let u8 low = 0x34
+    let u32 wide = 0x1200
+    let u32 both = (low as u32) | wide  # 0x1234
+    return Result.Ok(0)
+```
+
+A shift is the exception. Its right operand is a count, not a second value: it
+says how far to move the bits, and the result keeps the type of the left operand.
+The count can be of any numeric type.
+
+```sushi
+fn main() i32:
+    let u64 value = 8
+    let u8 places = 8
+    let u64 shifted = value << places   # 2048
+    return Result.Ok(0)
+```
+
+A count is also limited by the width of the value it shifts, because a count at or
+above that width moves every bit out of the type. A count the compiler can read --
+a literal, a constant, an expression of them -- is **CE2512**:
+
+<!-- docs-sweep: error CE2512 -->
+```sushi
+fn main() i32:
+    let u8 high = 0x12
+    let u8 shifted = high << 8          # CE2512: a u8 count runs from 0 to 7
+    return Result.Ok(0)
+```
+
+Cast the value to the width the shift is meant to reach:
+
+```sushi
+fn main() i32:
+    let u8 high = 0x12
+    let u32 reached = (high as u32) << 8    # 0x1200
+    return Result.Ok(0)
+```
+
+A computed count -- a loop index, a value read from a file -- cannot be read at
+compile time, so it is not an error. It has a defined answer instead: a shift by a
+count at or above the width moves every bit out of the type and gives **0**. An
+arithmetic right shift fills from the sign bit, so it leaves the sign behind: 0 for
+a positive value and -1 for a negative one. A negative count is out of range at the
+other end and answers the same way.
+
+```sushi
+fn shift(u8 value, u8 places) u8:
+    return Result.Ok(value << places)
+
+fn main() i32:
+    println("{shift(0x12, 3).realise(0)}")     # 144
+    println("{shift(0x12, 8).realise(0)}")     # 0 -- every bit has left the u8
+    return Result.Ok(0)
+```
+
+The count is never masked. Masking is what the hardware does and what Java and Rust
+expose, and it would answer `value << 8` on a `u8` with the value itself -- a wrong
+answer that reads like a working shift. Sushi follows Go here: shifting by one place
+at a time is the rule, so a count that empties the type gives an empty result. It
+costs one compare and one conditional move, and nothing at all when the count is a
+constant.
+
 ### Arithmetic
 
 - `+` - Addition
@@ -342,6 +425,27 @@ forms for all logical operators.
 - `~` - Bitwise NOT (complement)
 - `<<` - Left shift (zero-fill)
 - `>>` - Right shift (type-dependent, see below)
+
+Every operand of every one of them must be an **integer**. A float has no bits to
+combine: its bits are reached through `f64.to_bits()` / `f32.to_bits()`, which hand
+over a `u64` / `u32`, and `from_bits()` goes back. A float operand is **CE2004**.
+
+<!-- docs-sweep: error CE2004 -->
+```sushi
+fn main() i32:
+    let f64 value = 1.5
+    let f64 masked = value & 1.0    # CE2004: a float has no bits
+    return Result.Ok(0)
+```
+
+```sushi
+fn main() i32:
+    let f64 value = 1.5
+    let u64 bits = value.to_bits()
+    let u64 sign = (bits >> 63) & 1      # 0
+    let f64 back = f64.from_bits(bits)   # 1.5
+    return Result.Ok(0)
+```
 
 **Right shift behavior (matches Go/Rust):**
 - **Signed types** (`i8`, `i16`, `i32`, `i64`): Arithmetic shift (sign-extends)
@@ -422,6 +526,53 @@ Stack-allocated, compile-time size:
 ```sushi
 let i32[5] arr = [1, 2, 3, 4, 5]
 let i32 first = arr.get(0)??  # .get returns Maybe@(i32); ?? unwraps it
+```
+
+#### The size
+
+A fixed array's size is a positive integer the compiler can read. It may be a literal
+in any base:
+
+```sushi
+fn main() i32:
+    let u8[4] decimal = [1, 2, 3, 4]
+    let u8[0x4] hex = [1, 2, 3, 4]
+    let u8[0b1_00] binary = [1, 2, 3, 4]
+    let u8[0o4] octal = [1, 2, 3, 4]
+    return Result.Ok(0)
+```
+
+It may also name an integer constant, so a size that repeats across declarations can
+be written once. The constant may be an expression, and a named size works wherever a
+type does -- a local, a struct field, a parameter, a return type:
+
+```sushi
+const i32 MAX_BITS = 4
+
+struct Counts:
+    i32[MAX_BITS] slots
+
+fn walk(i32[MAX_BITS] counts) i32:
+    return Result.Ok(counts.len())
+
+fn main() i32:
+    let i32[MAX_BITS] counts = [1, 2, 3, 4]
+    return Result.Ok(walk(counts).realise(0))
+```
+
+The constant must be declared in the **same unit**. A size is read while that unit's
+AST is built, before any pass holds a program-wide constant table, so a constant in
+another unit is reachable as a value but not as a size.
+
+A size that cannot count elements is **CE2099**: a name that is no integer constant
+of this unit, a constant that is not an integer, or a zero. A zero-length array does
+not exist in Sushi.
+
+<!-- docs-sweep: error CE2099 -->
+```sushi
+fn main() i32:
+    let i32[0] nothing = [1]        # CE2099: an array holds at least one element
+    return Result.Ok(0)
 ```
 
 ### Dynamic Arrays

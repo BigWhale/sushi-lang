@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODE: CE2510
+# The wrong-answer case: the right operand is truncated to the width of the left,
+# so 0x1FF became 0xFF and the result printed 255. Silence is the defect.
+
+fn main() i32:
+    let u8 low = 0x05
+    let u32 wide = 0x1FF
+    let u8 merged = low | wide
+    println("{merged}")
+    return Result.Ok(0)

@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2099
+# A zero size used to leave the type unparsed, and the declaration was then
+# reported as having no type annotation at all (CE2007) -- a diagnostic about the
+# wrong half of the line.
+
+fn main() i32:
+    let i32[0] nothing = [1]
+    println("{nothing.len()}")
+    return Result.Ok(0)

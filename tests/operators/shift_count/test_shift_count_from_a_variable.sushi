@@ -1,0 +1,19 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n2048\n8\n"
+# A count that the compiler cannot read is not rejected: a bit reader computes its
+# count from a loop index, and that is the ordinary way to write one.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let u64 value = 8
+    foreach(i in 0..1):
+        let u64 places = (8 + i) as u64
+        let u64 shifted = value << places
+        println("{shifted}")
+
+    let u32 wide = 2048
+    let u8 count = 8
+    let u32 restored = wide >> count
+    println("{restored}")
+
+    return Result.Ok(0)

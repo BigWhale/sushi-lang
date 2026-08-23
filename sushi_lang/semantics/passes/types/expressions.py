@@ -6,7 +6,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, IntLit, RangeExpr
-from sushi_lang.semantics.type_predicates import is_numeric_type
+from sushi_lang.semantics.type_predicates import is_integer_type, is_numeric_type
 from .compatibility import is_valid_cast
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -260,25 +260,103 @@ def _annotate_try_expr(
     expr.inferred_func_return_type = func_return_type
 
 
+def reject_mixed_numeric_operands(validator: 'TypeValidator', expr: BinaryOp,
+                                  left_type: 'Optional[Type]',
+                                  right_type: 'Optional[Type]') -> None:
+    """CE2510 when two numeric operands are not of the same type.
+
+    One rule for every operator that takes its result from operands which must
+    already agree: arithmetic, comparison, and the bitwise `& | ^`. Sushi converts
+    no numeric type implicitly, so the operands say what the result is and `as` is
+    the only way to change a width. A shift never asks both its operands: the
+    count says how far to move, not what the result is.
+    """
+    if left_type is None or right_type is None:
+        return
+    if not (is_numeric_type(left_type) and is_numeric_type(right_type)):
+        return
+    if left_type == right_type:
+        return
+
+    er.emit(validator.reporter, er.ERR.CE2510, expr.loc,
+            left_type=display_type(left_type), right_type=display_type(right_type))
+
+
 def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> None:
-    """Validate that bitwise operators are used with numeric types only."""
+    """Validate the operands of a bitwise operator: integer, and of one width.
+
+    An integer, not merely a number: a float has no bits to combine, and its bits
+    are reached through `.to_bits()`. The gate asked for a numeric type, so a float
+    passed it and the backend met an operand LLVM has no such instruction for
+    (CE0000, "instruction requires integer or integer vector operands").
+    """
     left_type = validator.infer_expression_type(expr.left)
     right_type = validator.infer_expression_type(expr.right)
 
-    if left_type is not None and not is_numeric_type(left_type):
+    if left_type is not None and not is_integer_type(left_type):
         er.emit(validator.reporter, er.ERR.CE2004, expr.left.loc, op=expr.op)
         return
 
-    if right_type is not None and not is_numeric_type(right_type):
+    if right_type is not None and not is_integer_type(right_type):
         er.emit(validator.reporter, er.ERR.CE2004, expr.right.loc, op=expr.op)
         return
 
+    if expr.op in ("&", "|", "^"):
+        reject_mixed_numeric_operands(validator, expr, left_type, right_type)
+
+    if expr.op in ("<<", ">>"):
+        reject_impossible_shift_count(validator, expr, left_type)
+
+
+def _provable_shift_count(validator: 'TypeValidator', count: Expr) -> Optional[int]:
+    """The count as a number when the compiler can read it, else None.
+
+    A silent reporter is passed in because a count that is not a constant -- a
+    variable, a loop index, a call -- is ordinary code and not a diagnostic. Only
+    the answer is wanted here, never the evaluator's complaint about not finding
+    one.
+    """
+    from sushi_lang.internals.report import Reporter
+    from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+
+    evaluator = ConstantEvaluator(Reporter(), validator.const_table, validator.ast_constants)
+    value = evaluator.evaluate(count, BuiltinType.I64, None)
+    if value is None or not isinstance(value.value, int) or isinstance(value.value, bool):
+        return None
+    return value.value
+
+
+def reject_impossible_shift_count(validator: 'TypeValidator', expr: BinaryOp,
+                                  value_type: 'Optional[Type]') -> None:
+    """CE2512 when a shift count the compiler can read cannot fit the value.
+
+    The width of the shifted value is the limit: a count at or above it moves every
+    bit out of the type, and a negative count is not a shift. LLVM answers such a
+    shift with poison, so nothing reports the loss and the program prints whatever
+    the optimizer left behind. A count that cannot be read at compile time is left
+    alone -- a bit reader computes its count, and no check is emitted around it.
+    """
+    from .inference import integer_bit_width
+
+    if value_type is None:
+        return
+    width = integer_bit_width(value_type)
+    if width is None:
+        return
+
+    count = _provable_shift_count(validator, expr.right)
+    if count is None or 0 <= count < width:
+        return
+
+    er.emit(validator.reporter, er.ERR.CE2512, expr.right.loc,
+            count=count, value_type=display_type(value_type), max_count=width - 1)
+
 
 def validate_bitwise_unary(validator: 'TypeValidator', expr: UnaryOp) -> None:
-    """Validate that bitwise NOT (~) is used with numeric types only."""
+    """Validate that bitwise NOT (~) is used with an integer, floats included out."""
     operand_type = validator.infer_expression_type(expr.expr)
 
-    if operand_type is not None and not is_numeric_type(operand_type):
+    if operand_type is not None and not is_integer_type(operand_type):
         er.emit(validator.reporter, er.ERR.CE2004, expr.expr.loc, op=expr.op)
 
 

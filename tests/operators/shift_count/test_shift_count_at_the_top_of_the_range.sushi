@@ -1,0 +1,19 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n128\n1\n9223372036854775808\n"
+# The last legal count is one below the width, and it must stay legal: the check
+# refuses a count that cannot work, not one that is merely large.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let u8 one = 1
+    let u8 top = one << 7
+    println("{top}")
+
+    let u8 back = top >> 7
+    println("{back}")
+
+    let u64 wide = 1
+    let u64 high = wide << 63
+    println("{high}")
+
+    return Result.Ok(0)
