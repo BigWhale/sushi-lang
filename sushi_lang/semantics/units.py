@@ -35,6 +35,10 @@ class Unit:
     ast: Optional[Program]          # Parsed AST (None until loaded)
     dependencies: List[str]         # Other unit names this depends on (from use statements)
     public_symbols: Dict[str, Symbol]  # Symbols exported by this unit
+    # Set only on a unit that arrived from a source library. Every diagnostic raised
+    # against the unit carries it as a note, so a consumer is never shown a bare error
+    # about code they did not write.
+    provenance: Optional[str] = None
 
     def __post_init__(self):
         """Initialize computed fields after dataclass creation."""

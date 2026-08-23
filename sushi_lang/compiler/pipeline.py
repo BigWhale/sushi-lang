@@ -115,6 +115,110 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
             )
 
 
+def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter, args,
+                             cache_root: Path) -> tuple[object, set[str]] | None:
+    """Resolve every `use <lib/...>`, injecting source libraries as ordinary units.
+
+    A source library is not linked, registered or monomorphized through the library
+    registry: its units join the consumer's unit table and the ordinary passes compile
+    them, so a private helper stays private through `func.is_public` and there is no
+    export closure to compute. A binary library keeps the old path and reaches the
+    semantic analyzer through the resolver's `loaded_libraries`.
+
+    Returns (resolver-or-None, binary import paths), or None when a library failed to
+    load. A library's OWN `use <lib/...>` is not followed -- transitive library
+    dependencies are unsupported, and a consumer states each library it uses.
+    """
+    from sushi_lang.backend.library_errors import LibraryError
+    from sushi_lang.backend.library_format import LibraryFormat
+    from sushi_lang.backend.library_paths import LibraryResolver
+    from sushi_lang.internals import errors as er
+
+    wanted: set[str] = set()
+    for unit in list(unit_manager.units.values()):
+        if unit.ast is None or unit.provenance is not None:
+            continue
+        wanted.update(u.path for u in unit.ast.uses if u.is_library)
+    if not wanted:
+        return None, set()
+
+    resolver = LibraryResolver()
+    binary_imports: set[str] = set()
+
+    print(f"Linking {len(wanted)} custom libraries:")
+    for lib_path in sorted(wanted):
+        try:
+            slib_path = resolver.resolve_library(lib_path)
+            metadata = LibraryFormat.read_metadata_only(slib_path)
+            _check_library_platform(metadata, lib_path)
+            _check_library_compiler_version(
+                metadata, lib_path,
+                ignore=bool(getattr(args, "ignore_compiler_version", False)))
+
+            if metadata.get("kind") == "source":
+                _inject_library_source(unit_manager, slib_path, metadata, lib_path,
+                                       cache_root)
+            else:
+                binary_imports.add(lib_path)
+                resolver.loaded_libraries[metadata["library_name"]] = metadata
+
+            print(f"  - {' / '.join(lib_path.split('/'))}")
+        except LibraryError as e:
+            er.emit_exception(reporter, e)
+            return None
+        except SushiError:
+            raise
+    print()
+
+    return (resolver if binary_imports else None), binary_imports
+
+
+def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata: dict,
+                           lib_path: str, cache_root: Path) -> None:
+    """Write a source library's units to disk and add them to the unit table.
+
+    The units are materialized rather than kept in memory because two things read a
+    unit's source off its path: the per-unit Reporter, which needs the text to draw a
+    caret, and `compute_unit_fingerprint`, which hashes it to decide what to rebuild.
+    A real file also gives the consumer somewhere to look when the error is ours.
+
+    Names are prefixed `lib/<library>/<unit>`, so a library unit can never collide with
+    a consumer unit of the same name, and every intra-library dependency is rewritten
+    to match.
+    """
+    from sushi_lang.compiler.cache import CacheManager
+    from sushi_lang.internals.parser import parse_to_ast
+    from sushi_lang.backend.library_format import LibraryFormat
+
+    _metadata, sources = LibraryFormat.read_source_only(slib_path)
+    lib_name = metadata.get("library_name") or slib_path.stem
+    version = metadata.get("library_version") or "unknown"
+    provenance = (f"'{lib_name}' {version} is a source library, "
+                  f"compiled here because of `use <{lib_path}>`")
+
+    out_dir = CacheManager(cache_root).library_source_dir(lib_name)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    own = set(sources)
+
+    for unit_name, text in sources.items():
+        file_path = out_dir / f"{unit_name}.sushi"
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        if not file_path.exists() or file_path.read_text(encoding="utf-8") != text:
+            file_path.write_text(text, encoding="utf-8")
+
+        try:
+            module_ast, _tree = parse_to_ast(text, dump_parse=False)
+        except SushiError as e:
+            e.filename = e.filename or str(file_path)
+            raise
+
+        unit = Unit(name=f"lib/{lib_name}/{unit_name}", file_path=file_path,
+                    ast=module_ast, dependencies=[], public_symbols={},
+                    provenance=provenance)
+        unit.dependencies = [f"lib/{lib_name}/{d}" for d in unit.dependencies if d in own]
+        unit_manager.units[unit.name] = unit
+
+
 def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                        args, is_library: bool = False) -> int:
     """Handle multi-file compilation when use statements are present."""
@@ -142,6 +246,15 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         assert unit_name in unit_manager.units, \
             f"Unit '{unit_name}' was loaded but not found in unit manager"
 
+    # Libraries resolve BEFORE the symbol table and before the stdlib injector: a
+    # source library's units have to be in the table when it is built, and a bundled
+    # module the LIBRARY uses still needs injecting.
+    resolved = _resolve_library_imports(unit_manager, reporter, args,
+                                        src_path.resolve().parent)
+    if resolved is None:
+        return 2
+    library_linker, library_imports = resolved
+
     if not _inject_source_stdlib_units(unit_manager, reporter):
         return 2
 
@@ -153,15 +266,12 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         return 2
 
     stdlib_units = set()
-    library_imports = set()
     for unit in compilation_order:
         if unit.ast:
             for use_stmt in unit.ast.uses:
                 if use_stmt.is_stdlib:
                     stdlib_units.add(use_stmt.path)
                     activate_generic_unit(use_stmt.path)
-                elif use_stmt.is_library:
-                    library_imports.add(use_stmt.path)
 
     if len(compilation_order) > 1:
         print(f"Found {len(compilation_order)} units:")
@@ -198,32 +308,6 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
 
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
     get_stdlib_registry()
-
-    library_linker = None
-    if library_imports:
-        from sushi_lang.backend.library_errors import LibraryError
-        from sushi_lang.backend.library_paths import LibraryResolver
-        from sushi_lang.backend.library_format import LibraryFormat
-        library_linker = LibraryResolver()
-
-        print(f"Linking {len(library_imports)} custom libraries:")
-        for lib_path in sorted(library_imports):
-            try:
-                slib_path = library_linker.resolve_library(lib_path)
-                metadata = LibraryFormat.read_metadata_only(slib_path)
-                _check_library_platform(metadata, lib_path)
-                _check_library_compiler_version(
-                    metadata, lib_path,
-                    ignore=bool(getattr(args, "ignore_compiler_version", False)))
-                library_linker.loaded_libraries[metadata["library_name"]] = metadata
-
-                formatted_path = " / ".join(lib_path.split('/'))
-                print(f"  - {formatted_path}")
-            except LibraryError as e:
-                from sushi_lang.internals import errors as er
-                er.emit_exception(reporter, e)
-                return 2
-        print()
 
     multi_file_analyzer = SemanticAnalyzer(reporter, filename=main_unit_name,
                                            unit_manager=unit_manager,

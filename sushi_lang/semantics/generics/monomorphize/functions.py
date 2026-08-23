@@ -226,6 +226,7 @@ class FunctionMonomorphizer:
                 concrete_func,
                 program=target_program if is_single_file else None,
                 units=None if is_single_file else units,
+                home_unit=getattr(generic_func, "unit_name", None),
             )
 
             worklist.update(self.monomorphizer.pending_instantiations)

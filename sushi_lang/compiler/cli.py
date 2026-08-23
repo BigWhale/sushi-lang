@@ -216,7 +216,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument(
         "--lib-kind",
         choices=["source", "binary", "hybrid"],
-        default="binary",
+        default="source",
         help="How the library ships: source text, compiled bitcode, or both",
     )
     ap.add_argument(

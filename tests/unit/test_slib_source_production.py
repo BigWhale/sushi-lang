@@ -107,14 +107,17 @@ def test_a_bundled_stdlib_module_does_not_ship(tmp_path):
 
 # --- The other two kinds ----------------------------------------------------
 
-def test_binary_is_still_the_default(tmp_path):
-    # Phase 4 flips this once a consumer can compile a source library.
-    result, out = _build(tmp_path)
+def test_binary_is_available_on_request(tmp_path):
+    # Source is the default since phase 4 (test_slib_source_consumption covers that).
+    # Asking for binary must still get a library with bitcode and no source.
+    result, out = _build(tmp_path, "--lib-kind", "binary")
     assert result.returncode == 0, result.stdout + result.stderr
 
     metadata, source = LibraryFormat.read_source_only(out)
+    _meta, bitcode = LibraryFormat.read(out)
     assert metadata["kind"] == "binary"
     assert source == {}
+    assert bitcode != b""
 
 
 def test_a_hybrid_carries_source_and_bitcode(tmp_path):

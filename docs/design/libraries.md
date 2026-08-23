@@ -1,21 +1,17 @@
 # Design: `.slib` Libraries — source-first distribution
 
-**Status: landing in phases.** §1–3, §5 and §6 describe code that runs today. §4 is the
-consumer half and is **not built yet**: a source library can be produced, and nothing
-reads one back. Each phase below moves one part from DESIGN to BUILT; this banner
-records where the line is.
+**Status: landing in phases.** §1–6 describe code that runs today; only the tooling and
+user-facing doc passes are left. Each phase below moves one part from DESIGN to BUILT;
+this banner records where the line is.
 
 | Phase | Content | State |
 |---|---|---|
 | 1 | This document | BUILT |
 | 2 | Container VERSION 4, manifest fields, a `semver` module under `sushi_lang/internals/`, CE3503/CE3505/CE3506 | BUILT |
 | 3 | `--lib-kind source` writes the source section; the platform gate becomes kind-conditional | BUILT |
-| 4 | The consumer compiles library source as ordinary units | DESIGN |
+| 4 | The consumer compiles library source as ordinary units; `--lib-kind` defaults to `source` | BUILT |
 | 5 | `slib-info` and the `sushic` fallback report the v4 fields | DESIGN |
 | 6 | User-facing docs | DESIGN |
-
-Until phase 4 lands, `--lib-kind` still defaults to `binary`: a default that produced
-libraries nothing could consume would be worse than no flag.
 
 Written for a compiler contributor. The user-facing guide is
 [`docs/libraries.md`](../libraries.md), and the on-disk byte format is specified in
@@ -177,6 +173,26 @@ Three rules make this sound:
 - **The registry is skipped.** For `kind = "source"`, none of the
   `_register_library_*` helpers in `semantics/semantic_analyzer.py` runs. A library
   unit is an ordinary unit, so the ordinary passes handle it.
+- **Library units are COLLECTED first.** The compilation order puts dependents before
+  dependencies, which is right for codegen and wrong for collection: a consumer's
+  `extend i32 with Display` is checked against the perks visible when its own unit is
+  collected, so a perk the library declares has to be in the table already. Seeding it
+  ahead of the loop the way `_seed_library_perks` does for a binary library would
+  register the same perk twice (CE4001), because this one also arrives in a real unit.
+- **A consumer definition SHADOWS a library one, silently.** Same rule the binary path
+  documents in §7, now enforced for functions, generics and perk impls by
+  `passes/collect/`. Without it, `--lib-kind` would change program semantics instead of
+  just distribution. A shadowed perk impl is also dropped from its unit's AST: both
+  bodies are ordinary Sushi in ordinary units, so leaving it defines the method symbol
+  twice. (A binary library needs no such step -- its body is `weak_odr` and the linker
+  discards it.)
+- **A monomorphized instance of a library generic goes home to the library unit.**
+  `register_synthesized_function` stores it in the unit that declared the generic
+  rather than the first unit, so a library generic calling a library-private helper is
+  an intra-unit call. This is what replaces the export closure. The instance is folded
+  into that unit's fingerprint (`SYNTHESIZED:`), because which instances a library unit
+  carries depends on what the consumer asked for, and its own source hash cannot say
+  so. The rule is applied to source-library units only -- see §4.6.
 
 Three consequences follow, and they are the point of the design:
 
@@ -217,7 +233,27 @@ existing ladder in `internals/report.py` covers it.
 The user-visible contract is that a consumer must never see a bare error with no
 explanation of why code they did not write is being compiled.
 
-### 4.5 What the source path does not solve
+### 4.5 Where CE5007 went
+
+The binary path needs CE5007 because an export-closure private shares the consumer's
+flat namespace, so a consumer symbol of the same name would silently change what the
+library's own shipped bodies call. Namespaced units remove the shared namespace, and
+the instance-goes-home rule above removes the need to ship privates at all, so the
+clash cannot occur. `tests/libs/helpers/private_closure_lib.sushi` is therefore built
+as a BINARY library by the test runner (`BINARY_ONLY_HELPERS`): the code it guards is
+binary-path machinery, and `test_err_lib_private_clash` asserts a rule that only exists
+there.
+
+### 4.6 A deliberately narrow rule
+
+"A monomorphized instance belongs to the unit that declared the generic" is true of
+ordinary multi-unit programs and of the bundled source stdlib as well, but it is
+applied only to source-library units. Moving every instance breaks lookup of a
+monomorphized `<collections/iter>` combinator
+(`KeyError: unknown function: map__i32_i32`), and finding out why is its own change.
+Everything outside a source library keeps landing in the first unit.
+
+### 4.7 What the source path does not solve
 
 A source library is portable as **text**. It is not automatically portable in
 **behaviour**.
@@ -637,14 +673,16 @@ an internal simplification.
   enum "infinite-loops the monomorphizer's type substitutor... even for a purely
   in-program definition": stale — the same definition compiles and runs correctly today.
   The comment predates the tie-the-knot fix and was not updated when it landed.
-- **`docs/library-format.md`**, the "Version" subsection and the "Writing" steps both
-  say the container version is `1`, while the binary-layout diagram above them and
-  `LibraryFormat.VERSION` in code disagree. Fixed in the phase-6 doc pass.
+- **`docs/library-format.md`** disagrees with itself about the container version, and
+  this entry described the disagreement the wrong way round. Measured at 0.11.1: the
+  layout diagram says `2`, the "Version" subsection and the "Writing" steps say `3`, and
+  `LibraryFormat.VERSION` in code says `4`. All three places in the document need to say
+  `4`. Fixed in the phase-6 doc pass.
 - The manifest schema shown in `docs/library-format.md` lists `is_generic`/`type_params`
   fields on `public_functions`/`structs`/`enums` entries as if they vary; in the actual
   producer generic declarations are filtered out of these lists entirely (they route to
   `templates.*`), so on every record that does appear here `is_generic` is always
   `False` and `type_params` is always `[]`. Fixed in the phase-6 doc pass.
 - **`CLAUDE.md` Known Limitation #6** says a `.slib` "is not portable across platforms".
-  True for a binary library, false for a source library once phase 4 lands. Narrowed in
-  the phase-6 doc pass.
+  True for a binary library, false for a source library. Narrowed in the phase-6 doc
+  pass.

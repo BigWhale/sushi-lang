@@ -14,6 +14,10 @@ from sushi_lang import __version__ as compiler_version
 
 
 CACHE_DIR_NAME = "__sushi_cache__"
+# Where a source library's units are written out. They need to be REAL files:
+# diagnostics read a unit's source off disk to render a caret, and the unit
+# fingerprint hashes those same bytes to decide what to rebuild.
+LIBSRC_DIR = "libsrc"
 UNITS_DIR = "units"
 STDLIB_DIR = "stdlib"
 LIBS_DIR = "libs"
@@ -32,6 +36,7 @@ class CacheManager:
         self.units_path = self.cache_path / UNITS_DIR
         self.stdlib_path = self.cache_path / STDLIB_DIR
         self.libs_path = self.cache_path / LIBS_DIR
+        self.libsrc_path = self.cache_path / LIBSRC_DIR
         self._target_triple = llvm.get_default_triple()
 
     @property
@@ -50,7 +55,8 @@ class CacheManager:
 
     def ensure_dirs(self) -> None:
         """Create the cache directory structure if it doesn't exist."""
-        for path in (self.units_path, self.stdlib_path, self.libs_path):
+        for path in (self.units_path, self.stdlib_path, self.libs_path,
+                     self.libsrc_path):
             path.mkdir(parents=True, exist_ok=True)
 
     def wipe(self) -> None:
@@ -68,6 +74,10 @@ class CacheManager:
     def lib_object_path(self, lib_name: str, fingerprint: str) -> Path:
         """Cached .o path for a library."""
         return self._object_path(self.libs_path, lib_name.replace("/", "_"), fingerprint)
+
+    def library_source_dir(self, lib_name: str) -> Path:
+        """Directory holding one source library's materialized units."""
+        return self.libsrc_path / lib_name.replace("/", "_")
 
     def has_cached_unit(self, unit_name: str, fingerprint: str) -> bool:
         return self.unit_object_path(unit_name, fingerprint).exists()
