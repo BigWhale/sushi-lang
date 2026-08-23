@@ -110,6 +110,13 @@ class LibraryManifestGenerator:
 
         library_name = output_path.stem
 
+        # The public API is extracted FIRST, because that is what can reject the library
+        # (CE0116, CE5002). A rejected build writes no container at all, and the pipeline
+        # turns the reporter's state into the exit code (#436).
+        public_functions = self._extract_public_functions(units)
+        if self.analyzer.reporter.has_errors:
+            return
+
         manifest = {
             "sushi_lib_version": "2.0",
             "library_name": library_name,
@@ -120,7 +127,7 @@ class LibraryManifestGenerator:
             "compiled_at": datetime.now(timezone.utc).isoformat(),
             "platform": platform_name,
             "compiler_version": VERSION,
-            "public_functions": self._extract_public_functions(units),
+            "public_functions": public_functions,
             "public_constants": self._extract_public_constants(units),
             "structs": self._extract_structs(units),
             "enums": self._extract_enums(units),
@@ -159,25 +166,25 @@ class LibraryManifestGenerator:
                 # consumer. A v2 pack `...Ts` carries type_params and left through the
                 # template route above. The discriminator is is_variadic vs is_pack, NOT
                 # the `...` spelling they share.
+                # A rejection emits and moves on. `generate()` writes nothing once the
+                # reporter holds an error, so the partial list this returns is discarded,
+                # and every bad export is named in one build instead of one per build.
+                # Raising here reached the top-level guard as a spurious CE0000 (#436).
                 if any(getattr(p, "is_variadic", False) for p in func.params):
                     er.emit(self.analyzer.reporter, er.ERR.CE0116,
                             getattr(func, "name_span", None) or func.loc, name=func.name)
-                    raise ValueError(
-                        f"CE0116: public function '{func.name}' is variadic and "
-                        f"cannot appear in a library public API"
-                    )
+                    continue
 
-                # CE5002: reject foreign `ptr` in a public library signature.
+                # CE5002: reject foreign `ptr` in a public library signature. The
+                # typecheck pass's public-fn ptr fence (CE5008) tests the same condition
+                # and exits earlier, so this is the backstop for a direct producer call.
                 exposes_ptr = self._contains_foreign_ptr(func.ret) or any(
                     self._contains_foreign_ptr(p.ty) for p in func.params
                 )
                 if exposes_ptr:
                     er.emit(self.analyzer.reporter, er.ERR.CE5002,
                             getattr(func, "name_span", None) or func.loc, name=func.name)
-                    raise ValueError(
-                        f"CE5002: public function '{func.name}' exposes a foreign `ptr` "
-                        f"and cannot appear in a library public API"
-                    )
+                    continue
 
                 public_funcs.append({
                     "name": func.name,
@@ -358,16 +365,26 @@ class LibraryManifestGenerator:
         shipped_consts: dict[str, tuple] = {}
         visited: set[str] = set()
 
+        rejected = False
+
         def _reject(root, symbol: str) -> None:
+            """Emit CE5006 and mark the closure rejected.
+
+            This used to raise ValueError, which reached the top-level guard and printed
+            a spurious CE0000 over the real diagnostic (#436). The raise also carried the
+            control flow: it stopped the walk, and every caller below relies on that, so
+            each one now returns explicitly once this has fired.
+            """
+            nonlocal rejected
+            rejected = True
             er.emit(self.analyzer.reporter, er.ERR.CE5006,
                     getattr(root, "name_span", None) or root.loc,
                     name=root.name, symbol=symbol)
-            raise ValueError(
-                f"CE5006: public generic '{root.name}' references "
-                f"un-shippable library symbol '{symbol}' and cannot be exported"
-            )
 
         def _walk(node, root) -> None:
+            if rejected:
+                return
+
             refs: set[str] = set()
             self._scan_referenced_symbols(node, refs)
             self._scan_referenced_type_names(node, refs)
@@ -377,16 +394,21 @@ class LibraryManifestGenerator:
             own |= {p.name for p in (getattr(node, "params", None) or [])}
 
             for name in sorted(refs - own - visited):
+                if rejected:
+                    return
                 if name in external_namespaces:
                     _reject(root, name)
+                    return
                 elif name in priv_concrete_fns:
                     fn, src = priv_concrete_fns[name]
                     if any(getattr(p, "is_variadic", False) for p in fn.params):
                         _reject(root, name)
+                        return
                     if self._contains_foreign_ptr(fn.ret) or any(
                         self._contains_foreign_ptr(p.ty) for p in fn.params
                     ):
                         _reject(root, name)
+                        return
                     visited.add(name)
                     shipped_fns[name] = (fn, src)
                     _walk(fn, root)
@@ -407,6 +429,8 @@ class LibraryManifestGenerator:
 
         for node, _source in exported:
             _walk(node, node)
+            if rejected:
+                break
 
         return {
             "private_functions": list(shipped_fns.values()),

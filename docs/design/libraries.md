@@ -670,11 +670,12 @@ would compile at a consumer on the author's platform and fail on any other, whic
 the failure conditional compilation is supposed to describe. Leaving CE5006 as it is keeps
 the honest answer ("this cannot be portable yet") until there is a way to say so.
 
-**A rejected library build reports a spurious CE0000 after the real diagnostic.** The three
-rejection sites in `sushi_lang/backend/library_manifest.py` emit their diagnostic into the
-reporter and then `raise ValueError` to stop the build. Nothing catches it, so the top-level
-guard in `sushi_lang/compiler/cli.py` renders it as an internal compiler error on top of the
-correct message:
+**A rejected library build reported a spurious CE0000 after the real diagnostic.**
+FIXED in #436. The three rejection sites in `sushi_lang/backend/library_manifest.py` emitted
+their diagnostic into the reporter and then raised `ValueError` to stop the build. Nothing
+caught it, so the top-level guard in `sushi_lang/compiler/cli.py` rendered it as an internal
+compiler error on top of the correct message, telling the user to report a compiler bug that
+was not one:
 
 ```
 varlib.sushi:1:11: error [CE0116]: public function 'total' is variadic and cannot appear ...
@@ -682,11 +683,22 @@ varlib.sushi: error [CE0000]: internal compiler error: ValueError: CE0116: publi
   = note: this is a bug in the Sushi compiler, not in your program
 ```
 
-The exit code is already 2 and the real diagnostic is already correct, so this is cosmetic --
-but it tells a user to report a compiler bug that is not one. The fix is not a `try/except`
-around the raise: it is for the producer to emit and return, and for `pipeline.py` to gate on
-`reporter.has_errors` the way it already does before codegen. That is a behaviour change in
-the library build path, so it is its own change rather than part of a doc pass.
+Each site now emits and returns, and control flow belongs to `pipeline.py`, which gates on
+`reporter.has_errors` the way it already does before codegen. There are two gates, and the
+placement is the contract: the first sits after the export closure and BEFORE the bitcode
+compilation, so a CE5006 rejection still costs nothing; the second sits after
+`generate()`, which itself extracts the public API first and returns without writing once
+the reporter holds an error. A rejected build therefore leaves no `.slib` behind and prints
+no success line.
+
+Two things surfaced while fixing it. `_reject` inside the export-closure walk had been
+non-returning, so the code after each call site was unreachable; each caller now returns
+explicitly, which keeps the one-diagnostic-per-build behaviour the raise used to give.
+And the producer's **CE5002 is unreachable from a CLI build**: the typecheck pass's public-fn
+`ptr` fence (`passes/types/signatures.py`, CE5008) tests the identical condition and exits
+earlier. The site is kept as the backstop for a direct producer call, and
+`tests/unit/test_lib_rejection_diagnostics.py` pins the shadowing so a missing CE5002 is
+never read as a regression.
 
 ## Rejected alternatives
 

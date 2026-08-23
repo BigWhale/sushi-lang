@@ -404,6 +404,11 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
             src_path.resolve().parent, args.lib_version, out_path.stem)
         manifest_gen = LibraryManifestGenerator(analyzer)
         templates = manifest_gen._extract_templates(compilation_order)
+        # A rejected export closure (CE5006) ends the build HERE, before the expensive
+        # bitcode compilation. The producer emits and returns; this gate is what stops
+        # the build, the same way the pre-codegen gate above does (#436).
+        if reporter.has_errors:
+            return 2
         closure_fn_names = set(
             (templates.get("closure_summary") or {}).get("private_functions", [])
         )
@@ -424,6 +429,11 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
 
         manifest_gen.generate(compilation_order, out_path, bitcode, templates=templates,
                               library_version=library_version, kind=kind, source=source)
+        # CE0116 and CE5002 are found while the public API is extracted, so the second
+        # gate is here. `generate()` wrote nothing; this is what keeps the success line
+        # from following a diagnostic.
+        if reporter.has_errors:
+            return 2
 
         if args.write_ll:
             try:
