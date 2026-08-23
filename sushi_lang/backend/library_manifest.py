@@ -12,6 +12,29 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 
 
+def own_units(units: list['Unit']) -> list['Unit']:
+    """The library's OWN units -- the compilation order minus what came bundled.
+
+    A `use <collections/iter>` injects the bundled module as an ordinary unit, so it
+    reaches the manifest generator alongside the library's own files. The consumer has
+    its own copy of every bundled module, so shipping ours would put a second
+    definition of each of its symbols into their build. One filter, used by both the
+    `units` index and the source section, so the two can never disagree.
+    """
+    from sushi_lang.semantics.stdlib_registry import SOURCE_STDLIB_MODULES
+
+    return [u for u in units if u.name not in SOURCE_STDLIB_MODULES]
+
+
+def collect_unit_source(units: list['Unit']) -> dict[str, str]:
+    """Read every own unit's complete source text, keyed by unit name.
+
+    Whole files, not the per-declaration slices the binary path ships: a source library
+    has no export closure to compute, because there is nothing to leave out.
+    """
+    return {u.name: u.file_path.read_text(encoding="utf-8") for u in own_units(units)}
+
+
 def _requires_compiler(compiler_version: str) -> str:
     """The constraint a build stamps: the building compiler's minor, when it parses."""
     from sushi_lang.internals.semver import InvalidVersion, Version, default_compiler_req
@@ -92,7 +115,7 @@ class LibraryManifestGenerator:
             "library_name": library_name,
             "library_version": library_version,
             "kind": kind,
-            "units": [unit.name for unit in units],
+            "units": [unit.name for unit in own_units(units)],
             "requires_compiler": _requires_compiler(VERSION),
             "compiled_at": datetime.now(timezone.utc).isoformat(),
             "platform": platform_name,

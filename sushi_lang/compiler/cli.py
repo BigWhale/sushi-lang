@@ -214,6 +214,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Compile to library bitcode (no main() required)",
     )
     ap.add_argument(
+        "--lib-kind",
+        choices=["source", "binary", "hybrid"],
+        default="binary",
+        help="How the library ships: source text, compiled bitcode, or both",
+    )
+    ap.add_argument(
         "--lib-version",
         metavar="X.Y.Z",
         help="Version of the library being built (a nori.toml beside the sources wins)",
