@@ -1,0 +1,55 @@
+# Every way a raw deflate stream can be rejected. The fixtures are hand-built
+# bit streams, not zlib output, because zlib cannot produce them.
+# EXPECT_STDOUT_EXACT: "reserved block type\nstored block length does not match its complement\ntruncated input\ndistance reaches before the start of the output\nbad length or distance symbol\ntruncated input\ntruncated input\n"
+# EXPECT_NO_LEAKS: true
+
+use <compression/zlib>
+
+# show: print the error for a stream that must not decode. A success here is a
+# failure of the test, so it prints a marker instead of a length.
+fn show(u8[] blob) ~:
+    match inflate_raw(blob):
+        Result.Ok(out) ->
+            println("UNEXPECTED OK len={out.len()}")
+        Result.Err(e) ->
+            println("{zlib_error_text(e)??}")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    # BTYPE 3 is reserved
+    let u8[] bad_btype = from([0x07])
+    show(bad_btype)??
+
+    # a stored block whose NLEN is not the complement of LEN
+    let u8[] bad_nlen = from([0x01, 0x05, 0x00, 0x00, 0x00, 0x68, 0x65, 0x6c, 0x6f, 0x6f])
+    show(bad_nlen)??
+
+    # a stored block that promises 5 payload bytes and carries 2
+    let u8[] short_stored = from([0x01, 0x05, 0x00, 0xfa, 0xff, 0x68, 0x65])
+    show(short_stored)??
+
+    # a fixed block whose first symbol is a match, with no output to copy from
+    let u8[] bad_dist = from([0x03, 0x02])
+    show(bad_dist)??
+
+    # length symbol 286 has a code in the fixed alphabet but no meaning.
+    # Real zlib rejects this stream too, with "invalid literal/length code".
+    let u8[] bad_lensym = from([0x1b, 0x03])
+    show(bad_lensym)??
+
+    # a valid fixed stream cut in half
+    let u8[] truncated = from([
+        0x2b, 0xc9, 0x48, 0x55, 0x28, 0x2c, 0xcd, 0x4c, 0xce, 0x56, 0x48, 0x2a,
+        0xca, 0x2f, 0xcf, 0x53, 0x48, 0xcb, 0xaf, 0x50, 0xc8, 0x2a, 0xcd, 0x2d,
+        0x28
+    ])
+    show(truncated)??
+
+    # no input at all
+    let u8[] nothing = new()
+    show(nothing)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

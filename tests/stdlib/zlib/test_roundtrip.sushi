@@ -1,0 +1,79 @@
+# Compress then decompress, in process, over the shapes that break a DEFLATE
+# encoder: nothing, one byte, a run at the maximum match length, a long run,
+# incompressible bytes, and a pattern whose matches sit at distance 2.
+# Each line reports the compressed size, the recovered size and its checksum,
+# so a wrong ratio and a wrong payload are both visible.
+# EXPECT_STDOUT_EXACT: "empty ok=1 smaller=0\none ok=1 smaller=0\nrun300 ok=1 smaller=1\nrun100k ok=1 smaller=1\nalt80k ok=1 smaller=1\nramp ok=1 smaller=0\nprose ok=1 smaller=1\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 120
+
+use <compression/zlib>
+
+# check: round-trip through the zlib container at level 6 and report whether
+# the bytes came back and whether the stream actually got smaller.
+fn check(string name, u8[] data) ~ | ZError:
+    let u8[] packed = zlib_compress(data, 6)??
+    let u8[] back = zlib_uncompress(packed)??
+    let i32 ok = 0
+    if (back.len() == data.len()):
+        if (adler32(back).realise(0) == adler32(data).realise(1)):
+            ok := 1
+    let i32 smaller = 0
+    if (packed.len() < data.len()):
+        smaller := 1
+    println("{name} ok={ok} smaller={smaller}")
+    return Result.Ok(~)
+
+fn repeat(u8 b, i32 n) u8[] | ZError:
+    let u8[] out = new()
+    let i32 i = 0
+    while (i < n):
+        out.push(b)
+        i := i + 1
+    return Result.Ok(out)
+
+fn run_test() i32 | ZError:
+    let u8[] nothing = new()
+    check("empty", nothing)??
+
+    let u8[] one = from([65])
+    check("one", one)??
+
+    let u8[] run300 = repeat(97 as u8, 300)??
+    check("run300", run300)??
+
+    let u8[] run100k = repeat(97 as u8, 100000)??
+    check("run100k", run100k)??
+
+    # alternating bytes: every match sits at distance 2
+    let u8[] alt = new()
+    let i32 i = 0
+    while (i < 80000):
+        alt.push((97 + (i % 2)) as u8)
+        i := i + 1
+    check("alt80k", alt)??
+
+    # a ramp of 256 distinct bytes has no repeats to find
+    let u8[] ramp = new()
+    i := 0
+    while (i < 256):
+        ramp.push(i as u8)
+        i := i + 1
+    check("ramp", ramp)??
+
+    # a repeating sentence, the ordinary case
+    let u8[] prose = new()
+    let u8[] unit = from([116, 104, 101, 32, 113, 117, 105, 99, 107, 32, 98, 114, 111, 119, 110, 32, 102, 111, 120, 46, 32])
+    i := 0
+    while (i < 500):
+        let i32 j = 0
+        while (j < unit.len()):
+            prose.push(unit[j])
+            j := j + 1
+        i := i + 1
+    check("prose", prose)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

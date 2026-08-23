@@ -86,7 +86,8 @@ def _build_err_variant(
 
     if error_value is not None:
         data_array_type = enum_llvm_type.elements[1]
-        temp_alloca = codegen.builder.alloca(data_array_type, name="err_data_temp")
+        # ENTRY block: an Err built inside a loop must not grow the frame (BUGS.md B1).
+        temp_alloca = codegen.memory.entry_alloca(data_array_type, "err_data_temp")
         data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="err_data_ptr")
 
         error_ptr_typed = codegen.builder.bitcast(

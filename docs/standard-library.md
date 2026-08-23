@@ -15,6 +15,11 @@ Complete reference for Sushi's standard library modules and types.
 - [Strings](stdlib/collections/strings.md) - 33 string manipulation methods
 - [Iter combinators](stdlib/collections/iter.md) - `map`/`filter`/`fold`/`compose` over `List@(T)`
 
+### Encoding and Compression
+- [Compression (zlib)](stdlib/compression/zlib.md) - DEFLATE and the zlib container (RFC 1950/1951)
+- [MessagePack](stdlib/encoding/msgpack.md) - MessagePack decoder
+- [Slib reader](stdlib/toolchain/slib.md) - `.slib` header and metadata reader
+
 ### I/O Operations
 - [Console I/O](stdlib/io/console.md) - println, print, stdin/stdout/stderr
 - [File I/O](stdlib/io/files.md) - File operations with error handling
@@ -34,6 +39,8 @@ Complete reference for Sushi's standard library modules and types.
 ```sushi
 use <collections/strings>  # String methods
 use <collections/iter>     # Higher-order combinators (map/filter/fold/compose)
+use <compression/zlib>     # DEFLATE and the zlib container
+use <encoding/msgpack>     # MessagePack decoder
 use <io/stdio>             # Console I/O
 use <io/files>             # File operations
 use <math>                 # Math functions
@@ -177,6 +184,15 @@ match open("output.txt", FileMode.Write()):
 - `map(xs, f)`, `filter(xs, pred)`, `fold(xs, init, f)`, `compose(nom g, nom f)`
 - Ordinary generic free functions (the first Sushi-source stdlib module, no bitcode)
 - Copy/primitive element types; pass a typed-param lambda (`|i32 x| ...`) or a function reference
+
+### Compression (`use <compression/zlib>`)
+
+**zlib** - DEFLATE and the RFC 1950 container, written in Sushi (no C library, no FFI):
+- `zlib_compress(src, level)`, `zlib_uncompress(src)` - the container, with an Adler-32 trailer
+- `deflate_raw(src, level)`, `inflate_raw(src)` - a bare RFC 1951 stream
+- `adler32(data)`, `zlib_error_text(e)` - the checksum, and one stable line per error
+- The decoder reads stored, fixed and dynamic blocks; the encoder emits stored and fixed
+  only, so its ratio is short of a full encoder's
 
 ### I/O (`use <io/stdio>`, `use <io/files>`)
 

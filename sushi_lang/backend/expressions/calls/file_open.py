@@ -72,7 +72,8 @@ def construct_file_result_err(codegen: 'LLVMCodegen', file_error: ir.Value) -> i
         codegen, file_result_llvm_type, variant_index=1, data=None, name_prefix="FileResult_Err"
     )
 
-    temp_alloca = codegen.builder.alloca(data_array_type, name="err_data_temp")
+    # ENTRY block: an open() inside a loop must not grow the frame (BUGS.md B1).
+    temp_alloca = codegen.memory.entry_alloca(data_array_type, "err_data_temp")
     data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="err_data_ptr")
 
     file_error_llvm_type = file_error.type

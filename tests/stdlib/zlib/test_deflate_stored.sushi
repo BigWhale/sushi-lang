@@ -1,0 +1,44 @@
+# deflate_raw at level 0 emits stored blocks: a three-bit header padded to a
+# byte, then LEN and its complement, then the bytes unchanged. The framing is
+# checked against the bytes Python zlib writes at level 0.
+# A 65536-byte payload needs two blocks, because one block carries 65535.
+# EXPECT_STDOUT_EXACT: "empty=5 1,0,0,255,255\ntext=20 1,15,0,240,255\nround=15 adler=777324008\nbig=65546 round=65536 adler=1932721212\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 60
+
+use <compression/zlib>
+
+# header: the five framing bytes of a stored block, as decimal.
+fn header(u8[] b) string | ZError:
+    let string s = "{b[0]}"
+    let i32 i = 1
+    while (i < 5):
+        s := "{s},{b[i]}"
+        i := i + 1
+    return Result.Ok(s)
+
+fn run_test() i32 | ZError:
+    let u8[] nothing = new()
+    let u8[] z0 = deflate_raw(nothing, 0)??
+    println("empty={z0.len()} {header(z0)??}")
+
+    let u8[] text = from([77, 111, 115, 116, 108, 121, 32, 72, 97, 114, 109, 108, 101, 115, 115])
+    let u8[] z1 = deflate_raw(text, 0)??
+    println("text={z1.len()} {header(z1)??}")
+
+    let u8[] back = inflate_raw(z1)??
+    println("round={back.len()} adler={adler32(back).realise(0)}")
+
+    let u8[] big = new()
+    let i32 i = 0
+    while (i < 65536):
+        big.push((i % 251) as u8)
+        i := i + 1
+    let u8[] z2 = deflate_raw(big, 0)??
+    let u8[] big_back = inflate_raw(z2)??
+    println("big={z2.len()} round={big_back.len()} adler={adler32(big_back).realise(0)}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

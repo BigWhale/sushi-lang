@@ -1,0 +1,51 @@
+# Adler-32 over known vectors. The 100 KB payloads force the mod-65521 wrap in
+# both sums; the reference values come from Python zlib.adler32.
+# The two 100 KB arrays are built one push at a time, so the default 10 s
+# timeout is not enough on a cold cache.
+# EXPECT_STDOUT_EXACT: "empty=1\na=6422626\ntext=777324008\nzeros=2259615745\nff=345649196\nseq=2918612865\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 60
+
+use <compression/zlib>
+
+# repeat: an array of n copies of b.
+fn repeat(u8 b, i32 n) u8[]:
+    let u8[] out = new()
+    let i32 i = 0
+    while (i < n):
+        out.push(b)
+        i := i + 1
+    return Result.Ok(out)
+
+# ramp: the bytes 0 through 255, in order.
+fn ramp() u8[]:
+    let u8[] out = new()
+    let i32 i = 0
+    while (i < 256):
+        out.push(i as u8)
+        i := i + 1
+    return Result.Ok(out)
+
+fn run_test() i32:
+    let u8[] nothing = new()
+    println("empty={adler32(nothing)??}")
+
+    let u8[] one = from([97])
+    println("a={adler32(one)??}")
+
+    let u8[] text = from([77, 111, 115, 116, 108, 121, 32, 72, 97, 114, 109, 108, 101, 115, 115])
+    println("text={adler32(text)??}")
+
+    let u8[] zeros = repeat(0 as u8, 100000)??
+    println("zeros={adler32(zeros)??}")
+
+    let u8[] ff = repeat(255 as u8, 100000)??
+    println("ff={adler32(ff)??}")
+
+    let u8[] seq = ramp()??
+    println("seq={adler32(seq)??}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

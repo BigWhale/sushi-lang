@@ -69,7 +69,11 @@ def emit_enum_constructor_from_method_call(
         # alloca 8-aligned (#300 phase 2), so the naturally aligned field offsets below
         # are naturally aligned absolutely.
         data_array_type = llvm_enum_type.elements[1]  # [K x i64] array
-        temp_alloca = codegen.builder.alloca(data_array_type, name="enum_data_temp")
+        # ENTRY block, not the current position: constructing an enum inside a loop
+        # would otherwise allocate again every iteration and never release it until
+        # the function returned (BUGS.md B1). One slot per site is enough, because the
+        # packed payload is loaded back out before the expression finishes.
+        temp_alloca = codegen.memory.entry_alloca(data_array_type, "enum_data_temp")
 
         data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 

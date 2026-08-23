@@ -376,7 +376,11 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
     data_array = enum_utils.extract_enum_data(codegen, scrutinee_value, name="match_data")
 
     data_array_type = scrutinee_value.type.elements[1]
-    temp_alloca = codegen.builder.alloca(data_array_type, name="match_data_storage")
+    # ENTRY block, not the current position: a match inside a loop would otherwise
+    # allocate again every iteration and never release it (BUGS.md B1). Reuse is safe
+    # because every value binding is loaded OUT of this copy below, and a reference
+    # binding deliberately points into the scrutinee instead (#253).
+    temp_alloca = codegen.memory.entry_alloca(data_array_type, "match_data_storage")
     codegen.builder.store(data_array, temp_alloca)
 
     data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")

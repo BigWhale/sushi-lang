@@ -338,7 +338,8 @@ def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
     ok_enum = ir.Constant(result_llvm_type, ir.Undefined)
     ok_enum = codegen.builder.insert_value(ok_enum, ir.Constant(codegen.types.i32, 0), 0, name="Result_Ok_tag")
     data_array_type = result_llvm_type.elements[1]
-    temp_alloca = codegen.builder.alloca(data_array_type, name="enum_data_temp")
+    # ENTRY block: a push inside a loop must not grow the frame (BUGS.md B1).
+    temp_alloca = codegen.memory.entry_alloca(data_array_type, "enum_data_temp")
     data_ptr = codegen.builder.bitcast(temp_alloca, ir.PointerType(codegen.types.i8), name="data_ptr")
     arg_ptr = codegen.builder.bitcast(data_ptr, ir.PointerType(codegen.types.i32), name="arg0_ptr_typed")
     codegen.builder.store(ir.Constant(codegen.types.i32, 0), arg_ptr)
@@ -434,7 +435,8 @@ def emit_list_remove(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
     some_enum = codegen.builder.insert_value(some_enum, ir.Constant(codegen.types.i32, 0), 0, name="Maybe_Some_tag")
 
     data_array_type = maybe_llvm_type.elements[1]
-    temp_alloca = codegen.builder.alloca(data_array_type, name="enum_data_temp")
+    # ENTRY block: a pop inside a loop must not grow the frame (BUGS.md B1).
+    temp_alloca = codegen.memory.entry_alloca(data_array_type, "enum_data_temp")
     data_ptr_enum = codegen.builder.bitcast(temp_alloca, ir.PointerType(codegen.types.i8), name="data_ptr")
 
     arg_ptr = codegen.builder.bitcast(data_ptr_enum, ir.PointerType(element_llvm_type), name="arg0_ptr_typed")

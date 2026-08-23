@@ -1,0 +1,96 @@
+# An enum payload slot must live in the function entry block, not in the loop
+# that uses it.
+#
+# Every one of these slots used to be allocated at its point of use, so inside a
+# loop it landed in the loop body. LLVM only releases an alloca at function
+# return, so each iteration took another 16 or 32 bytes and a loop of a few
+# hundred thousand walked off the stack guard page with SIGSEGV. The counts here
+# each demand tens of MB against an 8 MB stack, so any slot that moves back into
+# a loop fails this test loudly rather than subtly.
+#
+# Four paths, one bug: `??` unwrapping, enum construction, match payload
+# extraction, and the Result that a List method returns.
+# EXPECT_STDOUT_EXACT: "sum=999999000000\ndeep=2000000\ntagged=1000000\nlisted=300000\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 120
+
+enum Tag:
+    Some(i32)
+    None()
+
+fn double(i32 x) i32:
+    return Result.Ok(x * 2)
+
+# one unwrap per iteration, a million times
+fn accumulate(i32 n) i64:
+    let i64 total = 0
+    let i32 i = 0
+    while (i < n):
+        let i32 d = double(i)??
+        total := total + (d as i64)
+        i := i + 1
+    return Result.Ok(total)
+
+# two unwraps per iteration, in a nested loop, so the count is the product
+fn nested(i32 outer, i32 inner) i32:
+    let i32 count = 0
+    let i32 i = 0
+    while (i < outer):
+        let i32 j = 0
+        while (j < inner):
+            let i32 a = double(j)??
+            let i32 b = double(a)??
+            if (b == (a * 2)):
+                count := count + 1
+            j := j + 1
+        i := i + 1
+    return Result.Ok(count)
+
+# construct an enum and take its payload apart, once per iteration
+fn tagged(i32 n) i32:
+    let i32 c = 0
+    let i32 i = 0
+    while (i < n):
+        let Tag t = Tag.Some(i)
+        match t:
+            Tag.Some(v) ->
+                if (v == i):
+                    c := c + 1
+            Tag.None() ->
+                c := c
+        i := i + 1
+    return Result.Ok(c)
+
+# a List method returning Result/Maybe, once per iteration
+fn listed(i32 n) i32:
+    let List@(i32) xs = List.new()
+    let i32 i = 0
+    while (i < n):
+        xs.push(i)
+        i := i + 1
+    let i32 seen = 0
+    let i32 j = 0
+    while (j < n):
+        seen := seen + xs.get(j)?? - i + 1
+        j := j + 1
+    let i32 popped = 0
+    while (xs.len() > 0):
+        match xs.pop():
+            Maybe.Some(_) ->
+                popped := popped + 1
+            Maybe.None() ->
+                popped := popped
+    xs.destroy()
+    return Result.Ok(popped)
+
+fn run_test() i32:
+    println("sum={accumulate(1000000)??}")
+    println("deep={nested(1000, 2000)??}")
+    println("tagged={tagged(1000000)??}")
+    println("listed={listed(300000)??}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)
