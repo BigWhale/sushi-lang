@@ -673,14 +673,16 @@ an internal simplification.
   enum "infinite-loops the monomorphizer's type substitutor... even for a purely
   in-program definition": stale — the same definition compiles and runs correctly today.
   The comment predates the tie-the-knot fix and was not updated when it landed.
-- **`docs/library-format.md`**, the "Version" subsection and the "Writing" steps both
-  say the container version is `1`, while the binary-layout diagram above them and
-  `LibraryFormat.VERSION` in code disagree. Fixed in the phase-6 doc pass.
+- **`docs/library-format.md`** disagrees with itself about the container version, and
+  this entry described the disagreement the wrong way round. Measured at 0.11.1: the
+  layout diagram says `2`, the "Version" subsection and the "Writing" steps say `3`, and
+  `LibraryFormat.VERSION` in code says `4`. All three places in the document need to say
+  `4`. Fixed in the phase-6 doc pass.
 - The manifest schema shown in `docs/library-format.md` lists `is_generic`/`type_params`
   fields on `public_functions`/`structs`/`enums` entries as if they vary; in the actual
   producer generic declarations are filtered out of these lists entirely (they route to
   `templates.*`), so on every record that does appear here `is_generic` is always
   `False` and `type_params` is always `[]`. Fixed in the phase-6 doc pass.
 - **`CLAUDE.md` Known Limitation #6** says a `.slib` "is not portable across platforms".
-  True for a binary library, false for a source library once phase 4 lands. Narrowed in
-  the phase-6 doc pass.
+  True for a binary library, false for a source library. Narrowed in the phase-6 doc
+  pass.
