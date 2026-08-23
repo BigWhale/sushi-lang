@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODE: CE2012
+# A constant cannot trap, so an index past the end of an array constant is the same
+# compile-time diagnostic a body gets.
+
+const i32[3] PRIMES = [2, 3, 5]
+const i32 PAST_THE_END = PRIMES[3]
+
+fn main() i32:
+    println("{PAST_THE_END}")
+    return Result.Ok(0)

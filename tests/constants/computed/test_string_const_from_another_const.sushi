@@ -1,0 +1,14 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nMostly Harmless\nMostly Harmless\n"
+# A string constant whose value is not a bare literal. The backend used to match a
+# string constant SYNTACTICALLY, so anything else registered no global at all and
+# every use reported CE0055, an internal error, on a valid program (#441).
+
+const string GREETING = "Mostly Harmless"
+const string ALIAS = GREETING
+const string SECOND_ALIAS = ALIAS
+
+fn main() i32:
+    println(GREETING)
+    println(ALIAS)
+    println(SECOND_ALIAS)
+    return Result.Ok(0)
