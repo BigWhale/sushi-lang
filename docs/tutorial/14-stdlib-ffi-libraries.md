@@ -240,19 +240,19 @@ add(40, 2) = 42
 answer() = 42
 ```
 
-For genuine reuse you compile the library once into a `.slib` — a single file holding
-bitcode plus the metadata the compiler needs for type information — and link it by name.
-Build the library with `--lib`, then point `SUSHI_LIB_PATH` at it and import it with
-`use <lib/...>`:
+For genuine reuse you compile the library once into a `.slib` — a single file holding the
+library's source text plus the index the compiler needs for type information — and link it
+by name. Build the library with `--lib`, then point `SUSHI_LIB_PATH` at it and import it
+with `use <lib/...>`:
 
 ```bash
-./sushic --lib guidelib.sushi -o /tmp/guidelib.slib
+./sushic --lib --lib-version 1.0.0 guidelib.sushi -o /tmp/guidelib.slib
 export SUSHI_LIB_PATH=/tmp
 ./sushic use-slib.sushi -o use-slib
 ./use-slib
 ```
 
-where the program imports the precompiled library rather than the source:
+where the program imports the library by name rather than compiling its source alongside:
 
 ```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/use-slib.sushi"

@@ -37,7 +37,7 @@ compiler internals in one place.
 - [Language Reference](language-reference.md) — complete syntax and semantics
 - [Standard Library](standard-library.md) — built-in types (`Result`, `Maybe`, `List`, `HashMap`)
 - [Compiler Reference](compiler-reference.md) — CLI options, optimization levels, error codes
-- [Libraries](libraries.md) — creating and linking precompiled libraries
+- [Libraries](libraries.md) — creating and linking reusable libraries
 - [Library Format](library-format.md) — the `.slib` binary format
 - [Nori Package Manager](package-manager.md) — packaging, installing, and managing libraries
 

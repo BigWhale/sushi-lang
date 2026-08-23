@@ -31,7 +31,7 @@ advanced features and compiler internals.
 
 **Using and understanding the compiler:**
 - [Compiler Reference](compiler-reference.md) - CLI options, optimization levels, error codes
-- [Libraries](libraries.md) - Creating and linking precompiled libraries
+- [Libraries](libraries.md) - Creating and linking reusable libraries
 - [Library Format](library-format.md) - `.slib` binary format specification
 - [Internals: Architecture](internals/architecture.md) - Compiler pipeline and design
 - [Internals: Semantic Passes](internals/semantic-passes.md) - Pass-by-pass analysis details
@@ -69,7 +69,7 @@ Each example includes detailed comments explaining concepts and patterns.
 ./sushic --dump-ll program.sushi   # Show LLVM IR
 
 # Libraries
-./sushic --lib mylib.sushi -o mylib.slib  # Compile library
+./sushic --lib --lib-version 1.0.0 mylib.sushi -o mylib.slib  # Compile library
 ./sushic --lib-info mylib.slib            # Inspect library
 # In main.sushi: use <lib/mylib>          # Import library
 

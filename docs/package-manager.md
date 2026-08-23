@@ -448,8 +448,8 @@ public fn multiply(i32 a, i32 b) i32:
     return Result.Ok(a * b)
 EOF
 
-# 2. Compile to .slib
-./sushic --lib mathlib.sushi -o build/mathlib.slib
+# 2. Compile to .slib (--lib-version, because there is no nori.toml yet)
+./sushic --lib --lib-version 1.0.0 mathlib.sushi -o build/mathlib.slib
 
 # 3. Create manifest
 nori init

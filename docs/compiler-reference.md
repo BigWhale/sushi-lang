@@ -42,7 +42,11 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 |---------------------|----------------------------------------------------|
 | `-o NAME`           | Specify output executable name                     |
 | `--opt LEVEL`       | Set optimization level (none, mem2reg, O1, O2, O3) |
-| `--lib`             | Compile to library bitcode instead of executable   |
+| `--lib`             | Compile to a library (`.slib`) instead of an executable |
+| `--lib-kind KIND`   | What the library ships: `source` (default), `binary`, `hybrid` |
+| `--lib-version X.Y.Z` | Version of the library being built                |
+| `--lib-info FILE`   | Print the metadata report of a `.slib` file        |
+| `--ignore-compiler-version` | Load libraries this compiler does not satisfy (CE3503) |
 | `--traceback`       | Show full Python traceback on errors               |
 | `--dump-ast`        | Print abstract syntax tree                         |
 | `--dump-ll`         | Print LLVM IR to terminal                          |
@@ -54,12 +58,23 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 ### Library Compilation
 
 ```bash
-# Compile source to reusable library
-./sushic --lib mylib.sushi -o mylib.slib
+# Compile source to a reusable library
+./sushic --lib --lib-version 1.0.0 mylib.sushi -o mylib.slib
 
 # Inspect library metadata
 ./sushic --lib-info mylib.slib
 ```
+
+A `.slib` ships **source** by default: the consumer compiles its units and caches the
+objects, so one file works on every platform. `--lib-kind binary` ships LLVM bitcode
+instead, which binds the library to the platform that built it, and `--lib-kind hybrid`
+ships both.
+
+Every library states its own version. `--lib-version` supplies it, unless a `nori.toml`
+beside the sources does; neither is **CE3505**. A build also stamps `requires_compiler` --
+`~<major>.<minor>` of the building compiler -- because a source library is compiled by the
+consumer's compiler and a later one may reject it. A consumer outside that range is
+**CE3503**, and `--ignore-compiler-version` overrides the check for the whole build.
 
 In a repository checkout, `--lib-info` runs the Sushi-written `toolchain/bin/slib-info`
 binary when it exists (build it with `./toolchain/build.py`) and returns its exit code;
