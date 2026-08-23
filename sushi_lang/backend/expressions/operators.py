@@ -202,6 +202,11 @@ def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Valu
         if folded is not None:
             return folded
 
+    # A shift count may be of any width, and LLVM wants both shift operands of one
+    # type, so the count is brought to the value's width here. For & | ^ the widths
+    # already agree: a mixed pair is CE2510 in the typecheck pass. This was once the
+    # only thing standing between mixed operands and the binary, and it truncated
+    # silently (#438).
     if left.type != right.type:
         if isinstance(left.type, ir.IntType) and isinstance(right.type, ir.IntType):
             if left.type.width > right.type.width:

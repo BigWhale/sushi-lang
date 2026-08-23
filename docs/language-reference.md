@@ -307,6 +307,47 @@ The rule and its reasoning are [docs/design/borrow-model.md](design/borrow-model
 
 ## Operators
 
+### Operand types
+
+Two numeric operands of one operator must have the same type. Sushi converts no
+numeric type on its own, so the operands say what the result is: `+ - * / %`, the
+comparisons `== != < <= > >=`, and the bitwise `& | ^` all refuse a mixed pair
+with **CE2510**.
+
+<!-- docs-sweep: error CE2510 -->
+```sushi
+fn main() i32:
+    let u8 low = 0x34
+    let u32 wide = 0x1200
+    let u32 both = low | wide          # CE2510: u8 and u32
+    return Result.Ok(0)
+```
+
+`as` makes the widths agree, and then the operation says what it means:
+
+```sushi
+fn main() i32:
+    let u8 low = 0x34
+    let u32 wide = 0x1200
+    let u32 both = (low as u32) | wide  # 0x1234
+    return Result.Ok(0)
+```
+
+A shift is the exception. Its right operand is a count, not a second value: it
+says how far to move the bits, and the result keeps the type of the left operand.
+The count can be of any numeric type.
+
+```sushi
+fn main() i32:
+    let u64 value = 8
+    let u8 places = 8
+    let u64 shifted = value << places   # 2048
+    return Result.Ok(0)
+```
+
+Note that a count is not checked against the width of the value. `low << 8` with a
+`u8` value moves every bit out of the type and answers nothing useful.
+
 ### Arithmetic
 
 - `+` - Addition

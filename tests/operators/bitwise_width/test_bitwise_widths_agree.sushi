@@ -1,0 +1,23 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n4660\n15\n65535\n"
+# The escape, and the answer the mixed-width program was reaching for: cast every
+# operand to the width of the result, and the two bytes assemble into 0x1234.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let u8 low = 0x34
+    let u8 high = 0x12
+    let u32 assembled = (low as u32) | ((high as u32) << 8)
+    println("{assembled}")
+
+    let u8 mask = 0x0F
+    let u8 bits = 0xFF
+    let u8 kept = mask & bits
+    println("{kept}")
+
+    let u16 ones = 0xFF00
+    let u16 other = 0x00FF
+    let u16 flipped = ones ^ other
+    println("{flipped}")
+
+    return Result.Ok(0)

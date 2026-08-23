@@ -146,6 +146,23 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   is the question it asks. `.githooks/pre-push` scrubs the same variables from every check
   it starts, which keeps the hook an honest mirror of CI.
 
+- **A bitwise operator did not check operand width** (#438). `& | ^` accepted two
+  different numeric types where `+` refuses them, and the backend then made the two sides
+  agree without a word: it widened or **truncated** the right operand to the width of the
+  left, and gave the result the type of the left operand. `low | wide`, a `u8` and a
+  `u32`, compiled clean and printed 255, because 0x1FF had been cut to 0xFF. So did the
+  byte-assembly shape behind every bit reader, checksum and length field:
+  `accumulator := accumulator | (byte << 8)` never moved the accumulator, because the
+  shift kept the `u8` width of `byte`.
+
+  CE2510 is now one rule for every operator whose two operands must agree -- arithmetic,
+  comparison and `& | ^` all reach `reject_mixed_numeric_operands`, which also retires the
+  copy of the numeric-type list that the arithmetic path carried. `as` is the escape, as it
+  is everywhere else. A shift is deliberately exempt: its right operand is a count, not a
+  second value, so `value << places` with two widths stays legal and the result keeps the
+  type of the left operand. `docs/language-reference.md` states the rule under Operators,
+  where it was not written down before.
+
 ## [0.11.1] - 2026-08-22
 
 The clean-up release after 0.11.0: the first two libraries written in Sushi itself, the

@@ -260,8 +260,30 @@ def _annotate_try_expr(
     expr.inferred_func_return_type = func_return_type
 
 
+def reject_mixed_numeric_operands(validator: 'TypeValidator', expr: BinaryOp,
+                                  left_type: 'Optional[Type]',
+                                  right_type: 'Optional[Type]') -> None:
+    """CE2510 when two numeric operands are not of the same type.
+
+    One rule for every operator that takes its result from operands which must
+    already agree: arithmetic, comparison, and the bitwise `& | ^`. Sushi converts
+    no numeric type implicitly, so the operands say what the result is and `as` is
+    the only way to change a width. A shift never asks both its operands: the
+    count says how far to move, not what the result is.
+    """
+    if left_type is None or right_type is None:
+        return
+    if not (is_numeric_type(left_type) and is_numeric_type(right_type)):
+        return
+    if left_type == right_type:
+        return
+
+    er.emit(validator.reporter, er.ERR.CE2510, expr.loc,
+            left_type=display_type(left_type), right_type=display_type(right_type))
+
+
 def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> None:
-    """Validate that bitwise operators are used with numeric types only."""
+    """Validate the operands of a bitwise operator: numeric, and of one width."""
     left_type = validator.infer_expression_type(expr.left)
     right_type = validator.infer_expression_type(expr.right)
 
@@ -272,6 +294,9 @@ def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> No
     if right_type is not None and not is_numeric_type(right_type):
         er.emit(validator.reporter, er.ERR.CE2004, expr.right.loc, op=expr.op)
         return
+
+    if expr.op in ("&", "|", "^"):
+        reject_mixed_numeric_operands(validator, expr, left_type, right_type)
 
 
 def validate_bitwise_unary(validator: 'TypeValidator', expr: UnaryOp) -> None:

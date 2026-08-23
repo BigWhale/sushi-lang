@@ -1,0 +1,18 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n2048\n8\n"
+# A shift count is not the value's sibling: it says how far to move, not what the
+# result is. Its width may differ, and the result keeps the value's type.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let u64 value = 8
+    let u8 places = 8
+    let u64 shifted = value << places
+    println("{shifted}")
+
+    let u32 wide = 2048
+    let u16 back = 8
+    let u32 restored = wide >> back
+    println("{restored}")
+
+    return Result.Ok(0)
