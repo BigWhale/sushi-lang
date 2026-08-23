@@ -1,0 +1,69 @@
+# slib_sizes reports the byte length of both payload sections in one pass.
+# The fixture carries a 1-byte metadata blob, a 5-byte source section, and
+# records 12345 (0x3039 little-endian) as the bitcode length with no bitcode
+# bytes after it.
+# EXPECT_STDOUT_EXACT: "5 12345\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+use <toolchain/slib>
+
+fn fixture_header(u8 version, u8 mlen) u8[]:
+    let u8[] h = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
+    h.push(version)
+    let i32 i = 0
+    while (i < 27):
+        h.push(0)
+        i := i + 1
+    h.push(mlen)
+    let i32 j = 0
+    while (j < 7):
+        h.push(0)
+        j := j + 1
+    return Result.Ok(h)
+
+fn sized_fixture() u8[]:
+    let u8[] b = fixture_header(4, 1)??
+    b.push(0xc0)
+    b.push(5)
+    let i32 s = 0
+    while (s < 7):
+        b.push(0)
+        s := s + 1
+    let i32 t = 0
+    while (t < 5):
+        b.push(0x20)
+        t := t + 1
+    b.push(0x39)
+    b.push(0x30)
+    let i32 i = 0
+    while (i < 6):
+        b.push(0)
+        i := i + 1
+    return Result.Ok(b)
+
+fn write_fixture(string path, u8[] bytes) i32:
+    match open(path, FileMode.WriteB()):
+        FileResult.Ok(out) ->
+            out.write_bytes(bytes)
+            out.close()
+            return Result.Ok(0)
+        FileResult.Err(_) ->
+            return Result.Ok(1)
+    return Result.Ok(1)
+
+fn run_test() i32:
+    let u8[] fixture = sized_fixture()??
+    if (write_fixture("test_slib_sizes.slib", fixture)?? != 0):
+        println("cannot write fixture")
+        return Result.Ok(1)
+    match slib_sizes("test_slib_sizes.slib"):
+        Result.Ok(sizes) ->
+            println("{sizes.source} {sizes.bitcode}")
+        Result.Err(_) ->
+            println("sizes failed")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

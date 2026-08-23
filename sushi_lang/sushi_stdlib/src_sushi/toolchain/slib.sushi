@@ -2,10 +2,10 @@
 #
 # The module ships as bundled .sushi source and is merged as a compilation
 # unit when imported (`use <toolchain/slib>`). It reads the fixed 52-byte
-# little-endian header and the msgpack metadata map of a version-3 .slib
+# little-endian header and the msgpack metadata map of a version-4 .slib
 # library. It mirrors the Python reader LibraryFormat.read_metadata_only and
-# never reads the bitcode itself; slib_bitcode_size reads only the length
-# field that follows the metadata blob.
+# never reads a payload blob for its own sake; slib_sizes reads only the two
+# length fields that follow the metadata blob.
 #
 # Limitations: the four spare header fields are read and not validated. The
 # reader targets metadata below 2 GiB; a hostile length casts to a negative
@@ -67,10 +67,17 @@ public fn slib_read_metadata(string path) MsgValue | SlibError:
             return Result.Err(SlibError.OpenFailed(path.clone()))
     return Result.Err(SlibError.OpenFailed(path.clone()))
 
-# slib_bitcode_size: the u64 length of the bitcode. Container version 4 puts a
-# length-prefixed SOURCE section between the metadata and the bitcode, so reaching
-# the bitcode length means stepping over that section first.
-public fn slib_bitcode_size(string path) u64 | SlibError:
+# SlibSizes: the byte length of the two payload sections that follow the
+# metadata blob. A source library records no bitcode, a binary one no source.
+struct SlibSizes:
+    u64 source
+    u64 bitcode
+
+# slib_sizes: the length of both payload sections, in one pass over the file.
+# Container version 4 puts a length-prefixed SOURCE section between the metadata
+# and the bitcode, so reaching the bitcode length means stepping over that
+# section first. No report needs a blob itself, only its length.
+public fn slib_sizes(string path) SlibSizes | SlibError:
     match open(path, FileMode.ReadB()):
         FileResult.Ok(f) ->
             let u8[] header = f.read_bytes(52)
@@ -84,18 +91,24 @@ public fn slib_bitcode_size(string path) u64 | SlibError:
                 f.close()
                 slib_header_check(peek header)??
                 return Result.Err(SlibError.Truncated())
-            let i32 slen = slib_le_uint(peek src_field, 0, 8)?? as i32
-            let u8[] src_blob = f.read_bytes(slen)
+            let u64 slen = slib_le_uint(peek src_field, 0, 8)??
+            let u8[] src_blob = f.read_bytes(slen as i32)
             let u8[] size_field = f.read_bytes(8)
             f.close()
             slib_header_check(peek header)??
             if (blob.len() < mlen):
                 return Result.Err(SlibError.Truncated())
-            if (src_blob.len() < slen):
+            if (src_blob.len() < (slen as i32)):
                 return Result.Err(SlibError.Truncated())
             if (size_field.len() < 8):
                 return Result.Err(SlibError.Truncated())
-            return Result.Ok(slib_le_uint(peek size_field, 0, 8)??)
+            let u64 bclen = slib_le_uint(peek size_field, 0, 8)??
+            return Result.Ok(SlibSizes(slen, bclen))
         FileResult.Err(_) ->
             return Result.Err(SlibError.OpenFailed(path.clone()))
     return Result.Err(SlibError.OpenFailed(path.clone()))
+
+# slib_bitcode_size: the u64 length of the bitcode section alone.
+public fn slib_bitcode_size(string path) u64 | SlibError:
+    let SlibSizes sizes = slib_sizes(path)??
+    return Result.Ok(sizes.bitcode)
