@@ -4,6 +4,23 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **An enum payload slot allocated inside a loop leaked stack until the function
+  returned.** A `??` unwrap, an enum construction, a match that binds a payload, and
+  `List.push`/`List.pop` each allocated their scratch slot at the point of use, so in a
+  loop the `alloca` landed in the loop body. LLVM only releases an alloca at function
+  return, so every iteration took another 16 or 32 bytes and a loop of a few hundred
+  thousand walked off the stack guard page with SIGSEGV. Optimisation did not help.
+
+  All seven sites now take the slot from `entry_alloca`, which puts it in the function
+  entry block and reuses it. Reuse is safe because each slot is scratch: the payload is
+  loaded back out before the expression finishes, and a reference binding deliberately
+  points into the scrutinee rather than the copy.
+
+  The regression test drives all four shapes past a million iterations
+  (`tests/error_handling/stack/test_run_try_in_long_loop.sushi`). Found while building
+  `compression/zlib`, whose encoder died above 53 KB of ordinary text.
+
 ### Added
 - **`use <compression/zlib>`: DEFLATE and the zlib container, written in Sushi.** No C
   library and no FFI -- the whole codec is Sushi. `zlib_compress` and `zlib_uncompress`

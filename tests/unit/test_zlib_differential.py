@@ -90,12 +90,20 @@ CORPUS = {
     "prose": b"the quick brown fox jumps over the lazy dog. " * 2000,
     "readme": _repo_file("README.md"),
     "style": _repo_file("STYLE.md"),
+    # A large file with ordinary redundancy is the case a corpus of runs and short
+    # strings misses. A run of one byte compresses through few loop iterations,
+    # because one match consumes up to 258 bytes; real text takes one iteration per
+    # few bytes. That difference hid the stack leak in BUGS.md B1, which crashed the
+    # encoder above ~53 KB while every repetitive payload here still passed.
+    "changelog": _repo_file("CHANGELOG.md"),
+    "large_text": _repo_file("CHANGELOG.md") + _repo_file("STYLE.md") + _repo_file("README.md"),
 }
 
 # Entries with enough redundancy that the encoder must beat the input size.
 COMPRESSIBLE = (
     "run_300", "run_100k", "window_32768", "window_32769",
     "alternating", "ramp_x400", "nulls", "prose", "readme", "style",
+    "changelog", "large_text",
 )
 
 

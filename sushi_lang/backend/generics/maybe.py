@@ -77,7 +77,8 @@ def emit_maybe_some(codegen: 'LLVMCodegen', value_type: Type, value: ir.Value) -
     enum_value = codegen.builder.insert_value(enum_value, tag, 0, name="maybe_some_tag")
 
     data_array_type = llvm_enum_type.elements[1]  # [N x i8] array
-    temp_alloca = codegen.builder.alloca(data_array_type, name="enum_data_temp")
+    # ENTRY block: a Maybe built inside a loop must not grow the frame (BUGS.md B1).
+    temp_alloca = codegen.memory.entry_alloca(data_array_type, "enum_data_temp")
 
     data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 
