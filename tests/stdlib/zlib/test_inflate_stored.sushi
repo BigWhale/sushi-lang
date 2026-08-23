@@ -1,0 +1,30 @@
+# inflate_raw over stored blocks (BTYPE=00): an empty block and a text block.
+# Both fixtures come from Python zlib at level 0, which never compresses.
+# EXPECT_STDOUT_EXACT: "len=0 adler=1\nlen=15 adler=777324008\n"
+# EXPECT_NO_LEAKS: true
+
+use <compression/zlib>
+
+# show: inflate one stream and print the length and checksum of the result.
+fn show(u8[] blob) ~:
+    match inflate_raw(blob):
+        Result.Ok(out) ->
+            println("len={out.len()} adler={adler32(out)??}")
+        Result.Err(e) ->
+            println("err={zlib_error_text(e)??}")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let u8[] empty_block = from([0x01, 0x00, 0x00, 0xff, 0xff])
+    show(empty_block)??
+
+    let u8[] stored_text = from([
+        0x01, 0x0f, 0x00, 0xf0, 0xff, 0x4d, 0x6f, 0x73, 0x74, 0x6c, 0x79, 0x20,
+        0x48, 0x61, 0x72, 0x6d, 0x6c, 0x65, 0x73, 0x73
+    ])
+    show(stored_text)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

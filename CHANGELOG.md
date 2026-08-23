@@ -2,6 +2,28 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **`use <compression/zlib>`: DEFLATE and the zlib container, written in Sushi.** No C
+  library and no FFI -- the whole codec is Sushi. `zlib_compress` and `zlib_uncompress`
+  handle the RFC 1950 container with its Adler-32 trailer; `deflate_raw` and
+  `inflate_raw` handle a bare RFC 1951 stream; `adler32` is the checksum on its own.
+  Errors are values: `ZError` carries the byte offset, the symbol or the two checksums
+  that explain the failure, and `zlib_error_text` renders any of them as one stable line.
+
+  The decoder is complete -- stored, fixed Huffman and dynamic Huffman blocks -- so it
+  reads anything a conforming encoder writes. It follows puff.c, so a Huffman code is a
+  count per bit length plus the symbols sorted by length, and needs only flat integer
+  arrays. The encoder emits stored and fixed-Huffman blocks with an LZ77 hash-chain
+  matcher, and falls back to stored when coding would make the data bigger, so the output
+  never exceeds the input by more than five bytes per 65535. It never emits a dynamic
+  Huffman block, so its ratio is short of a full encoder's: about 1.2x `zlib -6` on prose.
+
+  Validated differentially against Python `zlib` in both directions
+  (`tests/unit/test_zlib_differential.py`, 318 cases): every stream Sushi writes is read
+  back by a real zlib, and every stream a real zlib writes is read back by Sushi.
+
 ## [0.11.1] - 2026-08-22
 
 The clean-up release after 0.11.0: the first two libraries written in Sushi itself, the

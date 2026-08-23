@@ -1,0 +1,41 @@
+# zlib_uncompress over the RFC 1950 container: the two-byte header, the deflate
+# stream, and the big-endian Adler-32 trailer. Also the two ways the wrapper is
+# rejected -- a header whose 31-check fails, and a corrupted trailer.
+# EXPECT_STDOUT_EXACT: "len=15 adler=777324008\nbad zlib header\nchecksum mismatch\n"
+# EXPECT_NO_LEAKS: true
+
+use <compression/zlib>
+
+fn show(u8[] blob) ~:
+    match zlib_uncompress(blob):
+        Result.Ok(out) ->
+            println("len={out.len()} adler={adler32(out)??}")
+        Result.Err(e) ->
+            println("{zlib_error_text(e)??}")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let u8[] zlib_text = from([
+        0x78, 0x9c, 0xf3, 0xcd, 0x2f, 0x2e, 0xc9, 0xa9, 0x54, 0xf0, 0x48, 0x2c,
+        0xca, 0xcd, 0x49, 0x2d, 0x2e, 0x06, 0x00, 0x2e, 0x55, 0x05, 0xe8
+    ])
+    show(zlib_text)??
+
+    # FLG bumped by one, so (CMF * 256 + FLG) is no longer a multiple of 31
+    let u8[] bad_zhdr = from([
+        0x78, 0x9d, 0xf3, 0xcd, 0x2f, 0x2e, 0xc9, 0xa9, 0x54, 0xf0, 0x48, 0x2c,
+        0xca, 0xcd, 0x49, 0x2d, 0x2e, 0x06, 0x00, 0x2e, 0x55, 0x05, 0xe8
+    ])
+    show(bad_zhdr)??
+
+    # the last trailer byte flipped
+    let u8[] bad_adler = from([
+        0x78, 0x9c, 0xf3, 0xcd, 0x2f, 0x2e, 0xc9, 0xa9, 0x54, 0xf0, 0x48, 0x2c,
+        0xca, 0xcd, 0x49, 0x2d, 0x2e, 0x06, 0x00, 0x2e, 0x55, 0x05, 0x17
+    ])
+    show(bad_adler)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

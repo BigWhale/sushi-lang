@@ -115,6 +115,7 @@ nav:
       - Strings: stdlib/collections/strings.md
       - Iter combinators: stdlib/collections/iter.md
       - MessagePack: stdlib/encoding/msgpack.md
+      - Compression (zlib): stdlib/compression/zlib.md
       - Slib reader: stdlib/toolchain/slib.md
       - Console: stdlib/io/console.md
       - Files: stdlib/io/files.md

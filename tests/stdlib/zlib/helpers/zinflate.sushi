@@ -1,0 +1,85 @@
+# zinflate: decompress a file. A tool program for the differential test, not a
+# collected test. With --raw the input is a bare DEFLATE stream; without it the
+# input carries the zlib header and the Adler-32 trailer.
+# Exit codes: 0 decoded, 1 decode error, 2 usage or I/O error.
+#
+# Every stage nests inside the match arm that produced its value. A match
+# payload is a borrow, so lifting one out with `x := payload` is CE2411 and the
+# escape would be a full copy of the buffer.
+
+use <io/stdio>
+use <io/files>
+use <compression/zlib>
+
+# read_all: the whole file as bytes.
+fn read_all(string path) u8[]:
+    let i32 size = 0
+    match file_size(path):
+        Result.Ok(n) ->
+            size := n as i32
+        Result.Err(_) ->
+            return Result.Err(StdError.Error)
+    match open(path, FileMode.ReadB()):
+        FileResult.Ok(f) ->
+            let u8[] b = f.read_bytes(size)
+            f.close()
+            if (b.len() < size):
+                return Result.Err(StdError.Error)
+            return Result.Ok(b)
+        FileResult.Err(_) ->
+            return Result.Err(StdError.Error)
+    return Result.Err(StdError.Error)
+
+# emit: replace the destination file with these bytes.
+fn emit(string dst, u8[] data) i32:
+    match open(dst, FileMode.WriteB()):
+        FileResult.Ok(f) ->
+            f.write_bytes(data)
+            f.close()
+            return Result.Ok(0)
+        FileResult.Err(_) ->
+            stderr.write("cannot write {dst}\n")
+            return Result.Ok(2)
+    return Result.Ok(2)
+
+# decode: inflate the blob and write the result out.
+fn decode(u8[] blob, string dst, bool raw) i32:
+    if (raw):
+        match inflate_raw(blob):
+            Result.Ok(d) ->
+                return Result.Ok(emit(dst, d)??)
+            Result.Err(e) ->
+                stderr.write("{zlib_error_text(e)??}\n")
+                return Result.Ok(1)
+    match zlib_uncompress(blob):
+        Result.Ok(d) ->
+            return Result.Ok(emit(dst, d)??)
+        Result.Err(e) ->
+            stderr.write("{zlib_error_text(e)??}\n")
+            return Result.Ok(1)
+    return Result.Ok(1)
+
+fn run_tool(peek string[] args) i32:
+    if (args.len() < 3):
+        stderr.write("usage: zinflate <in> <out> [--raw]\n")
+        return Result.Ok(2)
+    let string src_path = args.get(1)??
+    let string dst_path = args.get(2)??
+    let bool raw = false
+    if (args.len() > 3):
+        if (args.get(3)?? == "--raw"):
+            raw := true
+
+    match read_all(src_path):
+        Result.Ok(blob) ->
+            return Result.Ok(decode(blob, dst_path, raw)??)
+        Result.Err(_) ->
+            stderr.write("cannot read {src_path}\n")
+            return Result.Ok(2)
+    return Result.Ok(2)
+
+fn main(string[] args) i32:
+    if (args.len() > 0):
+        let i32 r = run_tool(peek args).realise(99)
+        return Result.Ok(r)
+    return Result.Ok(2)

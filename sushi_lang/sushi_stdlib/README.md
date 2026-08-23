@@ -34,7 +34,7 @@ present locally). `src/_platform/` splits OS-specific declarations into
 ## 2. Bundled Sushi-source modules (`src_sushi/`)
 
 A small second class of stdlib module ships as plain `.sushi` source, parsed and
-compiled like user code instead of precompiled to bitcode. Three exist today:
+compiled like user code instead of precompiled to bitcode. Four exist today:
 
 - `collections/iter` (`src_sushi/collections/iter.sushi`) — generic combinators
   (`map`/`filter`/`fold`); nothing is emitted unless a program instantiates one.
@@ -46,6 +46,16 @@ compiled like user code instead of precompiled to bitcode. Three exist today:
   reader on top of the decoder, and the first source module that imports
   another source module (`encoding/msgpack`) plus a `.bc` module (`io/files`);
   the injection fixpoint in `compiler/pipeline.py` resolves both.
+- `compression/zlib` (`src_sushi/compression/zlib.sushi`) — DEFLATE and the
+  zlib container, and the first source module that both READS and WRITES a
+  binary format. It is validated differentially against Python `zlib` in both
+  directions (`tests/unit/test_zlib_differential.py`), which is what makes a
+  hand-written codec safe to trust.
+
+A bundled module must compile WARNING-FREE: its diagnostics surface in every
+program that imports it, and there is no per-unit suppression. CW2409 was
+deleted from the compiler for exactly this reason (see
+`internals/errors/warnings.py`).
 
 Registration is two entries per module: `SOURCE_STDLIB_MODULES`
 (`sushi_lang/semantics/stdlib_registry.py`) maps the import path to the bundled
