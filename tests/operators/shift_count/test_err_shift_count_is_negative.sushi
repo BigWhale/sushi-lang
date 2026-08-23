@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2512
+# EXPECT_STDERR_CONTAINS: shift count -1 is out of range for i32
+# A negative count is the other end of the same range. There is no such shift.
+
+fn main() i32:
+    let i32 value = 16
+    let i32 shifted = value << -1
+    println("{shifted}")
+    return Result.Ok(0)

@@ -345,8 +345,30 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-Note that a count is not checked against the width of the value. `low << 8` with a
-`u8` value moves every bit out of the type and answers nothing useful.
+A count is also limited by the width of the value it shifts, because a count at or
+above that width moves every bit out of the type. A count the compiler can read --
+a literal, a constant, an expression of them -- is **CE2512**:
+
+<!-- docs-sweep: error CE2512 -->
+```sushi
+fn main() i32:
+    let u8 high = 0x12
+    let u8 shifted = high << 8          # CE2512: a u8 count runs from 0 to 7
+    return Result.Ok(0)
+```
+
+Cast the value to the width the shift is meant to reach:
+
+```sushi
+fn main() i32:
+    let u8 high = 0x12
+    let u32 reached = (high as u32) << 8    # 0x1200
+    return Result.Ok(0)
+```
+
+A computed count -- a loop index, a value read from a file -- is not checked, at
+compile time or at run time. A shift by such a count at or above the width has no
+defined answer today, so a bit reader must keep its own count in range.
 
 ### Arithmetic
 

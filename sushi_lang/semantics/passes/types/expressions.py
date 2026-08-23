@@ -298,6 +298,53 @@ def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> No
     if expr.op in ("&", "|", "^"):
         reject_mixed_numeric_operands(validator, expr, left_type, right_type)
 
+    if expr.op in ("<<", ">>"):
+        reject_impossible_shift_count(validator, expr, left_type)
+
+
+def _provable_shift_count(validator: 'TypeValidator', count: Expr) -> Optional[int]:
+    """The count as a number when the compiler can read it, else None.
+
+    A silent reporter is passed in because a count that is not a constant -- a
+    variable, a loop index, a call -- is ordinary code and not a diagnostic. Only
+    the answer is wanted here, never the evaluator's complaint about not finding
+    one.
+    """
+    from sushi_lang.internals.report import Reporter
+    from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+
+    evaluator = ConstantEvaluator(Reporter(), validator.const_table, validator.ast_constants)
+    value = evaluator.evaluate(count, BuiltinType.I64, None)
+    if value is None or not isinstance(value.value, int) or isinstance(value.value, bool):
+        return None
+    return value.value
+
+
+def reject_impossible_shift_count(validator: 'TypeValidator', expr: BinaryOp,
+                                  value_type: 'Optional[Type]') -> None:
+    """CE2512 when a shift count the compiler can read cannot fit the value.
+
+    The width of the shifted value is the limit: a count at or above it moves every
+    bit out of the type, and a negative count is not a shift. LLVM answers such a
+    shift with poison, so nothing reports the loss and the program prints whatever
+    the optimizer left behind. A count that cannot be read at compile time is left
+    alone -- a bit reader computes its count, and no check is emitted around it.
+    """
+    from .inference import integer_bit_width
+
+    if value_type is None:
+        return
+    width = integer_bit_width(value_type)
+    if width is None:
+        return
+
+    count = _provable_shift_count(validator, expr.right)
+    if count is None or 0 <= count < width:
+        return
+
+    er.emit(validator.reporter, er.ERR.CE2512, expr.right.loc,
+            count=count, value_type=display_type(value_type), max_count=width - 1)
+
 
 def validate_bitwise_unary(validator: 'TypeValidator', expr: UnaryOp) -> None:
     """Validate that bitwise NOT (~) is used with numeric types only."""

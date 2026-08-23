@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2512
+# A right shift has the same limit as a left shift, and the value's width is what
+# sets it -- 40 is a legal count for a u64 and not for a u32.
+
+fn main() i32:
+    let u32 value = 0xDEAD_BEEF
+    let u32 shifted = value >> 40
+    println("{shifted}")
+    return Result.Ok(0)

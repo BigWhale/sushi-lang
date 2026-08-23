@@ -163,6 +163,18 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   type of the left operand. `docs/language-reference.md` states the rule under Operators,
   where it was not written down before.
 
+- **A shift count at or above the width of the value was accepted.** Found while fixing
+  the mixed-width defect above, and it is what makes that report's own example wrong:
+  `high << 8` on a `u8` moves every bit out of the type. LLVM answers such a shift with
+  poison, so nothing was lost loudly -- the program printed whatever the optimiser left
+  behind, 32 for `0x12 << 8` and 255 once an `|` was wrapped around it.
+
+  A count the compiler can read -- a literal, a constant, an expression of them -- is now
+  **CE2512**, which also covers a negative count. This is the rule Rust applies to the same
+  program (`deny(arithmetic_overflow)`), and the escape is a cast on the VALUE:
+  `(high as u32) << 8`. A computed count is still not checked, at compile time or at run
+  time; `docs/language-reference.md` says so where it states the rule.
+
 ## [0.11.1] - 2026-08-22
 
 The clean-up release after 0.11.0: the first two libraries written in Sushi itself, the

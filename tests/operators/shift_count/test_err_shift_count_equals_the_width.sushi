@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODE: CE2512
+# EXPECT_STDERR_CONTAINS: a count must be from 0 to 7
+# A count equal to the width moves every bit out of the type. LLVM calls the
+# result poison, so the program printed whatever the optimiser left behind: this
+# shape answered 32 for 0x12 << 8.
+
+fn main() i32:
+    let u8 high = 0x12
+    let u8 shifted = high << 8
+    println("{shifted}")
+    return Result.Ok(0)
