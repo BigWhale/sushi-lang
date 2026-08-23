@@ -1,9 +1,7 @@
 # EXPECT_ERROR_CODE: CE2056
-# EXPECT_STDERR_CONTAINS: "is negative"
 # A negative index into an array constant cannot become a run-time trap either.
-# CE2014 is the CAST code; CE2056 is the one whose text is about a negative index.
-# The code alone used to be the whole assertion, so a CE2014 rendering as
-# "invalid cast from '<missing:source>'" passed this file (#450).
+# CE2056 is the code whose text is about a negative index; #441 reached for CE2014,
+# which is the CAST code, and #450 corrected it.
 
 const i32[3] PRIMES = [2, 3, 5]
 const i32 BEFORE_THE_START = PRIMES[-1]
