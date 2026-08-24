@@ -539,10 +539,10 @@ A snippet with no `fn main(` is wrapped, the way rustdoc wraps one. Written by t
 as two lines of intent:
 
     - Example:
-    ~~~sushi
+    ```sushi
     let i32 d = hyperspace_jump(3, 7)??
     println("{d}")
-    ~~~
+    ```
 
 and compiled as a program, with the import injected, the body indented into
 `fn main() i32:`, and `return Result.Ok(0)` appended.
@@ -621,7 +621,8 @@ question about a file.
 edits, the `DOC_BLOCK` peel in `parse_block`, `DocBlock` and `DocTag`, the doc parser and
 the attachment function, the `docs` pass with its always-on checks, CE6011, CE6012 and the
 CE70xx module. At the end of this phase the compiler understands doc blocks and nothing
-consumes them.
+consumes them. This phase also writes the complete documentation, about the doc block.
+Later phases simply add what they added to the feature.
 
 **Phase 3 — the library.** The `doc` key on the six manifest records and the generic
 serializers, and the plain dump in both `slib-info` implementations. At the end of this
@@ -636,7 +637,14 @@ collector in `docs_sweep.py`.
 Markdown checker is written in Sushi and lives in `toolchain/`, which makes it the second
 inhabitant after `slib-info` and another test of the language against a real problem.
 
-### What each phase must not do
+### What each phase MUST do
+
+Check the user documentation that it is still valid and add things that were done in
+that phase if applicable.
+
+Stay on the same branch: feat/doc-block, commit the work it was completed in that phase.
+
+### What each phase must NOT do
 
 Phase 2 must not add a fallback for an unparseable doc block. A block either parses or is
 a diagnostic; a silent recovery path would reintroduce exactly the failure mode this
