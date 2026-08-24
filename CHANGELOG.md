@@ -189,6 +189,28 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **A rejected library build no longer reports a spurious CE0000 over the real diagnostic**
+  (#436). Three rejection sites in the manifest producer emitted their diagnostic and then
+  raised `ValueError` to stop the build. Nothing caught it, so the top-level guard rendered
+  it as an internal compiler error on top of the correct message, and a legitimate
+  rejection of the user's own program came with an invitation to file a compiler bug. Each
+  site now emits and returns, and `pipeline.py` decides control flow through
+  `reporter.has_errors`, the way it already does before codegen.
+
+  Two gates, and the placement is the point: the first sits after the export closure and
+  before the bitcode compilation, so a CE5006 rejection still costs nothing, and the second
+  sits after the manifest, which extracts the public API first and returns without writing
+  once the reporter holds an error. A rejected build leaves no `.slib` behind and prints no
+  success line. The exit code was already 2 and stays 2.
+
+  Every rejected public export is now named in one build rather than one per build, because
+  the loop reports instead of stopping at the first. Two findings came with the fix: the
+  `_reject` helper inside the export-closure walk had been non-returning, which left the
+  code after each call site unreachable, and the producer's **CE5002 cannot be reached from
+  a CLI build at all** -- the typecheck pass's public-fn `ptr` fence (CE5008) tests the same
+  condition and exits earlier. That shadowing is now pinned by a test, so a missing CE5002
+  is never read as a regression.
+
 - **A negative array index compiled, and reached run time as a trap** (#450). `numbers[-1]`
   and `numbers.get(-1)` both passed the compiler and RE2020 caught them at run time, although
   the compiler held the answer the whole time. A `-1` parses as a unary negation over a

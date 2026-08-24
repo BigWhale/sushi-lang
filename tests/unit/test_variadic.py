@@ -1,8 +1,6 @@
 """Unit tests for native variadic '...T' internals the .sushi corpus cannot pin."""
 from __future__ import annotations
 
-import pytest
-
 from sushi_lang.internals.report import Reporter
 
 # Reuse the production IR-emit + function-body helpers from the FFI unit tests.
@@ -77,8 +75,9 @@ def test_ce0116_public_variadic_aborts_manifest(tmp_path):
 
     gen = LibraryManifestGenerator(_StubAnalyzer(reporter, StructTable(), EnumTable()))
 
-    with pytest.raises(ValueError):
-        gen._extract_public_functions([unit])
+    # Emits and returns. The raise this used to assert reached the top-level guard and
+    # printed a spurious CE0000 over the diagnostic (#436).
+    gen._extract_public_functions([unit])
     assert any(item.code == "CE0116" for item in reporter.items)
 
 

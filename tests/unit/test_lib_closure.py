@@ -108,8 +108,8 @@ def test_ptr_exposing_private_helper_still_rejected(tmp_path):
         reporter=reporter, structs=StructTable(), enums=EnumTable())
     gen = LibraryManifestGenerator(analyzer)
 
-    with pytest.raises(ValueError):
-        gen._extract_templates([unit])
+    # Emits and returns; the pipeline's has_errors gate is what stops the build (#436).
+    gen._extract_templates([unit])
 
     assert any(item.code == "CE5006" for item in reporter.items)
 

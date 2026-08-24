@@ -1,8 +1,6 @@
 """Unit tests for FFI internals that the .sushi corpus cannot reach directly."""
 from __future__ import annotations
 
-import pytest
-
 from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.units import Unit
@@ -45,8 +43,8 @@ def test_ce5002_public_foreign_ptr_aborts_manifest(tmp_path):
     reporter = Reporter(source="", filename="main")
     gen = LibraryManifestGenerator(_StubAnalyzer(reporter, StructTable(), EnumTable()))
 
-    with pytest.raises(ValueError):
-        gen._extract_public_functions([unit])
+    # Emits and returns; the pipeline's has_errors gate is what stops the build (#436).
+    gen._extract_public_functions([unit])
 
     assert any(item.code == "CE5002" for item in reporter.items)
 
