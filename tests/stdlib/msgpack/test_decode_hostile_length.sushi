@@ -1,0 +1,60 @@
+# A length prefix the buffer cannot supply is an error, not empty data (#463).
+# The four length-prefixed families each declared 0xffffffff, which cast to a
+# negative count and decoded as an empty value. A large POSITIVE length is the
+# same rule: the header is rejected where it is read, not part way through.
+# EXPECT_STDOUT_EXACT: "Truncated(5)\nTruncated(5)\nTruncated(5)\nTruncated(5)\nTruncated(3)\nTruncated(3)\nTruncated(5)\nTruncated(5)\n[1,2]\n"hi"\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/msgpack>
+
+fn check(u8[] buf) ~:
+    match mp_decode(buf):
+        Result.Ok(v) ->
+            println(mp_show(v)??)
+        Result.Err(e) ->
+            match e:
+                MpError.Truncated(off) ->
+                    println("Truncated({off})")
+                MpError.Unsupported(t) ->
+                    println("Unsupported({t})")
+                MpError.BadUtf8(off) ->
+                    println("BadUtf8({off})")
+                MpError.Trailing(p) ->
+                    println("Trailing({p})")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    # 0xffffffff in each 32-bit length family: array, map, bin, str.
+    let u8[] b_arr32 = from([0xdd, 0xff, 0xff, 0xff, 0xff])
+    check(b_arr32)??
+    let u8[] b_map32 = from([0xdf, 0xff, 0xff, 0xff, 0xff])
+    check(b_map32)??
+    let u8[] b_bin32 = from([0xc6, 0xff, 0xff, 0xff, 0xff])
+    check(b_bin32)??
+    let u8[] b_str32 = from([0xdb, 0xff, 0xff, 0xff, 0xff])
+    check(b_str32)??
+
+    # 0xffff in the 16-bit families: over the buffer, under 2^31.
+    let u8[] b_arr16 = from([0xdc, 0xff, 0xff])
+    check(b_arr16)??
+    let u8[] b_str16 = from([0xda, 0xff, 0xff])
+    check(b_str16)??
+
+    # A hostile header followed by bytes reported Trailing before, which named
+    # the wrong fault. The length is what is wrong, so Truncated is the report.
+    let u8[] b_arr32_tail = from([0xdd, 0xff, 0xff, 0xff, 0xff, 0x01])
+    check(b_arr32_tail)??
+    # The largest positive i32, still unsatisfiable by a five-byte buffer.
+    let u8[] b_arr32_max = from([0xdd, 0x7f, 0xff, 0xff, 0xff])
+    check(b_arr32_max)??
+
+    # A length the buffer DOES satisfy still decodes.
+    let u8[] b_ok_arr = from([0xdc, 0x00, 0x02, 0x01, 0x02])
+    check(b_ok_arr)??
+    let u8[] b_ok_str = from([0xd9, 0x02, 0x68, 0x69])
+    check(b_ok_str)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)
