@@ -263,6 +263,23 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **A msgpack length at or above 2^31 decoded as an empty value instead of an error**
+  (#463). Each length-prefixed tag narrowed its `u64` prefix with a bare cast, so
+  `0xffffffff` became -1, every taker looped `while (i < count)` zero times, and a
+  five-byte buffer of nothing but a hostile header came back as `Ok`: `dd ff ff ff ff`
+  was an empty array, `df ...` an empty map, `c6 ...` an empty bin and `db ...` an empty
+  string. Python's `msgpack` rejects all four.
+
+  The module's own header stated that such a length "casts to a negative count, loops zero
+  times, and the next read reports Truncated". There is no next read when the header ends
+  the buffer, so nothing reported anything; with a byte after it the result was `Trailing`,
+  which named the wrong fault.
+
+  One reader now takes every length prefix and rejects one the remaining buffer cannot
+  supply. Every element of an array or a map needs at least one byte and a str or bin
+  payload needs exactly its count, so `count > remaining` is unsatisfiable for all four
+  families and `Truncated` is the accurate report -- no new `MpError` variant. It also
+  catches an over-long POSITIVE length at the header rather than part way through the loop.
 - **A declared type reaches a bare literal through `~`, and through a nested negation**
   (#448). `let u8 b = ~0` was **CE2002**, "cannot assign i32 to u8", and `const u8 MASK = ~0`
   said the same, so "every bit set" at any width other than `i32` needed an `as` cast --
