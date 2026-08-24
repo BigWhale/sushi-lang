@@ -75,6 +75,14 @@ _add(ErrorMessage("CE2016", Severity.ERROR,
     "method '{method}' expects {expected} argument(s), got {got}",
     Category.TYPE, "Built-in Result@(T, E) and Maybe@(T) methods take a fixed number of arguments."))
 
+_add(ErrorMessage("CE2017", Severity.ERROR,
+    "invalid repeat count in an array literal: {reason}",
+    Category.TYPE, "A repeated element is 'value; count', and the count is a count of elements: a positive integer the compiler can read. That is a literal in any base, the name of an integer constant, or an expression of them -- the same reader a fixed array size uses. One code carries every way it can go wrong, because they share one rule and one fix, which is the precedent CE2099 sets for an array size. A count of zero spells nothing and Sushi has no zero-length array, so the lower bound is one. The count is read at the typecheck pass, so unlike an array size it may name a constant of ANOTHER unit."))
+
+_add(ErrorMessage("CE2018", Severity.ERROR,
+    "a repeated element cannot be of type '{type}', which owns heap memory",
+    Category.TYPE, "'value; count' makes count copies of one value. For a type that owns heap memory that would need a deep copy per element, and in Sushi '.clone()' is the only deep copy -- the compiler never inserts one. So a run is limited to a type that copies: a number, a bool, or a composite of those. Write the elements out, or fill the array with a loop at run time and clone into each slot. The rule is by type and not by expression, so a string literal is rejected as well even though its bytes live in .rodata and copying its descriptor would be safe; no case needed it when Ruling 2 went in, and the rule relaxes without breaking a program."))
+
 # Dynamic array-specific errors (compile-time only)
 
 _add(ErrorMessage("CE2023", Severity.ERROR,

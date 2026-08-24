@@ -1,0 +1,12 @@
+# A run inside from(...) reserves once and fills. This is the shape zlib needs
+# for its 32768-entry head table.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1000\n-1\n-1\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let i32[] head = from([-1; 1000])
+    println(head.len())
+    println(head[0])
+    println(head[999])
+    return Result.Ok(0)

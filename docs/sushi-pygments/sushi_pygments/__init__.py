@@ -122,7 +122,7 @@ class SushiLexer(RegexLexer):
 
             # `@` opens a type-argument list (`List@(i32)`), the 0.11.0 generic
             # form. It delimits, like the parenthesis it always precedes.
-            (r"[()\[\]{},:.@]", Punctuation),
+            (r"[()\[\]{},:.@;]", Punctuation),
             (r".", Text),
         ],
 

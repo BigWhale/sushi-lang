@@ -421,7 +421,9 @@ class ScopeAnalyzer:
                         self._check_expression(part)
             case ArrayLiteral():
                 for element in expr.elements:
-                    self._check_expression(element)
+                    self._check_expression(element.value)
+                    if element.count is not None:
+                        self._check_expression(element.count)
             case IndexAccess():
                 self._check_expression(expr.array)
                 self._check_expression(expr.index)

@@ -31,6 +31,7 @@ from sushi_lang.semantics.ast import (
     TryExpr,
     UnaryOp,
 )
+from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.ownership import ConsumingUse
 
 from .borrows import check_borrow
@@ -89,10 +90,11 @@ def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
         case EnumConstructor():
             _check_sink_elements(checker, expr.args, ConsumingUse.ENUM_PAYLOAD)
         case DynamicArrayFrom():
-            _check_sink_elements(checker, expr.elements.elements,
+            _check_sink_elements(checker, array_runs.values(expr.elements.elements),
                                  ConsumingUse.ARRAY_ELEMENT)
         case ArrayLiteral():
-            _check_sink_elements(checker, expr.elements, ConsumingUse.ARRAY_ELEMENT)
+            _check_sink_elements(checker, array_runs.values(expr.elements),
+                                 ConsumingUse.ARRAY_ELEMENT)
         case InterpolatedString():
             for part in expr.parts:
                 if not isinstance(part, str):

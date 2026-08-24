@@ -16,6 +16,7 @@ from sushi_lang.semantics.ast import (
 from sushi_lang.semantics.integer_width import (
     fits_integer_type, integer_bit_width, wrap_to_integer_type)
 from sushi_lang.semantics.typesys import Type, BuiltinType
+from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.passes.collect import ConstantTable
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -243,12 +244,21 @@ class ConstantEvaluator:
         if isinstance(expected_type, ArrayType):
             element_type = expected_type.base_type
 
+        # A run is evaluated ONCE and its result repeated. This is the speaker for CE2017
+        # on a constant: `validate_constant` returns on the error, so the typecheck pass
+        # never reaches the same literal twice.
+        runs = array_runs.read_runs(
+            expr.elements, array_runs.const_int_reader(self.const_table, self.ast_constants),
+            self.reporter)
+        if runs is None:
+            return None
+
         element_values = []
-        for elem in expr.elements:
-            elem_val = self.evaluate(elem, element_type, elem.loc)
-            if elem_val is None:
+        for run in runs:
+            run_val = self.evaluate(run.value, element_type, run.value.loc)
+            if run_val is None:
                 return None  # Non-constant element
-            element_values.append(elem_val)
+            element_values.extend([run_val] * run.count)
 
         if not element_values:
             er.emit(self.reporter, er.ERR.CE0108, span, expr_type='empty array')

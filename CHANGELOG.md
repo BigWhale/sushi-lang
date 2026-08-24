@@ -9,6 +9,31 @@ a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
 ### Added
+- **An array literal element may repeat: `[value; count]`** (#446). A table of one value
+  no longer has to be spelled out or built at run time. The form is an ELEMENT form, so
+  runs mix with plain elements and repeat within one literal: `[0; 19]`, `[1, 0;3, 9, 7]`,
+  and the RFC 1951 fixed literal code as `[8;144, 9;112, 7;24, 8;8]` on one line. It works
+  in a `const`, in a fixed local, and inside `from(...)`.
+
+  The count is a positive integer the compiler reads: a literal in any base, an integer
+  constant, or an expression of them. Unlike a fixed array's SIZE, it is read at the
+  typecheck pass rather than while the AST is built, so it may name a constant of another
+  unit. A count that is not a count -- zero, negative, or unreadable -- is **CE2017**.
+
+  The value is evaluated once and copied, so the element type must copy. Repeating a type
+  that owns heap memory would need a deep copy per slot and `.clone()` is the only deep
+  copy in Sushi, so it is **CE2018**.
+
+  A long run emits a counted loop, never a line of stores: `from([-1; 32768])` is 223 lines
+  of IR with one store in it. **CE2011** now compares the EXPANDED count, and when a literal
+  has runs it lists each one with the absolute span it fills. That listing is what the count
+  form otherwise lacks -- a literal one element short gives the compiler no way to know
+  which run is wrong, since either could be, so it prints what it does know and the reader
+  matches a boundary against it.
+
+  Ruled in `docs/design/compile-time-evaluation.md`. The measurement behind the ruling: every
+  long table in the repository is a run of one value, so this closes them all and Sushi needs
+  no constant function or compile-time loop yet.
 - **`<`, `>`, `<=` and `>=` order two strings, and a comparison now decides its operands**
   (#449). The four order operators read the UTF-8 bytes, which is what Rust and Go do:
   `memcmp` over the common prefix, then the length as the tiebreak, so `"apple" < "apples"`

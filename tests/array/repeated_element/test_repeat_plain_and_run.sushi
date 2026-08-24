@@ -1,0 +1,10 @@
+# A run stands beside plain elements, in any position.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n0\n0\n0\n9\n7\n"
+
+const i32[6] B = [1, 0;3, 9, 7]
+
+fn main() i32:
+    foreach(i in 0..6):
+        println(B[i])
+    return Result.Ok(0)

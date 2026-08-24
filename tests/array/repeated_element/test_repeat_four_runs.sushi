@@ -1,0 +1,16 @@
+# The RFC 1951 fixed literal code: four runs, 288 entries, one line.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "8\n8\n9\n9\n7\n7\n8\n8\n"
+
+const i32[288] ZFIXED_LIT = [8;144, 9;112, 7;24, 8;8]
+
+fn main() i32:
+    println(ZFIXED_LIT[0])
+    println(ZFIXED_LIT[143])
+    println(ZFIXED_LIT[144])
+    println(ZFIXED_LIT[255])
+    println(ZFIXED_LIT[256])
+    println(ZFIXED_LIT[279])
+    println(ZFIXED_LIT[280])
+    println(ZFIXED_LIT[287])
+    return Result.Ok(0)

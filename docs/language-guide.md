@@ -80,6 +80,40 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+### Integer Overflow
+
+A value has the width its type gives it, and the compiler tells you when a value you
+wrote cannot fit that width. It reads what it can read: a `const`, and an expression
+built from literals and constants. An operation whose result the type cannot hold is a
+compile error (**CE2077**), so a wrong answer never reaches the program:
+
+<!-- docs-sweep: error CE2077 -->
+```sushi
+fn main() i32:
+    let u8 sum = 200 + 100     # CE2077: '+' gives 300, out of range for u8
+    println(sum)
+    return Result.Ok(0)
+```
+
+The answer is a wider type, or an `as` cast when the bit pattern is what you want:
+`(200 as u16) + 100` counts to 300 in a `u16`, and `300 as u8` keeps the low eight bits
+and gives 44. The checked operators are `+`, `-`, `*`, `/`, `%` and unary minus. The
+bitwise operators ask a different question, because they move and combine bits: `&`, `|`,
+`^`, `~`, `<<` and `>>` work at the width and lose whatever leaves it, so `200 << 1` on
+a `u8` is 144 and nothing reports it.
+
+Nothing is checked at run time. The compiler cannot read the value of a variable, so a
+sum of two locals wraps at the width, as it does in C:
+
+```sushi
+fn main() i32:
+    let u8 a = 200
+    let u8 b = 100
+    let u8 sum = a + b
+    println(sum)               # 44
+    return Result.Ok(0)
+```
+
 ### Type Conversion
 
 All conversions must be explicit with `as`:
@@ -480,6 +514,24 @@ An indexed assignment takes ownership of the value, so the rules are the ones ev
 position uses: an owned source is moved (using it afterwards is `CE2405`), and a value read out of
 a container needs `.clone()` (`words[0] := words[1]` is `CE2411`). You may only write where the
 write can reach the owner — not through a `peek` parameter, a match binding, or a constant.
+
+**Repeating an element**: a table of the same value does not have to be spelled out.
+`value; count` fills `count` slots with one value, and it mixes with plain elements:
+
+```sushi
+fn main() i32:
+    let i32[10] tally = [0; 10]           # ten zeros
+    let i32[6]  mixed = [1, 0;3, 9, 7]    # 1 0 0 0 9 7
+    let i32[]   head  = from([-1; 1000])  # a thousand, on the heap
+
+    println("{tally[9]} {mixed[2]} {head.len()}")
+    return Result.Ok(0)
+```
+
+The count is read at compile time, so it is a literal in any base or the name of an
+integer constant. The value is evaluated once and copied, which means the element type
+must copy: repeating a `string` or another owning type is `CE2018`. See the
+[Language Reference](language-reference.md#a-repeated-element) for the full rules.
 
 **Memory Management**: Dynamic arrays use RAII - they're automatically deallocated when they go out of scope. The destructor recursively cleans up all elements, so arrays of structs or nested arrays are properly freed. Arrays use move semantics: when you pass a dynamic array to a function, ownership transfers unless you explicitly `.clone()` it.
 

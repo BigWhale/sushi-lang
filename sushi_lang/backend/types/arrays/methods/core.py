@@ -47,7 +47,7 @@ def emit_dynamic_array_from(codegen: 'LLVMCodegen', expr: DynamicArrayFrom) -> i
     if not elements:
         raise NotImplementedError("Empty from() constructor not yet supported")
 
-    element_llvm_type = elements[0].type
+    element_llvm_type = elements[0].value.type
 
     element_type = _infer_builtin_type_from_llvm(element_llvm_type)
 

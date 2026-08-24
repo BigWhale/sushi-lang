@@ -1,0 +1,8 @@
+# A repeat count of zero spells nothing, and Sushi has no zero-length array.
+# EXPECT_ERROR_CODE: CE2017
+
+const i32[3] EMPTY_RUN = [0; 0]
+
+fn main() i32:
+    println(EMPTY_RUN[0])
+    return Result.Ok(0)

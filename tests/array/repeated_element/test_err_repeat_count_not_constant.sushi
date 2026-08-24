@@ -1,0 +1,8 @@
+# The count must be a value the compiler can read. A local is not one.
+# EXPECT_ERROR_CODE: CE2017
+
+fn main() i32:
+    let i32 n = 4
+    let i32[4] t = [7; n]
+    println(t[0])
+    return Result.Ok(0)

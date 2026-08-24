@@ -187,15 +187,17 @@ class DynamicArrayManager:
         """Emit code for new() constructor - array is already initialized to empty."""
         pass  # new() constructor creates empty array - already done in declare
 
-    def emit_array_constructor_from(self, name: str, elements: List[ir.Value]) -> None:
-        """Emit code for from(array_literal) constructor."""
+    def emit_array_constructor_from(self, name: str, elements) -> None:
+        """Emit code for from(array_literal) constructor, over emitted runs."""
+        from sushi_lang.backend.types.arrays import runs
+
         descriptor = self._array(name)
         if descriptor is None:
             raise_internal_error("CE0057", name=name)
         if descriptor.destroyed:
             raise_internal_error("CE0058", name=name)
 
-        initial_len = len(elements)
+        initial_len = runs.total_elements(elements)
         if initial_len == 0:
             return  # Empty array, already initialized
 
@@ -210,10 +212,7 @@ class DynamicArrayManager:
         element_llvm_type = self._get_llvm_type_for_element(descriptor.element_type)
         typed_data_ptr = self.builder.bitcast(data_ptr, ir.PointerType(element_llvm_type), name="typed_data_ptr")
 
-        for i, element_value in enumerate(elements):
-            element_ptr = self.builder.gep(typed_data_ptr, [make_i32_const(i)])
-            casted_element = self.codegen.utils.cast_for_param(element_value, element_llvm_type)
-            self.builder.store(casted_element, element_ptr)
+        runs.fill_runs(self.codegen, typed_data_ptr, elements, element_llvm_type)
 
         self._update_array_fields(name, initial_len, initial_capacity, typed_data_ptr)
 

@@ -1,0 +1,8 @@
+# A repeat count is a count of elements, so it cannot be negative.
+# EXPECT_ERROR_CODE: CE2017
+
+const i32[3] BACKWARDS = [0; -2]
+
+fn main() i32:
+    println(BACKWARDS[0])
+    return Result.Ok(0)

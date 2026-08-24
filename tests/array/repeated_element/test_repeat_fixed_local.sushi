@@ -1,0 +1,13 @@
+# A run fills a fixed local. The back end emits a loop, not ten stores.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n7\n70\n"
+
+fn main() i32:
+    let i32[10] t = [7; 10]
+    println(t[0])
+    println(t[9])
+    let i32 total = 0
+    foreach(i in 0..10):
+        total := total + t[i]
+    println(total)
+    return Result.Ok(0)

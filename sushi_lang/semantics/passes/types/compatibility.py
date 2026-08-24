@@ -2,7 +2,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
-from sushi_lang.internals.report import Span
+from sushi_lang.internals.report import Reporter, Span
+from sushi_lang.semantics import array_runs
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, ReferenceType, BorrowMode
@@ -22,10 +23,7 @@ def validate_assignment_compatibility(validator: 'TypeValidator', declared_type:
     validator.validate_expression(value_expr)
 
     if isinstance(declared_type, ArrayType) and isinstance(value_expr, ArrayLiteral):
-        # Check array literal size matches declared size (CE2011)
-        if len(value_expr.elements) != declared_type.size:
-            er.emit(validator.reporter, er.ERR.CE2011, value_span,
-                   got=len(value_expr.elements), expected=declared_type.size)
+        if reject_array_size_mismatch(validator, declared_type, value_expr, value_span):
             return
 
     if isinstance(declared_type, DynamicArrayType):
@@ -53,6 +51,35 @@ def validate_assignment_compatibility(validator: 'TypeValidator', declared_type:
         if declared_span:
             b.note("declared here", declared_span)
         b.emit()
+
+
+def reject_array_size_mismatch(validator: 'TypeValidator', declared_type: ArrayType,
+                               literal: ArrayLiteral, value_span: Optional[Span]) -> bool:
+    """CE2011: the EXPANDED element count must match the declared size.
+
+    A repeated element is written by length, so the compiler cannot know which run is
+    short -- either of them could be. It lists what it does know instead: every run with
+    the absolute span it fills. A reader who knows a boundary sees which run misses it.
+    """
+    runs = array_runs.read_runs(
+        literal.elements,
+        array_runs.const_int_reader(validator.const_table, validator.ast_constants),
+        Reporter())
+    if runs is None:
+        return True  # a bad count. CE2017 said so; a size report would pile on.
+
+    got = array_runs.expanded_length(runs)
+    if got == declared_type.size:
+        return False
+
+    b = er.emit_with(validator.reporter, er.ERR.CE2011, value_span,
+                     got=got, expected=declared_type.size)
+    if array_runs.has_run(literal.elements):
+        for number, run in enumerate(runs, start=1):
+            b.note(f"run {number} fills {run.start}..{run.end} "
+                   f"({run.count} element{'' if run.count == 1 else 's'})", run.loc)
+    b.emit()
+    return True
 
 
 def validate_return_compatibility(validator: 'TypeValidator', expected_type: Type, return_expr: Expr, return_span: Optional[Span]) -> None:

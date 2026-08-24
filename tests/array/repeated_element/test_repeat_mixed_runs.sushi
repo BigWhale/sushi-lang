@@ -1,0 +1,10 @@
+# Two runs in one literal expand in order: [0;2, 1;2] is 0 0 1 1.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0\n0\n1\n1\n"
+
+const i32[4] A = [0;2, 1;2]
+
+fn main() i32:
+    foreach(i in 0..4):
+        println(A[i])
+    return Result.Ok(0)

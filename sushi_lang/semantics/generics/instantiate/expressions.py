@@ -74,7 +74,9 @@ class ExpressionScanner:
 
         elif isinstance(expr, ArrayLiteral):
             for element in expr.elements:
-                self.scan_expression(element)
+                self.scan_expression(element.value)
+                if element.count is not None:
+                    self.scan_expression(element.count)
 
         elif isinstance(expr, EnumConstructor):
             for arg in expr.args:

@@ -1,0 +1,18 @@
+# The count takes any base a literal takes, and an expression of constants.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "48\n40\n"
+
+const i32 HALF = 4
+const i32[16] HEX_COUNT = [3; 0x10]
+const i32[8]  EXPR_COUNT = [5; HALF * 2]
+
+fn main() i32:
+    let i32 a = 0
+    foreach(i in 0..16):
+        a := a + HEX_COUNT[i]
+    println(a)
+    let i32 b = 0
+    foreach(i in 0..8):
+        b := b + EXPR_COUNT[i]
+    println(b)
+    return Result.Ok(0)
