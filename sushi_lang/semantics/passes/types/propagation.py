@@ -20,6 +20,29 @@ _NUMERIC_FLOAT = {BuiltinType.F32, BuiltinType.F64}
 
 _ARITH_BITWISE_OPS = {"+", "-", "*", "/", "%", "&", "|", "^"}
 _SHIFT_OPS = {"<<", ">>"}
+# A unary operator whose result is its operand's type. `not` answers a bool and is not one.
+_TYPE_PRESERVING_UNARY = {"neg", "~"}
+
+
+def _is_negated_literal(expr: 'Expr') -> bool:
+    """A negated bare literal is ONE leaf: the sign belongs to its range check.
+
+    That is what makes -128 fit an i8 while the bare 128 does not, and -1 miss a u8.
+    """
+    return (isinstance(expr, UnaryOp) and expr.op == "neg"
+            and isinstance(expr.expr, (IntLit, FloatLit)))
+
+
+def is_bare_numeric_literal(expr: 'Expr') -> bool:
+    """A numeric literal that no context has typed yet."""
+    return isinstance(expr, (IntLit, FloatLit)) and expr.resolved_type is None
+
+
+def unwrap_type_preserving_unary(expr: 'Expr') -> 'Expr':
+    """The value under any run of unary operators that keep their operand's type."""
+    while isinstance(expr, UnaryOp) and expr.op in _TYPE_PRESERVING_UNARY:
+        expr = expr.expr
+    return expr
 
 
 def _propagate_numeric_type(validator: 'TypeValidator', expr: 'Expr',
@@ -32,6 +55,10 @@ def _propagate_numeric_type(validator: 'TypeValidator', expr: 'Expr',
         elif expr.op in _SHIFT_OPS:
             _propagate_numeric_type(validator, expr.left, expected)
         return
+    if (isinstance(expr, UnaryOp) and expr.op in _TYPE_PRESERVING_UNARY
+            and not _is_negated_literal(expr)):
+        _propagate_numeric_type(validator, expr.expr, expected)
+        return
     _stamp_numeric_literal(validator, expr, expected)
 
 
@@ -40,8 +67,7 @@ def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
     """Stamp a bare numeric literal (optionally negated) with its context type."""
     sign = 1
     lit = node
-    if (isinstance(lit, UnaryOp) and lit.op == "neg"
-            and isinstance(lit.expr, (IntLit, FloatLit))):
+    if _is_negated_literal(lit):
         sign = -1
         lit = lit.expr
 

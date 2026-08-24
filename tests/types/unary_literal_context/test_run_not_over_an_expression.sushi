@@ -1,0 +1,22 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n247\n0\n55\n-3\n"
+# The declared type does not stop at the operator: it reaches every literal leaf
+# under it. `~0xC8` is the radix rule at work -- a hex literal is checked as a bit
+# PATTERN, so 0xC8 is a legal i8 (-56) and its complement is 55. The negated case
+# is the other half of the same missing arm: `-(1 + 2)` was a type mismatch too.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let u8 masked = ~(1 << 3)
+    println("{masked}")
+
+    let u8 twice = ~~0
+    println("{twice}")
+
+    let i8 pattern = ~0xC8
+    println("{pattern}")
+
+    let i8 negated = -(1 + 2)
+    println("{negated}")
+
+    return Result.Ok(0)

@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2002
+# This types LITERALS; it never converts a typed value. A u32 complemented is still
+# a u32, and `as` is the only way across.
+
+fn main() i32:
+    let u32 wide = 0x0F
+    let u8 narrow = ~wide
+    println("{narrow}")
+    return Result.Ok(0)

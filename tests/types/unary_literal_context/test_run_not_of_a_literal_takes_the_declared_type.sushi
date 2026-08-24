@@ -1,0 +1,30 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n255\n65535\n4294967295\n18446744073709551615\n-1\n-1\n-1\n"
+# `~0` is how "every bit set" is written, and which bits those are is the DECLARED
+# type's business. The literal takes its type from the annotation, and the
+# complement then happens at that width (#448).
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let u8 a = ~0
+    println("{a}")
+
+    let u16 b = ~0
+    println("{b}")
+
+    let u32 c = ~0
+    println("{c}")
+
+    let u64 d = ~0
+    println("{d}")
+
+    let i8 e = ~0
+    println("{e}")
+
+    let i32 f = ~0
+    println("{f}")
+
+    let i64 g = ~0
+    println("{g}")
+
+    return Result.Ok(0)

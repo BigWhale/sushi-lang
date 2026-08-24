@@ -1,0 +1,19 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n240\nkept\nall set\n"
+# A comparison and an interpolation hand down no numeric type of their own, so the
+# literal under `~` has to take its SIBLING's type instead. Without that, the bit
+# test `flags & ~0x0F` is a mixed pair, u8 against i32 (CE2510).
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let u8 flags = 0xF0
+    println("{flags & ~0x0F}")
+
+    if ((flags & ~0x0F) != 0):
+        println("kept")
+
+    let u8 every = 0xFF
+    if (every == ~0):
+        println("all set")
+
+    return Result.Ok(0)

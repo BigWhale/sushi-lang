@@ -1,9 +1,10 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "4294967295\nAll bitwise constant tests passed\n"
 # Test bitwise operations in constant expressions.
-# The NOT_MASK line currently prints -1: a `const u32` referenced directly formats
-# as signed. The comparison against 4294967295 succeeds, so only an assertion on
-# the printed text can see the bug.
+# The explicit `as u32` on every operand predates #448, which taught the typecheck
+# pass to carry a declared type through `~`. The casts stay: they keep the path that
+# reads an operand's OWN type covered, next to the bare-literal cases in
+# tests/types/unary_literal_context/.
 
 const u32 FLAGS_A = 0x01 as u32
 const u32 FLAGS_B = 0x02 as u32
@@ -34,10 +35,8 @@ fn main() i32:
     if (SHIFT_RIGHT != 64 as u32):
         return Result.Err(StdError.Error)
 
-    # Bitwise NOT on a u32 constant. A `const u32` referenced directly formats as
-    # signed -- it prints -1 rather than 4294967295 -- while the same value read
-    # through a local is correct. The assertion below is expected to fail until that
-    # formatter defect is fixed.
+    # Bitwise NOT on a u32 constant, printed as well as compared: a const reference
+    # has to read its own declared type to format unsigned.
     println(NOT_MASK)
     if (NOT_MASK != 4294967295 as u32):
         return Result.Err(StdError.Error)

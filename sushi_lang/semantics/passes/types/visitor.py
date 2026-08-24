@@ -306,13 +306,20 @@ class ExpressionValidator(RecursiveVisitor):
             self.type_validator._validate_bitwise_operation(node)
 
     def _context_type_operand_from_sibling(self, node: BinaryOp) -> None:
-        """Stamp a bare numeric-literal operand with its concrete sibling's type."""
+        """Stamp a bare numeric-literal operand with its concrete sibling's type.
+
+        Bareness is read THROUGH the unary operators that keep their operand's type, so
+        `flags & ~0x0F` is one width rather than the mixed u8/i32 pair of CE2510 (#448).
+        What gets propagated is still the operand node, not the literal under it: the
+        recursion owns the negated-literal rule.
+        """
+        from sushi_lang.semantics.passes.types.propagation import (
+            is_bare_numeric_literal, propagate_types_to_value, unwrap_type_preserving_unary)
         left, right = node.left, node.right
-        left_bare = isinstance(left, (IntLit, FloatLit)) and left.resolved_type is None
-        right_bare = isinstance(right, (IntLit, FloatLit)) and right.resolved_type is None
+        left_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(left))
+        right_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(right))
         if left_bare == right_bare:
             return
-        from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
         if left_bare:
             sibling_type = self.type_validator.infer_expression_type(right)
             if isinstance(sibling_type, BuiltinType):
