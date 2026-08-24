@@ -134,6 +134,28 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   reader where the file was cut.
 
 ### Changed
+- **An operation the compiler reads computes at the declared width, and a result that
+  leaves the type is CE2077** (#446, Ruling 1 of `docs/design/compile-time-evaluation.md`).
+  The evaluator held a Python integer of unlimited size and stamped the exact result with
+  the type of the left operand, so `const u8 A = 200 + 100` held 300 while the program
+  printed 44. Truncation hid that for `+`, `-`, `*`, `<<` and `~`, and exposed it wherever
+  something read the held value: `A as u32` was 300, `A > 255` was true, and
+  `(200 + 100) / 2` was 150 in a constant and 22 in a body.
+
+  Sushi now follows Rust. The overflow-checked operators are `+`, `-`, `*`, `/`, `%` and
+  unary minus, and each reports **CE2077** with the operator, the value and the type;
+  division and unary minus have one case each, the smallest signed value. The width-defined
+  operators -- `~`, `&`, `|`, `^`, `<<`, `>>` -- compute at the width and never report,
+  because the bits that leave the type are lost by design. A cast is the escape and
+  truncates. This is a breaking change: `let u8 x = 200 + 100` no longer compiles, and no
+  test in the suite of 1782 needed a change for it.
+
+  Two divergences close with it. A held value is now inside its own range, so a right shift
+  of an unsigned constant no longer fills from a sign bit the type does not have --
+  `~(0 as u32) >> 1` was 4294967295 and is 2147483647, which is what a body always read.
+  And a cast in a constant truncates as the machine does, so `300 as u8` holds 44 rather
+  than 300. One consequence for #447: a constant now always holds a value its type can
+  hold, so interpolation in a constant has nothing left to reconcile.
 - **The `.slib` container is at version 4.** `SPARE_1` and `SPARE_2` became `FLAGS` and
   `KIND`, so the fixed 52-byte header did not change size, and a length-prefixed source
   section sits between the metadata and the bitcode. `KIND` states which payload is

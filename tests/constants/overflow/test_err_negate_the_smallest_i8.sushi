@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2077
+# Unary minus has one overflow case, and this is it: 128 is no i8.
+
+const i8 SMALLEST = -128
+const i8 NEGATED = -SMALLEST
+
+fn main() i32:
+    println(NEGATED)
+    return Result.Ok(0)

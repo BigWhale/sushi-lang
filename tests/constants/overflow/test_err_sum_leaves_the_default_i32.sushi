@@ -1,0 +1,7 @@
+# EXPECT_ERROR_CODE: CE2077
+# No declared type means the i32 default, and the rule holds at that width too.
+
+fn main() i32:
+    let i32 past_the_top = 2147483647 + 1
+    println(past_the_top)
+    return Result.Ok(0)

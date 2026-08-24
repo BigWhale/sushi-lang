@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2077
+# The compiler reads this sum, so it computes at the declared width and reports a
+# result the type cannot hold. It used to hold 300 and print 44 (Ruling 1, #446).
+
+const u8 TOO_BIG = 200 + 100
+
+fn main() i32:
+    println(TOO_BIG)
+    return Result.Ok(0)

@@ -1,0 +1,17 @@
+# EXPECT_STDOUT_EXACT: "44 44\n200 200\n"
+# The cast is the escape from the overflow rule, so it truncates and does not report.
+# The widening cast is the other half: a u8 constant now holds the value its type can
+# hold, so `A as u32` reads 200 and no longer the 300 that the sum below it lost.
+
+const u8  TRUNCATED = 300 as u8
+const u8  A         = 200
+const u32 WIDENED   = A as u32
+
+fn main() i32:
+    let u8 truncated = 300 as u8
+    let u8 a = 200
+    let u32 widened = a as u32
+
+    println("{TRUNCATED} {truncated}")
+    println("{WIDENED} {widened}")
+    return Result.Ok(0)

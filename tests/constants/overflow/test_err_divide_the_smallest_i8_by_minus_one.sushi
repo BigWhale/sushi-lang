@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODE: CE2077
+# The one overflow case of division. LLVM calls it undefined for sdiv, because the
+# hardware instruction traps, so a compile-time report is the only correct answer.
+
+const i8 SMALLEST = -128
+const i8 FLIPPED = SMALLEST / -1
+
+fn main() i32:
+    println(FLIPPED)
+    return Result.Ok(0)

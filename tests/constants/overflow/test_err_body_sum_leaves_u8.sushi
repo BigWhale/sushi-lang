@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE2077
+# One expression has one meaning: a fold of literals in a body follows the same rule
+# as a constant does.
+
+fn main() i32:
+    let u8 too_big = 200 + 100
+    println(too_big)
+    return Result.Ok(0)

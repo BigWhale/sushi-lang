@@ -1,0 +1,22 @@
+# EXPECT_STDOUT_EXACT: "144 144\n2147483647 2147483647\n4294967295 4294967295\n240 240\n"
+# A width-defined operator computes at the width and never reports: the bits that
+# leave the type are lost, which is what a body does. The right shift is the one that
+# used to disagree -- the evaluator held ~0 as Python -1, so it filled from a sign bit
+# a u32 does not have and read 4294967295 where a body read 2147483647.
+
+const u8  SHIFTED  = (200 as u8) << 1
+const u32 HALF     = (~(0 as u32)) >> 1
+const u32 ALL_ONES = ~(0 as u32)
+const u8  XORED    = (0xFF as u8) ^ (0x0F as u8)
+
+fn main() i32:
+    let u8 two_hundred = 200
+    let u32 zero = 0
+    let u8 top = 0xFF
+    let u8 low = 0x0F
+
+    println("{SHIFTED} {two_hundred << 1}")
+    println("{HALF} {(~zero) >> 1}")
+    println("{ALL_ONES} {~zero}")
+    println("{XORED} {top ^ low}")
+    return Result.Ok(0)

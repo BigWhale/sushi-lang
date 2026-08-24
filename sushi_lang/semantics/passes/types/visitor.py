@@ -267,6 +267,13 @@ class ExpressionValidator(RecursiveVisitor):
             from sushi_lang.semantics.passes.types.expressions import validate_bitwise_unary
             validate_bitwise_unary(self.type_validator, node)
 
+        # Unary minus is overflow-checked: the smallest signed value has no positive
+        # twin. `~` is width-defined and never reports.
+        if node.op == "neg":
+            from sushi_lang.semantics.passes.types.expressions import (
+                reject_overflowing_operation)
+            reject_overflowing_operation(self.type_validator, node, operand_type)
+
     def visit_binaryop(self, node: BinaryOp) -> None:
         """Validate binary operation."""
         self.type_validator.validate_expression(node.left)
@@ -304,6 +311,13 @@ class ExpressionValidator(RecursiveVisitor):
 
         if node.op in ["&", "|", "^", "<<", ">>"]:
             self.type_validator._validate_bitwise_operation(node)
+
+        # The overflow-checked operators. A width-defined one cannot leave its type,
+        # so it is not asked (Ruling 1 of docs/design/compile-time-evaluation.md).
+        if node.op in ["+", "-", "*", "/", "%"]:
+            from sushi_lang.semantics.passes.types.expressions import (
+                reject_overflowing_operation)
+            reject_overflowing_operation(self.type_validator, node, left_type)
 
     def _context_type_operand_from_sibling(self, node: BinaryOp) -> None:
         """Stamp a bare numeric-literal operand with its concrete sibling's type.
