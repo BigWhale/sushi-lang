@@ -21,7 +21,8 @@ from tqdm import tqdm
 
 from test_metadata import parse_test_metadata, get_test_category, should_run_runtime_test, TestMetadata
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
-                       leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE)
+                       leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
+                       DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs)
 
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
@@ -294,12 +295,12 @@ class TestResult:
 class TestRunner:
     """Enhanced test runner with compilation and runtime testing."""
 
-    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False, parallel_jobs: int = 4, json_output: bool = False, leaks_only: bool = False):
+    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False, parallel_jobs: Optional[int] = None, json_output: bool = False, leaks_only: bool = False):
         """Initialize the test runner."""
         self.tests_dir = tests_dir
         self.mode = mode
         self.verbose = verbose
-        self.parallel_jobs = parallel_jobs
+        self.parallel_jobs = default_jobs() if parallel_jobs is None else parallel_jobs
         self.json_output = json_output
         self.leaks_only = leaks_only
         # Every leak assertion that produced a verdict, and every one that could not
@@ -866,8 +867,11 @@ def main():
     parser.add_argument(
         "--jobs", "-j",
         type=int,
-        default=4,
-        help="Number of parallel test jobs (default: 4)"
+        default=None,   # None -> TestRunner asks default_jobs(). run_tests always
+                        # forwards --jobs, and this module is a SECOND copy of
+                        # run_tests when that happens, so evaluating the default here
+                        # announced a rejected SUSHI_TEST_JOBS a second time.
+        help=f"Number of parallel test jobs (default: {DEFAULT_JOBS}, or ${JOBS_ENV_VAR})"
     )
 
     parser.add_argument(
