@@ -270,6 +270,9 @@ the limit that Known Limitation 14 records for a size does not apply to a count.
 
 ### What this closes
 
+**Adopted.** `compression/zlib` was rewritten onto this ruling, and the measurement below is
+what the rewrite acted on.
+
 `compression/zlib` is the only real client of a long table in the repository, and every table
 it builds at run time is a run of one value:
 
@@ -294,11 +297,21 @@ written values and not computed ones. This ruling does not change them.
 
 - A CRC-32 table. Each entry needs eight steps over an accumulator.
 - A 256-entry character-class table for a lexer.
-- The decode tables that a fast inflate uses. `zlib.sushi` avoids them with a reverse linear
-  scan (`zlen_index` at `zlib.sushi:390`, `zdist_index` at `zlib.sushi:403`), which reads up
-  to 28 entries for each match it writes.
+- The decode tables that a fast inflate uses. These are indexed by a code, and a code is
+  computed, so they need Ruling 3.
 
-These three are the evidence that Ruling 3 waits for.
+These two are the evidence that Ruling 3 waits for.
+
+**One item left this list during the rewrite.** The ENCODER's two lookups -- a length to its
+length code, a distance to its distance code -- read as computed tables, and they are not:
+each is a step function whose value is constant over a run, so a repeated element writes it
+directly. `zlen_index` walked 29 base entries backwards for every match it emitted and now
+reads one slot of a 256-entry table written in 29 runs. `zdist_index` does the same through
+the range split zlib's own encoder uses, since one direct table would need 32768 slots.
+
+The lesson generalizes, and it is worth stating before Ruling 3 opens: **a table is a run
+table more often than it looks.** Ask whether the value is constant over intervals of the
+index before concluding that it needs a loop to build.
 
 ## 4. Ruling 3: a constant function waits
 

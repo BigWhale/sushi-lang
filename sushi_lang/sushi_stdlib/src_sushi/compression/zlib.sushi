@@ -13,10 +13,10 @@
 # preset dictionary gives DictNeeded. Buffers above 2 GiB are out of range: a
 # length casts to a negative count and the read reports Truncated.
 #
-# CAUTION for anyone editing this file: a bitwise operator does not check the
-# width of its operands, and the backend silently truncates the right side to
-# the width of the left. Cast every operand of every shift, OR and AND to the
-# width you intend. See BUGS.md B1.
+# On the casts: a bitwise operator rejects two different numeric types
+# (CE2510), so the `as u32` and `as i32` on the OPERANDS of a shift, an OR or
+# an AND are what the language requires and not defensive noise. A shift COUNT
+# is exempt -- its type is free -- so a count carries no cast here.
 
 # The length code table of RFC 1951 3.2.5. Symbol 257 + i has base length
 # ZLIB_LEN_BASE[i] and reads ZLIB_LEN_EXTRA[i] more bits.
@@ -37,6 +37,31 @@ const i32[30] ZLIB_DIST_BASE = [
 const i32[30] ZLIB_DIST_EXTRA = [
     0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7,
     8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13
+]
+
+# The inverse of the two tables above, for the encoder. A repeated element
+# writes them, so the encoder reads one slot instead of scanning a base table
+# backwards for every match it emits.
+
+# Length 3 to 258 -> length code 0 to 28, indexed by length - 3.
+const i32[256] ZLIB_LEN_CODE = [
+    0;1, 1;1, 2;1, 3;1, 4;1, 5;1, 6;1, 7;1, 8;2, 9;2, 10;2, 11;2,
+    12;4, 13;4, 14;4, 15;4, 16;8, 17;8, 18;8, 19;8, 20;16, 21;16,
+    22;16, 23;16, 24;32, 25;32, 26;32, 27;31, 28;1
+]
+
+# Distance 1 to 256 -> distance code 0 to 15, indexed by dist - 1.
+const i32[256] ZLIB_DIST_SMALL = [
+    0;1, 1;1, 2;1, 3;1, 4;2, 5;2, 6;4, 7;4,
+    8;8, 9;8, 10;16, 11;16, 12;32, 13;32, 14;64, 15;64
+]
+
+# Distance 257 to 32768 -> distance code 16 to 29, indexed by (dist - 1) >> 7.
+# The first two slots are never read, because that index is 2 or more for every
+# distance of 257 and above. They stay so the shift needs no adjustment.
+const i32[256] ZLIB_DIST_BIG = [
+    0;1, 14;1, 16;1, 17;1, 18;2, 19;2, 20;4, 21;4,
+    22;8, 23;8, 24;16, 25;16, 26;32, 27;32, 28;64, 29;64
 ]
 
 # The order the code-length code lengths arrive in, RFC 1951 3.2.7.
@@ -78,13 +103,12 @@ fn zbits_get(peek u8[] src, poke ZBits s, i32 need) u32 | ZError:
     while (s.cnt < need):
         if (s.pos >= src.len()):
             return Result.Err(ZError.Truncated(s.pos))
-        s.acc := s.acc | ((src[s.pos] as u32) << (s.cnt as u32))
+        s.acc := s.acc | ((src[s.pos] as u32) << s.cnt)
         s.pos := s.pos + 1
         s.cnt := s.cnt + 8
-    let u32 one = 1
-    let u32 mask = (one << (need as u32)) - one
+    let u32 mask = (1 << need) - 1
     let u32 v = s.acc & mask
-    s.acc := s.acc >> (need as u32)
+    s.acc := s.acc >> need
     s.cnt := s.cnt - need
     return Result.Ok(v)
 
@@ -92,11 +116,7 @@ fn zbits_get(peek u8[] src, poke ZBits s, i32 need) u32 | ZError:
 # over-subscribed code is rejected here; an incomplete one is reported through
 # `left` because the distance code of a one-symbol block is legally incomplete.
 fn zhuff_build(peek i32[] lengths, i32 n) ZHuff | ZError:
-    let i32[] count = new()
-    let i32 i = 0
-    while (i < 16):
-        count.push(0)
-        i := i + 1
+    let i32[] count = from([0; 16])
 
     let i32 sym = 0
     while (sym < n):
@@ -117,18 +137,16 @@ fn zhuff_build(peek i32[] lengths, i32 n) ZHuff | ZError:
         len := len + 1
 
     # the first symbol slot for each code length
-    let i32[] offs = new()
-    i := 0
-    while (i < 16):
-        offs.push(0)
-        i := i + 1
+    let i32[] offs = from([0; 16])
     len := 1
     while (len < 15):
         offs[len + 1] := offs[len] + count[len]
         len := len + 1
 
+    # n is a parameter, so this length is not readable at compile time and the
+    # fill cannot be a repeated element.
     let i32[] symbol = new()
-    i := 0
+    let i32 i = 0
     while (i < n):
         symbol.push(0)
         i := i + 1
@@ -162,30 +180,13 @@ fn zhuff_decode(peek u8[] src, poke ZBits s, peek ZHuff h) i32 | ZError:
 
 # zfixed_lit: the fixed literal/length code of RFC 1951 3.2.6.
 fn zfixed_lit() ZHuff | ZError:
-    let i32[] lengths = new()
-    let i32 i = 0
-    while (i < 144):
-        lengths.push(8)
-        i := i + 1
-    while (i < 256):
-        lengths.push(9)
-        i := i + 1
-    while (i < 280):
-        lengths.push(7)
-        i := i + 1
-    while (i < 288):
-        lengths.push(8)
-        i := i + 1
+    let i32[] lengths = from([8;144, 9;112, 7;24, 8;8])
     return Result.Ok(zhuff_build(peek lengths, 288)??)
 
 # zfixed_dist: the fixed distance code. Thirty codes of five bits, so the code
 # is incomplete by design and the two spare patterns decode to nothing.
 fn zfixed_dist() ZHuff | ZError:
-    let i32[] lengths = new()
-    let i32 i = 0
-    while (i < 30):
-        lengths.push(5)
-        i := i + 1
+    let i32[] lengths = from([5; 30])
     return Result.Ok(zhuff_build(peek lengths, 30)??)
 
 # zinflate_stored: a BTYPE=00 block. The bit buffer is dropped, which aligns to
@@ -251,12 +252,8 @@ fn zinflate_fixed(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
 # zinflate_clen: the code-length code that the header of a dynamic block
 # carries. Its own lengths arrive in the permuted ZLIB_CLEN_ORDER.
 fn zinflate_clen(peek u8[] src, poke ZBits s, i32 ncode) ZHuff | ZError:
-    let i32[] clen = new()
+    let i32[] clen = from([0; 19])
     let i32 i = 0
-    while (i < 19):
-        clen.push(0)
-        i := i + 1
-    i := 0
     while (i < ncode):
         clen[ZLIB_CLEN_ORDER[i]] := zbits_get(peek src, poke s, 3)?? as i32
         i := i + 1
@@ -274,19 +271,18 @@ fn zinflate_lengths(peek u8[] src, poke ZBits s, peek ZHuff clencode,
         else:
             let i32 val = 0
             let i32 rep = 0
-            if (sym == 16):
-                if (lengths.len() == 0):
-                    return Result.Err(ZError.BadCode())
-                val := lengths[lengths.len() - 1]
-                rep := 3 + (zbits_get(peek src, poke s, 2)?? as i32)
-            else:
-                if (sym == 17):
+            match sym:
+                16 ->
+                    if (lengths.len() == 0):
+                        return Result.Err(ZError.BadCode())
+                    val := lengths[lengths.len() - 1]
+                    rep := 3 + (zbits_get(peek src, poke s, 2)?? as i32)
+                17 ->
                     rep := 3 + (zbits_get(peek src, poke s, 3)?? as i32)
-                else:
-                    if (sym == 18):
-                        rep := 11 + (zbits_get(peek src, poke s, 7)?? as i32)
-                    else:
-                        return Result.Err(ZError.BadSymbol(sym))
+                18 ->
+                    rep := 11 + (zbits_get(peek src, poke s, 7)?? as i32)
+                _ ->
+                    return Result.Err(ZError.BadSymbol(sym))
             if ((lengths.len() + rep) > total):
                 return Result.Err(ZError.BadCode())
             let i32 k = 0
@@ -347,7 +343,7 @@ struct ZCode:
 # zput_bits: append n bits of v, low bit first, the way DEFLATE packs plain
 # values. It cannot fail; it shares the ZError channel so ?? composes.
 fn zput_bits(poke u8[] out, poke ZOut w, u32 v, i32 n) ~ | ZError:
-    w.acc := w.acc | (v << (w.cnt as u32))
+    w.acc := w.acc | (v << w.cnt)
     w.cnt := w.cnt + n
     while (w.cnt >= 8):
         out.push((w.acc & 255) as u8)
@@ -360,7 +356,7 @@ fn zput_bits(poke u8[] out, poke ZOut w, u32 v, i32 n) ~ | ZError:
 fn zput_code(poke u8[] out, poke ZOut w, u32 code, i32 n) ~ | ZError:
     let i32 i = n - 1
     while (i >= 0):
-        let u32 bit = (code >> (i as u32)) & 1
+        let u32 bit = (code >> i) & 1
         zput_bits(poke out, poke w, bit, 1)??
         i := i - 1
     return Result.Ok(~)
@@ -385,32 +381,25 @@ fn zfixed_code(i32 sym) ZCode | ZError:
         return Result.Ok(ZCode((192 + (sym - 280)) as u32, 8))
     return Result.Err(ZError.BadSymbol(sym))
 
-# zlen_index: the length code for a match of 3 to 258 bytes. The scan runs
-# downwards, so it lands on the largest base that the length reaches.
+# zlen_index: the length code for a match of 3 to 258 bytes.
 fn zlen_index(i32 length) i32 | ZError:
     if (length < 3):
         return Result.Err(ZError.BadSymbol(length))
     if (length > 258):
         return Result.Err(ZError.BadSymbol(length))
-    let i32 i = 28
-    while (i > 0):
-        if (ZLIB_LEN_BASE[i] <= length):
-            return Result.Ok(i)
-        i := i - 1
-    return Result.Ok(0)
+    return Result.Ok(ZLIB_LEN_CODE[length - 3])
 
-# zdist_index: the distance code for 1 to 32768 bytes.
+# zdist_index: the distance code for 1 to 32768 bytes. One direct table would
+# need 32768 slots, so the range splits: below 257 the distance indexes itself,
+# above it the top bits do, which is the split zlib's own encoder uses.
 fn zdist_index(i32 dist) i32 | ZError:
     if (dist < 1):
         return Result.Err(ZError.BadDistance(dist, 0))
     if (dist > 32768):
         return Result.Err(ZError.BadDistance(dist, 32768))
-    let i32 i = 29
-    while (i > 0):
-        if (ZLIB_DIST_BASE[i] <= dist):
-            return Result.Ok(i)
-        i := i - 1
-    return Result.Ok(0)
+    if (dist < 257):
+        return Result.Ok(ZLIB_DIST_SMALL[dist - 1])
+    return Result.Ok(ZLIB_DIST_BIG[(dist - 1) >> 7])
 
 # zemit_match: a length/distance pair. In a fixed block every distance code is
 # five bits and equals its symbol, so the code needs no table.
@@ -485,13 +474,11 @@ fn zdeflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~ | ZError:
     zput_bits(poke out, poke w, 1, 2)??
 
     let i32 n = src.len()
-    let i32[] head = new()
-    let i32 i = 0
-    while (i < 32768):
-        head.push(-1)
-        i := i + 1
+    let i32[] head = from([-1; 32768])
+    # `prev` is one slot per input byte, so its length is not readable at
+    # compile time and the fill cannot be a repeated element.
     let i32[] prev = new()
-    i := 0
+    let i32 i = 0
     while (i < n):
         prev.push(-1)
         i := i + 1

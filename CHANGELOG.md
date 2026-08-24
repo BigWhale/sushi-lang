@@ -159,6 +159,33 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   reader where the file was cut.
 
 ### Changed
+- **`compression/zlib` is rewritten onto the language it now has.** The module landed
+  before four of the fixes in this release and carried a workaround for each. It opened
+  with a CAUTION block telling the reader that a bitwise operator truncates in silence and
+  to cast every operand -- the opposite of what #438 made true -- and it pointed at an
+  untracked working document from a file that ships to users.
+
+  Six fill loops become one repeated element each: the RFC 1951 fixed literal code is
+  `from([8;144, 9;112, 7;24, 8;8])` instead of four `while` loops and 288 bounds-checked
+  appends, and the encoder's 32768-entry hash head is `from([-1; 32768])`. Since Sushi has
+  no module-level state, `zfixed_lit` and `zfixed_dist` run once per fixed block in a
+  stream, so this is about 700 appends per block replaced by two allocations and six
+  counted fills. Two fills keep their loop, and say why in a comment: their length is the
+  input size or a parameter, so no count is readable at compile time.
+
+  The encoder stops scanning for a code. `zlen_index` walked a 29-entry base table
+  backwards and `zdist_index` a 30-entry one, once per emitted match. The inverse tables
+  are now written directly -- 256 slots in 29 runs for the length code, and the range split
+  zlib'"'"'s own encoder uses for the distance code, 256 slots in 16 runs each side -- so a
+  lookup is one array read. Both keep their range check and their `ZError` channel, and a
+  program compares every table against the scan it replaces across all 256 lengths and all
+  32768 distances: no disagreement.
+
+  Five shift counts drop a cast that #438 made unnecessary, since a shift count'"'"'s type is
+  free; the operand casts stay, because CE2510 requires them. `zinflate_lengths` reads its
+  three repeat symbols with a `match`, the form `inflate_raw` already used for the block
+  type. No behaviour changes: 354 differential cases against Python zlib pass in both
+  directions, over both containers.
 - **An operation the compiler reads computes at the declared width, and a result that
   leaves the type is CE2077** (#446, Ruling 1 of `docs/design/compile-time-evaluation.md`).
   The evaluator held a Python integer of unlimited size and stamped the exact result with
