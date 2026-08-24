@@ -103,7 +103,7 @@ def _propagate_array_element_type(validator: 'TypeValidator', value_expr: 'Expr'
     if not isinstance(value_expr, ArrayLiteral):
         return
     for element in value_expr.elements:
-        propagate_types_to_value(validator, element, element_type)
+        propagate_types_to_value(validator, element.value, element_type)
 
 
 def _propagate_to_enum_args(validator: 'TypeValidator', node: Expr,

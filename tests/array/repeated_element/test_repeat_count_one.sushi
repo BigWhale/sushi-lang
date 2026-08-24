@@ -1,0 +1,10 @@
+# A count of one is legal. It spells one element, and it is pointless.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n8\n"
+
+const i32[2] C = [7;1, 8;1]
+
+fn main() i32:
+    println(C[0])
+    println(C[1])
+    return Result.Ok(0)

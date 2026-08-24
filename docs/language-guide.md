@@ -515,6 +515,24 @@ position uses: an owned source is moved (using it afterwards is `CE2405`), and a
 a container needs `.clone()` (`words[0] := words[1]` is `CE2411`). You may only write where the
 write can reach the owner — not through a `peek` parameter, a match binding, or a constant.
 
+**Repeating an element**: a table of the same value does not have to be spelled out.
+`value; count` fills `count` slots with one value, and it mixes with plain elements:
+
+```sushi
+fn main() i32:
+    let i32[10] tally = [0; 10]           # ten zeros
+    let i32[6]  mixed = [1, 0;3, 9, 7]    # 1 0 0 0 9 7
+    let i32[]   head  = from([-1; 1000])  # a thousand, on the heap
+
+    println("{tally[9]} {mixed[2]} {head.len()}")
+    return Result.Ok(0)
+```
+
+The count is read at compile time, so it is a literal in any base or the name of an
+integer constant. The value is evaluated once and copied, which means the element type
+must copy: repeating a `string` or another owning type is `CE2018`. See the
+[Language Reference](language-reference.md#a-repeated-element) for the full rules.
+
 **Memory Management**: Dynamic arrays use RAII - they're automatically deallocated when they go out of scope. The destructor recursively cleans up all elements, so arrays of structs or nested arrays are properly freed. Arrays use move semantics: when you pass a dynamic array to a function, ownership transfers unless you explicitly `.clone()` it.
 
 ### List@(T)

@@ -646,6 +646,66 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+#### A repeated element
+
+An element may say how many slots it fills. `value; count` puts `count` copies of one
+value in the literal, and it stands where a single element stands, so runs and plain
+elements mix freely:
+
+```sushi
+const i32[19]  ZEROS  = [0; 19]
+const i32[4]   PAIRS  = [0;2, 1;2]              # 0 0 1 1
+const i32[6]   MIXED  = [1, 0;3, 9, 7]          # 1 0 0 0 9 7
+const i32[288] FIXED  = [8;144, 9;112, 7;24, 8;8]
+
+fn main() i32:
+    let i32[10] tally = [0; 10]
+    let i32[]   head  = from([-1; 32768])
+    println(tally[9])
+    println(head.len())
+    return Result.Ok(0)
+```
+
+The count is a positive integer the compiler can read: a literal in any base, the name
+of an integer constant, or an expression of them. Unlike an array size, it is read late
+enough to name a constant of **another** unit. A count that is not a count is
+**CE2017** -- a zero, a negative, or a value the compiler cannot read:
+
+<!-- docs-sweep: error CE2017 -->
+```sushi
+fn main() i32:
+    let i32 n = 4
+    let i32[4] t = [7; n]           # CE2017: a local is not a value the compiler reads
+    println(t[0])
+    return Result.Ok(0)
+```
+
+The value is evaluated once and copied, so a repeated element must be of a type that
+copies. A type that owns heap memory would need a deep copy per slot, and `.clone()` is
+the only deep copy in Sushi -- the compiler never inserts one. Repeating one is
+**CE2018**:
+
+<!-- docs-sweep: error CE2018 -->
+```sushi
+fn main() i32:
+    let string s = "mostly harmless"
+    let string[3] t = [s; 3]        # CE2018: string owns heap memory
+    println(t[0])
+    return Result.Ok(0)
+```
+
+What CE2011 compares is the **expanded** count, so a run of 144 is 144 slots. When a
+literal has a run, CE2011 lists every run with the span it fills, because the compiler
+cannot know which of two runs is the short one -- either could be:
+
+```
+error CE2011: array literal has 287 elements but declared type expects 288
+note: run 1 fills 0..143    (144 elements)
+note: run 2 fills 144..254  (111 elements)
+note: run 3 fills 255..278   (24 elements)
+note: run 4 fills 279..286    (8 elements)
+```
+
 ### Dynamic Arrays
 
 Heap-allocated, runtime size:

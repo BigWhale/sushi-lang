@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, RangeExpr
@@ -22,16 +23,46 @@ def validate_array_literal(validator: 'TypeValidator', expr: ArrayLiteral) -> No
         return
 
     for element in expr.elements:
-        validator.validate_expression(element)
+        validator.validate_expression(element.value)
+        if element.count is not None:
+            validator.validate_expression(element.count)
+
+    # CE2017 for a bad repeat count. A `const` never arrives here with one, because its
+    # evaluator reads the same runs first and `validate_constant` returns on the error --
+    # so the two speakers cannot both fire for one literal.
+    runs = array_runs.read_runs(
+        expr.elements,
+        array_runs.const_int_reader(validator.const_table, validator.ast_constants),
+        validator.reporter)
 
     # Check type consistency of all elements (CE2013)
-    first_element_type = validator.infer_expression_type(expr.elements[0])
+    first_element_type = validator.infer_expression_type(expr.elements[0].value)
     if first_element_type is not None:
-        for _i, element in enumerate(expr.elements[1:], 1):
-            element_type = validator.infer_expression_type(element)
+        for element in expr.elements[1:]:
+            element_type = validator.infer_expression_type(element.value)
             if element_type is not None and element_type != first_element_type:
-                er.emit(validator.reporter, er.ERR.CE2013, element.loc,
+                er.emit(validator.reporter, er.ERR.CE2013, element.value.loc,
                        expected=display_type(first_element_type), got=display_type(element_type))
+
+    if runs is not None:
+        reject_owning_repeat(validator, runs)
+
+
+def reject_owning_repeat(validator: 'TypeValidator', runs) -> None:
+    """CE2018: `value; count` cannot repeat a value that owns heap memory.
+
+    N copies of an owning value would need N-1 deep copies, and `.clone()` is the only
+    deep copy in Sushi -- the compiler never inserts one.
+    """
+    from sushi_lang.semantics import typesys
+
+    for run in runs:
+        if run.count == 1:
+            continue
+        element_type = validator.infer_expression_type(run.value)
+        if element_type is not None and typesys.owns_heap(element_type):
+            er.emit(validator.reporter, er.ERR.CE2018, run.value.loc,
+                    type=display_type(element_type))
 
 
 def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None:
@@ -490,7 +521,7 @@ def check_propagation_in_expression(expr: Expr) -> bool:
 
     elif isinstance(expr, ArrayLiteral):
         if expr.elements:
-            return any(check_propagation_in_expression(elem) for elem in expr.elements)
+            return any(check_propagation_in_expression(elem.value) for elem in expr.elements)
 
     elif isinstance(expr, EnumConstructor):
         if expr.args:

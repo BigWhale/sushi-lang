@@ -1,0 +1,11 @@
+# A repeated element in a const: one run of nineteen zeros.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0\n0\n0\n"
+
+const i32[19] ZCLEN_ZERO = [0; 19]
+
+fn main() i32:
+    println(ZCLEN_ZERO[0])
+    println(ZCLEN_ZERO[9])
+    println(ZCLEN_ZERO[18])
+    return Result.Ok(0)

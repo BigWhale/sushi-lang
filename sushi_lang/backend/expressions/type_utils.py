@@ -148,7 +148,7 @@ def _dynamic_array_from_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
     elements = expr.elements.elements
     if not elements:
         return None
-    element_type = infer_expr_semantic_type(codegen, elements[0])
+    element_type = infer_expr_semantic_type(codegen, elements[0].value)
     return None if element_type is None else DynamicArrayType(base_type=element_type)
 
 

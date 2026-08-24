@@ -19,27 +19,16 @@ def initialize_array_literal(
     element_semantic_type=None
 ) -> None:
     """Initialize array variable with array literal elements."""
-    from llvmlite import ir
     from sushi_lang.backend.destructors import resolve_named_type
-    from sushi_lang.backend.ownership import ConsumingUse, consume
+    from sushi_lang.backend.types.arrays import runs
 
     require_builder(codegen)
 
     resolved_element = (resolve_named_type(codegen, element_semantic_type)
                         if element_semantic_type is not None else None)
 
-    for i, element_expr in enumerate(array_literal.elements):
-        element_value = codegen.expressions.emit_expr(element_expr)
-
-        element_value = consume(codegen, element_expr, element_value, resolved_element,
-                                ConsumingUse.ARRAY_ELEMENT)
-
-        zero = ir.Constant(codegen.i32, 0)
-        index = ir.Constant(codegen.i32, i)
-        gep = codegen.builder.gep(slot, [zero, index])
-
-        casted_element = codegen.utils.cast_for_param(element_value, array_type.element)
-        codegen.builder.store(casted_element, gep)
+    emitted = runs.emit_runs(codegen, array_literal.elements, resolved_element)
+    runs.fill_fixed_slot(codegen, slot, emitted, array_type.element)
 
 
 def initialize_dynamic_array(

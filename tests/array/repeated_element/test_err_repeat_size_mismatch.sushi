@@ -1,0 +1,10 @@
+# The expanded total is what CE2011 compares. The runs are listed with their
+# absolute spans, so a short run is findable: run 2 ends at 254, not 255.
+# EXPECT_ERROR_CODE: CE2011
+# EXPECT_STDERR_CONTAINS: run 2 fills 144..254
+
+const i32[288] ZFIXED_LIT = [8;144, 9;111, 7;24, 8;8]
+
+fn main() i32:
+    println(ZFIXED_LIT[0])
+    return Result.Ok(0)

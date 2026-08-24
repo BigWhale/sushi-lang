@@ -39,8 +39,11 @@ def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
     _variadic_temp_counter[0] += 1
     temp_name = f"__variadic_{callee_name}_{_variadic_temp_counter[0]}"
 
+    from sushi_lang.backend.types.arrays import runs
+
     codegen.dynamic_arrays.declare_dynamic_array(temp_name, array_type)
-    codegen.dynamic_arrays.emit_array_constructor_from(temp_name, trailing_values)
+    codegen.dynamic_arrays.emit_array_constructor_from(
+        temp_name, runs.single_runs(trailing_values))
 
     descriptor = codegen.dynamic_arrays._array(temp_name)
     array_struct = codegen.builder.load(descriptor.llvm_alloca, name=f"{temp_name}_val")

@@ -134,9 +134,11 @@ class RecursiveVisitor(NodeVisitor[None]):
                 self.visit(part)
 
     def visit_arrayliteral(self, node: ArrayLiteral) -> None:
-        """Visit an array literal. Default: visit all elements."""
+        """Visit an array literal. Default: visit every value, and every repeat count."""
         for element in node.elements:
-            self.visit(element)
+            self.visit(element.value)
+            if element.count is not None:
+                self.visit(element.count)
 
     def visit_indexaccess(self, node: IndexAccess) -> None:
         """Visit an index access. Default: visit array and index."""

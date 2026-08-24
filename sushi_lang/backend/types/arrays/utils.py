@@ -8,23 +8,18 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-def emit_array_literal_elements(codegen: 'LLVMCodegen', element_exprs, element_type) -> list[ir.Value]:
-    """Emit array-literal element values, deep-copying heap-owning aliases."""
-    from sushi_lang.backend.ownership import ConsumingUse, consume
+def emit_array_literal_elements(codegen: 'LLVMCodegen', elements, element_type):
+    """Emit array-literal values as RUNS, deep-copying heap-owning aliases.
 
-    values = []
-    for elem in element_exprs:
-        value = codegen.expressions.emit_expr(elem)
-        # The array takes ownership of each element. `_alias_element_type` is the fallback
-        # for callers that do not know the declared element type (the plain `from([...])`
-        # path); a None type classifies as PLAIN, i.e. store as-is, which is the same
-        # verbatim-emit this position did before.
-        ety = element_type if element_type is not None else _alias_element_type(codegen, elem)
-        values.append(consume(codegen, elem, value, ety, ConsumingUse.ARRAY_ELEMENT))
-    return values
+    A run carries its count rather than a value per slot, so `from([-1; 32768])` emits one
+    value and not 32768 (#446).
+    """
+    from sushi_lang.backend.types.arrays import runs
+
+    return runs.emit_runs(codegen, elements, element_type)
 
 
-def _alias_element_type(codegen: 'LLVMCodegen', elem):
+def alias_element_type(codegen: 'LLVMCodegen', elem):
     """Best-effort semantic type of a bare-Name array-literal element (for alias cloning)."""
     from sushi_lang.semantics.ast import Name
     if isinstance(elem, Name):
@@ -33,11 +28,12 @@ def _alias_element_type(codegen: 'LLVMCodegen', elem):
 
 
 def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_type, element_llvm_type: ir.Type,
-                                       elements: list[ir.Value]) -> ir.Value:
-    """Create a dynamic array struct value from a list of elements."""
+                                       elements) -> ir.Value:
+    """Create a dynamic array struct value from emitted runs."""
     from sushi_lang.backend.expressions import memory
+    from sushi_lang.backend.types.arrays import runs
 
-    initial_len = len(elements)
+    initial_len = runs.total_elements(elements)
     if initial_len == 0:
         zero_i32 = ir.Constant(codegen.types.i32, 0)
         null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
@@ -68,9 +64,7 @@ def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_type, ele
 
     typed_data_ptr = codegen.builder.bitcast(data_ptr, ir.PointerType(element_llvm_type))
 
-    for i, element_value in enumerate(elements):
-        element_ptr = codegen.builder.gep(typed_data_ptr, [ir.Constant(codegen.types.i32, i)])
-        codegen.builder.store(element_value, element_ptr)
+    runs.fill_runs(codegen, typed_data_ptr, elements, element_llvm_type)
 
     array_struct_type = ir.LiteralStructType([
         codegen.types.i32,

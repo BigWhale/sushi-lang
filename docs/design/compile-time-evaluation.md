@@ -178,6 +178,10 @@ let u8 s = x + y          # this wraps at run time, with no check
 
 ## 3. Ruling 2: an array literal takes a repeated element
 
+**Implemented.** The grammar takes one new level, the AST carries the run rather than
+expanding it, and one seam (`semantics/array_runs.py`) reads every count. Two questions
+this section did not answer came up while it went in, and section 3.1 rules on them.
+
 ### The syntax
 
 A repeated element is `value; count`. It stands anywhere an element stands, and it mixes with
@@ -225,6 +229,44 @@ stores, because the IR size and the compile time both grow with N.
 
 A note on the stack: a fixed local of 32768 `i32` values is 128 KiB. The encoder case
 therefore wants `from([-1; 32768])`, which puts the table on the heap.
+
+### 3.1 Two rules the first draft did not state
+
+**A repeated element must not own heap memory (CE2018).** `[s; 3]` for a `string` asks the
+compiler to put one owned value in three slots. That needs a deep copy per slot, and
+`.clone()` is the only deep copy in Sushi -- the compiler inserts none. So a run is limited
+to a type that copies.
+
+The rule is by TYPE and not by expression, so `["-"; 40]` is rejected as well, although a
+string literal owns no heap and copying its descriptor forty times would be safe. Nothing in
+the repository needed that, and a rule that starts narrow relaxes later without breaking a
+program that compiles today.
+
+**CE2011 lists the runs.** A run is written by length, so a literal that is one element short
+gives the compiler no way to know WHICH run is short -- either of them could be. The
+alternative spelling, Ada's `first .. last => value`, does not solve this either: it catches a
+gap or an overlap, because each run states its absolute bounds, but a writer who shortens one
+run and lengthens its neighbour leaves it silent too.
+
+So the compiler prints what it does know. Every run, with the absolute span it fills, as a
+note on its own source location:
+
+```
+error CE2011: array literal has 287 elements but declared type expects 288
+note: run 1 fills 0..143    (144 elements)
+note: run 2 fills 144..254  (111 elements)
+note: run 3 fills 255..278   (24 elements)
+note: run 4 fills 279..286    (8 elements)
+```
+
+A reader who knows the RFC 1951 boundary is 256 sees `255` and goes to run 2. This is the
+information the index form spells by hand, and the compiler derives it from the counts
+instead of asking the writer to repeat it. A literal of plain elements keeps its tier-2
+rendering, because a list of 287 one-element runs helps nobody.
+
+**A note on where the count is read.** Unlike a fixed array size, a repeat count is read at
+the typecheck pass, not while the AST is built. So it may name a constant of ANOTHER unit --
+the limit that Known Limitation 14 records for a size does not apply to a count.
 
 ### What this closes
 

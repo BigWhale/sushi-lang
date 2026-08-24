@@ -1,0 +1,11 @@
+# The count is any integer the compiler reads, so it may name a constant.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n7\n7\n7\n"
+
+const i32 N = 4
+const i32[4] SEVENS = [7; N]
+
+fn main() i32:
+    foreach(i in 0..4):
+        println(SEVENS[i])
+    return Result.Ok(0)

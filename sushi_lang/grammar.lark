@@ -207,7 +207,10 @@ lambda_param: NOM? type NAME    -> lambda_typed_param
 lambda_ret: "->" type ["|" type]
 
 array_literal: "[" [array_elements] "]"
-array_elements: expr ("," expr)*
+array_elements: array_element ("," array_element)*
+// `value; count` repeats one element. It is an ELEMENT form, so runs and plain
+// elements mix in one literal (#446, Ruling 2). `;` appears nowhere else.
+array_element: expr (";" expr)?
 
 dynamic_array_new: "new" "(" ")"
 dynamic_array_from: "from" "(" array_literal ")"

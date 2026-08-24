@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import List, TYPE_CHECKING
 from lark import Tree
-from sushi_lang.semantics.ast import Expr, ArrayLiteral, DynamicArrayNew, DynamicArrayFrom
+from sushi_lang.semantics.ast import ArrayElement, ArrayLiteral, DynamicArrayNew, DynamicArrayFrom
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice, expect
 from sushi_lang.internals.report import span_of
 
@@ -14,18 +14,35 @@ def array_literal(array_literal_node: Tree, ast_builder: 'ASTBuilder') -> ArrayL
     """Parse array_literal: \"[\" [array_elements] \"]\" """
     array_literal_node = expect(array_literal_node, "array_literal")
 
-    elements: List[Expr] = []
+    elements: List[ArrayElement] = []
 
     elements_node = first_tree(array_literal_node.children, "array_elements")
     if elements_node:
         for child in elements_node.children:
             if isinstance(child, Tree):
-                elements.append(ast_builder._expr(child))
+                elements.append(array_element(child, ast_builder))
 
     return ArrayLiteral(
         elements=elements,
         loc=span_of(array_literal_node)
     )
+
+
+def array_element(t: Tree, ast_builder: 'ASTBuilder') -> ArrayElement:
+    """Parse array_element: expr (\";\" expr)?
+
+    The count is NOT expanded here. A run of 32768 would become 32768 copies of one
+    expression, the back end would emit 32768 stores, and CE2011 would have nothing
+    left to name a run with.
+    """
+    t = expect(t, "array_element")
+    children = [c for c in t.children if isinstance(c, Tree)]
+    if not children:
+        ice(t, "array element has no value")
+
+    value = ast_builder._expr(children[0])
+    count = ast_builder._expr(children[1]) if len(children) > 1 else None
+    return ArrayElement(value=value, count=count, loc=span_of(t))
 
 
 def dynamic_array_new(t: Tree) -> DynamicArrayNew:

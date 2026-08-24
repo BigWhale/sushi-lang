@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Reporter
+from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.integer_width import fits_integer_type, integer_bit_width
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, IteratorType
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, DynamicArrayFrom, Expr, RangeExpr
@@ -17,18 +19,27 @@ def infer_array_literal_type(validator: 'TypeValidator', expr: ArrayLiteral) -> 
     if not expr.elements:
         return None
 
-    first_element_type = validator.infer_expression_type(expr.elements[0])
+    first_element_type = validator.infer_expression_type(expr.elements[0].value)
     if first_element_type is None:
         return None
 
     # Verify all elements have the same type (CE2013)
-    for _i, element in enumerate(expr.elements[1:], start=1):
-        element_type = validator.infer_expression_type(element)
+    for element in expr.elements[1:]:
+        element_type = validator.infer_expression_type(element.value)
         if element_type is not None and element_type != first_element_type:
-            er.emit(validator.reporter, er.ERR.CE2013, element.loc,
+            er.emit(validator.reporter, er.ERR.CE2013, element.value.loc,
                    expected=display_type(first_element_type), got=display_type(element_type))
 
-    return ArrayType(base_type=first_element_type, size=len(expr.elements))
+    # The SIZE is the expanded count, so a run of 144 is 144 slots and not one. Read
+    # silently: CE2017 belongs to validate_array_literal, which speaks for this literal.
+    runs = array_runs.read_runs(
+        expr.elements,
+        array_runs.const_int_reader(validator.const_table, validator.ast_constants),
+        Reporter())
+    if runs is None:
+        return None
+
+    return ArrayType(base_type=first_element_type, size=array_runs.expanded_length(runs))
 
 
 def infer_index_access_type(validator: 'TypeValidator', expr: IndexAccess) -> Optional[Type]:
@@ -52,12 +63,12 @@ def infer_dynamic_array_from_type(validator: 'TypeValidator', expr: DynamicArray
 
     expected_element_type = expected_type.base_type if expected_type else None
 
-    first_element_type = infer_element_type_with_context(validator, array_literal.elements[0], expected_element_type)
+    first_element_type = infer_element_type_with_context(validator, array_literal.elements[0].value, expected_element_type)
     if first_element_type is None:
         return None
 
     for element in array_literal.elements[1:]:
-        element_type = infer_element_type_with_context(validator, element, expected_element_type)
+        element_type = infer_element_type_with_context(validator, element.value, expected_element_type)
         if element_type != first_element_type:
             return None
 

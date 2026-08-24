@@ -361,7 +361,9 @@ class FunctionMonomorphizer:
             self._collect_from_expr(expr.index, substitution, var_types)
         elif isinstance(expr, ArrayLiteral):
             for element in expr.elements:
-                self._collect_from_expr(element, substitution, var_types)
+                self._collect_from_expr(element.value, substitution, var_types)
+                if element.count is not None:
+                    self._collect_from_expr(element.count, substitution, var_types)
         elif isinstance(expr, EnumConstructor):
             for arg in expr.args:
                 self._collect_from_expr(arg, substitution, var_types)

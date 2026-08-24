@@ -371,8 +371,13 @@ class InterpolatedString(Node):
     parts: List[Union[str, "Expr"]]  # Alternating string literals and expressions
 
 @dataclass
+class ArrayElement(Node):
+    value: "Expr"
+    count: Optional["Expr"] = None   # `value; count`. None is a plain element.
+
+@dataclass
 class ArrayLiteral(Node):
-    elements: List["Expr"]
+    elements: List["ArrayElement"]
 
 @dataclass
 class IndexAccess(Node):
@@ -565,7 +570,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 __all__ = [
     "Node", "Program", "UseStatement", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "Break", "Continue",
-    "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
+    "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]
