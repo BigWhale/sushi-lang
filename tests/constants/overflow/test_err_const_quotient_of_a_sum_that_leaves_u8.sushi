@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2077
+# The sum is the operation that leaves the type. A divergence follows it: the
+# evaluator read 300 / 2 as 150, while a body read the truncated 44 / 2 as 22.
+
+const u8 HALVED = (200 + 100) / 2
+
+fn main() i32:
+    println(HALVED)
+    return Result.Ok(0)

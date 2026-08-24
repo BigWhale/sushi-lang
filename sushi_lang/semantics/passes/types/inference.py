@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.integer_width import fits_integer_type, integer_bit_width
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, IteratorType
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, DynamicArrayFrom, Expr, RangeExpr
 from sushi_lang.semantics.generics.type_display import display_type
@@ -80,48 +81,20 @@ def infer_range_expression_type(validator: 'TypeValidator', expr: 'RangeExpr') -
     return IteratorType(element_type=BuiltinType.I32)
 
 
-def int_literal_fits_in_type(value: int, target_type: BuiltinType) -> bool:
-    """Check if an integer literal value fits in the target type's range."""
-    ranges = {
-        BuiltinType.I8: (-128, 127),
-        BuiltinType.I16: (-32768, 32767),
-        BuiltinType.I32: (-2147483648, 2147483647),
-        BuiltinType.I64: (-9223372036854775808, 9223372036854775807),
-        BuiltinType.U8: (0, 255),
-        BuiltinType.U16: (0, 65535),
-        BuiltinType.U32: (0, 4294967295),
-        BuiltinType.U64: (0, 18446744073709551615),
-    }
-
-    if target_type in ranges:
-        min_val, max_val = ranges[target_type]
-        return min_val <= value <= max_val
-
-    return False
-
-
-_INT_WIDTHS = {
-    BuiltinType.I8: 8, BuiltinType.U8: 8,
-    BuiltinType.I16: 16, BuiltinType.U16: 16,
-    BuiltinType.I32: 32, BuiltinType.U32: 32,
-    BuiltinType.I64: 64, BuiltinType.U64: 64,
-}
-
 _F32_MAX = 3.4028234663852886e38
 
 
-def integer_bit_width(target_type: Type) -> Optional[int]:
-    """The bit width of an integer type, None when the type is not an integer."""
-    return _INT_WIDTHS.get(target_type)
-
-
 def int_literal_fits(value: int, radix: int, target_type: BuiltinType) -> bool:
-    """Check whether an integer literal fits its context-typed target."""
-    width = _INT_WIDTHS.get(target_type)
+    """Check whether an integer literal fits its context-typed target.
+
+    A literal written in another base spells BITS, so the whole unsigned range of the
+    width is legal: 0xFF is an i8, and -1 is the value it stands for.
+    """
+    width = integer_bit_width(target_type)
     if width is None:
         return False
     if radix == 10:
-        return int_literal_fits_in_type(value, target_type)
+        return fits_integer_type(value, target_type)
     return 0 <= value <= (1 << width) - 1
 
 

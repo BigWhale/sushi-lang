@@ -364,6 +364,30 @@ def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> No
         reject_impossible_shift_count(validator, expr, left_type)
 
 
+def reject_overflowing_operation(validator: 'TypeValidator', expr: Expr,
+                                 result_type: 'Optional[Type]') -> None:
+    """CE2077 when an operation the compiler can read gives a value its type cannot hold.
+
+    The evaluator does the reading and the arithmetic, so the language has ONE
+    compile-time arithmetic and a constant cannot disagree with the same expression in a
+    body. Its reporter is silent here, because an operand that is not constant -- a
+    variable, a call -- is ordinary code and not a diagnostic.
+
+    Only an overflow recorded AT THIS node is reported. One recorded deeper belongs to
+    the node that computed it: the inner operation of `(200 + 100) / 2` reports once,
+    and a constant that overflows is reported where it is declared and not at every use.
+    """
+    from sushi_lang.internals.report import Reporter
+    from sushi_lang.semantics.passes.const_eval import ConstantEvaluator, emit_overflow
+
+    evaluator = ConstantEvaluator(Reporter(), validator.const_table, validator.ast_constants)
+    evaluator.evaluate(expr, result_type, expr.loc)
+
+    overflow = evaluator.overflow
+    if overflow is not None and overflow.node is expr:
+        emit_overflow(validator.reporter, overflow)
+
+
 def _provable_shift_count(validator: 'TypeValidator', count: Expr) -> Optional[int]:
     """The count as a number when the compiler can read it, else None.
 
@@ -392,7 +416,7 @@ def reject_impossible_shift_count(validator: 'TypeValidator', expr: BinaryOp,
     the optimizer left behind. A count that cannot be read at compile time is left
     alone -- a bit reader computes its count, and no check is emitted around it.
     """
-    from .inference import integer_bit_width
+    from sushi_lang.semantics.integer_width import integer_bit_width
 
     if value_type is None:
         return

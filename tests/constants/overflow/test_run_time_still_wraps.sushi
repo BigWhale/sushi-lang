@@ -1,0 +1,11 @@
+# EXPECT_STDOUT_EXACT: "44\n"
+# The rule applies to an expression whose value the compiler reads. Two locals are not
+# one, so their sum still wraps at run time and nothing reports it.
+
+fn main() i32:
+    let u8 a = 200
+    let u8 b = 100
+    let u8 sum = a + b
+
+    println(sum)
+    return Result.Ok(0)

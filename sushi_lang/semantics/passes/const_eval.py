@@ -1,8 +1,9 @@
 """Compile-time constant expression evaluator."""
 from __future__ import annotations
 import math
+import operator
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import Callable, List, Mapping, Optional, Union
 
 from llvmlite import ir
 
@@ -12,9 +13,45 @@ from sushi_lang.semantics.ast import (
     Expr, IntLit, FloatLit, BoolLit, StringLit, ArrayLiteral,
     BinaryOp, UnaryOp, Name, CastExpr, IndexAccess
 )
+from sushi_lang.semantics.integer_width import (
+    fits_integer_type, integer_bit_width, wrap_to_integer_type)
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.collect import ConstantTable
 from sushi_lang.semantics.generics.type_display import display_type
+
+# The exact arithmetic of an overflow-checked operator. Unary minus is the fourth one
+# and is applied where it is read, because it has no right operand.
+_ARITHMETIC: Mapping[str, Callable[[object, object], object]] = {
+    "+": operator.add, "-": operator.sub, "*": operator.mul,
+}
+
+# A width-defined operator: every bit of the result the width holds is kept, and the
+# rest are lost. None of these can leave its type, so none of them reports.
+_BITWISE: Mapping[str, Callable[[int, int], int]] = {
+    "&": operator.and_, "|": operator.or_, "^": operator.xor,
+}
+
+
+@dataclass
+class ConstOverflow:
+    """An operation whose result its type cannot hold.
+
+    The node is kept so a caller that reads an expression with a silent reporter can
+    tell its own overflow from one inside a constant it named: only the node that
+    computed the value reports it (CE2077).
+    """
+    node: Expr
+    op: str
+    value: int
+    semantic_type: Type
+    span: Optional[Span]
+
+
+def emit_overflow(reporter: Reporter, overflow: ConstOverflow) -> None:
+    """Raise a recorded overflow as CE2077, whoever read the expression."""
+    er.emit_with(reporter, er.ERR.CE2077, overflow.span, op=overflow.op,
+                 value=overflow.value, type=display_type(overflow.semantic_type)) \
+        .help("use a wider type, or compute in one and cast the result with 'as'").emit()
 
 
 @dataclass
@@ -69,6 +106,8 @@ class ConstantEvaluator:
         self.const_table = const_table
         self.ast_constants = ast_constants
         self.evaluation_stack: List[str] = []  # For cycle detection
+        # The FIRST operation that left its type, for a caller whose reporter is silent.
+        self.overflow: Optional[ConstOverflow] = None
 
     def evaluate(self, expr: Expr, expected_type: Type, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate an expression to a compile-time constant."""
@@ -126,28 +165,24 @@ class ConstantEvaluator:
         if left_val is None or right_val is None:
             return None
 
-        if expr.op == '+':
+        op_span = expr.loc or span
+
+        if expr.op == '+' and BuiltinType.STRING in (left_val.semantic_type,
+                                                     right_val.semantic_type):
             # Sushi has no concatenation operator anywhere, so a constant reports the
             # language rule and not a constant-only one (#441).
-            if BuiltinType.STRING in (left_val.semantic_type, right_val.semantic_type):
-                er.emit(self.reporter, er.ERR.CE2509, span)
-                return None
-            return self._eval_arithmetic(left_val, right_val, lambda a, b: a + b, span)
-        elif expr.op == '-':
-            return self._eval_arithmetic(left_val, right_val, lambda a, b: a - b, span)
-        elif expr.op == '*':
-            return self._eval_arithmetic(left_val, right_val, lambda a, b: a * b, span)
-        elif expr.op == '/':
-            return self._eval_division(left_val, right_val, span)
-        elif expr.op == '%':
-            return self._eval_modulo(left_val, right_val, span)
+            er.emit(self.reporter, er.ERR.CE2509, span)
+            return None
 
-        elif expr.op == '&':
-            return self._eval_bitwise(left_val, right_val, lambda a, b: a & b, '&', span)
-        elif expr.op == '|':
-            return self._eval_bitwise(left_val, right_val, lambda a, b: a | b, '|', span)
-        elif expr.op == '^':
-            return self._eval_bitwise(left_val, right_val, lambda a, b: a ^ b, '^', span)
+        if expr.op in _ARITHMETIC:
+            return self._eval_arithmetic(expr, left_val, right_val, op_span)
+        elif expr.op == '/':
+            return self._eval_division(expr, left_val, right_val, op_span)
+        elif expr.op == '%':
+            return self._eval_modulo(expr, left_val, right_val, op_span)
+
+        elif expr.op in _BITWISE:
+            return self._eval_bitwise(left_val, right_val, expr.op, span)
         elif expr.op == '<<':
             return self._eval_shift_left(left_val, right_val, span)
         elif expr.op == '>>':
@@ -171,14 +206,19 @@ class ConstantEvaluator:
 
         if expr.op == 'neg':
             if self._is_numeric_type(operand.semantic_type):
-                return ConstantValue(-operand.value, operand.semantic_type)
+                # A negated literal is ONE leaf, and the range of a leaf is CE2073's
+                # question -- that is what makes -128 an i8 while 128 is not.
+                if isinstance(expr.expr, (IntLit, FloatLit)):
+                    return ConstantValue(-operand.value, operand.semantic_type)
+                return self._checked(expr, '-', -operand.value,
+                                     operand.semantic_type, expr.loc or span)
             else:
                 er.emit(self.reporter, er.ERR.CE0110, span, op='negation on non-numeric type')
                 return None
 
         elif expr.op == '~':
             if self._is_integer_type(operand.semantic_type):
-                result = ~operand.value
+                result = wrap_to_integer_type(~operand.value, operand.semantic_type)
                 return ConstantValue(result, operand.semantic_type)
             else:
                 er.emit(self.reporter, er.ERR.CE0110, span, op='bitwise NOT on non-integer type')
@@ -250,14 +290,16 @@ class ConstantEvaluator:
         from_type = value.semantic_type
         to_type = expr.target_type
 
+        # A cast asks for the bit pattern, so it truncates and never reports: it is the
+        # escape from the overflow rule and cannot be subject to it.
         if self._is_integer_type(from_type) and self._is_integer_type(to_type):
-            return ConstantValue(value.value, to_type)
+            return ConstantValue(wrap_to_integer_type(value.value, to_type), to_type)
 
         elif self._is_integer_type(from_type) and self._is_float_type(to_type):
             return ConstantValue(float(value.value), to_type)
 
         elif self._is_float_type(from_type) and self._is_integer_type(to_type):
-            return ConstantValue(int(value.value), to_type)
+            return ConstantValue(wrap_to_integer_type(int(value.value), to_type), to_type)
 
         elif self._is_integer_type(from_type) and to_type == BuiltinType.BOOL:
             return ConstantValue(value.value != 0, BuiltinType.BOOL)
@@ -305,16 +347,37 @@ class ConstantEvaluator:
 
         return base.value[index.value]
 
-    def _eval_arithmetic(self, left: ConstantValue, right: ConstantValue, op, span: Optional[Span]) -> Optional[ConstantValue]:
+    def _checked(self, node: Expr, op: str, value: Union[int, float], semantic_type: Type,
+                 span: Optional[Span]) -> Optional[ConstantValue]:
+        """The result of an overflow-checked operation, or CE2077 when it left its type.
+
+        A float has no width to leave, and a value the operands already made a lie --
+        a mixed pair, which CE2510 owns -- is not this diagnostic's to report.
+        """
+        if (self._is_integer_type(semantic_type)
+                and isinstance(value, int) and not isinstance(value, bool)
+                and not fits_integer_type(value, semantic_type)):
+            record = ConstOverflow(node=node, op=op, value=value,
+                                   semantic_type=semantic_type, span=span)
+            if self.overflow is None:
+                self.overflow = record
+            emit_overflow(self.reporter, record)
+            return None
+
+        return ConstantValue(value, semantic_type)
+
+    def _eval_arithmetic(self, node: BinaryOp, left: ConstantValue, right: ConstantValue,
+                         span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate arithmetic operation."""
         if not self._is_numeric_type(left.semantic_type) or not self._is_numeric_type(right.semantic_type):
             er.emit(self.reporter, er.ERR.CE0110, span, op='arithmetic on non-numeric type')
             return None
 
-        result = op(left.value, right.value)
-        return ConstantValue(result, left.semantic_type)
+        result = _ARITHMETIC[node.op](left.value, right.value)
+        return self._checked(node, node.op, result, left.semantic_type, span)
 
-    def _eval_division(self, left: ConstantValue, right: ConstantValue, span: Optional[Span]) -> Optional[ConstantValue]:
+    def _eval_division(self, node: BinaryOp, left: ConstantValue, right: ConstantValue,
+                       span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate division with zero check."""
         if not self._is_numeric_type(left.semantic_type) or not self._is_numeric_type(right.semantic_type):
             er.emit(self.reporter, er.ERR.CE0110, span, op='division on non-numeric type')
@@ -329,9 +392,10 @@ class ConstantEvaluator:
         else:
             result = left.value / right.value
 
-        return ConstantValue(result, left.semantic_type)
+        return self._checked(node, node.op, result, left.semantic_type, span)
 
-    def _eval_modulo(self, left: ConstantValue, right: ConstantValue, span: Optional[Span]) -> Optional[ConstantValue]:
+    def _eval_modulo(self, node: BinaryOp, left: ConstantValue, right: ConstantValue,
+                     span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate modulo with zero check."""
         if not self._is_numeric_type(left.semantic_type) or not self._is_numeric_type(right.semantic_type):
             er.emit(self.reporter, er.ERR.CE0110, span, op='modulo on non-numeric type')
@@ -346,32 +410,48 @@ class ConstantEvaluator:
         else:
             result = math.fmod(left.value, right.value)
 
-        return ConstantValue(result, left.semantic_type)
+        return self._checked(node, node.op, result, left.semantic_type, span)
 
-    def _eval_bitwise(self, left: ConstantValue, right: ConstantValue, op, op_name: str, span: Optional[Span]) -> Optional[ConstantValue]:
+    def _eval_bitwise(self, left: ConstantValue, right: ConstantValue, op: str, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate bitwise operation."""
         if not self._is_integer_type(left.semantic_type) or not self._is_integer_type(right.semantic_type):
-            er.emit(self.reporter, er.ERR.CE0110, span, op=f'bitwise {op_name} on non-integer type')
+            er.emit(self.reporter, er.ERR.CE0110, span, op=f'bitwise {op} on non-integer type')
             return None
 
-        result = op(left.value, right.value)
-        return ConstantValue(result, left.semantic_type)
+        result = _BITWISE[op](left.value, right.value)
+        return ConstantValue(wrap_to_integer_type(result, left.semantic_type),
+                             left.semantic_type)
 
     def _eval_shift_left(self, left: ConstantValue, right: ConstantValue, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate left shift."""
-        if not self._is_integer_type(left.semantic_type) or not self._is_integer_type(right.semantic_type):
-            er.emit(self.reporter, er.ERR.CE0110, span, op='shift on non-integer type')
+        shift = self._shift_count(left, right, span)
+        if shift is None:
             return None
+        count, width = shift
 
-        if right.value < 0:
-            er.emit(self.reporter, er.ERR.CE0110, span, op='shift by negative amount')
-            return None
-
-        result = left.value << right.value
-        return ConstantValue(result, left.semantic_type)
+        result = 0 if count >= width else left.value << count
+        return ConstantValue(wrap_to_integer_type(result, left.semantic_type),
+                             left.semantic_type)
 
     def _eval_shift_right(self, left: ConstantValue, right: ConstantValue, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate right shift (arithmetic for signed, logical for unsigned)."""
+        shift = self._shift_count(left, right, span)
+        if shift is None:
+            return None
+        count, width = shift
+
+        # A held value is in its own range, so Python's shift IS the machine's: it fills
+        # from the sign bit of a negative value, and a value of an unsigned type has none.
+        return ConstantValue(left.value >> min(count, width), left.semantic_type)
+
+    def _shift_count(self, left: ConstantValue, right: ConstantValue,
+                     span: Optional[Span]) -> Optional[tuple]:
+        """A shift's count and the width it moves bits in, or None with the reason reported.
+
+        A count past the width is defined and not checked (Go's rule, and CE2512 covers
+        the one a body writes), so the width is handed back to clamp with: a Python shift
+        by a count of millions builds the number it names.
+        """
         if not self._is_integer_type(left.semantic_type) or not self._is_integer_type(right.semantic_type):
             er.emit(self.reporter, er.ERR.CE0110, span, op='shift on non-integer type')
             return None
@@ -380,8 +460,7 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0110, span, op='shift by negative amount')
             return None
 
-        result = left.value >> right.value
-        return ConstantValue(result, left.semantic_type)
+        return right.value, integer_bit_width(left.semantic_type)
 
     def _eval_logical(self, left: ConstantValue, right: ConstantValue, op: str, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate logical operation (and, or, xor)."""

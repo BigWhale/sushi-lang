@@ -103,7 +103,8 @@ expected type and range-checked at compile time, so no cast is needed to write a
 literal of a non-`i32` type. A decimal literal uses value ranges (signed/unsigned per
 type); a hex/binary/octal literal uses the target's bit-pattern width (so `0xFF` is a
 valid `i8` — the pattern `-1`); an `f32` rejects overflow to infinity (precision loss
-on `f64`->`f32` is silently rounded). An out-of-range literal is `CE2073`. This is
+on `f64`->`f32` is silently rounded). An out-of-range literal is `CE2073`, and an
+operation whose *result* leaves the type is `CE2077` (see [Overflow](#overflow)). This is
 literal *typing*, not value coercion — converting an already-typed value still needs
 `as` (see [Type Conversion](#type-conversion)).
 
@@ -403,6 +404,43 @@ constant.
 - `*` - Multiplication
 - `/` - Division (integer division for int types)
 - `%` - Modulo (remainder)
+
+### Overflow
+
+An expression whose value the compiler reads is computed at the **declared width**, and an
+operation whose result the type cannot hold is a compile error (**CE2077**). That covers a
+constant and a fold of literals in a body — one expression has one meaning:
+
+<!-- docs-sweep: error CE2077 -->
+```sushi
+fn main() i32:
+    let u8 sum = 200 + 100    # CE2077: '+' gives 300, which is out of range for u8
+    println(sum)
+    return Result.Ok(0)
+```
+
+The **overflow-checked** operators are `+`, `-`, `*`, `/`, `%` and unary minus. Division
+has one such case, the smallest signed value over `-1`, and unary minus has one, the
+smallest signed value: neither has an answer the type can hold.
+
+The **width-defined** operators compute at the width and never report, because the bits
+that leave the type are lost by design: `~`, `&`, `|`, `^`, `<<` and `>>`. So `200 << 1`
+on a `u8` is 144, and `~0` on a `u32` is 4294967295.
+
+An `as` cast is the escape. It asks for the bit pattern, so it truncates: `300 as u8` is
+44. A wider type is the other answer.
+
+**Run time does not change.** Only an expression the compiler reads is checked, so two
+locals still wrap:
+
+```sushi
+fn main() i32:
+    let u8 a = 200
+    let u8 b = 100
+    let u8 sum = a + b        # 44 at run time, and nothing reports it
+    println(sum)
+    return Result.Ok(0)
+```
 
 ### Comparison
 
@@ -999,6 +1037,10 @@ const bool IS_VALID = (100 > 50) and true # true
 - **Comparison**: `==`, `!=` (numeric, `bool`, `string`); `<`, `<=`, `>`, `>=` (numeric,
   `string` -- by bytes). Both operands must be of one type
 - **Type casts**: `as` (between compatible types)
+
+A constant always holds a value its type can hold: it is computed at the declared width,
+and an operation whose result leaves the type is **CE2077**. See
+[Overflow](#overflow) for the two operator groups and for the `as` escape.
 
 ### Constant References
 

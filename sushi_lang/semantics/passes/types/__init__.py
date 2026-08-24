@@ -85,6 +85,10 @@ class TypeValidator:
         self.current_function: Optional[FuncDef] = None
         self.variable_types: Dict[str, Type] = {}
         self.destroyed_arrays: List[set[str]] = []
+        # `run` fills these from the program. A validator built to infer one type --
+        # the monomorphizer and the instantiator both build one -- never runs, and it
+        # reads no constant, so an empty map is the truth and not a fallback.
+        self.ast_constants: Dict[str, ConstDef] = {}
 
         self.statement_validator = StatementValidator(self)
         self.expression_validator = ExpressionValidator(self)
