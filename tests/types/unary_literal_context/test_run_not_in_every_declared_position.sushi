@@ -1,0 +1,34 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n255\n255\n255\n255\n15\n255\n"
+# Every declared position routes through one propagation entry point, so an
+# argument, a field, a return value, an array element and an enum payload all get
+# the same answer as a `let`.
+
+struct Flags:
+    u8 mask
+
+fn takes(u8 v) i32:
+    println("{v}")
+    return Result.Ok(0)
+
+fn all_bits() u8:
+    return Result.Ok(~0)
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let i32 ignored = takes(~0).realise(1)
+
+    let Flags f = Flags(~0)
+    println("{f.mask}")
+
+    let u8 returned = all_bits().realise(0)
+    println("{returned}")
+
+    let u8[2] table = [~0, ~0xF0]
+    println("{table[0]}")
+    println("{table[1]}")
+
+    let Maybe@(u8) payload = Maybe.Some(~0)
+    println("{payload.realise(0)}")
+
+    return Result.Ok(ignored)

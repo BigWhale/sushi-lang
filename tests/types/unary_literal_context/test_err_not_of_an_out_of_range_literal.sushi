@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2073
+# The literal is still RANGE-CHECKED at the type it was given. Reaching the operand
+# is not a licence to ignore the width: 300 is no more a u8 under a `~` than it is
+# on its own.
+
+fn main() i32:
+    let u8 mask = ~300
+    println("{mask}")
+    return Result.Ok(0)

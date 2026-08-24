@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE2004
+# A float has no bits to complement, and reaching the literal must not paper that
+# over: the operand rule still answers first.
+
+fn main() i32:
+    let f64 flipped = ~1.5
+    println("{flipped}")
+    return Result.Ok(0)

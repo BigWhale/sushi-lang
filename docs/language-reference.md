@@ -107,10 +107,16 @@ on `f64`->`f32` is silently rounded). An out-of-range literal is `CE2073`. This 
 literal *typing*, not value coercion — converting an already-typed value still needs
 `as` (see [Type Conversion](#type-conversion)).
 
+The type reaches the literal through every operator whose result is its operand's
+type: the arithmetic and bitwise operators, a shift's left operand, unary minus, and
+`~`. It stops at an operator that answers something else -- a comparison and `not`
+both give a `bool` -- and it never converts an already-typed value.
+
 ```sushi
 let i64 big   = 40000000000                # context-typed i64, no cast needed
 let u64 max   = 18446744073709551615       # context-typed u64
 let u32 mask  = 0x01 | 0x02 | 0x04         # operands typed u32
+let u8  all   = ~0                         # 255: the complement of a u8 zero
 let i8  small = 200                        # CE2073: out of range for i8
 ```
 
@@ -448,7 +454,8 @@ forms for all logical operators.
 - `&` - Bitwise AND
 - `|` - Bitwise OR
 - `^` - Bitwise XOR
-- `~` - Bitwise NOT (complement)
+- `~` - Bitwise NOT (complement), at the width of its operand -- so `~0` is every
+  bit of the type the `0` was given, and a `u8` reads 255 where an `i8` reads -1
 - `<<` - Left shift (zero-fill)
 - `>>` - Right shift (type-dependent, see below)
 

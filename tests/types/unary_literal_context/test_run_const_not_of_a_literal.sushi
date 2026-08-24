@@ -1,0 +1,21 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n255\n4294967295\n15\n"
+# A constant takes the same road. The evaluator always threaded the expected type
+# through a unary operator; the typecheck pass refused the declaration before the
+# evaluated value could be used, so `const u8 MASK = ~0` needed an `as` cast (#448).
+
+const u8 MASK = ~0
+const u32 ALL = ~0
+const u8 LOW = ~0xF0
+
+fn main() i32:
+    println("Mostly Harmless")
+    println("{MASK}")
+    println("{ALL}")
+    println("{LOW}")
+
+    if (MASK != 255):
+        return Result.Err(StdError.Error)
+    if (LOW != 15):
+        return Result.Err(StdError.Error)
+
+    return Result.Ok(0)

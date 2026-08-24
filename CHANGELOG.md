@@ -189,6 +189,31 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **A declared type reaches a bare literal through `~`, and through a nested negation**
+  (#448). `let u8 b = ~0` was **CE2002**, "cannot assign i32 to u8", and `const u8 MASK = ~0`
+  said the same, so "every bit set" at any width other than `i32` needed an `as` cast --
+  which is why the bitwise constant test carried `~(0x00 as u32)`. The literal now takes the
+  declared type and the complement happens at that width: a `u8` reads 255, an `i8` reads -1,
+  a `u64` reads all 64 bits.
+
+  `~` was not a missing special case. The recursion that carries a declared numeric type
+  down to the literal leaves had an arm for a binary operator and nothing else, and unary
+  minus worked only through a LEAF case one function below it, which unwraps a negated bare
+  literal to fold the sign into its range check. So the other half of the same hole was
+  `let i8 x = -(1 + 2)`, a negation over anything that is not itself a literal. The
+  recursion now descends through a unary operator whose result is its operand's type --
+  `neg` and `~`, never `not`, which answers a `bool` -- and the negated bare literal stays
+  one leaf, so `-128` still fits an `i8` and `-1` still misses a `u8`.
+
+  The operand-driven half reads the same way. A bare literal takes its sibling's type
+  through those operators too, so the bit test `flags & ~0x0F` on a `u8` is one width rather
+  than the mixed `u8`/`i32` pair of **CE2510**, which is the shape a mask check inside an
+  `if` always had. Nothing about `as` moved: `~wide` on a `u32` assigned to a `u8` is still
+  CE2002, because this types LITERALS and never converts a typed value. Two diagnostics get
+  better instead of disappearing -- `let u8 b = ~300` is now **CE2073**, the range check
+  answering for itself rather than a type mismatch downstream of it, and `~1.5` is still
+  **CE2004**.
+
 - **A rejected library build no longer reports a spurious CE0000 over the real diagnostic**
   (#436). Three rejection sites in the manifest producer emitted their diagnostic and then
   raised `ValueError` to stop the build. Nothing caught it, so the top-level guard rendered
