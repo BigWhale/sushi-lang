@@ -1,0 +1,9 @@
+# Test: the runaway from section 2 of the design document. A lazy delimiter
+# would swallow the constant whole and report nothing; the line-initial rule
+# turns it into an unclosed block at the opener the author can fix.
+# EXPECT_ERROR_CODE: CE6011
+
+##: docs for x
+const i32 x = 1
+
+##: docs for y :##

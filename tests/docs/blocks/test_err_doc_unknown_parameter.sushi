@@ -1,0 +1,16 @@
+# Test: a `- Parameter` tag that names no parameter of the callable.
+# EXPECT_ERROR_CODE: CE7001
+
+##:
+Adds two numbers.
+
+- Parameter a: The first addend.
+- Parameter q: There is no parameter called q.
+:##
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+fn main() i32:
+    let i32 n = add(1, 2)??
+    println("{n}")
+    return Result.Ok(0)

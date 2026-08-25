@@ -54,10 +54,6 @@ ALLOWED = {
     # (docs/design/documentation.md, section 12). Remove this entry when the
     # module exists.
     "internals/errors/docs.py",
-    # TEMPORARY, same phase: sections 4 and 5 name the two gates that hold their
-    # rulings true. Remove both entries when phase 2 writes them.
-    "tests/unit/test_doc_block_attachment.py",
-    "tests/unit/test_doc_block_grammar.py",
 }
 
 

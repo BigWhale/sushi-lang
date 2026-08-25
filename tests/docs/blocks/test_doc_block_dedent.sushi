@@ -1,0 +1,23 @@
+# Test: a doc block written inside a body compiles, whatever its interior layout.
+# The dedent itself is asserted in tests/unit/test_doc_block_parse.py -- nothing
+# consumes the text at this phase, so the source can only prove that it parses.
+# EXPECT_STDOUT_EXACT: "7\n"
+
+##:
+        A block above a declaration may be laid out however reads best.
+            The common indent comes off; the relative indent stays.
+:##
+fn seven() i32:
+    ##:
+    Returns a constant.
+
+        A fenced example keeps its own indent:
+
+            let i32 n = seven()??
+    :##
+    return Result.Ok(7)
+
+fn main() i32:
+    let i32 n = seven()??
+    println("{n}")
+    return Result.Ok(0)

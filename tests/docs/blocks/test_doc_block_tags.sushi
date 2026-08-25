@@ -1,0 +1,24 @@
+# Test: the tag vocabulary parses, and prose that is not a tag stays prose.
+# EXPECT_STDOUT_EXACT: "9\n"
+
+##:
+Multiplies two numbers.
+
+- Parameter a: The first factor.
+- Parameter b: The second factor. The description may wrap onto
+  a second line and stays part of the tag.
+- Returns: The product.
+- Errors: Never, in practice.
+- Example: this tag is recognised now and consumed in phase 4.
+- Note: this is prose, not a tag.
+- Deprecated: reserved by the design, and prose until a later phase.
+- Traps: reserved as well.
+- see docs/language-reference.md for the grammar
+:##
+fn multiply(i32 a, i32 b) i32:
+    return Result.Ok(a * b)
+
+fn main() i32:
+    let i32 n = multiply(3, 3)??
+    println("{n}")
+    return Result.Ok(0)

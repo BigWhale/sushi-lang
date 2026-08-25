@@ -1,0 +1,13 @@
+# Test: a doc block that is neither the unit's nor a declaration's warns.
+# The first block documents the constant, so it is not the unit block; the
+# second is separated from `fn main` by a blank line and attaches to nothing.
+# EXPECT_ERROR_CODE: CW7001
+
+##: The answer to life, the universe and everything. :##
+const i32 ANSWER = 42
+
+##: This block documents nothing, and warns. :##
+
+fn main() i32:
+    println("{ANSWER}")
+    return Result.Ok(0)
