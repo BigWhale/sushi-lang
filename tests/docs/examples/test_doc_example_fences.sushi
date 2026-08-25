@@ -1,0 +1,43 @@
+# Test: the four fence attributes parse, no CE70xx fires on any of them, and the
+# contents of a fence never reach the host build -- the `error` fence below holds Sushi
+# that does not compile, and this file exits 0. The whole block is one DOC_BLOCK token.
+#
+# This file declares `main`, so the sweep SKIPs all four examples (documentation.md
+# section 10, R21). The four OUTCOMES are asserted against
+# tests/docs/examples/fence_outcomes.sushi, which declares none.
+#
+# EXPECT_STDOUT_EXACT: "42\n"
+
+##:
+Doubles a number.
+
+- Parameter n: The number to double.
+- Returns: Twice `n`.
+- Example: a plain fence, compiled and run.
+```sushi
+let i32 d = doubled(21)??
+println("{d}")
+```
+- Example: a fence that is compiled and never run.
+```sushi no_run
+let i32 d = doubled(1)??
+println("{d}")
+```
+- Example: a fence that is not compiled at all.
+```sushi skip (needs a listening socket)
+let i32 fd = connect(8080)??
+println("{fd}")
+```
+- Example: a fence whose code is deliberately wrong.
+```sushi error CE2002
+let string s = 42
+println("{s}")
+```
+:##
+fn doubled(i32 n) i32:
+    return Result.Ok(n * 2)
+
+fn main() i32:
+    let i32 d = doubled(21).realise(0)
+    println("{d}")
+    return Result.Ok(0)

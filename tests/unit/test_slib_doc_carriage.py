@@ -298,3 +298,55 @@ def test_an_undocumented_library_carries_no_doc_key_anywhere(undocumented):
     assert "unit_docs" not in undocumented
     for record in _every_record(undocumented):
         assert "doc" not in record, record
+
+
+# -- the examples key (phase 4, R23) --------------------------------------------
+
+EXAMPLE_LIB = """\
+##:
+Doubles a number.
+
+- Example: the plain one.
+```sushi
+let i32 d = doubled(21)??
+println("{d}")
+```
+- Example: and one the harness must not run.
+```sushi no_run
+let i32 d = doubled(1)??
+println("{d}")
+```
+:##
+public fn doubled(i32 n) i32:
+    return Result.Ok(n * 2)
+
+##: Triples a number, and shows nothing. :##
+public fn tripled(i32 n) i32:
+    return Result.Ok(n * 3)
+"""
+
+
+@pytest.fixture(scope="module")
+def exampled(tmp_path_factory):
+    _path, metadata = build_library(tmp_path_factory.mktemp("examplelib"),
+                                    "examplelib", EXAMPLE_LIB)
+    return metadata
+
+
+def test_the_examples_travel_in_source_order(exampled):
+    doc = _named(exampled["public_functions"], "name", "doubled")["doc"]
+    assert doc["examples"] == [
+        'let i32 d = doubled(21)??\nprintln("{d}")',
+        'let i32 d = doubled(1)??\nprintln("{d}")',
+    ]
+
+
+def test_the_attributes_are_not_carried(exampled):
+    """An attribute is a harness instruction, and a harness instruction is not docs."""
+    doc = _named(exampled["public_functions"], "name", "doubled")["doc"]
+    assert not any("no_run" in code for code in doc["examples"])
+
+
+def test_a_block_with_no_example_has_no_examples_key(exampled):
+    doc = _named(exampled["public_functions"], "name", "tripled")["doc"]
+    assert doc == {"summary": "Triples a number, and shows nothing."}

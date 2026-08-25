@@ -1,0 +1,19 @@
+# Test: a fence inside a doc block that never closes. The block ends at its own `:##`,
+# so the fence is truncated, and a truncated example is not one.
+# EXPECT_ERROR_CODE: CE7008
+
+##:
+Doubles a number.
+
+- Example:
+```sushi
+let i32 d = doubled(21)??
+println("{d}")
+:##
+fn doubled(i32 n) i32:
+    return Result.Ok(n * 2)
+
+fn main() i32:
+    let i32 d = doubled(21).realise(0)
+    println("{d}")
+    return Result.Ok(0)
