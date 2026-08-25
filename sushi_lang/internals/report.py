@@ -1,4 +1,5 @@
 from __future__ import annotations
+import textwrap
 from dataclasses import dataclass, field
 from typing import List, Optional, Any
 
@@ -37,6 +38,12 @@ class Diagnostic:
     span: Optional[Span] = None
     filename: Optional[str] = None
     sub: List[SubDiagnostic] = field(default_factory=list)
+    # Whether to draw the source line and the caret. False for a diagnostic whose
+    # span covers a WHOLE construct: the caret then marks everything and separates
+    # nothing, while the header already carries the location. It is also the only
+    # honest rendering of a multi-line span, because the marker takes its width from
+    # the span's last line and is drawn under its first.
+    show_source: bool = True
 
 def span_of(t: Any) -> Optional[Span]:
     m = getattr(t, "meta", None)
@@ -65,6 +72,11 @@ class DiagnosticBuilder:
 
     def help(self, message: str) -> DiagnosticBuilder:
         self._diagnostic.sub.append(SubDiagnostic("help", message))
+        return self
+
+    def location_only(self) -> DiagnosticBuilder:
+        """Drop the source line and the caret; the header keeps the location."""
+        self._diagnostic.show_source = False
         return self
 
     def emit(self) -> None:
@@ -194,7 +206,7 @@ class Reporter:
             else:
                 head = f"{loc}: {d.kind} [{d.code}]: {message}"
 
-            if d.span:
+            if d.span and d.show_source:
                 diagnostic_src_lines = self._get_source_lines(d.filename or self.filename, src_lines)
 
                 if diagnostic_src_lines is not None:
@@ -204,7 +216,15 @@ class Reporter:
                     line_text = ""
 
                 start = max(1, d.span.col)
-                end = max(start, d.span.end_col)
+                if d.span.end_line > d.span.line:
+                    # The span runs past this line and only this line is drawn, so it
+                    # is underlined to its end. Taking the width from the span's LAST
+                    # line measures it against text the caret is not drawn under: a
+                    # `const_def` ends at column 1 of the line after the declaration,
+                    # which rendered as a one-character caret under the first keyword.
+                    end = max(start, len(line_text))
+                else:
+                    end = max(start, d.span.end_col)
 
                 if use_unicode:
                     if use_color:
@@ -237,12 +257,13 @@ class Reporter:
                     else:
                         out.append(f"{line_prefix}{marker}")
 
-                    # Check if any sub-diagnostics have spans (continuous box)
-                    has_span_subs = any(s.span for s in d.sub)
+                    # The box stays open for ANY sub-diagnostic: a note carries its
+                    # own snippet, and a help is now rendered inside the box too.
+                    has_subs = bool(d.sub)
 
                     guide_len = start + (span_len // 2 if span_len > 1 else 0)
 
-                    if not has_span_subs:
+                    if not has_subs:
                         if use_color:
                             out.append(f"{gray('  \u2570')}{C.GRAY}{'\u2500' * guide_len}{C.RESET}{error_color}\u256f{C.RESET}")
                         else:
@@ -266,12 +287,26 @@ class Reporter:
                         ascii_marker = " " * (start - 1) + "-" * left + "+" + "-" * right
                     out.append(f"{line_prefix}{line_text}")
                     out.append(f"{caret_prefix}{ascii_marker}")
+            elif d.span and use_unicode:
+                # Location only: the header names the line and column, and there is
+                # no caret because there is nothing on the line to separate.
+                if use_color:
+                    out.append(f"{C.GRAY}  \u256d\u2500\u2500\u2524{C.RESET} {head}")
+                else:
+                    out.append(f"  \u256d\u2500\u2500\u2524 {head}")
+                if not d.sub:
+                    out.append(f"{C.GRAY}  \u2570\u2500\u2500\u2500{C.RESET}"
+                               if use_color else "  \u2570\u2500\u2500\u2500")
             else:
                 out.append(head)
 
             # Render sub-diagnostics (notes, help)
             span_subs = [s for s in d.sub if s.span]
             no_span_subs = [s for s in d.sub if not s.span]
+            # A help never carries a location, so it can only be rendered after every
+            # note. Inside the box when there is a box; the old trailing `= help:`
+            # form otherwise.
+            in_box = bool(use_unicode and d.span)
 
             for i, sub in enumerate(span_subs):
                 sub_span = sub.span
@@ -280,7 +315,7 @@ class Reporter:
                 sub_filename = self._resolve_filename(sub_filename)
                 sub_loc = f"{sub_filename}:{sub_span.line}:{sub_span.col}"
                 sub_src_lines = self._get_source_lines(sub.filename or d.filename or self.filename, src_lines)
-                is_last = (i == len(span_subs) - 1)
+                is_last = (i == len(span_subs) - 1) and not (in_box and no_span_subs)
 
                 if use_unicode:
                     sub_kind_color = C.BLUE if sub.kind == "note" else C.BOLD
@@ -313,12 +348,30 @@ class Reporter:
                         out.append(f"    {sub_loc}")
                     self._render_snippet(sub_span, sub_src_lines, "", use_color, use_unicode, out, prefix="    ")
 
-            for sub in no_span_subs:
+            for index, sub in enumerate(no_span_subs):
                 sub_kind_color = C.BLUE if sub.kind == "note" else C.BOLD
-                if use_color:
-                    out.append(f"  = {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}")
-                else:
-                    out.append(f"  = {sub.kind}: {sub.message}")
+                if not in_box:
+                    if use_color:
+                        out.append(f"  = {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}")
+                    else:
+                        out.append(f"  = {sub.kind}: {sub.message}")
+                    continue
+
+                # The label stays: a span-less NOTE is a fact and a HELP is advice,
+                # and inside the box nothing else tells the two apart.
+                if index == 0:
+                    out.append(f"{C.GRAY}  \u2502{C.RESET}" if use_color else "  \u2502")
+                label = f"{sub.kind}: "
+                lines = textwrap.wrap(sub.message, width=76 - len(label)) or [""]
+                for offset, line in enumerate(lines):
+                    shown = f"{sub_kind_color}{label}{C.RESET}" if use_color else label
+                    lead = shown if offset == 0 else " " * len(label)
+                    bar = f"{C.GRAY}  \u2502{C.RESET}" if use_color else "  \u2502"
+                    out.append(f"{bar}  {lead}{line}")
+
+            if in_box and no_span_subs:
+                out.append(f"{C.GRAY}  \u2570\u2500\u2500\u2500{C.RESET}"
+                           if use_color else "  \u2570\u2500\u2500\u2500")
 
         return "\n".join(out)
 

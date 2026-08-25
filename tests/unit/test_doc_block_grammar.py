@@ -21,6 +21,12 @@ from sushi_lang.internals.parser import build_parser, parse_to_ast
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SKIP_DIRS = {"__sushi_cache__", ".git", "node_modules", ".venv", "venv", "build", "dist"}
 
+# Named roots rather than the repository root, for the reason
+# `test_path_references_exist.py` gives for the same choice: the top level holds
+# local-only scratch files (`/a.sushi` is in `.gitignore`), and a scratch file is not
+# a corpus this gate has any business measuring.
+SCAN_ROOTS = ("docs", "editor-support", "site", "sushi_lang", "tests", "toolchain")
+
 # The one directory that writes doc blocks on purpose. Everything else in the tree
 # predates the feature and must not change meaning.
 DOC_TESTS = "tests/docs"
@@ -39,8 +45,12 @@ MAIN = "fn main() i32:\n    return Result.Ok(0)\n"
 
 
 def _sushi_files() -> list[Path]:
-    return [p for p in sorted(PROJECT_ROOT.rglob("*.sushi"))
-            if not any(part in SKIP_DIRS for part in p.relative_to(PROJECT_ROOT).parts)]
+    found: list[Path] = []
+    for root in SCAN_ROOTS:
+        for path in sorted((PROJECT_ROOT / root).rglob("*.sushi")):
+            if not any(part in SKIP_DIRS for part in path.relative_to(PROJECT_ROOT).parts):
+                found.append(path)
+    return found
 
 
 def _expects_syntax_error(text: str) -> bool:

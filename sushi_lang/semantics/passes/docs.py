@@ -137,11 +137,16 @@ def _check_tags(reporter: 'Reporter', doc: 'DocBlock', owner) -> None:
 
 
 def _check_positions(reporter: 'Reporter', program: 'Program') -> None:
+    # Every diagnostic here spans a WHOLE doc block, so it is reported location only:
+    # a caret that covers the block marks everything and separates nothing, and the
+    # header already carries the line and column.
     for doc in program.orphan_docs:
         if doc.orphan_reason == "in-body":
-            er.emit(reporter, er.ERR.CE7005, doc.loc)
+            er.emit_with(reporter, er.ERR.CE7005, doc.loc).location_only().help(
+                "a block in a body documents the function around it, so it goes "
+                "first; move it above the declaration to document something else")
         else:
-            er.emit_with(reporter, er.ERR.CW7001, doc.loc).help(
+            er.emit_with(reporter, er.ERR.CW7001, doc.loc).location_only().help(
                 "a block documents the declaration on the next line; a blank line or "
                 "a comment between the two breaks the attachment")
 
@@ -149,5 +154,5 @@ def _check_positions(reporter: 'Reporter', program: 'Program') -> None:
         body_doc = getattr(decl.body, "doc", None)
         if decl.doc is not None and body_doc is not None and body_doc is not decl.doc:
             er.emit_with(reporter, er.ERR.CE7006, body_doc.loc,
-                         name=decl.name).note(
+                         name=decl.name).location_only().note(
                 "the other block is here", decl.doc.loc)
