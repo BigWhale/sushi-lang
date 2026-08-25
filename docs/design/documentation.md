@@ -1054,23 +1054,44 @@ Phase 4. A fenced code block under `- Example:` is compiled and run.
 A snippet with no `fn main(` is wrapped, the way rustdoc wraps one. Written by the author
 as two lines of intent:
 
-    - Example:
-    ```sushi
-    let i32 d = hyperspace_jump(3, 7)??
-    println("{d}")
-    ```
+~~~sushi
+- Example:
+```sushi
+let i32 d = hyperspace_jump(3, 7)??
+println("{d}")
+```
+~~~
 
 and compiled as a program, with the import injected, the body indented into
 `fn main() i32:`, and `return Result.Ok(0)` appended.
-
-(The fences above are drawn with tildes only so this document can show a fence inside a
-fence. A real doc block uses backticks.)
 
 A snippet that declares its own `main` is compiled verbatim. One rule, and it covers the
 whole-program case for free.
 
 The reason to wrap is that an example is documentation first. Six lines of ceremony around
 two lines of intent teaches the ceremony.
+
+### Showing a fence inside a fence: the outer one is `~~~`
+
+The illustration above is the shape every page that teaches this feature needs: a fenced
+block whose contents are a doc block that itself holds a fence. **The convention is a
+`~~~` outer fence**, in `docs/documentation-blocks.md`, in the language reference, and
+here.
+
+CommonMark closes a fence only with a fence of the SAME character that is at least as
+long, so a longer run of backticks would work too. Tildes are the convention because the
+outer and the inner delimiter then look different, which is the whole point of the
+illustration. `pymdownx.superfences` is in `mkdocs.yml` and renders both.
+
+`tests/docs_sweep.py` implements no part of that rule. It matches ` ```sushi ` and ` ``` `
+at column 1 and nothing else, so it reads INSIDE an illustration and collects the inner
+example as a block of its own -- measured with a tilde outer fence and with a
+four-backtick one, and it happens with both. Phase 4 teaches the collector to step over a
+fence it cannot close. Until then an illustration is safe only while its inner example is
+a fragment, because a block with no `fn main(` is not a candidate.
+
+A doc block cannot contain a doc block, so this is a problem for `.md` pages only: a `##:`
+inside a block is CE6013 whether it is indented or not.
 
 ### The runner
 
@@ -1090,7 +1111,210 @@ to be present in a block, to tell a runnable example from a quoted signature. Wr
 makes that test wrong for doc snippets, so the new collector needs its own rule: a doc
 example is runnable unless it is marked otherwise. And its skip and expected-error markers
 are HTML comments, which a `.sushi` file cannot carry — the doc-block collector needs a
-marker that is legal inside a doc block.
+marker that is legal inside a doc block. R16 gives it one: the marker rides on the fence's
+own info string.
+
+An example is compiled from OUTSIDE the unit it documents, which is rustdoc's model and
+R18's ruling. Two things are then out of reach, and R21 makes each one a printed skip
+rather than a failure: a PRIVATE declaration, which the generated file cannot call, and a
+unit that declares `main`, which cannot be imported beside a second `main`.
+
+### Phase 4 rulings
+
+The numbering continues S8's list, so no number is used twice in this document.
+
+**R13 — the block is partitioned before the tags are read.** `parse_doc_block` first
+splits the dedented entries into prose regions and fenced regions. `_read_tags` and
+`_read_body` see only the prose. Three defects go away at once: a tag-shaped line inside
+example code is no longer a tag, an example is no longer truncated by a blank line, and
+the body rule needs no special case for a fence.
+
+Measured against the phase-3 parse, each defect was real. A line-initial `- Returns:` in
+example code parsed as a `returns` tag and truncated the example there. `_read_tags` folds
+a tag's continuation lines with `part.strip()`, so the indentation of an `if` body was
+destroyed. Both rules are right for prose and wrong for code.
+
+**R14 — an example is its own structure, kept verbatim.** A third dataclass in `ast.py`:
+
+```python
+@dataclass
+class DocExample:
+    code: str                    # the fence body, dedented by the fence's own indent
+    attrs: str = ""              # the words after the fence's language, as written
+    loc: Optional[Span] = None   # the opening fence, so a diagnostic can point at it
+    defect: Optional[Literal["no-fence", "unterminated"]] = None
+```
+
+and `DocBlock.examples: List[DocExample]`. The `- Example:` tag keeps only its caption —
+the words on the tag line, usually none. An example carried in `DocTag.text` is not
+usable, because the text of a tag is stripped and folded.
+
+The code is dedented twice: once by the block rule, and once by the indent of its own
+opening fence. The second one is CommonMark's rule for a fenced block, and it is what lets
+an author indent the fence under its list item. Indentation INSIDE the fence is untouched,
+which is the whole reason the structure exists.
+
+The parse records the defect and the pass reports it, which is the split
+`DocBlock.orphan_reason` settled in phase 2. Both classes go in `__all__`, and
+`tests/unit/test_ast_all_is_complete.py` is the gate.
+
+**R15 — many examples are legal, in source order.** Nothing changes in the `docs` pass:
+`_SINGLETON_TAGS` is `("returns", "errors")` and an example was never in it. A declaration
+with two examples has two things to show.
+
+**R16 — the attributes ride on the fence info string, in the vocabulary the sweep already
+has.** A `.sushi` file cannot carry an HTML comment, so the marker moves into the fence:
+
+| Fence | Meaning |
+|---|---|
+| ` ```sushi ` | compile and run; a non-zero exit is a failure |
+| ` ```sushi no_run ` | compile only — the example needs a file, a socket, or a long loop |
+| ` ```sushi skip (reason) ` | do not compile; the reason is printed |
+| ` ```sushi error CExxxx ` | must exit 2 and name every code given |
+| any other info string | not a Sushi example; the sweep ignores it |
+
+`skip` and `error` are the words the Markdown collector already uses, so the tool keeps one
+dialect with two carriers. `no_run` is new and has no Markdown twin, because the Markdown
+collector does not run anything. A renderer takes the FIRST word of an info string as the
+language, so the extra words are harmless in phase 6.
+
+**R17 — two new codes, both always on.** `- Example:` with no fenced block after it is
+CE7007. A fence inside a doc block that never closes is CE7008. Both go in
+`internals/errors/docs.py`.
+
+They are always on rather than a phase-5 policy lint, because each one is a claim that
+contradicts itself. The whole job of the tag is to introduce a fence (S3), so a tag with
+nothing to introduce is wrong the way a `- Parameter q:` that names no parameter is wrong.
+S6's split holds: an ABSENT example is policy, and stays phase 5's business.
+
+**R18 — an example is compiled from OUTSIDE the unit.** One generated entry file, with
+`use "<absolute path to the documented unit>"` at the top. This is rustdoc's model: a
+doctest links the crate and sees the public API.
+
+Compiling INSIDE the unit was measured and works — the generated file is the unit's own
+source with the wrapper appended, and it reaches private declarations. Rejected: an example
+that calls what a reader cannot call is not documentation, and the inside model still
+cannot handle a unit that declares `main`. One mechanism, not two.
+
+A unit import resolves against the ENTRY file's directory and there is no search path, so a
+`use "helpers/x"` inside the documented unit resolves only from that unit's own directory.
+The generated file therefore goes into a temp COPY of that directory. The copy is made once
+per unit, not once per example.
+
+**R19 — the wrapper is a helper plus a `match`, not a bare `main`.** For a snippet with no
+`fn main(`:
+
+```
+use "<unit>"
+<the snippet's own use lines>
+
+fn doc_example_<n>() ~:
+    <the snippet, indented four spaces, blank lines left blank>
+    return Result.Ok(~)
+
+fn main() i32:
+    match doc_example_<n>():
+        Result.Ok(_) ->
+            return Result.Ok(0)
+        Result.Err(_) ->
+            return Result.Ok(1)
+```
+
+A body with `??` directly inside `fn main()` warns CW2511 on every such example. That
+warning exists to discourage `??` in `main`, so a harness that writes the discouraged form
+on the author's behalf teaches it. Measured: the helper form warns nothing, and an example
+whose `??` fails still exits 1. The name carries the block index, so it cannot collide with
+a symbol in the imported unit.
+
+A snippet that declares its own `fn main(` is compiled verbatim, with the import injected
+above it. That is the wrapping rule above, and it is unchanged.
+
+**R20 — `use` lines are hoisted, and the injected import is not repeated.** A `use` inside
+a function body does not parse, so every line that matches `^use ` moves to the top of the
+generated file, in the order written. The unit import is injected only when the snippet does
+not already import that unit, because a duplicate `use` is CW3001. `println` needs no
+import at all, so the wrapper injects no stdio.
+
+**R21 — two skips, each with its reason printed.** An example is SKIPped, not failed, when
+the collector can see that it cannot be compiled from outside: the declaration is private
+(measured CE3005), or the unit declares `main` (measured CE0101). The collector knows both
+facts because it parses (R22). A skip prints its reason and is counted, the way the
+Markdown collector prints a marked skip, so the hole stays visible.
+
+**R22 — the collector parses, it does not scan.** It calls `parse_to_ast` and reuses the
+`docs` pass's own walk over documented declarations, so it sees exactly what the pass sees
+— a body-first block included — and it gets `is_public`, the declaration name and the unit's
+own `main` for free. The walk becomes public API: `_documented` is renamed `documented` in
+`semantics/passes/docs.py`, with its caller updated.
+
+A file that does not parse is skipped and counted. There are 36 in the tree: 35 are
+`test_err_` files that fail on purpose, and the last is `helper_sizes.sushi`, the
+`public const` gap (#466) that `tests/unit/test_doc_block_grammar.py` already exempts by
+name.
+
+**R23 — the manifest carries the code, and prints none of it.** `doc_record` gains
+`examples: [str]` — the code of each example in source order. The attributes are not
+carried, because an attribute is a harness instruction and not documentation. The key is
+absent when there is no example. `slib-info` does not print examples: S9 is a plain dump,
+and a fenced program inside it would bury the signature. Phase 6 renders them.
+
+This closes R7, the one thing an author could write that phase 3 dropped.
+
+**R24 — a bundled stdlib module is a library unit as far as the `docs` pass is concerned.**
+`_inject_source_stdlib_units` builds a `Unit` with no provenance, and the pass skips a unit
+only when it has one. Measured: a `CW7001` in `collections/iter.sushi` is then reported in
+every program that imports the module. So the injector sets a provenance, the same way
+`_inject_library_source` does, and a user is never told about a stdlib doc typo.
+
+Nothing triggers this today, because no bundled module carries a block. It is the trap
+waiting for whoever writes the first one, and it is the prerequisite for documenting the
+stdlib later. It lands here because it is one line, and because the measurement that
+justifies it is fresh.
+
+The same line silences the diagnostic for us, so the repo needs its own gate: one pytest
+module runs `check_docs` over every module in `SOURCE_STDLIB_MODULES` and asserts no CE70xx
+and no CW7001.
+
+**R25 — the sweep grows a selector, and runs each example in its own directory.**
+`--only {all,docs,examples}`, and `all` is the default. Each run gets its own working
+directory inside the temp tree, so an example that writes a file leaves nothing behind. The
+compile timeout is 60 s, as it is today, and the run timeout is 10 s. A timeout is a failure
+with its own label. Output is NOT asserted: an example is documentation, and an
+expected-output mechanism would make it a test.
+
+**R26 — the corpus proves the plumbing, and nothing more.** The tree holds 35 attached doc
+blocks and, before this phase, no `- Example:` with a fence at all. So the phase writes the
+smallest set of examples that exercises every fence, and then stops. It does NOT put an
+example on every documented declaration, and it does not document the stdlib.
+
+Three fixture files, because the contents of a fence never reach the host build — a fence
+is text inside one `DOC_BLOCK` token, so a file whose fences hold deliberately broken Sushi
+still compiles clean:
+
+- **one file carries all four attributes** — a plain fence that runs, a `no_run`, a
+  `skip (reason)`, and an `error CE2002`. It compiles with exit 0, and the sweep is what
+  tells the four outcomes apart.
+- **two `test_err_` files**, one for CE7007 and one for CE7008, because each has to exit 2
+  on its own.
+
+An example that cannot compile is a legitimate fixture and not a gap: `error` and `skip`
+exist precisely for code that must not build, or must not run.
+
+**Real examples are a later editorial pass.** The bundled stdlib modules are where they pay
+off, and writing them is a review of four modules' prose rather than plumbing. R24 is the
+prerequisite that pass needs, and it lands here so the pass can start whenever it is worth
+starting.
+
+**R27 — the Markdown collector honours CommonMark's own fence rule.** A fenced block is
+closed by a fence of the SAME character that is at least as long, which is how the format
+already lets one fence hold another. `collect_blocks` implements none of it. So when a line
+opens a fence that this collector cannot close — a `~~~`, or four or more backticks — it
+steps to that fence's own closer before it resumes scanning.
+
+Measured both ways: with a `~~~sushi` outer fence AND with a four-backtick one, the
+phase-3 collector reached inside an illustration and pulled the inner example out as a
+block of its own. The `~~~` convention above is the spelling; this ruling is what makes it
+safe.
 
 ---
 
@@ -1181,6 +1405,10 @@ feature removes.
 
 Phase 3 must not teach `slib-info` to parse source, must not move the container version for
 an added optional key, and must not put a `doc` key on a private or closure-path record.
+
+Phase 4 must not make the sweep a CI job, must not assert an example's output, and must not
+teach the wrapper to reach a private symbol. Each one turns documentation into a test, and
+the third one documents a call a reader cannot make.
 
 Phase 5 must not turn any always-on check into a warning, or any warning into an
 always-on error. The split in §6 is the contract: a claim that contradicts the declaration
