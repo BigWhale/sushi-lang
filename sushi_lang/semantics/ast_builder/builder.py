@@ -8,7 +8,7 @@ from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.generics.types import GenericTypeRef
 
 from sushi_lang.semantics.ast import (
-    Program, UseStatement, FuncDef, ConstDef, ExtendDef, Block,
+    Program, UseStatement, FuncDef, ConstDef, DocBlock, ExtendDef, Block,
     StructDef, EnumDef, PerkDef, ExtendWithDef, Expr, ExternalBlock,
 )
 from sushi_lang.internals.report import span_of
@@ -31,6 +31,15 @@ class ASTBuilder:
         # type is read while the AST is built -- long before the collect pass has a
         # constant table -- so the builder keeps its own.
         self.unit_constants: dict = {}
+        # Doc blocks the builder cannot report on: it takes no Reporter, and a block
+        # that documents nothing is the `docs` pass's warning to raise. Every block
+        # ends up attached, lifted, or here -- see documentation.md section 5.
+        self.unit_doc: Optional[DocBlock] = None
+        self.orphan_docs: List[DocBlock] = []
+        # Body-first blocks parked on a Block, by id(block), until the enclosing
+        # declaration lifts one. What still stands at the end of `build()` belongs to
+        # a body that takes no docs.
+        self.pending_body_docs: dict = {}
 
     def integer_constant(self, name: str) -> Optional[int]:
         """The value of an integer constant of this unit, None when there is none.
@@ -218,7 +227,20 @@ class ASTBuilder:
             elif node.data == "extend_with_def":
                 perk_impls.append(perks.parse_extendwithdef(node, self))
 
-        return Program(uses=uses, constants=constants_list, structs=structs_list, enums=enums_list, perks=perks_list, functions=funcs, extensions=extensions_list, generic_extensions=generic_extensions, perk_impls=perk_impls, externals=externals_list, loc=span_of(tree))
+        from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
+        attach_docs(tree.children,
+                    [*uses, *constants_list, *structs_list, *enums_list, *perks_list,
+                     *funcs, *extensions_list, *generic_extensions, *perk_impls,
+                     *externals_list],
+                    self, allow_unit_doc=True)
+
+        # A body block nothing lifted documents nothing: a lambda body, an `if` arm.
+        for _body, doc in self.pending_body_docs.values():
+            doc.orphan_reason = "detached"
+            self.orphan_docs.append(doc)
+        self.orphan_docs.sort(key=lambda d: (d.loc.line, d.loc.col) if d.loc else (0, 0))
+
+        return Program(uses=uses, constants=constants_list, structs=structs_list, enums=enums_list, perks=perks_list, functions=funcs, extensions=extensions_list, generic_extensions=generic_extensions, perk_impls=perk_impls, externals=externals_list, loc=span_of(tree), doc=self.unit_doc, orphan_docs=self.orphan_docs)
 
     def _parse_type(self, type_node: Tree) -> Optional[Type]:
         """Parse a type node into a Type object."""

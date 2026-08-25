@@ -10,6 +10,6 @@ fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
 
 fn main() i32:
-    let i32 n = add(1, 2)??
+    let i32 n = add(1, 2).realise(0)
     println("{n}")
     return Result.Ok(0)

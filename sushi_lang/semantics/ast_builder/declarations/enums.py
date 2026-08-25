@@ -5,6 +5,7 @@ from lark import Tree
 from sushi_lang.semantics.ast import EnumDef, EnumVariant
 from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, ice, expect
+from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.report import span_of
 
@@ -30,6 +31,8 @@ def parse_enumdef(t: Tree, ast_builder: 'ASTBuilder') -> EnumDef:
 
     if not variants:
         ice(t, "enum must have at least one variant")
+
+    attach_docs(t.children, variants, ast_builder)
 
     return EnumDef(
         name=str(name_tok),

@@ -7,6 +7,6 @@ fn probe() i32:
     return Result.Ok(n)
 
 fn main() i32:
-    let i32 n = probe()??
+    let i32 n = probe().realise(0)
     println("{n}")
     return Result.Ok(0)

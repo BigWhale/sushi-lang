@@ -19,6 +19,6 @@ fn multiply(i32 a, i32 b) i32:
     return Result.Ok(a * b)
 
 fn main() i32:
-    let i32 n = multiply(3, 3)??
+    let i32 n = multiply(3, 3).realise(0)
     println("{n}")
     return Result.Ok(0)

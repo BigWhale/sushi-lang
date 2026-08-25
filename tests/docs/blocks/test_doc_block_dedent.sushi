@@ -18,6 +18,6 @@ fn seven() i32:
     return Result.Ok(7)
 
 fn main() i32:
-    let i32 n = seven()??
+    let i32 n = seven().realise(0)
     println("{n}")
     return Result.Ok(0)

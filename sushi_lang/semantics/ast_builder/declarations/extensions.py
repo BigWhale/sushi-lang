@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import ExtendDef
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
+from sushi_lang.semantics.ast_builder.declarations.docs import lift_body_doc
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, find_tree_recursive, ice
 from sushi_lang.internals.report import span_of
 
@@ -42,19 +43,21 @@ def parse_extenddef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDef:
     params = parse_params(params_node, ast_builder) if params_node else []
     self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
     return_type = ast_builder._parse_type(return_type_node) if return_type_node else None
+    body = ast_builder._block(body_node)
 
     return ExtendDef(
         target_type=target_type,
         name=str(name_tok),
         params=params,
         ret=return_type,
-        body=ast_builder._block(body_node),
+        body=body,
         loc=span_of(t),
         target_type_span=span_of(target_type_node),
         name_span=span_of(name_tok),
         ret_span=span_of(return_type_node),
         self_mode=self_mode,
         self_mode_span=self_mode_span,
+        doc=lift_body_doc(body, ast_builder),
     )
 
 
@@ -97,17 +100,19 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
     params = parse_params(params_node, ast_builder) if params_node else []
     self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
     return_type = ast_builder._parse_type(return_type_node) if return_type_node else None
+    body = ast_builder._block(body_node)
 
     return ExtendDef(
         target_type=target_type,
         name=str(name_tok),
         params=params,
         ret=return_type,
-        body=ast_builder._block(body_node),
+        body=body,
         loc=span_of(t),
         target_type_span=span_of(target_type_node),
         name_span=span_of(name_tok),
         ret_span=span_of(return_type_node),
         self_mode=self_mode,
         self_mode_span=self_mode_span,
+        doc=lift_body_doc(body, ast_builder),
     )

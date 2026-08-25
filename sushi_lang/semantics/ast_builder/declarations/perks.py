@@ -5,6 +5,7 @@ from lark import Tree, Token
 from sushi_lang.semantics.ast import PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, ice, expect
+from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.report import span_of
 
@@ -30,6 +31,8 @@ def parse_perkdef(t: Tree, ast_builder: 'ASTBuilder') -> PerkDef:
 
     if not methods:
         ice(t, "perk must have at least one method")
+
+    attach_docs(t.children, methods, ast_builder)
 
     return PerkDef(
         name=str(name_tok),
@@ -107,6 +110,7 @@ def parse_extendwithdef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendWithDef:
     if not methods:
         ice(t, "must have at least one method implementation")
 
+    attach_docs(t.children, methods, ast_builder)
     target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
 
     return ExtendWithDef(
@@ -150,6 +154,7 @@ def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendW
     if not methods:
         ice(suffix, "must have at least one method implementation")
 
+    attach_docs(suffix.children, methods, ast_builder)
     target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
 
     return ExtendWithDef(
