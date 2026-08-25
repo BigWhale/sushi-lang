@@ -6,8 +6,8 @@ is wrong TODAY, whatever the project's documentation policy is, so every code he
 always on. What is merely absent is a matter of policy, and belongs behind
 `--warn-missing-docs` (docs/design/documentation.md section 6).
 
-CE7001 to CE7004 are tag errors and CE7005 and CE7006 are position errors, numbered in
-those two runs.
+CE7001 to CE7004 are tag errors, CE7005 and CE7006 are position errors, and CE7007 and
+CE7008 are example errors, numbered in those three runs.
 """
 from __future__ import annotations
 
@@ -58,3 +58,19 @@ _add(ErrorMessage("CE7006", Severity.ERROR,
     Category.DOCS, "The two positions document the same declaration, so a declaration "
                    "that uses both says which one is the documentation twice over. Keep "
                    "one of them."))
+
+_add(ErrorMessage("CE7007", Severity.ERROR,
+    "the '- Example:' tag introduces no fenced block",
+    Category.DOCS, "The whole job of the tag is to introduce a fenced block of Sushi, "
+                   "so a tag with nothing to introduce contradicts itself the way a "
+                   "`- Parameter q:` that names no parameter does. This is always on "
+                   "for that reason. An ABSENT example is a matter of policy and "
+                   "belongs behind `--warn-missing-docs`."))
+
+_add(ErrorMessage("CE7008", Severity.ERROR,
+    "this documentation fence is never closed",
+    Category.DOCS, "A doc block ends at its own `:##`, so a fence that runs past it is "
+                   "truncated, and a truncated example is not one. Every documentation "
+                   "system that reads a block as text loses the tail without a signal, "
+                   "which is the failure this feature exists to remove. Close the fence "
+                   "with a run of the SAME character that is at least as long."))

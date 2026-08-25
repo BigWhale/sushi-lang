@@ -9,7 +9,11 @@ Multiplies two numbers.
   a second line and stays part of the tag.
 - Returns: The product.
 - Errors: Never, in practice.
-- Example: this tag is recognised now and consumed in phase 4.
+- Example: the tag introduces a fence, and CE7007 fires when it does not.
+```sushi
+let i32 n = multiply(3, 3)??
+println("{n}")
+```
 - Note: this is prose, not a tag.
 - Deprecated: reserved by the design, and prose until a later phase.
 - Traps: reserved as well.

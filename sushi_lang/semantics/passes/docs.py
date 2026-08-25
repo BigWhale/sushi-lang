@@ -33,6 +33,7 @@ def check_docs(reporter: 'Reporter', program: 'Program') -> None:
     """Check one unit's doc blocks."""
     for doc, owner in _documented(program):
         _check_tags(reporter, doc, owner)
+        _check_examples(reporter, doc)
     _check_positions(reporter, program)
 
 
@@ -134,6 +135,24 @@ def _check_tags(reporter: 'Reporter', doc: 'DocBlock', owner) -> None:
                     "the first one is here", first.loc)
                 continue
             first_singleton[tag.kind] = tag
+
+
+def _check_examples(reporter: 'Reporter', doc: 'DocBlock') -> None:
+    """The two ways an `- Example:` can contradict itself (documentation.md S10, R17).
+
+    Both are recorded by the parse and reported here, which is the split
+    `DocBlock.orphan_reason` settled: the builder takes no Reporter, so it cannot
+    diagnose, and dropping the defect there is the silent loss this feature removes.
+    """
+    for example in doc.examples:
+        if example.defect == "no-fence":
+            er.emit_with(reporter, er.ERR.CE7007, example.loc).help(
+                "the tag introduces a fenced block; open one with ```sushi on the "
+                "next line, or delete the tag")
+        elif example.defect == "unterminated":
+            er.emit_with(reporter, er.ERR.CE7008, example.loc).help(
+                "close it with a run of the same character that is at least as long, "
+                "before the block's own `:##`")
 
 
 def _check_positions(reporter: 'Reporter', program: 'Program') -> None:
