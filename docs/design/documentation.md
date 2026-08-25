@@ -1,13 +1,13 @@
 # Design: Documentation blocks
 
-**Status: none of this is built.** The document specifies a feature that does not exist
-yet. Each phase below moves one part from DESIGN to BUILT; this banner records where the
-line is.
+**Status: the language understands doc blocks. Nothing consumes the text yet.** Each
+phase below moves one part from DESIGN to BUILT; this banner records where the line is.
+The user-facing reference for what is built is `docs/documentation-blocks.md`.
 
 | Phase | Content | State |
 |---|---|---|
 | 1 | This document | BUILT |
-| 2 | Grammar, AST, attachment rules, the `docs` pass, CE6011/CE6012/CE6013 and CE70xx | DESIGN |
+| 2 | Grammar, AST, attachment rules, the `docs` pass, CE6011/CE6012/CE6013 and CE70xx | BUILT |
 | 3 | `.slib` manifest carriage; `slib-info` prints a plain dump | DESIGN |
 | 4 | `- Example:` blocks compile and run in the toolchain | DESIGN |
 | 5 | `--warn-missing-docs` completeness lints | DESIGN |
@@ -428,10 +428,11 @@ Two dataclasses in `sushi_lang/semantics/ast.py`:
 ```python
 @dataclass
 class DocTag:
-    kind: str                    # "parameter" | "returns" | "errors" | "example"
+    kind: str                    # "parameter" | "returns" | "errors" | "example" | "unknown"
     name: Optional[str]          # the parameter name, for kind == "parameter"
     text: str
     loc: Optional[Span] = None
+    word: str = ""               # the keyword AS WRITTEN; what CE7004 reports
 
 @dataclass
 class DocBlock:
@@ -439,7 +440,22 @@ class DocBlock:
     text: str                    # the whole block, dedented, tags included
     tags: List[DocTag]
     loc: Optional[Span] = None
+    orphan_reason: Optional[Literal["detached", "in-body"]] = None
 ```
+
+Two fields were added while phase 2 was built, and both carry a decision the pass cannot
+make for itself.
+
+`DocTag.word` holds the keyword exactly as the author typed it. A near miss reaches the
+pass as `kind == "unknown"`, and CE7004 has to name what was written, so `name` cannot
+carry it -- on an `unknown` tag `name` is not a parameter name and reusing it would say
+something false.
+
+`DocBlock.orphan_reason` says WHY a block reached `orphan_docs`. The two ways of
+documenting nothing are separate rules with separate codes -- CW7001 for a block that
+attaches to nothing, CE7005 for one that stands in a body it is not the first item of --
+and the builder is the only place that still knows which happened. Comparing spans in the
+pass to recover it would be the same fact derived twice.
 
 A `doc: Optional[DocBlock] = None` field goes on `FuncDef`, `ConstDef`, `StructDef`,
 `StructField`, `EnumDef`, `EnumVariant`, `PerkDef`, `PerkMethodSignature`, `ExtendDef`,

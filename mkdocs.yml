@@ -101,6 +101,7 @@ nav:
       - Foreign Function Interface: ffi.md
   - Reference:
       - Language Reference: language-reference.md
+      - Documentation Blocks: documentation-blocks.md
       - Standard Library: standard-library.md
       - Compiler Reference: compiler-reference.md
       - Libraries: libraries.md

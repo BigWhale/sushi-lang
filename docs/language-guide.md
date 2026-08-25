@@ -9,6 +9,7 @@ This guide provides a friendly tour of Sushi's features. If you're new to Sushi,
 - [Hello World](#hello-world)
 - [Variables and Types](#variables-and-types)
 - [Functions and Returns](#functions-and-returns)
+- [Documenting Code](#documenting-code)
 - [Control Flow](#control-flow)
 - [Error Handling](#error-handling)
 - [Collections](#collections)
@@ -234,6 +235,64 @@ wants to keep: `f(nom s.clone())`.
 
 (One special case: `main`'s `string[] args` is a borrowed view of the process argv. Passing it to an
 ordinary borrow parameter is fine; handing it to a `nom` one is `CE2410`.)
+
+## Documenting Code
+
+A documentation block is part of the declaration, not a comment near it. The compiler reads it,
+and checks what it says against the declaration beside it.
+
+A block opens with `##:` and closes with `:##`:
+
+```sushi
+##: The answer to life, the universe and everything. :##
+const i32 ANSWER = 42
+
+##:
+Adds two numbers.
+
+- Parameter a: The first addend.
+- Parameter b: The second addend.
+- Returns: The sum.
+- Errors: Never, in practice.
+:##
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+fn main() i32:
+    let i32 sum = add(ANSWER, 1).realise(0)
+    println("{sum}")
+    return Result.Ok(0)
+```
+
+The block attaches to the declaration on the **next line**. A blank line breaks the attachment,
+and so does an ordinary `#` comment. A block that attaches to nothing warns, unless it is the
+first item in the file — that one documents the unit.
+
+A block may also stand first in a body, where it documents the function around it:
+
+```sushi
+fn make_tea(u8 strength) ~:
+    ##:
+    Makes a cup of tea. A block that is first in a body documents the function.
+    :##
+    println("{strength}")
+    return Result.Ok(~)
+
+fn main() i32:
+    make_tea(7 as u8)
+    return Result.Ok(0)
+```
+
+Four tags are recognised, and each one is an ordinary Markdown list item:
+`- Parameter <name>:`, `- Returns:`, `- Errors:` and `- Example:`. Everything else is prose, and
+the first paragraph is the summary.
+
+Because the compiler owns the block, it can tell you that a `- Parameter q:` names no parameter
+of this function, that one parameter is documented twice, or that `- Retruns:` is a misspelling
+of `- Returns:`. A misspelled tag would be silently invisible in a system that reads the block
+as text.
+
+See [Documentation Blocks](documentation-blocks.md) for the full reference.
 
 ## Control Flow
 

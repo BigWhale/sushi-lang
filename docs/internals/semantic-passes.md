@@ -14,6 +14,7 @@ order; this list mirrors it.
 | Pass | What it does | Where |
 |---|---|---|
 | `collect` | constants, function headers, generic types, externals | `semantics/passes/collect/` |
+| `docs` | check each doc block against its declaration (CE70xx, CW7001) | `semantics/passes/docs.py` |
 | `externs` | extern signatures (CE5003), `CW5001`, the `ptr` unit gate (CE5009) | `semantics/passes/types/externals.py` |
 | `libraries` | register every symbol a `.slib` exports | `semantics/semantic_analyzer.py` |
 | `entrypoint` | `main()`'s signature and its `string[] args` | `semantics/semantic_analyzer.py` |
@@ -90,6 +91,46 @@ into the scope pass, the type validator, and the backend.
 The C-ABI allowlist check (`CE5003`) and the `CW5001` four-guarantee warning live
 in `semantics/passes/types/externals.py::validate_external_signatures`, run right
 after collection.
+
+## The `docs` pass: a doc block against its declaration
+
+**File:** `semantics/passes/docs.py`
+
+A doc block is part of the declaration (`docs/design/documentation.md`), so the compiler can
+check what the block claims against what the declaration says. A `- Parameter q:` that names
+no parameter of this function is wrong, and the compiler knows it is wrong.
+
+```sushi
+##:
+Adds two numbers.
+
+- Parameter q: CE7001 -- there is no parameter called q.
+:##
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+```
+
+Six errors and one warning, all of them always on:
+
+| Condition | Code |
+|---|---|
+| a `- Parameter` tag names no parameter of this callable | CE7001 |
+| two `- Parameter` tags for one name | CE7002 |
+| a second `- Returns:` or `- Errors:` | CE7003 |
+| an unrecognised tag keyword | CE7004 |
+| a block in a body that is not the first item | CE7005 |
+| a declaration with a block above it and a block first in its body | CE7006 |
+| a block that documents nothing | CW7001 |
+
+Every check finds a claim that CONTRADICTS the declaration, which is why none of them is
+behind a flag. Completeness — a public symbol with no block at all — is a matter of policy,
+and belongs behind `--warn-missing-docs`.
+
+Placement is load-bearing on one side. The pass needs the merged unit table and nothing
+later, and it must run before `instantiate` and `monomorphize`: a generic's block is written
+once, and checking it afterwards would report one mistake once per instantiation.
+
+Library units are skipped. A consumer must not be told about the library author's doc typos.
 
 ## The `externs` pass: FFI signature validation
 
@@ -603,7 +644,7 @@ if var in moved_variables:
 ```
 whole program, once:
 
-  collect → externs → libraries → entrypoint → instantiate → monomorphize
+  collect → docs → externs → libraries → entrypoint → instantiate → monomorphize
      → resolve → finite-types → derive → shadowing → effects
 
 then per unit, in one loop:
@@ -612,6 +653,8 @@ then per unit, in one loop:
 ```
 
 **Dependencies:**
+- `docs` needs `collect` (the merged unit table), and must run BEFORE `instantiate` and
+  `monomorphize`, or one mistake in a generic's block is reported once per instantiation
 - `externs`, `libraries` and `entrypoint` need `collect` (the tables and the signatures)
 - `instantiate` needs `libraries` (a library template must be visible to instantiate at
   the consumer)

@@ -17,6 +17,8 @@ Complete syntax and semantics reference for Sushi Lang. For a gentler introducti
 - [Enums](#enums)
 - [Pattern Matching](#pattern-matching)
 - [Module System](#module-system)
+- [Comments](#comments)
+- [Documentation Blocks](#documentation-blocks)
 
 ## Program Structure
 
@@ -973,6 +975,36 @@ Single-line comments only:
 # This is a comment
 let i32 x = 42  # Inline comment
 ```
+
+## Documentation Blocks
+
+A documentation block is part of the declaration, not a comment near it. It opens with `##:` and
+closes with `:##`:
+
+```
+DOC_BLOCK: /##:[^\n]*?:##|##:[\s\S]*?\n[ \t]*:##/
+```
+
+The closer is line-initial, or the block is a one-liner. Blocks do not nest. An unmatched `##:`
+is `CE6011`, a `:##` with no opener is `CE6012`, and a line-initial `##:` inside a block is
+`CE6013`.
+
+A block stands in one of three positions:
+
+| Position | Documents |
+|---|---|
+| Immediately above a declaration | that declaration |
+| First item in a body | the function that encloses the body |
+| First item in a file, attached to nothing | the unit |
+
+The block attaches to the declaration on the next line; a blank line or a `#` comment breaks the
+attachment. The text is dedented and not reflowed.
+
+A tag is a Markdown list item: `- Parameter <name>:`, `- Returns:`, `- Errors:` or `- Example:`.
+Everything else is prose, and the first paragraph is the summary.
+
+See [Documentation Blocks](documentation-blocks.md) for the positions, the tag vocabulary and
+every diagnostic.
 
 ## Keywords
 

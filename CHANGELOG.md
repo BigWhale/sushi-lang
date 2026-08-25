@@ -9,6 +9,32 @@ a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
 ### Added
+- **The compiler understands documentation blocks: `##: ... :##`**. A doc block is part of
+  the declaration, not a comment near it: the grammar sees it, the AST carries it, and the
+  compiler checks what it says against the declaration beside it.
+
+  One construct serves three positions -- above a declaration, first in a body, or first in
+  a file, where it documents the unit. A block attaches to the declaration on the NEXT line,
+  which is Go's rule; a blank line or a `#` comment breaks the attachment, and a block that
+  attaches to nothing is **CW7001**. The text is dedented and not reflowed, so a block
+  written inside a body renders flush and a fenced example keeps its own indent.
+
+  The delimiters are asymmetric on purpose, and that is what lets the compiler say which
+  mistake was made: an opener with no closer is **CE6011**, a closer with no opener is
+  **CE6012**, and a line-initial `##:` inside a block is **CE6013**, reported at the inner
+  opener with a note on the outer one. The closer is line-initial or the block is a
+  one-liner, so a lazy match can no longer swallow the declarations between two blocks.
+
+  Four tags are recognised, each an ordinary Markdown list item: `- Parameter <name>:`,
+  `- Returns:`, `- Errors:` and `- Example:`. A new `docs` pass checks them: a tag that
+  names no parameter of this callable is **CE7001**, one parameter documented twice is
+  **CE7002**, a second `- Returns:` or `- Errors:` is **CE7003**, and a keyword within two
+  edits of a real one is a typo rather than prose, **CE7004** with the tag it meant. A block
+  in a body that is not the first item is **CE7005**, and a declaration documented both from
+  above and from inside its body is **CE7006**.
+
+  Nothing consumes the text yet. `docs/documentation-blocks.md` is the reference and
+  `docs/design/documentation.md` carries the phases that follow.
 - **An array literal element may repeat: `[value; count]`** (#446). A table of one value
   no longer has to be spelled out or built at run time. The form is an ELEMENT form, so
   runs mix with plain elements and repeat within one literal: `[0; 19]`, `[1, 0;3, 9, 7]`,
