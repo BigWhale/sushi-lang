@@ -35,6 +35,10 @@ class DocBlock:
     summary: str                 # the first paragraph
     text: str                    # the whole block, dedented, tags included
     tags: List[DocTag]
+    # The prose between the summary and the FIRST tag, which is what a `.slib` record
+    # carries. Parsed and never derived: "the block with the tag lines taken out" reads
+    # the tail of a fenced example as prose (documentation.md section 8, R1).
+    body: str = ""
     loc: Optional[Span] = None
     # Why this block reached `Program.orphan_docs`, and None while it is attached.
     # "detached" documents nothing (CW7001); "in-body" stands in a body it is not

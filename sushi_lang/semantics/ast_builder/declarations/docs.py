@@ -149,6 +149,26 @@ def _read_tags(entries: Sequence[Tuple[int, int, str]]) -> List[DocTag]:
     return tags
 
 
+def _read_body(entries: Sequence[Tuple[int, int, str]], after_summary: int) -> str:
+    """The prose between the summary and the first tag candidate.
+
+    Parsed rather than derived. "The block with the tag lines taken out" is a different
+    answer: a Markdown list item stops at a blank line, so a fenced example's closing
+    lines fall outside its own tag and a line-removal rule copies them into the body as
+    prose. Everything from the first candidate onward belongs to the tags.
+    """
+    lines = [text for _line, _col, text in entries[after_summary:]]
+    for index, text in enumerate(lines):
+        if _CANDIDATE.match(text):
+            lines = lines[:index]
+            break
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines)
+
+
 def parse_doc_block(token: Token) -> DocBlock:
     """A DOC_BLOCK token, read into the block it carries."""
     entries = _dedent(token)
@@ -163,6 +183,7 @@ def parse_doc_block(token: Token) -> DocBlock:
     return DocBlock(
         summary="\n".join(summary).strip(),
         text="\n".join(text for _line, _col, text in entries),
+        body=_read_body(entries, len(summary)),
         tags=tags,
         loc=span_of(token),
     )

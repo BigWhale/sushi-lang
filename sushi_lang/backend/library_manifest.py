@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from sushi_lang.semantics.library_templates import doc_record, with_doc
 from sushi_lang.semantics.param_modes import param_mode
 
 if TYPE_CHECKING:
@@ -135,6 +136,13 @@ class LibraryManifestGenerator:
             "dependencies": self._extract_dependencies(units),
         }
 
+        # A map beside `units`, not a change to it: `units` is an ordered list and the
+        # order is load-bearing for the consumer's injection. Absent when no unit
+        # carries a block, so an undocumented library grows by nothing.
+        unit_docs = self._extract_unit_docs(units)
+        if unit_docs:
+            manifest["unit_docs"] = unit_docs
+
         LibraryFormat.write(output_path, manifest, bitcode, source=source)
 
     def _contains_foreign_ptr(self, ty) -> bool:
@@ -186,19 +194,22 @@ class LibraryManifestGenerator:
                             getattr(func, "name_span", None) or func.loc, name=func.name)
                     continue
 
-                public_funcs.append({
+                public_funcs.append(with_doc({
                     "name": func.name,
                     "params": [
                         # The MODE is its own field, not part of the type string. A
                         # `nom` cannot be spelled in a type at all, and reading peek /
                         # poke back out of a type string was the half that was missing
                         # (docs/design/borrow-model.md S10).
+                        #
+                        # A parameter record carries no `doc`: per-parameter text lives
+                        # in the enclosing function's `doc.params`, keyed by name.
                         {"name": p.name, "type": self._type_to_string(p.ty),
                          "mode": param_mode(p).value}
                         for p in func.params
                     ],
                     "return_type": self._type_to_string(func.ret),
-                })
+                }, func))
 
         return public_funcs
 
@@ -210,10 +221,10 @@ class LibraryManifestGenerator:
             if unit.ast is None:
                 continue
             for const in unit.ast.constants:
-                public_consts.append({
+                public_consts.append(with_doc({
                     "name": const.name,
                     "type": self._type_to_string(const.ty),
-                })
+                }, const))
 
         return public_consts
 
@@ -234,15 +245,16 @@ class LibraryManifestGenerator:
                     continue
                 seen_names.add(struct_def.name)
 
-                structs.append({
+                structs.append(with_doc({
                     "name": struct_def.name,
                     "fields": [
-                        {"name": field.name, "type": self._type_to_string(field.ty)}
+                        with_doc({"name": field.name,
+                                  "type": self._type_to_string(field.ty)}, field)
                         for field in struct_def.fields
                     ],
                     "is_generic": False,
                     "type_params": [],
-                })
+                }, struct_def))
 
         return structs
 
@@ -267,20 +279,36 @@ class LibraryManifestGenerator:
                 for variant in enum_def.variants:
                     has_data = len(variant.associated_types) > 0
                     data_type = self._type_to_string(variant.associated_types[0]) if has_data else None
-                    variants.append({
+                    variants.append(with_doc({
                         "name": variant.name,
                         "has_data": has_data,
                         "data_type": data_type,
-                    })
+                    }, variant))
 
-                enums.append({
+                enums.append(with_doc({
                     "name": enum_def.name,
                     "variants": variants,
                     "is_generic": False,
                     "type_params": [],
-                })
+                }, enum_def))
 
         return enums
+
+    def _extract_unit_docs(self, units: list['Unit']) -> dict[str, dict]:
+        """Each own unit's own doc block, keyed by unit name.
+
+        `own_units` is the same filter the `units` index and the source section use, so
+        the three can never disagree about which units are ours. A bundled stdlib
+        module's docs belong to the consumer's own copy of it, not to this library.
+        """
+        docs: dict[str, dict] = {}
+        for unit in own_units(units):
+            if unit.ast is None:
+                continue
+            record = doc_record(unit.ast.doc)
+            if record is not None:
+                docs[unit.name] = record
+        return docs
 
     def _scan_referenced_symbols(self, node, acc: set[str]) -> None:
         """Walk a body AST collecting referenced free symbol names."""
@@ -484,7 +512,10 @@ class LibraryManifestGenerator:
 
         for fn, src in closure["private_generic_functions"]:
             record = serialize_generic_function(fn, src)
+            # A private symbol is not part of the documented API, so the record that
+            # marks one drops its doc on the same line (documentation.md S8, R4).
             record["private"] = True
+            record.pop("doc", None)
             generic_functions.append(record)
             referenced_perks.update(record.get("free_perks", []))
 

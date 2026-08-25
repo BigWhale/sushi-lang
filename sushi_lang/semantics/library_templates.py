@@ -1,12 +1,67 @@
-"""Serialization codec for public generic templates shipped in .slib files."""
+"""The parts of a .slib manifest that come from the AST: generic templates, and docs.
+
+Two producers write a manifest -- this module and `backend/library_manifest.py` -- and
+both build a `doc` record through `doc_record` here. One function, so the record shape
+cannot differ between a concrete symbol and a template.
+"""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import (
-        FuncDef, PerkDef, StructDef, EnumDef, ExtendWithDef,
+        DocBlock, FuncDef, PerkDef, StructDef, EnumDef, ExtendWithDef,
     )
+
+# The two tags that are singletons, and the only two that reach a record as their own
+# key. `- Example:` waits for phase 4 and `- Parameter` rides in the `params` map.
+_SINGLETON_KINDS = ("returns", "errors")
+
+
+def doc_record(doc: Optional["DocBlock"]) -> Optional[dict]:
+    """One doc block as a manifest record, or None when it says nothing.
+
+    Every field is optional and an EMPTY one is omitted, so a reader that has only
+    `ml_get_str` cannot mistake an absent field for an empty string. The whole block
+    (`DocBlock.text`) is deliberately not carried: the index would then hold its own
+    input, duplicating text a source library already ships verbatim
+    (`docs/design/documentation.md` section 8).
+    """
+    if doc is None:
+        return None
+
+    params: Dict[str, str] = {}
+    singletons: Dict[str, str] = {}
+    for tag in doc.tags:
+        if tag.kind == "parameter" and tag.name and tag.text:
+            params.setdefault(tag.name, tag.text)
+        elif tag.kind in _SINGLETON_KINDS and tag.text:
+            singletons.setdefault(tag.kind, tag.text)
+
+    record: dict = {}
+    if doc.summary:
+        record["summary"] = doc.summary
+    if doc.body:
+        record["body"] = doc.body
+    if params:
+        record["params"] = params
+    for kind in _SINGLETON_KINDS:
+        if kind in singletons:
+            record[kind] = singletons[kind]
+
+    return record or None
+
+
+def with_doc(record: dict, node) -> dict:
+    """`record` plus the `doc` key, when `node` carries a block that says something.
+
+    The key is ABSENT otherwise, which is what makes an undocumented library grow by
+    nothing. Every producer adds a doc through here, so no record can grow a second way.
+    """
+    doc = doc_record(getattr(node, "doc", None))
+    if doc is not None:
+        record["doc"] = doc
+    return record
 
 
 def _free_perks_of(node) -> List[str]:
@@ -85,12 +140,12 @@ def slice_decl_source(node, source_text: str) -> str:
 
 def serialize_generic_function(func: "FuncDef", source_text: str) -> dict:
     """Produce the manifest record for a single public generic function."""
-    return {
+    return with_doc({
         "name": func.name,
         "type_params": _type_param_records(func),
         "source": slice_decl_source(func, source_text),
         "free_perks": _free_perks_of(func),
-    }
+    }, func)
 
 
 def deserialize_generic_function(record: dict) -> "FuncDef":
@@ -112,12 +167,12 @@ def deserialize_generic_function(record: dict) -> "FuncDef":
 
 def serialize_generic_struct(struct: "StructDef", source_text: str) -> dict:
     """Produce the manifest record for a single public generic struct."""
-    return {
+    return with_doc({
         "name": struct.name,
         "type_params": _type_param_records(struct),
         "source": slice_decl_source(struct, source_text),
         "free_perks": _free_perks_of(struct),
-    }
+    }, struct)
 
 
 def deserialize_generic_struct(record: dict) -> "StructDef":
@@ -139,12 +194,12 @@ def deserialize_generic_struct(record: dict) -> "StructDef":
 
 def serialize_generic_enum(enum: "EnumDef", source_text: str) -> dict:
     """Produce the manifest record for a single public generic enum."""
-    return {
+    return with_doc({
         "name": enum.name,
         "type_params": _type_param_records(enum),
         "source": slice_decl_source(enum, source_text),
         "free_perks": _free_perks_of(enum),
-    }
+    }, enum)
 
 
 def deserialize_generic_enum(record: dict) -> "EnumDef":
@@ -175,15 +230,18 @@ def serialize_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
     from sushi_lang.semantics.passes.collect.perks import _get_type_name
 
     type_name = _get_type_name(impl.target_type)
-    return {
+    return with_doc({
         "type": type_name,
         "perk": impl.perk_name,
         "source": slice_decl_source(impl, source_text),
+        # The method records are where a perk method's own block lands. A perk
+        # DEFINITION has no such array, so its methods' blocks travel only inside the
+        # source slice (documentation.md section 8, R3).
         "methods": [
-            {"name": m.name, "symbol": impl_method_symbol(type_name, m.name)}
+            with_doc({"name": m.name, "symbol": impl_method_symbol(type_name, m.name)}, m)
             for m in impl.methods
         ],
-    }
+    }, impl)
 
 
 def deserialize_perk_impl(record: dict) -> "ExtendWithDef":
@@ -203,10 +261,10 @@ def deserialize_perk_impl(record: dict) -> "ExtendWithDef":
 
 def serialize_perk(perk: "PerkDef", source_text: str) -> dict:
     """Produce the manifest record for a single perk DEFINITION (the contract)."""
-    return {
+    return with_doc({
         "name": perk.name,
         "source": slice_decl_source(perk, source_text),
-    }
+    }, perk)
 
 
 def deserialize_perk(record: dict) -> "PerkDef":
