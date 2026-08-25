@@ -1,0 +1,11 @@
+# Helper library with an UNMARKED generic beside a public one (#467).
+#
+# `public` is the discriminator for a generic exactly as it is for a concrete
+# function: `marked` is the library's API, `unmarked` is not. A consumer that
+# calls `unmarked` has to hear the same answer on every compilation path.
+
+fn unmarked@(T)(nom T x) T:
+    return Result.Ok(x)
+
+public fn marked@(T)(nom T x) T:
+    return Result.Ok(x)

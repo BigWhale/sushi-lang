@@ -104,6 +104,11 @@ public fn double_add(i32 a, i32 b) i32:
     return Result.Ok(helper(sum)??)
 ```
 
+A generic is no exception. `public fn pick@(T)(...)` is part of the API; `fn pick@(T)(...)`
+is internal, and a consumer that calls it hears `CE3005` on the source path exactly as it
+does for a concrete function. Only a public generic ships as a template, so on the binary
+path the symbol is not there at all and the answer is `CE2008`.
+
 ### No main() Required
 
 Libraries do not need a `main()` function. If you include one, compilation will fail.

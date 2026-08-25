@@ -1,0 +1,10 @@
+# The public half: a marked generic of another unit is callable and runs (#467).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "7"
+
+use "helpers/generic_private_helper"
+
+fn main() i32:
+    let i32 a = public_generic(nom 7).realise(0)
+    println("{a}")
+    return Result.Ok(0)

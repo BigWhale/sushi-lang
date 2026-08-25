@@ -1,0 +1,11 @@
+# Cross-unit call of a private GENERIC function. The concrete twin is
+# test_err_multifile_private.sushi; the generic slipped through with no
+# visibility check at all (#467).
+# EXPECT_ERROR_CODE: CE3005
+
+use "helpers/generic_private_helper"
+
+fn main() i32:
+    let i32 a = private_generic(nom 7).realise(0)
+    println("{a}")
+    return Result.Ok(0)

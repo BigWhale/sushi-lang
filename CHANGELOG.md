@@ -371,6 +371,26 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **A source library's private generic crashed the compiler, and two build paths disagreed
+  about it** (#467). `public` gates a concrete function across units, and the typecheck
+  pass says so with **CE3005**. A generic had no such gate. The units of a source `.slib`
+  arrive at the consumer as ordinary units, so the consumer resolved the private symbol,
+  and only the backend found out that no template was ever exported -- as a `KeyError`,
+  which the top-level guard rendered as **CE0000**. The default incremental path raised
+  that internal error, `--no-incremental` accepted the same program and ran it, and a
+  binary `.slib` answered **CE2008**.
+
+  One gate now answers for both kinds of callee, in the typecheck pass, where the
+  consumer's units and the library's exported templates are both visible. A private
+  generic of another unit is **CE3005** wherever the call is written, on either path: a
+  flag that controls rebuilds no longer decides which programs are legal. The same hole
+  was open in an ordinary multi-unit program, where a private generic next door was
+  callable; it is closed too. An export-closure template stays callable, because the
+  consumer registers it so that a transplanted library body can call it -- which is what
+  the concrete half of the closure already does.
+
+  The bundled `<collections/iter>` combinators -- `map`, `filter`, `fold` and `compose` --
+  were reachable only because the gate was missing. They are `public fn` now.
 - **Every caret was one character wider than the thing it marked.** `end_col` is
   exclusive -- Lark reports it that way, and every span the compiler builds by hand
   spells it `col + len(text)` -- but the width was computed as the difference plus one.

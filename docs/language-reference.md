@@ -943,7 +943,8 @@ fn add(i32 a, i32 b) i32:
 
 ### Visibility
 
-Functions are private by default. Use `public` for external access:
+Functions are private by default. Use `public` for external access. A generic function is
+no exception: a call from another unit to a private one is `CE3005`.
 
 ```sushi
 use "utils"

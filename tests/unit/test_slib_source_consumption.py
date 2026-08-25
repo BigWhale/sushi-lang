@@ -38,6 +38,14 @@ public fn pick@(T)(nom T a) T:
     return Result.Ok(a)
 """
 
+VISIBILITY_LIB = """\
+fn unmarked@(T)(nom T x) T:
+    return Result.Ok(x)
+
+public fn marked@(T)(nom T x) T:
+    return Result.Ok(x)
+"""
+
 ITER_LIB = """\
 use <collections/iter>
 
@@ -68,10 +76,11 @@ def _build_lib(tmp_path, sources, main, kind="source", version="1.2.0"):
     return out
 
 
-def _run_consumer(tmp_path, program, lib_dir, name="consumer"):
+def _run_consumer(tmp_path, program, lib_dir, name="consumer", flags=()):
     src = tmp_path / f"{name}.sushi"
     src.write_text(program, encoding="utf-8")
-    build = _sushic([str(src)], cwd=tmp_path, extra_env={"SUSHI_LIB_PATH": str(lib_dir)})
+    build = _sushic([*flags, str(src)], cwd=tmp_path,
+                    extra_env={"SUSHI_LIB_PATH": str(lib_dir)})
     return build, tmp_path / name
 
 
@@ -299,3 +308,61 @@ fn main() i32:
 
     assert subprocess.run([str(exe_a)], capture_output=True, text=True).stdout == "42\n"
     assert subprocess.run([str(exe_b)], capture_output=True, text=True).stdout == "hello\n"
+
+
+# --- What `public` gates on a generic (#467) ----------------------------------
+
+CALL_UNMARKED = """\
+use <lib/visibilitylib>
+
+fn main() i32:
+    let i32 a = unmarked(nom 7).realise(0)
+    println("{a}")
+    return Result.Ok(0)
+"""
+
+
+@pytest.fixture(scope="module")
+def visibilitylib(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("visibilitylib")
+    _build_lib(tmp, {"visibilitylib": VISIBILITY_LIB}, "visibilitylib")
+    return tmp
+
+
+def test_an_unmarked_library_generic_is_not_callable(tmp_path, visibilitylib):
+    # A source library's units arrive as ordinary units, so the consumer's
+    # type-checker can resolve a private generic. Only the backend used to find
+    # out, and it found out as a KeyError.
+    build, _exe = _run_consumer(tmp_path, CALL_UNMARKED, visibilitylib)
+    out = build.stdout + build.stderr
+    assert build.returncode == 2, out
+    assert "CE3005" in out
+    assert "CE0000" not in out
+
+
+def test_both_compilation_paths_reject_the_unmarked_generic(tmp_path, visibilitylib):
+    # --no-incremental is a rebuild control. It must not decide which programs
+    # are legal, so it has to give the same answer as the default path.
+    incremental, _a = _run_consumer(tmp_path, CALL_UNMARKED, visibilitylib,
+                                    name="prog_inc")
+    whole = _run_consumer(tmp_path, CALL_UNMARKED, visibilitylib,
+                          name="prog_whole", flags=("--no-incremental",))[0]
+
+    assert incremental.returncode == whole.returncode == 2
+    assert "CE3005" in incremental.stdout + incremental.stderr
+    assert "CE3005" in whole.stdout + whole.stderr
+
+
+def test_a_marked_library_generic_still_runs(tmp_path, visibilitylib):
+    build, exe = _run_consumer(tmp_path, """\
+use <lib/visibilitylib>
+
+fn main() i32:
+    let i32 a = marked(nom 7).realise(0)
+    println("{a}")
+    return Result.Ok(0)
+""", visibilitylib)
+    assert build.returncode == 0, build.stdout + build.stderr
+
+    run = subprocess.run([str(exe)], capture_output=True, text=True)
+    assert run.stdout == "7\n"
