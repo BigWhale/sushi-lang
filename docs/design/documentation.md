@@ -897,10 +897,11 @@ node)` convenience beside it. It returns `None` for a block that is absent or sa
 and it omits every field that has no text. That module's docstring widens to say what it is:
 the parts of a manifest that come from the AST -- the generic templates, and the doc records.
 
-A new `semantics/library_docs.py` was the alternative. Rejected: the backend manifest
-generator already imports this module, one function does not earn a file, and a new path
-named here has to exist in the same commit (`tests/unit/test_path_references_exist.py` reads
-a path reference as a promise).
+A new module of its own beside it was the alternative. Rejected: the backend manifest
+generator already imports this module, and one function does not earn a file. Note the
+second cost of naming one -- `tests/unit/test_path_references_exist.py` reads a path-shaped
+reference in `docs/` as a promise, so a path named here has to exist in the same commit,
+even when the sentence naming it says the file was NOT written.
 
 **R3 — the key goes where a record already exists.** `serialize_perk_impl` has a `methods`
 array, so each method record gains `doc`. `serialize_perk` has none, so the perk gains its
