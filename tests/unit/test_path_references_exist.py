@@ -50,6 +50,10 @@ ALLOWED = {
     # "(The old `semantics/pipeline.py` scaffold ... deleted in Tier 3 ...)" (closures.md).
     "backend/interfaces.py",
     "semantics/pipeline.py",
+    # TEMPORARY: the doc-block feature creates this module in its phase 2
+    # (docs/design/documentation.md, section 12). Remove this entry when the
+    # module exists.
+    "internals/errors/docs.py",
 }
 
 
