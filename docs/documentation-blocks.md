@@ -116,7 +116,7 @@ fn main() i32:
 ## Attachment
 
 **A block attaches to the declaration on the next line.** A blank line breaks the
-attachment. This is Go's rule.
+attachment.
 
 An ordinary `#` comment between the block and the declaration breaks the attachment as
 well. The compiler collapses a run of comment lines into the newline that carries them,
@@ -267,9 +267,9 @@ harmless to anything that draws the page.
 
 ### What the toolchain cannot reach
 
-An example is compiled from OUTSIDE the unit it documents, the way a Rust doctest links
-its crate: one generated file that imports the unit and holds the snippet. Two things are
-out of reach, and each is a printed SKIP rather than a failure.
+An example is compiled from OUTSIDE the unit it documents: one generated file that imports
+the unit and holds the snippet. Two things are out of reach, and each is a printed SKIP
+rather than a failure:
 
 - **A private declaration.** The generated file cannot call it (`CE3005`). An example that
   calls what a reader cannot call is not documentation, so the answer is `public` and not a
