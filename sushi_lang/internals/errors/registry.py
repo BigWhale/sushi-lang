@@ -21,6 +21,7 @@ class Category(str, Enum):
     PERK      = "perk"
     FFI       = "ffi"
     SYNTAX    = "syntax"
+    DOCS      = "docs"
     RUNTIME   = "runtime"
     INTERNAL  = "internal"
 

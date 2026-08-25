@@ -53,6 +53,15 @@ _add(ErrorMessage("CW3506", Severity.WARNING,
     Category.LIBRARY, "A perk implementation shipped by a library failed to deserialize. "
                       "Methods it provides will be unavailable unless the consumer supplies its own."))
 
+# Documentation blocks (CW7001, CE7001-CE7006)
+_add(ErrorMessage("CW7001", Severity.WARNING,
+    "this documentation block documents nothing", Category.DOCS,
+    "A block attaches to the declaration on the NEXT line. A blank line breaks the "
+    "attachment, and so does an ordinary `#` comment: both are absorbed into the "
+    "newline token, so the compiler cannot tell one from the other. The escape is to "
+    "move the comment, or to move the block. A block that is the first item in its "
+    "file documents the unit and never warns."))
+
 # FFI / Foreign Function Interface (CW5001, CE5001-CE5008)
 _add(ErrorMessage("CW5001", Severity.WARNING,
     "unsafe external block suspends four Sushi guarantees (add `because \"...\"` to acknowledge)",

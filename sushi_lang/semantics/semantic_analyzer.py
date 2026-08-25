@@ -91,6 +91,7 @@ class SemanticAnalyzer:
         the old scheme ended up running the scope pass after the derive pass.
 
             collect       constants, headers, generic types      passes/collect/
+            docs          doc blocks against their declarations  passes/docs.py
             externs       extern signatures, ptr unit gate       passes/types/externals.py
             libraries     library symbol registration            _register_library_*
             entrypoint    main()'s signature                     _check_main_function_args*
@@ -113,6 +114,16 @@ class SemanticAnalyzer:
         it as a helper.
         """
         self._check_multi_file()
+
+    @staticmethod
+    def _unit_reporter(unit) -> Reporter:
+        """A Reporter that knows one unit's file and source, for a per-unit pass."""
+        try:
+            source = unit.file_path.read_text(encoding="utf-8")
+        except Exception:
+            source = ""  # the diagnostic still renders, without its caret line
+        return Reporter(source=source, filename=str(unit.file_path),
+                        provenance=unit.provenance)
 
     def _check_multi_file(self) -> None:
         """Multi-file semantic analysis with cross-unit symbol resolution."""
@@ -178,6 +189,20 @@ class SemanticAnalyzer:
         self.generic_funcs = global_tables.generic_funcs
         self.externals = collector.externals
         global_tables.externals = collector.externals
+
+        # docs: check each doc block against the declaration beside it. Here because
+        # the pass needs the merged tables and nothing later, and because it must run
+        # ahead of instantiate/monomorphize -- a generic's block is written once, and
+        # checking it afterwards would report one mistake once per instantiation. A
+        # library unit is skipped: a consumer must not be told about the library
+        # author's doc typos.
+        from sushi_lang.semantics.passes.docs import check_docs
+        for unit in compilation_order:
+            if unit.ast is None or unit.provenance is not None:
+                continue
+            unit_reporter = self._unit_reporter(unit)
+            check_docs(unit_reporter, unit.ast)
+            self.reporter.items.extend(unit_reporter.items)
 
         # FFI: validate external signatures (CE5003), emit CW5001, and enforce
         # the ptr unit gate (CE5009) per unit.
@@ -388,13 +413,7 @@ class SemanticAnalyzer:
             if unit.ast is None:
                 continue
 
-            try:
-                unit_source = unit.file_path.read_text(encoding="utf-8")
-            except Exception:
-                unit_source = ""  # Fallback if we can't read the source
-
-            unit_reporter = Reporter(source=unit_source, filename=str(unit.file_path),
-                                     provenance=unit.provenance)
+            unit_reporter = self._unit_reporter(unit)
 
             scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals)
             scope_analyzer.run(unit.ast)

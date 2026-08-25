@@ -59,12 +59,12 @@ Adds two numbers.
 - Errors: Never, in practice.
 :##
 fn add(i32 a, i32 b) i32:
-    ##:
-    A block first in a body documents the function that encloses it.
-    :##
     return Result.Ok(a + b)
 
 fn main() i32:
+    ##:
+    A block first in a body documents the function that encloses it.
+    :##
     let Point p = Point(1, 2)
     let i32 sum = add(p.x, p.y).realise(0)
     let i64 n = libc.strlen("ready")
