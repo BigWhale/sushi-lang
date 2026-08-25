@@ -1,0 +1,20 @@
+# Phase 3 acceptance: a documented library consumes clean. The generic template it
+# ships carries a doc block INSIDE its source slice, and the generic struct's field
+# blocks travel the same way; both re-parse at the consumer. Compiling with no
+# diagnostic at all is the assertion -- a consumer must never be told about the
+# library author's doc blocks.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "47 7\n"
+# EXPECT_STDERR_EMPTY
+
+use <lib/doc_lib>
+
+fn run_test() i32:
+    let i32 bigger = pick_bigger(3, 5)??
+    return Result.Ok(add_answer(bigger)??)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    let Box@(i32) held = Box(7)
+    println("{result} {held.value}")
+    return Result.Ok(0)

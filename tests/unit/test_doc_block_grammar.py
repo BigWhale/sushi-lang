@@ -27,9 +27,14 @@ SKIP_DIRS = {"__sushi_cache__", ".git", "node_modules", ".venv", "venv", "build"
 # a corpus this gate has any business measuring.
 SCAN_ROOTS = ("docs", "editor-support", "site", "sushi_lang", "tests", "toolchain")
 
-# The one directory that writes doc blocks on purpose. Everything else in the tree
-# predates the feature and must not change meaning.
-DOC_TESTS = "tests/docs"
+# What writes doc blocks ON PURPOSE. Everything else in the tree predates the feature
+# and must not change meaning, which is what this gate measures. Each entry is a path
+# prefix and each one is deliberate:
+#   tests/docs                        -- the feature's own corpus
+#   tests/libs/helpers/doc_lib.sushi  -- phase 3's documented helper library. It has to
+#                                        live beside the other helpers, because
+#                                        `build_test_helpers` globs that directory.
+DOC_SOURCES = ("tests/docs", "tests/libs/helpers/doc_lib.sushi")
 
 # `.sushi` files that do not parse, and did not before doc blocks existed. Each entry
 # carries its reason; adding one is deliberate. A `test_err_` file declaring a CE6xxx
@@ -65,7 +70,7 @@ def test_no_doc_delimiters_outside_the_doc_tests():
     offenders: list[str] = []
     for path in _sushi_files():
         rel = str(path.relative_to(PROJECT_ROOT))
-        if rel.startswith(DOC_TESTS):
+        if rel.startswith(DOC_SOURCES):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for number, line in enumerate(text.splitlines(), start=1):
@@ -73,7 +78,7 @@ def test_no_doc_delimiters_outside_the_doc_tests():
                 offenders.append(f"{rel}:{number}: {line.strip()}")
 
     assert not offenders, (
-        "doc-block delimiters outside " + DOC_TESTS + " -- these sources changed "
+        "doc-block delimiters outside " + str(DOC_SOURCES) + " -- these sources changed "
         "meaning when the terminals landed:\n  " + "\n  ".join(offenders)
     )
 

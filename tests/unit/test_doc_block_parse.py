@@ -188,3 +188,84 @@ def test_a_reserved_keyword_is_never_a_near_miss():
 def test_prose_words_are_never_near_misses():
     for word in ("Note", "Notes", "See", "Warning", "Todo"):
         assert suggest_tag(word) is None, word
+
+
+# -- the body -------------------------------------------------------------------
+# R1: `body` is parsed, not derived. It is the prose between the summary and the
+# FIRST tag candidate, and everything from that candidate onward belongs to the tags.
+
+def test_body_is_the_prose_between_the_summary_and_the_first_tag():
+    doc = parse_doc_block(_doc(
+        "##:\n"
+        "Jumps through hyperspace.\n"
+        "\n"
+        "The drive needs a warm coil.\n"
+        "- Returns: parsecs.\n"
+        ":##"
+    ))
+    assert doc.summary == "Jumps through hyperspace."
+    assert doc.body == "The drive needs a warm coil."
+
+
+def test_a_block_with_only_a_summary_has_an_empty_body():
+    doc = parse_doc_block(_doc("##: A simple const :##"))
+    assert doc.body == ""
+
+
+def test_a_block_that_is_only_tags_has_an_empty_body():
+    doc = parse_doc_block(_doc("##:\n- Returns: parsecs.\n:##"))
+    assert doc.body == ""
+
+
+def test_a_blank_line_inside_the_body_is_kept():
+    doc = parse_doc_block(_doc(
+        "##:\n"
+        "Summary.\n"
+        "\n"
+        "First paragraph.\n"
+        "\n"
+        "Second paragraph.\n"
+        ":##"
+    ))
+    assert doc.body == "First paragraph.\n\nSecond paragraph."
+
+
+def test_a_fenced_example_does_not_leak_into_the_body():
+    """The reason `body` is parsed: a fence breaks at a blank line, prose does not."""
+    doc = parse_doc_block(_doc(
+        "##:\n"
+        "Jumps through hyperspace.\n"
+        "\n"
+        "The drive needs a warm coil.\n"
+        "- Example:\n"
+        "```sushi\n"
+        "let i32 x = 1\n"
+        "\n"
+        'println("{x}")\n'
+        "```\n"
+        ":##"
+    ))
+    assert doc.body == "The drive needs a warm coil."
+    assert "println" not in doc.body
+
+
+def test_prose_after_the_tags_is_not_in_the_body():
+    doc = parse_doc_block(_doc(
+        "##:\n"
+        "Summary.\n"
+        "\n"
+        "The body.\n"
+        "- Returns: parsecs.\n"
+        "\n"
+        "This prose stands after the tags and is not carried.\n"
+        ":##"
+    ))
+    assert doc.body == "The body."
+
+
+def test_the_whole_block_still_carries_everything():
+    """`text` is unchanged by R1: it is the whole dedented block, tags included."""
+    doc = parse_doc_block(_doc(
+        "##:\nSummary.\n\nThe body.\n- Returns: parsecs.\n:##"
+    ))
+    assert doc.text == "Summary.\n\nThe body.\n- Returns: parsecs."
