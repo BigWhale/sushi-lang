@@ -5,8 +5,9 @@
 # MsgValue tree. There is no encoder and no streaming entry.
 #
 # Limitations: ext, fixext and timestamp tags give MpError.Unsupported. The
-# decoder targets buffers below 2 GiB; a hostile length above 2^31 casts to a
-# negative count, loops zero times, and the next read reports Truncated.
+# decoder targets buffers below 2 GiB. A length prefix is checked against what
+# is left in the buffer as it is read, so a length too large to satisfy -- a
+# hostile 2^32-1 included -- is Truncated at the header (#463).
 
 enum MsgValue:
     Nil()
@@ -45,6 +46,18 @@ fn mp_be_uint(peek u8[] buf, poke MpCursor cur, i32 nbytes) u64 | MpError:
         acc := (acc << 8) | (b as u64)
         i := i + 1
     return Result.Ok(acc)
+
+# mp_len: a length prefix as a count. Every element of an array or a map needs
+# at least one byte, and a str or bin payload needs exactly its count, so a
+# count above what is left in the buffer cannot be satisfied by any of the four
+# families. Rejecting it where it is read is what keeps a length at or above
+# 2^31 from casting to a negative count and decoding as an empty value (#463).
+fn mp_len(peek u8[] buf, poke MpCursor cur, i32 nbytes) i32 | MpError:
+    let u64 raw = mp_be_uint(peek buf, poke cur, nbytes)??
+    let u64 left = (buf.len() - cur.pos) as u64
+    if (raw > left):
+        return Result.Err(MpError.Truncated(cur.pos))
+    return Result.Ok(raw as i32)
 
 # mp_signed: reinterpret a width-limited unsigned value as two's complement.
 # It cannot fail; it shares the MpError channel so ?? composes in the dispatch.
@@ -123,13 +136,13 @@ fn mp_decode_value(peek u8[] buf, poke MpCursor cur) MsgValue | MpError:
         0xc3 ->
             return Result.Ok(MsgValue.Bool(true))
         0xc4 ->
-            let i32 n8 = mp_be_uint(peek buf, poke cur, 1)?? as i32
+            let i32 n8 = mp_len(peek buf, poke cur, 1)??
             return Result.Ok(MsgValue.Bin(mp_take_bytes(peek buf, poke cur, n8)??))
         0xc5 ->
-            let i32 n16 = mp_be_uint(peek buf, poke cur, 2)?? as i32
+            let i32 n16 = mp_len(peek buf, poke cur, 2)??
             return Result.Ok(MsgValue.Bin(mp_take_bytes(peek buf, poke cur, n16)??))
         0xc6 ->
-            let i32 n32 = mp_be_uint(peek buf, poke cur, 4)?? as i32
+            let i32 n32 = mp_len(peek buf, poke cur, 4)??
             return Result.Ok(MsgValue.Bin(mp_take_bytes(peek buf, poke cur, n32)??))
         0xca ->
             let u64 bits32 = mp_be_uint(peek buf, poke cur, 4)??
@@ -159,25 +172,25 @@ fn mp_decode_value(peek u8[] buf, poke MpCursor cur) MsgValue | MpError:
         0xd3 ->
             return Result.Ok(MsgValue.Int(mp_signed(mp_be_uint(peek buf, poke cur, 8)??, 8)??))
         0xd9 ->
-            let i32 s8 = mp_be_uint(peek buf, poke cur, 1)?? as i32
+            let i32 s8 = mp_len(peek buf, poke cur, 1)??
             return Result.Ok(mp_take_str(peek buf, poke cur, s8)??)
         0xda ->
-            let i32 s16 = mp_be_uint(peek buf, poke cur, 2)?? as i32
+            let i32 s16 = mp_len(peek buf, poke cur, 2)??
             return Result.Ok(mp_take_str(peek buf, poke cur, s16)??)
         0xdb ->
-            let i32 s32 = mp_be_uint(peek buf, poke cur, 4)?? as i32
+            let i32 s32 = mp_len(peek buf, poke cur, 4)??
             return Result.Ok(mp_take_str(peek buf, poke cur, s32)??)
         0xdc ->
-            let i32 a16 = mp_be_uint(peek buf, poke cur, 2)?? as i32
+            let i32 a16 = mp_len(peek buf, poke cur, 2)??
             return Result.Ok(mp_take_arr(peek buf, poke cur, a16)??)
         0xdd ->
-            let i32 a32 = mp_be_uint(peek buf, poke cur, 4)?? as i32
+            let i32 a32 = mp_len(peek buf, poke cur, 4)??
             return Result.Ok(mp_take_arr(peek buf, poke cur, a32)??)
         0xde ->
-            let i32 m16 = mp_be_uint(peek buf, poke cur, 2)?? as i32
+            let i32 m16 = mp_len(peek buf, poke cur, 2)??
             return Result.Ok(mp_take_map(peek buf, poke cur, m16)??)
         0xdf ->
-            let i32 m32 = mp_be_uint(peek buf, poke cur, 4)?? as i32
+            let i32 m32 = mp_len(peek buf, poke cur, 4)??
             return Result.Ok(mp_take_map(peek buf, poke cur, m32)??)
         _ ->
             return Result.Err(MpError.Unsupported(t))

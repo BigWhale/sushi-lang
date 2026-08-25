@@ -146,8 +146,10 @@ fn main() i32:
 - Decode-only. No encoder, no streaming entry point.
 - `ext`, `fixext`, and timestamp tags give `MpError.Unsupported` with the tag byte.
 - `mp_show` does not escape string contents.
-- The decoder targets buffers below 2 GiB. A hostile length above 2^31 casts to a
-  negative count, loops zero times, and the next read reports `Truncated`.
+- The decoder targets buffers below 2 GiB. A length prefix is checked against what is
+  left in the buffer as it is read, so a length the input cannot supply -- a hostile
+  `0xffffffff` included -- is `Truncated` at the header rather than part way through the
+  payload.
 
 ## See also
 
