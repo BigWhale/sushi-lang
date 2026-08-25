@@ -26,6 +26,10 @@ def register_synthesized_function(
     instances breaks lookup of a monomorphized `<collections/iter>` combinator, and
     chasing that down is its own change. Everything outside a source library keeps
     landing in the first unit, as before.
+
+    The test for "a source library" is `Unit.from_library`, and not the provenance a
+    bundled stdlib module now carries too: reading the provenance here moved every
+    `<collections/iter>` instance and hit exactly the breakage above.
     """
     from sushi_lang.semantics.passes.collect import FuncSig
 
@@ -58,7 +62,7 @@ def register_synthesized_function(
         if home_unit is not None:
             target = next((u for u in units
                            if u.name == home_unit and u.ast
-                           and getattr(u, "provenance", None) is not None), None)
+                           and getattr(u, "from_library", False)), None)
         if target is None and units[0].ast:
             target = units[0]
         if target is not None and target.ast:
