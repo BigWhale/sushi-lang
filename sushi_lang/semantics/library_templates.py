@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     )
 
 # The two tags that are singletons, and the only two that reach a record as their own
-# key. `- Example:` waits for phase 4 and `- Parameter` rides in the `params` map.
+# key. `- Parameter` rides in the `params` map, and an `- Example:` in `examples`.
 _SINGLETON_KINDS = ("returns", "errors")
 
 
@@ -38,6 +38,13 @@ def doc_record(doc: Optional["DocBlock"]) -> Optional[dict]:
         elif tag.kind in _SINGLETON_KINDS and tag.text:
             singletons.setdefault(tag.kind, tag.text)
 
+    # The CODE of each example, in source order, and not its fence attributes: an
+    # attribute is an instruction to the doc-test harness and not documentation
+    # (documentation.md section 10, R23). A defective one carries a diagnostic of its
+    # own and nothing a consumer could render.
+    examples = [example.code for example in doc.examples
+                if example.defect is None and example.code.strip()]
+
     record: dict = {}
     if doc.summary:
         record["summary"] = doc.summary
@@ -48,6 +55,8 @@ def doc_record(doc: Optional["DocBlock"]) -> Optional[dict]:
     for kind in _SINGLETON_KINDS:
         if kind in singletons:
             record[kind] = singletons[kind]
+    if examples:
+        record["examples"] = examples
 
     return record or None
 
