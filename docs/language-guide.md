@@ -292,6 +292,9 @@ of this function, that one parameter is documented twice, or that `- Retruns:` i
 of `- Returns:`. A misspelled tag would be silently invisible in a system that reads the block
 as text.
 
+An `- Example:` introduces a fenced code block, and `python tests/docs_sweep.py` compiles and
+runs it: an example that stops compiling is documentation that has drifted.
+
 See [Documentation Blocks](documentation-blocks.md) for the full reference.
 
 ## Control Flow

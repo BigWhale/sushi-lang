@@ -49,14 +49,58 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   mode now prints beside its type. That is the one mode a type cannot spell; `peek` and
   `poke` were always part of the type string.
 
-  Three things do not travel in the index: an `- Example:` waits for a later phase, an
-  extension has no manifest record of any kind, and a private symbol carries no doc because
-  it is not part of the documented API.
+  Two things do not travel in the index: an extension has no manifest record of any kind,
+  and a private symbol carries no doc because it is not part of the documented API.
 
   The index is bigger for it, and that is expected rather than a cost to weigh. Measured on a
   stdlib-sized library of 83 documented symbols, it grew from 5,787 to 22,578 bytes -- about
   200 bytes a symbol, of which 35 is msgpack framing. The metadata blob is plain text and
   uncompressed today; compressing it is its own change.
+
+  **The toolchain runs the examples.** An `- Example:` tag introduces a fenced code block,
+  and `python tests/docs_sweep.py` compiles and runs it -- an example that stops compiling
+  is documentation that has drifted, and this is what says so. The sweep grew a second
+  collector for it and a `--only {all,docs,examples}` selector; it stays a by-hand tool and
+  deliberately not a CI job.
+
+  The block is now PARTITIONED before its tags are read, which removes three silent
+  defects: a line-initial `- Returns:` inside example code was read as a tag and truncated
+  the example there, a blank line inside a fence ended the tag that introduced it, and the
+  fold that joins a tag's continuation lines destroyed the indentation a program needs. An
+  example is its own structure, kept verbatim, and many `- Example:` tags are legal.
+
+  Two new codes, both always on, because each is a claim that contradicts itself: a tag
+  with no fenced block after it is **CE7007**, and a fence a block's own `:##` truncates is
+  **CE7008**. An example that is merely ABSENT stays a matter of policy.
+
+  A snippet with no `fn main(` is wrapped -- two lines of intent stay two lines. It goes
+  into a helper and a generated `main` matches on the result, so an example whose `??` fails
+  exits non-zero without a bare `??` in `main` to warn about. Every `use` line is hoisted,
+  because a `use` inside a body does not parse. A snippet that declares its own `main` is
+  compiled as written. The instruction to the harness rides on the fence itself, because a
+  `.sushi` file cannot carry an HTML comment: ` ```sushi ` runs, `no_run` compiles only,
+  `skip (reason)` does neither, and `error CExxxx` must exit 2 and name every code.
+
+  An example is compiled from OUTSIDE the unit it documents, the way a Rust doctest links
+  its crate. Two things are then out of reach and each is a printed, counted SKIP rather
+  than a failure: a private declaration, which the generated file cannot call, and a unit
+  that declares `main`, which cannot be imported beside a second one. An example that calls
+  what a reader cannot call is not documentation, so the answer to the first is `public`
+  and not a second mechanism.
+
+  A `.slib` carries the code. The `doc` record gained an `examples` array -- the code of
+  each example in source order, the fence attributes left behind, because an attribute is a
+  harness instruction and not documentation. Measured on a three-example library: 184 bytes,
+  of which 148 is the code the author wrote and 36 is framing, 12 bytes an example.
+  `--lib-info` prints none of it; a fenced program inside a plain dump would bury the
+  signature the reader came for.
+
+  Two fixes came with it. A doc-block mistake in a bundled Sushi-source stdlib module was
+  reported in every program that imported the module, against code the user never wrote --
+  measured with a `CW7001` in `collections/iter.sushi`; the module now carries a
+  provenance, like a source library's unit, so the diagnostic reaches us and not a user.
+  And the syntax highlighter had no rule for a doc block at all: `#.*$` took the opening
+  `##:` line and the code rules took the rest of the block.
 
   `docs/documentation-blocks.md` is the reference and `docs/design/documentation.md` carries
   the phases that follow.

@@ -1,7 +1,8 @@
 # Design: Documentation blocks
 
-**Status: the language understands doc blocks, and a library carries them.** Each
-phase below moves one part from DESIGN to BUILT; this banner records where the line is.
+**Status: the language understands doc blocks, a library carries them, and the
+toolchain runs the examples.** Each phase below moves one part from DESIGN to BUILT; this
+banner records where the line is.
 The user-facing reference for what is built is `docs/documentation-blocks.md`.
 
 | Phase | Content | State |
@@ -9,7 +10,7 @@ The user-facing reference for what is built is `docs/documentation-blocks.md`.
 | 1 | This document | BUILT |
 | 2 | Grammar, AST, attachment rules, the `docs` pass, CE6011/CE6012/CE6013 and CE70xx | BUILT |
 | 3 | `.slib` manifest carriage; `slib-info` prints a plain dump | BUILT |
-| 4 | `- Example:` blocks compile and run in the toolchain | DESIGN |
+| 4 | `- Example:` blocks compile and run in the toolchain | BUILT |
 | 5 | `--warn-missing-docs` completeness lints | DESIGN |
 | 6 | Markdown rendering, and a Markdown checker written in Sushi | DESIGN |
 
@@ -1083,12 +1084,12 @@ long, so a longer run of backticks would work too. Tildes are the convention bec
 outer and the inner delimiter then look different, which is the whole point of the
 illustration. `pymdownx.superfences` is in `mkdocs.yml` and renders both.
 
-`tests/docs_sweep.py` implements no part of that rule. It matches ` ```sushi ` and ` ``` `
-at column 1 and nothing else, so it reads INSIDE an illustration and collects the inner
-example as a block of its own -- measured with a tilde outer fence and with a
-four-backtick one, and it happens with both. Phase 4 teaches the collector to step over a
-fence it cannot close. Until then an illustration is safe only while its inner example is
-a fragment, because a block with no `fn main(` is not a candidate.
+`tests/docs_sweep.py` implemented no part of that rule. It matched ` ```sushi ` and
+` ``` ` at column 1 and nothing else, so it read INSIDE an illustration and collected the
+inner example as a block of its own -- measured with a tilde outer fence and with a
+four-backtick one, and it happened with both. R27 taught it to step over a fence it cannot
+close, and both collectors now share one implementation of the rule
+(`closes_fence`).
 
 A doc block cannot contain a doc block, so this is a problem for `.md` pages only: a `##:`
 inside a block is CE6013 whether it is indented or not.
@@ -1140,7 +1141,7 @@ destroyed. Both rules are right for prose and wrong for code.
 @dataclass
 class DocExample:
     code: str                    # the fence body, dedented by the fence's own indent
-    attrs: str = ""              # the words after the fence's language, as written
+    attrs: str = ""              # the fence info string, as written
     loc: Optional[Span] = None   # the opening fence, so a diagnostic can point at it
     defect: Optional[Literal["no-fence", "unterminated"]] = None
 ```
@@ -1188,8 +1189,9 @@ nothing to introduce is wrong the way a `- Parameter q:` that names no parameter
 S6's split holds: an ABSENT example is policy, and stays phase 5's business.
 
 **R18 — an example is compiled from OUTSIDE the unit.** One generated entry file, with
-`use "<absolute path to the documented unit>"` at the top. This is rustdoc's model: a
-doctest links the crate and sees the public API.
+`use "<the documented unit>"` at the top. This is rustdoc's model: a doctest links the
+crate and sees the public API. The import names the unit's own stem, not a path: the
+entry file stands beside the unit, so the sibling name is what an author would write.
 
 Compiling INSIDE the unit was measured and works — the generated file is the unit's own
 source with the wrapper appended, and it reaches private declarations. Rejected: an example
@@ -1247,10 +1249,11 @@ Markdown collector prints a marked skip, so the hole stays visible.
 own `main` for free. The walk becomes public API: `_documented` is renamed `documented` in
 `semantics/passes/docs.py`, with its caller updated.
 
-A file that does not parse is skipped and counted. There are 36 in the tree: 35 are
-`test_err_` files that fail on purpose, and the last is `helper_sizes.sushi`, the
-`public const` gap (#466) that `tests/unit/test_doc_block_grammar.py` already exempts by
-name.
+A file with no `##:` in it is never parsed, so the walk costs about a second over the
+whole tree and the unparsed count means something: it is the files that carry a block and
+do not parse. There are three, and all three are the CE6011, CE6012 and CE6013 fixtures,
+which fail on purpose. The 33 other files in the tree that do not parse hold no block and
+are not read.
 
 **R23 — the manifest carries the code, and prints none of it.** `doc_record` gains
 `examples: [str]` — the code of each example in source order. The attributes are not
@@ -1287,13 +1290,20 @@ blocks and, before this phase, no `- Example:` with a fence at all. So the phase
 smallest set of examples that exercises every fence, and then stops. It does NOT put an
 example on every documented declaration, and it does not document the stdlib.
 
-Three fixture files, because the contents of a fence never reach the host build — a fence
-is text inside one `DOC_BLOCK` token, so a file whose fences hold deliberately broken Sushi
-still compiles clean:
+Four fixture files in `tests/docs/examples/`. An earlier draft of this ruling said
+three, on the strength of one measurement — that the contents of a fence never reach the
+host build, because a fence is text inside one `DOC_BLOCK` token, so a file whose fences
+hold deliberately broken Sushi still compiles clean. That is true, and it is not enough:
+R21 makes every example in a unit that declares `main` a SKIP, and a `test_` file has to
+declare one. One file cannot both exit 0 as a test and show the sweep four outcomes.
 
-- **one file carries all four attributes** — a plain fence that runs, a `no_run`, a
-  `skip (reason)`, and an `error CE2002`. It compiles with exit 0, and the sweep is what
-  tells the four outcomes apart.
+- **`fence_outcomes.sushi`** carries all four attributes and declares no `main`, so it is
+  not a test and the collector can import it. This is where the four outcomes are
+  asserted, by `tests/unit/test_doc_examples_runner.py` and by the sweep.
+- **`test_doc_example_fences.sushi`** carries the same four spellings and declares `main`.
+  It asserts the other half, in CI: four legal fence spellings raise no CE70xx, and the
+  deliberately broken Sushi in its `error` fence never reaches the build. The sweep reports
+  its four examples as skips, which is R21 working.
 - **two `test_err_` files**, one for CE7007 and one for CE7008, because each has to exit 2
   on its own.
 

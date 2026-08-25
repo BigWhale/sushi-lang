@@ -404,6 +404,11 @@ Write a `##: ... :##` doc block on every public symbol. A block is part of the d
 so the library carries it and `--lib-info` prints it; a `#` comment is dropped at the
 boundary and reaches nobody.
 
+An `- Example:` is worth writing on a public symbol: the code travels in the index, and
+`python tests/docs_sweep.py` compiles and runs it against the library's own source, so an
+example that drifts out of date says so. `--lib-info` does not print one -- a fenced program
+inside a plain dump would bury the signature.
+
 ```sushi
 ##:
 Adds two integers.

@@ -1001,7 +1001,9 @@ The block attaches to the declaration on the next line; a blank line or a `#` co
 attachment. The text is dedented and not reflowed.
 
 A tag is a Markdown list item: `- Parameter <name>:`, `- Returns:`, `- Errors:` or `- Example:`.
-Everything else is prose, and the first paragraph is the summary.
+Everything else is prose, and the first paragraph is the summary. An `- Example:` introduces a
+fenced code block, which `python tests/docs_sweep.py` compiles and runs; a tag with no fence
+after it is `CE7007`, and a fence the block's own `:##` truncates is `CE7008`.
 
 See [Documentation Blocks](documentation-blocks.md) for the positions, the tag vocabulary and
 every diagnostic.

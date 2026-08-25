@@ -170,13 +170,14 @@ parser, and a block that nobody renders still reads as a sensible list.
 | `- Parameter <name>:` | one declared parameter, named |
 | `- Returns:` | the success value |
 | `- Errors:` | when and why the error arm is taken |
-| `- Example:` | introduces a fenced code block |
+| `- Example:` | a fenced code block the toolchain compiles and runs |
 
 Everything that is not a recognised tag is prose. The first paragraph is the **summary**,
 and is what a one-line listing shows.
 
 At most one `- Returns:` and at most one `- Errors:`. Many `- Parameter` tags are legal,
-one for each parameter.
+one for each parameter, and so are many `- Example:` tags -- a declaration with two things
+to show says both.
 
 ### Parameter, not Argument
 
@@ -213,6 +214,73 @@ keyword is a tag. A candidate whose word is within two edits of a keyword is a t
 Two edits is the boundary because that is what a mistyped keyword looks like: a
 transposition, plus a dropped letter. A misspelled tag is silently invisible in every
 documentation system that reads it as text, which is why it earns a code of its own.
+
+## Examples that run
+
+An `- Example:` tag introduces a fenced code block, and `python tests/docs_sweep.py`
+compiles and runs it. An example that stops compiling is documentation that has drifted,
+and this is what says so.
+
+~~~sushi
+##:
+Doubles a number.
+
+- Parameter n: The number to double.
+- Returns: Twice `n`.
+- Example:
+```sushi
+let i32 d = doubled(21)??
+println("{d}")
+```
+:##
+public fn doubled(i32 n) i32:
+    return Result.Ok(n * 2)
+~~~
+
+(The outer `~~~` fence is this page showing a fence inside a fence. A real doc block uses
+backticks, as the inner one does.)
+
+### The snippet is wrapped
+
+Two lines of intent stay two lines. A snippet with no `fn main(` goes into a helper, and a
+generated `main` matches on the result: the example fails when its `??` fails, and it needs
+no ceremony to say so. A snippet that declares its own `fn main(` is compiled as written.
+
+Every `use` line moves to the top of the generated file, wherever it stands in the snippet
+-- a `use` inside a function body does not parse. `println` needs no import.
+
+### The attributes ride on the fence
+
+A `.sushi` file cannot carry an HTML comment, so an instruction to the harness goes on the
+fence's own info string:
+
+| Fence | What happens |
+|---|---|
+| ` ```sushi ` | compiled and run; a non-zero exit is a failure |
+| ` ```sushi no_run ` | compiled and not run -- it needs a file, a socket, or a long loop |
+| ` ```sushi skip (reason) ` | not compiled; the reason is printed |
+| ` ```sushi error CExxxx ` | must exit 2 and name every code given |
+| ` ```text `, ` ```python `, ... | not a Sushi example; ignored |
+
+A renderer reads the first word of an info string as the language, so the extra words are
+harmless to anything that draws the page.
+
+### What the toolchain cannot reach
+
+An example is compiled from OUTSIDE the unit it documents, the way a Rust doctest links
+its crate: one generated file that imports the unit and holds the snippet. Two things are
+out of reach, and each is a printed SKIP rather than a failure.
+
+- **A private declaration.** The generated file cannot call it (`CE3005`). An example that
+  calls what a reader cannot call is not documentation, so the answer is `public` and not a
+  second mechanism.
+- **A unit that declares `main`.** It cannot be imported beside a second `main`
+  (`CE0101`), so a standalone program's blocks are read and never run.
+
+A skip is counted and printed with its reason, so the hole in the coverage is visible.
+
+The sweep never asserts an example's OUTPUT. An example is documentation, and an
+expected-output mechanism would make it a test.
 
 ## Diagnostics
 
@@ -299,6 +367,26 @@ fn probe() i32:
     return Result.Ok(7)
 ```
 
+### CE7007 — an `- Example:` tag introduces no fenced block
+
+The whole job of the tag is to introduce a fence, so a tag with nothing to introduce
+contradicts itself. An example that is merely ABSENT is a matter of policy, and is not this.
+
+```
+##:
+Adds two numbers.
+
+- Example: there is no fenced block after this tag.
+:##
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+```
+
+### CE7008 — a fence inside a block is never closed
+
+A block ends at its own `:##`, so a fence that runs past it is truncated, and a truncated
+example is not one. Close it with a run of the same character that is at least as long.
+
 ### CW7001 — a block documents nothing
 
 The block attaches to no declaration, and it is not the first item in its file. A blank
@@ -319,10 +407,14 @@ Each record holds the block in parsed parts, not as raw text:
 | `params` | the `- Parameter` text, keyed by parameter name |
 | `returns` | the `- Returns:` text |
 | `errors` | the `- Errors:` text |
+| `examples` | the code of each `- Example:`, in source order |
 
 Every field is optional, and the whole record is absent when a symbol has no block, so an
 undocumented library grows by nothing. Document as much as the symbol deserves: the size of
 the index is the compiler's problem and not the author's.
+
+The `examples` array carries the CODE and not the fence attributes: an attribute is an
+instruction to the doc-test harness, and not documentation.
 
 `--lib-info` prints the record under the symbol it documents, indented two spaces:
 
@@ -342,17 +434,16 @@ Parameters print in the order the signature declares them, and not in the order 
 documents them. A symbol with no block prints as it always did: no blank line, and no
 placeholder.
 
-A unit block prints under its unit name in the `Units` section. A `- Parameter` tag on
-something that declares no parameters -- a unit, a struct, a template -- is carried and not
-printed.
+A unit block prints under its unit name in the `Units` section. Two things are carried and
+not printed: a `- Parameter` tag on something that declares no parameters -- a unit, a
+struct, a template -- and an example, because a fenced program inside a plain dump would
+bury the signature the reader came for.
 
 ### What does not travel
 
-Four things an author can write do not reach the index. Each one is a limit of a record, not
-of the file, and `docs/design/documentation.md` section 8 carries the reasons:
+Three things an author can write do not reach the index. Each one is a limit of a record,
+not of the file, and `docs/design/documentation.md` section 8 carries the reasons:
 
-- **An `- Example:`.** Phase 4 owns the key; a source library keeps the text in its source
-  section, and a binary library does not carry it.
 - **An extension's block.** `extend i32 squared()` has no manifest record of any kind, so
   `--lib-info` has never listed one.
 - **A generic struct's field blocks, and a perk definition's method blocks.** They are in the
@@ -362,13 +453,13 @@ of the file, and `docs/design/documentation.md` section 8 carries the reasons:
 
 ## What is not built yet
 
-The compiler reads doc blocks and checks them, and a library carries them. These parts come
-later, and `docs/design/documentation.md` is the plan for each of them:
+The compiler reads doc blocks and checks them, a library carries them, and the toolchain
+runs the examples. These parts come later, and `docs/design/documentation.md` is the plan
+for each of them:
 
-- A `- Example:` block compiles and runs in the toolchain.
 - `--warn-missing-docs` reports a public symbol with no block, an undocumented parameter,
   and a missing `- Returns:` or `- Errors:`.
-- Markdown rendering.
+- Markdown rendering, and `--lib-info` printing an example rather than carrying it.
 
 ## See also
 

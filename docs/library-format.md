@@ -177,8 +177,9 @@ is the authority, and the index is a cache of it.
     #       "body":    str,            # The prose between the summary and the first tag
     #       "params":  {str: str},     # `- Parameter` text, keyed by parameter NAME
     #       "returns": str,            # `- Returns:` text
-    #       "errors":  str             # `- Errors:` text
-    #   }
+    #       "errors":  str,            # `- Errors:` text
+    #       "examples": [str]          # `- Example:` CODE, in source order; the fence
+    #   }                              #   attributes are a harness instruction, not docs
     #
     # A PARAMETER record deliberately carries no doc: its text lives in the enclosing
     # symbol's `doc.params`. So does a private or closure-path record: a private symbol
