@@ -30,7 +30,7 @@ DOC_TESTS = "tests/docs"
 # code is exempt by its own header and is not listed here.
 PARSE_EXEMPT = {
     # `public const` is not in the grammar -- `const_def` carries no PUBLIC, and a
-    # constant is public regardless. This helper is only reached by
+    # constant is public regardless (#466). This helper is only reached by
     # test_err_array_size_from_another_unit.sushi, which fails before it is read.
     "tests/array/declared_size/helper_sizes.sushi",
 }
