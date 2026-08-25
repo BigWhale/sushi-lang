@@ -67,10 +67,16 @@ fn render_params(MsgValue f) string:
         let MsgValue p = ml_at(ps, i)??
         let string t = ml_get_str(p, "type")??
         let string pn = ml_get_str(p, "name")??
+        # `nom` is the one mode a TYPE cannot spell, so it comes from the record's own
+        # field. `peek` and `poke` are part of the type string already.
+        let string declared = ml_get_str(p, "mode")??
+        let string mode = ""
+        if (declared == "nom"):
+            mode := "nom "
         if (i == 0):
-            out := "{t} {pn}"
+            out := "{mode}{t} {pn}"
         else:
-            out := "{out}, {t} {pn}"
+            out := "{out}, {mode}{t} {pn}"
         i := i + 1
     return Result.Ok(out)
 

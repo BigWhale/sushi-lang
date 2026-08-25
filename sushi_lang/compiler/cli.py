@@ -59,6 +59,20 @@ def library_info_command(library_path: Path) -> int:
     return print_library_info(library_path)
 
 
+def _render_params(params: list) -> str:
+    """One parameter list, as a signature reads it.
+
+    `nom` is the one mode a TYPE cannot spell, so the record's own `mode` field is the
+    only place it can come from. `peek` and `poke` ride on the type itself, so the type
+    string already carries them and printing the mode again would double it.
+    """
+    rendered = []
+    for param in params:
+        mode = "nom " if param.get("mode") == "nom" else ""
+        rendered.append(f"{mode}{param['type']} {param['name']}")
+    return ", ".join(rendered)
+
+
 def print_library_info(library_path: Path) -> int:
     """Print formatted metadata from a .slib library file."""
     from sushi_lang.backend.library_format import LibraryFormat
@@ -106,7 +120,7 @@ def print_library_info(library_path: Path) -> int:
     if funcs:
         print(f"Public Functions ({len(funcs)}):")
         for func in funcs:
-            params = ', '.join(f"{p['type']} {p['name']}" for p in func['params'])
+            params = _render_params(func['params'])
             print(f"  fn {func['name']}({params}) {func['return_type']}")
         print()
 
