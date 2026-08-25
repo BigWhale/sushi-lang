@@ -749,9 +749,10 @@ Two records deliberately do **not** gain the key:
 - **The binary closure path.** Those records describe private symbols shipped so that a
   binary library links. A private symbol is not part of the documented API.
 
-One gap has no home yet. The per-method record inside `serialize_perk_impl` is
-`{name, symbol}`, so a documented perk method does not survive the boundary. Phase 3 either
-adds a `doc` key there or says that it does not.
+One gap had no home when this section was written: the per-method record inside
+`serialize_perk_impl` was `{name, symbol}`, so a documented perk method did not survive the
+boundary. **R3 closes it** -- that record gains a `doc` key. A perk DEFINITION has no
+methods array, so its methods' blocks travel only inside the source slice.
 
 ### A generic's doc block does not travel for free
 
@@ -800,9 +801,13 @@ known keys, and it needs work:
 
 - **Parameters render in declaration order, read from the signature and looked up by name.**
   This is normative, not a suggestion. `ml_get_str(params, name)` while walking the
-  function's existing `params` array costs no new helper. Walking the doc map's own keys is
-  not possible: `ml_len` and `ml_at` are `Arr`-only, a `Map` has no iteration helper, and
-  whatever order a map happened to have would not be the signature's.
+  function's existing `params` array costs no new helper. The reason is the ORDER and only
+  the order: whatever order a map happened to have would not be the signature's.
+
+  An earlier draft of this bullet also said a `Map` cannot be walked at all. That is true
+  of the `ml_*` helpers -- `ml_len` and `ml_at` are `Arr`-only -- and not of the language.
+  `MsgValue.Map(MsgValue[], MsgValue[])` destructures in a `match`, and `mp_map_get` in the
+  stdlib does exactly that. Phase 3 reads `unit_docs` by key the same way.
 - **A multi-line `body` needs a line splitter**, and its indent has to match Python's byte
   for byte. §9 carries that obligation.
 - **`ml_get_str` cannot tell an absent key from an empty string.** Both give `""`. Suppress
@@ -822,8 +827,26 @@ expired — `compression/zlib.sushi` is in the stdlib now, so a Sushi-side infla
 missing, and `FLAGS` bit 0 is already claimed. That is a `libraries.md` decision and not this
 feature's to take.
 
-Phase 3 reports measured `.slib` growth on a stdlib-sized library. Nothing here is revisited
-without a measurement.
+### Measured, at phase 3
+
+Two libraries were built against a real tree, each beside an undocumented twin carrying the
+same declarations:
+
+| Library | Index without docs | Index with docs | Growth |
+|---|---|---|---|
+| 16 records: every position this section names | 1,638 B | 3,130 B | +1,492 B (+91%) |
+| 83 records: 40 functions with all four tags, 8 structs, 6 enums | 5,787 B | 22,578 B | +16,791 B (+290%) |
+
+The second is the stdlib-sized case, and it is about **202 bytes a documented symbol**. Of
+its 16,791 bytes, **13,921 are the prose itself** and 2,870 are msgpack framing -- 35 bytes
+a record, which is the `doc` key, the field names and the length prefixes.
+
+The whole file for that library, at the default source kind: 9,176 B with no doc blocks in
+the source at all, 26,181 B with the blocks and no index carriage, and 42,972 B with both.
+So **doc prose costs about twice its own size in a source `.slib`**: once in the source
+section, once in the index. This section accepted that duplication and those are its price.
+
+**R8 takes the decision.** Nothing here is revisited without a new measurement.
 
 ### What phase 3 cannot promise
 
@@ -842,6 +865,96 @@ make it true:
 Making perk serialization unconditional is a `libraries.md` change and is out of scope here.
 Record the limit rather than papering over it.
 
+Phase 3 found three more, and each one is a limit of a record and not of the file:
+
+- **An extension has no manifest record at all.** `extend i32 squared()` reaches a consumer
+  through the source section or through monomorphized bitcode, and `--lib-info` has never
+  listed one. Its doc block cannot travel in the index.
+- **A generic struct's field blocks, and a perk definition's method blocks, travel only
+  inside the source slice** (R3). They are in the file; the index cannot answer for them.
+- **An `- Example:` is dropped from the index** (R7).
+
+### Phase 3 rulings
+
+Each one closes a question this section or S9 left open.
+
+**R1 — `body` is a parsed field, and it stops at the first tag.** `DocBlock.body`, set by
+`parse_doc_block` in the same walk that builds the summary and the tags. It is the entries
+between the end of the summary and the FIRST tag candidate; everything from that candidate
+onward belongs to the tags. Two consequences, both accepted: prose written after the tags is
+not carried, and a fenced example cannot leak into the body. `DocTag.word` and
+`DocBlock.orphan_reason` are the precedent -- the parse knows the answer and no consumer
+should derive it again.
+
+The derivation an earlier draft implied is not safe. "The block with the tag lines removed"
+leaks example code into the body, because a Markdown list item breaks at a blank line: a
+fenced `- Example:` tag stops at the fence's first blank line, and a line-removal rule then
+reads the rest of the fence as prose.
+
+**R2 — one function builds every record.** `doc_record(doc) -> Optional[dict]` in
+`semantics/library_templates.py`, called by both producers through the `with_doc(record,
+node)` convenience beside it. It returns `None` for a block that is absent or says nothing,
+and it omits every field that has no text. That module's docstring widens to say what it is:
+the parts of a manifest that come from the AST -- the generic templates, and the doc records.
+
+A new `semantics/library_docs.py` was the alternative. Rejected: the backend manifest
+generator already imports this module, one function does not earn a file, and a new path
+named here has to exist in the same commit (`tests/unit/test_path_references_exist.py` reads
+a path reference as a promise).
+
+**R3 — the key goes where a record already exists.** `serialize_perk_impl` has a `methods`
+array, so each method record gains `doc`. `serialize_perk` has none, so the perk gains its
+own `doc` and nothing more; inventing an array there is a `library-format.md` change and is
+out of scope. The same limit applies to a generic struct's fields and a generic enum's
+variants: the record is a source slice with no member array.
+
+**R4 — a private record carries no doc.** `_extract_templates` marks a closure-shipped
+generic `record["private"] = True`, and drops the doc key on the same line.
+`templates.private_functions` and `templates.constants` never gain one. A private symbol is
+not part of the documented API.
+
+**R5 — the report prints the mode a type cannot carry, which is `nom`.** S9 said the report
+drops the mode. Measured: it drops `nom` only. `peek` and `poke` ride on `ReferenceType`, so
+`str(ty)` already spells them and `--lib-info` has been printing `fn reads(peek i32 n) i32`
+all along. `nom` is the one mode no type can spell, so the record's own `mode` field is its
+only source. Printing a mode that is already in the type string would double it, so
+`render_params` prefixes `nom ` and nothing else, on both sides. S1's claim is now true of
+the tool for all three.
+
+**R6 — the render order, and the blank lines.** Per record: the summary, a blank line, the
+body, then the tags. No blank line before the tags, which is what S9's example shows. The
+tags print in order: `- Parameter` in DECLARATION order, then `- Returns:`, then `- Errors:`.
+
+A blank line inside a body prints as an empty line with no indent, so the report carries no
+trailing whitespace. The blank line between the summary and the body prints only when there
+is a body to separate. S9's example has no body and is unchanged by this rule.
+
+**R7 — `- Example:` is not carried.** This section reserves the `examples` key for phase 4,
+so phase 3 stores no example and prints none. For a source library the text stays in the
+source section; for a binary library it is not in the file. This is the one thing an author
+can write that phase 3 drops.
+
+**R8 — the size is accepted. No compression.** A documented library pays for its docs, and
+an undocumented one pays nothing because the key is absent. The numbers are in "Measured, at
+phase 3" above. Compressing the metadata blob is a `docs/design/libraries.md` decision and
+this feature does not take it.
+
+**R9 — `unit_docs` uses `own_units()`.** The same filter as `collect_unit_source`, so the
+index, the unit array and the source section can never disagree about which units are ours.
+A bundled stdlib module's docs are not shipped.
+
+**R10 — no new codes.** A doc record is data. Every block in it already parsed and already
+passed the `docs` pass, so phase 3 has no new failure of its own.
+
+**R11 — the report prints docs in every section that exists.** Public functions, generic
+functions, public constants, structs and their fields, enums and their variants. Perks, perk
+implementations, generic structs and generic enums have no section in the report today, so
+their records carry the key and nothing prints it. Phase 3 adds no section.
+
+**R12 — the unit block prints under its unit name**, two spaces further in, in the existing
+`Units (n):` section. A record with no `params` array renders no parameter line, so a
+`- Parameter` tag on a unit, a struct or a template is stored and not printed.
+
 ---
 
 ## 9. `slib-info` rendering
@@ -856,15 +969,32 @@ sections:
 Public Functions (1):
   fn hyperspace_jump(i32 a, u8 b) i32
     Jumps through hyperspace.
+
+    The drive needs a warm coil.
     - Parameter a: The incoming argument.
     - Parameter b: The second one.
     - Returns: The jump distance in parsecs.
     - Errors: When the drive is cold, this returns `JumpError.NotReady`.
 ```
 
+One blank line between the summary and the body, and none before the tags. R6 carries the
+whole rule, including what a blank line inside a body prints as.
+
 A symbol with no docs renders exactly as it does today, with no blank line and no
 placeholder. This matches the existing convention, where an empty section is suppressed
 rather than printed empty.
+
+The two implementations need three helpers each, and phase 3 wrote them under these names:
+
+- `ml_is_nil(MsgValue) -> bool`, because `ml_get_str` cannot tell an absent key from an
+  empty string -- both give `""`. A doc record is read with `ml_get` and tested for `Nil`.
+- `print_lines(indent, text)` -- `text.split("\n")`, one `println` per line, an empty line
+  printed empty. Python must use `str.split("\n")` and **not** `splitlines()`: the latter
+  drops the trailing empty field and also breaks on `\r`, `\x0b` and `\x0c`. Measured
+  against `.split("\n")` on `"a\nb"`, `"a\n"`, `"\na"`, `"a\n\nb"`, `"a"` and `""`, the
+  two agree on every one.
+- `print_doc_record(doc, owner, indent)` -- the whole record in R6's order. It reads the
+  owner's own `params` array for the order and looks each name up in `doc.params`.
 
 ### The parity obligation
 
@@ -874,10 +1004,12 @@ reports:
 - Python, `print_library_info` in `sushi_lang/compiler/cli.py`
 - Sushi, `toolchain/src/slib_info.sushi`
 
-`tests/unit/test_slib_info_parity.py:86` locks them with
+`tests/unit/test_slib_info_parity.py` locks them with
 `assert py_run.stdout.endswith(tool_run.stdout)`, and `toolchain/README.md` states the
 contract: error messages may differ between the tool and the fallback, the success report
-may not.
+may not. `tests/unit/test_slib_info_docs.py` locks the same thing on a DOCUMENTED library,
+and the older module keeps an undocumented one, which is the regression that says a report
+with no docs in it is unchanged.
 
 So every rendering change here is two implementations plus a rebuild through
 `toolchain/build.py`. This is the real cost of the requirement, and it is worth paying —
@@ -886,14 +1018,18 @@ the parity gate is what keeps the self-hosted tool honest.
 Three costs in particular, since "a plain dump" understates them:
 
 - **A multi-line body needs a line splitter on both sides**, with identical blank-line and
-  trailing-newline handling. `group_thousands` in `slib_info.sushi` — a whole recursive
-  function written to reproduce Python's `{n:,}` — is the precedent for what byte-exactness
-  costs by hand.
+  trailing-newline handling. This turned out to be the cheap half:
+  `Sushi .split("\n")` and Python `str.split("\n")` agree on every edge case, so the
+  splitter is one call on each side. `group_thousands` in `slib_info.sushi` is not the
+  precedent for it.
 - **`toolchain/build.py` runs by hand.** A stale `toolchain/bin/slib-info` keeps printing the
-  old report, and the parity test is the only thing that says so.
+  old report, and **nothing tells you.** An earlier draft of this bullet said the parity test
+  catches it. It does not: `test_slib_info_parity.py` compiles `TOOL_SRC` into a temporary
+  directory on every run, so no test reads the built binary. After a rendering change, run
+  `./toolchain/build.py` by hand; a green suite is not evidence that you did.
 - **Parameter modes.** §1 says `slib-info` can print `nom` / `peek` / `poke` from the manifest
-  alone. It can, and it does not: `print_library_info` formats `{type} {name}` and drops the
-  mode. Phase 3 either prints it in both implementations or §1 stops claiming it.
+  alone. Measured: it prints two of the three already, because `peek` and `poke` are part of
+  the type string. R5 adds the third and makes §1 true.
 
 ---
 
