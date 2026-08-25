@@ -40,6 +40,28 @@ _add(ErrorMessage("CE6010", Severity.ERROR,
     "could not parse the interpolated expression '{expr}'",
     Category.SYNTAX, "The text between {braces} in a string literal must be a valid expression."))
 
+# Documentation blocks (docs/design/documentation.md sections 2 and 7). All three are
+# raised from a lexer callback, at lex time, before the AST builder has an opinion.
+_add(ErrorMessage("CE6011", Severity.ERROR,
+    "a documentation block is opened here and never closed",
+    Category.SYNTAX, "A `##:` opens a documentation block, and a `:##` closes it. The "
+                     "closer is on the opening line, or it is line-initial. Treating an "
+                     "unmatched opener as a comment would let a whole documented API "
+                     "vanish from a build with no signal."))
+
+_add(ErrorMessage("CE6012", Severity.ERROR,
+    "a documentation block is closed here, but never opened",
+    Category.SYNTAX, "A `:##` closes a documentation block that a `##:` opened. The two "
+                     "delimiters are asymmetric on purpose: they let the compiler say "
+                     "which of the two mistakes was made."))
+
+_add(ErrorMessage("CE6013", Severity.ERROR,
+    "a documentation block is opened inside a documentation block",
+    Category.SYNTAX, "Documentation blocks do not nest: a block ends at the first closer "
+                     "that qualifies. A line-initial `##:` in the interior means the "
+                     "enclosing block swallowed the blocks between the two openers. This "
+                     "is the signal GCC gives for a `/*` inside a block comment."))
+
 _add(ErrorMessage("CE6101", Severity.ERROR,
     "nested function definitions are not supported",
     Category.SYNTAX, "A function may only be defined at the top level. Use a lambda for a "
