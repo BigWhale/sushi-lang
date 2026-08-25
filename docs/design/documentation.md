@@ -273,12 +273,42 @@ to `%ignore COMMENT` and is discarded, and a stray `:##` raises `UnexpectedChara
 colon — CE6002, pointing at a character, rather than CE6012 pointing at a delimiter. Neither
 code can fire at all.
 
-So both terminals are carried as `toplevel` alternatives that the builder rejects. That is
-the same "grammar permissive, builder rejects" shape the position rules use below, and it
-gives CE6011 and CE6012 a real location. Anywhere else in a file the LALR parser raises
-`UnexpectedToken`, and `lark_to_diagnostic` (`sushi_lang/internals/parse_errors.py`) has to
-match on `token.type` for these two before its generic CE6001 arm. No per-token-type mapping
-exists there today; `TOKEN_NAMES` and `TERMINAL_NAMES` are where one goes.
+**They are kept by `%ignore`, and a lexer callback raises the diagnostic.** `%ignore` counts
+as a reference, so the terminal survives the pruning; the token is then dropped before the
+parser, which is what makes the rest of the grammar unaware of it. The diagnostic comes from
+`lexer_callbacks`, which fire for an ignored terminal exactly as they do for a kept one.
+
+```lark
+// Ignored to keep Lark from deleting them, never to discard one: reaching
+// either terminal is a diagnostic, raised from its lexer callback.
+%ignore DOC_OPEN
+%ignore DOC_CLOSE
+```
+
+This is one mechanism for both codes, in every position, and the caret lands on the delimiter
+itself — which is what §7 asks for.
+
+Carrying the two as `toplevel` alternatives was tried first and rejected on measurement. It
+fails on §2's own runaway example: `##:` shifts as a legal `toplevel`, the following ` docs`
+lexes as `NAME`, and the parser dies on a `NAME` token several columns to the right. A
+`token.type` match in `lark_to_diagnostic` cannot rescue that, because the failing token is
+not `DOC_OPEN`. A bare `##:` and a bare `:##` at top level also parse to a complete tree, and
+reach a diagnostic only if the builder rejects them — two more places to be right, for a
+mechanism that still cannot reach the case the feature exists for.
+
+`lark_to_diagnostic` (`sushi_lang/internals/parse_errors.py`) therefore needs no per-token
+mapping, and `TOKEN_NAMES` is unchanged.
+
+### The third delimiter error comes from the same place
+
+CE6013 — a line-initial `##:` inside a block — is interior to a `DOC_BLOCK` token, so no
+terminal can match it and no rule can reach it. It is found by scanning the matched token,
+from a third `lexer_callbacks` entry on `DOC_BLOCK` itself.
+
+That keeps all three delimiter diagnostics in one place, at lex time, before the AST builder
+has an opinion about anything. `SushiError` already carries `notes`, and `emit_exception`
+renders them, so the relational note on the outer opener that §7 requires works from a
+callback without any new machinery.
 
 ### The newline terminal must be narrowed
 
@@ -299,11 +329,16 @@ _NEWLINE: /(\r?\n[ \t]*(?:#(?!#:)[^\n]*\r?\n[ \t]*)*)+/
 A `###` comment is unaffected: after the first `#`, the next two characters are `##`, not
 `#:`, so the group still matches it.
 
-**Measured** across 2058 `.sushi` files: zero occurrences of `:#` in any position, and zero
-line-initial `##`. No existing source changes meaning. There are no `###` banner comments in
-the corpus either — the only `###` in any `.sushi` file is string-literal test data in
-`tests/types/result/propagation/test_propagation_preserves_error_data.sushi` — so the
-paragraph above covers a case the tree does not yet contain.
+**Measured** across every `.sushi` file in the tree: zero occurrences of `:#` in any
+position, and zero line-initial `##`. No existing source changes meaning. There are no `###`
+banner comments in the corpus either — the only `###` in any `.sushi` file is string-literal
+test data in `tests/types/result/propagation/test_propagation_preserves_error_data.sushi` —
+so the paragraph above covers a case the tree does not yet contain.
+
+A file count is deliberately not quoted. It is stale the week after it is written, and the
+claim that matters is that the count of `:#` is zero, not how many files were read to find
+that out. Phase 2 re-runs the measurement rather than trusting this paragraph, and
+`tests/unit/test_doc_block_grammar.py` keeps it true afterwards.
 
 ### The rules
 
@@ -311,7 +346,7 @@ paragraph above covers a case the tree does not yet contain.
 declaration rules. Seven edits, near enough the same shape:
 
 ```lark
-toplevel: use_stmt | const_def | ... | external_block | DOC_BLOCK | DOC_OPEN | DOC_CLOSE
+program: (_NEWLINE | DOC_BLOCK | toplevel)+
 
 block: _NEWLINE _INDENT (_NEWLINE | DOC_BLOCK | statement)+ _DEDENT
 
@@ -322,9 +357,16 @@ external_block: ... _INDENT (DOC_BLOCK _NEWLINE | extern_decl)+   _DEDENT
 extend_suffix:  ... _INDENT (DOC_BLOCK _NEWLINE | function_def)+  _DEDENT
 ```
 
-`toplevel` and `block` need no trailing `_NEWLINE`, because both already carry `_NEWLINE`
+`program` and `block` need no trailing `_NEWLINE`, because both already carry `_NEWLINE`
 as an alternative in their repetition. The five member blocks admit only their own member
 rule, so they spell it.
+
+The top-level alternative goes on `program`, not on `toplevel`, so the token arrives as a
+direct child of `program`. `builder.build()` skips a non-`Tree` child already, so nothing in
+that loop changes. On `toplevel` the token would instead be wrapped in a `toplevel` tree that
+holds no declaration, and every `_first_tree` lookup in the loop would fall through it.
+`DOC_OPEN` and `DOC_CLOSE` appear in no rule at all — they are held by `%ignore` and reported
+from a lexer callback, as above.
 
 `extend_suffix` is the one edit that is not the shape it looks. It is two aliased
 alternatives: `extend_with_def` is the indented `function_def+` body the sketch shows, while
@@ -403,6 +445,19 @@ A `doc: Optional[DocBlock] = None` field goes on `FuncDef`, `ConstDef`, `StructD
 `StructField`, `EnumDef`, `EnumVariant`, `PerkDef`, `PerkMethodSignature`, `ExtendDef`,
 `ExtendWithDef`, `ExternalBlock` and `ExternalDecl`.
 
+Two more classes carry one, and neither is a declaration:
+
+- **`Program.doc`** — §2's third position is a block that documents the unit. There is no
+  declaration to hang it on, so it lives on the unit's own node.
+- **`Block.doc`** — a body-first block is parsed before its enclosing declaration exists.
+  `parse_block` parks it here, and `parse_funcdef` and `parse_extenddef` lift it onto the
+  declaration.
+
+**`Program.orphan_docs: List[DocBlock]`** holds every block that attached to nothing. It has
+to exist because the builder cannot report: `ASTBuilder` takes no `Reporter`, and a block
+that documents nothing is a warning the `docs` pass raises. Dropping such a block in the
+builder would make it vanish silently, which is the failure mode of §1 read backwards.
+
 The nearest existing precedent for author prose surviving into the AST is
 `ExternalBlock.reason` (`ast.py:205`), the `because "..."` string.
 
@@ -417,11 +472,28 @@ the only place that understands doc syntax:
 
 - `parse_doc_block(token) -> DocBlock` — strip delimiters, dedent, split summary from
   body, recognise tags.
-- `attach_docs(items) -> None` — walk a sequence of sibling nodes, bind each block to the
-  node on the next line, and report the unattached ones.
+- `attach_docs(children, built, ast_builder) -> None` — walk a container's parse-tree
+  children beside the nodes just built from them, bind each block to the node that starts on
+  the next line, and send the rest to `ast_builder.orphan_docs`.
 
 The twelve declaration builders must not each grow doc handling of their own. They call
 `attach_docs` once per block they own.
+
+### Nothing may vanish
+
+A doc block that is written and then silently dropped is the failure this feature exists to
+remove, so the builder accounts for every one of them.
+
+`parse_block` parks a body-first block on `Block.doc` and records the pair in
+`ast_builder.pending_body_docs`. `parse_funcdef` and `parse_extenddef` lift `body.doc` onto
+the declaration and drop the pair. Any pair still standing when `build()` finishes belongs to
+a block that takes no docs — a lambda body, an `if` arm — and becomes an orphan. A block in a
+body that is not its first item is an orphan too, and a different code, because inside a body
+there is no declaration it could plausibly have meant.
+
+That is O(1) bookkeeping and total by construction: every block ends up attached, lifted, or
+in `orphan_docs`. `tests/unit/test_doc_block_attachment.py` is the gate, and it asserts the
+totality rather than any one of the three outcomes.
 
 ---
 
@@ -431,7 +503,8 @@ A new whole-program pass named `docs`, running **after `collect` and before `ext
 
 The order lives in the `SemanticAnalyzer.check()` docstring, which is the authority;
 `docs/internals/semantic-passes.md` describes each pass, and the pass list in `CLAUDE.md`
-gains one name. Fifteen passes becomes sixteen, a count also written into `ROADMAP.md`.
+gains one name. Fifteen passes becomes sixteen, so every place that states the count moves
+with it.
 
 Two reasons for that position:
 
@@ -458,16 +531,49 @@ undocumented symbol in every library it imports.
 
 ### Always on
 
-| Condition | Kind |
-|---|---|
-| `- Parameter` names a parameter this callable does not declare | error |
-| two `- Parameter` tags for the same name | error |
-| an unrecognised tag keyword, `- Paramter:` | error |
-| a doc block that documents nothing | warning |
+| Condition | Code | Kind |
+|---|---|---|
+| `- Parameter` names a parameter this callable does not declare | CE7001 | error |
+| a repeated tag: two `- Parameter` for one name, or a second `- Returns:` or `- Errors:` | CE7002 | error |
+| an unrecognised tag keyword, `- Paramter:` | CE7003 | error |
+| a doc block in a body that is not the first item | CE7004 | error |
+| a declaration with a block above it and a block first in its body | CE7005 | error |
+| a doc block that documents nothing | CW7001 | warning |
+
+CE7001, CE7002 and CE7005 are relational: a caret on the tag or the block, and a `note` with
+its own `file:line:col` on the declaration, on the first tag, or on the other block.
+
+One code covers all three repeated tags, because it is one rule. `- Parameter` is keyed by
+the name it carries; `- Returns:` and `- Errors:` are keyed by the tag alone, since §3 allows
+at most one of each.
 
 The typo case earns a code of its own rather than being treated as prose. A misspelled tag
 is silently invisible in every documentation system that treats it as text, and that is
 the failure this feature exists to remove.
+
+### Telling a typo from prose
+
+A tag is a Markdown list item (§3), and so is an ordinary prose bullet. The rule that
+separates them has to catch `- Paramter:` without claiming `- Note that this is fast.`
+
+A list item shaped `- <Word>[ <name>]:` is a **tag candidate**. A candidate whose word is a
+known keyword is a tag. A candidate whose word is within edit distance 2 of a keyword is
+CE7003, with a `help` line naming the tag that was meant. Everything else is prose.
+
+```
+- Parameter a: ...     tag
+- Returns: ...         tag
+- Paramter a: ...      CE7003, help: did you mean `- Parameter:`
+- Retruns: ...         CE7003, help: did you mean `- Returns:`
+- Note: ...            prose -- distance 4 from every keyword
+- Deprecated: ...      prose -- reserved by §3, and no code may be registered for it
+- see docs/ffi.md      prose -- no `Word:` shape
+```
+
+Distance 2 is the boundary because it catches a transposition plus a dropped letter, which
+is what a mistyped keyword looks like, and stops short of `Note`. The reserved tags stay
+prose deliberately: `tests/unit/test_error_registry.py` is an exact-match ratchet on codes
+nothing emits, so a code cannot be registered for `- Deprecated:` until phase 6 emits one.
 
 ### Behind `--warn-missing-docs`
 
@@ -510,12 +616,16 @@ above; all three codes are free.
   note is what says so, which makes this a relational diagnostic. Rendering it with a single
   location would be a regression.
 
+All three are raised from `lexer_callbacks`, as §4 sets out: CE6011 and CE6012 from the two
+`%ignore`d delimiter terminals, CE6013 from a scan of the matched `DOC_BLOCK` token. One
+place, at lex time, before the builder has an opinion.
+
 ### The doc family
 
 CE70xx, in a **new** `docs.py` module under `sushi_lang/internals/errors/`. A code may only be added
 in the file that owns its range, and CE7xxx is entirely unused today.
 
-This needs three supporting changes:
+This needs four supporting changes:
 
 1. A `DOCS = "docs"` member on `Category` in `internals/errors/registry.py`.
 2. An import of the new module in `internals/errors/__init__.py`. Registration is an
@@ -525,6 +635,10 @@ This needs three supporting changes:
    CE70xx would be forced into the wrong category. It becomes a bounded
    `if number < 7000: return {Category.SYNTAX}` followed by `return {Category.DOCS}`.
    `RANGE_EXEMPT` is not the escape: it is documented shrink-only.
+4. The removal of the `internals/errors/docs.py` entry from `ALLOWED` in
+   `tests/unit/test_path_references_exist.py`. It was added as an explicitly TEMPORARY
+   exemption so that this document could name a module that did not exist yet. Phase 2
+   creates the module, so phase 2 takes the exemption back out.
 
 Warnings go in `warnings.py` regardless of family, as every warning does. A doc warning can
 carry `Category.DOCS` and still live there, because the range test returns every category for
@@ -534,6 +648,12 @@ a `CW` code.
 bump. Nothing else: the running changelog that comment used to carry was deleted in #444, and
 the comment now says why. Why a code exists belongs in its `doc` field in
 `internals/errors/docs.py`; what changed belongs in the `CHANGELOG` and the git log.
+
+Phase 2 registers nine codes in all — CE6011, CE6012 and CE6013 in `syntax.py`, CE7001 to
+CE7005 in the new `docs.py`, and CW7001 in `warnings.py`. Every one of them is emitted by the
+end of the phase, because `test_unreferenced_codes_match_the_allowlist` is an exact-match
+ratchet: a code registered and never emitted fails the suite. Nothing may be reserved here
+for a later phase.
 
 ---
 
