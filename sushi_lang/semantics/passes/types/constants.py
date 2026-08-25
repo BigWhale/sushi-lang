@@ -1,13 +1,30 @@
 """Constant definition validation for type validation (the typecheck pass)."""
 from __future__ import annotations
 
+from typing import Optional
+
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import ConstDef
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType
 
 from .utils import validate_type_name
 from .compatibility import validate_assignment_compatibility
 from .propagation import propagate_types_to_value
+
+
+def assignment_span(const: ConstDef) -> Optional[Span]:
+    """The `name = value` half of a declaration, which is what a mismatch is about.
+
+    Not the declaration's own span: that reaches from `const` to the line after the
+    statement, so it marks the declared type as well -- and the declared type already
+    has a note of its own on the same diagnostic.
+    """
+    name = const.name_span
+    value = const.value.loc if const.value is not None else None
+    if name is None or value is None:
+        return const.loc
+    return Span(name.line, name.col, value.end_line, value.end_col)
 
 
 def validate_constant(self, const: ConstDef) -> None:
@@ -32,4 +49,5 @@ def validate_constant(self, const: ConstDef) -> None:
 
     propagate_types_to_value(self, const.value, const.ty)
 
-    validate_assignment_compatibility(self, const.ty, const.value, const.type_span, const.loc)
+    validate_assignment_compatibility(self, const.ty, const.value, const.type_span,
+                                      assignment_span(const))

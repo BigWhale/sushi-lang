@@ -159,8 +159,11 @@ class Reporter:
             line_text = ""
 
         start = max(1, span.col)
-        end = max(start, span.end_col)
-        span_len = end - start + 1
+        if span.end_line > span.line:
+            end = max(start, len(line_text) + 1)   # only this line is drawn
+        else:
+            end = max(start, span.end_col)
+        span_len = max(1, end - start)             # `end_col` is exclusive
 
         if use_unicode:
             if span_len <= 1:
@@ -222,7 +225,7 @@ class Reporter:
                     # line measures it against text the caret is not drawn under: a
                     # `const_def` ends at column 1 of the line after the declaration,
                     # which rendered as a one-character caret under the first keyword.
-                    end = max(start, len(line_text))
+                    end = max(start, len(line_text) + 1)
                 else:
                     end = max(start, d.span.end_col)
 
@@ -244,7 +247,11 @@ class Reporter:
                     else:
                         out.append(f"{line_prefix}{line_text}")
 
-                    span_len = end - start + 1
+                    # `end_col` is EXCLUSIVE, as Lark reports it and as every span
+                    # the compiler builds by hand spells it (`col + len(text)`), so
+                    # the width is the difference. Adding one drew a marker one
+                    # character wider than its own token, every time.
+                    span_len = max(1, end - start)
                     if span_len <= 1:
                         marker = " " * (start - 1) + "\u252c"
                     else:
@@ -278,7 +285,7 @@ class Reporter:
                     out.append(head)
                     line_prefix  = "  | "
                     caret_prefix = "  ` "
-                    span_len = end - start + 1
+                    span_len = max(1, end - start)
                     if span_len <= 1:
                         ascii_marker = " " * (start - 1) + "^"
                     else:
@@ -332,7 +339,7 @@ class Reporter:
                     if is_last:
                         sub_start = max(1, sub_span.col)
                         sub_end = max(sub_start, sub_span.end_col)
-                        sub_span_len = sub_end - sub_start + 1
+                        sub_span_len = max(1, sub_end - sub_start)
                         sub_guide = sub_start + (sub_span_len // 2 if sub_span_len > 1 else 0)
                         if use_color:
                             out.append(f"{C.GRAY}  \u2570{'\u2500' * sub_guide}\u256f{C.RESET}")
