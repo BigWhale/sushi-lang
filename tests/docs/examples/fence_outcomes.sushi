@@ -51,15 +51,15 @@ public fn connect(i32 port) i32:
     return Result.Ok(port)
 
 ##:
-Counts the bytes of a name.
+Adds one to a number.
 
-- Parameter s: The name.
-- Returns: How many bytes it holds.
+- Parameter n: The number.
+- Returns: One more than `n`.
 - Example: an `error` fence must exit 2 and name every code it gives.
 ```sushi error CE2002
 let string s = 42
-println("{name_length(s)}")
+println("{incremented(s)}")
 ```
 :##
-public fn name_length(string s) i32:
-    return Result.Ok(s.len())
+public fn incremented(i32 n) i32:
+    return Result.Ok(n + 1)

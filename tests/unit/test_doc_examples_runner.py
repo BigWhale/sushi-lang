@@ -125,7 +125,7 @@ def test_an_indented_snippet_body_keeps_its_own_shape():
 def test_the_collector_finds_every_example_in_source_order():
     examples = examples_in(FIXTURE)
     assert [example.owner for example in examples] == \
-        ["doubled", "slow", "connect", "name_length"]
+        ["doubled", "summed", "connect", "incremented"]
     assert [example.attrs.mode for example in examples] == \
         ["run", "no_run", "skip", "error"]
 

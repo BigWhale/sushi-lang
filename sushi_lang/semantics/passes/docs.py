@@ -31,7 +31,7 @@ _SINGLETON_TAGS = ("returns", "errors")
 
 def check_docs(reporter: 'Reporter', program: 'Program') -> None:
     """Check one unit's doc blocks."""
-    for doc, owner in _documented(program):
+    for doc, owner in documented(program):
         _check_tags(reporter, doc, owner)
         _check_examples(reporter, doc)
     _check_positions(reporter, program)
@@ -43,11 +43,14 @@ def _bodied(program: 'Program') -> List:
             *[method for impl in program.perk_impls for method in impl.methods]]
 
 
-def _documented(program: 'Program') -> Iterator[Documented]:
+def documented(program: 'Program') -> Iterator[Documented]:
     """Every block that IS attached to something, with what it is attached to.
 
     An orphan is deliberately absent: it already carries its own diagnostic, and
     checking its tags as well would say two things about one mistake.
+
+    Public because `tests/docs_sweep.py` walks a unit the same way (documentation.md
+    S10, R22). One walk, so the doc-test runner cannot see a block the pass does not.
     """
     def pair(owner) -> Iterator[Documented]:
         if owner is not None and getattr(owner, "doc", None) is not None:

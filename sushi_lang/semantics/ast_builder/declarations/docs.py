@@ -154,7 +154,7 @@ def _fences(entries: Sequence[Tuple[int, int, str]]) -> List[_Fence]:
         indent, marker, info = match.group(1), match.group(2), match.group(3)
         close_at: Optional[int] = None
         for cursor in range(index + 1, len(entries)):
-            if _closes(marker, entries[cursor][2]):
+            if closes_fence(marker, entries[cursor][2]):
                 close_at = cursor
                 break
         body_end = close_at if close_at is not None else len(entries)
@@ -163,8 +163,12 @@ def _fences(entries: Sequence[Tuple[int, int, str]]) -> List[_Fence]:
     return found
 
 
-def _closes(marker: str, text: str) -> bool:
-    """Whether `text` is a closing fence for a region opened with `marker`."""
+def closes_fence(marker: str, text: str) -> bool:
+    """Whether `text` is a closing fence for a region opened with `marker`.
+
+    Public because the Markdown side of `tests/docs_sweep.py` needs the same rule to
+    step over a fence it cannot close (documentation.md S10, R27). One rule, once.
+    """
     run = text.strip()
     return len(run) >= len(marker) and set(run) == {marker[0]}
 
