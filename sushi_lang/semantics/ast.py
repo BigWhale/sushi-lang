@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Union, Literal, TYPE_CHECKING
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.typesys import Type
@@ -30,6 +30,21 @@ class DocTag:
 
 
 @dataclass
+class DocExample:
+    """One fenced code block under an `- Example:` tag (documentation.md S10, R14).
+
+    Kept verbatim, because an example is code: the fold that joins a tag's
+    continuation lines strips every line, which destroys the indentation a program
+    needs. `defect` is set when the tag introduces nothing a runner could compile,
+    and the `docs` pass turns it into CE7007 or CE7008.
+    """
+    code: str                    # the fence body, dedented by the fence's own indent
+    attrs: str = ""              # the fence info string, as written
+    loc: Optional[Span] = None   # the opening fence, or the tag when there is none
+    defect: Optional[Literal["no-fence", "unterminated"]] = None
+
+
+@dataclass
 class DocBlock:
     """A `##: ... :##` block, dedented, parked on the node it documents."""
     summary: str                 # the first paragraph
@@ -40,6 +55,9 @@ class DocBlock:
     # the tail of a fenced example as prose (documentation.md section 8, R1).
     body: str = ""
     loc: Optional[Span] = None
+    # The fenced examples, in source order. Their own structure rather than the text of
+    # an `- Example:` tag, which is stripped and folded (documentation.md S10, R14).
+    examples: List[DocExample] = field(default_factory=list)
     # Why this block reached `Program.orphan_docs`, and None while it is attached.
     # "detached" documents nothing (CW7001); "in-body" stands in a body it is not
     # the first item of (CE7005). The two are separate rules, not one.
@@ -612,7 +630,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 
 __all__ = [
-    "Node", "Program", "UseStatement", "DocBlock", "DocTag", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
+    "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding",

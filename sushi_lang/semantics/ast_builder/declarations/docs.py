@@ -7,12 +7,13 @@ of its own. `docs/design/documentation.md` sections 2, 3 and 5 are the authority
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, List, Optional, Sequence, Set, Tuple
 
 from lark import Token
 
 from sushi_lang.internals.report import Span, span_of
-from sushi_lang.semantics.ast import DocBlock, DocTag
+from sushi_lang.semantics.ast import DocBlock, DocExample, DocTag
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Block
@@ -31,6 +32,12 @@ RESERVED_KEYWORDS = ("Deprecated", "Traps")
 # `- <Word>[ <name>]:` -- the shape that makes a Markdown list item a tag candidate.
 # The item is line-initial: an indented bullet sits inside an example and is prose.
 _CANDIDATE = re.compile(r"^-[ \t]+([A-Za-z]\w*)(?:[ \t]+([A-Za-z_]\w*))?[ \t]*:[ \t]?(.*)$")
+
+# A fenced block opens with three or more backticks or tildes and closes with a run of
+# the SAME character that is at least as long. That is CommonMark's rule, and it is what
+# lets one fence hold another. The info string may not hold either fence character, so a
+# bare closer never reads as an opener.
+_FENCE = re.compile(r"^([ \t]*)(`{3,}|~{3,})[ \t]*([^`~]*)$")
 
 # A transposition plus a dropped letter is what a mistyped keyword looks like. Three
 # edits reaches `Err`, which is a word an author may well have meant.
@@ -120,23 +127,96 @@ def _dedent(token: Token) -> List[Tuple[int, int, str]]:
     return entries
 
 
-def _read_tags(entries: Sequence[Tuple[int, int, str]]) -> List[DocTag]:
+@dataclass
+class _Fence:
+    """One fenced region of a block, as entry indices (documentation.md S10, R13)."""
+    open_at: int                 # the opening fence line
+    body_end: int                # one past the last code line
+    close_at: Optional[int]      # the closing fence line, or None when there is none
+    info: str                    # the info string, as written
+    indent: int                  # the opening fence's own indent, stripped off the code
+
+
+def _fences(entries: Sequence[Tuple[int, int, str]]) -> List[_Fence]:
+    """Every fenced region, in source order.
+
+    Scanned rather than matched line by line, because a closing fence is shaped like an
+    opening one with no info string: once a region opens, the scan continues from its
+    closer and cannot read that closer as a second opener.
+    """
+    found: List[_Fence] = []
+    index = 0
+    while index < len(entries):
+        match = _FENCE.match(entries[index][2])
+        if match is None:
+            index += 1
+            continue
+        indent, marker, info = match.group(1), match.group(2), match.group(3)
+        close_at: Optional[int] = None
+        for cursor in range(index + 1, len(entries)):
+            if _closes(marker, entries[cursor][2]):
+                close_at = cursor
+                break
+        body_end = close_at if close_at is not None else len(entries)
+        found.append(_Fence(index, body_end, close_at, info.strip(), len(indent)))
+        index = body_end + 1
+    return found
+
+
+def _closes(marker: str, text: str) -> bool:
+    """Whether `text` is a closing fence for a region opened with `marker`."""
+    run = text.strip()
+    return len(run) >= len(marker) and set(run) == {marker[0]}
+
+
+def _fenced_lines(fences: Sequence[_Fence]) -> Set[int]:
+    """Every entry index a fence covers, its own two delimiter lines included.
+
+    This is what makes `- Returns:` inside example code prose rather than a tag, and
+    what stops a blank line inside a fence from ending the tag that introduced it.
+    """
+    covered: Set[int] = set()
+    for fence in fences:
+        last = fence.close_at if fence.close_at is not None else fence.body_end - 1
+        covered.update(range(fence.open_at, last + 1))
+    return covered
+
+
+def _strip_indent(text: str, width: int) -> str:
+    """`text` with up to `width` leading spaces or tabs removed."""
+    cut = 0
+    while cut < width and cut < len(text) and text[cut] in " \t":
+        cut += 1
+    return text[cut:]
+
+
+def _candidates(entries: Sequence[Tuple[int, int, str]], fenced: Set[int]) -> List[int]:
+    """The entry index of every tag candidate outside a fence."""
+    return [index for index, (_line, _col, text) in enumerate(entries)
+            if index not in fenced and _CANDIDATE.match(text)]
+
+
+def _read_tags(entries: Sequence[Tuple[int, int, str]], candidates: Sequence[int],
+               fenced: Set[int]) -> List[DocTag]:
     """Every list item that is a keyword or a near miss of one. The rest is prose."""
     tags: List[DocTag] = []
-    for index, (line, col, text) in enumerate(entries):
+    for index in candidates:
+        line, col, text = entries[index]
         match = _CANDIDATE.match(text)
-        if match is None:
-            continue
+        assert match is not None                       # `_candidates` matched it already
         word, name, description = match.group(1), match.group(2), match.group(3)
         if word not in TAG_KEYWORDS and suggest_tag(word) is None:
             continue
 
-        # A Markdown list item runs on until a blank line or the next item.
+        # A Markdown list item runs on until a blank line, the next item, or the fence
+        # it introduces. A fence ends the caption and starts the example.
         parts = [description.strip()]
-        for _line, _col, following in entries[index + 1:]:
-            if not following.strip() or _CANDIDATE.match(following):
+        for following in range(index + 1, len(entries)):
+            text_of = entries[following][2]
+            if (not text_of.strip() or following in fenced
+                    or _CANDIDATE.match(text_of)):
                 break
-            parts.append(following.strip())
+            parts.append(text_of.strip())
 
         kind = _KIND_OF.get(word, "unknown")
         tags.append(DocTag(
@@ -149,19 +229,54 @@ def _read_tags(entries: Sequence[Tuple[int, int, str]]) -> List[DocTag]:
     return tags
 
 
-def _read_body(entries: Sequence[Tuple[int, int, str]], after_summary: int) -> str:
+def _read_examples(entries: Sequence[Tuple[int, int, str]], fences: Sequence[_Fence],
+                   candidates: Sequence[int]) -> List[DocExample]:
+    """One entry per `- Example:` tag, in source order.
+
+    The window of a tag runs to the next tag candidate, so the fence an example gets is
+    the first one the author wrote under that tag and nothing later. A tag whose window
+    holds no fence is the CE7007 defect; a fence with no closer is the CE7008 one.
+    """
+    examples: List[DocExample] = []
+    for position, index in enumerate(candidates):
+        match = _CANDIDATE.match(entries[index][2])
+        if match is None or match.group(1) != "Example":
+            continue
+        stop = candidates[position + 1] if position + 1 < len(candidates) else len(entries)
+        fence = next((f for f in fences if index < f.open_at < stop), None)
+
+        if fence is None:
+            line, col, text = entries[index]
+            examples.append(DocExample(
+                code="", attrs="", defect="no-fence",
+                loc=Span(line, col, line, col + len(text))))
+            continue
+
+        line, col, text = entries[fence.open_at]
+        examples.append(DocExample(
+            code="\n".join(_strip_indent(entries[i][2], fence.indent)
+                           for i in range(fence.open_at + 1, fence.body_end)),
+            attrs=fence.info,
+            loc=Span(line, col, line, col + len(text)),
+            defect=None if fence.close_at is not None else "unterminated"))
+    return examples
+
+
+def _read_body(entries: Sequence[Tuple[int, int, str]], after_summary: int,
+               candidates: Sequence[int]) -> str:
     """The prose between the summary and the first tag candidate.
 
     Parsed rather than derived. "The block with the tag lines taken out" is a different
     answer: a Markdown list item stops at a blank line, so a fenced example's closing
     lines fall outside its own tag and a line-removal rule copies them into the body as
     prose. Everything from the first candidate onward belongs to the tags.
+
+    A fence that no tag introduces is prose, and it stays here as written. Only the
+    CANDIDATE search reads the partition, which is why a fence cannot end the body.
     """
-    lines = [text for _line, _col, text in entries[after_summary:]]
-    for index, text in enumerate(lines):
-        if _CANDIDATE.match(text):
-            lines = lines[:index]
-            break
+    first_tag = next((index for index in candidates if index >= after_summary),
+                     len(entries))
+    lines = [text for _line, _col, text in entries[after_summary:first_tag]]
     while lines and not lines[0].strip():
         lines.pop(0)
     while lines and not lines[-1].strip():
@@ -170,21 +285,31 @@ def _read_body(entries: Sequence[Tuple[int, int, str]], after_summary: int) -> s
 
 
 def parse_doc_block(token: Token) -> DocBlock:
-    """A DOC_BLOCK token, read into the block it carries."""
+    """A DOC_BLOCK token, read into the block it carries.
+
+    The block is PARTITIONED first: every fenced region is found before a single line is
+    read as a tag (documentation.md S10, R13). Without that the parse has three defects,
+    each of them silent -- a tag-shaped line inside example code becomes a tag, a blank
+    line inside a fence ends the tag that introduced it, and the body rule needs a
+    special case for a fence it cannot see.
+    """
     entries = _dedent(token)
-    tags = _read_tags(entries)
+    fences = _fences(entries)
+    fenced = _fenced_lines(fences)
+    candidates = _candidates(entries, fenced)
 
     summary: List[str] = []
-    for _line, _col, text in entries:
-        if not text.strip() or _CANDIDATE.match(text):
+    for index, (_line, _col, text) in enumerate(entries):
+        if not text.strip() or index in candidates:
             break
         summary.append(text)
 
     return DocBlock(
         summary="\n".join(summary).strip(),
         text="\n".join(text for _line, _col, text in entries),
-        body=_read_body(entries, len(summary)),
-        tags=tags,
+        body=_read_body(entries, len(summary), candidates),
+        tags=_read_tags(entries, candidates, fenced),
+        examples=_read_examples(entries, fences, candidates),
         loc=span_of(token),
     )
 
