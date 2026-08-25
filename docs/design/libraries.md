@@ -95,17 +95,24 @@ Integrity is checked strictly in order, one code per failure mode, all in
 ### Compression
 
 `FLAGS` bit 0 is reserved for source-section compression and is **always written as
-zero** for now. The bit is claimed so the format is ready, not because compression is
-planned.
+zero** today. **Compression is now planned** (ruled 2026-08-25), and one of the two
+reasons this section gave for waiting has expired: the self-hosted reader
+(`sushi_stdlib/src_sushi/toolchain/slib.sushi` plus `encoding/msgpack`) needed an
+inflate written in Sushi, and `compression/zlib.sushi` is in the stdlib now. The other
+still holds for the source section — Nori archives are already `tar.gz`
+(`packager/archive.py`), so distribution is compressed regardless.
 
-Two reasons to wait. Nori archives are already `tar.gz` (`packager/archive.py`), so
-distribution is compressed regardless — compression inside the container would only
-reduce on-disk size. And the self-hosted reader
-(`sushi_stdlib/src_sushi/toolchain/slib.sushi` plus `encoding/msgpack`) would need an
-inflate written in Sushi. Revisit only when on-disk size is a measured problem.
+What moved the decision is the **metadata blob**, not the source section. An earlier
+draft of this section said the blob is never compressed, because it is the index and
+every reader must be able to take it cheaply. That reasoning is about the cost of
+reading it, and it argued for keeping the index SMALL — which turned into an argument
+for carrying less in it. The index is where doc text lives
+(`docs/design/documentation.md` section 8, R8), and a library must not carry thinner
+documentation to keep a number down.
 
-The metadata blob is deliberately never compressed. It is the index, and every reader
-must be able to take it cheaply.
+So the blob is uncompressed today and is not meant to stay that way. Whoever takes it
+owns three things: the flag, a read side in both readers, and a rule for when an index
+is still cheap to take.
 
 ## 3. The manifest — an index, not the authority
 

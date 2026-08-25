@@ -49,12 +49,14 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   mode now prints beside its type. That is the one mode a type cannot spell; `peek` and
   `poke` were always part of the type string.
 
-  A documented library pays for its docs. Measured on a stdlib-sized library of 83 documented
-  symbols, the index grew from 5,787 to 22,578 bytes -- about 200 bytes a symbol, of which
-  35 is msgpack framing -- and doc prose costs about twice its own size in a source `.slib`,
-  because the source section carries it as well. Three things do not travel in the index: an
-  `- Example:` waits for a later phase, an extension has no manifest record of any kind, and
-  a private symbol carries no doc because it is not part of the documented API.
+  Three things do not travel in the index: an `- Example:` waits for a later phase, an
+  extension has no manifest record of any kind, and a private symbol carries no doc because
+  it is not part of the documented API.
+
+  The index is bigger for it, and that is expected rather than a cost to weigh. Measured on a
+  stdlib-sized library of 83 documented symbols, it grew from 5,787 to 22,578 bytes -- about
+  200 bytes a symbol, of which 35 is msgpack framing. The metadata blob is plain text and
+  uncompressed today; compressing it is its own change.
 
   `docs/documentation-blocks.md` is the reference and `docs/design/documentation.md` carries
   the phases that follow.

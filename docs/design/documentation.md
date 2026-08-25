@@ -815,17 +815,20 @@ known keys, and it needs work:
 
 ### Size
 
-The metadata blob is deliberately never compressed: it is the index, and every reader must be
-able to take it cheaply. Committed fixtures run 1-9 KB today, so prose for every public symbol
-is plausibly the same order as the entire existing index — in the one section that is always
-read in full and, for the default source kind, duplicating the source blob.
+The metadata blob is not compressed today: it is the index, and every reader must be able to
+take it cheaply. Committed fixtures run 1-9 KB, so prose for every public symbol is plausibly
+the same order as the entire existing index — in the one section that is always read in full
+and, for the default source kind, duplicating the source blob.
 
-Three things hold that in hand, in order. The key is absent when there is no doc block, so an
-undocumented library pays nothing. The record stores the parsed fields and not the raw block.
-And if it ever does bite, one of the two reasons `libraries.md` gives for not compressing has
-expired — `compression/zlib.sushi` is in the stdlib now, so a Sushi-side inflate is no longer
-missing, and `FLAGS` bit 0 is already claimed. That is a `libraries.md` decision and not this
-feature's to take.
+Two things hold that in hand whatever happens. The key is absent when there is no doc block,
+so an undocumented library pays nothing, and the record stores the parsed fields and not the
+raw block.
+
+The third is that **the blob will be compressed** (R8). Both of the reasons `libraries.md`
+gave for not compressing have expired: `compression/zlib.sushi` is in the stdlib, so a
+Sushi-side inflate is no longer missing, and `FLAGS` bit 0 is already claimed. That is a
+`libraries.md` decision and a container decision, so it is not this feature's to take — but
+it is the reason nothing here is shaped around a byte budget.
 
 ### Measured, at phase 3
 
@@ -844,9 +847,10 @@ a record, which is the `doc` key, the field names and the length prefixes.
 The whole file for that library, at the default source kind: 9,176 B with no doc blocks in
 the source at all, 26,181 B with the blocks and no index carriage, and 42,972 B with both.
 So **doc prose costs about twice its own size in a source `.slib`**: once in the source
-section, once in the index. This section accepted that duplication and those are its price.
+section, once in the index — and both copies are plain text in an uncompressed container,
+which is what makes the number look large and what compression takes back.
 
-**R8 takes the decision.** Nothing here is revisited without a new measurement.
+These are measurements and not a budget. **R8 is the ruling.**
 
 ### What phase 3 cannot promise
 
@@ -935,10 +939,17 @@ so phase 3 stores no example and prints none. For a source library the text stay
 source section; for a binary library it is not in the file. This is the one thing an author
 can write that phase 3 drops.
 
-**R8 — the size is accepted. No compression.** A documented library pays for its docs, and
-an undocumented one pays nothing because the key is absent. The numbers are in "Measured, at
-phase 3" above. Compressing the metadata blob is a `docs/design/libraries.md` decision and
-this feature does not take it.
+**R8 — the size is not a constraint, because the blob will be compressed.** Ruled by David
+on 2026-08-25, against an earlier draft of this ruling that accepted the size as a permanent
+cost: the index is going to be zlib-compressed, so its size is not a reason for this feature
+to store less than it needs. An undocumented library still pays nothing, because the key is
+absent.
+
+Phase 3 does not do the compressing. That is a `FLAGS` bit, a read side in both `slib.sushi`
+and the Python reader, and a `docs/design/libraries.md` decision about when the index is
+cheap to take — one feature at a time. What changes here is only what the number means: the
+measurement above is what tells that work what it is worth, and it is not an argument for
+carrying less text.
 
 **R9 — `unit_docs` uses `own_units()`.** The same filter as `collect_unit_source`, so the
 index, the unit array and the source section can never disagree about which units are ours.

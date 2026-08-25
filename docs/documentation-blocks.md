@@ -320,10 +320,9 @@ Each record holds the block in parsed parts, not as raw text:
 | `returns` | the `- Returns:` text |
 | `errors` | the `- Errors:` text |
 
-Every field is optional, and the whole record is absent when a symbol has no block. An
-undocumented library grows by nothing. A documented one pays: a stdlib-sized library of 83
-documented symbols grew its index by about 200 bytes a symbol, and doc prose in a source
-library costs about twice its own size, because the source section carries it as well.
+Every field is optional, and the whole record is absent when a symbol has no block, so an
+undocumented library grows by nothing. Document as much as the symbol deserves: the size of
+the index is the compiler's problem and not the author's.
 
 `--lib-info` prints the record under the symbol it documents, indented two spaces:
 
