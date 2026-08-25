@@ -238,15 +238,25 @@ Protocol: 2.0
 
 Units (1):
   mylib
+    Arithmetic that reports its own failures.
 
-Public Functions (2):
+Public Functions (3):
   fn add(i32 a, i32 b) i32
+    Adds two numbers.
+    - Parameter a: The first addend.
+    - Parameter b: The second addend.
+    - Returns: The sum.
   fn multiply(i32 a, i32 b) i32
+  fn shout(nom string s) string
+    Hands the string back, and takes it over.
 
 Structs (1):
   struct Point:
+    A point in the plane.
     i32 x
+      The distance along x.
     i32 y
+      The distance along y.
 
 Enums (1):
   enum Color:
@@ -260,8 +270,14 @@ Dependencies (1):
 Source: 1,204 bytes
 ```
 
+A documented symbol prints its doc block, indented two spaces under its own line;
+`multiply` above has no block and prints as it always did. A `nom` parameter shows its
+mode, which is the one mode a type cannot spell. See
+[Documentation Blocks](documentation-blocks.md#what-travels-in-a-slib) for the record and
+for the few things that do not travel in it.
+
 This is useful for:
-- Checking what functions a library exports
+- Checking what functions a library exports, and what each one is for
 - Verifying platform compatibility
 - Understanding library dependencies
 
@@ -384,14 +400,25 @@ fn internal_helper(i32 x) i32:
 
 ### 2. Document Your Library
 
-Include comments explaining what each public function does:
+Write a `##: ... :##` doc block on every public symbol. A block is part of the declaration,
+so the library carries it and `--lib-info` prints it; a `#` comment is dropped at the
+boundary and reaches nobody.
 
 ```sushi
-# Adds two integers and returns the result.
-# Returns Result.Err if overflow would occur.
+##:
+Adds two integers.
+
+- Parameter a: The first addend.
+- Parameter b: The second addend.
+- Returns: The sum.
+- Errors: `MathError.Overflow` when the sum does not fit an `i32`.
+:##
 public fn safe_add(i32 a, i32 b) i32 | MathError:
-    # ...
+    return Result.Ok(a + b)
 ```
+
+A block first in the file documents the unit itself, which is the right place for what the
+library as a whole is for. [Documentation Blocks](documentation-blocks.md) is the guide.
 
 ### 3. Organize with Namespaces
 

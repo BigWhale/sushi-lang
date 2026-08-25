@@ -304,12 +304,68 @@ fn probe() i32:
 The block attaches to no declaration, and it is not the first item in its file. A blank
 line or a `#` comment between the block and the declaration is the usual cause.
 
+## What travels in a `.slib`
+
+A library carries the doc text of every symbol it exports, so `--lib-info` answers what a
+library holds without a source tree. Nothing has to be enabled: build a library and the
+blocks come with it.
+
+Each record holds the block in parsed parts, not as raw text:
+
+| Field | What it is |
+|---|---|
+| `summary` | the first paragraph |
+| `body` | the prose between the summary and the first tag |
+| `params` | the `- Parameter` text, keyed by parameter name |
+| `returns` | the `- Returns:` text |
+| `errors` | the `- Errors:` text |
+
+Every field is optional, and the whole record is absent when a symbol has no block. An
+undocumented library grows by nothing. A documented one pays: a stdlib-sized library of 83
+documented symbols grew its index by about 200 bytes a symbol, and doc prose in a source
+library costs about twice its own size, because the source section carries it as well.
+
+`--lib-info` prints the record under the symbol it documents, indented two spaces:
+
+```
+Public Functions (1):
+  fn hyperspace_jump(i32 a, u8 b) i32
+    Jumps through hyperspace.
+
+    The drive needs a warm coil.
+    - Parameter a: The incoming argument.
+    - Parameter b: The second one.
+    - Returns: The jump distance in parsecs.
+    - Errors: When the drive is cold, this fails.
+```
+
+Parameters print in the order the signature declares them, and not in the order the block
+documents them. A symbol with no block prints as it always did: no blank line, and no
+placeholder.
+
+A unit block prints under its unit name in the `Units` section. A `- Parameter` tag on
+something that declares no parameters -- a unit, a struct, a template -- is carried and not
+printed.
+
+### What does not travel
+
+Four things an author can write do not reach the index. Each one is a limit of a record, not
+of the file, and `docs/design/documentation.md` section 8 carries the reasons:
+
+- **An `- Example:`.** Phase 4 owns the key; a source library keeps the text in its source
+  section, and a binary library does not carry it.
+- **An extension's block.** `extend i32 squared()` has no manifest record of any kind, so
+  `--lib-info` has never listed one.
+- **A generic struct's field blocks, and a perk definition's method blocks.** They are in the
+  file, inside the shipped source slice, and the index cannot answer for them.
+- **A private symbol's block.** A helper that ships only so a binary library links is not
+  part of the documented API.
+
 ## What is not built yet
 
-The compiler reads doc blocks and checks them. Nothing consumes the text yet. These parts
-come later, and `docs/design/documentation.md` is the plan for each of them:
+The compiler reads doc blocks and checks them, and a library carries them. These parts come
+later, and `docs/design/documentation.md` is the plan for each of them:
 
-- A `.slib` records the doc text for each symbol, and `--lib-info` prints it.
 - A `- Example:` block compiles and runs in the toolchain.
 - `--warn-missing-docs` reports a public symbol with no block, an undocumented parameter,
   and a missing `- Returns:` or `- Errors:`.

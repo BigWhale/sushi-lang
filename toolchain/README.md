@@ -29,7 +29,10 @@ implementation when one does not. The contract:
 - `sushic --lib-info FILE` runs `toolchain/bin/slib-info FILE` and returns its
   exit code. The tool owns the full report; the Python fallback
   (`print_library_info` in `sushi_lang/compiler/cli.py`) prints the same body.
-  The parity test `tests/unit/test_slib_info_parity.py` locks the two together.
+  Two parity tests lock the two together: `tests/unit/test_slib_info_parity.py` on
+  an undocumented library, and `tests/unit/test_slib_info_docs.py` on a
+  documented one. Both compile `src/slib_info.sushi` themselves, so neither
+  reads `bin/`: a stale binary is caught by nothing but this section.
 - A wheel install has no `toolchain/` directory, so it always uses the fallback.
 - Error messages can differ between the tool and the fallback; the success
   report cannot.

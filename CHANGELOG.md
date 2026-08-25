@@ -33,8 +33,31 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   in a body that is not the first item is **CE7005**, and a declaration documented both from
   above and from inside its body is **CE7006**.
 
-  Nothing consumes the text yet. `docs/documentation-blocks.md` is the reference and
-  `docs/design/documentation.md` carries the phases that follow.
+  **A library carries the text.** Every `.slib` record that names a symbol an author can
+  document gains an optional `doc` key -- a public function, a public constant, a struct and
+  each of its fields, an enum and each of its variants, a generic function, struct or enum, a
+  perk, a perk implementation and each of its methods -- and a `unit_docs` map beside `units`
+  carries each unit's own block. The record holds the block in parsed parts: `summary`,
+  `body`, a `params` map keyed by parameter name, `returns` and `errors`. Every field is
+  optional and the whole key is absent when a symbol has no block, so the container version
+  does not move and an undocumented library grows by nothing.
+
+  `--lib-info` prints the block under the symbol it documents, indented two spaces, in both
+  implementations -- the Python fallback and the Sushi-written `toolchain/bin/slib-info` --
+  and the two are locked byte for byte. Parameters print in DECLARATION order, and not in the
+  order the block documents them. The report also gained a second thing: a parameter's `nom`
+  mode now prints beside its type. That is the one mode a type cannot spell; `peek` and
+  `poke` were always part of the type string.
+
+  A documented library pays for its docs. Measured on a stdlib-sized library of 83 documented
+  symbols, the index grew from 5,787 to 22,578 bytes -- about 200 bytes a symbol, of which
+  35 is msgpack framing -- and doc prose costs about twice its own size in a source `.slib`,
+  because the source section carries it as well. Three things do not travel in the index: an
+  `- Example:` waits for a later phase, an extension has no manifest record of any kind, and
+  a private symbol carries no doc because it is not part of the documented API.
+
+  `docs/documentation-blocks.md` is the reference and `docs/design/documentation.md` carries
+  the phases that follow.
 - **An array literal element may repeat: `[value; count]`** (#446). A table of one value
   no longer has to be spelled out or built at run time. The form is an ELEMENT form, so
   runs mix with plain elements and repeat within one literal: `[0; 19]`, `[1, 0;3, 9, 7]`,

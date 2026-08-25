@@ -76,6 +76,11 @@ beside the sources does; neither is **CE3505**. A build also stamps `requires_co
 consumer's compiler and a later one may reject it. A consumer outside that range is
 **CE3503**, and `--ignore-compiler-version` overrides the check for the whole build.
 
+The report prints a documented symbol's doc block under its signature, and a parameter's
+`nom` mode beside its type. A `.slib` carries the doc text of every symbol it exports, so
+this answers what a library holds without its sources -- see
+[Documentation Blocks](documentation-blocks.md#what-travels-in-a-slib).
+
 In a repository checkout, `--lib-info` runs the Sushi-written `toolchain/bin/slib-info`
 binary when it exists (build it with `./toolchain/build.py`) and returns its exit code;
 without the binary the built-in Python reader prints the same report. Set

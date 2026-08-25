@@ -1,6 +1,6 @@
 # Design: Documentation blocks
 
-**Status: the language understands doc blocks. Nothing consumes the text yet.** Each
+**Status: the language understands doc blocks, and a library carries them.** Each
 phase below moves one part from DESIGN to BUILT; this banner records where the line is.
 The user-facing reference for what is built is `docs/documentation-blocks.md`.
 
@@ -8,7 +8,7 @@ The user-facing reference for what is built is `docs/documentation-blocks.md`.
 |---|---|---|
 | 1 | This document | BUILT |
 | 2 | Grammar, AST, attachment rules, the `docs` pass, CE6011/CE6012/CE6013 and CE70xx | BUILT |
-| 3 | `.slib` manifest carriage; `slib-info` prints a plain dump | DESIGN |
+| 3 | `.slib` manifest carriage; `slib-info` prints a plain dump | BUILT |
 | 4 | `- Example:` blocks compile and run in the toolchain | DESIGN |
 | 5 | `--warn-missing-docs` completeness lints | DESIGN |
 | 6 | Markdown rendering, and a Markdown checker written in Sushi | DESIGN |
