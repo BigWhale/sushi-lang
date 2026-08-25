@@ -534,18 +534,24 @@ undocumented symbol in every library it imports.
 | Condition | Code | Kind |
 |---|---|---|
 | `- Parameter` names a parameter this callable does not declare | CE7001 | error |
-| a repeated tag: two `- Parameter` for one name, or a second `- Returns:` or `- Errors:` | CE7002 | error |
-| an unrecognised tag keyword, `- Paramter:` | CE7003 | error |
-| a doc block in a body that is not the first item | CE7004 | error |
-| a declaration with a block above it and a block first in its body | CE7005 | error |
+| two `- Parameter` tags for the same name | CE7002 | error |
+| a second `- Returns:` or `- Errors:` | CE7003 | error |
+| an unrecognised tag keyword, `- Paramter:` | CE7004 | error |
+| a doc block in a body that is not the first item | CE7005 | error |
+| a declaration with a block above it and a block first in its body | CE7006 | error |
 | a doc block that documents nothing | CW7001 | warning |
 
-CE7001, CE7002 and CE7005 are relational: a caret on the tag or the block, and a `note` with
-its own `file:line:col` on the declaration, on the first tag, or on the other block.
+CE7001 through CE7004 are tag errors and CE7005 and CE7006 are position errors, which is why
+they are numbered in those two runs. CE7001, CE7002, CE7003 and CE7006 are relational: a
+caret on the tag or the block, and a `note` with its own `file:line:col` on the declaration,
+on the first tag, or on the other block.
 
-One code covers all three repeated tags, because it is one rule. `- Parameter` is keyed by
-the name it carries; `- Returns:` and `- Errors:` are keyed by the tag alone, since §3 allows
-at most one of each.
+**The two repeat cases are separate codes, because they are separate rules.** `- Parameter`
+is keyed by the name it carries — many of them are legal, one per parameter — so CE7002 says
+which parameter was documented twice, and its note points at the first tag for that name.
+`- Returns:` and `- Errors:` are singletons by §3, keyed by the tag alone, so CE7003 says the
+tag may appear once. The two mistakes read differently and are fixed differently: one is a
+copied-and-not-renamed tag, the other is a tag written twice.
 
 The typo case earns a code of its own rather than being treated as prose. A misspelled tag
 is silently invisible in every documentation system that treats it as text, and that is
@@ -558,13 +564,13 @@ separates them has to catch `- Paramter:` without claiming `- Note that this is 
 
 A list item shaped `- <Word>[ <name>]:` is a **tag candidate**. A candidate whose word is a
 known keyword is a tag. A candidate whose word is within edit distance 2 of a keyword is
-CE7003, with a `help` line naming the tag that was meant. Everything else is prose.
+CE7004, with a `help` line naming the tag that was meant. Everything else is prose.
 
 ```
 - Parameter a: ...     tag
 - Returns: ...         tag
-- Paramter a: ...      CE7003, help: did you mean `- Parameter:`
-- Retruns: ...         CE7003, help: did you mean `- Returns:`
+- Paramter a: ...      CE7004, help: did you mean `- Parameter:`
+- Retruns: ...         CE7004, help: did you mean `- Returns:`
 - Note: ...            prose -- distance 4 from every keyword
 - Deprecated: ...      prose -- reserved by §3, and no code may be registered for it
 - see docs/ffi.md      prose -- no `Word:` shape
@@ -649,8 +655,8 @@ bump. Nothing else: the running changelog that comment used to carry was deleted
 the comment now says why. Why a code exists belongs in its `doc` field in
 `internals/errors/docs.py`; what changed belongs in the `CHANGELOG` and the git log.
 
-Phase 2 registers nine codes in all — CE6011, CE6012 and CE6013 in `syntax.py`, CE7001 to
-CE7005 in the new `docs.py`, and CW7001 in `warnings.py`. Every one of them is emitted by the
+Phase 2 registers ten codes in all — CE6011, CE6012 and CE6013 in `syntax.py`, CE7001 to
+CE7006 in the new `docs.py`, and CW7001 in `warnings.py`. Every one of them is emitted by the
 end of the phase, because `test_unreferenced_codes_match_the_allowlist` is an exact-match
 ratchet: a code registered and never emitted fails the suite. Nothing may be reserved here
 for a later phase.
