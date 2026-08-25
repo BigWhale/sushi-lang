@@ -185,6 +185,19 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   reader where the file was cut.
 
 ### Changed
+- **A diagnostic that spans a whole construct is rendered without a caret, and a help
+  is rendered inside the box.** A caret separates one thing from the rest of its line.
+  When the span covers a whole construct there is nothing to separate, and the header
+  already carries the line and column, so `CW7001`, `CE7005` and `CE7006` now report the
+  location alone. A help used to hang below the box in the plain-text form even when the
+  box was drawn; it now sits inside it, wrapped. The label stays, because a note with no
+  location is a fact and a help is advice, and inside the box nothing else tells them
+  apart. The plain renderer, which is what a pipe and every test sees, is unchanged.
+- **A constant's type mismatch marks the assignment, not the declaration.** `CE2002` was
+  handed the declaration's own span, where the `let` path hands it the value's, so
+  `const str x = "FOO"` marked from `const` to the end of the line. It now marks
+  `x = "FOO"`: the declared type is not the half that is wrong, and it already carries a
+  note of its own on the same diagnostic.
 - **`compression/zlib` is rewritten onto the language it now has.** The module landed
   before four of the fixes in this release and carried a workaround for each. It opened
   with a CAUTION block telling the reader that a bitwise operator truncates in silence and
@@ -289,6 +302,18 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **Every caret was one character wider than the thing it marked.** `end_col` is
+  exclusive -- Lark reports it that way, and every span the compiler builds by hand
+  spells it `col + len(text)` -- but the width was computed as the difference plus one.
+  `str` was underlined with four dashes, `Maybe@(i32)` with twelve, `##:` with four. The
+  width is now the difference. The one span that counted inclusively was the indent run
+  behind `CE6004`, which now spells its end exclusively like the rest, and both marker
+  paths share the arithmetic so a note underlines like a caret.
+- **A span that ended on a later line drew a caret measured against a line it was not
+  drawn under.** Only the span's first line is rendered, but the width came from its
+  last: a `const_def` reaches column 1 of the line after the statement, so a whole
+  declaration was marked with a single character under its first keyword. Such a span now
+  underlines to the end of the line it is drawn under.
 - **A msgpack length at or above 2^31 decoded as an empty value instead of an error**
   (#463). Each length-prefixed tag narrowed its `u64` prefix with a bare cast, so
   `0xffffffff` became -1, every taker looped `while (i < count)` zero times, and a
