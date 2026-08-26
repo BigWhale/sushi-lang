@@ -91,6 +91,18 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and nowhere else, which is what keeps a fenced example intact. A symbol with no block
   still prints as one bare line, so the plain report stays exactly as dense as it was.
 
+  **Inline Markdown renders, and an example finally prints.** On a terminal `` `code` ``
+  is cyan, `**bold**` is bold and `*italic*` is italic, each with its marks removed; a
+  captured report keeps every mark, so nothing piped into a file loses the signal that
+  `` `spin_up` `` is a symbol. The subset is closed and everything outside it -- a link, a
+  table, a heading, a nested list -- prints as it was written, which is what every
+  construct did before. The scanner leaves prose alone: a mark that never closes is
+  punctuation, an empty span is punctuation, and `2 * 3 * 4` stays arithmetic.
+
+  An `- Example:` prints last, with the tag's own text as its caption and the code
+  indented under it and dim. The caption is new in the index -- the library carried the
+  code alone -- and it pairs with its code by position.
+
   Parameters print in DECLARATION order, and not in the order the block documents them. The
   report also gained a second thing, which prints either way: a parameter's `nom` mode now
   shows beside its type. That is the one mode a type cannot spell; `peek` and `poke` were

@@ -176,8 +176,64 @@ def _section(title: str, items: list, p: Palette) -> bool:
     return True
 
 
+# The rendered Markdown subset, longest opener first: `**` has to be tried before `*`,
+# or every bold run would read as two empty italics. A CLOSED set -- a link, a table, a
+# heading and a nested list print as the author wrote them, which is what every construct
+# outside the subset has always done.
+_MARKS = (("**", "bold"), ("`", "cyan"), ("*", "italic"))
+
+
+def _mark_at(line: str, i: int) -> tuple[str | None, str]:
+    """The mark that opens at `i`, and the style it asks for."""
+    for mark, style in _MARKS:
+        if line.startswith(mark, i):
+            return mark, style
+    return None, ""
+
+
+def _is_span(mark: str, inner: str, close: int) -> bool:
+    """Is this a span, or is it punctuation the author meant literally?"""
+    if close == -1 or not inner:
+        return False
+    return mark == "`" or not (inner[0].isspace() or inner[-1].isspace())
+
+
+def _render_inline(line: str, p: Palette) -> str:
+    """One line of prose with its Markdown marks turned into styles (R44).
+
+    PLAIN mode returns the line untouched, which is R40: a captured report keeps the
+    marks, so it loses no information and `` `spin_up` `` still reads as a symbol.
+
+    A span that does not close prints verbatim, and so does an EMPTY one. An emphasis
+    span must also hug its text -- `2 * 3 * 4` is arithmetic, not an italic ` 3 ` --
+    which is CommonMark's flanking rule in the one form this subset needs. Inline code
+    is exempt from it, because a code span may legitimately hold spaces.
+    """
+    if not p.reset:
+        return line
+
+    out: list[str] = []
+    i, n = 0, len(line)
+    while i < n:
+        mark, style = _mark_at(line, i)
+        if mark is None:
+            out.append(line[i])
+            i += 1
+            continue
+        close = line.find(mark, i + len(mark))
+        inner = line[i + len(mark):close] if close != -1 else ""
+        if _is_span(mark, inner, close):
+            out.append(f"{getattr(p, style)}{inner}{p.reset}")
+            i = close + len(mark)
+        else:
+            out.append(mark)
+            i += len(mark)
+    return "".join(out)
+
+
 def _print_doc_lines(indent: str, text: str, opener: str = "",
-                     opener_width: int | None = None) -> None:
+                     opener_width: int | None = None,
+                     p: Palette | None = None) -> None:
     """One line of output per line of `text`. A blank line prints EMPTY.
 
     `split` and not `splitlines`: the latter drops a trailing empty field and also
@@ -197,8 +253,10 @@ def _print_doc_lines(indent: str, text: str, opener: str = "",
     for i, line in enumerate(text.split("\n")):
         if not line:
             print()
-        else:
-            print(f"{indent}{opener}{line}" if i == 0 else f"{hang}{line}")
+            continue
+        if p is not None:
+            line = _render_inline(line, p)
+        print(f"{indent}{opener}{line}" if i == 0 else f"{hang}{line}")
 
 
 def _doc_tags(doc: dict, owner: dict | None) -> list[tuple[str, str, str]]:
@@ -252,19 +310,37 @@ def _print_doc_record(doc: dict | None, owner: dict | None, indent: str,
     summary = doc.get('summary', '')
     body = doc.get('body', '')
     if summary:
-        _print_doc_lines(indent, summary)
+        _print_doc_lines(indent, summary, p=opts.p)
         printed = True
     if body:
         if printed:
             print()
-        _print_doc_lines(indent, body)
+        _print_doc_lines(indent, body, p=opts.p)
         printed = True
 
     for keyword, name, text in _doc_tags(doc, owner):
         if printed:
             print()
         opener, width = _tag_opener(keyword, name, opts.p)
-        _print_doc_lines(indent, text, opener, width)
+        _print_doc_lines(indent, text, opener, width, opts.p)
+        printed = True
+
+    # An example is the LAST thing a record says: a parameter is a contract and an
+    # example is a demonstration. Its body is CODE, so it is indented rather than hung,
+    # and dim rather than rendered -- a backtick inside a program is a program's
+    # backtick.
+    for example in doc.get('examples') or []:
+        if printed:
+            print()
+        opener, width = _tag_opener("Example", "", opts.p)
+        caption = example.get('caption') or ""
+        if caption:
+            # A caption is a tag's text like any other, so it hangs and it renders.
+            _print_doc_lines(indent, caption, opener, width, opts.p)
+        else:
+            print(f"{indent}{opener}".rstrip())
+        for line in example['code'].split("\n"):
+            print(f"{indent}    {opts.p.dim}{line}{opts.p.reset}" if line else "")
         printed = True
 
     return printed

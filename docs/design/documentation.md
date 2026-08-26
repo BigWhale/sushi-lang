@@ -1236,6 +1236,64 @@ are the same line of code. The one place it does not fall out for free is the ha
 indent, which must be measured on the PLAIN opener: an alignment measured on the painted
 one would indent a continuation by the width of the escapes as well.
 
+**R40 — plain mode keeps the marks, colour mode replaces them.** In colour, `` `code` ``
+prints styled with the backticks removed. In plain it prints as the author wrote it,
+exactly as it always has. Nothing a user pipes into a file loses information, and the
+alternative -- stripping the marks in plain mode too -- was set aside: it changes every
+captured report and loses the signal that `` `spin_up` `` is a symbol rather than prose.
+
+This is the one exception to R43's "colour changes no text", and it is deliberate. The
+gate states it as written: strip the escapes from a coloured report and every line WITHOUT
+a mark comes back byte for byte, and the line count never moves.
+
+**R44 — the rendered subset is closed, and everything outside it is verbatim.** In: inline
+code, `**bold**`, `*italic*`, and a fenced block under `- Example:`. Out: bullets beyond
+the tags themselves, links, tables, headings, blockquotes, nested lists, raw HTML.
+
+The subset is narrow because the corpus is. Every doc block in the tree, 61 of them across
+1982 `.sushi` files and 260 lines:
+
+```
+prose             87        fence             19
+tag               56        bullet             5
+inline code       26        heading            2
+                            bold, italic, link, table, blockquote:  0
+```
+
+Inline code is the only inline construct anyone actually writes, and it is 26 lines of
+260. `**bold**` and `*italic*` are in because they cost two more branches in a scanner
+that has to exist anyway. A link is not, because rendering one well means deciding what to
+do with the URL, and nothing in the tree has one.
+
+A construct outside the subset prints as the author wrote it, which is what happens to
+every construct today. "Out" costs a reader nothing they have now.
+
+Three rules keep the scanner from mangling prose:
+
+- **Longest opener first.** `**` is tried before `*`, or every bold run reads as two empty
+  italics.
+- **A span that does not close is punctuation**, and so is an EMPTY one -- so `` `` ``
+  survives as two backticks.
+- **An emphasis span hugs its text.** `2 * 3 * 4` is arithmetic and not an italic ` 3 `.
+  This is CommonMark's flanking rule in the one form the subset needs. Inline code is
+  exempt, because a code span may legitimately hold spaces.
+
+Rendering is per LINE, so a span never crosses a newline. That falls out of R39: the text
+is printed line by line and never reflowed, so a line is the unit either way.
+
+**R48 — `- Example:` renders.** Under the symbol, LAST: a parameter is a contract and an
+example is a demonstration. The tag's own text is the caption, and it is a tag's text like
+any other -- it hangs under its own column and its marks render. The code is indented four
+past the tag and printed dim, and it is NOT rendered: a backtick inside a program is a
+program's own.
+
+The caption is new in the record. Phase 4 carried the code alone, so R48 could not have
+printed one; it pairs with its code by POSITION, which is exact because both lists walk the
+block's `- Example:` items in source order and neither filters.
+
+This also closes an inconsistency section 3 did not list: a fence in a block's BODY printed
+raw while a fence under `- Example:` printed nothing. Both print now.
+
 **R45 — user-visible text spells a generic `@(...)`.** The report printed
 `fn pick_bigger<T: Doubler> (template)` and `struct Box<T>:`. Angle brackets are the
 INTERNAL identity spelling and `docs/design/type-identity.md` reserves them for interned

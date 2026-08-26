@@ -161,12 +161,16 @@ def test_never_beats_a_forcing_variable(built):
     assert "\x1b" not in py.stdout
 
 
-@pytest.mark.parametrize("extra", [[], ["--docs"]])
-def test_colour_changes_no_text_at_all(built, extra):
-    """R43's real constraint: strip the escapes and the plain report comes back."""
+def test_colour_changes_no_text_at_all(built):
+    """R43's real constraint: strip the escapes and the plain report comes back.
+
+    Stated on the PLAIN report, which is all signatures and has no prose to render.
+    The documented report has one deliberate exception -- R40 replaces an inline
+    Markdown mark with a style -- and `test_slib_info_markdown.py` states it there.
+    """
     slib, tool = built
-    plain = _run([str(tool), *extra, str(slib)], env=_env()).stdout
-    painted = _run([str(tool), "--color=always", *extra, str(slib)], env=_env()).stdout
+    plain = _run([str(tool), str(slib)], env=_env()).stdout
+    painted = _run([str(tool), "--color=always", str(slib)], env=_env()).stdout
     assert painted != plain
     assert ANSI.sub("", painted) == plain
 

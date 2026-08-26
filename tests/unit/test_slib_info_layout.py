@@ -145,11 +145,12 @@ def test_a_section_ends_with_exactly_one_blank_line(report, which):
 @pytest.mark.parametrize("which", [0, 1], ids=["python", "tool"])
 def test_the_plain_report_stays_dense(plain, which):
     """No record prints a block, so no rule fires and the API surface is unchanged."""
-    assert ("Public Functions (4):\n"
+    assert ("Public Functions (5):\n"
             "  fn hyperspace_jump(i32 b, i32 a) i32\n"
             "  fn plain_add(i32 a, i32 b) i32\n"
             "  fn shout(nom string s) string\n"
             "  fn checked_jump(i32 factor) i32 | JumpError\n"
+            "  fn spin_up(i32 turns) i32\n"
             "\n") in plain[which]
 
 

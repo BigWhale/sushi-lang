@@ -38,12 +38,25 @@ def doc_record(doc: Optional["DocBlock"]) -> Optional[dict]:
         elif tag.kind in _SINGLETON_KINDS and tag.text:
             singletons.setdefault(tag.kind, tag.text)
 
-    # The CODE of each example, in source order, and not its fence attributes: an
-    # attribute is an instruction to the doc-test harness and not documentation
-    # (documentation.md section 10, R23). A defective one carries a diagnostic of its
-    # own and nothing a consumer could render.
-    examples = [example.code for example in doc.examples
-                if example.defect is None and example.code.strip()]
+    # The CAPTION and the CODE of each example, in source order, and not its fence
+    # attributes: an attribute is an instruction to the doc-test harness and not
+    # documentation (documentation.md section 10, R23). A defective one carries a
+    # diagnostic of its own and nothing a consumer could render.
+    #
+    # The caption is the tag's own text, and it pairs with the code by POSITION: both
+    # lists walk the block's `- Example:` items in source order and neither filters, so
+    # the i-th example tag introduces the i-th example. The filter below happens after
+    # the pairing, for that reason.
+    captions = [tag.text for tag in doc.tags if tag.kind == "example"]
+    examples = []
+    for index, example in enumerate(doc.examples):
+        if example.defect is not None or not example.code.strip():
+            continue
+        entry = {"code": example.code}
+        caption = captions[index] if index < len(captions) else ""
+        if caption:
+            entry["caption"] = caption
+        examples.append(entry)
 
     record: dict = {}
     if doc.summary:

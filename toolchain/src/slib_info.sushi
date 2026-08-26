@@ -124,6 +124,89 @@ fn section(string title, i32 n, Opts o) bool:
     println("{o.bold}{title}{o.reset} {o.dim}({n}){o.reset}:")
     return Result.Ok(true)
 
+# mark_at: the mark that opens at `i`, or "". Longest opener first: `**` has to be tried
+# before `*`, or every bold run would read as two empty italics.
+fn mark_at(string line, i32 i) string:
+    let i32 n = line.len()
+    if (i + 2 <= n):
+        if (line.s(i, i + 2) == "**"):
+            return Result.Ok("**")
+    let string one = line.char_at(i)
+    if (one == "`"):
+        return Result.Ok("`")
+    if (one == "*"):
+        return Result.Ok("*")
+    return Result.Ok("")
+
+# style_of: the escape a mark asks for.
+fn style_of(string mark, Opts o) string:
+    if (mark == "**"):
+        return Result.Ok(o.bold.clone())
+    if (mark == "`"):
+        return Result.Ok(o.cyan.clone())
+    return Result.Ok(o.italic.clone())
+
+# close_at: where `mark` next occurs at or after `start`, or -1.
+fn close_at(string line, i32 start, string mark) i32:
+    let i32 n = line.len()
+    let i32 mlen = mark.len()
+    let i32 probe = start
+    while (probe + mlen <= n):
+        if (line.s(probe, probe + mlen) == mark):
+            return Result.Ok(probe)
+        probe := probe + 1
+    return Result.Ok(0 - 1)
+
+# is_span: is this a span, or is it punctuation the author meant literally? A span that
+# does not close is punctuation, and so is an EMPTY one. An emphasis span must also hug
+# its text -- `2 * 3 * 4` is arithmetic and not an italic ` 3 ` -- which is CommonMark's
+# flanking rule in the one form this subset needs. Inline code is exempt, because a code
+# span may legitimately hold spaces.
+fn is_span(string mark, string inner, i32 close) bool:
+    if (close < 0):
+        return Result.Ok(false)
+    if (inner == ""):
+        return Result.Ok(false)
+    if (mark == "`"):
+        return Result.Ok(true)
+    let i32 last = inner.len() - 1
+    if (inner.char_at(0) == " " or inner.char_at(last) == " "):
+        return Result.Ok(false)
+    return Result.Ok(true)
+
+# render_inline: one line of prose with its Markdown marks turned into styles (R44).
+#
+# PLAIN mode returns the line untouched, which is R40: a captured report keeps the marks,
+# so it loses no information and `spin_up` still reads as a symbol. The subset is CLOSED:
+# a link, a table, a heading and a nested list print as the author wrote them, which is
+# what every construct outside it has always done.
+fn render_inline(string line, Opts o) string:
+    if (o.reset == ""):
+        return Result.Ok(line.clone())
+    let string out = ""
+    let i32 n = line.len()
+    let i32 i = 0
+    while (i < n):
+        let string mark = mark_at(line, i)??
+        if (mark == ""):
+            let string one = line.char_at(i)
+            out := "{out}{one}"
+            i := i + 1
+        else:
+            let i32 mlen = mark.len()
+            let i32 close = close_at(line, i + mlen, mark)??
+            let string inner = ""
+            if (close >= 0):
+                inner := line.s(i + mlen, close)
+            if (is_span(mark, inner, close)??):
+                let string style = style_of(mark, o)??
+                out := "{out}{style}{inner}{o.reset}"
+                i := close + mlen
+            else:
+                out := "{out}{mark}"
+                i := i + mlen
+    return Result.Ok(out)
+
 # print_lines: one println per line of `text`, each one indented. A blank line prints
 # EMPTY, so the report carries no trailing whitespace. `.split("\n")` agrees with
 # Python's `str.split("\n")` on every edge case, which is what the parity gate needs.
@@ -136,17 +219,19 @@ fn section(string title, i32 n, Opts o) bool:
 # `opener_width` is the opener's VISIBLE width, which is not its length once it carries
 # escapes: an alignment measured in bytes would indent a coloured continuation by the
 # width of the escapes as well.
-fn print_lines(string indent, string text, string opener, i32 opener_width) ~:
+fn print_lines(string indent, string text, string opener, i32 opener_width,
+               Opts o) ~:
     let string pad = " ".repeat(opener_width)
     let string hang = "{indent}{pad}"
     let string[] lines = text.split("\n")
     let i32 n = lines.len()
     let i32 i = 0
     while (i < n):
-        let string line = lines.get(i)??
-        if (line == ""):
+        let string raw = lines.get(i)??
+        if (raw == ""):
             println("")
         else:
+            let string line = render_inline(raw, o)??
             if (i == 0):
                 println("{indent}{opener}{line}")
             else:
@@ -177,12 +262,12 @@ fn print_doc_record(MsgValue doc, MsgValue owner, string indent, Opts o) bool:
     let string summary = ml_get_str(doc, "summary")??
     let string body = ml_get_str(doc, "body")??
     if (summary != ""):
-        print_lines(indent, summary, "", 0)??
+        print_lines(indent, summary, "", 0, o)??
         printed := true
     if (body != ""):
         if (printed):
             println("")
-        print_lines(indent, body, "", 0)??
+        print_lines(indent, body, "", 0, o)??
         printed := true
     let MsgValue named = ml_get(doc, "params")??
     let MsgValue declared = ml_get(owner, "params")??
@@ -198,22 +283,57 @@ fn print_doc_record(MsgValue doc, MsgValue owner, string indent, Opts o) bool:
             # The width is the PLAIN opener's, so it cannot drift from what prints.
             let string pplain = "- Parameter {pn}: "
             let string popener = "- {o.blue}Parameter{o.reset} {o.cyan}{pn}{o.reset}: "
-            print_lines(indent, ptext, popener, pplain.len())??
+            print_lines(indent, ptext, popener, pplain.len(), o)??
             printed := true
         i := i + 1
     let string returns = ml_get_str(doc, "returns")??
     if (returns != ""):
         if (printed):
             println("")
-        print_lines(indent, returns, "- {o.blue}Returns{o.reset}: ", "- Returns: ".len())??
+        print_lines(indent, returns, "- {o.blue}Returns{o.reset}: ", "- Returns: ".len(), o)??
         printed := true
     let string errors = ml_get_str(doc, "errors")??
     if (errors != ""):
         if (printed):
             println("")
-        print_lines(indent, errors, "- {o.blue}Errors{o.reset}: ", "- Errors: ".len())??
+        print_lines(indent, errors, "- {o.blue}Errors{o.reset}: ", "- Errors: ".len(), o)??
         printed := true
+    # An example is the LAST thing a record says: a parameter is a contract and an
+    # example is a demonstration. Its body is CODE, so it is indented rather than hung,
+    # and dim rather than rendered -- a backtick inside a program is a program's own.
+    let MsgValue examples = ml_get(doc, "examples")??
+    let i32 ne = ml_len(examples)??
+    let i32 e = 0
+    while (e < ne):
+        let MsgValue ex = ml_at(examples, e)??
+        if (printed):
+            println("")
+        let string caption = ml_get_str(ex, "caption")??
+        if (caption == ""):
+            println("{indent}- {o.blue}Example{o.reset}:")
+        else:
+            # A caption is a tag's text like any other, so it hangs and it renders.
+            print_lines(indent, caption, "- {o.blue}Example{o.reset}: ",
+                        "- Example: ".len(), o)??
+        print_code(indent, ml_get_str(ex, "code")??, o)??
+        printed := true
+        e := e + 1
     return Result.Ok(printed)
+
+# print_code: an example's program, indented four past its tag and dim. Not rendered: a
+# backtick inside a program is a program's own.
+fn print_code(string indent, string code, Opts o) ~:
+    let string[] lines = code.split("\n")
+    let i32 n = lines.len()
+    let i32 i = 0
+    while (i < n):
+        let string line = lines.get(i)??
+        if (line == ""):
+            println("")
+        else:
+            println("{indent}    {o.dim}{line}{o.reset}")
+        i := i + 1
+    return Result.Ok(~)
 
 # print_doc: the doc record of one manifest entry, when it carries one.
 fn print_doc(MsgValue owner, string indent, Opts o) bool:
