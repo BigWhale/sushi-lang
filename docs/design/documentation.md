@@ -1,8 +1,8 @@
 # Design: Documentation blocks
 
-**Status: the language understands doc blocks, a library carries them, and the
-toolchain runs the examples.** Each phase below moves one part from DESIGN to BUILT; this
-banner records where the line is.
+**Status: the language understands doc blocks, a library carries them, the toolchain runs
+the examples, and the compiler says what a block leaves out.** Each phase below moves one
+part from DESIGN to BUILT; this banner records where the line is.
 The user-facing reference for what is built is `docs/documentation-blocks.md`.
 
 | Phase | Content | State |
@@ -11,10 +11,11 @@ The user-facing reference for what is built is `docs/documentation-blocks.md`.
 | 2 | Grammar, AST, attachment rules, the `docs` pass, CE6011/CE6012/CE6013 and CE70xx | BUILT |
 | 3 | `.slib` manifest carriage; `slib-info` prints a plain dump | BUILT |
 | 4 | `- Example:` blocks compile and run in the toolchain | BUILT |
-| 5 | `--warn-missing-docs` completeness lints | DESIGN |
+| 5 | `--warn-missing-docs` completeness lints | BUILT |
 | 6 | Markdown rendering, and a Markdown checker written in Sushi | DESIGN |
 
-Written for a compiler contributor. The user-facing guide comes with phase 6.
+Written for a compiler contributor. `docs/documentation-blocks.md` is the user-facing
+guide, written in phase 2 and extended by every phase since.
 
 ---
 
@@ -1502,9 +1503,12 @@ inhabitant after `slib-info` and another test of the language against a real pro
 ### What each phase MUST do
 
 Check the user documentation that it is still valid and add things that were done in
-that phase if applicable.
+that phase if applicable. Move this section's own phase row, and the status banner at the
+top, in the same commit — a phase that ships and still reads DESIGN is the one drift a
+reader cannot detect.
 
-Stay on the same branch: feat/doc-block, commit the work it was completed in that phase.
+Phases 2 to 5 shared one branch, `feat/doc-block`, and merged together. Phase 6 has its
+own branch, `feat/doc-block-markdown`.
 
 ### What each phase must NOT do
 
