@@ -26,6 +26,11 @@ def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
 
         hash_value = emit_fnv1a_init(codegen)
 
+        # Two callers, two shapes. The method dispatcher hands an address down from
+        # `as_fixed_array_address` (#480). The DERIVED struct hash
+        # (`backend/types/structs.py::_emit_field_hash`) hands a field value, because it
+        # walks a loaded struct and no field of it has an address. A hash only READS, so
+        # spilling that value is sound -- the read/write split the seam draws.
         if isinstance(receiver_value.type, ir.PointerType):
             array_ptr = receiver_value
         else:
@@ -185,25 +190,19 @@ def _emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type
         raise_internal_error("CE0052", type=str(element_type))
 
 
-def emit_fixed_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Value,
-                                 receiver_type: ir.Type, to_i1: bool) -> ir.Value:
-    """Direct emitter for fixed array hash (called from backend/expressions/calls.py)."""
-    from sushi_lang.semantics.ast import Name
+def emit_fixed_array_hash_direct(codegen: Any, expr: Any, array_ptr: ir.Value,
+                                 receiver_type: ir.Type, array_type: Type,
+                                 to_i1: bool) -> ir.Value:
+    """Direct emitter for fixed array hash.
 
-    # Get the semantic type of the receiver -- a local or a global constant (#248).
-    # The receiver's semantic type must be resolvable here -- semantic analysis
-    # guarantees a resolved Name receiver for .hash(). Falling back to an i32 array
-    # would silently produce a wrong hash, so a missing type is a compiler bug.
-    if isinstance(expr.receiver, Name):
-        from sushi_lang.backend.expressions.names import resolve_name_semantic_type
-        array_type = resolve_name_semantic_type(codegen, expr.receiver.id)
-        if array_type is None:
-            raise_internal_error("CE0056", name=expr.receiver.id)
-    else:
-        raise_internal_error("CE0056", name=f"<{type(expr.receiver).__name__}>")
-
+    The receiver arrives as an address and its type arrives with it. Looking the type up by
+    NAME rejected every receiver that has no name, so `b.slots.hash()` on a field was CE0056
+    (#480). A wrong element type would silently produce a wrong hash, which is why the old
+    code refused rather than guessed; the caller now knows the type, so there is nothing to
+    guess.
+    """
     emitter = _emit_fixed_array_hash(array_type)
-    return emitter(codegen, expr, receiver_value, receiver_type, to_i1)
+    return emitter(codegen, expr, array_ptr, receiver_type, to_i1)
 
 
 def emit_dynamic_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Value,

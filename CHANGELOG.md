@@ -8,6 +8,25 @@ Two libraries written in Sushi itself, and the distribution form that carries th
 a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
+### Fixed
+- **Every built-in method on a fixed array now works through every receiver.** A `T[N]`
+  reached as a struct field, a nested field or an array element had no address rule of its
+  own, so nine sites re-derived one and each fell back to a stack COPY of the receiver.
+  `b.slots.fill(9)` and `b.slots.reverse()` therefore compiled, ran, and left the field
+  unchanged -- no diagnostic was possible, because the store is legal. `.iter()` and
+  `.hash()` on a field refused instead, with CE0072 and CE0056, because they looked the
+  element type up by NAME and a field has none. Through a `peek` or `poke` parameter every
+  method was CE0000: such a receiver arrives as `[N x T]*`, which the dispatch gate did not
+  accept, so the call fell through to the user-extension lookup and mangled the type name
+  into `i32[3]_len`.
+
+  `as_fixed_array_address` is the one rule now, the fixed twin of `as_array_address`. It
+  resolves the address from the AST, and it takes one flag: a READ may spill a value that
+  names no storage, and a WRITE may not. That is what keeps a store out of `.rodata` -- a
+  constant resolves for a read and to nothing for a write, so no such binary can be built
+  even if CE2096 were bypassed. There is no fallback behind the write arm: reaching it means
+  a typecheck rejection did not fire, and that is the new CE0132.
+
 ### Added
 - **`--color=always|never|auto`, and one colour decision behind it.** Everything the
   compiler prints to a terminal -- a diagnostic, the version banner and the `--lib-info`

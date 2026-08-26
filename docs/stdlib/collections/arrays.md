@@ -23,6 +23,37 @@ Both types share common methods, while dynamic arrays have additional memory man
 Both are mutable in place: `arr[i] := v` writes one element, and `.fill()` / `.reverse()` write
 all of them. Only the LENGTH of a fixed array is immutable.
 
+## Every receiver shape
+
+A built-in method works the same through every receiver: a local, a struct field, a nested
+field, an array element, and a `peek` or `poke` parameter.
+
+```sushi
+struct Buf:
+    i32[4] slots
+
+fn zap(poke i32[4] arr) ~:
+    arr.fill(0)                # reaches the caller's array
+    return Result.Ok(~)
+
+extend Buf clear(poke self) ~:
+    self.slots.fill(0)         # reaches the caller's struct
+    return ~
+
+let Buf b = Buf(slots: [1, 2, 3, 4])
+b.slots.fill(9)                # reaches the field
+println(b.slots.len())
+```
+
+A method that WRITES -- `.fill()`, `.reverse()` -- needs a receiver it can reach. A constant
+is rejected with **CE2096**, and the read-only receivers each have their own code: a `peek`
+parameter is CE2408, a `match` or `foreach` binding is CE2414, a receiver without `poke self`
+is CE2421, an unmarked parameter is CE2422, a borrowing `let` is CE2426, and an unbound
+chained receiver is CE2429.
+
+A method that only READS -- `.len()`, `.get()`, `.iter()`, `.hash()`, `.clone()` -- accepts
+any receiver, a constant included.
+
 ## Common Methods (Fixed and Dynamic)
 
 ### `.len() -> i32`

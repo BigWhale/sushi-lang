@@ -1,0 +1,30 @@
+# Regression for #480: the read-only methods were CE0000 through a `peek` receiver. They
+# copy nothing, so this failed for a plain element type as much as for an owning one.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n10\n30\n60\n1\n"
+
+use <io/stdio>
+
+fn report(peek i32[3] arr) ~:
+    println(arr.len())
+    println(arr.get(0)??)
+    println(arr[2])
+
+    let i32 total = 0
+    foreach(n in arr.iter()):
+        total := total + n
+    println(total)
+    return Result.Ok(~)
+
+fn same_hash(peek i32[3] arr, u64 want) bool:
+    return Result.Ok(arr.hash() == want)
+
+fn run_test() i32:
+    let i32[3] a = [10, 20, 30]
+    report(peek a)
+    println(same_hash(peek a, a.hash())??)
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

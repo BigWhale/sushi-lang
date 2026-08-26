@@ -59,6 +59,41 @@ of every struct with an array field and every `T[]` parameter, and it would re-o
 question of who owns the pointee — a question the descriptor answers today by being owned
 wherever it is stored.
 
+## The fixed array's own seam
+
+A `T[N]` never had this problem, because it never had the duality: `[N x T]` is a value
+everywhere, and `emit_member_access` hands a fixed-array field over BY VALUE while it hands a
+dynamic one over as a GEP. That difference is deliberate and stays -- returning a pointer from
+the fixed field read would change what an assignment, an argument and a hash receive.
+
+What a fixed array lacked was the other half: **a rule for the RECEIVER of a built-in method**.
+Nine sites re-derived one -- two in the dispatcher, three in the iterators, two in the hashing,
+and one each in `get` and `clone` -- and each fell back to an `alloca` of a COPY for any
+receiver that was not a bare `Name`. So `b.slots.fill(9)` filled the copy and the owner kept
+its old elements, with no diagnostic possible, because that store is legal (#480).
+
+`as_fixed_array_address` (`backend/types/arrays/fixed_addressing.py`) is the one rule now. It
+resolves the address from the AST rather than from the value, through
+`try_get_struct_alloca`, which already walks a `Name`, a nested field chain, an `IndexAccess`
+and a reference parameter.
+
+It takes one flag, and that flag is the whole of the read/write split:
+
+| receiver | write address | read address |
+|---|---|---|
+| local `Name` | its alloca | the same |
+| `peek` / `poke` parameter | the pointer it arrived as | the same |
+| field or element chain | a GEP | the same |
+| constant `Name` | **none. CE0132** | its global |
+| temporary | **none. CE0132** | a `park_value` spill |
+
+**A read may spill a value that names no storage. A write may not, and there is no fallback.**
+That is what keeps a store out of `.rodata` -- a constant resolves for a read and to nothing
+for a write, so no such binary can be built even if CE2096 were bypassed. The other unwritable
+receivers have their own diagnostics (CE2408, CE2414, CE2421, CE2422, CE2426, CE2429), so
+reaching CE0132 means one of them did not fire. Same treatment `backend/ownership.py` gives a
+consuming use with no decision.
+
 ## The one element address
 
 `emit_element_pointer` (`backend/types/arrays/indexing.py`) is the single place that turns an
