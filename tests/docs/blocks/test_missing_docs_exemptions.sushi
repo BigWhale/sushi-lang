@@ -1,0 +1,38 @@
+# Test: the two exemptions --warn-missing-docs keeps (documentation.md, R30).
+# `main` is nobody's API, and a library cannot declare one at all. An `unsafe external`
+# block and the declarations inside it already carry `because "..."`, which acknowledges
+# the contract that matters at the FFI seam.
+#
+# The undocumented `main` and the undocumented external block are the ONLY undocumented
+# things here. Everything else carries a block, so this file exits 0 only while both
+# exemptions hold, and it goes red the day one is dropped.
+# COMPILER_FLAGS: --warn-missing-docs
+# EXPECT_STDOUT_EXACT: "42\n7\n"
+
+##: A unit whose every documentable declaration but the two exempt ones is documented. :##
+
+##: The answer to life, the universe and everything. :##
+const i32 ANSWER = 42
+
+##: A ship. :##
+struct Ship:
+    ##: How much hull is left. :##
+    i32 hull
+
+unsafe external "C" as libc because "the seam already acknowledges its contract":
+    fn abs(i32 n) i32 = "abs"
+
+##:
+Reads a ship's hull rating.
+
+- Parameter ship: The ship to read.
+- Returns: The hull rating.
+:##
+fn hull_of(Ship ship) i32:
+    return Result.Ok(ship.hull)
+
+fn main() i32:
+    let Ship s = Ship(7)
+    println("{ANSWER}")
+    println("{hull_of(s).realise(0)}")
+    return Result.Ok(0)

@@ -11,6 +11,11 @@ is the repo-side gate that takes its place: every bundled module's blocks are ch
 here, by hand, where the author can see the answer.
 
 `docs/design/documentation.md` section 10 is the authority.
+
+The second gate below is phase 5's, and it is a BUDGET rather than an assertion of zero
+(R37): documenting the bundled modules is an editorial pass that comes after the
+implementation. The number may fall and may never rise, so an undocumented symbol cannot
+be added to the stdlib unnoticed, and paying the debt is incremental.
 """
 from __future__ import annotations
 
@@ -20,7 +25,7 @@ import pytest
 
 from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.internals.report import Reporter
-from sushi_lang.semantics.passes.docs import check_docs
+from sushi_lang.semantics.passes.docs import check_docs, check_missing_docs
 from sushi_lang.semantics.stdlib_registry import SOURCE_STDLIB_MODULES
 
 
@@ -54,3 +59,28 @@ def test_an_injected_bundled_module_is_skipped_in_a_user_build():
     injected = manager.units["collections/iter"]
     assert injected.provenance is not None
     assert "collections/iter" in injected.provenance
+
+
+# Every CW7002/CW7006 the four bundled modules report today. SHRINK-ONLY: document a
+# symbol and lower it. Raising it means a new bundled symbol arrived with no block.
+MISSING_DOCS_BUDGET = 114
+
+
+def test_the_bundled_modules_stay_within_the_missing_docs_budget():
+    total = 0
+    per_module = {}
+    for module, path in sorted(SOURCE_STDLIB_MODULES.items()):
+        program, _tree = parse_to_ast(path.read_text(encoding="utf-8"), dump_parse=False)
+        reporter = Reporter(filename=str(path))
+        check_missing_docs(reporter, program)
+        per_module[module] = len(reporter.items)
+        total += len(reporter.items)
+
+    assert total <= MISSING_DOCS_BUDGET, (
+        f"the bundled modules report {total} missing-docs warnings, over the budget of "
+        f"{MISSING_DOCS_BUDGET}: {per_module}. A new bundled symbol needs a doc block."
+    )
+    assert total == MISSING_DOCS_BUDGET, (
+        f"the bundled modules report {total}, under the budget of "
+        f"{MISSING_DOCS_BUDGET}. Lower MISSING_DOCS_BUDGET to {total}."
+    )

@@ -1,0 +1,50 @@
+# Test: --warn-missing-docs reports each of its five lints over one unit.
+# The unit carries no block (CW7006), `Ship` carries none (CW7002), `add` leaves a
+# parameter undocumented (CW7003), `hull_of` leaves out `- Returns:` (CW7004), and
+# `divide` leaves out `- Errors:` (CW7005). `main` is exempt.
+# COMPILER_FLAGS: --warn-missing-docs
+# EXPECT_ERROR_CODE: CW7002 CW7003 CW7004 CW7005 CW7006
+
+struct Ship:
+    i32 hull
+
+##: A fault the divider can raise. :##
+enum DriveError:
+    ##: The divisor was nought. :##
+    DivisionByZero
+
+##:
+Adds two numbers.
+
+- Parameter a: The first addend.
+- Returns: The sum.
+:##
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+##:
+Reads a ship's hull rating.
+
+- Parameter ship: The ship to read.
+:##
+fn hull_of(Ship ship) i32:
+    return Result.Ok(ship.hull)
+
+##:
+Divides one number by another.
+
+- Parameter a: The dividend.
+- Parameter b: The divisor.
+- Returns: The quotient.
+:##
+fn divide(i32 a, i32 b) i32 | DriveError:
+    if (b == 0):
+        return Result.Err(DriveError.DivisionByZero)
+    return Result.Ok(a / b)
+
+fn main() i32:
+    let Ship s = Ship(7)
+    println("{add(1, 2).realise(0)}")
+    println("{hull_of(s).realise(0)}")
+    println("{divide(9, 3).realise(0)}")
+    return Result.Ok(0)

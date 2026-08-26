@@ -1,0 +1,48 @@
+# Test: the same source as test_warn_missing_docs.sushi, with no COMPILER_FLAGS.
+# Nothing is reported and the program compiles, which is what proves the flag is a gate
+# and not a new always-on check.
+# EXPECT_STDOUT_EXACT: "3\n7\n3\n"
+
+struct Ship:
+    i32 hull
+
+##: A fault the divider can raise. :##
+enum DriveError:
+    ##: The divisor was nought. :##
+    DivisionByZero
+
+##:
+Adds two numbers.
+
+- Parameter a: The first addend.
+- Returns: The sum.
+:##
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+##:
+Reads a ship's hull rating.
+
+- Parameter ship: The ship to read.
+:##
+fn hull_of(Ship ship) i32:
+    return Result.Ok(ship.hull)
+
+##:
+Divides one number by another.
+
+- Parameter a: The dividend.
+- Parameter b: The divisor.
+- Returns: The quotient.
+:##
+fn divide(i32 a, i32 b) i32 | DriveError:
+    if (b == 0):
+        return Result.Err(DriveError.DivisionByZero)
+    return Result.Ok(a / b)
+
+fn main() i32:
+    let Ship s = Ship(7)
+    println("{add(1, 2).realise(0)}")
+    println("{hull_of(s).realise(0)}")
+    println("{divide(9, 3).realise(0)}")
+    return Result.Ok(0)

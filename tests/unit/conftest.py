@@ -43,7 +43,8 @@ def make_unit(tmp_path):
     return _make
 
 
-def _analyze_source(tmp_path, src: str, name: str) -> "Analysis":
+def _analyze_source(tmp_path, src: str, name: str,
+                    warn_missing_docs: bool = False) -> "Analysis":
     """Run the production semantic flow over `src` and return everything it produced."""
     from sushi_lang.semantics.generics.active_generics import reset_active_generics
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
@@ -67,7 +68,8 @@ def _analyze_source(tmp_path, src: str, name: str) -> "Analysis":
     unit_manager.build_global_symbol_table()
     unit_manager.get_compilation_order()
 
-    analyzer = SemanticAnalyzer(reporter, filename=name, unit_manager=unit_manager)
+    analyzer = SemanticAnalyzer(reporter, filename=name, unit_manager=unit_manager,
+                                warn_missing_docs=warn_missing_docs)
     try:
         analyzer.check(program)
     except ValueError:
@@ -85,8 +87,9 @@ class Analysis(NamedTuple):
 @pytest.fixture
 def analyze(tmp_path):
     """Factory that semantically analyzes `src`, returning the Reporter."""
-    def _analyze(src: str, name: str = "main") -> Reporter:
-        return _analyze_source(tmp_path, src, name).reporter
+    def _analyze(src: str, name: str = "main",
+                 warn_missing_docs: bool = False) -> Reporter:
+        return _analyze_source(tmp_path, src, name, warn_missing_docs).reporter
 
     return _analyze
 
@@ -94,7 +97,8 @@ def analyze(tmp_path):
 @pytest.fixture
 def analyze_program(tmp_path):
     """Factory that semantically analyzes `src`, returning the whole `Analysis`."""
-    def _analyze(src: str, name: str = "main") -> Analysis:
-        return _analyze_source(tmp_path, src, name)
+    def _analyze(src: str, name: str = "main",
+                 warn_missing_docs: bool = False) -> Analysis:
+        return _analyze_source(tmp_path, src, name, warn_missing_docs)
 
     return _analyze
