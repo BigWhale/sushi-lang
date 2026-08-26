@@ -371,6 +371,25 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **A binary library's private helpers were callable from consumer code** (#468). The
+  export closure ships what a public generic's body needs -- a private concrete helper, a
+  private generic template, a constant -- because the body is monomorphized at the
+  consumer and still has to call them. Those names landed in the consumer's tables as
+  ordinary callable symbols: the concrete records were registered `public`, and the gate
+  exempted a template for being one. So a consumer could call `scale_up(2)` or
+  `pick_first(a, b)` by name and it linked and ran, while the same call against a source
+  `.slib` was CE3005.
+
+  The call SITE now decides, not the symbol. A monomorphized instance of a library
+  template is marked as the library's code, a lambda lifted out of such a body carries the
+  mark with it, and the typecheck pass exempts those bodies alone. Consumer code naming a
+  shipped private is **CE3005**, which names the library it belongs to. An instance of the
+  *consumer's* own generic is synthesized by the same machinery and is deliberately not
+  exempt -- it is code the user wrote, so it reaches no further than the user's own
+  symbols.
+
+  A shipped constant stays readable. There is no private constant to refuse yet, which is
+  #466.
 - **A source library's private generic crashed the compiler, and two build paths disagreed
   about it** (#467). `public` gates a concrete function across units, and the typecheck
   pass says so with **CE3005**. A generic had no such gate. The units of a source `.slib`

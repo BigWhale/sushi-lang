@@ -34,7 +34,7 @@ def validate_generic_function_call(
     # and it noticed as a KeyError (#467).
     if reject_private_cross_unit_call(
             validator, function_name, call.callee.loc,
-            visible=generic_func.is_public or generic_func.is_library_template,
+            visible=generic_func.is_public,
             unit_name=generic_func.unit_name):
         return
 

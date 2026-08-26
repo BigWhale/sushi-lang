@@ -12,6 +12,7 @@ def register_synthesized_function(
     program: Optional[Program] = None,
     units: Optional[List] = None,
     home_unit: Optional[str] = None,
+    from_library_template: bool = False,
 ) -> bool:
     """Register a synthesized concrete function and queue it for backend emission.
 
@@ -54,6 +55,13 @@ def register_synthesized_function(
     # the unit's source hash, and which instances a unit carries depends on what the
     # rest of the program asked for.
     funcdef.is_synthesized = True
+
+    # Whose code this body is. An instance of a `.slib` template is the library's, wherever
+    # it lands, and it keeps calling the private helpers the export closure shipped for it
+    # (#468). An instance of the consumer's own generic is the consumer's, and reaches no
+    # further than the consumer's own code.
+    if from_library_template:
+        funcdef.is_library_template = True
 
     if program is not None:
         program.functions.append(funcdef)

@@ -460,6 +460,18 @@ namespace (foreign bindings cannot be re-declared at a consumer that never saw t
 purely for observability (inspectable via `--lib-info` / direct manifest reads) so a
 library author can see what their public API is quietly dragging along.
 
+**The closure is for the library's own bodies, and the CALL SITE is what says so**
+(#468). A shipped private has to be resolvable at the consumer, because a monomorphized
+template body lands there and still calls what it called at home; consumer code that
+names the same symbol is `CE3005`. The two are told apart by whose body the call is in,
+never by the symbol: `FuncDef.is_library_template` marks an instance of a `.slib`
+template (stamped in `register_synthesized_function`, and carried onto a lambda lifted
+out of such a body), the typecheck pass reads it as `in_library_body`, and the gate in
+`passes/types/calls/visibility.py` exempts that and nothing else. An instance of the
+*consumer's* generic is synthesized the same way and is not exempt — it is the user's
+code. A constant is the one kind still readable, because a private constant cannot be
+written yet (#466).
+
 **None of this machinery exists on the source path** (§4.2), which is the largest
 structural difference between the two.
 

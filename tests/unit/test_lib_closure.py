@@ -29,6 +29,15 @@ public fn compute@(T)(T a, T b) T:
     return Result.Ok(b)
 """
 
+LAMBDA_LIB = """\
+fn bump(i32 x) i32:
+    return Result.Ok(x + 1)
+
+public fn through@(T)(T a, fn(T) -> i32 f) i32:
+    let fn(i32) -> i32 g = |i32 n| bump(n)??
+    return Result.Ok(g(1)?? + f(a)??)
+"""
+
 EXTERN_LIB = """\
 unsafe external "C" as libc because "test fixture":
     fn strlen(string s) i64 = "strlen"
@@ -190,3 +199,95 @@ def test_private_helper_defined_in_lib_object_only(tmp_path):
         assert _definitions(obj) == 0, (
             f"scale_up must not be re-emitted in consumer unit {obj.name}"
         )
+
+
+# Consumer: the closure is for the library's own bodies, not for consumer code (#468)
+
+def _consume(tmp_path: Path, env: dict, program: str, name: str = "prog") -> subprocess.CompletedProcess:
+    project = tmp_path / name
+    _write(project / "main.sushi", program)
+    return subprocess.run(["sushic", "main.sushi", "-o", "out"],
+                          cwd=project, capture_output=True, text=True, env=env)
+
+
+@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+def test_a_shipped_private_generic_is_not_callable_by_the_consumer(tmp_path):
+    build, env = _build_lib(tmp_path, CLOSURE_LIB)
+    assert build.returncode == 0, build.stderr
+
+    r = _consume(tmp_path, env, """\
+use <lib/closurelib>
+
+fn main() i32:
+    println("{pick_first(1, 2).realise(0)}")
+    return Result.Ok(0)
+""")
+    out = r.stdout + r.stderr
+    assert r.returncode == 2, out
+    assert "CE3005" in out
+    assert "pick_first" in out
+
+
+@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+def test_a_shipped_private_concrete_helper_is_not_callable_by_the_consumer(tmp_path):
+    build, env = _build_lib(tmp_path, CLOSURE_LIB)
+    assert build.returncode == 0, build.stderr
+
+    r = _consume(tmp_path, env, """\
+use <lib/closurelib>
+
+fn main() i32:
+    println("{scale_up(2).realise(0)}")
+    return Result.Ok(0)
+""")
+    out = r.stdout + r.stderr
+    assert r.returncode == 2, out
+    assert "CE3005" in out
+    assert "scale_up" in out
+
+
+@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+def test_a_consumer_generic_reaches_no_further_than_consumer_code(tmp_path):
+    # The gate reads the call site, so it has to tell a transplanted library body from a
+    # body the user wrote -- including one the user wrote as a generic, whose instance is
+    # synthesized exactly like the library's.
+    build, env = _build_lib(tmp_path, CLOSURE_LIB)
+    assert build.returncode == 0, build.stderr
+
+    r = _consume(tmp_path, env, """\
+use <lib/closurelib>
+
+fn wrap@(T)(T a, T b) T:
+    return Result.Ok(pick_first(a, b)??)
+
+fn main() i32:
+    println("{wrap(1, 2).realise(0)}")
+    return Result.Ok(0)
+""")
+    out = r.stdout + r.stderr
+    assert r.returncode == 2, out
+    assert "CE3005" in out
+
+
+@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+def test_a_lambda_in_a_transplanted_body_still_calls_the_library_helper(tmp_path):
+    # The lambda lifts out of the monomorphized template body into a function of its own,
+    # which is validated on its own. It is still the library's code and still calls the
+    # library's private helper.
+    build, env = _build_lib(tmp_path, LAMBDA_LIB, name="lamlib")
+    assert build.returncode == 0, build.stderr
+
+    r = _consume(tmp_path, env, """\
+use <lib/lamlib>
+
+fn plus_ten(i32 n) i32:
+    return Result.Ok(n + 10)
+
+fn main() i32:
+    println("{through(2, plus_ten).realise(0)}")
+    return Result.Ok(0)
+""", name="lamprog")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+    out = subprocess.run([str(tmp_path / "lamprog" / "out")], capture_output=True, text=True)
+    assert out.stdout.strip() == "14", out.stdout

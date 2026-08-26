@@ -83,6 +83,10 @@ class TypeValidator:
             BuiltinType.FILE
         }  # Built-in types
         self.current_function: Optional[FuncDef] = None
+        # A library body transplanted into this program: a monomorphized instance of a
+        # `.slib` template, or a lambda lifted out of one. It calls what it called at
+        # home, the export closure included (#468).
+        self.in_library_body = False
         self.variable_types: Dict[str, Type] = {}
         self.destroyed_arrays: List[set[str]] = []
         # `run` fills these from the program. A validator built to infer one type --

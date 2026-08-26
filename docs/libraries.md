@@ -532,10 +532,11 @@ Current limitations of the library system:
    evaluation). The manifest's `templates.closure_summary` lists what shipped, by kind. At the
    consumer, a local symbol with the same name as a shipped private is an error (**CE5007**,
    not local-wins): shadowing it would silently change what the library's monomorphized bodies
-   call. Note that shipped private helpers become callable by name from consumer code - they
-   are not advertised in the public API, but they are not hidden either. None of this can
-   arise on the source path: library units are namespaced, so there is no shared namespace to
-   clash in, and nothing has to be shipped ahead of need.
+   call. A shipped private helper is callable by the library's own bodies and by nothing
+   else: consumer code that names one is `CE3005`, like any other private function. The
+   exception is a constant, which has no private form yet (#466), so a shipped one is
+   readable. None of this can arise on the source path: library units are namespaced, so
+   there is no shared namespace to clash in, and nothing has to be shipped ahead of need.
 
    Remaining restriction on the binary path:
    - **Generic-target perk impls do not ship**: `extend <Generic@(T)> with <Perk>` is not supported

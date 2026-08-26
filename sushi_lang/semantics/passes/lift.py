@@ -19,12 +19,18 @@ class LambdaLifter:
         self.annotate = annotate
         self._counter = 0
         self._lifted: List[FuncDef] = []
+        # Whose body the walk is inside. A lambda lifted out of a library body becomes a
+        # function of its own and is checked as one, so it has to carry the same answer
+        # (#468).
+        self._owner_is_library = False
 
     def run(self) -> None:
         for fn in list(self.program.functions):
             if getattr(fn, "type_params", None):
                 continue  # generic templates: their instantiations carry the lambdas
+            self._owner_is_library = bool(getattr(fn, "is_library_template", False))
             self._walk(fn.body)
+        self._owner_is_library = False
         # Extension and perk-impl bodies emit through the same statement paths
         # as a plain fn, so their lambdas lift the same way (#399).
         # program.generic_extensions stays unwalked: templates, like generic
@@ -47,6 +53,7 @@ class LambdaLifter:
         borrow-checks exactly what this call lifted.
         """
         before = len(self._lifted)
+        self._owner_is_library = False
         self._walk(body)
         produced = self._lifted[before:]
         if self.annotate is not None:
@@ -119,8 +126,9 @@ class LambdaLifter:
             loc=lam.loc,
         )
         from sushi_lang.semantics.generics.synthesis import register_synthesized_function
-        if not register_synthesized_function(self.func_table, lifted,
-                                             program=self.program):
+        if not register_synthesized_function(
+                self.func_table, lifted, program=self.program,
+                from_library_template=self._owner_is_library):
             # Unreachable after the free-name search above; a silent False
             # here is exactly the #402 aliasing, so fail loud instead.
             raise RuntimeError(f"lifted lambda name '{lifted_name}' already registered")

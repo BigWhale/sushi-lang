@@ -74,7 +74,7 @@ class LibraryRegistry:
 
         templates = manifest.get("templates") or {}
         metadata.private_functions = self._parse_functions(
-            templates.get("private_functions", []) or []
+            templates.get("private_functions", []) or [], owner=lib_name
         )
 
         self._libraries[lib_name] = metadata
@@ -122,8 +122,14 @@ class LibraryRegistry:
             result[enum_name] = EnumType(name=enum_name, variants=tuple(variants))
         return result
 
-    def _parse_functions(self, func_list: list[dict]) -> dict[str, 'FuncSig']:
-        """Parse function signatures from manifest."""
+    def _parse_functions(self, func_list: list[dict],
+                         owner: str | None = None) -> dict[str, 'FuncSig']:
+        """Parse function signatures from manifest.
+
+        `owner` names the library for a record that is NOT part of its API: the export
+        closure ships it so the library's own bodies can call it, and the signature says
+        so, so that the CE3005 gate answers for it like any other private function.
+        """
         from sushi_lang.semantics.param_modes import ParamMode
         from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
         from sushi_lang.semantics.type_resolution import parse_type_string
@@ -162,7 +168,8 @@ class LibraryRegistry:
                 ret_type=ret_type,
                 ret_span=None,
                 params=params,
-                is_public=True,
+                is_public=owner is None,
+                unit_name=owner,
             )
 
         return result

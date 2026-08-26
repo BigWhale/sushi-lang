@@ -227,6 +227,8 @@ class FunctionMonomorphizer:
                 program=target_program if is_single_file else None,
                 units=None if is_single_file else units,
                 home_unit=getattr(generic_func, "unit_name", None),
+                from_library_template=getattr(
+                    generic_func, "is_library_template", False),
             )
 
             worklist.update(self.monomorphizer.pending_instantiations)
