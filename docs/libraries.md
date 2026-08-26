@@ -257,9 +257,13 @@ Units (1):
 Public Functions (3):
   fn add(i32 a, i32 b) i32
     Adds two numbers.
+
     - Parameter a: The first addend.
+
     - Parameter b: The second addend.
+
     - Returns: The sum.
+
   fn multiply(i32 a, i32 b) i32
   fn shout(nom string s) string
     Hands the string back, and takes it over.
@@ -267,8 +271,10 @@ Public Functions (3):
 Structs (1):
   struct Point:
     A point in the plane.
+
     i32 x
       The distance along x.
+
     i32 y
       The distance along y.
 
@@ -284,12 +290,13 @@ Dependencies (1):
 Source: 1,204 bytes
 ```
 
-A documented symbol prints its doc block, indented two spaces under its own line;
-`multiply` above has no block and prints as it always did. Without `--docs` no block
-prints at all, and the report is the signature lines alone -- prose is what makes a report
-long, and a reader asking what a library exports usually does not want ten screens of it.
-A `nom` parameter shows its mode, which is the one mode a type cannot spell, and it prints
-either way. See
+A documented symbol prints its doc block, indented two spaces under its own line, with a
+blank line closing the block and another between one claim and the next; `multiply` above
+has no block, so it prints as a bare line and the run of bare lines stays dense. Without
+`--docs` no block prints at all and the whole report is that dense -- prose is what makes
+a report long, and a reader asking what a library exports usually does not want ten
+screens of it. A `nom` parameter shows its mode, which is the one mode a type cannot
+spell, and it prints either way. See
 [Documentation Blocks](documentation-blocks.md#what-travels-in-a-slib) for the record and
 for the few things that do not travel in it.
 

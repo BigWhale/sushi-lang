@@ -1069,42 +1069,54 @@ their records carry the key and nothing prints it. Phase 3 adds no section.
 
 ## 9. `slib-info` rendering
 
-Phase 3 is a plain dump. No pagination, no colour, no wrapping. Colour and structure are
-phase 6.
+Two reports, behind one switch. The PLAIN one is the API surface -- one line per symbol,
+dense, and the report phase 3 shipped. `--docs` (R50) adds every documentation block.
+Neither paginates, neither reflows.
 
 Docs are indented two spaces under the signature they belong to, inside the existing
 sections:
 
 ```
 Public Functions (1):
-  fn hyperspace_jump(i32 a, u8 b) i32
+  fn hyperspace_jump(i32 a, u8 b) i32 | JumpError
     Jumps through hyperspace.
 
     The drive needs a warm coil.
+
     - Parameter a: The incoming argument.
+
     - Parameter b: The second one.
+
     - Returns: The jump distance in parsecs.
-    - Errors: When the drive is cold, this returns `JumpError.NotReady`.
+
+    - Errors: When the drive is cold, this returns `JumpError.NotReady`, and
+              `JumpError.Overheated` when it is too warm.
 ```
 
-One blank line between the summary and the body, and none before the tags. R6 carries the
-whole rule, including what a blank line inside a body prints as.
+**R6 as amended by R38.** Phase 3 put a blank line between the summary and the body and
+nowhere else. R38 adds three more and one alignment rule; R6's ORDER half is untouched,
+and so is what a blank line inside a body prints as.
 
-A symbol with no docs renders exactly as it does today, with no blank line and no
-placeholder. This matches the existing convention, where an empty section is suppressed
-rather than printed empty.
+A symbol with no block renders with no blank line and no placeholder. That is why a run of
+bare signatures stays dense, in the documented report as much as in the plain one: rule 2
+closes a block, and a signature with no block has none to close.
 
-The two implementations need three helpers each, and phase 3 wrote them under these names:
+The two implementations need these helpers, under these names:
 
 - `ml_is_nil(MsgValue) -> bool`, because `ml_get_str` cannot tell an absent key from an
   empty string -- both give `""`. A doc record is read with `ml_get` and tested for `Nil`.
-- `print_lines(indent, text)` -- `text.split("\n")`, one `println` per line, an empty line
-  printed empty. Python must use `str.split("\n")` and **not** `splitlines()`: the latter
-  drops the trailing empty field and also breaks on `\r`, `\x0b` and `\x0c`. Measured
-  against `.split("\n")` on `"a\nb"`, `"a\n"`, `"\na"`, `"a\n\nb"`, `"a"` and `""`, the
-  two agree on every one.
-- `print_doc_record(doc, owner, indent)` -- the whole record in R6's order. It reads the
-  owner's own `params` array for the order and looks each name up in `doc.params`.
+- `print_lines(indent, text, opener)` -- `text.split("\n")`, one `println` per line, an
+  empty line printed empty, and `opener` on the FIRST line with every later line indented
+  past it. Python must use `str.split("\n")` and **not** `splitlines()`: the latter drops
+  the trailing empty field and also breaks on `\r`, `\x0b` and `\x0c`. Measured against
+  `.split("\n")` on `"a\nb"`, `"a\n"`, `"\na"`, `"a\n\nb"`, `"a"` and `""`, the two
+  agree on every one. The hanging indent lives here and not in a tag printer, so one
+  function owns both the cut and the alignment.
+- `print_doc_record(doc, owner, indent, show) -> bool` -- the whole record in R6's order,
+  and **whether it printed**, which is what rule 2 reads. It gates `--docs` for the whole
+  report, and reads the owner's own `params` array for the order.
+- `open_record(pending) -> bool` / `_Records` -- rule 2's blank line, before a record and
+  never after one.
 
 ### The parity obligation
 
@@ -1142,6 +1154,36 @@ Three costs in particular, since "a plain dump" understates them:
   the type string. R5 adds the third and makes §1 true.
 
 ### Phase 6 rulings
+
+**R38 — the record layout, amending R6.** R6 said "no blank line before the tags, which is
+what S9's example shows". At the size a real library reaches that is the fault, not the
+rule: measured on 40 documented functions, 8 structs and 16 fields, the report is 428
+lines and ten terminal screens with no blank line anywhere between one symbol and the
+next. Whitespace is the only thing that makes that stream scannable.
+
+Five rules:
+
+1. **A blank line before the first tag**, when there is a tag and prose above it. This is
+   the amendment to R6.
+2. **A blank line before a record whose predecessor printed a block.** Before and never
+   after: an after-rule doubles with the blank line every section already prints when it
+   closes. A member is a record too, so a struct's own block is separated from its first
+   field and one field from the next.
+3. **A hanging indent on a continuation**, aligned under the tag's TEXT and not under its
+   dash, or a wrapped line reads as a new item.
+4. **A blank line between tags.** Ruled by David on 2026-08-26. A parameter, a return and
+   an error are three kinds of claim; it costs about six lines a documented function, and
+   the report is opt-in (R50), so the reader who asked for prose is the one who pays.
+5. **A blank line before a section header**, which the report had already.
+
+Rules 1 and 4 are ONE predicate in the implementation -- "something is already above
+me" -- because that is the whole condition either of them tests.
+
+**R39 — no reflow.** A tag's text wraps where the author wrote a newline and nowhere else.
+Rule 3 re-indents a continuation that already exists; it does not rewrap a long line. A
+reflow would destroy a fenced example, and §2 does not reflow the text anywhere else in
+this feature.
+
 
 **R45 — user-visible text spells a generic `@(...)`.** The report printed
 `fn pick_bigger<T: Doubler> (template)` and `struct Box<T>:`. Angle brackets are the

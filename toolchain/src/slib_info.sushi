@@ -92,7 +92,14 @@ fn section(string title, i32 n) bool:
 # print_lines: one println per line of `text`, each one indented. A blank line prints
 # EMPTY, so the report carries no trailing whitespace. `.split("\n")` agrees with
 # Python's `str.split("\n")` on every edge case, which is what the parity gate needs.
-fn print_lines(string indent, string text) ~:
+#
+# `opener` prefixes the FIRST line only, and every line after it is indented past the
+# opener rather than under it -- the hanging indent a tag needs (R38 rule 3). The text is
+# re-indented and never reflowed (R39): it breaks where the author wrote a newline, which
+# is what keeps a fenced example intact.
+fn print_lines(string indent, string text, string opener) ~:
+    let string pad = " ".repeat(opener.len())
+    let string hang = "{indent}{pad}"
     let string[] lines = text.split("\n")
     let i32 n = lines.len()
     let i32 i = 0
@@ -101,28 +108,43 @@ fn print_lines(string indent, string text) ~:
         if (line == ""):
             println("")
         else:
-            println("{indent}{line}")
+            if (i == 0):
+                println("{indent}{opener}{line}")
+            else:
+                println("{hang}{line}")
         i := i + 1
     return Result.Ok(~)
 
-# print_doc_record: one doc record, in the order documentation.md section 9 gives --
-# the summary, a blank line, the body, then the tags with no blank line before them.
+# print_doc_record: one doc record -- the summary, the body, then the tags -- and whether
+# it printed anything.
+#
+# A blank line separates every part from the one above it: the body from the summary, the
+# first tag from the prose (R38 rule 1), and each tag from the last (rule 4). One
+# predicate does all three, because "something is already above me" is the whole
+# condition.
+#
+# The ANSWER is what rule 2 needs: a caller prints a blank line before the next record
+# when this one left a block behind, and nothing extra when it did not.
+#
 # Parameters print in DECLARATION order, read from the owner's own `params` array and
 # looked up by name: a map's wire order is not the signature's order. An owner with no
-# `params` array -- a unit, a struct, a template -- renders no parameter line.
-fn print_doc_record(MsgValue doc, MsgValue owner, string indent, bool show) ~:
+# `params` array -- a unit, a struct, a generic type -- renders no parameter line.
+fn print_doc_record(MsgValue doc, MsgValue owner, string indent, bool show) bool:
     if (not show):
-        return Result.Ok(~)
+        return Result.Ok(false)
     if (ml_is_nil(doc)??):
-        return Result.Ok(~)
+        return Result.Ok(false)
+    let bool printed = false
     let string summary = ml_get_str(doc, "summary")??
     let string body = ml_get_str(doc, "body")??
     if (summary != ""):
-        print_lines(indent, summary)??
+        print_lines(indent, summary, "")??
+        printed := true
     if (body != ""):
-        if (summary != ""):
+        if (printed):
             println("")
-        print_lines(indent, body)??
+        print_lines(indent, body, "")??
+        printed := true
     let MsgValue named = ml_get(doc, "params")??
     let MsgValue declared = ml_get(owner, "params")??
     let i32 n = ml_len(declared)??
@@ -132,21 +154,38 @@ fn print_doc_record(MsgValue doc, MsgValue owner, string indent, bool show) ~:
         let string pn = ml_get_str(p, "name")??
         let string ptext = ml_get_str(named, pn)??
         if (ptext != ""):
-            print_lines(indent, "- Parameter {pn}: {ptext}")??
+            if (printed):
+                println("")
+            print_lines(indent, ptext, "- Parameter {pn}: ")??
+            printed := true
         i := i + 1
     let string returns = ml_get_str(doc, "returns")??
     if (returns != ""):
-        print_lines(indent, "- Returns: {returns}")??
+        if (printed):
+            println("")
+        print_lines(indent, returns, "- Returns: ")??
+        printed := true
     let string errors = ml_get_str(doc, "errors")??
     if (errors != ""):
-        print_lines(indent, "- Errors: {errors}")??
-    return Result.Ok(~)
+        if (printed):
+            println("")
+        print_lines(indent, errors, "- Errors: ")??
+        printed := true
+    return Result.Ok(printed)
 
 # print_doc: the doc record of one manifest entry, when it carries one.
-fn print_doc(MsgValue owner, string indent, bool show) ~:
+fn print_doc(MsgValue owner, string indent, bool show) bool:
     let MsgValue doc = ml_get(owner, "doc")??
-    print_doc_record(doc, owner, indent, show)??
-    return Result.Ok(~)
+    return Result.Ok(print_doc_record(doc, owner, indent, show)??)
+
+# open_record: the blank line rule 2 puts BEFORE a record whose predecessor left a block
+# behind, never after one -- an after-rule would double with the blank line every section
+# already prints when it closes. A run of bare signatures has no block to close, so it
+# stays as dense as the plain report is. The answer is the caller's new `pending`.
+fn open_record(bool pending) bool:
+    if (pending):
+        println("")
+    return Result.Ok(false)
 
 fn render_params(MsgValue f) string:
     let MsgValue ps = ml_get(f, "params")??
@@ -192,12 +231,14 @@ fn print_functions(MsgValue meta, bool show_docs) ~:
     let i32 n = ml_len(funcs)??
     if (not section("Public Functions", n)??):
         return Result.Ok(~)
+    let bool pending = false
     let i32 i = 0
     while (i < n):
         let MsgValue f = ml_at(funcs, i)??
+        pending := open_record(pending)??
         let string sig = render_signature(f)??
         println("  {sig}")
-        print_doc(f, "    ", show_docs)??
+        pending := print_doc(f, "    ", show_docs)??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -246,12 +287,14 @@ fn print_generic_functions(MsgValue meta, bool show_docs) ~:
     let i32 n = ml_len(gfs)??
     if (not section("Generic Functions", n)??):
         return Result.Ok(~)
+    let bool pending = false
     let i32 i = 0
     while (i < n):
         let MsgValue gf = ml_at(gfs, i)??
+        pending := open_record(pending)??
         let string sig = render_signature(gf)??
         println("  {sig}")
-        print_doc(gf, "    ", show_docs)??
+        pending := print_doc(gf, "    ", show_docs)??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -261,13 +304,15 @@ fn print_constants(MsgValue meta, bool show_docs) ~:
     let i32 n = ml_len(consts)??
     if (not section("Public Constants", n)??):
         return Result.Ok(~)
+    let bool pending = false
     let i32 i = 0
     while (i < n):
         let MsgValue c = ml_at(consts, i)??
+        pending := open_record(pending)??
         let string t = to_surface(ml_get_str(c, "type")??)??
         let string name = ml_get_str(c, "name")??
         println("  const {t} {name}")
-        print_doc(c, "    ", show_docs)??
+        pending := print_doc(c, "    ", show_docs)??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -297,22 +342,27 @@ fn print_structs(MsgValue meta, bool show_docs) ~:
     let i32 n = ml_len(structs)??
     if (not section("Structs", n)??):
         return Result.Ok(~)
+    let bool pending = false
     let i32 i = 0
     while (i < n):
         let MsgValue s = ml_at(structs, i)??
+        pending := open_record(pending)??
         let string name = ml_get_str(s, "name")??
         let string generic = render_named_type_params(s)??
         println("  struct {name}{generic}:")
-        print_doc(s, "    ", show_docs)??
+        # A FIELD is a record too, and the struct's own block is the record above the
+        # first one -- so one flag covers the struct and its members alike.
+        pending := print_doc(s, "    ", show_docs)??
         let MsgValue fields = ml_get(s, "fields")??
         let i32 nf = ml_len(fields)??
         let i32 j = 0
         while (j < nf):
             let MsgValue fld = ml_at(fields, j)??
+            pending := open_record(pending)??
             let string ft = to_surface(ml_get_str(fld, "type")??)??
             let string fname = ml_get_str(fld, "name")??
             println("    {ft} {fname}")
-            print_doc(fld, "      ", show_docs)??
+            pending := print_doc(fld, "      ", show_docs)??
             j := j + 1
         i := i + 1
     println("")
@@ -323,25 +373,28 @@ fn print_enums(MsgValue meta, bool show_docs) ~:
     let i32 n = ml_len(enums)??
     if (not section("Enums", n)??):
         return Result.Ok(~)
+    let bool pending = false
     let i32 i = 0
     while (i < n):
         let MsgValue e = ml_at(enums, i)??
+        pending := open_record(pending)??
         let string name = ml_get_str(e, "name")??
         let string generic = render_named_type_params(e)??
         println("  enum {name}{generic}:")
-        print_doc(e, "    ", show_docs)??
+        pending := print_doc(e, "    ", show_docs)??
         let MsgValue variants = ml_get(e, "variants")??
         let i32 nv = ml_len(variants)??
         let i32 j = 0
         while (j < nv):
             let MsgValue v = ml_at(variants, j)??
+            pending := open_record(pending)??
             let string vname = ml_get_str(v, "name")??
             if (ml_get_bool(v, "has_data")??):
                 let string dt = to_surface(ml_get_str(v, "data_type")??)??
                 println("    {vname}({dt})")
             else:
                 println("    {vname}")
-            print_doc(v, "      ", show_docs)??
+            pending := print_doc(v, "      ", show_docs)??
             j := j + 1
         i := i + 1
     println("")
@@ -358,13 +411,15 @@ fn print_generic_named(MsgValue meta, string key, string title, string keyword,
     let i32 n = ml_len(items)??
     if (not section(title, n)??):
         return Result.Ok(~)
+    let bool pending = false
     let i32 i = 0
     while (i < n):
         let MsgValue r = ml_at(items, i)??
+        pending := open_record(pending)??
         let string name = ml_get_str(r, "name")??
         let string generic = render_type_params(r)??
         println("  {keyword} {name}{generic}:")
-        print_doc(r, "    ", show_docs)??
+        pending := print_doc(r, "    ", show_docs)??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -378,12 +433,14 @@ fn print_perks(MsgValue meta, bool show_docs) ~:
     let i32 n = ml_len(perks)??
     if (not section("Perks", n)??):
         return Result.Ok(~)
+    let bool pending = false
     let i32 i = 0
     while (i < n):
         let MsgValue r = ml_at(perks, i)??
+        pending := open_record(pending)??
         let string name = ml_get_str(r, "name")??
         println("  perk {name}:")
-        print_doc(r, "    ", show_docs)??
+        pending := print_doc(r, "    ", show_docs)??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -396,22 +453,25 @@ fn print_perk_impls(MsgValue meta, bool show_docs) ~:
     let i32 n = ml_len(impls)??
     if (not section("Perk Implementations", n)??):
         return Result.Ok(~)
+    let bool pending = false
     let i32 i = 0
     while (i < n):
         let MsgValue r = ml_at(impls, i)??
+        pending := open_record(pending)??
         let string target = to_surface(ml_get_str(r, "type")??)??
         # `perk` is a reserved word, so the contract's NAME cannot be bound to it.
         let string contract = ml_get_str(r, "perk")??
         println("  extend {target} with {contract}:")
-        print_doc(r, "    ", show_docs)??
+        pending := print_doc(r, "    ", show_docs)??
         let MsgValue methods = ml_get(r, "methods")??
         let i32 nm = ml_len(methods)??
         let i32 j = 0
         while (j < nm):
             let MsgValue m = ml_at(methods, j)??
+            pending := open_record(pending)??
             let string mname = ml_get_str(m, "name")??
             println("    fn {mname}")
-            print_doc(m, "      ", show_docs)??
+            pending := print_doc(m, "      ", show_docs)??
             j := j + 1
         i := i + 1
     println("")
@@ -424,13 +484,15 @@ fn print_units(MsgValue meta, bool show_docs) ~:
     if (not section("Units", n)??):
         return Result.Ok(~)
     let MsgValue unit_docs = ml_get(meta, "unit_docs")??
+    let bool pending = false
     let i32 i = 0
     while (i < n):
         let MsgValue u = ml_at(units, i)??
+        pending := open_record(pending)??
         let string name = ml_str(u)??
         println("  {name}")
         let MsgValue doc = ml_get(unit_docs, name)??
-        print_doc_record(doc, MsgValue.Nil(), "    ", show_docs)??
+        pending := print_doc_record(doc, MsgValue.Nil(), "    ", show_docs)??
         i := i + 1
     println("")
     return Result.Ok(~)

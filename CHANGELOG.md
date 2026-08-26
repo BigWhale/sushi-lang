@@ -67,6 +67,15 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   the same at both ends and travels through the delegation as itself, and the tool answers
   `--help` on its own.
 
+  **The documented report has room to breathe.** A blank line before the first tag, one
+  between tags, one closing each record, and a hanging indent under a wrapped tag's TEXT
+  rather than under its dash. Measured on a realistic library -- 40 documented functions,
+  8 structs, 16 fields -- the report is ten terminal screens with no blank line anywhere
+  between one symbol and the next, and whitespace is the only thing that makes a stream
+  that long scannable. Nothing is reflowed: a tag wraps where the author wrote a newline
+  and nowhere else, which is what keeps a fenced example intact. A symbol with no block
+  still prints as one bare line, so the plain report stays exactly as dense as it was.
+
   Parameters print in DECLARATION order, and not in the order the block documents them. The
   report also gained a second thing, which prints either way: a parameter's `nom` mode now
   shows beside its type. That is the one mode a type cannot spell; `peek` and `poke` were

@@ -511,15 +511,25 @@ instruction to the doc-test harness, and not documentation.
 
 ```
 Public Functions (1):
-  fn hyperspace_jump(i32 a, u8 b) i32
+  fn hyperspace_jump(i32 a, u8 b) i32 | JumpError
     Jumps through hyperspace.
 
     The drive needs a warm coil.
+
     - Parameter a: The incoming argument.
+
     - Parameter b: The second one.
+
     - Returns: The jump distance in parsecs.
-    - Errors: When the drive is cold, this fails.
+
+    - Errors: When the drive is cold, this fails, and `JumpError.Overheated`
+              when it is too warm.
 ```
+
+A blank line separates the prose from the contract and one claim from the next, and a
+continuation hangs under the tag's text rather than under its dash. Nothing is reflowed: a
+tag wraps where the author wrote a newline and nowhere else, which is what keeps a fenced
+example intact.
 
 The blocks are opt-in. A plain `--lib-info` prints the signature lines alone, because
 prose is what makes a report long and a reader asking what a library exports usually wants

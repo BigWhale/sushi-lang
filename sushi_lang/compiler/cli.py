@@ -130,10 +130,12 @@ def _print_generic_named(templates: dict, key: str, title: str, keyword: str,
     items = templates.get(key) or []
     if not _section(title, items):
         return
+    records = _Records()
     for record in items:
+        records.open()
         generic = _render_type_params(record.get('type_params'))
         print(f"  {keyword} {record['name']}{generic}:")
-        _print_doc(record, "    ", show_docs)
+        records.close(_print_doc(record, "    ", show_docs))
     print()
 
 
@@ -149,58 +151,108 @@ def _section(title: str, items: list) -> bool:
     return True
 
 
-def _print_doc_lines(indent: str, text: str) -> None:
+def _print_doc_lines(indent: str, text: str, opener: str = "") -> None:
     """One line of output per line of `text`. A blank line prints EMPTY.
 
     `split` and not `splitlines`: the latter drops a trailing empty field and also
     breaks on `\r`, `\x0b`, `\x0c` and the Unicode separators, and the Sushi tool's
     `.split("\n")` does neither. The two must cut the same bytes.
+
+    `opener` prefixes the FIRST line only, and every line after it is indented past the
+    opener rather than under it -- the hanging indent a tag needs (R38 rule 3). The text
+    is re-indented and never reflowed (R39): it breaks where the author wrote a newline,
+    which is what keeps a fenced example intact.
     """
-    for line in text.split("\n"):
-        print(f"{indent}{line}" if line else "")
+    hang = indent + " " * len(opener)
+    for i, line in enumerate(text.split("\n")):
+        if not line:
+            print()
+        else:
+            print(f"{indent}{opener}{line}" if i == 0 else f"{hang}{line}")
+
+
+def _doc_tags(doc: dict, owner: dict | None) -> list[tuple[str, str]]:
+    """Every tag of one record, in the order R38 prints them.
+
+    Parameters come first and in DECLARATION order, read from the owner's own `params`
+    array and looked up by name: a map's wire order is not the signature's order. A
+    record with no `params` array -- a struct, a unit, a generic type -- yields none.
+    """
+    named = doc.get('params') or {}
+    tags = [(f"Parameter {p['name']}", named[p['name']])
+            for p in ((owner or {}).get('params') or [])
+            if named.get(p['name'])]
+    tags += [(label, doc[key])
+             for key, label in (('returns', 'Returns'), ('errors', 'Errors'))
+             if doc.get(key)]
+    return tags
 
 
 def _print_doc_record(doc: dict | None, owner: dict | None, indent: str,
-                      show_docs: bool = True) -> None:
-    """One doc record: the summary, a blank line, the body, then the tags.
+                      show_docs: bool = True) -> bool:
+    """One doc record -- the summary, the body, then the tags -- and whether it printed.
 
-    No blank line before the tags, and the one above the body prints only when there is
-    a summary to separate it from (`docs/design/documentation.md` section 9).
+    A blank line separates every part from the one above it: the body from the summary,
+    the first tag from the prose (R38 rule 1), and each tag from the last (rule 4). One
+    predicate does all three, because "something is already above me" is the whole
+    condition.
 
-    Parameters print in DECLARATION order, read from the owner's own `params` array and
-    looked up by name. A map's wire order is not the signature's order, and a record
-    with no `params` array -- a struct, a unit, a template -- renders no parameter line.
+    The ANSWER is what rule 2 needs: a caller prints a blank line before the next record
+    when this one left a block behind, and prints nothing extra when it did not.
 
     THE gate for `--docs`: every doc record in the report comes through here, so the
-    switch is read once rather than at each of the seven sections.
+    switch is read once rather than at each of the ten sections.
     """
     if not doc or not show_docs:
-        return
+        return False
 
+    printed = False
     summary = doc.get('summary', '')
     body = doc.get('body', '')
     if summary:
         _print_doc_lines(indent, summary)
+        printed = True
     if body:
-        if summary:
+        if printed:
             print()
         _print_doc_lines(indent, body)
+        printed = True
 
-    named = doc.get('params') or {}
-    for param in (owner or {}).get('params') or []:
-        text = named.get(param['name'])
-        if text:
-            _print_doc_lines(indent, f"- Parameter {param['name']}: {text}")
+    for label, text in _doc_tags(doc, owner):
+        if printed:
+            print()
+        _print_doc_lines(indent, text, f"- {label}: ")
+        printed = True
 
-    for key, label in (('returns', 'Returns'), ('errors', 'Errors')):
-        text = doc.get(key)
-        if text:
-            _print_doc_lines(indent, f"- {label}: {text}")
+    return printed
 
 
-def _print_doc(owner: dict, indent: str, show_docs: bool) -> None:
+def _print_doc(owner: dict, indent: str, show_docs: bool) -> bool:
     """The doc record of one manifest entry, when it carries one."""
-    _print_doc_record(owner.get('doc'), owner, indent, show_docs)
+    return _print_doc_record(owner.get('doc'), owner, indent, show_docs)
+
+
+class _Records:
+    """One section's records, separated by rule 2.
+
+    A blank line goes BEFORE a record whose predecessor printed a block, never after
+    one: an after-rule would double with the blank line every section already prints
+    when it closes. A run of bare signatures has no block to close, so it stays as dense
+    as the plain report is.
+    """
+
+    def __init__(self) -> None:
+        self._pending = False
+
+    def open(self) -> None:
+        """Announce the next record, closing the block above it if there was one."""
+        if self._pending:
+            print()
+        self._pending = False
+
+    def close(self, printed: bool) -> None:
+        """Record whether this entry left a block behind."""
+        self._pending = printed
 
 
 def print_library_info(library_path: Path, show_docs: bool = False) -> int:
@@ -242,45 +294,59 @@ def print_library_info(library_path: Path, show_docs: bool = False) -> int:
     units = metadata.get('units', [])
     if _section("Units", units):
         unit_docs = metadata.get('unit_docs') or {}
+        records = _Records()
         for unit in units:
+            records.open()
             print(f"  {unit}")
-            _print_doc_record(unit_docs.get(unit), None, "    ", show_docs)
+            records.close(
+                _print_doc_record(unit_docs.get(unit), None, "    ", show_docs))
         print()
 
     templates = metadata.get('templates') or {}
 
     funcs = metadata.get('public_functions', [])
     if _section("Public Functions", funcs):
+        records = _Records()
         for func in funcs:
+            records.open()
             print(f"  {_render_signature(func)}")
-            _print_doc(func, "    ", show_docs)
+            records.close(_print_doc(func, "    ", show_docs))
         print()
 
     generic_funcs = templates.get('generic_functions', [])
     if _section("Generic Functions", generic_funcs):
+        records = _Records()
         for gf in generic_funcs:
+            records.open()
             print(f"  {_render_signature(gf)}")
-            _print_doc(gf, "    ", show_docs)
+            records.close(_print_doc(gf, "    ", show_docs))
         print()
 
     consts = metadata.get('public_constants', [])
     if _section("Public Constants", consts):
+        records = _Records()
         for const in consts:
+            records.open()
             print(f"  const {_surface(const['type'])} {const['name']}")
-            _print_doc(const, "    ", show_docs)
+            records.close(_print_doc(const, "    ", show_docs))
         print()
 
     structs = metadata.get('structs', [])
     if _section("Structs", structs):
+        records = _Records()
         for struct in structs:
+            records.open()
             generic = ""
             if struct.get('is_generic') and struct.get('type_params'):
                 generic = f"@({', '.join(struct['type_params'])})"
             print(f"  struct {struct['name']}{generic}:")
-            _print_doc(struct, "    ", show_docs)
+            # A FIELD is a record too, and the struct's own block is the record above
+            # the first one -- so one tracker covers the struct and its members alike.
+            records.close(_print_doc(struct, "    ", show_docs))
             for field in struct['fields']:
+                records.open()
                 print(f"    {_surface(field['type'])} {field['name']}")
-                _print_doc(field, "      ", show_docs)
+                records.close(_print_doc(field, "      ", show_docs))
         print()
 
     # A generic struct beside its concrete twin, not filed away with the other
@@ -290,18 +356,21 @@ def print_library_info(library_path: Path, show_docs: bool = False) -> int:
 
     enums = metadata.get('enums', [])
     if _section("Enums", enums):
+        records = _Records()
         for enum in enums:
+            records.open()
             generic = ""
             if enum.get('is_generic') and enum.get('type_params'):
                 generic = f"@({', '.join(enum['type_params'])})"
             print(f"  enum {enum['name']}{generic}:")
-            _print_doc(enum, "    ", show_docs)
+            records.close(_print_doc(enum, "    ", show_docs))
             for variant in enum['variants']:
+                records.open()
                 if variant.get('has_data'):
                     print(f"    {variant['name']}({_surface(variant['data_type'])})")
                 else:
                     print(f"    {variant['name']}")
-                _print_doc(variant, "      ", show_docs)
+                records.close(_print_doc(variant, "      ", show_docs))
         print()
 
     _print_generic_named(templates, 'generic_enums', "Generic Enums", "enum", show_docs)
@@ -310,19 +379,24 @@ def print_library_info(library_path: Path, show_docs: bool = False) -> int:
     # so this section lists the contracts a consumer can actually be asked to satisfy.
     perks = templates.get('perks', [])
     if _section("Perks", perks):
+        records = _Records()
         for perk in perks:
+            records.open()
             print(f"  perk {perk['name']}:")
-            _print_doc(perk, "    ", show_docs)
+            records.close(_print_doc(perk, "    ", show_docs))
         print()
 
     impls = templates.get('perk_impls', [])
     if _section("Perk Implementations", impls):
+        records = _Records()
         for impl in impls:
+            records.open()
             print(f"  extend {_surface(impl['type'])} with {impl['perk']}:")
-            _print_doc(impl, "    ", show_docs)
+            records.close(_print_doc(impl, "    ", show_docs))
             for method in impl.get('methods') or []:
+                records.open()
                 print(f"    fn {method['name']}")
-                _print_doc(method, "      ", show_docs)
+                records.close(_print_doc(method, "      ", show_docs))
         print()
 
     deps = metadata.get('dependencies', [])
