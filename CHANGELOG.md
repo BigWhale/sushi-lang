@@ -371,6 +371,16 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **Every diagnostic about a callee rendered as text with no caret.** The builder parsed
+  the callee into a `Name` carrying its span, then rebuilt one from the bare identifier
+  and dropped it, so `call.callee.loc` was `None` for every ordinary call. The head line
+  named the file and stopped there: `shape.sushi: error [CE2009]: function 'add' expects 2
+  arguments, got 1.` -- no line, no column, no source line, nothing marked.
+
+  The builder passes the `Name` it already has. Every code anchored to a callee is tier 2
+  now, with the caret under the name: **CE2008**, **CE2009** (eight emit sites),
+  **CE3005**, **CE2060**, **CE2061**, **CE2062**, **CE2001** and **CE2027**. No emitter
+  and no message changed.
 - **A call to a function the compiler could not find was judged against a signature it
   invented.** The mode resolver answers `borrow` for a name it does not carry, so the
   borrow pass compared the call-site marker against that answer: `no_such(nom s)` reported
