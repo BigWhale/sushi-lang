@@ -1,0 +1,30 @@
+# Regression for #476: `.fill()` stored ONE value into every slot with no copy. With an
+# owning element type every slot then held the same pointer, so the array destructor freed
+# it once per slot AND the named local freed it again at scope exit.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_CONTAINS: "len = 2"
+
+use <io/stdio>
+use <collections/strings>
+
+fn run_test() i32:
+    let string towel = "mostly harmless".upper()
+    let string[] arr = from(["x", "y"])
+    arr.fill(towel)
+
+    if (arr.get(0)?? != "MOSTLY HARMLESS"):
+        return Result.Err(StdError.Error)
+    if (arr.get(1)?? != "MOSTLY HARMLESS"):
+        return Result.Err(StdError.Error)
+
+    # The source is a borrow, so it stays usable after the fill.
+    if (towel != "MOSTLY HARMLESS"):
+        return Result.Err(StdError.Error)
+
+    println("len = {arr.len()}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

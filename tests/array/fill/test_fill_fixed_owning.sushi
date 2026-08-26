@@ -1,0 +1,20 @@
+# Regression for #476: the fixed-array arm had the same shallow store as the dynamic one,
+# so a `string[3]` gave one buffer three owners.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_CONTAINS: "cde cde cde"
+
+use <io/stdio>
+use <collections/strings>
+
+fn run_test() i32:
+    let string src = "abcdefghij"
+    let string[3] arr = ["x", "y", "z"]
+    arr.fill(src.s(2, 5))
+
+    println("{arr[0]} {arr[1]} {arr[2]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

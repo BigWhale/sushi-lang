@@ -460,6 +460,23 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **`.fill()` on an array of an owning element type double-freed and leaked.** The
+  emitter stored ONE value into every slot with no copy. That is right for a plain
+  element type, where a shallow store IS the value, and wrong for an owning one: two
+  slots then held the same pointer and the array destructor freed it twice. A named
+  local source was worse, because the local freed it a third time at scope exit. The
+  same store also overwrote whatever a slot already held without destroying it, so an
+  array of owning elements leaked one buffer per slot. The fixed arm had all three.
+
+  `fill` now copies per slot, through the one deep-clone entry, and destroys the old
+  element first -- the shape `arr[i] := v` already used. Its argument is a **borrow**,
+  which makes `fill` the one container write that does not consume: it has N slots to
+  satisfy and one value, so it cannot take ownership the way `.push()` does. The value
+  therefore stays usable, and one string can fill two arrays. An owning element type
+  costs one allocation per slot; a plain one copies nothing and emits what it did before.
+
+  The argument also joins the built-in borrow seam, so the temporary behind
+  `arr.fill(s.s(2, 5))` gets an owner instead of leaking.
 - **`slib-info` printed angle brackets, half a generic's signature, and none of four
   sections.** Four faults in one renderer, so they are fixed in one pass.
 

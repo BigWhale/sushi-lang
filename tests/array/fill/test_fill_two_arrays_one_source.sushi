@@ -1,0 +1,29 @@
+# Regression for #476, and the case that settled the design: `.fill()` COPIES its argument
+# into every slot and leaves the argument a borrow, so one owning value can fill two arrays
+# of different length and stay usable afterwards.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_CONTAINS: "a=2 b=3 towel=MOSTLY HARMLESS"
+
+use <io/stdio>
+use <collections/strings>
+
+fn run_test() i32:
+    let string towel = "mostly harmless".upper()
+    let string[] a = from(["x", "y"])
+    let string[] b = from(["p", "q", "r"])
+
+    a.fill(towel)
+    b.fill(towel)
+
+    if (a.get(1)?? != "MOSTLY HARMLESS"):
+        return Result.Err(StdError.Error)
+    if (b.get(2)?? != "MOSTLY HARMLESS"):
+        return Result.Err(StdError.Error)
+
+    println("a={a.len()} b={b.len()} towel={towel}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

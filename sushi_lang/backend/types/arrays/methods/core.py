@@ -281,8 +281,13 @@ def emit_dynamic_array_destroy(codegen: 'LLVMCodegen', array_value: ir.Value, ar
 
 
 def emit_dynamic_array_fill(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
-                            fill_value: ir.Value) -> ir.Value:
-    """Emit code to fill all elements of a dynamic array with a value."""
+                            fill_value: ir.Value, element_type: 'Type') -> ir.Value:
+    """Emit code to fill all elements of a dynamic array with a value.
+
+    The argument is a BORROW: each slot takes its own deep copy, so one value can fill
+    several arrays and stays usable afterwards. `fill` is the one container write that
+    does not consume -- see `docs/stdlib/collections/arrays.md`.
+    """
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
 
@@ -311,7 +316,7 @@ def emit_dynamic_array_fill(codegen: 'LLVMCodegen', array_value: ir.Value, array
         codegen.builder.position_at_end(loop_body_bb)
         i_val = codegen.builder.load(loop_i, name="i_val")
         element_ptr = gep_utils.gep_array_element(codegen, data_ptr, i_val, "element_ptr")
-        codegen.builder.store(fill_value, element_ptr)
+        _store_fill_element(codegen, element_ptr, fill_value, element_type)
 
         i_next = codegen.builder.add(i_val, one, name="i_next")
         codegen.builder.store(i_next, loop_i)
@@ -382,9 +387,29 @@ def emit_dynamic_array_reverse(codegen: 'LLVMCodegen', array_value: ir.Value, ar
 
     return ir.Constant(codegen.types.i32, 0)
 
+
+def _store_fill_element(codegen: 'LLVMCodegen', element_ptr: ir.Value,
+                        fill_value: ir.Value, element_type: 'Type') -> None:
+    """Put one copy of the fill value into one slot, for either array kind.
+
+    The copy comes FIRST: it reads the source before the old element is freed, so a source
+    that aliases the buffer about to go is still intact. `arr[i] := v` orders it the same
+    way. Both steps are no-ops for a plain element type, where a shallow store IS the value.
+    """
+    from sushi_lang.backend.destructors import destroy_old_value
+    from sushi_lang.backend.ownership import copy_out
+
+    copy = copy_out(codegen, fill_value, element_type)
+    destroy_old_value(codegen, element_ptr, element_type)
+    codegen.builder.store(codegen.utils.cast_for_param(copy, element_ptr.type.pointee), element_ptr)
+
+
 def emit_fixed_array_fill(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_type: ir.ArrayType,
-                          fill_value: ir.Value) -> ir.Value:
-    """Emit code to fill all elements of a fixed array with a value."""
+                          fill_value: ir.Value, element_type: 'Type') -> ir.Value:
+    """Emit code to fill all elements of a fixed array with a value.
+
+    The argument is a BORROW; see `emit_dynamic_array_fill`.
+    """
     zero = ir.Constant(codegen.types.i32, 0)
     one = ir.Constant(codegen.types.i32, 1)
     array_size = ir.Constant(codegen.types.i32, array_type.count)
@@ -406,7 +431,7 @@ def emit_fixed_array_fill(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_typ
     codegen.builder.position_at_end(loop_body_bb)
     i_val = codegen.builder.load(loop_i, name="i_val")
     element_ptr = codegen.builder.gep(array_ptr, [zero, i_val], name="element_ptr")
-    codegen.builder.store(fill_value, element_ptr)
+    _store_fill_element(codegen, element_ptr, fill_value, element_type)
 
     i_next = codegen.builder.add(i_val, one, name="i_next")
     codegen.builder.store(i_next, loop_i)
