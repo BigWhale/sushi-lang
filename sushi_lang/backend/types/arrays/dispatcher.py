@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import DynamicArrayType, Type, deref_type
+from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type, deref_type
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -78,8 +78,18 @@ def emit_array_method(
                 else:
                     array_ptr = codegen.builder.alloca(receiver_type, name="temp_array")
                     codegen.builder.store(receiver_value, array_ptr)
-                fill_value = codegen.expressions.emit_expr(expr.args[0])
-                return core.emit_fixed_array_fill(codegen, array_ptr, receiver_type, fill_value)
+                # The element type drives the per-slot deep copy of an owning element (#476).
+                # Dereferenced here rather than at the top: the dynamic path below unwraps
+                # once for all of its arms, and the fixed arms above take the type whole.
+                fixed_semantic_type = deref_type(semantic_type)
+                if not isinstance(fixed_semantic_type, ArrayType):
+                    raise_internal_error("CE0042", type=type(fixed_semantic_type).__name__)
+                # A borrow, so an owning temporary needs an owner (#475).
+                from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
+                fill_value = emit_borrowed_arg(codegen, expr.args[0],
+                                               fixed_semantic_type.base_type)
+                return core.emit_fixed_array_fill(codegen, array_ptr, receiver_type, fill_value,
+                                                  fixed_semantic_type.base_type)
 
             case "reverse":
                 # Fixed array reverse: reverse in-place
@@ -179,8 +189,14 @@ def emit_array_method(
             return hashing.emit_dynamic_array_hash_direct(codegen, expr, receiver_value, array_struct_type, to_i1)
 
         case "fill":
-            fill_value = codegen.expressions.emit_expr(expr.args[0])
-            return core.emit_dynamic_array_fill(codegen, receiver_value, array_struct_type, fill_value)
+            # The element type drives the per-slot deep copy of an owning element (#476).
+            if not isinstance(semantic_type, DynamicArrayType):
+                raise_internal_error("CE0042", type=type(semantic_type).__name__)
+            # A borrow, so the temporary behind `arr.fill(s.s(2, 5))` needs an owner (#475).
+            from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
+            fill_value = emit_borrowed_arg(codegen, expr.args[0], semantic_type.base_type)
+            return core.emit_dynamic_array_fill(codegen, receiver_value, array_struct_type,
+                                                fill_value, semantic_type.base_type)
 
         case "reverse":
             return core.emit_dynamic_array_reverse(codegen, receiver_value, array_struct_type)

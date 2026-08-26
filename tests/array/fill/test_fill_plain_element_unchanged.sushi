@@ -1,0 +1,21 @@
+# Guard for #476: a PLAIN element type owns no heap, so a shallow store IS the value and
+# the fix must leave that path alone. Fixed and dynamic arms both.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_CONTAINS: "42 42 7 7 7"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let i32[] dynamic = from([1, 2])
+    dynamic.fill(42)
+
+    let i32[3] fixed = [1, 2, 3]
+    fixed.fill(7)
+
+    println("{dynamic.get(0)??} {dynamic.get(1)??} {fixed[0]} {fixed[1]} {fixed[2]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

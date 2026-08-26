@@ -1,6 +1,7 @@
 """Variable lifecycle statement emission for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
+from sushi_lang.backend.destructors import destroy_old_value
 from sushi_lang.backend.ownership import ConsumingUse, bind, consume
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -129,7 +130,7 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
         referent_type = semantic_type.referenced_type
         val = consume(codegen, stmt.value, val, referent_type, ConsumingUse.REBIND)
         ref_ptr = codegen.builder.load(slot, name=f"{var_name}_ref_ptr")
-        _destroy_old_value(codegen, ref_ptr, referent_type)
+        destroy_old_value(codegen, ref_ptr, referent_type)
         codegen.builder.store(val, ref_ptr)
         return  # Done - skip the rest of the function
 
@@ -151,17 +152,6 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
             _emit_struct_rebind(codegen, stmt, slot, val)
     else:
         raise_internal_error("CE0022", type=str(dst))
-
-
-def _destroy_old_value(codegen: 'LLVMCodegen', value_ptr: 'ir.Value', value_type) -> None:
-    """Free the value that a rebind is about to overwrite."""
-    from sushi_lang.backend.destructors import (
-        emit_value_destructor, needs_cleanup, resolve_named_type,
-    )
-
-    resolved = resolve_named_type(codegen, value_type)
-    if needs_cleanup(resolved):
-        emit_value_destructor(codegen, value_ptr, resolved)
 
 
 def _emit_dynamic_array_rebind(
@@ -245,7 +235,7 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
     already_destroyed = da is not None and da.is_destroyed(var_name)
     if not already_destroyed:
         codegen.moves.emit_free_unless_moved(
-            slot, lambda: _destroy_old_value(codegen, slot, resolved))
+            slot, lambda: destroy_old_value(codegen, slot, resolved))
 
     # A rebind takes ownership of its RHS. Run this for EVERY resolved type, not only the
     # cleanup-needing composites above: the gate belongs to the destroy-the-old-value step,
@@ -289,7 +279,7 @@ def _emit_element_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
 
     # Free what the element held, or overwriting it leaks. AFTER the value is consumed,
     # so a source aliasing the buffer about to be freed has already been read.
-    _destroy_old_value(codegen, element_ptr, element_type)
+    destroy_old_value(codegen, element_ptr, element_type)
 
     codegen.builder.store(
         codegen.utils.cast_for_param(val, element_ptr.type.pointee), element_ptr)

@@ -133,6 +133,30 @@ Fill all elements with value (in-place).
 arr.fill(0)  # All elements become 0
 ```
 
+The argument is a **borrow**, which makes `fill` the one container write that does not
+consume. Every other one -- `.push()`, an array literal element, `arr[i] := v` -- takes
+ownership by position. `fill` cannot, because it has N slots to satisfy and one value.
+
+Each slot therefore takes its own deep copy, and the value stays yours:
+
+```sushi
+let string towel = "mostly harmless".upper()
+let string[] a = from(["x", "y"])
+let string[] b = from(["p", "q", "r"])
+
+a.fill(towel)                  # two copies
+b.fill(towel)                  # three more
+println(towel)                 # and the source is still usable
+```
+
+An owning element type costs one allocation per slot. Use `.fill()` on a large array of
+`string` or another owning type only when you mean that. A plain element type -- `i32`,
+`bool`, `f64`, a struct of only those -- copies nothing, because a shallow store of a
+plain value **is** the value.
+
+Filling an array that already holds owning elements destroys what each slot held, so
+nothing leaks.
+
 ### `.reverse() -> ~`
 
 Reverse array elements (in-place).

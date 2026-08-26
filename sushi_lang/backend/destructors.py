@@ -434,6 +434,16 @@ def needs_cleanup(value_type: Type) -> bool:
     return owns_heap(value_type)
 
 
+def destroy_old_value(codegen: LLVMCodegen, value_ptr: ir.Value, value_type: Type) -> None:
+    """Free the value a store is about to overwrite, or the store leaks it.
+
+    A plain type owns no heap, so this is a no-op there and the caller needs no gate.
+    """
+    resolved = resolve_named_type(codegen, value_type)
+    if needs_cleanup(resolved):
+        emit_value_destructor(codegen, value_ptr, resolved)
+
+
 # The DESTROY half of every composite kind's handler; the CLONE half registers in
 # backend/expressions/memory.py. A kind registered on one side only is a double free or a
 # leak by construction, so tests/unit/test_lifecycle_handlers.py asserts the pairing.
