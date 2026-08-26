@@ -65,6 +65,10 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+The unit block is the first item in the **file**, which puts it above the `use` lines. A
+block written below them attaches to nothing and warns (`CW7001`), and the unit still has
+none.
+
 A block inside a body must be the **first item** in that body. A block between two
 statements is an error (`CE7005`), not a warning: inside a body there is no declaration
 it could have meant, so there is nothing to guess at.
@@ -466,7 +470,8 @@ for either: it is not a parameter by the time the compiler reads one.
 ### CW7006 has no caret
 
 The other four point at a declaration. A unit with no block is the one warning about
-something that is not there, so it is reported against the file and nothing is underlined:
+something that is not there, so it is reported against the file and nothing is underlined.
+A unit block goes above the `use` lines, because it is the first item in the file:
 
 ```
 mymodule.sushi: warning [CW7006]: this unit has no documentation block.
