@@ -91,7 +91,7 @@ def test_the_tool_renders_every_section(built):
     out = _run([str(tool), str(slib)]).stdout
     assert "Library: demolib" in out
     assert "fn add(i32 a, i32 b) i32" in out
-    assert "fn identity<T> (template)" in out
+    assert "fn identity@(T)(nom T x) T" in out
     assert "const i32 ANSWER" in out
     assert "struct Point:" in out
     assert "enum Shade:" in out

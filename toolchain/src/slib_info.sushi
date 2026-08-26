@@ -67,6 +67,28 @@ fn ml_is_nil(MsgValue v) bool:
         _ ->
             return Result.Ok(false)
 
+# to_surface: an interned identity name in the surface `@(...)` spelling a reader is
+# owed. The manifest carries `List<i32>` because a consumer parses that string back, so
+# the spelling is a wire format; angle brackets are never user-visible text. The four
+# rules are the Python side's four, in `display_type_name`.
+fn to_surface(string name) string:
+    if (not name.contains("<")):
+        return Result.Ok(name.clone())
+    if (name.contains("->")):
+        return Result.Ok(name.clone())
+    if (name.count("<") != name.count(">")):
+        return Result.Ok(name.clone())
+    let string opened = name.replace("<", "@(")
+    return Result.Ok(opened.replace(">", ")"))
+
+# section: open a section, or answer false when it holds nothing. A section with no
+# members prints no header, and one function is what keeps every section obeying it.
+fn section(string title, i32 n) bool:
+    if (n == 0):
+        return Result.Ok(false)
+    println("{title} ({n}):")
+    return Result.Ok(true)
+
 # print_lines: one println per line of `text`, each one indented. A blank line prints
 # EMPTY, so the report carries no trailing whitespace. `.split("\n")` agrees with
 # Python's `str.split("\n")` on every edge case, which is what the parity gate needs.
@@ -133,7 +155,7 @@ fn render_params(MsgValue f) string:
     let i32 i = 0
     while (i < n):
         let MsgValue p = ml_at(ps, i)??
-        let string t = ml_get_str(p, "type")??
+        let string t = to_surface(ml_get_str(p, "type")??)??
         let string pn = ml_get_str(p, "name")??
         # `nom` is the one mode a TYPE cannot spell, so it comes from the record's own
         # field. `peek` and `poke` are part of the type string already.
@@ -148,19 +170,33 @@ fn render_params(MsgValue f) string:
         i := i + 1
     return Result.Ok(out)
 
+# render_signature: one function's whole signature, concrete or generic. ONE renderer,
+# so a template prints what a concrete function prints -- a generic used to print
+# `(template)` where its parameters belong, which is why its `- Parameter` tags were
+# stored and never rendered.
+fn render_signature(MsgValue f) string:
+    let string name = ml_get_str(f, "name")??
+    let string generic = render_type_params(f)??
+    let string params = render_params(f)??
+    let string ret = to_surface(ml_get_str(f, "return_type")??)??
+    let string err = ml_get_str(f, "error_type")??
+    # The default error type is StdError and a signature that takes it does not say so,
+    # so a record with no `error_type` prints no arm either.
+    if (err == ""):
+        return Result.Ok("fn {name}{generic}({params}) {ret}")
+    let string serr = to_surface(err)??
+    return Result.Ok("fn {name}{generic}({params}) {ret} | {serr}")
+
 fn print_functions(MsgValue meta, bool show_docs) ~:
     let MsgValue funcs = ml_get(meta, "public_functions")??
     let i32 n = ml_len(funcs)??
-    if (n == 0):
+    if (not section("Public Functions", n)??):
         return Result.Ok(~)
-    println("Public Functions ({n}):")
     let i32 i = 0
     while (i < n):
         let MsgValue f = ml_at(funcs, i)??
-        let string name = ml_get_str(f, "name")??
-        let string params = render_params(f)??
-        let string ret = ml_get_str(f, "return_type")??
-        println("  fn {name}({params}) {ret}")
+        let string sig = render_signature(f)??
+        println("  {sig}")
         print_doc(f, "    ", show_docs)??
         i := i + 1
     println("")
@@ -202,21 +238,19 @@ fn render_type_params(MsgValue gf) string:
         else:
             body := "{body}, {one}"
         i := i + 1
-    return Result.Ok("<{body}>")
+    return Result.Ok("@({body})")
 
 fn print_generic_functions(MsgValue meta, bool show_docs) ~:
     let MsgValue templates = ml_get(meta, "templates")??
     let MsgValue gfs = ml_get(templates, "generic_functions")??
     let i32 n = ml_len(gfs)??
-    if (n == 0):
+    if (not section("Generic Functions", n)??):
         return Result.Ok(~)
-    println("Generic Functions ({n}):")
     let i32 i = 0
     while (i < n):
         let MsgValue gf = ml_at(gfs, i)??
-        let string name = ml_get_str(gf, "name")??
-        let string generic = render_type_params(gf)??
-        println("  fn {name}{generic} (template)")
+        let string sig = render_signature(gf)??
+        println("  {sig}")
         print_doc(gf, "    ", show_docs)??
         i := i + 1
     println("")
@@ -225,13 +259,12 @@ fn print_generic_functions(MsgValue meta, bool show_docs) ~:
 fn print_constants(MsgValue meta, bool show_docs) ~:
     let MsgValue consts = ml_get(meta, "public_constants")??
     let i32 n = ml_len(consts)??
-    if (n == 0):
+    if (not section("Public Constants", n)??):
         return Result.Ok(~)
-    println("Public Constants ({n}):")
     let i32 i = 0
     while (i < n):
         let MsgValue c = ml_at(consts, i)??
-        let string t = ml_get_str(c, "type")??
+        let string t = to_surface(ml_get_str(c, "type")??)??
         let string name = ml_get_str(c, "name")??
         println("  const {t} {name}")
         print_doc(c, "    ", show_docs)??
@@ -239,7 +272,7 @@ fn print_constants(MsgValue meta, bool show_docs) ~:
     println("")
     return Result.Ok(~)
 
-# render_named_type_params: the <T, U> suffix of a generic struct or enum record.
+# render_named_type_params: the `@(T, U)` suffix of a generic struct or enum record.
 fn render_named_type_params(MsgValue rec) string:
     if (not ml_get_bool(rec, "is_generic")??):
         return Result.Ok("")
@@ -257,14 +290,13 @@ fn render_named_type_params(MsgValue rec) string:
         else:
             body := "{body}, {s}"
         i := i + 1
-    return Result.Ok("<{body}>")
+    return Result.Ok("@({body})")
 
 fn print_structs(MsgValue meta, bool show_docs) ~:
     let MsgValue structs = ml_get(meta, "structs")??
     let i32 n = ml_len(structs)??
-    if (n == 0):
+    if (not section("Structs", n)??):
         return Result.Ok(~)
-    println("Structs ({n}):")
     let i32 i = 0
     while (i < n):
         let MsgValue s = ml_at(structs, i)??
@@ -277,7 +309,7 @@ fn print_structs(MsgValue meta, bool show_docs) ~:
         let i32 j = 0
         while (j < nf):
             let MsgValue fld = ml_at(fields, j)??
-            let string ft = ml_get_str(fld, "type")??
+            let string ft = to_surface(ml_get_str(fld, "type")??)??
             let string fname = ml_get_str(fld, "name")??
             println("    {ft} {fname}")
             print_doc(fld, "      ", show_docs)??
@@ -289,9 +321,8 @@ fn print_structs(MsgValue meta, bool show_docs) ~:
 fn print_enums(MsgValue meta, bool show_docs) ~:
     let MsgValue enums = ml_get(meta, "enums")??
     let i32 n = ml_len(enums)??
-    if (n == 0):
+    if (not section("Enums", n)??):
         return Result.Ok(~)
-    println("Enums ({n}):")
     let i32 i = 0
     while (i < n):
         let MsgValue e = ml_at(enums, i)??
@@ -306,7 +337,7 @@ fn print_enums(MsgValue meta, bool show_docs) ~:
             let MsgValue v = ml_at(variants, j)??
             let string vname = ml_get_str(v, "name")??
             if (ml_get_bool(v, "has_data")??):
-                let string dt = ml_get_str(v, "data_type")??
+                let string dt = to_surface(ml_get_str(v, "data_type")??)??
                 println("    {vname}({dt})")
             else:
                 println("    {vname}")
@@ -316,14 +347,83 @@ fn print_enums(MsgValue meta, bool show_docs) ~:
     println("")
     return Result.Ok(~)
 
+# print_generic_named: one section of generic structs, or one of generic enums. The two
+# records have the same shape -- a name, its type parameters and its own block -- so they
+# share a printer and differ by the keyword. A generic struct's FIELD blocks are not in
+# the index at all (documentation.md S8, R3), so neither record has members to print.
+fn print_generic_named(MsgValue meta, string key, string title, string keyword,
+                       bool show_docs) ~:
+    let MsgValue templates = ml_get(meta, "templates")??
+    let MsgValue items = ml_get(templates, key)??
+    let i32 n = ml_len(items)??
+    if (not section(title, n)??):
+        return Result.Ok(~)
+    let i32 i = 0
+    while (i < n):
+        let MsgValue r = ml_at(items, i)??
+        let string name = ml_get_str(r, "name")??
+        let string generic = render_type_params(r)??
+        println("  {keyword} {name}{generic}:")
+        print_doc(r, "    ", show_docs)??
+        i := i + 1
+    println("")
+    return Result.Ok(~)
+
+# print_perks: the contracts a consumer can be asked to satisfy. A perk reaches the
+# manifest only when an exported generic's constraint names it, so this section is
+# exactly the set that can appear in a signature above.
+fn print_perks(MsgValue meta, bool show_docs) ~:
+    let MsgValue templates = ml_get(meta, "templates")??
+    let MsgValue perks = ml_get(templates, "perks")??
+    let i32 n = ml_len(perks)??
+    if (not section("Perks", n)??):
+        return Result.Ok(~)
+    let i32 i = 0
+    while (i < n):
+        let MsgValue r = ml_at(perks, i)??
+        let string name = ml_get_str(r, "name")??
+        println("  perk {name}:")
+        print_doc(r, "    ", show_docs)??
+        i := i + 1
+    println("")
+    return Result.Ok(~)
+
+# print_perk_impls: which types satisfy which contract. Each method carries its own
+# block, which is the one thing an implementation record adds over a perk definition.
+fn print_perk_impls(MsgValue meta, bool show_docs) ~:
+    let MsgValue templates = ml_get(meta, "templates")??
+    let MsgValue impls = ml_get(templates, "perk_impls")??
+    let i32 n = ml_len(impls)??
+    if (not section("Perk Implementations", n)??):
+        return Result.Ok(~)
+    let i32 i = 0
+    while (i < n):
+        let MsgValue r = ml_at(impls, i)??
+        let string target = to_surface(ml_get_str(r, "type")??)??
+        # `perk` is a reserved word, so the contract's NAME cannot be bound to it.
+        let string contract = ml_get_str(r, "perk")??
+        println("  extend {target} with {contract}:")
+        print_doc(r, "    ", show_docs)??
+        let MsgValue methods = ml_get(r, "methods")??
+        let i32 nm = ml_len(methods)??
+        let i32 j = 0
+        while (j < nm):
+            let MsgValue m = ml_at(methods, j)??
+            let string mname = ml_get_str(m, "name")??
+            println("    fn {mname}")
+            print_doc(m, "      ", show_docs)??
+            j := j + 1
+        i := i + 1
+    println("")
+    return Result.Ok(~)
+
 # print_units: the unit index a v4 library carries.
 fn print_units(MsgValue meta, bool show_docs) ~:
     let MsgValue units = ml_get(meta, "units")??
     let i32 n = ml_len(units)??
-    if (n == 0):
+    if (not section("Units", n)??):
         return Result.Ok(~)
     let MsgValue unit_docs = ml_get(meta, "unit_docs")??
-    println("Units ({n}):")
     let i32 i = 0
     while (i < n):
         let MsgValue u = ml_at(units, i)??
@@ -338,9 +438,8 @@ fn print_units(MsgValue meta, bool show_docs) ~:
 fn print_dependencies(MsgValue meta) ~:
     let MsgValue deps = ml_get(meta, "dependencies")??
     let i32 n = ml_len(deps)??
-    if (n == 0):
+    if (not section("Dependencies", n)??):
         return Result.Ok(~)
-    println("Dependencies ({n}):")
     let i32 i = 0
     while (i < n):
         let MsgValue d = ml_at(deps, i)??
@@ -392,7 +491,11 @@ fn print_report(MsgValue meta, SlibSizes sizes, bool show_docs) ~:
     print_generic_functions(meta, show_docs)??
     print_constants(meta, show_docs)??
     print_structs(meta, show_docs)??
+    print_generic_named(meta, "generic_structs", "Generic Structs", "struct", show_docs)??
     print_enums(meta, show_docs)??
+    print_generic_named(meta, "generic_enums", "Generic Enums", "enum", show_docs)??
+    print_perks(meta, show_docs)??
+    print_perk_impls(meta, show_docs)??
     print_dependencies(meta)??
     if (kind != "binary"):
         let string src = group_thousands(sizes.source)??

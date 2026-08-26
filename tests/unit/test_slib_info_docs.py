@@ -137,7 +137,13 @@ def test_a_parameter_tag_on_a_struct_is_stored_and_not_printed(report, which):
 
 @pytest.mark.parametrize("which", [0, 1], ids=["python", "tool"])
 def test_a_generic_function_dumps_its_docs_too(report, which):
-    """R11: every section that exists prints one; a template has no params array."""
-    assert ("  fn pick_bigger<T: Doubler> (template)\n"
+    """R11: every section that exists prints one.
+
+    R46 gave the record its parameter list, so a template now renders the same
+    signature a concrete function does. `test_slib_info_sections.py` owns that
+    spelling; what is locked here is that a template's tags render at all.
+    """
+    assert ("  fn pick_bigger@(T: Doubler)(T a, T b) T\n"
             "    Picks the bigger of two doublers.\n"
+            "    - Parameter a: The first candidate.\n"
             "    - Returns: Whichever doubles larger.\n") in report[which]

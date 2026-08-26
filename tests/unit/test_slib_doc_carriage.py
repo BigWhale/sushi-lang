@@ -18,7 +18,8 @@ from sushi_lang.backend.library_format import LibraryFormat
 # Every position section 2 allows, in one library: the unit block, a constant, a struct
 # and its fields, an enum and its variants, a concrete function with all four tags, a
 # `nom` parameter, a perk and its method, a perk implementation and its method, and a
-# generic function, struct and enum.
+# generic function, struct and enum. `checked_jump` declares a custom error arm, which is
+# the one thing a signature can say that the record used not to carry.
 #
 # `hyperspace_jump` declares (b, a) while its tags document a then b: the report must
 # print them in DECLARATION order, and the render test reads that from here.
@@ -116,6 +117,21 @@ enum Either@(T):
     Left(T)
     ##: The right side. :##
     Right(T)
+
+##: How a jump can fail. :##
+enum JumpError:
+    ColdCoil
+
+##:
+Jumps, and says how it failed.
+
+- Returns: The distance in parsecs.
+- Errors: `JumpError.ColdCoil` when the coil is cold.
+:##
+public fn checked_jump(i32 factor) i32 | JumpError:
+    if (factor < 1):
+        return Result.Err(JumpError.ColdCoil)
+    return Result.Ok(factor)
 """
 
 _BLOCK = re.compile(r"^[ \t]*##:.*?:##[ \t]*\n", re.DOTALL | re.MULTILINE)

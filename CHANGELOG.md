@@ -424,6 +424,29 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **`slib-info` printed angle brackets, half a generic's signature, and none of four
+  sections.** Four faults in one renderer, so they are fixed in one pass.
+
+  A generic printed `fn pick_bigger<T: Doubler> (template)`. Angle brackets are the
+  INTERNAL identity spelling and never user-visible text. The MANIFEST keeps them, because
+  a consumer reads every type string back with `parse_type_string` and converting them at
+  the producer would break every library already built; the report converts, by the same
+  four rules `display_type_name` already applied to diagnostics.
+
+  `(template)` stood where the parameter list belongs, and a generic's record had no
+  parameter list at all -- so its `- Parameter` tags were stored by the library and
+  rendered by nothing. The record now carries the same three signature keys a concrete one
+  does, built by one function, and a template prints the signature a concrete function
+  prints.
+
+  Generic Structs, Generic Enums, Perks and Perk Implementations were carried and printed
+  by neither implementation. Each has a section now, suppressed when empty, and each
+  generic section stands beside its concrete twin.
+- **A function's error arm did not travel.** `fn improbability(i32) i32 | DriveError`
+  reached the manifest with no error field, so the report printed `i32` and dropped the
+  rest. This was not a render fault -- the information was uncarried, and `--lib-info` may
+  never read source to recover it. The record gains an optional `error_type`, absent when
+  the declaration does not spell one.
 - **An owning temporary handed to a built-in method was never freed.**
   `src.contains(src.s(2, 5))` leaked one block a call, and `src.replace(src.s(2, 4),
   src.s(5, 7))` leaked two -- one for each owning argument. About fourteen `string`

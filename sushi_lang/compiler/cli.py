@@ -65,6 +65,17 @@ def library_info_command(library_path: Path, show_docs: bool = False) -> int:
     return print_library_info(library_path, show_docs)
 
 
+def _surface(type_str: str) -> str:
+    """One manifest type string, in the surface `@(...)` spelling a reader is owed.
+
+    The manifest carries the INTERNAL identity name, `List<i32>`, because a consumer
+    reads it back through `parse_type_string`. Angle brackets are never user-visible
+    text (`docs/design/type-identity.md`), so the report converts here and nowhere else.
+    """
+    from sushi_lang.semantics.generics.type_display import display_type_name
+    return display_type_name(type_str)
+
+
 def _render_params(params: list) -> str:
     """One parameter list, as a signature reads it.
 
@@ -75,8 +86,67 @@ def _render_params(params: list) -> str:
     rendered = []
     for param in params:
         mode = "nom " if param.get("mode") == "nom" else ""
-        rendered.append(f"{mode}{param['type']} {param['name']}")
+        rendered.append(f"{mode}{_surface(param['type'])} {param['name']}")
     return ", ".join(rendered)
+
+
+def _render_type_params(records: list | None) -> str:
+    """The `@(T: Perk, U)` suffix of a generic declaration, or "" when there is none."""
+    if not records:
+        return ""
+    rendered = []
+    for tp in records:
+        constraints = tp.get('constraints') or []
+        rendered.append(f"{tp['name']}: {', '.join(constraints)}"
+                        if constraints else tp['name'])
+    return f"@({', '.join(rendered)})"
+
+
+def _render_signature(func: dict) -> str:
+    """One function's whole signature, concrete or generic.
+
+    ONE renderer, so a template prints what a concrete function prints. A generic used
+    to print `(template)` where its parameters belong, which is why its `- Parameter`
+    tags were stored and never rendered.
+    """
+    generic = _render_type_params(func.get('type_params'))
+    params = _render_params(func.get('params') or [])
+    line = f"fn {func['name']}{generic}({params}) {_surface(func['return_type'])}"
+    # The default error type is StdError and a signature that takes it does not say so,
+    # so a record with no `error_type` prints no arm either.
+    error = func.get('error_type')
+    return f"{line} | {_surface(error)}" if error else line
+
+
+def _print_generic_named(templates: dict, key: str, title: str, keyword: str,
+                         show_docs: bool) -> None:
+    """One section of generic structs, or one of generic enums.
+
+    The two records have the same shape -- a name, its type parameters and its own
+    block -- so they share a printer and differ by the keyword. A generic struct's FIELD
+    blocks are not in the index at all (documentation.md S8, R3), so neither record has
+    members to print.
+    """
+    items = templates.get(key) or []
+    if not _section(title, items):
+        return
+    for record in items:
+        generic = _render_type_params(record.get('type_params'))
+        print(f"  {keyword} {record['name']}{generic}:")
+        _print_doc(record, "    ", show_docs)
+    print()
+
+
+def _section(title: str, items: list) -> bool:
+    """Open a section, or answer False when it holds nothing.
+
+    A section with no members prints no header. Every section obeys it, which is why
+    the guard is one function rather than one `if` per section.
+    """
+    if not items:
+        return False
+    print(f"{title} ({len(items)}):")
+    return True
 
 
 def _print_doc_lines(indent: str, text: str) -> None:
@@ -170,87 +240,93 @@ def print_library_info(library_path: Path, show_docs: bool = False) -> int:
     print()
 
     units = metadata.get('units', [])
-    if units:
+    if _section("Units", units):
         unit_docs = metadata.get('unit_docs') or {}
-        print(f"Units ({len(units)}):")
         for unit in units:
             print(f"  {unit}")
             _print_doc_record(unit_docs.get(unit), None, "    ", show_docs)
         print()
 
+    templates = metadata.get('templates') or {}
+
     funcs = metadata.get('public_functions', [])
-    if funcs:
-        print(f"Public Functions ({len(funcs)}):")
+    if _section("Public Functions", funcs):
         for func in funcs:
-            params = _render_params(func['params'])
-            print(f"  fn {func['name']}({params}) {func['return_type']}")
+            print(f"  {_render_signature(func)}")
             _print_doc(func, "    ", show_docs)
         print()
 
-    generic_funcs = metadata.get('templates', {}).get('generic_functions', [])
-    if generic_funcs:
-        print(f"Generic Functions ({len(generic_funcs)}):")
+    generic_funcs = templates.get('generic_functions', [])
+    if _section("Generic Functions", generic_funcs):
         for gf in generic_funcs:
-            tps = gf.get('type_params', [])
-            if tps:
-                rendered = []
-                for tp in tps:
-                    constraints = tp.get('constraints') or []
-                    if constraints:
-                        rendered.append(f"{tp['name']}: {', '.join(constraints)}")
-                    else:
-                        rendered.append(tp['name'])
-                generic = f"<{', '.join(rendered)}>"
-            else:
-                generic = ""
-            print(f"  fn {gf['name']}{generic} (template)")
+            print(f"  {_render_signature(gf)}")
             _print_doc(gf, "    ", show_docs)
         print()
 
     consts = metadata.get('public_constants', [])
-    if consts:
-        print(f"Public Constants ({len(consts)}):")
+    if _section("Public Constants", consts):
         for const in consts:
-            print(f"  const {const['type']} {const['name']}")
+            print(f"  const {_surface(const['type'])} {const['name']}")
             _print_doc(const, "    ", show_docs)
         print()
 
     structs = metadata.get('structs', [])
-    if structs:
-        print(f"Structs ({len(structs)}):")
+    if _section("Structs", structs):
         for struct in structs:
             generic = ""
             if struct.get('is_generic') and struct.get('type_params'):
-                type_params = ', '.join(struct['type_params'])
-                generic = f"<{type_params}>"
+                generic = f"@({', '.join(struct['type_params'])})"
             print(f"  struct {struct['name']}{generic}:")
             _print_doc(struct, "    ", show_docs)
             for field in struct['fields']:
-                print(f"    {field['type']} {field['name']}")
+                print(f"    {_surface(field['type'])} {field['name']}")
                 _print_doc(field, "      ", show_docs)
         print()
 
+    # A generic struct beside its concrete twin, not filed away with the other
+    # templates: a reader looking for `Box` wants it near `Point`.
+    _print_generic_named(templates, 'generic_structs', "Generic Structs", "struct",
+                         show_docs)
+
     enums = metadata.get('enums', [])
-    if enums:
-        print(f"Enums ({len(enums)}):")
+    if _section("Enums", enums):
         for enum in enums:
             generic = ""
             if enum.get('is_generic') and enum.get('type_params'):
-                type_params = ', '.join(enum['type_params'])
-                generic = f"<{type_params}>"
+                generic = f"@({', '.join(enum['type_params'])})"
             print(f"  enum {enum['name']}{generic}:")
             _print_doc(enum, "    ", show_docs)
             for variant in enum['variants']:
                 if variant.get('has_data'):
-                    print(f"    {variant['name']}({variant['data_type']})")
+                    print(f"    {variant['name']}({_surface(variant['data_type'])})")
                 else:
                     print(f"    {variant['name']}")
                 _print_doc(variant, "      ", show_docs)
         print()
 
+    _print_generic_named(templates, 'generic_enums', "Generic Enums", "enum", show_docs)
+
+    # A perk reaches the manifest only when an exported generic's constraint names it,
+    # so this section lists the contracts a consumer can actually be asked to satisfy.
+    perks = templates.get('perks', [])
+    if _section("Perks", perks):
+        for perk in perks:
+            print(f"  perk {perk['name']}:")
+            _print_doc(perk, "    ", show_docs)
+        print()
+
+    impls = templates.get('perk_impls', [])
+    if _section("Perk Implementations", impls):
+        for impl in impls:
+            print(f"  extend {_surface(impl['type'])} with {impl['perk']}:")
+            _print_doc(impl, "    ", show_docs)
+            for method in impl.get('methods') or []:
+                print(f"    fn {method['name']}")
+                _print_doc(method, "      ", show_docs)
+        print()
+
     deps = metadata.get('dependencies', [])
-    if deps:
-        print(f"Dependencies ({len(deps)}):")
+    if _section("Dependencies", deps):
         for dep in deps:
             print(f"  <{dep}>")
         print()

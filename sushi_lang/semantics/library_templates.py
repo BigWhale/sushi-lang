@@ -84,6 +84,45 @@ def _free_perks_of(node) -> List[str]:
     return sorted(perks)
 
 
+def type_string(ty) -> str:
+    """One type, as the manifest spells it. `~` for none.
+
+    The INTERNAL identity spelling, `List<i32>` and not `List@(i32)`: a consumer reads
+    these back through `parse_type_string`, so this is a wire format and not display
+    text. Rendering `@(...)` is the report's job (`docs/design/type-identity.md`).
+    """
+    return "~" if ty is None else str(ty)
+
+
+def signature_record(func: "FuncDef") -> dict:
+    """The signature half of a function record: the parameters, the return, the error arm.
+
+    ONE builder, for the concrete record and the generic one alike. A generic used to
+    carry no parameter list at all, so its `- Parameter` tags named nothing a renderer
+    could print them against (`docs/design/documentation.md`, R46).
+    """
+    from sushi_lang.semantics.param_modes import param_mode
+
+    record: dict = {
+        # The MODE is its own field, not part of the type string. A `nom` cannot be
+        # spelled in a type at all, and reading peek / poke back out of a type string
+        # was the half that was missing (docs/design/borrow-model.md S10).
+        #
+        # A parameter record carries no `doc`: per-parameter text lives in the
+        # enclosing function's `doc.params`, keyed by name.
+        "params": [
+            {"name": p.name, "type": type_string(p.ty), "mode": param_mode(p).value}
+            for p in func.params
+        ],
+        "return_type": type_string(func.ret),
+    }
+    # Absent when the signature does not say one: the default is StdError, and a record
+    # that spelled the default would claim the author wrote it.
+    if getattr(func, "err_type", None) is not None:
+        record["error_type"] = type_string(func.err_type)
+    return record
+
+
 def _type_param_records(node) -> List[dict]:
     """Serialize a declaration's bounded type parameters to msgpack-safe dicts."""
     return [
@@ -152,6 +191,7 @@ def serialize_generic_function(func: "FuncDef", source_text: str) -> dict:
     return with_doc({
         "name": func.name,
         "type_params": _type_param_records(func),
+        **signature_record(func),
         "source": slice_decl_source(func, source_text),
         "free_perks": _free_perks_of(func),
     }, func)

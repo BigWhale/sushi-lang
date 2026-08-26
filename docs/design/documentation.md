@@ -1141,6 +1141,67 @@ Three costs in particular, since "a plain dump" understates them:
   alone. Measured: it prints two of the three already, because `peek` and `poke` are part of
   the type string. R5 adds the third and makes §1 true.
 
+### Phase 6 rulings
+
+**R45 — user-visible text spells a generic `@(...)`.** The report printed
+`fn pick_bigger<T: Doubler> (template)` and `struct Box<T>:`. Angle brackets are the
+INTERNAL identity spelling and `docs/design/type-identity.md` reserves them for interned
+names, mangled symbols and the match sites that read them.
+
+The MANIFEST keeps them. A consumer reads every `type` and `return_type` back through
+`parse_type_string`, so those strings are a wire format, not display text; converting them
+at the producer would break every library already built. **The renderer converts**, which
+is what `display_type_name` already did for diagnostics: no `<`, an `->` anywhere, or
+unbalanced brackets all mean "leave it alone"; otherwise `<` opens and `>` closes. The
+Sushi tool spells the same four rules as `to_surface`.
+
+**R46 — a generic function's record carries its signature.** `params`, `return_type` and
+`error_type`, the same three keys a concrete record carries, built by ONE function
+(`signature_record`) so a template and a concrete function cannot drift apart. Without the
+parameter list a template's `- Parameter` tags named nothing a report could print them
+against: they were stored by phase 3 and rendered by nothing.
+
+`(template)` is gone with it. It stood where the parameters belong, and the section header
+already says `Generic Functions`.
+
+Slicing the signature out of the record's `source` field was rejected: §8's rule is that
+`--lib-info` never parses source, and a tool that reads `source` to render a signature is
+one refactor away from parsing it.
+
+**R47 — every manifest section has a renderer.** Generic Structs, Generic Enums, Perks and
+Perk Implementations were carried by phase 3 and printed by neither implementation. Each
+one is suppressed when empty, which is the existing convention, and each generic section
+stands beside its concrete twin rather than being filed away with the other templates: a
+reader looking for `Box` wants it near `Point`.
+
+Two limits stay, and §8 records both: a generic struct's FIELD blocks are not in the index
+at all (R3), and a perk reaches the manifest only when an exported generic's constraint
+names it.
+
+**R49 — a function's error arm travels.** `fn improbability(i32) i32 | DriveError` reached
+the manifest as `{name, params, return_type: "i32"}` and printed as `fn improbability(i32
+factor) i32`. The error type was not a render fault: it was **uncarried**, and §8's rule
+forbids `--lib-info` from reading source to recover it.
+
+The record gains an optional `error_type`, absent when the declaration does not spell one --
+the default is `StdError`, and a record that named the default would claim the author wrote
+it. An added optional key does not move the container version (§8).
+
+**R50 — the doc blocks are opt-in, behind `--docs`.** Ruled by David on 2026-08-26.
+Measured on a realistic library -- 40 documented functions, 8 structs, 16 fields -- the
+report is 428 lines, ten terminal screens, of which the signature lines are one and a half.
+A reader asking what a library exports was reading nine screens of prose to find out.
+
+One switch for the blocks and the examples together, spelled `--docs` at BOTH ends, so the
+delegation forwards it as itself rather than translating a name. Every doc record in either
+implementation comes through one function (`_print_doc_record` / `print_doc_record`), so
+the switch is read once and not at each of the ten sections.
+
+The tool grew a real command-line parser with it, and answers `--help` on its own. A flag
+is a flag wherever it stands, the one bare word is the path, and a second file is a usage
+error. Its usage line has one spelling, a `const`, because two of them drift the first time
+one is edited.
+
 ---
 
 ## 10. Doc tests

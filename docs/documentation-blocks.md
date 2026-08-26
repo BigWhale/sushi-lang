@@ -531,8 +531,9 @@ placeholder.
 
 A unit block prints under its unit name in the `Units` section. Two things are carried and
 not printed: a `- Parameter` tag on something that declares no parameters -- a unit, a
-struct, a template -- and an example, because a fenced program inside a plain dump would
-bury the signature the reader came for.
+struct, a generic struct or enum -- and an example, because a fenced program inside a plain
+dump would bury the signature the reader came for. A generic FUNCTION does declare
+parameters, and its record carries them, so its `- Parameter` tags print like any other's.
 
 ### What does not travel
 
