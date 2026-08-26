@@ -3,7 +3,7 @@
 # The report mirrors the Python fallback (print_library_info in
 # sushi_lang/compiler/cli.py) line for line on the success path;
 # tests/unit/test_slib_info_parity.py locks the two together.
-# Exit codes: 0 report printed, 2 usage or read error.
+# Exit codes: 0 report printed or --help answered, 2 usage or read error.
 
 use <io/stdio>
 use <collections/strings>
@@ -88,7 +88,9 @@ fn print_lines(string indent, string text) ~:
 # Parameters print in DECLARATION order, read from the owner's own `params` array and
 # looked up by name: a map's wire order is not the signature's order. An owner with no
 # `params` array -- a unit, a struct, a template -- renders no parameter line.
-fn print_doc_record(MsgValue doc, MsgValue owner, string indent) ~:
+fn print_doc_record(MsgValue doc, MsgValue owner, string indent, bool show) ~:
+    if (not show):
+        return Result.Ok(~)
     if (ml_is_nil(doc)??):
         return Result.Ok(~)
     let string summary = ml_get_str(doc, "summary")??
@@ -119,9 +121,9 @@ fn print_doc_record(MsgValue doc, MsgValue owner, string indent) ~:
     return Result.Ok(~)
 
 # print_doc: the doc record of one manifest entry, when it carries one.
-fn print_doc(MsgValue owner, string indent) ~:
+fn print_doc(MsgValue owner, string indent, bool show) ~:
     let MsgValue doc = ml_get(owner, "doc")??
-    print_doc_record(doc, owner, indent)??
+    print_doc_record(doc, owner, indent, show)??
     return Result.Ok(~)
 
 fn render_params(MsgValue f) string:
@@ -146,7 +148,7 @@ fn render_params(MsgValue f) string:
         i := i + 1
     return Result.Ok(out)
 
-fn print_functions(MsgValue meta) ~:
+fn print_functions(MsgValue meta, bool show_docs) ~:
     let MsgValue funcs = ml_get(meta, "public_functions")??
     let i32 n = ml_len(funcs)??
     if (n == 0):
@@ -159,7 +161,7 @@ fn print_functions(MsgValue meta) ~:
         let string params = render_params(f)??
         let string ret = ml_get_str(f, "return_type")??
         println("  fn {name}({params}) {ret}")
-        print_doc(f, "    ")??
+        print_doc(f, "    ", show_docs)??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -202,7 +204,7 @@ fn render_type_params(MsgValue gf) string:
         i := i + 1
     return Result.Ok("<{body}>")
 
-fn print_generic_functions(MsgValue meta) ~:
+fn print_generic_functions(MsgValue meta, bool show_docs) ~:
     let MsgValue templates = ml_get(meta, "templates")??
     let MsgValue gfs = ml_get(templates, "generic_functions")??
     let i32 n = ml_len(gfs)??
@@ -215,12 +217,12 @@ fn print_generic_functions(MsgValue meta) ~:
         let string name = ml_get_str(gf, "name")??
         let string generic = render_type_params(gf)??
         println("  fn {name}{generic} (template)")
-        print_doc(gf, "    ")??
+        print_doc(gf, "    ", show_docs)??
         i := i + 1
     println("")
     return Result.Ok(~)
 
-fn print_constants(MsgValue meta) ~:
+fn print_constants(MsgValue meta, bool show_docs) ~:
     let MsgValue consts = ml_get(meta, "public_constants")??
     let i32 n = ml_len(consts)??
     if (n == 0):
@@ -232,7 +234,7 @@ fn print_constants(MsgValue meta) ~:
         let string t = ml_get_str(c, "type")??
         let string name = ml_get_str(c, "name")??
         println("  const {t} {name}")
-        print_doc(c, "    ")??
+        print_doc(c, "    ", show_docs)??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -257,7 +259,7 @@ fn render_named_type_params(MsgValue rec) string:
         i := i + 1
     return Result.Ok("<{body}>")
 
-fn print_structs(MsgValue meta) ~:
+fn print_structs(MsgValue meta, bool show_docs) ~:
     let MsgValue structs = ml_get(meta, "structs")??
     let i32 n = ml_len(structs)??
     if (n == 0):
@@ -269,7 +271,7 @@ fn print_structs(MsgValue meta) ~:
         let string name = ml_get_str(s, "name")??
         let string generic = render_named_type_params(s)??
         println("  struct {name}{generic}:")
-        print_doc(s, "    ")??
+        print_doc(s, "    ", show_docs)??
         let MsgValue fields = ml_get(s, "fields")??
         let i32 nf = ml_len(fields)??
         let i32 j = 0
@@ -278,13 +280,13 @@ fn print_structs(MsgValue meta) ~:
             let string ft = ml_get_str(fld, "type")??
             let string fname = ml_get_str(fld, "name")??
             println("    {ft} {fname}")
-            print_doc(fld, "      ")??
+            print_doc(fld, "      ", show_docs)??
             j := j + 1
         i := i + 1
     println("")
     return Result.Ok(~)
 
-fn print_enums(MsgValue meta) ~:
+fn print_enums(MsgValue meta, bool show_docs) ~:
     let MsgValue enums = ml_get(meta, "enums")??
     let i32 n = ml_len(enums)??
     if (n == 0):
@@ -296,7 +298,7 @@ fn print_enums(MsgValue meta) ~:
         let string name = ml_get_str(e, "name")??
         let string generic = render_named_type_params(e)??
         println("  enum {name}{generic}:")
-        print_doc(e, "    ")??
+        print_doc(e, "    ", show_docs)??
         let MsgValue variants = ml_get(e, "variants")??
         let i32 nv = ml_len(variants)??
         let i32 j = 0
@@ -308,14 +310,14 @@ fn print_enums(MsgValue meta) ~:
                 println("    {vname}({dt})")
             else:
                 println("    {vname}")
-            print_doc(v, "      ")??
+            print_doc(v, "      ", show_docs)??
             j := j + 1
         i := i + 1
     println("")
     return Result.Ok(~)
 
 # print_units: the unit index a v4 library carries.
-fn print_units(MsgValue meta) ~:
+fn print_units(MsgValue meta, bool show_docs) ~:
     let MsgValue units = ml_get(meta, "units")??
     let i32 n = ml_len(units)??
     if (n == 0):
@@ -328,7 +330,7 @@ fn print_units(MsgValue meta) ~:
         let string name = ml_str(u)??
         println("  {name}")
         let MsgValue doc = ml_get(unit_docs, name)??
-        print_doc_record(doc, MsgValue.Nil(), "    ")??
+        print_doc_record(doc, MsgValue.Nil(), "    ", show_docs)??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -365,7 +367,7 @@ fn group_thousands(u64 n) string:
 # the size of every payload section the kind actually has. A field that the kind
 # makes meaningless does not print: a source library has no platform, and a
 # binary one has no source.
-fn print_report(MsgValue meta, SlibSizes sizes) ~:
+fn print_report(MsgValue meta, SlibSizes sizes, bool show_docs) ~:
     let string libname = ml_get_str(meta, "library_name")??
     let string libver = ml_get_str(meta, "library_version")??
     let string kind = ml_get_str(meta, "kind")??
@@ -385,12 +387,12 @@ fn print_report(MsgValue meta, SlibSizes sizes) ~:
     println("Compiled: {at}")
     println("Protocol: {proto}")
     println("")
-    print_units(meta)??
-    print_functions(meta)??
-    print_generic_functions(meta)??
-    print_constants(meta)??
-    print_structs(meta)??
-    print_enums(meta)??
+    print_units(meta, show_docs)??
+    print_functions(meta, show_docs)??
+    print_generic_functions(meta, show_docs)??
+    print_constants(meta, show_docs)??
+    print_structs(meta, show_docs)??
+    print_enums(meta, show_docs)??
     print_dependencies(meta)??
     if (kind != "binary"):
         let string src = group_thousands(sizes.source)??
@@ -414,19 +416,33 @@ fn print_read_error(string path, SlibError e) ~:
             stderr.write("Error: {path} carries metadata that does not decode\n")
     return Result.Ok(~)
 
-fn run_tool(peek string[] args) i32:
-    if (args.len() < 2):
-        stderr.write("usage: slib-info <file.slib>\n")
-        return Result.Ok(2)
-    let string path = args.get(1)??
-    if (not path.ends_with(".slib")):
-        stderr.write("Error: expected .slib file, got: {path}\n")
-        return Result.Ok(2)
+# USAGE: the one spelling of the summary line, printed by --help and by every usage
+# error. Two spellings drift the moment one of them is edited.
+const string USAGE = "usage: slib-info [--docs] <file.slib>"
+
+# print_help: what the tool is and what it takes. Goes to stdout and exits 0, because
+# help that was asked for is an answer and not an error.
+fn print_help() ~:
+    println(USAGE)
+    println("")
+    println("Print the metadata report of a .slib library.")
+    println("")
+    println("Options:")
+    println("  --docs      Print the documentation block of every symbol that has one.")
+    println("  -h, --help  Print this message and exit.")
+    return Result.Ok(~)
+
+fn print_usage_error(string message) ~:
+    stderr.write("Error: {message}\n")
+    stderr.write("{USAGE}\n")
+    return Result.Ok(~)
+
+fn report(string path, bool show_docs) i32:
     match slib_read_metadata(path):
         Result.Ok(meta) ->
             match slib_sizes(path):
                 Result.Ok(sizes) ->
-                    print_report(meta, sizes)??
+                    print_report(meta, sizes, show_docs)??
                     return Result.Ok(0)
                 Result.Err(e2) ->
                     print_read_error(path, e2)??
@@ -436,6 +452,38 @@ fn run_tool(peek string[] args) i32:
             return Result.Ok(2)
     return Result.Ok(2)
 
+# run_tool: the command line, in one pass. A flag is a flag wherever it stands, and the
+# one bare word is the path. `--help` is answered the moment it is seen, so it wins over
+# whatever else was typed.
+fn run_tool(peek string[] args) i32:
+    let string path = ""
+    let bool show_docs = false
+    let i32 n = args.len()
+    let i32 i = 1
+    while (i < n):
+        let string a = args.get(i)??
+        if (a == "-h" or a == "--help"):
+            print_help()??
+            return Result.Ok(0)
+        if (a == "--docs"):
+            show_docs := true
+        else:
+            if (a.starts_with("-")):
+                print_usage_error("unknown option: {a}")??
+                return Result.Ok(2)
+            if (path != ""):
+                print_usage_error("more than one file named: {a}")??
+                return Result.Ok(2)
+            path := a.clone()
+        i := i + 1
+
+    if (path == ""):
+        stderr.write("{USAGE}\n")
+        return Result.Ok(2)
+    if (not path.ends_with(".slib")):
+        stderr.write("Error: expected .slib file, got: {path}\n")
+        return Result.Ok(2)
+    return Result.Ok(report(path, show_docs)??)
 fn main(string[] args) i32:
     if (args.len() > 0):
         let i32 r = run_tool(peek args).realise(99)

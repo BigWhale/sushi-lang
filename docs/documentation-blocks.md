@@ -423,7 +423,7 @@ succeeds and the exit code is 1.
 The `public` marker is not the test. An internal API is documented surface as much as an
 exported one, so a private helper with no block is CW7002 like any other declaration. A
 struct field and an enum variant are each asked on their own, because each one carries its
-own `doc` key in a `.slib` and `--lib-info` prints each one under its owner.
+own `doc` key in a `.slib` and `--lib-info --docs` prints each one under its owner.
 
 ### Two exemptions
 
@@ -507,7 +507,7 @@ the index is the compiler's problem and not the author's.
 The `examples` array carries the CODE and not the fence attributes: an attribute is an
 instruction to the doc-test harness, and not documentation.
 
-`--lib-info` prints the record under the symbol it documents, indented two spaces:
+`--lib-info --docs` prints the record under the symbol it documents, indented two spaces:
 
 ```
 Public Functions (1):
@@ -520,6 +520,10 @@ Public Functions (1):
     - Returns: The jump distance in parsecs.
     - Errors: When the drive is cold, this fails.
 ```
+
+The blocks are opt-in. A plain `--lib-info` prints the signature lines alone, because
+prose is what makes a report long and a reader asking what a library exports usually wants
+the surface and not the manual.
 
 Parameters print in the order the signature declares them, and not in the order the block
 documents them. A symbol with no block prints as it always did: no blank line, and no

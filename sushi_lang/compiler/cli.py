@@ -38,11 +38,13 @@ def _find_toolchain_tool(name: str) -> Optional[Path]:
     return None
 
 
-def library_info_command(library_path: Path) -> int:
+def library_info_command(library_path: Path, show_docs: bool = False) -> int:
     """--lib-info: run the toolchain slib-info tool, or the Python fallback.
 
     The tool owns the report and its exit code propagates. Only a failure to
     execute the binary at all falls back to print_library_info.
+
+    `--docs` is spelled the same at both ends, so the switch travels as itself.
     """
     from sushi_lang.compiler.loader import get_effective_cwd
 
@@ -52,11 +54,15 @@ def library_info_command(library_path: Path) -> int:
     tool = _find_toolchain_tool("slib-info")
     if tool is not None:
         import subprocess
+        cmd = [str(tool)]
+        if show_docs:
+            cmd.append("--docs")
+        cmd.append(str(library_path))
         try:
-            return subprocess.run([str(tool), str(library_path)]).returncode
+            return subprocess.run(cmd).returncode
         except OSError:
             pass
-    return print_library_info(library_path)
+    return print_library_info(library_path, show_docs)
 
 
 def _render_params(params: list) -> str:
@@ -84,7 +90,8 @@ def _print_doc_lines(indent: str, text: str) -> None:
         print(f"{indent}{line}" if line else "")
 
 
-def _print_doc_record(doc: dict | None, owner: dict | None, indent: str) -> None:
+def _print_doc_record(doc: dict | None, owner: dict | None, indent: str,
+                      show_docs: bool = True) -> None:
     """One doc record: the summary, a blank line, the body, then the tags.
 
     No blank line before the tags, and the one above the body prints only when there is
@@ -93,8 +100,11 @@ def _print_doc_record(doc: dict | None, owner: dict | None, indent: str) -> None
     Parameters print in DECLARATION order, read from the owner's own `params` array and
     looked up by name. A map's wire order is not the signature's order, and a record
     with no `params` array -- a struct, a unit, a template -- renders no parameter line.
+
+    THE gate for `--docs`: every doc record in the report comes through here, so the
+    switch is read once rather than at each of the seven sections.
     """
-    if not doc:
+    if not doc or not show_docs:
         return
 
     summary = doc.get('summary', '')
@@ -118,12 +128,12 @@ def _print_doc_record(doc: dict | None, owner: dict | None, indent: str) -> None
             _print_doc_lines(indent, f"- {label}: {text}")
 
 
-def _print_doc(owner: dict, indent: str) -> None:
+def _print_doc(owner: dict, indent: str, show_docs: bool) -> None:
     """The doc record of one manifest entry, when it carries one."""
-    _print_doc_record(owner.get('doc'), owner, indent)
+    _print_doc_record(owner.get('doc'), owner, indent, show_docs)
 
 
-def print_library_info(library_path: Path) -> int:
+def print_library_info(library_path: Path, show_docs: bool = False) -> int:
     """Print formatted metadata from a .slib library file."""
     from sushi_lang.backend.library_format import LibraryFormat
     from sushi_lang.backend.library_errors import LibraryError
@@ -165,7 +175,7 @@ def print_library_info(library_path: Path) -> int:
         print(f"Units ({len(units)}):")
         for unit in units:
             print(f"  {unit}")
-            _print_doc_record(unit_docs.get(unit), None, "    ")
+            _print_doc_record(unit_docs.get(unit), None, "    ", show_docs)
         print()
 
     funcs = metadata.get('public_functions', [])
@@ -174,7 +184,7 @@ def print_library_info(library_path: Path) -> int:
         for func in funcs:
             params = _render_params(func['params'])
             print(f"  fn {func['name']}({params}) {func['return_type']}")
-            _print_doc(func, "    ")
+            _print_doc(func, "    ", show_docs)
         print()
 
     generic_funcs = metadata.get('templates', {}).get('generic_functions', [])
@@ -194,7 +204,7 @@ def print_library_info(library_path: Path) -> int:
             else:
                 generic = ""
             print(f"  fn {gf['name']}{generic} (template)")
-            _print_doc(gf, "    ")
+            _print_doc(gf, "    ", show_docs)
         print()
 
     consts = metadata.get('public_constants', [])
@@ -202,7 +212,7 @@ def print_library_info(library_path: Path) -> int:
         print(f"Public Constants ({len(consts)}):")
         for const in consts:
             print(f"  const {const['type']} {const['name']}")
-            _print_doc(const, "    ")
+            _print_doc(const, "    ", show_docs)
         print()
 
     structs = metadata.get('structs', [])
@@ -214,10 +224,10 @@ def print_library_info(library_path: Path) -> int:
                 type_params = ', '.join(struct['type_params'])
                 generic = f"<{type_params}>"
             print(f"  struct {struct['name']}{generic}:")
-            _print_doc(struct, "    ")
+            _print_doc(struct, "    ", show_docs)
             for field in struct['fields']:
                 print(f"    {field['type']} {field['name']}")
-                _print_doc(field, "      ")
+                _print_doc(field, "      ", show_docs)
         print()
 
     enums = metadata.get('enums', [])
@@ -229,13 +239,13 @@ def print_library_info(library_path: Path) -> int:
                 type_params = ', '.join(enum['type_params'])
                 generic = f"<{type_params}>"
             print(f"  enum {enum['name']}{generic}:")
-            _print_doc(enum, "    ")
+            _print_doc(enum, "    ", show_docs)
             for variant in enum['variants']:
                 if variant.get('has_data'):
                     print(f"    {variant['name']}({variant['data_type']})")
                 else:
                     print(f"    {variant['name']}")
-                _print_doc(variant, "      ")
+                _print_doc(variant, "      ", show_docs)
         print()
 
     deps = metadata.get('dependencies', [])
@@ -321,6 +331,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--lib-info",
         metavar="FILE",
         help="Display metadata from a .slib library file",
+    )
+    ap.add_argument(
+        "--docs",
+        action="store_true",
+        help="With --lib-info: print the documentation block of every symbol that has one",
     )
     ap.add_argument(
         "--ignore-compiler-version",
@@ -467,7 +482,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.lib_info:
-        return library_info_command(Path(args.lib_info))
+        return library_info_command(Path(args.lib_info), args.docs)
 
     session = Session(args=args)
 

@@ -46,6 +46,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--lib-kind KIND`   | What the library ships: `source` (default), `binary`, `hybrid` |
 | `--lib-version X.Y.Z` | Version of the library being built                |
 | `--lib-info FILE`   | Print the metadata report of a `.slib` file        |
+| `--docs`            | With `--lib-info`: print each symbol's documentation block |
 | `--ignore-compiler-version` | Load libraries this compiler does not satisfy (CE3503) |
 | `--warn-missing-docs` | Warn about anything with no documentation block (CW7002-CW7006) |
 | `--traceback`       | Show full Python traceback on errors               |
@@ -88,6 +89,9 @@ rules behind them are in
 
 # Inspect library metadata
 ./sushic --lib-info mylib.slib
+
+# The same report, with every documentation block in it
+./sushic --lib-info mylib.slib --docs
 ```
 
 A `.slib` ships **source** by default: the consumer compiles its units and caches the
@@ -101,14 +105,20 @@ beside the sources does; neither is **CE3505**. A build also stamps `requires_co
 consumer's compiler and a later one may reject it. A consumer outside that range is
 **CE3503**, and `--ignore-compiler-version` overrides the check for the whole build.
 
-The report prints a documented symbol's doc block under its signature, and a parameter's
-`nom` mode beside its type. A `.slib` carries the doc text of every symbol it exports, so
-this answers what a library holds without its sources -- see
+The plain report is the API surface: one line per symbol, plus a parameter's `nom` mode
+beside its type, which is the one mode a type cannot spell for itself.
+
+`--docs` prints each symbol's documentation block under its signature. It is opt-in
+because prose is what makes a report long -- a library of forty documented functions runs
+to ten screens with the blocks in and one and a half without. A `.slib` carries the doc
+text of every symbol it exports, so this answers what a library holds without its
+sources -- see
 [Documentation Blocks](documentation-blocks.md#what-travels-in-a-slib).
 
 In a repository checkout, `--lib-info` runs the Sushi-written `toolchain/bin/slib-info`
 binary when it exists (build it with `./toolchain/build.py`) and returns its exit code;
-without the binary the built-in Python reader prints the same report. Set
+without the binary the built-in Python reader prints the same report. `--docs` reaches the
+tool as itself, and the tool answers `--help` on its own. Set
 `SUSHI_TOOLCHAIN=off` to force the Python path, or `SUSHI_TOOLCHAIN_BIN=DIR` to point at
 a different tool directory.
 

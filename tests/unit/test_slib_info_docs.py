@@ -4,6 +4,9 @@
 parameter mode) and R6 (the order and the blank lines) are the rulings locked here.
 `test_slib_info_parity.py` keeps an UNDOCUMENTED library, which is the regression that
 says a report with no docs in it is unchanged.
+
+The doc blocks are opt-in, so every invocation here asks for them. What the switch
+itself does -- and what the plain report leaves out -- is `test_slib_info_flags.py`.
 """
 from __future__ import annotations
 
@@ -57,13 +60,13 @@ def report(tmp_path_factory):
     built = _run(["sushic", str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
     assert built.returncode == 0, built.stdout + built.stderr
 
-    tool_run = _run([str(tool), str(slib)])
+    tool_run = _run([str(tool), "--docs", str(slib)])
     assert tool_run.returncode == 0, tool_run.stdout + tool_run.stderr
 
     env = dict(os.environ)
     env.pop("SUSHI_TOOLCHAIN_BIN", None)
     env["SUSHI_TOOLCHAIN"] = "off"
-    py_run = _run(["sushic", "--lib-info", str(slib)], env=env)
+    py_run = _run(["sushic", "--lib-info", str(slib), "--docs"], env=env)
     assert py_run.returncode == 0, py_run.stdout + py_run.stderr
     return py_run.stdout, tool_run.stdout
 

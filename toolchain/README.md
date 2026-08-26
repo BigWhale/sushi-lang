@@ -29,10 +29,16 @@ implementation when one does not. The contract:
 - `sushic --lib-info FILE` runs `toolchain/bin/slib-info FILE` and returns its
   exit code. The tool owns the full report; the Python fallback
   (`print_library_info` in `sushi_lang/compiler/cli.py`) prints the same body.
-  Two parity tests lock the two together: `tests/unit/test_slib_info_parity.py` on
-  an undocumented library, and `tests/unit/test_slib_info_docs.py` on a
-  documented one. Both compile `src/slib_info.sushi` themselves, so neither
-  reads `bin/`: a stale binary is caught by nothing but this section.
+  Three parity tests lock the two together: `tests/unit/test_slib_info_parity.py`
+  on an undocumented library, `tests/unit/test_slib_info_docs.py` on a documented
+  one, and `tests/unit/test_slib_info_flags.py` on both modes of `--docs`. All
+  three compile `src/slib_info.sushi` themselves, so none reads `bin/`: a stale
+  binary is caught by nothing but this section.
+- **A switch is spelled the same at both ends.** `sushic --lib-info FILE --docs`
+  passes `--docs` through to the tool as itself. The delegation forwards only the
+  switches it knows, so a new one is a change at both ends and in the fallback.
+  The tool answers `--help` on its own; `sushic --help` lists the compiler's own
+  flags and does not run the tool.
 - A wheel install has no `toolchain/` directory, so it always uses the fallback.
 - Error messages can differ between the tool and the fallback; the success
   report cannot.
@@ -47,4 +53,4 @@ Environment variables:
 
 | tool | source | does |
 |---|---|---|
-| `slib-info` | `src/slib_info.sushi` | print the metadata report of a `.slib` library |
+| `slib-info` | `src/slib_info.sushi` | print the metadata report of a `.slib` library (`--docs` adds every documentation block; `--help` explains itself) |

@@ -58,12 +58,19 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   optional and the whole key is absent when a symbol has no block, so the container version
   does not move and an undocumented library grows by nothing.
 
-  `--lib-info` prints the block under the symbol it documents, indented two spaces, in both
-  implementations -- the Python fallback and the Sushi-written `toolchain/bin/slib-info` --
-  and the two are locked byte for byte. Parameters print in DECLARATION order, and not in the
-  order the block documents them. The report also gained a second thing: a parameter's `nom`
-  mode now prints beside its type. That is the one mode a type cannot spell; `peek` and
-  `poke` were always part of the type string.
+  **`--lib-info --docs` prints the block** under the symbol it documents, indented two
+  spaces, in both implementations -- the Python fallback and the Sushi-written
+  `toolchain/bin/slib-info` -- and the two are locked byte for byte in both modes. The
+  blocks are opt-in because prose is what makes a report long: a library of forty
+  documented functions runs to ten screens with them and one and a half without, so a
+  plain `--lib-info` is the API surface and `--docs` is the manual. The switch is spelled
+  the same at both ends and travels through the delegation as itself, and the tool answers
+  `--help` on its own.
+
+  Parameters print in DECLARATION order, and not in the order the block documents them. The
+  report also gained a second thing, which prints either way: a parameter's `nom` mode now
+  shows beside its type. That is the one mode a type cannot spell; `peek` and `poke` were
+  always part of the type string.
 
   Two things do not travel in the index: an extension has no manifest record of any kind,
   and a private symbol carries no doc because it is not part of the documented API.

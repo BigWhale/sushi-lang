@@ -232,7 +232,14 @@ Use `--lib-info` to display metadata from a compiled library:
 ./sushic --lib-info mylib.slib
 ```
 
-Example output:
+The plain report is the API surface: one line per symbol. Add `--docs` to print each
+symbol's documentation block under its own line:
+
+```bash
+./sushic --lib-info mylib.slib --docs
+```
+
+Example output, with `--docs`:
 
 ```
 Library: mylib
@@ -278,8 +285,11 @@ Source: 1,204 bytes
 ```
 
 A documented symbol prints its doc block, indented two spaces under its own line;
-`multiply` above has no block and prints as it always did. A `nom` parameter shows its
-mode, which is the one mode a type cannot spell. See
+`multiply` above has no block and prints as it always did. Without `--docs` no block
+prints at all, and the report is the signature lines alone -- prose is what makes a report
+long, and a reader asking what a library exports usually does not want ten screens of it.
+A `nom` parameter shows its mode, which is the one mode a type cannot spell, and it prints
+either way. See
 [Documentation Blocks](documentation-blocks.md#what-travels-in-a-slib) for the record and
 for the few things that do not travel in it.
 
