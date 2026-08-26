@@ -137,6 +137,7 @@ authority, and the index is a cache of it.
 | `compiled_at` | ISO-8601 UTC |
 | `public_functions`, `public_constants`, `structs`, `enums` | the index |
 | `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |
+| `not_exported` | **new** — what the library declares and keeps: a name and its kind, and nothing else. The complement of `templates.closure_summary`, and absent when a library keeps nothing (§5.5) |
 | `dependencies` | see `TODO.md` 6b |
 
 `structs` / `enums` / `public_functions` carry **only concrete, non-generic**
@@ -472,8 +473,27 @@ out of such a body), the typecheck pass reads it as `in_library_body`, and the g
 code. A constant is the one kind still readable, because a private constant cannot be
 written yet (#466).
 
+**A private the closure does not ship is named, not hidden** (#469). The walk starts at
+the public *generics*, so a private that only a concrete public function calls -- or one
+nothing public calls -- ships nowhere and reaches the consumer's tables not at all. That
+made it `CE2008: undefined function` on the binary path, for a function the library defines
+and deliberately kept, while the source path called the same call `CE3005`. The manifest's
+`not_exported` key closes that: `_extract_not_exported` lists the name and the kind of every
+private of the library's OWN units that the closure did not ship, `LibraryRegistry` reads it
+into `SymbolTables.library_not_exported`, and the `CE2008` site in
+`passes/types/calls/user_defined.py` asks it before it emits, routing the answer through the
+one CE3005 gate with the library in place of a unit.
+
+The two lists are one piece of bookkeeping: a private is named in the closure, WITH a
+signature, or in `not_exported`, with nothing but its kind. Which is why a `not_exported`
+name is registered in no function table -- there is no signature to register, the callee
+stays unresolved so the borrow pass judges no argument against an invented mode, and
+`CE5007` must not fire for a symbol that ships nowhere and so can clash with nothing.
+
 **None of this machinery exists on the source path** (§4.2), which is the largest
-structural difference between the two.
+structural difference between the two. The wording no longer differs, though: a source
+library's units are ordinary units at the consumer, so its private resolves and the same
+gate refuses it, naming the injected unit where the binary path names the library.
 
 ### 5.6 Who frees an argument at the boundary
 

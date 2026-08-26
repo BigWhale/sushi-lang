@@ -73,6 +73,7 @@ class TypeValidator:
         self.generic_func_table = tables.generic_funcs
         self.perk_table = tables.perks
         self.perk_impl_table = tables.perk_impls
+        self.library_not_exported = tables.library_not_exported
         self.current_unit_name = current_unit_name  # Track which unit is being validated (for visibility checking)
         self.monomorphized_functions = monomorphized_functions or {}
         self.known_types: Set[BuiltinType] = {

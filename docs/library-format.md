@@ -302,7 +302,24 @@ is the authority, and the index is a cache of it.
             "private_generic_functions": [str],
             "constants": [str]
         }
-    }
+    },
+
+    # What the library DECLARES and does not export -- the closure's complement, and the
+    # other half of the same bookkeeping: a private is named in exactly one of the two.
+    # A name and its kind, and nothing else: no signature, no body, no source. Written
+    # for every kind, and the whole key is ABSENT when a library keeps nothing.
+    #
+    # It exists so that a consumer naming one hears CE3005 rather than CE2008 (#469): on
+    # the binary path the symbol is in the consumer's tables not at all, and "undefined"
+    # was the wrong word for a function the library defines and deliberately kept. A name
+    # here is not shipped and clashes with nothing, so a consumer may declare its own
+    # function of the same name.
+    "not_exported": [
+        {
+            "name": str,
+            "kind": str                # "function" / "generic_function"
+        }
+    ]
 }
 ```
 

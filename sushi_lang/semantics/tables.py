@@ -35,3 +35,7 @@ class SymbolTables:
     generic_extensions: GenericExtensionTable = field(default_factory=GenericExtensionTable)
     generic_funcs: GenericFunctionTable = field(default_factory=GenericFunctionTable)
     externals: ExternalTable = field(default_factory=ExternalTable)
+    # A name a linked library declares and keeps: name -> (library, kind) (#469). Not a
+    # table of callables -- no signature travels with a kept name, so it holds what the
+    # CE3005 gate needs and nothing more.
+    library_not_exported: dict[str, tuple[str, str]] = field(default_factory=dict)

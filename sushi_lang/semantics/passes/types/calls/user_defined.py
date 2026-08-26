@@ -169,6 +169,15 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
 
     if function_name not in validator.func_table.by_name:
         call.callee_unresolved = True
+        # A name a library declares and keeps. It resolves to nothing here BECAUSE the
+        # library kept it, so "undefined" was the wrong word for it (#469). The callee
+        # stays unresolved either way: no signature travels with a kept name, so the
+        # borrow pass must judge no argument against one.
+        kept = validator.library_not_exported.get(function_name)
+        if kept is not None and reject_private_cross_unit_call(
+                validator, function_name, call.callee.loc,
+                visible=False, unit_name=kept[0]):
+            return
         diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.callee.loc,
                             name=function_name)
         # A generic struct constructor used inline is the most common cause; attach the

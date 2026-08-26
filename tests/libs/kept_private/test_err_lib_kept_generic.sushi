@@ -1,0 +1,11 @@
+# The generic half of the same library. The `nom` marker is deliberate: an
+# unresolved callee once drew a bogus CE2427 after the CE2008, telling the user
+# to drop a `nom` the library declares.
+# EXPECT_ERROR_CODE: CE3005
+
+use <lib/kept_private_lib>
+
+fn main() i32:
+    let i32 n = 7
+    println("{convert(nom n).realise(0)}")
+    return Result.Ok(0)

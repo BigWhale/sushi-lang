@@ -394,6 +394,36 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   is what it already did for a method call the type checker left unresolved. A callee that
   DOES resolve is judged as before, `open` included -- it carries no signature record, but
   the type checker resolves it.
+- **A binary library said "undefined function" where a source library said "private"**
+  (#469). The export closure walks what a public GENERIC's body needs, because that body is
+  monomorphized at the consumer. A private that only a concrete function calls, or that
+  nothing public calls, ships nowhere and reaches the consumer's tables under no name at
+  all -- so a consumer naming it heard **CE2008**, "undefined function", for a function the
+  library defines on the next line of the build script and deliberately kept. The same call
+  against a source `.slib` was **CE3005**. Both reject and both exit 2, so the two kinds
+  disagreed about the wording and not about the legality.
+
+  A `.slib` now carries one additive key, `not_exported`: what the library declares and does
+  not export, as a name and its kind. No signature, no body and no source travel with it,
+  because a name is all the diagnostic needs. Each private is named in exactly one place --
+  the export closure, with a signature, or this list, with nothing else. The consumer's
+  registry reads the key, and the `CE2008` site asks it before it emits, so the answer comes
+  out of the one **CE3005** gate with the library named in place of a unit. The callee stays
+  unresolved on that path, so no argument is judged against a mode the compiler invented.
+
+  A kept name ships nowhere, so it clashes with nothing: a consumer may declare its own
+  function of the same name and that is what the call resolves to. `CE2008` is left for
+  what it is for -- a name that no unit and no linked library declares.
+
+  Nothing else moves. The container version stays at 4 and `sushi_lib_version` at `"2.0"`:
+  the metadata blob is an open msgpack dict read through `.get()`, so an older consumer
+  ignores the key and a newer consumer reading an older `.slib` finds none, and both keep
+  answering as they did. `--lib-info` prints no new section, in either implementation.
+
+  This buys WORDING, not enforcement, and should not be read as hardening. Privacy across a
+  binary `.slib` is still defeatable by a route the manifest has nothing to do with: an
+  `unsafe external "C"` declaration can name a Sushi symbol, the library's module is merged
+  into the consumer's, and internal linkage does not stop the call.
 - **A binary library's private helpers were callable from consumer code** (#468). The
   export closure ships what a public generic's body needs -- a private concrete helper, a
   private generic template, a constant -- because the body is monomorphized at the

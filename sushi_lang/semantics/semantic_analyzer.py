@@ -224,6 +224,9 @@ class SemanticAnalyzer:
             # with a local name is CE5007 (local-wins would silently change
             # what the library's monomorphized bodies call).
             self._register_library_private_functions()
+            # And the complement: what the library declares and ships nowhere. These
+            # are names, not callables, so they register in no function table (#469).
+            self._register_library_not_exported()
             self._register_library_constants(compilation_order)
             # Library perk IMPLEMENTATIONS register here: after the consumer's own impls
             # (local wins) and before instantiate/monomorphize, so the constraint validator
@@ -615,6 +618,14 @@ class SemanticAnalyzer:
                 continue
             self.funcs.by_name[name] = sig
             self.funcs.order.append(name)
+
+    def _register_library_not_exported(self) -> None:
+        """Record what a loaded library declares and does not export (#469)."""
+        if self.tables is None or self.library_registry is None:
+            return
+
+        self.tables.library_not_exported.update(
+            self.library_registry.get_all_not_exported())
 
     def _register_library_constants(self, compilation_order) -> None:
         """Register export-closure constants from loaded libraries (C4b/C5)."""

@@ -1,0 +1,16 @@
+# Helper library whose privates the export closure does NOT ship (#469).
+#
+# `double_it` is concrete, so its body is machine code in the library and needs
+# nothing at the consumer. No public GENERIC names `scale` or `convert`, so the
+# closure ships neither, and the two names reach the consumer's tables not at
+# all. The binary path answered CE2008 for them where the source path answered
+# CE3005.
+
+public fn double_it(i32 n) i32:
+    return Result.Ok(scale(n, 2)??)
+
+fn scale(i32 n, i32 by) i32:
+    return Result.Ok(n * by)
+
+fn convert@(T)(nom T x) T:
+    return Result.Ok(x)

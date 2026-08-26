@@ -85,7 +85,10 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
 # private_closure_lib backs test_err_lib_private_clash, which expects CE5007 -- a clash
 # with an export-closure private. A source library has no export closure and namespaced
 # units, so that clash cannot happen (docs/design/libraries.md section 4.2).
-BINARY_ONLY_HELPERS = {"private_closure_lib"}
+# kept_private_lib backs tests/libs/kept_private, which asserts the wording the BINARY
+# path gives a private the closure never shipped (#469). A source library ships its
+# units, so the name resolves there and a different code path answers.
+BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib"}
 
 
 def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:

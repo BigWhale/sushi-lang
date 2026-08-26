@@ -105,9 +105,11 @@ public fn double_add(i32 a, i32 b) i32:
 ```
 
 A generic is no exception. `public fn pick@(T)(...)` is part of the API; `fn pick@(T)(...)`
-is internal, and a consumer that calls it hears `CE3005` on the source path exactly as it
-does for a concrete function. Only a public generic ships as a template, so on the binary
-path the symbol is not there at all and the answer is `CE2008`.
+is internal, and a consumer that calls it hears `CE3005` exactly as it does for a concrete
+function. Only a public generic ships as a template, so on the binary path the symbol is
+not in the consumer's tables at all -- but the manifest names what the library declares and
+keeps, so the answer is `CE3005` there too, naming the library instead of a unit. `CE2008`
+is left for what it is for: a name that no unit and no linked library declares.
 
 ### No main() Required
 
@@ -537,6 +539,14 @@ Current limitations of the library system:
    exception is a constant, which has no private form yet (#466), so a shipped one is
    readable. None of this can arise on the source path: library units are namespaced, so
    there is no shared namespace to clash in, and nothing has to be shipped ahead of need.
+
+   **A private the closure does not ship is named too.** The closure only walks what a
+   public *generic* needs, so a private a concrete function calls -- or one nothing public
+   calls -- ships nowhere. The manifest's `not_exported` key carries those names and their
+   kind, and nothing else: no signature, no body, no source. It is what lets the consumer
+   hear `CE3005` for them rather than `CE2008` (#469). A name in that list is not shipped,
+   so it clashes with nothing: a consumer may declare a function of the same name and it is
+   the consumer's own.
 
    Remaining restriction on the binary path:
    - **Generic-target perk impls do not ship**: `extend <Generic@(T)> with <Perk>` is not supported

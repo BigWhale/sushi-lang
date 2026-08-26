@@ -40,7 +40,7 @@ _add(ErrorMessage("CE2007", Severity.ERROR,
 
 _add(ErrorMessage("CE2008", Severity.ERROR,
     "undefined function '{name}'",
-    Category.TYPE, "Function call references a function that was not declared."))
+    Category.TYPE, "Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is CE3005, on either library kind (#469)."))
 
 _add(ErrorMessage("CE2009", Severity.ERROR,
     "function '{name}' expects {expected} arguments, got {got}",
