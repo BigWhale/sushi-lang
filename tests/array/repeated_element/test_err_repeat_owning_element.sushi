@@ -1,9 +1,0 @@
-# A run of an owning type asks for one value in three slots. Only .clone()
-# makes a deep copy in Sushi, and the compiler never inserts one.
-# EXPECT_ERROR_CODE: CE2018
-
-fn main() i32:
-    let string s = "mostly harmless"
-    let string[3] t = [s; 3]
-    println(t[0])
-    return Result.Ok(0)

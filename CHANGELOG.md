@@ -8,6 +8,44 @@ Two libraries written in Sushi itself, and the distribution form that carries th
 a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
+### Added
+- **A range element in an array literal, and a run-time count in `from()`.** An element can
+  already fill more than one slot with `value; count`. It can now be a RANGE, and the count
+  no longer has to be readable at compile time.
+
+  ```sushi
+  let i32[6] table   = [0..=5]           # 0 1 2 3 4 5
+  let i32[]  down    = from([5..0])      # 5 4 3 2 1, the direction `foreach` uses
+  let i32[]  mixed   = from([-1, 0..3, 99])
+
+  fn zeros(i32 n) i32[]:
+      return Result.Ok(from([0; n]))     # a length known only at run time
+  ```
+
+  **Where a count must be readable depends on the position, not on the element.** A fixed
+  array's length is part of its TYPE and a constant's evaluator needs the values, so both
+  still need a count the compiler can read. A `from()` array carries its length in its
+  descriptor, so a count or a bound there may be any `i32` expression. A bound that is not
+  readable where it must be is **CE2019**, and so is a readable range that yields nothing;
+  a range carrying a repeat count is **CE2020**. A run-time count that is negative traps
+  **RE2024**, because the fill walks with an unsigned compare.
+
+  A readable count never pays for the run-time mechanism. llvmlite does not fold, so a
+  short readable range emits literal stores with no arithmetic, a longer one walks a
+  constant trip count, and only an unreadable one computes anything.
+
+### Changed
+- **CE2018 retires: a repeated value may own heap memory.** `[towel; 3]` was refused
+  because N copies of an owning value would need N-1 deep copies and the compiler never
+  inserts one. That stopped being true when `.fill()` gained a per-slot `copy_out`, and the
+  language answered one question two ways: `a.fill(towel)` was legal beside
+  `from([towel; 2])`, which was not.
+
+  A repeated value is now a **borrow**, as `.fill()`'s argument is, and every slot takes its
+  own copy. A run has one value and N slots, so it has no single position to consume into --
+  the general rule is that a bulk write borrows its source. A plain element still consumes,
+  because it still occupies one slot.
+
 ### Fixed
 - **Every built-in method on a fixed array now works through every receiver.** A `T[N]`
   reached as a struct field, a nested field or an array element had no address rule of its

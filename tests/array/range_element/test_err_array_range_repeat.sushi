@@ -1,0 +1,8 @@
+# Ruling 5: `value; count` repeats ONE value, and a range is not one value. A reader
+# cannot tell three copies of the span from a span of three.
+# EXPECT_ERROR_CODE: CE2020
+
+fn main() i32:
+    let i32[] a = from([0..2; 3])
+    println(a.len())
+    return Result.Ok(0)

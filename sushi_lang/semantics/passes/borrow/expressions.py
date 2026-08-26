@@ -90,9 +90,11 @@ def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
         case EnumConstructor():
             _check_sink_elements(checker, expr.args, ConsumingUse.ENUM_PAYLOAD)
         case DynamicArrayFrom():
+            _check_run_elements(checker, expr.elements.elements)
             _check_sink_elements(checker, array_runs.values(expr.elements.elements),
                                  ConsumingUse.ARRAY_ELEMENT)
         case ArrayLiteral():
+            _check_run_elements(checker, expr.elements)
             _check_sink_elements(checker, array_runs.values(expr.elements),
                                  ConsumingUse.ARRAY_ELEMENT)
         case InterpolatedString():
@@ -186,6 +188,25 @@ def _check_receiver_and_args(checker: 'BorrowChecker', expr) -> None:
     check_expr(checker, expr.receiver)
     for arg in expr.args:
         check_expr(checker, arg)
+
+
+def _check_run_elements(checker: 'BorrowChecker', elements) -> None:
+    """Walk what an array literal USES but does not consume (#478, Ruling 7).
+
+    A range run is inert at an ownership sink: it yields i32 (Ruling 4), so it owns nothing.
+    Its bounds are ordinary expressions, though, so `from([0..xs.len()])` must still report
+    a moved `xs`.
+
+    A repeated value BORROWS: `[towel; 3]` copies three times and leaves `towel` usable, so
+    it is USED here and not consumed. A run-time count is an ordinary expression too.
+    """
+    for bound in array_runs.range_bounds(elements):
+        check_expr(checker, bound)
+    for value in array_runs.repeated_values(elements):
+        check_expr(checker, value)
+    for element in elements:
+        if element.count is not None:
+            check_expr(checker, element.count)
 
 
 def _check_sink_elements(checker: 'BorrowChecker', elements, use) -> None:

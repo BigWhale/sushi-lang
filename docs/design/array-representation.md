@@ -94,6 +94,41 @@ receivers have their own diagnostics (CE2408, CE2414, CE2421, CE2422, CE2426, CE
 reaching CE0132 means one of them did not fire. Same treatment `backend/ownership.py` gives a
 consuming use with no decision.
 
+## A run-time length, and the cursor
+
+An array literal element may fill more than one slot: `value; count` repeats one value, and
+`a..b` yields a sequence (#446, #478). Both may have a count the compiler cannot read, and
+only in a `from()` literal -- a fixed array's length is part of its TYPE, and a constant's
+evaluator needs the values.
+
+That removes the last compile-time integer from the fill. `EmittedRun` carries an `ir.Value`
+count and no start; `fill_runs` threads a **cursor** instead:
+
+```python
+cursor = ir.Constant(i32, 0)
+for run in emitted:
+    base = gep_array_element(codegen, data_ptr, cursor)
+    ...                                     # fill run.count slots from base
+    cursor = builder.add(cursor, run.count)
+```
+
+The cursor is shorter than the constant arithmetic it replaced, and it is why a run-time
+element may sit anywhere in a literal: nothing depends on a compile-time position. When
+every count is constant the adds are folded in the emitter, so an all-readable literal emits
+what it emitted before.
+
+`emit_dynamic_array_of_length` (`backend/types/arrays/utils.py`) is the allocation for a
+run-time length. Capacity equals the length rather than the next power of two, which is safe
+at zero because `emit_dynamic_array_push` already selects a capacity of one when it sees
+zero. It is named rather than inlined because a fresh array of a COPIED range needs the same
+allocation with a different filler.
+
+**A readable count never pays for the run-time mechanism.** llvmlite does not fold, so a
+readable range must be turned into values by the front end; at `--opt none` there is no
+second chance. Three tiers, gated by `tests/unit/test_range_fill_tiers.py`: a readable range
+under `UNROLL_LIMIT` stores literals and emits no arithmetic, a longer one walks a constant
+trip count, and an unreadable one walks with `first`, `step` and `count` computed.
+
 ## The one element address
 
 `emit_element_pointer` (`backend/types/arrays/indexing.py`) is the single place that turns an

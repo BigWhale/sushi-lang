@@ -47,8 +47,9 @@ def emit_dynamic_array_from(codegen: 'LLVMCodegen', expr: DynamicArrayFrom) -> i
     if not elements:
         raise NotImplementedError("Empty from() constructor not yet supported")
 
-    element_llvm_type = elements[0].value.type
+    from ..runs import element_llvm_type as read_element_llvm_type
 
+    element_llvm_type = read_element_llvm_type(codegen, elements)
     element_type = _infer_builtin_type_from_llvm(element_llvm_type)
 
     # The DESCRIPTOR, by value -- what `ll_type(DynamicArrayType)` says a `T[]` is, and what

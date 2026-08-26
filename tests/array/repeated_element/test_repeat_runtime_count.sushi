@@ -1,0 +1,23 @@
+# #461's two sites, which #478 closes: a repeated value with a count only known at run
+# time. `from()` carries its length in the descriptor, so the count needs no reading.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4 0 0\n3 -1 -1\n"
+
+use <io/stdio>
+
+fn zeros(i32 n) i32[]:
+    return Result.Ok(from([0; n]))
+
+fn run_test() i32:
+    let i32[] symbol = zeros(4)??
+    println("{symbol.len()} {symbol[0]} {symbol[3]}")
+
+    let i32[] xs = from([10, 20, 30])
+    let i32[] prev = from([-1; xs.len()])
+    println("{prev.len()} {prev[0]} {prev[2]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

@@ -1,0 +1,8 @@
+# Ruling 2: a readable range that yields nothing is a typo, and Sushi has no zero-length
+# array. `3..3` spells nothing.
+# EXPECT_ERROR_CODE: CE2019
+
+fn main() i32:
+    let i32[] a = from([3..3])
+    println(a.len())
+    return Result.Ok(0)

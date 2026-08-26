@@ -232,15 +232,16 @@ therefore wants `from([-1; 32768])`, which puts the table on the heap.
 
 ### 3.1 Two rules the first draft did not state
 
-**A repeated element must not own heap memory (CE2018).** `[s; 3]` for a `string` asks the
+**A repeated element must not own heap memory (CE2018).** ~~`[s; 3]` for a `string` asks the
 compiler to put one owned value in three slots. That needs a deep copy per slot, and
-`.clone()` is the only deep copy in Sushi -- the compiler inserts none. So a run is limited
-to a type that copies.
+`.clone()` is the only deep copy in Sushi -- the compiler inserts none.~~
 
-The rule is by TYPE and not by expression, so `["-"; 40]` is rejected as well, although a
-string literal owns no heap and copying its descriptor forty times would be safe. Nothing in
-the repository needed that, and a rule that starts narrow relaxes later without breaking a
-program that compiles today.
+**Superseded by #478, Ruling 7.** The premise expired when #479 gave `.fill()` a per-slot
+`copy_out` through the sanctioned deep-clone seam: the language then answered one question
+two ways, because `a.fill(towel)` was legal beside `from([towel; 2])`, which was not. A
+repeated value is now a BORROW, and every slot takes its own copy. The rule anticipated its
+own end -- "a rule that starts narrow relaxes later without breaking a program that compiles
+today" -- and that is what happened.
 
 **CE2011 lists the runs.** A run is written by length, so a literal that is one element short
 gives the compiler no way to know WHICH run is short -- either of them could be. The

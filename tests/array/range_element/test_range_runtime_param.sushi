@@ -1,0 +1,22 @@
+# Ruling 3: a run-time count is legal exactly where a run-time LENGTH is, and that is
+# `from()`. A `T[]` carries its length in the descriptor (#478).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "5 0 4\n2 0 1\n"
+
+use <io/stdio>
+
+fn slots(i32 n) i32[]:
+    return Result.Ok(from([0..n]))
+
+fn run_test() i32:
+    let i32[] a = slots(5)??
+    println("{a.len()} {a[0]} {a[4]}")
+
+    let i32[] b = slots(2)??
+    println("{b.len()} {b[0]} {b[1]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)
