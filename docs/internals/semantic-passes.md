@@ -75,6 +75,22 @@ fn add(i32 a, i32 b) i32:  # Register signature
 - `functions = {'add': FunctionSignature(...)}`
 - `generic_types = {'Pair': GenericStruct(...)}`
 
+### One reporter, many files
+
+This pass is the only whole-program pass that walks every unit's AST while sharing ONE
+reporter -- the per-unit passes each build their own through `_unit_reporter(unit)`. A span
+is meaningless without the file it came from, so `CollectorPass.run` names the unit it is
+reading (`Reporter.origin`), and `Reporter._record` stamps it onto every diagnostic the pass
+raises. Without it, a declaration in a non-entry unit was reported against the ENTRY file:
+the head line named a line the user did not write, and the caret landed on whatever text sat
+at that column (#473).
+
+A `first defined here` note needs one thing more. It points at a table entry, and the entry
+may have been made while a DIFFERENT unit was being collected, so each record remembers its
+own file: `files` beside `spans` on the struct and enum tables, `PerkTable.files`, and a
+`filename` field on `FuncSig`, `ConstSig` and `ExternalSig`. `note_first_declaration` is the
+one place that reads them.
+
 ### Limitations
 
 Constants can only be literal values (no expressions).

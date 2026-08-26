@@ -28,6 +28,9 @@ class EnumTable:
     by_name: Dict[str, EnumType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
+    # The unit each span is in, keyed alike: a duplicate is reported while ANOTHER
+    # unit is being collected, so the note has to name this file (#473).
+    files: Dict[str, Optional[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -36,6 +39,9 @@ class GenericEnumTable:
     by_name: Dict[str, GenericEnumType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
+    # The unit each span is in, keyed alike: a duplicate is reported while ANOTHER
+    # unit is being collected, so the note has to name this file (#473).
+    files: Dict[str, Optional[str]] = field(default_factory=dict)
 
 
 class EnumCollector:
@@ -52,6 +58,9 @@ class EnumCollector:
     ) -> None:
         """Initialize enum collector."""
         self.r = reporter
+        # The unit being collected. This pass shares one reporter across every
+        # unit, so a record it stores has to remember its own file (#473).
+        self.current_unit_file: Optional[str] = None
         self.enums = enums
         self.generic_enums = generic_enums
         self.structs = structs
@@ -204,7 +213,7 @@ class EnumCollector:
         if name in self.enums.by_name:
             note_first_declaration(
                 er.emit_with(self.r, ERR.CE2046, name_span, name=name),
-                self.enums.spans, name,
+                self.enums.spans, name, files=self.enums.files,
             ).emit()
             return
 
@@ -212,7 +221,7 @@ class EnumCollector:
             note_first_declaration(
                 er.emit_with(self.r, ERR.CE0006, name_span, name=name),
                 self.structs.spans, name,
-                what="already defined as a struct here",
+                what="already defined as a struct here", files=self.structs.files,
             ).emit()
             return
 
@@ -221,6 +230,7 @@ class EnumCollector:
                 er.emit_with(self.r, ERR.CE0006, name_span, name=name),
                 self.generic_structs.spans, name,
                 what="already defined as a generic struct here",
+                files=self.generic_structs.files,
             ).emit()
             return
 
@@ -229,6 +239,7 @@ class EnumCollector:
                 er.emit_with(self.r, ERR.CE2046, name_span, name=name),
                 self.generic_enums.spans, name,
                 what="first defined here, as a generic enum",
+                files=self.generic_enums.files,
             ).emit()
             return
 
@@ -284,6 +295,7 @@ class EnumCollector:
             self.generic_enums.order.append(name)
             self.generic_enums.by_name[name] = generic_enum
             self.generic_enums.spans[name] = name_span
+            self.generic_enums.files[name] = self.current_unit_file
 
             # Note: Generic enums are not added to known_types until instantiated
         else:
@@ -295,5 +307,6 @@ class EnumCollector:
             self.enums.order.append(name)
             self.enums.by_name[name] = enum_type
             self.enums.spans[name] = name_span
+            self.enums.files[name] = self.current_unit_file
 
             self.known_types.add(enum_type)

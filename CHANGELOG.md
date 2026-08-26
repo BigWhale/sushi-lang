@@ -394,6 +394,30 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   is what it already did for a method call the type checker left unresolved. A callee that
   DOES resolve is judged as before, `open` included -- it carries no signature record, but
   the type checker resolves it.
+- **A cross-unit `collect` diagnostic was reported against the entry file** (#473). The
+  collect pass is the one whole-program pass that walks every unit's AST through a SINGLE
+  reporter; the per-unit passes each build their own. A span is meaningless without its file,
+  so a declaration in a non-entry unit was reported against the entry unit: the head line
+  named a line the user never wrote, and the caret landed on whatever text sat at that
+  column. A duplicate constant inside a helper unit marked `return Result.Ok(0)` in the entry
+  file, and a `CE5001` in a helper marked a correct `println(...)` -- for a declaration in
+  another file, which the diagnostic never mentioned.
+
+  `CollectorPass.run` now names the unit it is reading, and `Reporter._record` -- the one
+  place every diagnostic passes through -- stamps it. That answers for every emit site in the
+  pass at once: **CE0004**, **CE0006**, **CE0101**, **CE0105**, **CE2046**, **CE4001**,
+  **CE5001** and their siblings, head line and caret.
+
+  A `first defined here` note needed one thing more, because it points at a table entry that
+  may have been made while a different unit was being collected. Each record remembers its own
+  file now -- `files` beside `spans` on the struct and enum tables, `PerkTable.files`, and a
+  `filename` on `ConstSig` and `ExternalSig`, which `FuncSig` already had for exactly this
+  reason. So both halves of a cross-unit duplicate name their own file, each with its own
+  caret.
+
+  No new codes, no message changes, and nothing legal became illegal. The `Origin` record
+  that #471 introduced for a library template carries this too: its `provenance` note is now
+  optional, because a unit of the program being compiled needs no explanation.
 - **An `unsafe external "C"` could name a symbol the program itself defines** (#470). A
   program's units share one LLVM module and a linked library's module is merged into it, so
   a `declare` and a `define` of one name unify. There was no rule against it, and the

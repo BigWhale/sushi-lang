@@ -24,6 +24,7 @@ class ExternalSig:
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     loc: Optional[Span] = None
+    filename: Optional[str] = None  # The unit it was declared in (#473)
 
 
 @dataclass
@@ -50,6 +51,9 @@ class ExternalCollector:
 
     def __init__(self, reporter: Reporter, externals: ExternalTable) -> None:
         self.r = reporter
+        # The unit being collected. This pass shares one reporter across every
+        # unit, so a record it stores has to remember its own file (#473).
+        self.current_unit_file: Optional[str] = None
         self.externals = externals
 
     def collect(self, root: 'Program') -> None:
@@ -76,13 +80,15 @@ class ExternalCollector:
             name_span=decl.name_span,
             ret_span=decl.ret_span,
             loc=decl.loc,
+            filename=self.current_unit_file,
         )
 
         existing = self.externals.lookup(block.namespace, decl.name)
         if existing is not None:
             er.emit_with(self.r, er.ERR.CE0101, decl.name_span,
                          name=f"{block.namespace}.{decl.name}") \
-                .note("first defined here", existing.name_span).emit()
+                .note("first defined here", existing.name_span,
+                      existing.filename).emit()
             return
 
         # CE5001: clash with a reserved built-in extern of a DIFFERENT signature.

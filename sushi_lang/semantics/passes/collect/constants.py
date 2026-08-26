@@ -19,6 +19,7 @@ class ConstSig:
     name_span: Optional[Span] = None
     const_type: Optional[Type] = None
     type_span: Optional[Span] = None
+    filename: Optional[str] = None  # The unit it was declared in (#473)
     # Note: value is validated later in type checking pass
 
 
@@ -35,6 +36,9 @@ class ConstantCollector:
     def __init__(self, reporter: Reporter, constants: ConstantTable) -> None:
         """Initialize constant collector."""
         self.r = reporter
+        # The unit being collected. This pass shares one reporter across every
+        # unit, so a record it stores has to remember its own file (#473).
+        self.current_unit_file: Optional[str] = None
         self.constants = constants
 
     def collect(self, root: Program) -> None:
@@ -65,12 +69,13 @@ class ConstantCollector:
             name_span=name_span,
             const_type=const_type,
             type_span=type_span,
+            filename=self.current_unit_file,
         )
 
         if name in self.constants.by_name:
             prev = self.constants.by_name[name]
             er.emit_with(self.r, ERR.CE0105, name_span, name=name) \
-                .note("first defined here", prev.name_span).emit()
+                .note("first defined here", prev.name_span, prev.filename).emit()
             return
 
         self.constants.order.append(name)

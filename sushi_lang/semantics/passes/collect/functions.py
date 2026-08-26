@@ -346,14 +346,12 @@ class FunctionCollector:
         self.generic_structs = generic_structs
         self.generic_enums = generic_enums
 
-    def collect_functions(self, root: Program, unit_name: Optional[str] = None,
-                          unit_file: Optional[str] = None) -> None:
+    def collect_functions(self, root: Program, unit_name: Optional[str] = None) -> None:
         """Collect all function definitions from program AST."""
         funcs = getattr(root, "functions", None)
         if isinstance(funcs, list):
             for fn in funcs:
                 if isinstance(fn, FuncDef):
-                    self.current_unit_file = unit_file
                     self._collect_function_def(fn, unit_name=unit_name)
 
     def collect_extensions(self, root: Program) -> None:

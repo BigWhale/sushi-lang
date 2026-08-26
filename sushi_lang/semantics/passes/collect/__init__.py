@@ -6,7 +6,7 @@ from typing import Optional, Set, TYPE_CHECKING
 if TYPE_CHECKING:
     from sushi_lang.semantics.tables import SymbolTables
 
-from sushi_lang.internals.report import Reporter
+from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.typesys import (
     Type,
@@ -148,6 +148,27 @@ class CollectorPass:
     def run(self, root: Program, unit_name: Optional[str] = None,
             unit_file: Optional[str] = None) -> 'SymbolTables':
         """Run all collection passes in dependency order."""
+        # This pass walks every unit through ONE reporter, unlike the per-unit passes,
+        # which build their own. Naming the unit here is what keeps a span from being
+        # rendered against the entry file, and it answers for every emit site in the
+        # pass at once (#473). The collectors below carry the file too, because a
+        # "first defined here" note can point into a unit that is no longer current.
+        previous_origin = self.r.origin
+        if unit_file is not None:
+            self.r.origin = Origin(filename=unit_file)
+        try:
+            return self._collect(root, unit_name, unit_file)
+        finally:
+            self.r.origin = previous_origin
+
+    def _collect(self, root: Program, unit_name: Optional[str],
+                 unit_file: Optional[str]) -> 'SymbolTables':
+        # One way in for all six: the field, not a parameter on one collector's method.
+        for collector in (self.constant_collector, self.struct_collector,
+                          self.enum_collector, self.perk_collector,
+                          self.external_collector, self.function_collector):
+            collector.current_unit_file = unit_file
+
         self.constant_collector.collect(root)
         self.struct_collector.collect(root)
         self.enum_collector.collect(root)
@@ -155,7 +176,7 @@ class CollectorPass:
         self.perk_collector.collect_definitions(root)
         self.perk_collector.collect_implementations(root)
         self.perk_collector.register_synthetic_impls()
-        self.function_collector.collect_functions(root, unit_name, unit_file)
+        self.function_collector.collect_functions(root, unit_name)
         self.function_collector.collect_extensions(root)
         self.function_collector.register_stdlib_functions(root)
         self.external_collector.collect(root)

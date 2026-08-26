@@ -52,17 +52,23 @@ class Diagnostic:
 
 @dataclass(frozen=True)
 class Origin:
-    """Whose code a body is, when it is not the file a reporter covers.
+    """The file a span belongs to, when it is not the file the reporter covers.
 
-    A binary `.slib` ships a public generic as a source SLICE, re-parsed at the
-    consumer, so the instance's spans are line 1 of that slice and mean nothing against
-    the consumer's file. All three fields answer one question each: what to call it,
-    what text the caret marks, and why it is being compiled here at all.
+    One reporter serves many files in two places. A binary `.slib` ships a public generic
+    as a source SLICE, re-parsed at the consumer, so the instance's spans are line 1 of
+    that slice and mean nothing against the consumer's file (#471). And the collect pass
+    walks every unit through one reporter, so a declaration in a non-entry unit rendered
+    against the entry file names a line the user did not write (#473).
+
+    Each field answers one question: what to call it, what text the caret marks, and why
+    it is being compiled here at all. `source` is None when the file is on disk and the
+    renderer can read it, and `provenance` is None when there is nothing to explain --
+    a unit of the program the user is compiling needs no note.
     """
 
     filename: str
-    source: Optional[str]
-    provenance: str
+    source: Optional[str] = None
+    provenance: Optional[str] = None
 
 
 def span_of(t: Any) -> Optional[Span]:
@@ -129,7 +135,8 @@ class Reporter:
             if d.filename == self.filename:
                 d.filename = self.origin.filename
                 d.source = self.origin.source
-            d.sub.append(SubDiagnostic("note", self.origin.provenance))
+            if self.origin.provenance is not None:
+                d.sub.append(SubDiagnostic("note", self.origin.provenance))
         elif self.provenance:
             d.sub.append(SubDiagnostic("note", self.provenance))
         self.items.append(d)
