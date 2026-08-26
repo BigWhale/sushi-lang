@@ -8,7 +8,41 @@
 use <io/stdio>
 use <collections/strings>
 use <encoding/msgpack>
+use <sys/env>
 use <toolchain/slib>
+
+# The sixteen-colour palette, and nothing wider. The report has six kinds of thing in it,
+# so 256-colour and truecolor would buy nothing and cost a `COLORTERM` reading; every
+# terminal that does colour at all does these. The Python side spells the same eight in
+# `internals/styling.py`.
+const string ESC_RESET = "\x1b[0m"
+const string ESC_BOLD = "\x1b[1m"
+const string ESC_DIM = "\x1b[2m"
+const string ESC_ITALIC = "\x1b[3m"
+const string ESC_BLUE = "\x1b[34m"
+const string ESC_CYAN = "\x1b[36m"
+
+# Opts: what one run was asked for -- the doc blocks, and whether to paint. A struct of
+# plain fields, so it copies freely and every printer takes it by borrow.
+#
+# The styles are STRINGS and never a branch at the call site, so a painted line and a
+# plain one are written once. That is also what makes R43's constraint hold by
+# construction: strip the escapes from a coloured report and the plain report comes back.
+struct Opts:
+    bool docs
+    string bold
+    string dim
+    string italic
+    string blue
+    string cyan
+    string reset
+
+# make_opts: the palette, or six empty strings.
+fn make_opts(bool docs, bool colour) Opts:
+    if (colour):
+        return Result.Ok(Opts(docs, ESC_BOLD, ESC_DIM, ESC_ITALIC, ESC_BLUE, ESC_CYAN,
+                              ESC_RESET))
+    return Result.Ok(Opts(docs, "", "", "", "", "", ""))
 
 # ml_str: the payload of a Str value, empty for any other kind.
 fn ml_str(MsgValue v) string:
@@ -82,11 +116,12 @@ fn to_surface(string name) string:
     return Result.Ok(opened.replace(">", ")"))
 
 # section: open a section, or answer false when it holds nothing. A section with no
-# members prints no header, and one function is what keeps every section obeying it.
-fn section(string title, i32 n) bool:
+# members prints no header, and one function is what keeps every section obeying it --
+# and what writes the header's style once.
+fn section(string title, i32 n, Opts o) bool:
     if (n == 0):
         return Result.Ok(false)
-    println("{title} ({n}):")
+    println("{o.bold}{title}{o.reset} {o.dim}({n}){o.reset}:")
     return Result.Ok(true)
 
 # print_lines: one println per line of `text`, each one indented. A blank line prints
@@ -97,8 +132,12 @@ fn section(string title, i32 n) bool:
 # opener rather than under it -- the hanging indent a tag needs (R38 rule 3). The text is
 # re-indented and never reflowed (R39): it breaks where the author wrote a newline, which
 # is what keeps a fenced example intact.
-fn print_lines(string indent, string text, string opener) ~:
-    let string pad = " ".repeat(opener.len())
+#
+# `opener_width` is the opener's VISIBLE width, which is not its length once it carries
+# escapes: an alignment measured in bytes would indent a coloured continuation by the
+# width of the escapes as well.
+fn print_lines(string indent, string text, string opener, i32 opener_width) ~:
+    let string pad = " ".repeat(opener_width)
     let string hang = "{indent}{pad}"
     let string[] lines = text.split("\n")
     let i32 n = lines.len()
@@ -129,8 +168,8 @@ fn print_lines(string indent, string text, string opener) ~:
 # Parameters print in DECLARATION order, read from the owner's own `params` array and
 # looked up by name: a map's wire order is not the signature's order. An owner with no
 # `params` array -- a unit, a struct, a generic type -- renders no parameter line.
-fn print_doc_record(MsgValue doc, MsgValue owner, string indent, bool show) bool:
-    if (not show):
+fn print_doc_record(MsgValue doc, MsgValue owner, string indent, Opts o) bool:
+    if (not o.docs):
         return Result.Ok(false)
     if (ml_is_nil(doc)??):
         return Result.Ok(false)
@@ -138,12 +177,12 @@ fn print_doc_record(MsgValue doc, MsgValue owner, string indent, bool show) bool
     let string summary = ml_get_str(doc, "summary")??
     let string body = ml_get_str(doc, "body")??
     if (summary != ""):
-        print_lines(indent, summary, "")??
+        print_lines(indent, summary, "", 0)??
         printed := true
     if (body != ""):
         if (printed):
             println("")
-        print_lines(indent, body, "")??
+        print_lines(indent, body, "", 0)??
         printed := true
     let MsgValue named = ml_get(doc, "params")??
     let MsgValue declared = ml_get(owner, "params")??
@@ -156,27 +195,30 @@ fn print_doc_record(MsgValue doc, MsgValue owner, string indent, bool show) bool
         if (ptext != ""):
             if (printed):
                 println("")
-            print_lines(indent, ptext, "- Parameter {pn}: ")??
+            # The width is the PLAIN opener's, so it cannot drift from what prints.
+            let string pplain = "- Parameter {pn}: "
+            let string popener = "- {o.blue}Parameter{o.reset} {o.cyan}{pn}{o.reset}: "
+            print_lines(indent, ptext, popener, pplain.len())??
             printed := true
         i := i + 1
     let string returns = ml_get_str(doc, "returns")??
     if (returns != ""):
         if (printed):
             println("")
-        print_lines(indent, returns, "- Returns: ")??
+        print_lines(indent, returns, "- {o.blue}Returns{o.reset}: ", "- Returns: ".len())??
         printed := true
     let string errors = ml_get_str(doc, "errors")??
     if (errors != ""):
         if (printed):
             println("")
-        print_lines(indent, errors, "- Errors: ")??
+        print_lines(indent, errors, "- {o.blue}Errors{o.reset}: ", "- Errors: ".len())??
         printed := true
     return Result.Ok(printed)
 
 # print_doc: the doc record of one manifest entry, when it carries one.
-fn print_doc(MsgValue owner, string indent, bool show) bool:
+fn print_doc(MsgValue owner, string indent, Opts o) bool:
     let MsgValue doc = ml_get(owner, "doc")??
-    return Result.Ok(print_doc_record(doc, owner, indent, show)??)
+    return Result.Ok(print_doc_record(doc, owner, indent, o)??)
 
 # open_record: the blank line rule 2 puts BEFORE a record whose predecessor left a block
 # behind, never after one -- an after-rule would double with the blank line every section
@@ -213,8 +255,9 @@ fn render_params(MsgValue f) string:
 # so a template prints what a concrete function prints -- a generic used to print
 # `(template)` where its parameters belong, which is why its `- Parameter` tags were
 # stored and never rendered.
-fn render_signature(MsgValue f) string:
-    let string name = ml_get_str(f, "name")??
+fn render_signature(MsgValue f, Opts o) string:
+    let string bare = ml_get_str(f, "name")??
+    let string name = "{o.bold}{bare}{o.reset}"
     let string generic = render_type_params(f)??
     let string params = render_params(f)??
     let string ret = to_surface(ml_get_str(f, "return_type")??)??
@@ -226,19 +269,19 @@ fn render_signature(MsgValue f) string:
     let string serr = to_surface(err)??
     return Result.Ok("fn {name}{generic}({params}) {ret} | {serr}")
 
-fn print_functions(MsgValue meta, bool show_docs) ~:
+fn print_functions(MsgValue meta, Opts o) ~:
     let MsgValue funcs = ml_get(meta, "public_functions")??
     let i32 n = ml_len(funcs)??
-    if (not section("Public Functions", n)??):
+    if (not section("Public Functions", n, o)??):
         return Result.Ok(~)
     let bool pending = false
     let i32 i = 0
     while (i < n):
         let MsgValue f = ml_at(funcs, i)??
         pending := open_record(pending)??
-        let string sig = render_signature(f)??
+        let string sig = render_signature(f, o)??
         println("  {sig}")
-        pending := print_doc(f, "    ", show_docs)??
+        pending := print_doc(f, "    ", o)??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -281,28 +324,28 @@ fn render_type_params(MsgValue gf) string:
         i := i + 1
     return Result.Ok("@({body})")
 
-fn print_generic_functions(MsgValue meta, bool show_docs) ~:
+fn print_generic_functions(MsgValue meta, Opts o) ~:
     let MsgValue templates = ml_get(meta, "templates")??
     let MsgValue gfs = ml_get(templates, "generic_functions")??
     let i32 n = ml_len(gfs)??
-    if (not section("Generic Functions", n)??):
+    if (not section("Generic Functions", n, o)??):
         return Result.Ok(~)
     let bool pending = false
     let i32 i = 0
     while (i < n):
         let MsgValue gf = ml_at(gfs, i)??
         pending := open_record(pending)??
-        let string sig = render_signature(gf)??
+        let string sig = render_signature(gf, o)??
         println("  {sig}")
-        pending := print_doc(gf, "    ", show_docs)??
+        pending := print_doc(gf, "    ", o)??
         i := i + 1
     println("")
     return Result.Ok(~)
 
-fn print_constants(MsgValue meta, bool show_docs) ~:
+fn print_constants(MsgValue meta, Opts o) ~:
     let MsgValue consts = ml_get(meta, "public_constants")??
     let i32 n = ml_len(consts)??
-    if (not section("Public Constants", n)??):
+    if (not section("Public Constants", n, o)??):
         return Result.Ok(~)
     let bool pending = false
     let i32 i = 0
@@ -312,7 +355,7 @@ fn print_constants(MsgValue meta, bool show_docs) ~:
         let string t = to_surface(ml_get_str(c, "type")??)??
         let string name = ml_get_str(c, "name")??
         println("  const {t} {name}")
-        pending := print_doc(c, "    ", show_docs)??
+        pending := print_doc(c, "    ", o)??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -337,10 +380,10 @@ fn render_named_type_params(MsgValue rec) string:
         i := i + 1
     return Result.Ok("@({body})")
 
-fn print_structs(MsgValue meta, bool show_docs) ~:
+fn print_structs(MsgValue meta, Opts o) ~:
     let MsgValue structs = ml_get(meta, "structs")??
     let i32 n = ml_len(structs)??
-    if (not section("Structs", n)??):
+    if (not section("Structs", n, o)??):
         return Result.Ok(~)
     let bool pending = false
     let i32 i = 0
@@ -352,7 +395,7 @@ fn print_structs(MsgValue meta, bool show_docs) ~:
         println("  struct {name}{generic}:")
         # A FIELD is a record too, and the struct's own block is the record above the
         # first one -- so one flag covers the struct and its members alike.
-        pending := print_doc(s, "    ", show_docs)??
+        pending := print_doc(s, "    ", o)??
         let MsgValue fields = ml_get(s, "fields")??
         let i32 nf = ml_len(fields)??
         let i32 j = 0
@@ -362,16 +405,16 @@ fn print_structs(MsgValue meta, bool show_docs) ~:
             let string ft = to_surface(ml_get_str(fld, "type")??)??
             let string fname = ml_get_str(fld, "name")??
             println("    {ft} {fname}")
-            pending := print_doc(fld, "      ", show_docs)??
+            pending := print_doc(fld, "      ", o)??
             j := j + 1
         i := i + 1
     println("")
     return Result.Ok(~)
 
-fn print_enums(MsgValue meta, bool show_docs) ~:
+fn print_enums(MsgValue meta, Opts o) ~:
     let MsgValue enums = ml_get(meta, "enums")??
     let i32 n = ml_len(enums)??
-    if (not section("Enums", n)??):
+    if (not section("Enums", n, o)??):
         return Result.Ok(~)
     let bool pending = false
     let i32 i = 0
@@ -381,7 +424,7 @@ fn print_enums(MsgValue meta, bool show_docs) ~:
         let string name = ml_get_str(e, "name")??
         let string generic = render_named_type_params(e)??
         println("  enum {name}{generic}:")
-        pending := print_doc(e, "    ", show_docs)??
+        pending := print_doc(e, "    ", o)??
         let MsgValue variants = ml_get(e, "variants")??
         let i32 nv = ml_len(variants)??
         let i32 j = 0
@@ -394,7 +437,7 @@ fn print_enums(MsgValue meta, bool show_docs) ~:
                 println("    {vname}({dt})")
             else:
                 println("    {vname}")
-            pending := print_doc(v, "      ", show_docs)??
+            pending := print_doc(v, "      ", o)??
             j := j + 1
         i := i + 1
     println("")
@@ -405,11 +448,11 @@ fn print_enums(MsgValue meta, bool show_docs) ~:
 # share a printer and differ by the keyword. A generic struct's FIELD blocks are not in
 # the index at all (documentation.md S8, R3), so neither record has members to print.
 fn print_generic_named(MsgValue meta, string key, string title, string keyword,
-                       bool show_docs) ~:
+                       Opts o) ~:
     let MsgValue templates = ml_get(meta, "templates")??
     let MsgValue items = ml_get(templates, key)??
     let i32 n = ml_len(items)??
-    if (not section(title, n)??):
+    if (not section(title, n, o)??):
         return Result.Ok(~)
     let bool pending = false
     let i32 i = 0
@@ -419,7 +462,7 @@ fn print_generic_named(MsgValue meta, string key, string title, string keyword,
         let string name = ml_get_str(r, "name")??
         let string generic = render_type_params(r)??
         println("  {keyword} {name}{generic}:")
-        pending := print_doc(r, "    ", show_docs)??
+        pending := print_doc(r, "    ", o)??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -427,11 +470,11 @@ fn print_generic_named(MsgValue meta, string key, string title, string keyword,
 # print_perks: the contracts a consumer can be asked to satisfy. A perk reaches the
 # manifest only when an exported generic's constraint names it, so this section is
 # exactly the set that can appear in a signature above.
-fn print_perks(MsgValue meta, bool show_docs) ~:
+fn print_perks(MsgValue meta, Opts o) ~:
     let MsgValue templates = ml_get(meta, "templates")??
     let MsgValue perks = ml_get(templates, "perks")??
     let i32 n = ml_len(perks)??
-    if (not section("Perks", n)??):
+    if (not section("Perks", n, o)??):
         return Result.Ok(~)
     let bool pending = false
     let i32 i = 0
@@ -440,18 +483,18 @@ fn print_perks(MsgValue meta, bool show_docs) ~:
         pending := open_record(pending)??
         let string name = ml_get_str(r, "name")??
         println("  perk {name}:")
-        pending := print_doc(r, "    ", show_docs)??
+        pending := print_doc(r, "    ", o)??
         i := i + 1
     println("")
     return Result.Ok(~)
 
 # print_perk_impls: which types satisfy which contract. Each method carries its own
 # block, which is the one thing an implementation record adds over a perk definition.
-fn print_perk_impls(MsgValue meta, bool show_docs) ~:
+fn print_perk_impls(MsgValue meta, Opts o) ~:
     let MsgValue templates = ml_get(meta, "templates")??
     let MsgValue impls = ml_get(templates, "perk_impls")??
     let i32 n = ml_len(impls)??
-    if (not section("Perk Implementations", n)??):
+    if (not section("Perk Implementations", n, o)??):
         return Result.Ok(~)
     let bool pending = false
     let i32 i = 0
@@ -462,7 +505,7 @@ fn print_perk_impls(MsgValue meta, bool show_docs) ~:
         # `perk` is a reserved word, so the contract's NAME cannot be bound to it.
         let string contract = ml_get_str(r, "perk")??
         println("  extend {target} with {contract}:")
-        pending := print_doc(r, "    ", show_docs)??
+        pending := print_doc(r, "    ", o)??
         let MsgValue methods = ml_get(r, "methods")??
         let i32 nm = ml_len(methods)??
         let i32 j = 0
@@ -471,17 +514,17 @@ fn print_perk_impls(MsgValue meta, bool show_docs) ~:
             pending := open_record(pending)??
             let string mname = ml_get_str(m, "name")??
             println("    fn {mname}")
-            pending := print_doc(m, "      ", show_docs)??
+            pending := print_doc(m, "      ", o)??
             j := j + 1
         i := i + 1
     println("")
     return Result.Ok(~)
 
 # print_units: the unit index a v4 library carries.
-fn print_units(MsgValue meta, bool show_docs) ~:
+fn print_units(MsgValue meta, Opts o) ~:
     let MsgValue units = ml_get(meta, "units")??
     let i32 n = ml_len(units)??
-    if (not section("Units", n)??):
+    if (not section("Units", n, o)??):
         return Result.Ok(~)
     let MsgValue unit_docs = ml_get(meta, "unit_docs")??
     let bool pending = false
@@ -492,15 +535,15 @@ fn print_units(MsgValue meta, bool show_docs) ~:
         let string name = ml_str(u)??
         println("  {name}")
         let MsgValue doc = ml_get(unit_docs, name)??
-        pending := print_doc_record(doc, MsgValue.Nil(), "    ", show_docs)??
+        pending := print_doc_record(doc, MsgValue.Nil(), "    ", o)??
         i := i + 1
     println("")
     return Result.Ok(~)
 
-fn print_dependencies(MsgValue meta) ~:
+fn print_dependencies(MsgValue meta, Opts o) ~:
     let MsgValue deps = ml_get(meta, "dependencies")??
     let i32 n = ml_len(deps)??
-    if (not section("Dependencies", n)??):
+    if (not section("Dependencies", n, o)??):
         return Result.Ok(~)
     let i32 i = 0
     while (i < n):
@@ -528,7 +571,7 @@ fn group_thousands(u64 n) string:
 # the size of every payload section the kind actually has. A field that the kind
 # makes meaningless does not print: a source library has no platform, and a
 # binary one has no source.
-fn print_report(MsgValue meta, SlibSizes sizes, bool show_docs) ~:
+fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     let string libname = ml_get_str(meta, "library_name")??
     let string libver = ml_get_str(meta, "library_version")??
     let string kind = ml_get_str(meta, "kind")??
@@ -548,23 +591,23 @@ fn print_report(MsgValue meta, SlibSizes sizes, bool show_docs) ~:
     println("Compiled: {at}")
     println("Protocol: {proto}")
     println("")
-    print_units(meta, show_docs)??
-    print_functions(meta, show_docs)??
-    print_generic_functions(meta, show_docs)??
-    print_constants(meta, show_docs)??
-    print_structs(meta, show_docs)??
-    print_generic_named(meta, "generic_structs", "Generic Structs", "struct", show_docs)??
-    print_enums(meta, show_docs)??
-    print_generic_named(meta, "generic_enums", "Generic Enums", "enum", show_docs)??
-    print_perks(meta, show_docs)??
-    print_perk_impls(meta, show_docs)??
-    print_dependencies(meta)??
+    print_units(meta, o)??
+    print_functions(meta, o)??
+    print_generic_functions(meta, o)??
+    print_constants(meta, o)??
+    print_structs(meta, o)??
+    print_generic_named(meta, "generic_structs", "Generic Structs", "struct", o)??
+    print_enums(meta, o)??
+    print_generic_named(meta, "generic_enums", "Generic Enums", "enum", o)??
+    print_perks(meta, o)??
+    print_perk_impls(meta, o)??
+    print_dependencies(meta, o)??
     if (kind != "binary"):
         let string src = group_thousands(sizes.source)??
-        println("Source: {src} bytes")
+        println("Source: {o.dim}{src}{o.reset} bytes")
     if (kind != "source"):
         let string bc = group_thousands(sizes.bitcode)??
-        println("Bitcode: {bc} bytes")
+        println("Bitcode: {o.dim}{bc}{o.reset} bytes")
     return Result.Ok(~)
 
 fn print_read_error(string path, SlibError e) ~:
@@ -583,7 +626,7 @@ fn print_read_error(string path, SlibError e) ~:
 
 # USAGE: the one spelling of the summary line, printed by --help and by every usage
 # error. Two spellings drift the moment one of them is edited.
-const string USAGE = "usage: slib-info [--docs] <file.slib>"
+const string USAGE = "usage: slib-info [--docs] [--color=WHEN] <file.slib>"
 
 # print_help: what the tool is and what it takes. Goes to stdout and exits 0, because
 # help that was asked for is an answer and not an error.
@@ -593,8 +636,12 @@ fn print_help() ~:
     println("Print the metadata report of a .slib library.")
     println("")
     println("Options:")
-    println("  --docs      Print the documentation block of every symbol that has one.")
-    println("  -h, --help  Print this message and exit.")
+    println("  --docs          Print the documentation block of every symbol that has one.")
+    println("  --color=WHEN    always, never, or auto (the default).")
+    println("  -h, --help      Print this message and exit.")
+    println("")
+    println("Colour, highest precedence first: --color, then NO_COLOR, then")
+    println("CLICOLOR_FORCE, then TERM=dumb, then whether stdout is a terminal.")
     return Result.Ok(~)
 
 fn print_usage_error(string message) ~:
@@ -602,12 +649,12 @@ fn print_usage_error(string message) ~:
     stderr.write("{USAGE}\n")
     return Result.Ok(~)
 
-fn report(string path, bool show_docs) i32:
+fn report(string path, Opts o) i32:
     match slib_read_metadata(path):
         Result.Ok(meta) ->
             match slib_sizes(path):
                 Result.Ok(sizes) ->
-                    print_report(meta, sizes, show_docs)??
+                    print_report(meta, sizes, o)??
                     return Result.Ok(0)
                 Result.Err(e2) ->
                     print_read_error(path, e2)??
@@ -620,9 +667,49 @@ fn report(string path, bool show_docs) i32:
 # run_tool: the command line, in one pass. A flag is a flag wherever it stands, and the
 # one bare word is the path. `--help` is answered the moment it is seen, so it wins over
 # whatever else was typed.
+# env_is_set: is this variable in the environment at all? `NO_COLOR` and `CLICOLOR_FORCE`
+# both answer to their PRESENCE, so the empty string is a value and not an absence.
+fn env_is_set(string name) bool:
+    match getenv(name):
+        Maybe.Some(_) ->
+            return Result.Ok(true)
+        Maybe.None() ->
+            return Result.Ok(false)
+    return Result.Ok(false)
+
+# env_value: what the variable says, or "" when it is not set. Read it beside
+# `env_is_set` when the difference matters.
+fn env_value(string name) string:
+    match getenv(name):
+        Maybe.Some(v) ->
+            return Result.Ok(v.clone())
+        Maybe.None() ->
+            return Result.Ok("")
+    return Result.Ok("")
+
+# want_colour: THE colour decision, in the order R41 gives it -- the same five rungs the
+# compiler applies in `internals/styling.py`. Two answers to one question is the drift
+# every one-seam rule in this project exists to stop.
+fn want_colour(string choice) bool:
+    if (choice == "always"):
+        return Result.Ok(true)
+    if (choice == "never"):
+        return Result.Ok(false)
+    # no-color.org's rule: the variable's PRESENCE is the signal, never its value, so an
+    # empty NO_COLOR still turns colour off.
+    if (env_is_set("NO_COLOR")??):
+        return Result.Ok(false)
+    if (env_is_set("CLICOLOR_FORCE")??):
+        if (env_value("CLICOLOR_FORCE")?? != "0"):
+            return Result.Ok(true)
+    if (env_value("TERM")?? == "dumb"):
+        return Result.Ok(false)
+    return Result.Ok(stdout.is_terminal())
+
 fn run_tool(peek string[] args) i32:
     let string path = ""
     let bool show_docs = false
+    let string colour = "auto"
     let i32 n = args.len()
     let i32 i = 1
     while (i < n):
@@ -633,13 +720,19 @@ fn run_tool(peek string[] args) i32:
         if (a == "--docs"):
             show_docs := true
         else:
-            if (a.starts_with("-")):
-                print_usage_error("unknown option: {a}")??
-                return Result.Ok(2)
-            if (path != ""):
-                print_usage_error("more than one file named: {a}")??
-                return Result.Ok(2)
-            path := a.clone()
+            if (a.starts_with("--color=")):
+                colour := a.s(8, a.len())
+                if (colour != "always" and colour != "never" and colour != "auto"):
+                    print_usage_error("--color takes always, never or auto: {a}")??
+                    return Result.Ok(2)
+            else:
+                if (a.starts_with("-")):
+                    print_usage_error("unknown option: {a}")??
+                    return Result.Ok(2)
+                if (path != ""):
+                    print_usage_error("more than one file named: {a}")??
+                    return Result.Ok(2)
+                path := a.clone()
         i := i + 1
 
     if (path == ""):
@@ -648,7 +741,9 @@ fn run_tool(peek string[] args) i32:
     if (not path.ends_with(".slib")):
         stderr.write("Error: expected .slib file, got: {path}\n")
         return Result.Ok(2)
-    return Result.Ok(report(path, show_docs)??)
+    let Opts o = make_opts(show_docs, want_colour(colour)??)??
+    return Result.Ok(report(path, o)??)
+
 fn main(string[] args) i32:
     if (args.len() > 0):
         let i32 r = run_tool(peek args).realise(99)

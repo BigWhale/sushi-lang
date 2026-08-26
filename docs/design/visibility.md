@@ -234,6 +234,64 @@ the contract; the method belongs to the type.** Privacy on a perk decides who ma
 implementations of the contract. It does not retract a method from a type you chose to
 publish.
 
+### The same pair, with a public perk
+
+Mark the perk `public` and the contract itself becomes part of the API:
+
+<!-- docs-sweep: skip (proposed syntax, not implemented) -->
+```sushi
+# unit.sushi
+public perk Loud:                   # public -- the contract is API now
+    fn shout() i32
+
+public struct Box:
+    i32 n
+
+extend Box with Loud:               # public, because Box is public
+    fn shout() i32:
+        return 0
+```
+
+<!-- docs-sweep: skip (proposed syntax, not implemented) -->
+```sushi
+# main.sushi
+use "unit"
+
+struct MyStruct:
+    i32 v
+
+extend MyStruct with Loud:          # WORKS: Loud is public, so another unit may implement it
+    fn shout() i32:
+        return 1
+
+fn loudest@(T: Loud)(peek T a, peek T b) i32:   # WORKS: Loud may be named in a constraint
+    if (a.shout() > b.shout()):
+        return Result.Ok(a.shout())
+    return Result.Ok(b.shout())
+
+fn main() i32:
+    let Box my_box = Box(7)
+    my_box.shout()                  # WORKS -- unchanged by the perk's visibility
+    return Result.Ok(0)
+```
+
+Two things changed, and one did not:
+
+| | private `perk Loud` | `public perk Loud` |
+|---|---|---|
+| `extend MyStruct with Loud` in another unit | CE4011 | allowed |
+| `@(T: Loud)` in another unit | CE4011 | allowed |
+| `my_box.shout()` in another unit | **allowed** | **allowed** |
+
+The call is the row that does not move. A perk's visibility governs the **contract** — who
+may implement it, and who may demand it in a constraint. It never governs a method on a type
+that is already public. That is the whole content of Ruling 3, and the table is the shortest
+way to say it.
+
+The practical reading: keep a perk private while it is an implementation detail you may still
+want to change, because nothing outside can then depend on it. Publish it when you want other
+units to implement it, and accept that its method set is API from that point on.
+
 ### Java draws the same line
 
 An interface with no modifier is package-private. A public class may still implement it,
@@ -314,19 +372,22 @@ public interface). Sushi needs both.
 struct Point:                       # private
     i32 x
 
+perk Loud:                          # private
+    fn shout() i32
+
+public struct Box:                  # public
+    Point at                        # ERROR: a public struct with a private field type
+
 public fn origin() Point:           # ERROR: leaks Point
     return Result.Ok(Point(0))
 
 public fn many() List@(Point):      # ERROR: leaks Point through a type argument
     return Result.Ok(List.new())
 
-public struct Wrapper:              # ERROR: a public struct with a private field type
-    Point inner
+extend Box where() Point:           # ERROR: Box is public, so this is; Point is not
+    return self.at
 
-extend PublicBox at() Point:        # ERROR: the extension is public, Point is not
-    return self.p
-
-public fn loudest@(T: Quiet)(T x) ~:  # ERROR: names a private perk in a constraint
+public fn loudest@(T: Loud)(T x) ~:  # ERROR: names a private perk in a constraint
     return Result.Ok(~)
 ```
 
@@ -342,9 +403,21 @@ visibility of the thing being declared:
 | Public generic constraint | `if not func.is_public: return` | `signatures.py:30` |
 
 The extension guard reading its *target's* flag mirrors the function guard reading its
-*own*. Two new codes are needed, and `unit.py` owns the range up to CE3008, so **CE3009**
-(private type in a public signature) and **CE3010** (private perk in a public constraint)
-are the next free numbers.
+*own*.
+
+Three new codes are needed, and each family owns its own range. `unit.py` is registered up
+to CE3008 and `perk.py` up to CE4010, so the next free numbers are:
+
+| Code | Family | Answers |
+|---|---|---|
+| **CE3009** | `unit.py` | A public signature names a private type — Rust's E0446 |
+| **CE3010** | `unit.py` | A public signature's constraint names a private perk — Rust's E0445 |
+| **CE4011** | `perk.py` | Another unit implements or names a private perk — the perk twin of CE3005 |
+
+CE3010 and CE4011 both involve a private perk and are not the same error. CE4011 is a
+**use-site** rule: the perk is not nameable in that unit at all. CE3010 is a **leak** rule:
+the perk is nameable right there, in its own unit, and the signature would hand it to a unit
+where it is not.
 
 The implicit `Result` wrap needs no special case. `fn origin() Point` becomes
 `Result@(Point, StdError)`, but the fence runs on `func.ret` before the wrap.

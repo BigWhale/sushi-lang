@@ -47,6 +47,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--lib-version X.Y.Z` | Version of the library being built                |
 | `--lib-info FILE`   | Print the metadata report of a `.slib` file        |
 | `--docs`            | With `--lib-info`: print each symbol's documentation block |
+| `--color WHEN`      | `always`, `never` or `auto` (the default)          |
 | `--ignore-compiler-version` | Load libraries this compiler does not satisfy (CE3503) |
 | `--warn-missing-docs` | Warn about anything with no documentation block (CW7002-CW7006) |
 | `--traceback`       | Show full Python traceback on errors               |
@@ -117,10 +118,30 @@ sources -- see
 
 In a repository checkout, `--lib-info` runs the Sushi-written `toolchain/bin/slib-info`
 binary when it exists (build it with `./toolchain/build.py`) and returns its exit code;
-without the binary the built-in Python reader prints the same report. `--docs` reaches the
-tool as itself, and the tool answers `--help` on its own. Set
+without the binary the built-in Python reader prints the same report. `--docs` and
+`--color` reach the tool as themselves, and the tool answers `--help` on its own. Set
 `SUSHI_TOOLCHAIN=off` to force the Python path, or `SUSHI_TOOLCHAIN_BIN=DIR` to point at
 a different tool directory.
+
+### Colour
+
+Everything the compiler prints to a terminal -- a diagnostic, the version banner and the
+`--lib-info` report -- makes one colour decision. Highest precedence first:
+
+| # | Rung | Answer |
+|---|---|---|
+| 1 | `--color=always` / `--color=never` | as asked |
+| 2 | `NO_COLOR` set to **anything**, the empty string included | off |
+| 3 | `CLICOLOR_FORCE` set to anything but `0` | on, terminal or not |
+| 4 | `TERM=dumb` | off |
+| 5 | the stream is a terminal | on, else off |
+
+Rung 2 is [no-color.org](https://no-color.org)'s rule: the variable's presence is the
+signal, never its value. Rung 3 is what lets a script capture a coloured report, and what
+lets this project's own gates compare one.
+
+Colour changes no text. Strip the escapes from a coloured report and the plain report
+comes back, byte for byte.
 
 Libraries are used via `use <lib/...>` statements in source code:
 

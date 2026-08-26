@@ -1185,6 +1185,57 @@ reflow would destroy a fenced example, and §2 does not reflow the text anywhere
 this feature.
 
 
+**R41 — one colour decision, five rungs, and an explicit answer at the top.** Highest
+precedence first:
+
+1. `--color=always` / `--color=never`, from the flag or from a direct call.
+2. `NO_COLOR` set to ANYTHING, the empty string included -- off. That is
+   [no-color.org](https://no-color.org)'s rule: the variable's PRESENCE is the signal,
+   never its value.
+3. `CLICOLOR_FORCE` set to anything but `0` -- on, terminal or not.
+4. `TERM=dumb` -- off.
+5. The stream is a terminal.
+
+Rung 3 is what makes colour testable at all. A pipe is not a terminal and every gate this
+project has captures its output, so without a forced-colour rung every one of them would
+compare the plain report and call it a pass. Rung 1 was added when the tool grew a real
+command-line parser (R50); the flag is nearly free once one exists, and it lets a gate
+force colour without setting a variable for the whole process.
+
+The ladder is ONE function on each side: `internals/styling.py:should_colour` and the
+tool's `want_colour`. Three sites is what made this a seam. `report.py` had rungs 2, 4 and
+5 for diagnostics; `version.py:print_banner` had rung 5 alone, so `NO_COLOR` silenced
+every diagnostic and left the banner above them painted. Both read the one ladder now, and
+`--color` reaches all three through a process-wide override installed once from `main()` --
+a CLI flag IS process-wide, and threading it through every call in the compiler to change
+the colour of a line would be the wrong shape.
+
+**R43 — the style map, and the constraint on it.**
+
+| Part | Style |
+|---|---|
+| a section header | bold |
+| a count, a size | dim |
+| a symbol name inside a signature | bold |
+| the rest of a signature | plain |
+| a tag keyword (`Parameter`, `Returns`, `Errors`) | blue |
+| a parameter name after `- Parameter` | cyan |
+| prose, a summary, a body | plain |
+
+**Sixteen colours only.** No 256-colour and no truecolor: the report has six or seven
+kinds of thing in it, `COLORTERM` then needs no reading, and every terminal that supports
+colour at all supports these.
+
+**Colour changes no text.** Strip the escapes from a coloured report and the plain report
+comes back byte for byte -- `test_report_colour.py` asserts exactly that, in both modes of
+`--docs`. It is what makes the style map safe to extend: a new style cannot move a column.
+
+The implementation is what makes it hold. A style is a STRING carried on the options value
+and concatenated at the call site -- never a branch -- so a painted line and a plain one
+are the same line of code. The one place it does not fall out for free is the hanging
+indent, which must be measured on the PLAIN opener: an alignment measured on the painted
+one would indent a continuation by the width of the escapes as well.
+
 **R45 — user-visible text spells a generic `@(...)`.** The report printed
 `fn pick_bigger<T: Doubler> (template)` and `struct Box<T>:`. Angle brackets are the
 INTERNAL identity spelling and `docs/design/type-identity.md` reserves them for interned

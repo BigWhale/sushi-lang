@@ -38,16 +38,12 @@ def print_banner() -> None:
     v = _get_versions()
     today = datetime.date.today().isoformat()
 
-    # Only use ANSI styling if stdout is a TTY (interactive terminal)
-    # This prevents ANSI codes from appearing in piped/redirected output
-    use_ansi = sys.stdout.isatty()
+    # THE colour decision, the same one a diagnostic makes. Deciding on `isatty` alone
+    # here meant `NO_COLOR` silenced every diagnostic and left this line painted.
+    from sushi_lang.internals.styling import Palette, should_colour
 
-    if use_ansi:
-        # Minimal ANSI styling for interactive terminals
-        BOLD, DIM, RESET = "\x1b[1m", "\x1b[2m", "\x1b[0m"
-    else:
-        # Plain text for piped/redirected output
-        BOLD, DIM, RESET = "", "", ""
+    p = Palette(should_colour(sys.stdout))
+    BOLD, DIM, RESET = p.bold, p.dim, p.reset
 
     dev_marker = " (dev)" if is_dev else ""
     print(

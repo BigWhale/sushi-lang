@@ -9,6 +9,21 @@ a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
 ### Added
+- **`--color=always|never|auto`, and one colour decision behind it.** Everything the
+  compiler prints to a terminal -- a diagnostic, the version banner and the `--lib-info`
+  report -- now reads one ladder: the flag, then `NO_COLOR` (present at any value, which
+  is no-color.org's rule), then `CLICOLOR_FORCE`, then `TERM=dumb`, then whether the
+  stream is a terminal.
+
+  Three sites is what made this a seam. The diagnostics implemented three of the five
+  rungs and the banner implemented one, so `NO_COLOR` silenced every diagnostic and left
+  the banner above them painted.
+
+  **The `--lib-info` report is coloured**: a section header and a symbol name bold, a
+  count and a size dim, a tag keyword blue and a parameter name cyan, and prose left
+  alone. Sixteen colours only -- the report has seven kinds of thing in it, so
+  256-colour buys nothing and `COLORTERM` needs no reading. Colour changes no text:
+  strip the escapes and the plain report comes back byte for byte.
 - **`is_terminal()` on `stdin`, `stdout` and `stderr`.** A program can ask whether a
   stream is attached to a terminal, which is what a tool needs before it decides to use
   colour. The answer is about that stream alone: output piped into a pager still leaves a
