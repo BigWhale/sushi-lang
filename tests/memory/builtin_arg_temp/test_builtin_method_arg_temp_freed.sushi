@@ -1,0 +1,55 @@
+# An owning TEMPORARY handed to a BUILT-IN callee's borrow parameter is freed exactly once
+#
+# #358 made the argument's provenance decide, but only at `settle_call_arguments`, and a
+# built-in never reaches it: a built-in has no declared parameters, so its emitter builds
+# its own argument list. Every family below emitted `src.s(...)` and let it fall on the
+# floor (#475). One block per owning argument, so `replace` leaked two a call.
+# EXPECT_STDOUT_EXACT: "1\nabXYij\n1\ncde\nnone\n4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+use <io/stdio>
+use <collections/strings>
+use <collections/hashmap>
+use <sys/env>
+
+perk Namer:
+    fn tag(string s) i32
+
+struct Box:
+    i32 n
+
+extend Box with Namer:
+    fn tag(string s) i32:
+        return self.n + s.len()
+
+fn main() i32:
+    let string src = "abcdefghij"
+    let string alt = "XYZW"
+
+    # A built-in string method, one owning argument and then two.
+    println(src.contains(src.s(2, 5)))
+    println(src.replace(src.s(2, 8), alt.s(0, 2)))
+
+    # A HashMap key lookup borrows its key.
+    let HashMap@(string, i32) map = HashMap.new()
+    map.insert("cde", 1)
+    println(map.contains_key(src.s(2, 5)))
+    map.free()
+
+    # A stdio write borrows the string it prints.
+    stdout.write(src.s(2, 5))
+    stdout.write("\n")
+
+    # A C-string callee marshals a copy and frees it, but the string it marshalled from
+    # is still a temporary nobody owns.
+    match getenv(src.s(0, 6)):
+        Maybe.Some(value) -> println(value)
+        Maybe.None() -> println("none")
+
+    # A PERK method is not a built-in at all: it carries the same declared modes an
+    # extension method does, and simply never read them.
+    let Box box = Box(1)
+    println(box.tag(src.s(2, 5)))
+
+    return Result.Ok(0)

@@ -6,7 +6,7 @@ from llvmlite import ir
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
-from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg
+from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg, emit_cstr_arg
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -19,15 +19,27 @@ def emit_stdlib_stdio_call(
     args: list,
     to_i1: bool
 ) -> ir.Value:
-    """Emit a call to a stdlib stdio method."""
+    """Emit a call to a stdlib stdio method.
+
+    The arguments are emitted ONCE, here, through the built-in call-argument seam. A
+    stream method BORROWS what it writes, so an owning temporary handed to `write` had
+    no owner at all and leaked (#475).
+    """
     require_builder(codegen)
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i8_ptr = i8.as_pointer()
 
     func_name = f"sushi_{stream_name}_{method}"
+    arg_values = [emit_borrowed_arg(codegen, arg) for arg in args]
 
     from sushi_lang.backend.functions import declare_stdlib_function
+
+    # The one method valid on every stream, so it is resolved before the stream split.
+    if method == "is_terminal":
+        stdlib_func = declare_stdlib_function(codegen.module, func_name, i8, [])
+        result = codegen.builder.call(stdlib_func, [], name=f"{stream_name}_is_terminal_result")
+        return codegen.utils.as_i1(result) if to_i1 else result
 
     if stream_name == "stdin":
         if method == "readln":
@@ -42,7 +54,7 @@ def emit_stdlib_stdio_call(
 
         elif method == "read_bytes":
             array_struct_ty = ir.LiteralStructType([i32, i32, i8_ptr])
-            arg_value = codegen.expressions.emit_expr(args[0])
+            arg_value = arg_values[0]
             stdlib_func = declare_stdlib_function(codegen.module, func_name, array_struct_ty, [i32])
             result = codegen.builder.call(stdlib_func, [arg_value], name="stdin_read_bytes_result")
 
@@ -59,13 +71,13 @@ def emit_stdlib_stdio_call(
     elif stream_name in ["stdout", "stderr"]:
         if method == "write":
             string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
-            arg_value = codegen.expressions.emit_expr(args[0])
+            arg_value = arg_values[0]
             stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [string_struct_ty])
             return codegen.builder.call(stdlib_func, [arg_value], name=f"{stream_name}_write_result")
 
         elif method == "write_bytes":
             array_struct_ty = ir.LiteralStructType([i32, i32, i8_ptr])
-            arg_value = codegen.expressions.emit_expr(args[0])
+            arg_value = arg_values[0]
 
             stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [array_struct_ty])
             return codegen.builder.call(stdlib_func, [arg_value], name=f"{stream_name}_write_bytes_result")
@@ -80,7 +92,11 @@ def emit_stdlib_file_call(
     args: list,
     to_i1: bool
 ) -> ir.Value:
-    """Emit a call to a stdlib file method."""
+    """Emit a call to a stdlib file method.
+
+    The arguments are emitted ONCE, here, through the built-in call-argument seam -- the
+    same rule the stream methods above follow (#475).
+    """
     require_builder(codegen)
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i32 = ir.IntType(INT32_BIT_WIDTH)
@@ -88,6 +104,7 @@ def emit_stdlib_file_call(
     i8_ptr = i8.as_pointer()
 
     func_name = f"sushi_file_{method}"
+    arg_values = [emit_borrowed_arg(codegen, arg) for arg in args]
 
     from sushi_lang.backend.functions import declare_stdlib_function
 
@@ -106,14 +123,14 @@ def emit_stdlib_file_call(
 
     elif method in ("write", "writeln"):
         string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
-        arg_value = codegen.expressions.emit_expr(args[0])
+        arg_value = arg_values[0]
         stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [i8_ptr, string_struct_ty])
         result = codegen.builder.call(stdlib_func, [file_ptr, arg_value], name=f"file_{method}_result")
         return result
 
     elif method == "read_bytes":
         array_struct_ty = ir.LiteralStructType([i32, i32, i8_ptr])
-        arg_value = codegen.expressions.emit_expr(args[0])
+        arg_value = arg_values[0]
         stdlib_func = declare_stdlib_function(codegen.module, func_name, array_struct_ty, [i8_ptr, i32])
         result = codegen.builder.call(stdlib_func, [file_ptr, arg_value], name="file_read_bytes_result")
 
@@ -123,15 +140,15 @@ def emit_stdlib_file_call(
 
     elif method == "write_bytes":
         array_struct_ty = ir.LiteralStructType([i32, i32, i8_ptr])
-        arg_value = codegen.expressions.emit_expr(args[0])
+        arg_value = arg_values[0]
 
         stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [i8_ptr, array_struct_ty])
         result = codegen.builder.call(stdlib_func, [file_ptr, arg_value], name="file_write_bytes_result")
         return result
 
     elif method == "seek":
-        offset_value = codegen.expressions.emit_expr(args[0])
-        seekfrom_value = codegen.expressions.emit_expr(args[1])
+        offset_value = arg_values[0]
+        seekfrom_value = arg_values[1]
 
         # SeekFrom is a unit enum (no associated data)
         # New shape (#300 phase 2): {i32 tag, [1 x i64] data} -- must byte-match the .bc
@@ -221,7 +238,7 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
             raise_internal_error("CE0023", method=func_name, expected=2, got=len(expr.args))
 
         path_cstr = emit_cstr_arg(codegen, expr.args[0])
-        mode_value = codegen.expressions.emit_expr(expr.args[1])
+        mode_value = emit_borrowed_arg(codegen, expr.args[1])
 
         # Result<i32, FileError> is {i32 tag, [2 x i64] data} (#300 phase 2, see file_size)
         from sushi_lang.sushi_stdlib.src.type_definitions import get_result_type, get_unit_enum_type

@@ -407,6 +407,36 @@ def _spill_receiver(codegen: 'LLVMCodegen', receiver: Expr,
     return park_value(codegen, receiver, value, semantic_type)
 
 
+def emit_borrowed_arg(codegen: 'LLVMCodegen', arg: Expr,
+                      semantic_type: Optional['Type'] = None) -> ir.Value:
+    """Emit ONE argument a BUILT-IN callee only borrows, giving an owning temporary an owner.
+
+    THE built-in half of the call-argument seam, and the twin of `_own_receiver_temp`. A
+    DECLARED callee reaches `settle_call_arguments`, which reads the parameter's mode off
+    the signature; a built-in declares no parameters, so its emitter builds its own
+    argument list and there is no mode to read. Every argument routed here is therefore a
+    borrow by construction -- a built-in that TAKES ownership (List.push, HashMap.insert,
+    Own.alloc) is a CONTAINER callee and goes through `consume` instead.
+
+    Without this the temporary behind `src.contains(src.s(2, 5))` had no owner at all and
+    leaked one block per owning argument (#475), which is the hole #358 left.
+
+    `semantic_type` is the parameter's own type, for an emitter that already knows it --
+    a HashMap key, say. It beats reconstructing the argument's type from its AST, which
+    is only the fallback.
+    """
+    from sushi_lang.backend.expressions.memory import own_temporary
+    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+
+    value = codegen.expressions.emit_expr(arg)
+    if value is None:
+        return value
+    if semantic_type is None:
+        semantic_type = infer_expr_semantic_type(codegen, arg)
+    own_temporary(codegen, arg, value, semantic_type)
+    return value
+
+
 def emit_cstr_arg(codegen: 'LLVMCodegen', arg: Expr) -> ir.Value:
     """Marshal a `string` argument into a C `char*` the CALLER frees at scope exit.
 
@@ -414,8 +444,11 @@ def emit_cstr_arg(codegen: 'LLVMCodegen', arg: Expr) -> ir.Value:
     and `open()`. Only the FFI arm used to register the copy, so the other two leaked one
     block per string argument -- with a literal argument as much as with an owning one, since
     the copy is a separate allocation either way (#292, #291).
+
+    The COPY is what this seam frees. The string it copied from is an ordinary borrowed
+    argument, so it goes through `emit_borrowed_arg` like every other one (#475).
     """
-    return marshal_cstr(codegen, codegen.expressions.emit_expr(arg))
+    return marshal_cstr(codegen, emit_borrowed_arg(codegen, arg))
 
 
 def marshal_cstr(codegen: 'LLVMCodegen', value: ir.Value) -> ir.Value:

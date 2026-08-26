@@ -1,8 +1,9 @@
 # Design: Documentation blocks
 
-**Status: the language understands doc blocks, a library carries them, and the
-toolchain runs the examples.** Each phase below moves one part from DESIGN to BUILT; this
-banner records where the line is.
+**Status: BUILT, every phase.** The language understands doc blocks, a library carries
+them, the toolchain runs the examples, the compiler says what a block leaves out, and
+`slib-info` renders what it carries. This banner records where the line is; there is
+nothing left below it.
 The user-facing reference for what is built is `docs/documentation-blocks.md`.
 
 | Phase | Content | State |
@@ -11,10 +12,11 @@ The user-facing reference for what is built is `docs/documentation-blocks.md`.
 | 2 | Grammar, AST, attachment rules, the `docs` pass, CE6011/CE6012/CE6013 and CE70xx | BUILT |
 | 3 | `.slib` manifest carriage; `slib-info` prints a plain dump | BUILT |
 | 4 | `- Example:` blocks compile and run in the toolchain | BUILT |
-| 5 | `--warn-missing-docs` completeness lints | DESIGN |
-| 6 | Markdown rendering, and a Markdown checker written in Sushi | DESIGN |
+| 5 | `--warn-missing-docs` completeness lints | BUILT |
+| 6 | `slib-info` renders: layout, colour, the Markdown subset, and `--docs` | BUILT |
 
-Written for a compiler contributor. The user-facing guide comes with phase 6.
+Written for a compiler contributor. `docs/documentation-blocks.md` is the user-facing
+guide, written in phase 2 and extended by every phase since.
 
 ---
 
@@ -1068,42 +1070,54 @@ their records carry the key and nothing prints it. Phase 3 adds no section.
 
 ## 9. `slib-info` rendering
 
-Phase 3 is a plain dump. No pagination, no colour, no wrapping. Colour and structure are
-phase 6.
+Two reports, behind one switch. The PLAIN one is the API surface -- one line per symbol,
+dense, and the report phase 3 shipped. `--docs` (R50) adds every documentation block.
+Neither paginates, neither reflows.
 
 Docs are indented two spaces under the signature they belong to, inside the existing
 sections:
 
 ```
 Public Functions (1):
-  fn hyperspace_jump(i32 a, u8 b) i32
+  fn hyperspace_jump(i32 a, u8 b) i32 | JumpError
     Jumps through hyperspace.
 
     The drive needs a warm coil.
+
     - Parameter a: The incoming argument.
+
     - Parameter b: The second one.
+
     - Returns: The jump distance in parsecs.
-    - Errors: When the drive is cold, this returns `JumpError.NotReady`.
+
+    - Errors: When the drive is cold, this returns `JumpError.NotReady`, and
+              `JumpError.Overheated` when it is too warm.
 ```
 
-One blank line between the summary and the body, and none before the tags. R6 carries the
-whole rule, including what a blank line inside a body prints as.
+**R6 as amended by R38.** Phase 3 put a blank line between the summary and the body and
+nowhere else. R38 adds three more and one alignment rule; R6's ORDER half is untouched,
+and so is what a blank line inside a body prints as.
 
-A symbol with no docs renders exactly as it does today, with no blank line and no
-placeholder. This matches the existing convention, where an empty section is suppressed
-rather than printed empty.
+A symbol with no block renders with no blank line and no placeholder. That is why a run of
+bare signatures stays dense, in the documented report as much as in the plain one: rule 2
+closes a block, and a signature with no block has none to close.
 
-The two implementations need three helpers each, and phase 3 wrote them under these names:
+The two implementations need these helpers, under these names:
 
 - `ml_is_nil(MsgValue) -> bool`, because `ml_get_str` cannot tell an absent key from an
   empty string -- both give `""`. A doc record is read with `ml_get` and tested for `Nil`.
-- `print_lines(indent, text)` -- `text.split("\n")`, one `println` per line, an empty line
-  printed empty. Python must use `str.split("\n")` and **not** `splitlines()`: the latter
-  drops the trailing empty field and also breaks on `\r`, `\x0b` and `\x0c`. Measured
-  against `.split("\n")` on `"a\nb"`, `"a\n"`, `"\na"`, `"a\n\nb"`, `"a"` and `""`, the
-  two agree on every one.
-- `print_doc_record(doc, owner, indent)` -- the whole record in R6's order. It reads the
-  owner's own `params` array for the order and looks each name up in `doc.params`.
+- `print_lines(indent, text, opener)` -- `text.split("\n")`, one `println` per line, an
+  empty line printed empty, and `opener` on the FIRST line with every later line indented
+  past it. Python must use `str.split("\n")` and **not** `splitlines()`: the latter drops
+  the trailing empty field and also breaks on `\r`, `\x0b` and `\x0c`. Measured against
+  `.split("\n")` on `"a\nb"`, `"a\n"`, `"\na"`, `"a\n\nb"`, `"a"` and `""`, the two
+  agree on every one. The hanging indent lives here and not in a tag printer, so one
+  function owns both the cut and the alignment.
+- `print_doc_record(doc, owner, indent, show) -> bool` -- the whole record in R6's order,
+  and **whether it printed**, which is what rule 2 reads. It gates `--docs` for the whole
+  report, and reads the owner's own `params` array for the order.
+- `open_record(pending) -> bool` / `_Records` -- rule 2's blank line, before a record and
+  never after one.
 
 ### The parity obligation
 
@@ -1139,6 +1153,206 @@ Three costs in particular, since "a plain dump" understates them:
 - **Parameter modes.** §1 says `slib-info` can print `nom` / `peek` / `poke` from the manifest
   alone. Measured: it prints two of the three already, because `peek` and `poke` are part of
   the type string. R5 adds the third and makes §1 true.
+
+### Phase 6 rulings
+
+**R38 — the record layout, amending R6.** R6 said "no blank line before the tags, which is
+what S9's example shows". At the size a real library reaches that is the fault, not the
+rule: measured on 40 documented functions, 8 structs and 16 fields, the report is 428
+lines and ten terminal screens with no blank line anywhere between one symbol and the
+next. Whitespace is the only thing that makes that stream scannable.
+
+Five rules:
+
+1. **A blank line before the first tag**, when there is a tag and prose above it. This is
+   the amendment to R6.
+2. **A blank line before a record whose predecessor printed a block.** Before and never
+   after: an after-rule doubles with the blank line every section already prints when it
+   closes. A member is a record too, so a struct's own block is separated from its first
+   field and one field from the next.
+3. **A hanging indent on a continuation**, aligned under the tag's TEXT and not under its
+   dash, or a wrapped line reads as a new item.
+4. **A blank line between tags.** Ruled by David on 2026-08-26. A parameter, a return and
+   an error are three kinds of claim; it costs about six lines a documented function, and
+   the report is opt-in (R50), so the reader who asked for prose is the one who pays.
+5. **A blank line before a section header**, which the report had already.
+
+Rules 1 and 4 are ONE predicate in the implementation -- "something is already above
+me" -- because that is the whole condition either of them tests.
+
+**R39 — no reflow.** A tag's text wraps where the author wrote a newline and nowhere else.
+Rule 3 re-indents a continuation that already exists; it does not rewrap a long line. A
+reflow would destroy a fenced example, and §2 does not reflow the text anywhere else in
+this feature.
+
+
+**R41 — one colour decision, five rungs, and an explicit answer at the top.** Highest
+precedence first:
+
+1. `--color=always` / `--color=never`, from the flag or from a direct call.
+2. `NO_COLOR` set to ANYTHING, the empty string included -- off. That is
+   [no-color.org](https://no-color.org)'s rule: the variable's PRESENCE is the signal,
+   never its value.
+3. `CLICOLOR_FORCE` set to anything but `0` -- on, terminal or not.
+4. `TERM=dumb` -- off.
+5. The stream is a terminal.
+
+Rung 3 is what makes colour testable at all. A pipe is not a terminal and every gate this
+project has captures its output, so without a forced-colour rung every one of them would
+compare the plain report and call it a pass. Rung 1 was added when the tool grew a real
+command-line parser (R50); the flag is nearly free once one exists, and it lets a gate
+force colour without setting a variable for the whole process.
+
+The ladder is ONE function on each side: `internals/styling.py:should_colour` and the
+tool's `want_colour`. Three sites is what made this a seam. `report.py` had rungs 2, 4 and
+5 for diagnostics; `version.py:print_banner` had rung 5 alone, so `NO_COLOR` silenced
+every diagnostic and left the banner above them painted. Both read the one ladder now, and
+`--color` reaches all three through a process-wide override installed once from `main()` --
+a CLI flag IS process-wide, and threading it through every call in the compiler to change
+the colour of a line would be the wrong shape.
+
+**R43 — the style map, and the constraint on it.**
+
+| Part | Style |
+|---|---|
+| a section header | bold |
+| a count, a size | dim |
+| a symbol name inside a signature | bold |
+| the rest of a signature | plain |
+| a tag keyword (`Parameter`, `Returns`, `Errors`) | blue |
+| a parameter name after `- Parameter` | cyan |
+| prose, a summary, a body | plain |
+
+**Sixteen colours only.** No 256-colour and no truecolor: the report has six or seven
+kinds of thing in it, `COLORTERM` then needs no reading, and every terminal that supports
+colour at all supports these.
+
+**Colour changes no text.** Strip the escapes from a coloured report and the plain report
+comes back byte for byte -- `test_report_colour.py` asserts exactly that, in both modes of
+`--docs`. It is what makes the style map safe to extend: a new style cannot move a column.
+
+The implementation is what makes it hold. A style is a STRING carried on the options value
+and concatenated at the call site -- never a branch -- so a painted line and a plain one
+are the same line of code. The one place it does not fall out for free is the hanging
+indent, which must be measured on the PLAIN opener: an alignment measured on the painted
+one would indent a continuation by the width of the escapes as well.
+
+**R40 — plain mode keeps the marks, colour mode replaces them.** In colour, `` `code` ``
+prints styled with the backticks removed. In plain it prints as the author wrote it,
+exactly as it always has. Nothing a user pipes into a file loses information, and the
+alternative -- stripping the marks in plain mode too -- was set aside: it changes every
+captured report and loses the signal that `` `spin_up` `` is a symbol rather than prose.
+
+This is the one exception to R43's "colour changes no text", and it is deliberate. The
+gate states it as written: strip the escapes from a coloured report and every line WITHOUT
+a mark comes back byte for byte, and the line count never moves.
+
+**R44 — the rendered subset is closed, and everything outside it is verbatim.** In: inline
+code, `**bold**`, `*italic*`, and a fenced block under `- Example:`. Out: bullets beyond
+the tags themselves, links, tables, headings, blockquotes, nested lists, raw HTML.
+
+The subset is narrow because the corpus is. Every doc block in the tree, 61 of them across
+1982 `.sushi` files and 260 lines:
+
+```
+prose             87        fence             19
+tag               56        bullet             5
+inline code       26        heading            2
+                            bold, italic, link, table, blockquote:  0
+```
+
+Inline code is the only inline construct anyone actually writes, and it is 26 lines of
+260. `**bold**` and `*italic*` are in because they cost two more branches in a scanner
+that has to exist anyway. A link is not, because rendering one well means deciding what to
+do with the URL, and nothing in the tree has one.
+
+A construct outside the subset prints as the author wrote it, which is what happens to
+every construct today. "Out" costs a reader nothing they have now.
+
+Three rules keep the scanner from mangling prose:
+
+- **Longest opener first.** `**` is tried before `*`, or every bold run reads as two empty
+  italics.
+- **A span that does not close is punctuation**, and so is an EMPTY one -- so `` `` ``
+  survives as two backticks.
+- **An emphasis span hugs its text.** `2 * 3 * 4` is arithmetic and not an italic ` 3 `.
+  This is CommonMark's flanking rule in the one form the subset needs. Inline code is
+  exempt, because a code span may legitimately hold spaces.
+
+Rendering is per LINE, so a span never crosses a newline. That falls out of R39: the text
+is printed line by line and never reflowed, so a line is the unit either way.
+
+**R48 — `- Example:` renders.** Under the symbol, LAST: a parameter is a contract and an
+example is a demonstration. The tag's own text is the caption, and it is a tag's text like
+any other -- it hangs under its own column and its marks render. The code is indented four
+past the tag and printed dim, and it is NOT rendered: a backtick inside a program is a
+program's own.
+
+The caption is new in the record. Phase 4 carried the code alone, so R48 could not have
+printed one; it pairs with its code by POSITION, which is exact because both lists walk the
+block's `- Example:` items in source order and neither filters.
+
+This also closes an inconsistency section 3 did not list: a fence in a block's BODY printed
+raw while a fence under `- Example:` printed nothing. Both print now.
+
+**R45 — user-visible text spells a generic `@(...)`.** The report printed
+`fn pick_bigger<T: Doubler> (template)` and `struct Box<T>:`. Angle brackets are the
+INTERNAL identity spelling and `docs/design/type-identity.md` reserves them for interned
+names, mangled symbols and the match sites that read them.
+
+The MANIFEST keeps them. A consumer reads every `type` and `return_type` back through
+`parse_type_string`, so those strings are a wire format, not display text; converting them
+at the producer would break every library already built. **The renderer converts**, which
+is what `display_type_name` already did for diagnostics: no `<`, an `->` anywhere, or
+unbalanced brackets all mean "leave it alone"; otherwise `<` opens and `>` closes. The
+Sushi tool spells the same four rules as `to_surface`.
+
+**R46 — a generic function's record carries its signature.** `params`, `return_type` and
+`error_type`, the same three keys a concrete record carries, built by ONE function
+(`signature_record`) so a template and a concrete function cannot drift apart. Without the
+parameter list a template's `- Parameter` tags named nothing a report could print them
+against: they were stored by phase 3 and rendered by nothing.
+
+`(template)` is gone with it. It stood where the parameters belong, and the section header
+already says `Generic Functions`.
+
+Slicing the signature out of the record's `source` field was rejected: §8's rule is that
+`--lib-info` never parses source, and a tool that reads `source` to render a signature is
+one refactor away from parsing it.
+
+**R47 — every manifest section has a renderer.** Generic Structs, Generic Enums, Perks and
+Perk Implementations were carried by phase 3 and printed by neither implementation. Each
+one is suppressed when empty, which is the existing convention, and each generic section
+stands beside its concrete twin rather than being filed away with the other templates: a
+reader looking for `Box` wants it near `Point`.
+
+Two limits stay, and §8 records both: a generic struct's FIELD blocks are not in the index
+at all (R3), and a perk reaches the manifest only when an exported generic's constraint
+names it.
+
+**R49 — a function's error arm travels.** `fn improbability(i32) i32 | DriveError` reached
+the manifest as `{name, params, return_type: "i32"}` and printed as `fn improbability(i32
+factor) i32`. The error type was not a render fault: it was **uncarried**, and §8's rule
+forbids `--lib-info` from reading source to recover it.
+
+The record gains an optional `error_type`, absent when the declaration does not spell one --
+the default is `StdError`, and a record that named the default would claim the author wrote
+it. An added optional key does not move the container version (§8).
+
+**R50 — the doc blocks are opt-in, behind `--docs`.** Ruled by David on 2026-08-26.
+Measured on a realistic library -- 40 documented functions, 8 structs, 16 fields -- the
+report is 428 lines, ten terminal screens, of which the signature lines are one and a half.
+A reader asking what a library exports was reading nine screens of prose to find out.
+
+One switch for the blocks and the examples together, spelled `--docs` at BOTH ends, so the
+delegation forwards it as itself rather than translating a name. Every doc record in either
+implementation comes through one function (`_print_doc_record` / `print_doc_record`), so
+the switch is read once and not at each of the ten sections.
+
+The tool grew a real command-line parser with it, and answers `--help` on its own. A flag
+is a flag wherever it stands, the one bare word is the path, and a second file is a usage
+error. Its usage line has one spelling, a `const`, because two of them drift the first time
+one is edited.
 
 ---
 
@@ -1357,6 +1571,10 @@ carried, because an attribute is a harness instruction and not documentation. Th
 absent when there is no example. `slib-info` does not print examples: S9 is a plain dump,
 and a fenced program inside it would bury the signature. Phase 6 renders them.
 
+**Amended by R48.** Phase 6 gave the record the CAPTION as well, and gated the whole
+documented report behind `--docs` (R50) -- so a fenced program no longer buries anything,
+because a reader who did not ask for prose does not get any.
+
 This closes R7, the one thing an author could write that phase 3 dropped.
 
 **R24 — a bundled stdlib module is a library unit as far as the `docs` pass is concerned.**
@@ -1495,16 +1713,31 @@ walk they read, and the `COMPILER_FLAGS:` test directive that lets a `.sushi` fi
 a compiler flag on. At the end of this phase the compiler answers both halves of the
 question: what a block claims, and what it leaves out.
 
-**Phase 6 — Markdown.** Rendering, a richer `slib-info`, and the user-facing guide. The
-Markdown checker is written in Sushi and lives in `toolchain/`, which makes it the second
-inhabitant after `slib-info` and another test of the language against a real problem.
+**Phase 6 — the report.** `slib-info` prints what it carries, and prints it better.
+Layout (R38, R39), colour behind one decision (R41, R43), the rendered Markdown subset
+(R40, R44), `- Example:` (R48), the four sections and two spellings that were wrong
+(R45-R47, R49), and `--docs` to gate the prose (R50). It also grew `is_terminal()` in
+`<io/stdio>` (R42), because a tool that wants colour has to ask whether anyone is looking.
+
+**A Markdown checker was cut from this phase, and §2 of the plan records why.** A Sushi
+tool has no Sushi parser: `slib_info.sushi` reads a `.slib` through msgpack and cannot open
+a `.sushi` file to find its doc blocks. So a checker written there could only ever check a
+LIBRARY, and a source tree is where an author works. If one is ever wanted, the checks
+split by what they need -- a tag on a declaration kind that cannot carry it wants the AST
+and belongs in the `docs` pass; an unclosed span wants the text alone and is a warning
+there too; a body fence that does not compile wants `docs_sweep.py`; and a relative link
+naming no file belongs nowhere, because a compiler that stats a path named in prose is a
+new kind of dependency.
 
 ### What each phase MUST do
 
 Check the user documentation that it is still valid and add things that were done in
-that phase if applicable.
+that phase if applicable. Move this section's own phase row, and the status banner at the
+top, in the same commit — a phase that ships and still reads DESIGN is the one drift a
+reader cannot detect.
 
-Stay on the same branch: feat/doc-block, commit the work it was completed in that phase.
+Phases 2 to 5 shared one branch, `feat/doc-block`, and merged together. Phase 6 has its
+own branch, `feat/doc-block-markdown`.
 
 ### What each phase must NOT do
 
@@ -1514,6 +1747,9 @@ feature removes.
 
 Phase 3 must not teach `slib-info` to parse source, must not move the container version for
 an added optional key, and must not put a `doc` key on a private or closure-path record.
+
+Phase 6 must not reflow a tag, must not paginate, must not let colour change any text
+outside a rendered mark, and must not teach `slib-info` to parse source.
 
 Phase 4 must not make the sweep a CI job, must not assert an example's output, and must not
 teach the wrapper to reach a private symbol. Each one turns documentation into a test, and

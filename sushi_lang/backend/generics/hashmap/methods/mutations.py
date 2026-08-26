@@ -22,6 +22,7 @@ from ..utils import (
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import get_element_size_constant
+from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
 
 
 def emit_hashmap_insert(
@@ -204,7 +205,7 @@ def emit_hashmap_remove(
     if len(expr.args) != 1:
         raise_internal_error("CE0023", method="remove", expected=1, got=len(expr.args))
 
-    key_value = codegen.expressions.emit_expr(expr.args[0])
+    key_value = emit_borrowed_arg(codegen, expr.args[0], key_type)
 
     fields = get_hashmap_field_ptrs(codegen, hashmap_value)
     size_ptr, capacity_ptr = fields.size, fields.capacity

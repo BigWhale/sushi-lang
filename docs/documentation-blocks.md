@@ -423,7 +423,7 @@ succeeds and the exit code is 1.
 The `public` marker is not the test. An internal API is documented surface as much as an
 exported one, so a private helper with no block is CW7002 like any other declaration. A
 struct field and an enum variant are each asked on their own, because each one carries its
-own `doc` key in a `.slib` and `--lib-info` prints each one under its owner.
+own `doc` key in a `.slib` and `--lib-info --docs` prints each one under its owner.
 
 ### Two exemptions
 
@@ -498,28 +498,74 @@ Each record holds the block in parsed parts, not as raw text:
 | `params` | the `- Parameter` text, keyed by parameter name |
 | `returns` | the `- Returns:` text |
 | `errors` | the `- Errors:` text |
-| `examples` | the code of each `- Example:`, in source order |
+| `examples` | the caption and the code of each `- Example:`, in source order |
 
 Every field is optional, and the whole record is absent when a symbol has no block, so an
 undocumented library grows by nothing. Document as much as the symbol deserves: the size of
 the index is the compiler's problem and not the author's.
 
-The `examples` array carries the CODE and not the fence attributes: an attribute is an
-instruction to the doc-test harness, and not documentation.
+The `examples` array carries each example's CAPTION -- the tag's own text -- and its CODE,
+and not the fence attributes: an attribute is an instruction to the doc-test harness, and
+not documentation.
 
-`--lib-info` prints the record under the symbol it documents, indented two spaces:
+`--lib-info --docs` prints the record under the symbol it documents, indented two spaces:
 
 ```
 Public Functions (1):
-  fn hyperspace_jump(i32 a, u8 b) i32
+  fn hyperspace_jump(i32 a, u8 b) i32 | JumpError
     Jumps through hyperspace.
 
     The drive needs a warm coil.
+
     - Parameter a: The incoming argument.
+
     - Parameter b: The second one.
+
     - Returns: The jump distance in parsecs.
-    - Errors: When the drive is cold, this fails.
+
+    - Errors: When the drive is cold, this fails, and `JumpError.Overheated`
+              when it is too warm.
 ```
+
+A blank line separates the prose from the contract and one claim from the next, and a
+continuation hangs under the tag's text rather than under its dash. Nothing is reflowed: a
+tag wraps where the author wrote a newline and nowhere else, which is what keeps a fenced
+example intact.
+
+An `- Example:` prints last -- a parameter is a contract and an example is a
+demonstration -- with the tag's text as its caption and the code indented under it.
+
+## Rendering
+
+**Colour.** On a terminal the report is coloured: a section header and a symbol name bold,
+a count and a size dim, a tag keyword blue and a parameter name cyan, and an example's code
+dim. Prose is left alone. `--color=always|never|auto` decides, then `NO_COLOR`, then
+`CLICOLOR_FORCE`, then `TERM=dumb`, then whether the stream is a terminal;
+[Compiler Reference](compiler-reference.md#colour) has the ladder in full.
+
+**Markdown.** A closed subset renders, and only when there is colour to render it with:
+
+| Written | On a terminal | Captured |
+|---|---|---|
+| `` `code` `` | cyan, without the backticks | as written |
+| `**bold**` | bold, without the asterisks | as written |
+| `*italic*` | italic, without the asterisks | as written |
+| a fence under `- Example:` | indented and dim | indented |
+
+Everything else -- a link, a table, a heading, a blockquote, a nested list, raw HTML --
+prints exactly as it was written, which is what every construct did before any of this.
+
+A captured report keeps every mark, so nothing piped into a file loses information and
+`` `spin_up` `` still reads as a symbol rather than prose.
+
+The scanner does not mangle ordinary prose. A mark that never closes is punctuation, an
+empty span is punctuation, and an emphasis span has to hug its text -- so `2 * 3 * 4` is
+arithmetic and stays arithmetic. Inline code is exempt from the last rule, because a code
+span may hold spaces.
+
+The blocks are opt-in. A plain `--lib-info` prints the signature lines alone, because
+prose is what makes a report long and a reader asking what a library exports usually wants
+the surface and not the manual.
 
 Parameters print in the order the signature declares them, and not in the order the block
 documents them. A symbol with no block prints as it always did: no blank line, and no
@@ -527,8 +573,9 @@ placeholder.
 
 A unit block prints under its unit name in the `Units` section. Two things are carried and
 not printed: a `- Parameter` tag on something that declares no parameters -- a unit, a
-struct, a template -- and an example, because a fenced program inside a plain dump would
-bury the signature the reader came for.
+struct, a generic struct or enum -- and an example, because a fenced program inside a plain
+dump would bury the signature the reader came for. A generic FUNCTION does declare
+parameters, and its record carries them, so its `- Parameter` tags print like any other's.
 
 ### What does not travel
 
@@ -541,14 +588,6 @@ not of the file, and `docs/design/documentation.md` section 8 carries the reason
   file, inside the shipped source slice, and the index cannot answer for them.
 - **A private symbol's block.** A helper that ships only so a binary library links is not
   part of the documented API.
-
-## What is not built yet
-
-The compiler reads doc blocks and checks them, a library carries them, the toolchain runs
-the examples, and `--warn-missing-docs` says what is missing. One part comes later, and
-`docs/design/documentation.md` is the plan for it:
-
-- Markdown rendering, and `--lib-info` printing an example rather than carrying it.
 
 ## See also
 

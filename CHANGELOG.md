@@ -9,6 +9,37 @@ a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
 ### Added
+- **`--color=always|never|auto`, and one colour decision behind it.** Everything the
+  compiler prints to a terminal -- a diagnostic, the version banner and the `--lib-info`
+  report -- now reads one ladder: the flag, then `NO_COLOR` (present at any value, which
+  is no-color.org's rule), then `CLICOLOR_FORCE`, then `TERM=dumb`, then whether the
+  stream is a terminal.
+
+  Three sites is what made this a seam. The diagnostics implemented three of the five
+  rungs and the banner implemented one, so `NO_COLOR` silenced every diagnostic and left
+  the banner above them painted.
+
+  **The `--lib-info` report is coloured**: a section header and a symbol name bold, a
+  count and a size dim, a tag keyword blue and a parameter name cyan, and prose left
+  alone. Sixteen colours only -- the report has seven kinds of thing in it, so
+  256-colour buys nothing and `COLORTERM` needs no reading. Colour changes no text:
+  strip the escapes and the plain report comes back byte for byte.
+- **`is_terminal()` on `stdin`, `stdout` and `stderr`.** A program can ask whether a
+  stream is attached to a terminal, which is what a tool needs before it decides to use
+  colour. The answer is about that stream alone: output piped into a pager still leaves a
+  terminal on `stderr`.
+
+  It returns a bare `bool`, because the question has no failure -- `isatty` answers 0 for
+  "not a terminal" and sets `ENOTTY`, which is the same answer. The name is `is_terminal`
+  and not `is_tty`: "tty" abbreviates teletype, a device file and an era, and the plain
+  word matches the `is_empty` / `is_ok` / `is_err` shape the rest of the library uses.
+
+  This is the first stdio method valid on all three streams -- the rest of the table is
+  split, with `stdin` reading and the other two writing -- so the validator, the generator
+  and the emitter each resolve it before the split rather than three times over.
+
+  A free `isatty(i32 fd)` was rejected. The language hides file descriptors completely, so
+  a function taking a raw fd would be the only place a number stands for a stream.
 - **The compiler understands documentation blocks: `##: ... :##`**. A doc block is part of
   the declaration, not a comment near it: the grammar sees it, the AST carries it, and the
   compiler checks what it says against the declaration beside it.
@@ -42,12 +73,40 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   optional and the whole key is absent when a symbol has no block, so the container version
   does not move and an undocumented library grows by nothing.
 
-  `--lib-info` prints the block under the symbol it documents, indented two spaces, in both
-  implementations -- the Python fallback and the Sushi-written `toolchain/bin/slib-info` --
-  and the two are locked byte for byte. Parameters print in DECLARATION order, and not in the
-  order the block documents them. The report also gained a second thing: a parameter's `nom`
-  mode now prints beside its type. That is the one mode a type cannot spell; `peek` and
-  `poke` were always part of the type string.
+  **`--lib-info --docs` prints the block** under the symbol it documents, indented two
+  spaces, in both implementations -- the Python fallback and the Sushi-written
+  `toolchain/bin/slib-info` -- and the two are locked byte for byte in both modes. The
+  blocks are opt-in because prose is what makes a report long: a library of forty
+  documented functions runs to ten screens with them and one and a half without, so a
+  plain `--lib-info` is the API surface and `--docs` is the manual. The switch is spelled
+  the same at both ends and travels through the delegation as itself, and the tool answers
+  `--help` on its own.
+
+  **The documented report has room to breathe.** A blank line before the first tag, one
+  between tags, one closing each record, and a hanging indent under a wrapped tag's TEXT
+  rather than under its dash. Measured on a realistic library -- 40 documented functions,
+  8 structs, 16 fields -- the report is ten terminal screens with no blank line anywhere
+  between one symbol and the next, and whitespace is the only thing that makes a stream
+  that long scannable. Nothing is reflowed: a tag wraps where the author wrote a newline
+  and nowhere else, which is what keeps a fenced example intact. A symbol with no block
+  still prints as one bare line, so the plain report stays exactly as dense as it was.
+
+  **Inline Markdown renders, and an example finally prints.** On a terminal `` `code` ``
+  is cyan, `**bold**` is bold and `*italic*` is italic, each with its marks removed; a
+  captured report keeps every mark, so nothing piped into a file loses the signal that
+  `` `spin_up` `` is a symbol. The subset is closed and everything outside it -- a link, a
+  table, a heading, a nested list -- prints as it was written, which is what every
+  construct did before. The scanner leaves prose alone: a mark that never closes is
+  punctuation, an empty span is punctuation, and `2 * 3 * 4` stays arithmetic.
+
+  An `- Example:` prints last, with the tag's own text as its caption and the code
+  indented under it and dim. The caption is new in the index -- the library carried the
+  code alone -- and it pairs with its code by position.
+
+  Parameters print in DECLARATION order, and not in the order the block documents them. The
+  report also gained a second thing, which prints either way: a parameter's `nom` mode now
+  shows beside its type. That is the one mode a type cannot spell; `peek` and `poke` were
+  always part of the type string.
 
   Two things do not travel in the index: an extension has no manifest record of any kind,
   and a private symbol carries no doc because it is not part of the documented API.
@@ -401,6 +460,48 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **`slib-info` printed angle brackets, half a generic's signature, and none of four
+  sections.** Four faults in one renderer, so they are fixed in one pass.
+
+  A generic printed `fn pick_bigger<T: Doubler> (template)`. Angle brackets are the
+  INTERNAL identity spelling and never user-visible text. The MANIFEST keeps them, because
+  a consumer reads every type string back with `parse_type_string` and converting them at
+  the producer would break every library already built; the report converts, by the same
+  four rules `display_type_name` already applied to diagnostics.
+
+  `(template)` stood where the parameter list belongs, and a generic's record had no
+  parameter list at all -- so its `- Parameter` tags were stored by the library and
+  rendered by nothing. The record now carries the same three signature keys a concrete one
+  does, built by one function, and a template prints the signature a concrete function
+  prints.
+
+  Generic Structs, Generic Enums, Perks and Perk Implementations were carried and printed
+  by neither implementation. Each has a section now, suppressed when empty, and each
+  generic section stands beside its concrete twin.
+- **A function's error arm did not travel.** `fn improbability(i32) i32 | DriveError`
+  reached the manifest with no error field, so the report printed `i32` and dropped the
+  rest. This was not a render fault -- the information was uncarried, and `--lib-info` may
+  never read source to recover it. The record gains an optional `error_type`, absent when
+  the declaration does not spell one.
+- **An owning temporary handed to a built-in method was never freed.**
+  `src.contains(src.s(2, 5))` leaked one block a call, and `src.replace(src.s(2, 4),
+  src.s(5, 7))` leaked two -- one for each owning argument. About fourteen `string`
+  methods took an argument, so every one of them leaked; so did a `HashMap` key lookup,
+  a `stdout.write`, a `file.write`, a `run()` command and every C-string callee. The
+  workaround was to bind each temporary to a `let` first, which is a rule no author can
+  be expected to know.
+
+  Ownership at a call boundary is decided from the argument's provenance, which is what
+  #358 built. A DECLARED callee reaches that seam and reads the parameter's mode off the
+  signature; a built-in declares no parameters, so its emitter built its own argument
+  list and there was no mode to read. `emit_borrowed_arg` is the built-in half of the
+  seam and the twin of the receiver's: every built-in argument goes through it, and a
+  built-in that TAKES ownership -- `List.push`, `HashMap.insert`, `Own.alloc` -- goes
+  through `consume` as before.
+
+  A PERK method was leaking for a different reason. It carries the same declared modes an
+  extension method does, and its emitter simply never read them; it now settles its
+  arguments through the same function the extension emitter calls.
 - **Every diagnostic about a callee rendered as text with no caret.** The builder parsed
   the callee into a `Name` carrying its span, then rebuilt one from the bare identifier
   and dropped it, so `call.callee.loc` was `None` for every ordinary call. The head line

@@ -20,6 +20,7 @@ from ..probe import emit_probe_loop, ProbeSlot
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import get_element_size_constant
+from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
 
 
 def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
@@ -97,7 +98,7 @@ def emit_hashmap_get(
     if len(expr.args) != 1:
         raise_internal_error("CE0023", method="get", expected=1, got=len(expr.args))
 
-    key_value = codegen.expressions.emit_expr(expr.args[0])
+    key_value = emit_borrowed_arg(codegen, expr.args[0], key_type)
 
     capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
     capacity = builder.load(capacity_ptr, name="capacity")
@@ -223,7 +224,7 @@ def emit_hashmap_contains_key(
     if len(expr.args) != 1:
         raise_internal_error("CE0023", method="contains_key", expected=1, got=len(expr.args))
 
-    key_value = codegen.expressions.emit_expr(expr.args[0])
+    key_value = emit_borrowed_arg(codegen, expr.args[0], key_type)
 
     capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
     capacity = builder.load(capacity_ptr, name="capacity")

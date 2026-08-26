@@ -13,6 +13,7 @@ from sushi_lang.internals.diagnostics import (
     SushiError,
 )
 from sushi_lang.internals.report import Reporter
+from sushi_lang.internals.styling import COLOUR_CHOICES, Palette, set_colour_override, should_colour
 from sushi_lang.internals.version import print_banner
 
 
@@ -38,11 +39,15 @@ def _find_toolchain_tool(name: str) -> Optional[Path]:
     return None
 
 
-def library_info_command(library_path: Path) -> int:
+def library_info_command(library_path: Path, show_docs: bool = False,
+                         color: str = "auto") -> int:
     """--lib-info: run the toolchain slib-info tool, or the Python fallback.
 
     The tool owns the report and its exit code propagates. Only a failure to
     execute the binary at all falls back to print_library_info.
+
+    `--docs` and `--color` are spelled the same at both ends, so a switch travels as
+    itself rather than being translated into a name only one side knows.
     """
     from sushi_lang.compiler.loader import get_effective_cwd
 
@@ -52,11 +57,46 @@ def library_info_command(library_path: Path) -> int:
     tool = _find_toolchain_tool("slib-info")
     if tool is not None:
         import subprocess
+        cmd = [str(tool)]
+        if show_docs:
+            cmd.append("--docs")
+        # `auto` is the default and says nothing, so it is not worth a word on the line.
+        # The tool reads the same environment variables this process did.
+        if color != "auto":
+            cmd.append(f"--color={color}")
+        cmd.append(str(library_path))
         try:
-            return subprocess.run([str(tool), str(library_path)]).returncode
+            return subprocess.run(cmd).returncode
         except OSError:
             pass
-    return print_library_info(library_path)
+    return print_library_info(library_path, show_docs, color)
+
+
+class _Report:
+    """What one `--lib-info` run was asked for: the doc blocks, and the palette.
+
+    ONE value threaded through the renderer rather than one parameter per switch. A
+    style is a STRING here and never a branch, so a painted line and a plain one are
+    written once -- which is also what makes R43's constraint hold by construction:
+    painting changes no text.
+    """
+
+    __slots__ = ("docs", "p")
+
+    def __init__(self, docs: bool, colour: bool):
+        self.docs = docs
+        self.p = Palette(colour)
+
+
+def _surface(type_str: str) -> str:
+    """One manifest type string, in the surface `@(...)` spelling a reader is owed.
+
+    The manifest carries the INTERNAL identity name, `List<i32>`, because a consumer
+    reads it back through `parse_type_string`. Angle brackets are never user-visible
+    text (`docs/design/type-identity.md`), so the report converts here and nowhere else.
+    """
+    from sushi_lang.semantics.generics.type_display import display_type_name
+    return display_type_name(type_str)
 
 
 def _render_params(params: list) -> str:
@@ -69,62 +109,275 @@ def _render_params(params: list) -> str:
     rendered = []
     for param in params:
         mode = "nom " if param.get("mode") == "nom" else ""
-        rendered.append(f"{mode}{param['type']} {param['name']}")
+        rendered.append(f"{mode}{_surface(param['type'])} {param['name']}")
     return ", ".join(rendered)
 
 
-def _print_doc_lines(indent: str, text: str) -> None:
+def _render_type_params(records: list | None) -> str:
+    """The `@(T: Perk, U)` suffix of a generic declaration, or "" when there is none."""
+    if not records:
+        return ""
+    rendered = []
+    for tp in records:
+        constraints = tp.get('constraints') or []
+        rendered.append(f"{tp['name']}: {', '.join(constraints)}"
+                        if constraints else tp['name'])
+    return f"@({', '.join(rendered)})"
+
+
+def _render_signature(func: dict, p: Palette) -> str:
+    """One function's whole signature, concrete or generic.
+
+    ONE renderer, so a template prints what a concrete function prints. A generic used
+    to print `(template)` where its parameters belong, which is why its `- Parameter`
+    tags were stored and never rendered.
+    """
+    generic = _render_type_params(func.get('type_params'))
+    params = _render_params(func.get('params') or [])
+    name = f"{p.bold}{func['name']}{p.reset}"
+    line = f"fn {name}{generic}({params}) {_surface(func['return_type'])}"
+    # The default error type is StdError and a signature that takes it does not say so,
+    # so a record with no `error_type` prints no arm either.
+    error = func.get('error_type')
+    return f"{line} | {_surface(error)}" if error else line
+
+
+def _print_generic_named(templates: dict, key: str, title: str, keyword: str,
+                         opts: '_Report') -> None:
+    """One section of generic structs, or one of generic enums.
+
+    The two records have the same shape -- a name, its type parameters and its own
+    block -- so they share a printer and differ by the keyword. A generic struct's FIELD
+    blocks are not in the index at all (documentation.md S8, R3), so neither record has
+    members to print.
+    """
+    items = templates.get(key) or []
+    if not _section(title, items, opts.p):
+        return
+    records = _Records()
+    for record in items:
+        records.open()
+        generic = _render_type_params(record.get('type_params'))
+        print(f"  {keyword} {record['name']}{generic}:")
+        records.close(_print_doc(record, "    ", opts))
+    print()
+
+
+def _section(title: str, items: list, p: Palette) -> bool:
+    """Open a section, or answer False when it holds nothing.
+
+    A section with no members prints no header. Every section obeys it, which is why
+    the guard is one function rather than one `if` per section -- and why the header's
+    style is written once.
+    """
+    if not items:
+        return False
+    print(f"{p.bold}{title}{p.reset} {p.dim}({len(items)}){p.reset}:")
+    return True
+
+
+# The rendered Markdown subset, longest opener first: `**` has to be tried before `*`,
+# or every bold run would read as two empty italics. A CLOSED set -- a link, a table, a
+# heading and a nested list print as the author wrote them, which is what every construct
+# outside the subset has always done.
+_MARKS = (("**", "bold"), ("`", "cyan"), ("*", "italic"))
+
+
+def _mark_at(line: str, i: int) -> tuple[str | None, str]:
+    """The mark that opens at `i`, and the style it asks for."""
+    for mark, style in _MARKS:
+        if line.startswith(mark, i):
+            return mark, style
+    return None, ""
+
+
+def _is_span(mark: str, inner: str, close: int) -> bool:
+    """Is this a span, or is it punctuation the author meant literally?"""
+    if close == -1 or not inner:
+        return False
+    return mark == "`" or not (inner[0].isspace() or inner[-1].isspace())
+
+
+def _render_inline(line: str, p: Palette) -> str:
+    """One line of prose with its Markdown marks turned into styles (R44).
+
+    PLAIN mode returns the line untouched, which is R40: a captured report keeps the
+    marks, so it loses no information and `` `spin_up` `` still reads as a symbol.
+
+    A span that does not close prints verbatim, and so does an EMPTY one. An emphasis
+    span must also hug its text -- `2 * 3 * 4` is arithmetic, not an italic ` 3 ` --
+    which is CommonMark's flanking rule in the one form this subset needs. Inline code
+    is exempt from it, because a code span may legitimately hold spaces.
+    """
+    if not p.reset:
+        return line
+
+    out: list[str] = []
+    i, n = 0, len(line)
+    while i < n:
+        mark, style = _mark_at(line, i)
+        if mark is None:
+            out.append(line[i])
+            i += 1
+            continue
+        close = line.find(mark, i + len(mark))
+        inner = line[i + len(mark):close] if close != -1 else ""
+        if _is_span(mark, inner, close):
+            out.append(f"{getattr(p, style)}{inner}{p.reset}")
+            i = close + len(mark)
+        else:
+            out.append(mark)
+            i += len(mark)
+    return "".join(out)
+
+
+def _print_doc_lines(indent: str, text: str, opener: str = "",
+                     opener_width: int | None = None,
+                     p: Palette | None = None) -> None:
     """One line of output per line of `text`. A blank line prints EMPTY.
 
     `split` and not `splitlines`: the latter drops a trailing empty field and also
     breaks on `\r`, `\x0b`, `\x0c` and the Unicode separators, and the Sushi tool's
     `.split("\n")` does neither. The two must cut the same bytes.
+
+    `opener` prefixes the FIRST line only, and every line after it is indented past the
+    opener rather than under it -- the hanging indent a tag needs (R38 rule 3). The text
+    is re-indented and never reflowed (R39): it breaks where the author wrote a newline,
+    which is what keeps a fenced example intact.
+
+    `opener_width` is the opener's VISIBLE width, which is not its length once it carries
+    escapes: an alignment measured in bytes would indent a coloured continuation by the
+    width of the escapes as well.
     """
-    for line in text.split("\n"):
-        print(f"{indent}{line}" if line else "")
+    hang = indent + " " * (len(opener) if opener_width is None else opener_width)
+    for i, line in enumerate(text.split("\n")):
+        if not line:
+            print()
+            continue
+        if p is not None:
+            line = _render_inline(line, p)
+        print(f"{indent}{opener}{line}" if i == 0 else f"{hang}{line}")
 
 
-def _print_doc_record(doc: dict | None, owner: dict | None, indent: str) -> None:
-    """One doc record: the summary, a blank line, the body, then the tags.
+def _doc_tags(doc: dict, owner: dict | None) -> list[tuple[str, str, str]]:
+    """Every tag of one record as (keyword, name, text), in the order R38 prints them.
 
-    No blank line before the tags, and the one above the body prints only when there is
-    a summary to separate it from (`docs/design/documentation.md` section 9).
+    The keyword and the name are kept apart because they PAINT apart: the keyword is a
+    label and the name is a symbol. `name` is empty for a tag that has none.
 
-    Parameters print in DECLARATION order, read from the owner's own `params` array and
-    looked up by name. A map's wire order is not the signature's order, and a record
-    with no `params` array -- a struct, a unit, a template -- renders no parameter line.
+    Parameters come first and in DECLARATION order, read from the owner's own `params`
+    array and looked up by name: a map's wire order is not the signature's order. A
+    record with no `params` array -- a struct, a unit, a generic type -- yields none.
     """
-    if not doc:
-        return
+    named = doc.get('params') or {}
+    tags = [("Parameter", p['name'], named[p['name']])
+            for p in ((owner or {}).get('params') or [])
+            if named.get(p['name'])]
+    tags += [(label, "", doc[key])
+             for key, label in (('returns', 'Returns'), ('errors', 'Errors'))
+             if doc.get(key)]
+    return tags
 
+
+def _tag_opener(keyword: str, name: str, p: Palette) -> tuple[str, int]:
+    """One tag's `- Keyword name: ` opener, painted, and its VISIBLE width."""
+    plain = f"- {keyword} {name}: " if name else f"- {keyword}: "
+    label = f"{p.blue}{keyword}{p.reset}"
+    if name:
+        label += f" {p.cyan}{name}{p.reset}"
+    return f"- {label}: ", len(plain)
+
+
+def _print_doc_record(doc: dict | None, owner: dict | None, indent: str,
+                      opts: '_Report') -> bool:
+    """One doc record -- the summary, the body, then the tags -- and whether it printed.
+
+    A blank line separates every part from the one above it: the body from the summary,
+    the first tag from the prose (R38 rule 1), and each tag from the last (rule 4). One
+    predicate does all three, because "something is already above me" is the whole
+    condition.
+
+    The ANSWER is what rule 2 needs: a caller prints a blank line before the next record
+    when this one left a block behind, and prints nothing extra when it did not.
+
+    THE gate for `--docs`: every doc record in the report comes through here, so the
+    switch is read once rather than at each of the ten sections.
+    """
+    if not doc or not opts.docs:
+        return False
+
+    printed = False
     summary = doc.get('summary', '')
     body = doc.get('body', '')
     if summary:
-        _print_doc_lines(indent, summary)
+        _print_doc_lines(indent, summary, p=opts.p)
+        printed = True
     if body:
-        if summary:
+        if printed:
             print()
-        _print_doc_lines(indent, body)
+        _print_doc_lines(indent, body, p=opts.p)
+        printed = True
 
-    named = doc.get('params') or {}
-    for param in (owner or {}).get('params') or []:
-        text = named.get(param['name'])
-        if text:
-            _print_doc_lines(indent, f"- Parameter {param['name']}: {text}")
+    for keyword, name, text in _doc_tags(doc, owner):
+        if printed:
+            print()
+        opener, width = _tag_opener(keyword, name, opts.p)
+        _print_doc_lines(indent, text, opener, width, opts.p)
+        printed = True
 
-    for key, label in (('returns', 'Returns'), ('errors', 'Errors')):
-        text = doc.get(key)
-        if text:
-            _print_doc_lines(indent, f"- {label}: {text}")
+    # An example is the LAST thing a record says: a parameter is a contract and an
+    # example is a demonstration. Its body is CODE, so it is indented rather than hung,
+    # and dim rather than rendered -- a backtick inside a program is a program's
+    # backtick.
+    for example in doc.get('examples') or []:
+        if printed:
+            print()
+        opener, width = _tag_opener("Example", "", opts.p)
+        caption = example.get('caption') or ""
+        if caption:
+            # A caption is a tag's text like any other, so it hangs and it renders.
+            _print_doc_lines(indent, caption, opener, width, opts.p)
+        else:
+            print(f"{indent}{opener}".rstrip())
+        for line in example['code'].split("\n"):
+            print(f"{indent}    {opts.p.dim}{line}{opts.p.reset}" if line else "")
+        printed = True
+
+    return printed
 
 
-def _print_doc(owner: dict, indent: str) -> None:
+def _print_doc(owner: dict, indent: str, opts: '_Report') -> bool:
     """The doc record of one manifest entry, when it carries one."""
-    _print_doc_record(owner.get('doc'), owner, indent)
+    return _print_doc_record(owner.get('doc'), owner, indent, opts)
 
 
-def print_library_info(library_path: Path) -> int:
+class _Records:
+    """One section's records, separated by rule 2.
+
+    A blank line goes BEFORE a record whose predecessor printed a block, never after
+    one: an after-rule would double with the blank line every section already prints
+    when it closes. A run of bare signatures has no block to close, so it stays as dense
+    as the plain report is.
+    """
+
+    def __init__(self) -> None:
+        self._pending = False
+
+    def open(self) -> None:
+        """Announce the next record, closing the block above it if there was one."""
+        if self._pending:
+            print()
+        self._pending = False
+
+    def close(self, printed: bool) -> None:
+        """Record whether this entry left a block behind."""
+        self._pending = printed
+
+
+def print_library_info(library_path: Path, show_docs: bool = False,
+                       color: str = "auto") -> int:
     """Print formatted metadata from a .slib library file."""
+    opts = _Report(show_docs, should_colour(sys.stdout, color))
     from sushi_lang.backend.library_format import LibraryFormat
     from sushi_lang.backend.library_errors import LibraryError
 
@@ -160,95 +413,123 @@ def print_library_info(library_path: Path) -> int:
     print()
 
     units = metadata.get('units', [])
-    if units:
+    if _section("Units", units, opts.p):
         unit_docs = metadata.get('unit_docs') or {}
-        print(f"Units ({len(units)}):")
+        records = _Records()
         for unit in units:
+            records.open()
             print(f"  {unit}")
-            _print_doc_record(unit_docs.get(unit), None, "    ")
+            records.close(
+                _print_doc_record(unit_docs.get(unit), None, "    ", opts))
         print()
+
+    templates = metadata.get('templates') or {}
 
     funcs = metadata.get('public_functions', [])
-    if funcs:
-        print(f"Public Functions ({len(funcs)}):")
+    if _section("Public Functions", funcs, opts.p):
+        records = _Records()
         for func in funcs:
-            params = _render_params(func['params'])
-            print(f"  fn {func['name']}({params}) {func['return_type']}")
-            _print_doc(func, "    ")
+            records.open()
+            print(f"  {_render_signature(func, opts.p)}")
+            records.close(_print_doc(func, "    ", opts))
         print()
 
-    generic_funcs = metadata.get('templates', {}).get('generic_functions', [])
-    if generic_funcs:
-        print(f"Generic Functions ({len(generic_funcs)}):")
+    generic_funcs = templates.get('generic_functions', [])
+    if _section("Generic Functions", generic_funcs, opts.p):
+        records = _Records()
         for gf in generic_funcs:
-            tps = gf.get('type_params', [])
-            if tps:
-                rendered = []
-                for tp in tps:
-                    constraints = tp.get('constraints') or []
-                    if constraints:
-                        rendered.append(f"{tp['name']}: {', '.join(constraints)}")
-                    else:
-                        rendered.append(tp['name'])
-                generic = f"<{', '.join(rendered)}>"
-            else:
-                generic = ""
-            print(f"  fn {gf['name']}{generic} (template)")
-            _print_doc(gf, "    ")
+            records.open()
+            print(f"  {_render_signature(gf, opts.p)}")
+            records.close(_print_doc(gf, "    ", opts))
         print()
 
     consts = metadata.get('public_constants', [])
-    if consts:
-        print(f"Public Constants ({len(consts)}):")
+    if _section("Public Constants", consts, opts.p):
+        records = _Records()
         for const in consts:
-            print(f"  const {const['type']} {const['name']}")
-            _print_doc(const, "    ")
+            records.open()
+            print(f"  const {_surface(const['type'])} {const['name']}")
+            records.close(_print_doc(const, "    ", opts))
         print()
 
     structs = metadata.get('structs', [])
-    if structs:
-        print(f"Structs ({len(structs)}):")
+    if _section("Structs", structs, opts.p):
+        records = _Records()
         for struct in structs:
+            records.open()
             generic = ""
             if struct.get('is_generic') and struct.get('type_params'):
-                type_params = ', '.join(struct['type_params'])
-                generic = f"<{type_params}>"
+                generic = f"@({', '.join(struct['type_params'])})"
             print(f"  struct {struct['name']}{generic}:")
-            _print_doc(struct, "    ")
+            # A FIELD is a record too, and the struct's own block is the record above
+            # the first one -- so one tracker covers the struct and its members alike.
+            records.close(_print_doc(struct, "    ", opts))
             for field in struct['fields']:
-                print(f"    {field['type']} {field['name']}")
-                _print_doc(field, "      ")
+                records.open()
+                print(f"    {_surface(field['type'])} {field['name']}")
+                records.close(_print_doc(field, "      ", opts))
         print()
 
+    # A generic struct beside its concrete twin, not filed away with the other
+    # templates: a reader looking for `Box` wants it near `Point`.
+    _print_generic_named(templates, 'generic_structs', "Generic Structs", "struct",
+                         opts)
+
     enums = metadata.get('enums', [])
-    if enums:
-        print(f"Enums ({len(enums)}):")
+    if _section("Enums", enums, opts.p):
+        records = _Records()
         for enum in enums:
+            records.open()
             generic = ""
             if enum.get('is_generic') and enum.get('type_params'):
-                type_params = ', '.join(enum['type_params'])
-                generic = f"<{type_params}>"
+                generic = f"@({', '.join(enum['type_params'])})"
             print(f"  enum {enum['name']}{generic}:")
-            _print_doc(enum, "    ")
+            records.close(_print_doc(enum, "    ", opts))
             for variant in enum['variants']:
+                records.open()
                 if variant.get('has_data'):
-                    print(f"    {variant['name']}({variant['data_type']})")
+                    print(f"    {variant['name']}({_surface(variant['data_type'])})")
                 else:
                     print(f"    {variant['name']}")
-                _print_doc(variant, "      ")
+                records.close(_print_doc(variant, "      ", opts))
+        print()
+
+    _print_generic_named(templates, 'generic_enums', "Generic Enums", "enum", opts)
+
+    # A perk reaches the manifest only when an exported generic's constraint names it,
+    # so this section lists the contracts a consumer can actually be asked to satisfy.
+    perks = templates.get('perks', [])
+    if _section("Perks", perks, opts.p):
+        records = _Records()
+        for perk in perks:
+            records.open()
+            print(f"  perk {perk['name']}:")
+            records.close(_print_doc(perk, "    ", opts))
+        print()
+
+    impls = templates.get('perk_impls', [])
+    if _section("Perk Implementations", impls, opts.p):
+        records = _Records()
+        for impl in impls:
+            records.open()
+            print(f"  extend {_surface(impl['type'])} with {impl['perk']}:")
+            records.close(_print_doc(impl, "    ", opts))
+            for method in impl.get('methods') or []:
+                records.open()
+                print(f"    fn {method['name']}")
+                records.close(_print_doc(method, "      ", opts))
         print()
 
     deps = metadata.get('dependencies', [])
-    if deps:
-        print(f"Dependencies ({len(deps)}):")
+    if _section("Dependencies", deps, opts.p):
         for dep in deps:
             print(f"  <{dep}>")
         print()
 
     if kind != 'binary':
-        print(f"Source: {source_size:,} bytes")
+        print(f"Source: {opts.p.dim}{source_size:,}{opts.p.reset} bytes")
     if kind != 'source':
-        print(f"Bitcode: {bitcode_size:,} bytes")
+        print(f"Bitcode: {opts.p.dim}{bitcode_size:,}{opts.p.reset} bytes")
 
     return 0
 
@@ -321,6 +602,18 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--lib-info",
         metavar="FILE",
         help="Display metadata from a .slib library file",
+    )
+    ap.add_argument(
+        "--docs",
+        action="store_true",
+        help="With --lib-info: print the documentation block of every symbol that has one",
+    )
+    ap.add_argument(
+        "--color",
+        choices=list(COLOUR_CHOICES),
+        default="auto",
+        help="When to use ANSI colour. 'auto' reads NO_COLOR, CLICOLOR_FORCE, TERM and "
+             "whether the stream is a terminal.",
     )
     ap.add_argument(
         "--ignore-compiler-version",
@@ -459,15 +752,17 @@ def _flush(session: Session) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     """Main compiler entry point."""
-    print_banner()
-
+    # The banner is a coloured line, so it comes AFTER the flag that decides its colour.
+    # A usage error now prints argparse's message alone, with no banner above it.
     args = _parse_args(argv)
+    set_colour_override(args.color)
+    print_banner()
 
     if args.version:
         return 0
 
     if args.lib_info:
-        return library_info_command(Path(args.lib_info))
+        return library_info_command(Path(args.lib_info), args.docs, args.color)
 
     session = Session(args=args)
 

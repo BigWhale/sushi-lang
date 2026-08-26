@@ -186,8 +186,14 @@ def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
             _park_argument_temp(codegen, args[i], resolved)
 
 
-def _settle_method_call_arguments(codegen: 'LLVMCodegen', expr, args: list) -> None:
-    """Settle a method call's arguments from the modes the typecheck pass resolved."""
+def settle_method_call_arguments(codegen: 'LLVMCodegen', expr, args: list) -> None:
+    """Settle a method call's arguments from the modes the typecheck pass resolved.
+
+    Both DECLARED method kinds come through here -- the extension emitter below and the
+    perk emitter in `intrinsics.py`. A perk method carries the same `callee_param_modes`
+    stamp and used to emit its arguments without reading it, so an owning temporary
+    handed to one had no owner at all (#475).
+    """
     modes = getattr(expr, "callee_param_modes", None)
     if modes is None:
         return
@@ -357,7 +363,7 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     # registers an unbound owning temporary, so `b.eat(make_list())` is freed once.
     # That was `_register_inline_closure_temps`, which covered a syntactic `Lambda`
     # argument only and leaked every other temporary shape.
-    _settle_method_call_arguments(codegen, expr, arg_values)
+    settle_method_call_arguments(codegen, expr, arg_values)
     emitted_args.extend(arg_values)
 
     params = list(llvm_fn.args)

@@ -178,18 +178,34 @@ is the authority, and the index is a cache of it.
     #       "params":  {str: str},     # `- Parameter` text, keyed by parameter NAME
     #       "returns": str,            # `- Returns:` text
     #       "errors":  str,            # `- Errors:` text
-    #       "examples": [str]          # `- Example:` CODE, in source order; the fence
-    #   }                              #   attributes are a harness instruction, not docs
+    #       "examples": [{"caption": str, "code": str}]
+    #   }                              #   in source order; `caption` is the tag's own
+    #                                  #   text and is absent when it has none. The fence
+    #                                  #   attributes are a harness instruction, not docs
     #
     # A PARAMETER record deliberately carries no doc: its text lives in the enclosing
     # symbol's `doc.params`. So does a private or closure-path record: a private symbol
     # is not part of the documented API.
 
+    # A SIGNATURE is three keys, built by one function (`signature_record`) so the
+    # concrete record, the generic record and the closure record cannot drift apart.
+    # `error_type` is absent when the declaration does not spell one: the default is
+    # StdError, and a record that named the default would claim the author wrote it.
+    #
+    #   SIG = {
+    #       "params": [{"name": str, "type": str, "mode": str}],
+    #       "return_type": str,
+    #       "error_type": str          # If the declaration says `| E`
+    #   }
+    #
+    # Every `type` and `return_type` is the INTERNAL identity spelling, `List<i32>` and
+    # not `List@(i32)`: a consumer reads these back with `parse_type_string`, so this is
+    # a wire format. Rendering `@(...)` is the report's job.
+
     "public_functions": [
         {
             "name": str,
-            "params": [{"name": str, "type": str, "mode": str}],
-            "return_type": str,
+            **SIG,
             "doc": DOC                 # If documented
         }
     ],
@@ -253,6 +269,8 @@ is the authority, and the index is a cache of it.
             {
                 "name": str,
                 "type_params": [{"name": str, "constraints": [str], "is_pack": bool}],
+                **SIG,                 # A template's signature, so its `- Parameter`
+                                       #   tags name something a report can print
                 "source": str,         # Self-contained, re-parsable decl text
                 "free_perks": [str],   # Perk names from type-param bounds
                 "private": bool,       # Present (true) for closure-shipped helpers
@@ -260,7 +278,8 @@ is the authority, and the index is a cache of it.
             }
         ],
 
-        # Generic structs/enums, same record shape as generic_functions.
+        # Generic structs/enums, same record shape MINUS the signature: neither declares
+        # parameters.
         "generic_structs": [ ... ],
         "generic_enums": [ ... ],
 
@@ -288,11 +307,7 @@ is the authority, and the index is a cache of it.
         # carry external linkage in the bitcode); constants ship with source
         # (the consumer needs the value for compile-time evaluation).
         "private_functions": [
-            {
-                "name": str,
-                "params": [{"name": str, "type": str, "mode": str}],
-                "return_type": str
-            }
+            {"name": str, **SIG}       # No doc: a private symbol is not documented API
         ],
         "constants": [
             {"name": str, "source": str}

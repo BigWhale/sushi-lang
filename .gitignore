@@ -53,3 +53,8 @@ omakase-api/
 
 # Leak-check interposer build output (compiled from source at test setup)
 tests/leakcheck/bin/
+
+# Editor swap and backup files
+*.swp
+*.swo
+*~

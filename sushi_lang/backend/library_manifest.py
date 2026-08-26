@@ -5,8 +5,9 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sushi_lang.semantics.library_templates import doc_record, with_doc
-from sushi_lang.semantics.param_modes import param_mode
+from sushi_lang.semantics.library_templates import (
+    doc_record, signature_record, type_string, with_doc,
+)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.units import Unit
@@ -206,19 +207,7 @@ class LibraryManifestGenerator:
 
                 public_funcs.append(with_doc({
                     "name": func.name,
-                    "params": [
-                        # The MODE is its own field, not part of the type string. A
-                        # `nom` cannot be spelled in a type at all, and reading peek /
-                        # poke back out of a type string was the half that was missing
-                        # (docs/design/borrow-model.md S10).
-                        #
-                        # A parameter record carries no `doc`: per-parameter text lives
-                        # in the enclosing function's `doc.params`, keyed by name.
-                        {"name": p.name, "type": self._type_to_string(p.ty),
-                         "mode": param_mode(p).value}
-                        for p in func.params
-                    ],
-                    "return_type": self._type_to_string(func.ret),
+                    **signature_record(func),
                 }, func))
 
         return public_funcs
@@ -562,19 +551,11 @@ class LibraryManifestGenerator:
             generic_functions.append(record)
             referenced_perks.update(record.get("free_perks", []))
 
+        # The same builder the public records use: a private helper is called from a
+        # monomorphized template body, so the consumer needs the same answer to "who
+        # frees this argument?".
         private_functions = [
-            {
-                "name": fn.name,
-                "params": [
-                    # The mode travels with a private helper too: the consumer calls it
-                    # from a monomorphized template body, so it needs the same answer to
-                    # "who frees this argument?" the public records carry.
-                    {"name": p.name, "type": self._type_to_string(p.ty),
-                     "mode": param_mode(p).value}
-                    for p in fn.params
-                ],
-                "return_type": self._type_to_string(fn.ret),
-            }
+            {"name": fn.name, **signature_record(fn)}
             for fn, _src in closure["private_functions"]
         ]
         shipped_constants = [
@@ -654,7 +635,4 @@ class LibraryManifestGenerator:
 
     def _type_to_string(self, ty) -> str:
         """Convert Type object to string representation."""
-        if ty is None:
-            return "~"
-
-        return str(ty)
+        return type_string(ty)

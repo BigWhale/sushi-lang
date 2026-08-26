@@ -288,6 +288,62 @@ fn main() i32:
     return Result.Ok(1)
 ```
 
+### is_terminal
+
+Ask whether a stream is attached to a terminal. This is the one method all three
+streams answer.
+
+```sushi
+fn stdin.is_terminal() -> bool
+fn stdout.is_terminal() -> bool
+fn stderr.is_terminal() -> bool
+```
+
+**Returns:** `true` when the stream is a terminal, `false` when it is a pipe, a file, or
+anything else. The answer is about THAT stream alone: a program whose output is piped
+into a pager still has a terminal on `stderr`.
+
+It returns a bare `bool` and not a `Result`. The question has no failure: a stream that
+is not a terminal is the `false` answer, not an error.
+
+**Example:** colour only when a person is reading.
+
+```sushi
+use <io/stdio>
+
+fn main() i32:
+    let string green = ""
+    let string reset = ""
+    if (stdout.is_terminal()):
+        green := "\x1b[32m"
+        reset := "\x1b[0m"
+
+    println("{green}Mostly Harmless{reset}")
+
+    return Result.Ok(0)
+```
+
+**Output:** `Mostly Harmless` in green on a terminal, and the same words with no escape
+bytes when the output is captured.
+
+**Example:** tell an interactive run from a piped one.
+
+```sushi
+use <io/stdio>
+
+fn main() i32:
+    if (stdin.is_terminal()):
+        stdout.write("Enter your name: ")
+        let string name = stdin.readln()
+        println("Hello, {name}!")
+    else:
+        # Reading a piped list, so there is nobody to prompt.
+        foreach(line in stdin.lines()):
+            println("read: {line}")
+
+    return Result.Ok(0)
+```
+
 ## Combining Streams
 
 ### Redirecting output

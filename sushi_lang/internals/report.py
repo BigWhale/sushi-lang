@@ -5,16 +5,9 @@ from typing import List, Optional, Any
 
 from lark import Token
 
-class C:
-    """ANSI color/style escape codes."""
-    RESET = "\x1b[0m"
-    BOLD  = "\x1b[1m"
-    DIM   = "\x1b[2m"
-    RED   = "\x1b[31m"
-    YELLOW = "\x1b[33m"
-    BLUE  = "\x1b[34m"
-    CYAN  = "\x1b[36m"
-    GRAY  = "\x1b[90m"
+# The palette and the colour ladder live in `styling`, which the version banner reads
+# too. `C` is re-exported because this module's renderers are its oldest caller.
+from sushi_lang.internals.styling import C, should_colour  # noqa: F401
 
 @dataclass
 class Span:
@@ -441,10 +434,7 @@ class Reporter:
         stream = stream or sys.stderr
 
         if use_color is None:
-            is_tty = getattr(stream, "isatty", lambda: False)()
-            no_color = os.getenv("NO_COLOR") is not None
-            dumb = os.getenv("TERM") == "dumb"
-            use_color = bool(is_tty and not no_color and not dumb)
+            use_color = should_colour(stream)
 
         if use_unicode is None:
             is_tty = getattr(stream, "isatty", lambda: False)()
