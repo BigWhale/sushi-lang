@@ -1,8 +1,9 @@
 # Design: Documentation blocks
 
-**Status: the language understands doc blocks, a library carries them, the toolchain runs
-the examples, and the compiler says what a block leaves out.** Each phase below moves one
-part from DESIGN to BUILT; this banner records where the line is.
+**Status: BUILT, every phase.** The language understands doc blocks, a library carries
+them, the toolchain runs the examples, the compiler says what a block leaves out, and
+`slib-info` renders what it carries. This banner records where the line is; there is
+nothing left below it.
 The user-facing reference for what is built is `docs/documentation-blocks.md`.
 
 | Phase | Content | State |
@@ -12,7 +13,7 @@ The user-facing reference for what is built is `docs/documentation-blocks.md`.
 | 3 | `.slib` manifest carriage; `slib-info` prints a plain dump | BUILT |
 | 4 | `- Example:` blocks compile and run in the toolchain | BUILT |
 | 5 | `--warn-missing-docs` completeness lints | BUILT |
-| 6 | Markdown rendering, and a Markdown checker written in Sushi | DESIGN |
+| 6 | `slib-info` renders: layout, colour, the Markdown subset, and `--docs` | BUILT |
 
 Written for a compiler contributor. `docs/documentation-blocks.md` is the user-facing
 guide, written in phase 2 and extended by every phase since.
@@ -1570,6 +1571,10 @@ carried, because an attribute is a harness instruction and not documentation. Th
 absent when there is no example. `slib-info` does not print examples: S9 is a plain dump,
 and a fenced program inside it would bury the signature. Phase 6 renders them.
 
+**Amended by R48.** Phase 6 gave the record the CAPTION as well, and gated the whole
+documented report behind `--docs` (R50) -- so a fenced program no longer buries anything,
+because a reader who did not ask for prose does not get any.
+
 This closes R7, the one thing an author could write that phase 3 dropped.
 
 **R24 — a bundled stdlib module is a library unit as far as the `docs` pass is concerned.**
@@ -1708,9 +1713,21 @@ walk they read, and the `COMPILER_FLAGS:` test directive that lets a `.sushi` fi
 a compiler flag on. At the end of this phase the compiler answers both halves of the
 question: what a block claims, and what it leaves out.
 
-**Phase 6 — Markdown.** Rendering, a richer `slib-info`, and the user-facing guide. The
-Markdown checker is written in Sushi and lives in `toolchain/`, which makes it the second
-inhabitant after `slib-info` and another test of the language against a real problem.
+**Phase 6 — the report.** `slib-info` prints what it carries, and prints it better.
+Layout (R38, R39), colour behind one decision (R41, R43), the rendered Markdown subset
+(R40, R44), `- Example:` (R48), the four sections and two spellings that were wrong
+(R45-R47, R49), and `--docs` to gate the prose (R50). It also grew `is_terminal()` in
+`<io/stdio>` (R42), because a tool that wants colour has to ask whether anyone is looking.
+
+**A Markdown checker was cut from this phase, and §2 of the plan records why.** A Sushi
+tool has no Sushi parser: `slib_info.sushi` reads a `.slib` through msgpack and cannot open
+a `.sushi` file to find its doc blocks. So a checker written there could only ever check a
+LIBRARY, and a source tree is where an author works. If one is ever wanted, the checks
+split by what they need -- a tag on a declaration kind that cannot carry it wants the AST
+and belongs in the `docs` pass; an unclosed span wants the text alone and is a warning
+there too; a body fence that does not compile wants `docs_sweep.py`; and a relative link
+naming no file belongs nowhere, because a compiler that stats a path named in prose is a
+new kind of dependency.
 
 ### What each phase MUST do
 
@@ -1730,6 +1747,9 @@ feature removes.
 
 Phase 3 must not teach `slib-info` to parse source, must not move the container version for
 an added optional key, and must not put a `doc` key on a private or closure-path record.
+
+Phase 6 must not reflow a tag, must not paginate, must not let colour change any text
+outside a rendered mark, and must not teach `slib-info` to parse source.
 
 Phase 4 must not make the sweep a CI job, must not assert an example's output, and must not
 teach the wrapper to reach a private symbol. Each one turns documentation into a test, and
