@@ -1,0 +1,24 @@
+# `is_terminal()` returns a bare `bool`, not a `Result`
+#
+# `isatty` cannot meaningfully fail -- it answers 0 for "not a terminal" and sets ENOTTY,
+# which is the same answer -- so the method follows `readln` and `write` and returns its
+# type unwrapped.
+# STDIN_INPUT: "x\n"
+# EXPECT_STDOUT_EXACT: "piped\nnot a terminal\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+use <io/stdio>
+
+fn main() i32:
+    let bool interactive = stdout.is_terminal()
+    if (interactive):
+        println("terminal")
+    else:
+        println("piped")
+
+    if (not stderr.is_terminal()):
+        println("not a terminal")
+    else:
+        println("a terminal")
+
+    return Result.Ok(0)

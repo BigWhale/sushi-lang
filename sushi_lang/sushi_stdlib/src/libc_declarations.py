@@ -148,6 +148,16 @@ def declare_isalpha(module: ir.Module) -> ir.Function:
     return ir.Function(module, fn_ty, name="isalpha")
 
 
+def declare_isatty(module: ir.Module) -> ir.Function:
+    """Declare isatty: int isatty(int fd)"""
+    if "isatty" in module.globals:
+        return module.globals["isatty"]
+
+    i32 = ir.IntType(32)
+    fn_ty = ir.FunctionType(i32, [i32])
+    return ir.Function(module, fn_ty, name="isatty")
+
+
 def declare_utf8_count(module: ir.Module) -> ir.Function:
     """Declare utf8_count: size_t utf8_count(const char* s)"""
     if "utf8_count" in module.globals:

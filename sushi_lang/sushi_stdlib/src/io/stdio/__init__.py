@@ -27,6 +27,10 @@ def generate_module_ir() -> ir.Module:
     from sushi_lang.sushi_stdlib.src.io.stdio.iterators import (
         generate_stdin_lines
     )
+    from sushi_lang.sushi_stdlib.src.io.stdio.terminal import (
+        STANDARD_DESCRIPTORS,
+        generate_is_terminal,
+    )
 
     module = create_stdlib_module("io.stdio")
 
@@ -40,6 +44,11 @@ def generate_module_ir() -> ir.Module:
 
     generate_stderr_write(module)
     generate_stderr_write_bytes(module)
+
+    # The first method valid on every stream, so it is generated from the stream table
+    # rather than once per stream.
+    for stream_name in STANDARD_DESCRIPTORS:
+        generate_is_terminal(module, stream_name)
 
     return module
 
@@ -80,6 +89,13 @@ def _validate_read_bytes(call: MethodCall, reporter: Any, validator: Any = None)
                    index=1, expected="i32", got=display_type(arg_type))
 
 
+def _validate_no_arguments(call: MethodCall, stream_name: str, reporter: Any) -> None:
+    """Validate a stream method that takes nothing, on whichever stream it was called."""
+    if call.args:
+        er.emit(reporter, er.ERR.CE2009, call.loc,
+               name=f"{stream_name}.{call.method}", expected=0, got=len(call.args))
+
+
 def _validate_write(call: MethodCall, stream_name: str, reporter: Any, validator: Any = None) -> None:
     """Validate write(string) method call on stdout/stderr."""
     if len(call.args) != 1:
@@ -115,13 +131,20 @@ def _validate_write_bytes(call: MethodCall, stream_name: str, reporter: Any, val
 
 def is_builtin_stdio_method(method_name: str) -> bool:
     """Check if a method name is a built-in stdio method."""
-    return method_name in {"readln", "read", "lines", "write", "read_bytes", "write_bytes"}
+    return method_name in {"readln", "read", "lines", "write", "read_bytes",
+                           "write_bytes", "is_terminal"}
 
 
 def validate_builtin_stdio_method_with_validator(call: MethodCall, stdio_type: BuiltinType,
                                                   reporter: Any, validator: Any) -> None:
     """Validate built-in stdio method calls with access to the validator for type checking."""
     method_name = call.method
+
+    # The one method every stream answers. The rest of the table is split -- stdin reads,
+    # stdout and stderr write -- so this is checked before the split.
+    if method_name == "is_terminal":
+        _validate_no_arguments(call, display_type(stdio_type), reporter)
+        return
 
     if stdio_type == BuiltinType.STDIN:
         if method_name == "readln":
@@ -165,4 +188,6 @@ def get_builtin_stdio_method_return_type(method_name: str, stdio_type: BuiltinTy
         return DynamicArrayType(BuiltinType.U8)
     elif method_name in {"write", "write_bytes"}:
         return BuiltinType.BLANK
+    elif method_name == "is_terminal":
+        return BuiltinType.BOOL
     return None

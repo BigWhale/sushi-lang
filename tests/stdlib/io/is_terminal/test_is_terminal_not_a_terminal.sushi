@@ -1,0 +1,17 @@
+# `is_terminal()` answers false on all three streams when none of them is a terminal
+#
+# The runner captures stdout and stderr and feeds stdin from a pipe, so every stream
+# here is a pipe. STDIN_INPUT is what makes the stdin answer deterministic: without it
+# the child inherits the shell's stdin, which IS a terminal when the suite is run by
+# hand.
+# STDIN_INPUT: "x\n"
+# EXPECT_STDOUT_EXACT: "0\n0\n0\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+use <io/stdio>
+
+fn main() i32:
+    println(stdin.is_terminal())
+    println(stdout.is_terminal())
+    println(stderr.is_terminal())
+    return Result.Ok(0)

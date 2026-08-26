@@ -35,6 +35,12 @@ def emit_stdlib_stdio_call(
 
     from sushi_lang.backend.functions import declare_stdlib_function
 
+    # The one method valid on every stream, so it is resolved before the stream split.
+    if method == "is_terminal":
+        stdlib_func = declare_stdlib_function(codegen.module, func_name, i8, [])
+        result = codegen.builder.call(stdlib_func, [], name=f"{stream_name}_is_terminal_result")
+        return codegen.utils.as_i1(result) if to_i1 else result
+
     if stream_name == "stdin":
         if method == "readln":
             string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)

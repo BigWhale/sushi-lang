@@ -9,6 +9,22 @@ a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
 ### Added
+- **`is_terminal()` on `stdin`, `stdout` and `stderr`.** A program can ask whether a
+  stream is attached to a terminal, which is what a tool needs before it decides to use
+  colour. The answer is about that stream alone: output piped into a pager still leaves a
+  terminal on `stderr`.
+
+  It returns a bare `bool`, because the question has no failure -- `isatty` answers 0 for
+  "not a terminal" and sets `ENOTTY`, which is the same answer. The name is `is_terminal`
+  and not `is_tty`: "tty" abbreviates teletype, a device file and an era, and the plain
+  word matches the `is_empty` / `is_ok` / `is_err` shape the rest of the library uses.
+
+  This is the first stdio method valid on all three streams -- the rest of the table is
+  split, with `stdin` reading and the other two writing -- so the validator, the generator
+  and the emitter each resolve it before the split rather than three times over.
+
+  A free `isatty(i32 fd)` was rejected. The language hides file descriptors completely, so
+  a function taking a raw fd would be the only place a number stands for a stream.
 - **The compiler understands documentation blocks: `##: ... :##`**. A doc block is part of
   the declaration, not a comment near it: the grammar sees it, the AST carries it, and the
   compiler checks what it says against the declaration beside it.
