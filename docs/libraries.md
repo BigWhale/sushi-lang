@@ -104,6 +104,13 @@ public fn double_add(i32 a, i32 b) i32:
     return Result.Ok(helper(sum)??)
 ```
 
+A generic is no exception. `public fn pick@(T)(...)` is part of the API; `fn pick@(T)(...)`
+is internal, and a consumer that calls it hears `CE3005` exactly as it does for a concrete
+function. Only a public generic ships as a template, so on the binary path the symbol is
+not in the consumer's tables at all -- but the manifest names what the library declares and
+keeps, so the answer is `CE3005` there too, naming the library instead of a unit. `CE2008`
+is left for what it is for: a name that no unit and no linked library declares.
+
 ### No main() Required
 
 Libraries do not need a `main()` function. If you include one, compilation will fail.
@@ -238,15 +245,25 @@ Protocol: 2.0
 
 Units (1):
   mylib
+    Arithmetic that reports its own failures.
 
-Public Functions (2):
+Public Functions (3):
   fn add(i32 a, i32 b) i32
+    Adds two numbers.
+    - Parameter a: The first addend.
+    - Parameter b: The second addend.
+    - Returns: The sum.
   fn multiply(i32 a, i32 b) i32
+  fn shout(nom string s) string
+    Hands the string back, and takes it over.
 
 Structs (1):
   struct Point:
+    A point in the plane.
     i32 x
+      The distance along x.
     i32 y
+      The distance along y.
 
 Enums (1):
   enum Color:
@@ -260,8 +277,14 @@ Dependencies (1):
 Source: 1,204 bytes
 ```
 
+A documented symbol prints its doc block, indented two spaces under its own line;
+`multiply` above has no block and prints as it always did. A `nom` parameter shows its
+mode, which is the one mode a type cannot spell. See
+[Documentation Blocks](documentation-blocks.md#what-travels-in-a-slib) for the record and
+for the few things that do not travel in it.
+
 This is useful for:
-- Checking what functions a library exports
+- Checking what functions a library exports, and what each one is for
 - Verifying platform compatibility
 - Understanding library dependencies
 
@@ -384,14 +407,30 @@ fn internal_helper(i32 x) i32:
 
 ### 2. Document Your Library
 
-Include comments explaining what each public function does:
+Write a `##: ... :##` doc block on every public symbol. A block is part of the declaration,
+so the library carries it and `--lib-info` prints it; a `#` comment is dropped at the
+boundary and reaches nobody.
+
+An `- Example:` is worth writing on a public symbol: the code travels in the index, and
+`python tests/docs_sweep.py` compiles and runs it against the library's own source, so an
+example that drifts out of date says so. `--lib-info` does not print one -- a fenced program
+inside a plain dump would bury the signature.
 
 ```sushi
-# Adds two integers and returns the result.
-# Returns Result.Err if overflow would occur.
+##:
+Adds two integers.
+
+- Parameter a: The first addend.
+- Parameter b: The second addend.
+- Returns: The sum.
+- Errors: `MathError.Overflow` when the sum does not fit an `i32`.
+:##
 public fn safe_add(i32 a, i32 b) i32 | MathError:
-    # ...
+    return Result.Ok(a + b)
 ```
+
+A block first in the file documents the unit itself, which is the right place for what the
+library as a whole is for. [Documentation Blocks](documentation-blocks.md) is the guide.
 
 ### 3. Organize with Namespaces
 
@@ -495,10 +534,19 @@ Current limitations of the library system:
    evaluation). The manifest's `templates.closure_summary` lists what shipped, by kind. At the
    consumer, a local symbol with the same name as a shipped private is an error (**CE5007**,
    not local-wins): shadowing it would silently change what the library's monomorphized bodies
-   call. Note that shipped private helpers become callable by name from consumer code - they
-   are not advertised in the public API, but they are not hidden either. None of this can
-   arise on the source path: library units are namespaced, so there is no shared namespace to
-   clash in, and nothing has to be shipped ahead of need.
+   call. A shipped private helper is callable by the library's own bodies and by nothing
+   else: consumer code that names one is `CE3005`, like any other private function. The
+   exception is a constant, which has no private form yet (#466), so a shipped one is
+   readable. None of this can arise on the source path: library units are namespaced, so
+   there is no shared namespace to clash in, and nothing has to be shipped ahead of need.
+
+   **A private the closure does not ship is named too.** The closure only walks what a
+   public *generic* needs, so a private a concrete function calls -- or one nothing public
+   calls -- ships nowhere. The manifest's `not_exported` key carries those names and their
+   kind, and nothing else: no signature, no body, no source. It is what lets the consumer
+   hear `CE3005` for them rather than `CE2008` (#469). A name in that list is not shipped,
+   so it clashes with nothing: a consumer may declare a function of the same name and it is
+   the consumer's own.
 
    Remaining restriction on the binary path:
    - **Generic-target perk impls do not ship**: `extend <Generic@(T)> with <Perk>` is not supported

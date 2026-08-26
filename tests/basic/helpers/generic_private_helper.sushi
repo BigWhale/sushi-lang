@@ -1,0 +1,8 @@
+# A unit with one private and one public generic function. `public` gates a
+# generic across units exactly as it gates a concrete function (#467).
+
+fn private_generic@(T)(nom T x) T:
+    return Result.Ok(x)
+
+public fn public_generic@(T)(nom T x) T:
+    return Result.Ok(x)

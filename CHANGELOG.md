@@ -9,6 +9,131 @@ a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
 ### Added
+- **The compiler understands documentation blocks: `##: ... :##`**. A doc block is part of
+  the declaration, not a comment near it: the grammar sees it, the AST carries it, and the
+  compiler checks what it says against the declaration beside it.
+
+  One construct serves three positions -- above a declaration, first in a body, or first in
+  a file, where it documents the unit. A block attaches to the declaration on the NEXT line,
+  which is Go's rule; a blank line or a `#` comment breaks the attachment, and a block that
+  attaches to nothing is **CW7001**. The text is dedented and not reflowed, so a block
+  written inside a body renders flush and a fenced example keeps its own indent.
+
+  The delimiters are asymmetric on purpose, and that is what lets the compiler say which
+  mistake was made: an opener with no closer is **CE6011**, a closer with no opener is
+  **CE6012**, and a line-initial `##:` inside a block is **CE6013**, reported at the inner
+  opener with a note on the outer one. The closer is line-initial or the block is a
+  one-liner, so a lazy match can no longer swallow the declarations between two blocks.
+
+  Four tags are recognised, each an ordinary Markdown list item: `- Parameter <name>:`,
+  `- Returns:`, `- Errors:` and `- Example:`. A new `docs` pass checks them: a tag that
+  names no parameter of this callable is **CE7001**, one parameter documented twice is
+  **CE7002**, a second `- Returns:` or `- Errors:` is **CE7003**, and a keyword within two
+  edits of a real one is a typo rather than prose, **CE7004** with the tag it meant. A block
+  in a body that is not the first item is **CE7005**, and a declaration documented both from
+  above and from inside its body is **CE7006**.
+
+  **A library carries the text.** Every `.slib` record that names a symbol an author can
+  document gains an optional `doc` key -- a public function, a public constant, a struct and
+  each of its fields, an enum and each of its variants, a generic function, struct or enum, a
+  perk, a perk implementation and each of its methods -- and a `unit_docs` map beside `units`
+  carries each unit's own block. The record holds the block in parsed parts: `summary`,
+  `body`, a `params` map keyed by parameter name, `returns` and `errors`. Every field is
+  optional and the whole key is absent when a symbol has no block, so the container version
+  does not move and an undocumented library grows by nothing.
+
+  `--lib-info` prints the block under the symbol it documents, indented two spaces, in both
+  implementations -- the Python fallback and the Sushi-written `toolchain/bin/slib-info` --
+  and the two are locked byte for byte. Parameters print in DECLARATION order, and not in the
+  order the block documents them. The report also gained a second thing: a parameter's `nom`
+  mode now prints beside its type. That is the one mode a type cannot spell; `peek` and
+  `poke` were always part of the type string.
+
+  Two things do not travel in the index: an extension has no manifest record of any kind,
+  and a private symbol carries no doc because it is not part of the documented API.
+
+  The index is bigger for it, and that is expected rather than a cost to weigh. Measured on a
+  stdlib-sized library of 83 documented symbols, it grew from 5,787 to 22,578 bytes -- about
+  200 bytes a symbol, of which 35 is msgpack framing. The metadata blob is plain text and
+  uncompressed today; compressing it is its own change.
+
+  **The toolchain runs the examples.** An `- Example:` tag introduces a fenced code block,
+  and `python tests/docs_sweep.py` compiles and runs it -- an example that stops compiling
+  is documentation that has drifted, and this is what says so. The sweep grew a second
+  collector for it and a `--only {all,docs,examples}` selector; it stays a by-hand tool and
+  deliberately not a CI job.
+
+  The block is now PARTITIONED before its tags are read, which removes three silent
+  defects: a line-initial `- Returns:` inside example code was read as a tag and truncated
+  the example there, a blank line inside a fence ended the tag that introduced it, and the
+  fold that joins a tag's continuation lines destroyed the indentation a program needs. An
+  example is its own structure, kept verbatim, and many `- Example:` tags are legal.
+
+  Two new codes, both always on, because each is a claim that contradicts itself: a tag
+  with no fenced block after it is **CE7007**, and a fence a block's own `:##` truncates is
+  **CE7008**. An example that is merely ABSENT stays a matter of policy.
+
+  A snippet with no `fn main(` is wrapped -- two lines of intent stay two lines. It goes
+  into a helper and a generated `main` matches on the result, so an example whose `??` fails
+  exits non-zero without a bare `??` in `main` to warn about. Every `use` line is hoisted,
+  because a `use` inside a body does not parse. A snippet that declares its own `main` is
+  compiled as written. The instruction to the harness rides on the fence itself, because a
+  `.sushi` file cannot carry an HTML comment: ` ```sushi ` runs, `no_run` compiles only,
+  `skip (reason)` does neither, and `error CExxxx` must exit 2 and name every code.
+
+  An example is compiled from OUTSIDE the unit it documents, the way a Rust doctest links
+  its crate. Two things are then out of reach and each is a printed, counted SKIP rather
+  than a failure: a private declaration, which the generated file cannot call, and a unit
+  that declares `main`, which cannot be imported beside a second one. An example that calls
+  what a reader cannot call is not documentation, so the answer to the first is `public`
+  and not a second mechanism.
+
+  A `.slib` carries the code. The `doc` record gained an `examples` array -- the code of
+  each example in source order, the fence attributes left behind, because an attribute is a
+  harness instruction and not documentation. Measured on a three-example library: 184 bytes,
+  of which 148 is the code the author wrote and 36 is framing, 12 bytes an example.
+  `--lib-info` prints none of it; a fenced program inside a plain dump would bury the
+  signature the reader came for.
+
+  Two fixes came with it. A doc-block mistake in a bundled Sushi-source stdlib module was
+  reported in every program that imported the module, against code the user never wrote --
+  measured with a `CW7001` in `collections/iter.sushi`; the module now carries a
+  provenance, like a source library's unit, so the diagnostic reaches us and not a user.
+  And the syntax highlighter had no rule for a doc block at all: `#.*$` took the opening
+  `##:` line and the code rules took the rest of the block.
+
+  **`--warn-missing-docs` says what is missing.** Every check above is always on, because
+  each one finds a claim that CONTRADICTS the declaration beside it. What a block leaves
+  OUT is policy, so it waits for one opt-in flag, and a codebase that has not been
+  documented yet does not become a wall of warnings on the day the feature lands.
+
+  Five warnings behind the switch. A declaration with no block is **CW7002**; a documented
+  callable with a parameter no `- Parameter` tag names is **CW7003**; a documented callable
+  that returns a value with no `- Returns:` is **CW7004**; a documented function that
+  declares `| E` with no `- Errors:` is **CW7005**; and a unit with no block of its own is
+  **CW7006** -- a unit block travels in the `.slib` as `unit_docs`, so a library whose units
+  say nothing is the first hole a reader meets.
+
+  A private declaration warns too. The `public` marker is not the test, because an internal
+  API is documented surface as much as an exported one. A struct field and an enum variant
+  are each asked on their own, because each carries its own `doc` key in the manifest and
+  `--lib-info` prints each one under its owner.
+
+  Two exemptions, and nothing else. `fn main()` is nobody's API, and a library cannot
+  declare one at all. An `unsafe external` block and the declarations inside it carry
+  `because "..."`, which acknowledges the contract that matters at that seam.
+
+  A block lint presupposes a block: CW7003, CW7004 and CW7005 fire only where a block
+  already exists, so a declaration with none collects CW7002 and stops. One omission stays
+  one diagnostic. A library's units are never linted, either way.
+
+  A `.sushi` test fixture can turn a compiler flag on now. The runner gained a
+  `COMPILER_FLAGS:` directive, which appends to the `sushic` command line; a flag the runner
+  owns -- `-o`, `--lib`, `--lib-info`, `--clean-cache`, `--build-stdlib`, `--cache-dir` --
+  is refused. Without it a flag-gated diagnostic had no fixture at all.
+
+  `docs/documentation-blocks.md` is the reference and `docs/design/documentation.md` carries
+  the phases that follow.
 - **An array literal element may repeat: `[value; count]`** (#446). A table of one value
   no longer has to be spelled out or built at run time. The form is an ELEMENT form, so
   runs mix with plain elements and repeat within one literal: `[0; 19]`, `[1, 0;3, 9, 7]`,
@@ -159,6 +284,19 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   reader where the file was cut.
 
 ### Changed
+- **A diagnostic that spans a whole construct is rendered without a caret, and a help
+  is rendered inside the box.** A caret separates one thing from the rest of its line.
+  When the span covers a whole construct there is nothing to separate, and the header
+  already carries the line and column, so `CW7001`, `CE7005` and `CE7006` now report the
+  location alone. A help used to hang below the box in the plain-text form even when the
+  box was drawn; it now sits inside it, wrapped. The label stays, because a note with no
+  location is a fact and a help is advice, and inside the box nothing else tells them
+  apart. The plain renderer, which is what a pipe and every test sees, is unchanged.
+- **A constant's type mismatch marks the assignment, not the declaration.** `CE2002` was
+  handed the declaration's own span, where the `let` path hands it the value's, so
+  `const str x = "FOO"` marked from `const` to the end of the line. It now marks
+  `x = "FOO"`: the declared type is not the half that is wrong, and it already carries a
+  note of its own on the same diagnostic.
 - **`compression/zlib` is rewritten onto the language it now has.** The module landed
   before four of the fixes in this release and carried a workaround for each. It opened
   with a CAUTION block telling the reader that a bitwise operator truncates in silence and
@@ -263,6 +401,189 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **Every diagnostic about a callee rendered as text with no caret.** The builder parsed
+  the callee into a `Name` carrying its span, then rebuilt one from the bare identifier
+  and dropped it, so `call.callee.loc` was `None` for every ordinary call. The head line
+  named the file and stopped there: `shape.sushi: error [CE2009]: function 'add' expects 2
+  arguments, got 1.` -- no line, no column, no source line, nothing marked.
+
+  The builder passes the `Name` it already has. Every code anchored to a callee is tier 2
+  now, with the caret under the name: **CE2008**, **CE2009** (eight emit sites),
+  **CE3005**, **CE2060**, **CE2061**, **CE2062**, **CE2001** and **CE2027**. No emitter
+  and no message changed.
+- **A call to a function the compiler could not find was judged against a signature it
+  invented.** The mode resolver answers `borrow` for a name it does not carry, so the
+  borrow pass compared the call-site marker against that answer: `no_such(nom s)` reported
+  **CE2008** and then **CE2427**, whose help line said to drop the `nom` -- advice that
+  breaks correct code, because the callee it could not find may well declare `nom`. The
+  loudest case was a private generic of a binary `.slib`, where the whole reason the name
+  does not resolve is that the library kept it.
+
+  The type checker now records that it found no callee (CE2008, CE2092), and the borrow
+  pass applies no mode to the arguments of such a call. It says nothing about them, which
+  is what it already did for a method call the type checker left unresolved. A callee that
+  DOES resolve is judged as before, `open` included -- it carries no signature record, but
+  the type checker resolves it.
+- **A cross-unit `collect` diagnostic was reported against the entry file** (#473). The
+  collect pass is the one whole-program pass that walks every unit's AST through a SINGLE
+  reporter; the per-unit passes each build their own. A span is meaningless without its file,
+  so a declaration in a non-entry unit was reported against the entry unit: the head line
+  named a line the user never wrote, and the caret landed on whatever text sat at that
+  column. A duplicate constant inside a helper unit marked `return Result.Ok(0)` in the entry
+  file, and a `CE5001` in a helper marked a correct `println(...)` -- for a declaration in
+  another file, which the diagnostic never mentioned.
+
+  `CollectorPass.run` now names the unit it is reading, and `Reporter._record` -- the one
+  place every diagnostic passes through -- stamps it. That answers for every emit site in the
+  pass at once: **CE0004**, **CE0006**, **CE0101**, **CE0105**, **CE2046**, **CE4001**,
+  **CE5001** and their siblings, head line and caret.
+
+  A `first defined here` note needed one thing more, because it points at a table entry that
+  may have been made while a different unit was being collected. Each record remembers its own
+  file now -- `files` beside `spans` on the struct and enum tables, `PerkTable.files`, and a
+  `filename` on `ConstSig` and `ExternalSig`, which `FuncSig` already had for exactly this
+  reason. So both halves of a cross-unit duplicate name their own file, each with its own
+  caret.
+
+  No new codes, no message changes, and nothing legal became illegal. The `Origin` record
+  that #471 introduced for a library template carries this too: its `provenance` note is now
+  optional, because a unit of the program being compiled needs no explanation.
+- **An `unsafe external "C"` could name a symbol the program itself defines** (#470). A
+  program's units share one LLVM module and a linked library's module is merged into it, so
+  a `declare` and a `define` of one name unify. There was no rule against it, and the
+  consequences split two ways. Naming a private a binary `.slib` kept COMPILED, LINKED and
+  RAN: the library's private body was entered from consumer code that may not call it, and
+  because the declaration promised a bare `i32` where the body returns a `Result`
+  aggregate, the answer came out of the wrong register -- `0` instead of `21`. Naming
+  anything the compiler already held a declaration for was a **CE0000** internal error
+  (`DuplicatedNameError`) instead: a private of another unit, a function of the extern's own
+  unit, a PUBLIC function of another unit, a shipped export-closure private, or a constant.
+
+  One rule now answers for all of it, **CE5013**: an `unsafe external` reaches out of the
+  program, so its link-name may not be a symbol this build defines. It is relational -- the
+  note carries the definition's own file, line and caret for a symbol this program declares,
+  and names the library otherwise, saying whether the library exports the symbol, ships it in
+  its export closure, or keeps it. `CE2008`-style guessing is not involved: the rule reads
+  the func table, the constant table and the library registry, so it is a new named step
+  `ffi-clash`, running after `libraries` because that is when the program's symbols are all
+  in place.
+
+  What stays legal is what FFI is for. A genuinely foreign symbol binds as before, and two
+  namespaces may still declare the same one -- LLVM deduplicates identical declarations, and
+  `CE5001` remains the rule for a mismatched one.
+
+  One gap is left and it is narrow: a symbol the stdlib GENERATORS emit (`string_len` and
+  its ~180 siblings) is named in no semantic table, so the rule cannot see it. It is not
+  catchable in the backend either -- externs are declared before any of it is in the module.
+- **Every diagnostic from a binary library's template body was reported against the
+  CONSUMER's file** (#471). A binary `.slib` ships a public generic as a re-parsable source
+  slice, and the consumer monomorphizes it. The instance lands in one of the consumer's own
+  unit ASTs, so the consumer's reporter rendered it -- while its spans came from parsing the
+  slice, where the declaration is on line 1. An error landed on a blank consumer line with a
+  caret under nothing, and one warning's caret marked the consumer's own `fn main() i32:` for
+  a mistake in code they cannot see. Two passes were affected, `scope` and `typecheck`, so it
+  was never one emitter's quirk.
+
+  A source library was always right, because it arrives as a unit with a `provenance` and
+  every per-unit pass runs against that unit's reporter. The binary path now reads the same:
+
+  ```
+  <template:errlib:add_one>:2:22: error [CE2509]: operator '+' cannot be used with string types.
+    |     return Result.Ok(a + 1)
+    `                      --+--
+    = note: 'errlib' 0.1.0 ships this template; it is monomorphized here because of `use <lib/errlib>`
+  ```
+
+  `report.Origin` carries the three things such a body needs -- what to call it, what text
+  the caret marks, and why it is being compiled here -- and it is set on the template beside
+  `is_library_template`, then copied onto every instance and every lambda lifted out of one.
+  The mark answers who may be called from the body; the origin answers how a failure reads.
+  `Reporter._record` applies it, because that is the one place every diagnostic passes
+  through, and a diagnostic that names a file of its own keeps it.
+
+  A name in angle brackets is no longer given a `./` prefix. `<input>` and
+  `<template:lib:name>` are not paths, and one rendered as `./<input>`.
+- **A binary library said "undefined function" where a source library said "private"**
+  (#469). The export closure walks what a public GENERIC's body needs, because that body is
+  monomorphized at the consumer. A private that only a concrete function calls, or that
+  nothing public calls, ships nowhere and reaches the consumer's tables under no name at
+  all -- so a consumer naming it heard **CE2008**, "undefined function", for a function the
+  library defines on the next line of the build script and deliberately kept. The same call
+  against a source `.slib` was **CE3005**. Both reject and both exit 2, so the two kinds
+  disagreed about the wording and not about the legality.
+
+  A `.slib` now carries one additive key, `not_exported`: what the library declares and does
+  not export, as a name and its kind. No signature, no body and no source travel with it,
+  because a name is all the diagnostic needs. Each private is named in exactly one place --
+  the export closure, with a signature, or this list, with nothing else. The consumer's
+  registry reads the key, and the `CE2008` site asks it before it emits, so the answer comes
+  out of the one **CE3005** gate with the library named in place of a unit. The callee stays
+  unresolved on that path, so no argument is judged against a mode the compiler invented.
+
+  A kept name ships nowhere, so it clashes with nothing: a consumer may declare its own
+  function of the same name and that is what the call resolves to. `CE2008` is left for
+  what it is for -- a name that no unit and no linked library declares.
+
+  Nothing else moves. The container version stays at 4 and `sushi_lib_version` at `"2.0"`:
+  the metadata blob is an open msgpack dict read through `.get()`, so an older consumer
+  ignores the key and a newer consumer reading an older `.slib` finds none, and both keep
+  answering as they did. `--lib-info` prints no new section, in either implementation.
+
+  This buys WORDING, not enforcement, and should not be read as hardening. Privacy across a
+  binary `.slib` is still defeatable by a route the manifest has nothing to do with: an
+  `unsafe external "C"` declaration can name a Sushi symbol, the library's module is merged
+  into the consumer's, and internal linkage does not stop the call.
+- **A binary library's private helpers were callable from consumer code** (#468). The
+  export closure ships what a public generic's body needs -- a private concrete helper, a
+  private generic template, a constant -- because the body is monomorphized at the
+  consumer and still has to call them. Those names landed in the consumer's tables as
+  ordinary callable symbols: the concrete records were registered `public`, and the gate
+  exempted a template for being one. So a consumer could call `scale_up(2)` or
+  `pick_first(a, b)` by name and it linked and ran, while the same call against a source
+  `.slib` was CE3005.
+
+  The call SITE now decides, not the symbol. A monomorphized instance of a library
+  template is marked as the library's code, a lambda lifted out of such a body carries the
+  mark with it, and the typecheck pass exempts those bodies alone. Consumer code naming a
+  shipped private is **CE3005**, which names the library it belongs to. An instance of the
+  *consumer's* own generic is synthesized by the same machinery and is deliberately not
+  exempt -- it is code the user wrote, so it reaches no further than the user's own
+  symbols.
+
+  A shipped constant stays readable. There is no private constant to refuse yet, which is
+  #466.
+- **A source library's private generic crashed the compiler, and two build paths disagreed
+  about it** (#467). `public` gates a concrete function across units, and the typecheck
+  pass says so with **CE3005**. A generic had no such gate. The units of a source `.slib`
+  arrive at the consumer as ordinary units, so the consumer resolved the private symbol,
+  and only the backend found out that no template was ever exported -- as a `KeyError`,
+  which the top-level guard rendered as **CE0000**. The default incremental path raised
+  that internal error, `--no-incremental` accepted the same program and ran it, and a
+  binary `.slib` answered **CE2008**.
+
+  One gate now answers for both kinds of callee, in the typecheck pass, where the
+  consumer's units and the library's exported templates are both visible. A private
+  generic of another unit is **CE3005** wherever the call is written, on either path: a
+  flag that controls rebuilds no longer decides which programs are legal. The same hole
+  was open in an ordinary multi-unit program, where a private generic next door was
+  callable; it is closed too. An export-closure template stays callable, because the
+  consumer registers it so that a transplanted library body can call it -- which is what
+  the concrete half of the closure already does.
+
+  The bundled `<collections/iter>` combinators -- `map`, `filter`, `fold` and `compose` --
+  were reachable only because the gate was missing. They are `public fn` now.
+- **Every caret was one character wider than the thing it marked.** `end_col` is
+  exclusive -- Lark reports it that way, and every span the compiler builds by hand
+  spells it `col + len(text)` -- but the width was computed as the difference plus one.
+  `str` was underlined with four dashes, `Maybe@(i32)` with twelve, `##:` with four. The
+  width is now the difference. The one span that counted inclusively was the indent run
+  behind `CE6004`, which now spells its end exclusively like the rest, and both marker
+  paths share the arithmetic so a note underlines like a caret.
+- **A span that ended on a later line drew a caret measured against a line it was not
+  drawn under.** Only the span's first line is rendered, but the width came from its
+  last: a `const_def` reaches column 1 of the line after the statement, so a whole
+  declaration was marked with a single character under its first keyword. Such a span now
+  underlines to the end of the line it is drawn under.
 - **A msgpack length at or above 2^31 decoded as an empty value instead of an error**
   (#463). Each length-prefixed tag narrowed its `u64` prefix with a bare cast, so
   `0xffffffff` became -1, every taker looped `while (i < count)` zero times, and a

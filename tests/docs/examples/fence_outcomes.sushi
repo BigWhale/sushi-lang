@@ -1,0 +1,65 @@
+# A library-shaped unit, and deliberately not a test. It declares no `main`, so
+# `tests/run_tests.py` does not collect it and the doc-example collector CAN import it
+# (documentation.md section 10, R18 and R21). One declaration per fence attribute:
+# `tests/unit/test_doc_examples_runner.py` sweeps this file and asserts PASS, PASS,
+# SKIP, EXPECTED-ERROR, and `python tests/docs_sweep.py --only examples` prints the
+# same four outcomes.
+
+##:
+Doubles a number.
+
+- Parameter n: The number to double.
+- Returns: Twice `n`.
+- Example: a plain fence is compiled and run, and a non-zero exit is a failure.
+```sushi
+let i32 d = doubled(21)??
+println("{d}")
+```
+:##
+public fn doubled(i32 n) i32:
+    return Result.Ok(n * 2)
+
+##:
+Adds up every number below a bound.
+
+- Parameter rounds: How far to count.
+- Returns: The sum.
+- Example: a `no_run` fence is compiled and never run, because the loop is long.
+```sushi no_run
+let i32 total = summed(100_000_000)??
+println("{total}")
+```
+:##
+public fn summed(i32 rounds) i32:
+    let i32 total = 0
+    foreach(i in 0..rounds):
+        total := total + i
+    return Result.Ok(total)
+
+##:
+Opens a connection on a port.
+
+- Parameter port: The port to reach.
+- Returns: The descriptor.
+- Example: a `skip` fence is not compiled at all, and the reason is printed.
+```sushi skip (needs a listening socket)
+let i32 fd = connect(8080)??
+println("{fd}")
+```
+:##
+public fn connect(i32 port) i32:
+    return Result.Ok(port)
+
+##:
+Adds one to a number.
+
+- Parameter n: The number.
+- Returns: One more than `n`.
+- Example: an `error` fence must exit 2 and name every code it gives.
+```sushi error CE2002
+let string s = 42
+println("{incremented(s)}")
+```
+:##
+public fn incremented(i32 n) i32:
+    return Result.Ok(n + 1)

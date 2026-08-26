@@ -1,0 +1,76 @@
+# Test: every position a doc block may stand in parses and compiles.
+# Unit docs, above a declaration, first in a body, and one per member kind:
+# struct field, enum variant, perk method, perk-impl method and extern decl.
+# EXPECT_STDOUT_EXACT: "42 3 point 5\n"
+
+##:
+Unit docs. This block is the first item in the file, so it documents the unit.
+:##
+
+##: The answer to life, the universe and everything. :##
+const i32 ANSWER = 42
+
+##:
+A point in two dimensions.
+:##
+struct Point:
+    ##: The horizontal offset. :##
+    i32 x
+    ##: The vertical offset. :##
+    i32 y
+
+##:
+What the drive is doing.
+:##
+enum Drive:
+    ##: The coil is cold. :##
+    Cold
+    ##: The coil is warm. :##
+    Ready
+
+##:
+Anything that can name itself.
+:##
+perk Named:
+    ##: The name of this thing. :##
+    fn name() string
+
+##:
+A point names itself.
+:##
+extend Point with Named:
+    ##: A point is always called the same thing. :##
+    fn name() string:
+        return "point"
+
+##:
+Foreign declarations borrowed from libc.
+:##
+unsafe external "C" as libc because "read a C string length for the position test":
+    ##: The length in bytes, excluding the terminator. :##
+    fn strlen(string s) i64 = "strlen"
+
+##:
+Adds two numbers.
+
+- Parameter a: The first addend.
+- Parameter b: The second addend.
+- Returns: The sum.
+- Errors: Never, in practice.
+:##
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+fn main() i32:
+    ##:
+    A block first in a body documents the function that encloses it.
+    :##
+    let Point p = Point(1, 2)
+    let i32 sum = add(p.x, p.y).realise(0)
+    let i64 n = libc.strlen("ready")
+    let string label = p.name()
+    let Drive d = Drive.Ready()
+    match d:
+        Drive.Cold -> println("cold")
+        Drive.Ready -> println("{ANSWER} {sum} {label} {n}")
+    return Result.Ok(0)

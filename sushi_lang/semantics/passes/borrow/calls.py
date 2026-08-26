@@ -83,6 +83,12 @@ def apply_mode(checker: 'BorrowChecker', call, arg: Expr, index: int,
 
 def consume_call_args(checker: 'BorrowChecker', expr: Call) -> None:
     """Consume the arguments the callee's declared modes say it takes ownership of."""
+    # No callee, no declared modes, nothing to say about the arguments. The resolver
+    # answers BORROW for a name it does not carry, so judging the marker against it told
+    # the user to drop a `nom` nobody declared -- and the callee may well declare one
+    # (#467). This mirrors `settle_method_args`, which has always declined the same way.
+    if getattr(expr, "callee_unresolved", False):
+        return
     kind, modes, variadic_at = call_modes(checker, expr)
     collected_owner_is_callee = (
         isinstance(expr.callee, Name)

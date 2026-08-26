@@ -14,6 +14,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from tqdm import tqdm
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_metadata import parse_test_metadata  # noqa: E402
+
 
 DEFAULT_JOBS = 4
 JOBS_ENV_VAR = "SUSHI_TEST_JOBS"
@@ -85,7 +88,10 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
 # private_closure_lib backs test_err_lib_private_clash, which expects CE5007 -- a clash
 # with an export-closure private. A source library has no export closure and namespaced
 # units, so that clash cannot happen (docs/design/libraries.md section 4.2).
-BINARY_ONLY_HELPERS = {"private_closure_lib"}
+# kept_private_lib backs tests/libs/kept_private, which asserts the wording the BINARY
+# path gives a private the closure never shipped (#469). A source library ships its
+# units, so the name resolves there and a different code path answers.
+BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib"}
 
 
 def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
@@ -254,9 +260,11 @@ def run_single_test(test_file: Path, bin_dir: Path, verbose: bool = False) -> tu
         output_name = test_file.stem  # e.g., test_arithmetic.sushi -> test_arithmetic
         output_path = bin_dir / output_name  # Output to tests/bin/ directory
 
-        # Run the compiler on the test file with unique output
+        # Run the compiler on the test file with unique output, plus whatever the
+        # fixture's COMPILER_FLAGS directive asks for.
         result = subprocess.run(
-            ["./sushic", str(test_file), "-o", str(output_path)],
+            ["./sushic", str(test_file), "-o", str(output_path),
+             *parse_test_metadata(test_file).compiler_flags],
             capture_output=True,
             text=True,
             timeout=30  # 30 second timeout per test

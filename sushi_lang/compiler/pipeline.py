@@ -109,9 +109,17 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
             except SushiError as e:
                 e.filename = e.filename or str(src_path)
                 raise
+            # A provenance, the same way `_inject_library_source` sets one. A bundled
+            # module is code the user did not write: without this the `docs` pass
+            # reports OUR doc-block mistakes in every program that imports the module,
+            # and every other diagnostic against it arrives unattributed
+            # (documentation.md section 10, R24). The repo's own gate is
+            # `tests/unit/test_stdlib_doc_blocks.py`.
             unit_manager.units[module_path] = Unit(
                 name=module_path, file_path=src_path, ast=module_ast,
                 dependencies=[], public_symbols={},
+                provenance=(f"'{module_path}' is a bundled stdlib module written in "
+                            f"Sushi, compiled here because of `use <{module_path}>`"),
             )
 
 
@@ -214,6 +222,7 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
 
         unit = Unit(name=f"lib/{lib_name}/{unit_name}", file_path=file_path,
                     ast=module_ast, dependencies=[], public_symbols={},
+                    from_library=True,
                     provenance=provenance)
         unit.dependencies = [f"lib/{lib_name}/{d}" for d in unit.dependencies if d in own]
         unit_manager.units[unit.name] = unit
@@ -309,9 +318,10 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
     get_stdlib_registry()
 
-    multi_file_analyzer = SemanticAnalyzer(reporter, filename=main_unit_name,
-                                           unit_manager=unit_manager,
-                                           library_linker=library_linker)
+    multi_file_analyzer = SemanticAnalyzer(
+        reporter, filename=main_unit_name, unit_manager=unit_manager,
+        library_linker=library_linker,
+        warn_missing_docs=bool(getattr(args, "warn_missing_docs", False)))
     multi_file_analyzer.check(main_ast)
 
     # A library must not carry main(): --lib used to embed it into the .slib silently,

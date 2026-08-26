@@ -1,0 +1,10 @@
+# A concrete private the library keeps: defined, and not exported. The binary
+# path called it "undefined" (CE2008) where the source path called it private
+# (#469).
+# EXPECT_ERROR_CODE: CE3005
+
+use <lib/kept_private_lib>
+
+fn main() i32:
+    println("{scale(4, 2).realise(0)}")
+    return Result.Ok(0)

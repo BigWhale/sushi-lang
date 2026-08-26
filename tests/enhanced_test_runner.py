@@ -474,7 +474,8 @@ class TestRunner:
             # substring assertions (EXPECT_ERROR_CODE / EXPECT_STDERR_CONTAINS)
             # robust.
             project_root = self.tests_dir.parent
-            cmd = ["./sushic", str(test_file), "-o", str(binary_path)]
+            cmd = ["./sushic", str(test_file), "-o", str(binary_path),
+                   *metadata.compiler_flags]
             result = subprocess.run(
                 cmd,
                 capture_output=True,

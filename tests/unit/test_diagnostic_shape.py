@@ -5,6 +5,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 HEAD_RE = re.compile(r"^(?P<loc>\S*?):?\s*(?P<severity>error|warning) \[(?P<code>[A-Z]{2}\d{4})\]: (?P<message>.+)$")
 LOCATED_HEAD_RE = re.compile(r"^(?P<file>\S+):(?P<line>\d+):(?P<col>\d+): (?P<severity>error|warning) \[(?P<code>[A-Z]{2}\d{4})\]: ")
@@ -139,3 +141,45 @@ def test_help_carries_no_location(tmp_path):
     following = lines[lines.index(help_line) + 1:]
     assert not any(re.match(r"^\s+\S+:\d+:\d+$", ln) for ln in following), \
         "a help must not be followed by a location block"
+
+
+# A diagnostic about the CALLEE marks the callee. Every one of these is emitted at
+# `call.callee.loc`, so they share one span and one rung of the ladder.
+
+CALLEE_ANCHORED = [
+    ("CE2008", "no_such", """\
+fn main() i32:
+    let i32 a = no_such(7).realise(0)
+    println("{a}")
+    return Result.Ok(0)
+"""),
+    ("CE2009", "add", """\
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+fn main() i32:
+    let i32 x = add(1).realise(0)
+    println("{x}")
+    return Result.Ok(0)
+"""),
+]
+
+
+@pytest.mark.parametrize("code,callee,source", CALLEE_ANCHORED,
+                         ids=[c for c, _n, _s in CALLEE_ANCHORED])
+def test_a_callee_diagnostic_marks_the_callee(tmp_path, code, callee, source):
+    stderr = _compile(tmp_path, source)
+
+    lines = stderr.splitlines()
+    head = next(ln for ln in lines if f"[{code}]" in ln)
+    match = LOCATED_HEAD_RE.match(head)
+    assert match, f"{code} must carry file:line:col -- got {head!r}"
+
+    src_line = source.splitlines()[int(match.group("line")) - 1]
+    assert int(match.group("col")) == src_line.index(callee) + 1, (
+        f"{code} must point at the callee, not at the statement"
+    )
+
+    body = lines[lines.index(head) + 1:]
+    assert body[0].startswith("  |"), f"{code} must show the source line"
+    assert body[1].startswith("  `"), f"{code} must underline the callee"

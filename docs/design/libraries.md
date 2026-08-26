@@ -95,17 +95,24 @@ Integrity is checked strictly in order, one code per failure mode, all in
 ### Compression
 
 `FLAGS` bit 0 is reserved for source-section compression and is **always written as
-zero** for now. The bit is claimed so the format is ready, not because compression is
-planned.
+zero** today. **Compression is now planned** (ruled 2026-08-25), and one of the two
+reasons this section gave for waiting has expired: the self-hosted reader
+(`sushi_stdlib/src_sushi/toolchain/slib.sushi` plus `encoding/msgpack`) needed an
+inflate written in Sushi, and `compression/zlib.sushi` is in the stdlib now. The other
+still holds for the source section — Nori archives are already `tar.gz`
+(`packager/archive.py`), so distribution is compressed regardless.
 
-Two reasons to wait. Nori archives are already `tar.gz` (`packager/archive.py`), so
-distribution is compressed regardless — compression inside the container would only
-reduce on-disk size. And the self-hosted reader
-(`sushi_stdlib/src_sushi/toolchain/slib.sushi` plus `encoding/msgpack`) would need an
-inflate written in Sushi. Revisit only when on-disk size is a measured problem.
+What moved the decision is the **metadata blob**, not the source section. An earlier
+draft of this section said the blob is never compressed, because it is the index and
+every reader must be able to take it cheaply. That reasoning is about the cost of
+reading it, and it argued for keeping the index SMALL — which turned into an argument
+for carrying less in it. The index is where doc text lives
+(`docs/design/documentation.md` section 8, R8), and a library must not carry thinner
+documentation to keep a number down.
 
-The metadata blob is deliberately never compressed. It is the index, and every reader
-must be able to take it cheaply.
+So the blob is uncompressed today and is not meant to stay that way. Whoever takes it
+owns three things: the flag, a read side in both readers, and a rule for when an index
+is still cheap to take.
 
 ## 3. The manifest — an index, not the authority
 
@@ -130,6 +137,7 @@ authority, and the index is a cache of it.
 | `compiled_at` | ISO-8601 UTC |
 | `public_functions`, `public_constants`, `structs`, `enums` | the index |
 | `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |
+| `not_exported` | **new** — what the library declares and keeps: a name and its kind, and nothing else. The complement of `templates.closure_summary`, and absent when a library keeps nothing (§5.5) |
 | `dependencies` | see `TODO.md` 6b |
 
 `structs` / `enums` / `public_functions` carry **only concrete, non-generic**
@@ -233,6 +241,10 @@ existing ladder in `internals/report.py` covers it.
 
 The user-visible contract is that a consumer must never see a bare error with no
 explanation of why code they did not write is being compiled.
+
+**The binary path owes the same contract** and did not pay it until #471; §5.2 has the
+mechanism. A source library gets this for free because it arrives as a `Unit` with a
+`provenance`, and every per-unit pass runs against `_unit_reporter(unit)`.
 
 ### 4.5 Where CE5007 went
 
@@ -350,6 +362,34 @@ table under its original name — indistinguishable, from that point on, from a 
 the consumer wrote itself. **Local definitions win silently**: a template is
 registered only if its name is not already present.
 
+**A diagnostic raised in a transplanted template body belongs to the library** (#471).
+The throwaway reporter above covers the collect pass only. What the consumer's per-unit
+passes check is the MONOMORPHIZED INSTANCE, which is a `FuncDef` in one of the
+consumer's own unit ASTs (`register_synthesized_function`'s `units[0]` fallback, since
+`home_unit` is honoured only for a `from_library` unit -- §4.2). Its spans came from
+parsing the SLICE, where the declaration is on line 1, so rendering them against the
+consumer's file named a line the consumer never wrote: an error landed on a blank line
+and a caret could mark unrelated consumer text.
+
+`report.Origin` is the answer, and it carries exactly three things -- what to call the
+body, what text the caret marks, and why it is being compiled here:
+
+| field | value |
+|---|---|
+| `filename` | `<template:<library>:<name>>`, the same shape the throwaway reporter already used |
+| `source` | the record's `source` slice, so the caret marks the template's own line |
+| `provenance` | `'<library>' <version> ships this template; it is monomorphized here because of \`use <lib/<library>>\`` |
+
+It is set on the `GenericFuncDef` beside `is_library_template` and copied onto every
+instance and onto every lambda lifted out of one -- the two travel together, and the
+mark answers *who may be called* while the origin answers *how a failure reads*. The
+per-function entry of each per-unit pass (`scope`, `typecheck`, `borrow`) stamps
+`Reporter.origin`, and `Reporter._record` -- the one place every diagnostic passes
+through -- applies it. A diagnostic that names a file of its own keeps it.
+
+`Diagnostic.source` carries the slice text rather than a source map, so it survives the
+per-unit reporters being merged into the top-level one, and no lookup can go stale.
+
 Structs are registered before enums (an enum variant payload may reference a struct).
 Generic *function* registration happens before generic struct/enum registration, and
 all of it happens before the instantiate pass, so the consumer's own `Box@(i32)` usages
@@ -453,8 +493,39 @@ namespace (foreign bindings cannot be re-declared at a consumer that never saw t
 purely for observability (inspectable via `--lib-info` / direct manifest reads) so a
 library author can see what their public API is quietly dragging along.
 
+**The closure is for the library's own bodies, and the CALL SITE is what says so**
+(#468). A shipped private has to be resolvable at the consumer, because a monomorphized
+template body lands there and still calls what it called at home; consumer code that
+names the same symbol is `CE3005`. The two are told apart by whose body the call is in,
+never by the symbol: `FuncDef.is_library_template` marks an instance of a `.slib`
+template (stamped in `register_synthesized_function`, and carried onto a lambda lifted
+out of such a body), the typecheck pass reads it as `in_library_body`, and the gate in
+`passes/types/calls/visibility.py` exempts that and nothing else. An instance of the
+*consumer's* generic is synthesized the same way and is not exempt — it is the user's
+code. A constant is the one kind still readable, because a private constant cannot be
+written yet (#466).
+
+**A private the closure does not ship is named, not hidden** (#469). The walk starts at
+the public *generics*, so a private that only a concrete public function calls -- or one
+nothing public calls -- ships nowhere and reaches the consumer's tables not at all. That
+made it `CE2008: undefined function` on the binary path, for a function the library defines
+and deliberately kept, while the source path called the same call `CE3005`. The manifest's
+`not_exported` key closes that: `_extract_not_exported` lists the name and the kind of every
+private of the library's OWN units that the closure did not ship, `LibraryRegistry` reads it
+into `SymbolTables.library_not_exported`, and the `CE2008` site in
+`passes/types/calls/user_defined.py` asks it before it emits, routing the answer through the
+one CE3005 gate with the library in place of a unit.
+
+The two lists are one piece of bookkeeping: a private is named in the closure, WITH a
+signature, or in `not_exported`, with nothing but its kind. Which is why a `not_exported`
+name is registered in no function table -- there is no signature to register, the callee
+stays unresolved so the borrow pass judges no argument against an invented mode, and
+`CE5007` must not fire for a symbol that ships nowhere and so can clash with nothing.
+
 **None of this machinery exists on the source path** (§4.2), which is the largest
-structural difference between the two.
+structural difference between the two. The wording no longer differs, though: a source
+library's units are ordinary units at the consumer, so its private resolves and the same
+gate refuses it, naming the injected unit where the binary path names the library.
 
 ### 5.6 Who frees an argument at the boundary
 
@@ -617,6 +688,7 @@ Rules marked **binary** apply only when `kind != "source"`.
 | A **source** library unit fails to compile | the real diagnostic, plus a `note` naming the library and the `use` that pulled it in (§4.4) | the consumer must never see a bare error about code they did not write |
 | Public v1 native `...T` variadic function | **CE0116** | the variadic flag is not serialized into the library format. Fires on EVERY kind: the check lives in `_extract_public_functions`, which builds the index for every kind — see §9 |
 | Platform mismatch (**binary**) | **CE3504** | bitcode is platform-specific; caught early with a clear message instead of an incomprehensible late `cc`/LLVM failure. Never raised for a source library |
+| An `unsafe external "C"` link-name == a symbol this build defines | **CE5013** | one module, so a declaration and a definition of one name unify: the declaration entered the program's own body with its own signature, unchecked. It reached a library-PRIVATE body from consumer code, and where the compiler already held a declaration of the name the same program was a `CE0000` instead (#470). Every kind: the rule reads the func table, the constant table and the library registry, so it runs after the `libraries` step |
 | Container version is not 4 | **CE3509** | no backward-compat shim; there are no users in the wild |
 | `requires_compiler` not satisfied | **CE3503** | see §6.2; the escape is `--ignore-compiler-version` |
 | No `library_version` available at build time | **CE3505** | see §6.1 |

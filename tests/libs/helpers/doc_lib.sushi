@@ -1,0 +1,46 @@
+# A DOCUMENTED helper library. Phase 3's regression, in two parts: a doc block that
+# stands first in a generic function's body is inside the shipped source slice, so the
+# consumer re-parses it; and the consumer is told nothing at all about this library's
+# doc blocks (documentation.md section 8).
+
+##: The answer to life, the universe and everything. :##
+const i32 ANSWER = 42
+
+##: A doubler contract, documented. :##
+perk Doubler:
+    ##: Twice the receiver. :##
+    fn doubled() i32
+
+##: The i32 side of the contract. :##
+extend i32 with Doubler:
+    ##: Twice the receiver, by multiplication. :##
+    fn doubled() i32:
+        return self * 2
+
+public fn pick_bigger@(T: Doubler)(T a, T b) T:
+    ##:
+    Picks the bigger of two doublers.
+
+    This block stands FIRST IN THE BODY, so the slice the library ships carries it.
+
+    - Parameter a: The first candidate.
+    - Parameter b: The second candidate.
+    - Returns: Whichever of the two doubles larger.
+    :##
+    if (a.doubled() > b.doubled()):
+        return Result.Ok(a)
+    return Result.Ok(b)
+
+##: A box that holds one value. :##
+struct Box@(T):
+    ##: The value inside. :##
+    T value
+
+##:
+Adds the answer to a number.
+
+- Parameter n: The addend.
+- Returns: The sum.
+:##
+public fn add_answer(i32 n) i32:
+    return Result.Ok(n + ANSWER)

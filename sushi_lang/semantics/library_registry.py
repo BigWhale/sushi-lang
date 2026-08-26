@@ -25,6 +25,11 @@ class LibraryMetadata:
     # `functions` because the consumer applies clash (CE5007), not
     # local-wins, semantics to them.
     private_functions: dict[str, 'FuncSig'] = field(default_factory=dict)
+    # What the library declares and does NOT export (#469): name -> kind, and nothing
+    # else. No signature travels with them, so they are not callables the consumer can
+    # register -- they exist so the CE3005 gate can say "private" where it used to have
+    # to say "undefined".
+    not_exported: dict[str, str] = field(default_factory=dict)
     structs: dict[str, StructType] = field(default_factory=dict)
     enums: dict[str, EnumType] = field(default_factory=dict)
     dependencies: list[str] = field(default_factory=list)
@@ -74,8 +79,13 @@ class LibraryRegistry:
 
         templates = manifest.get("templates") or {}
         metadata.private_functions = self._parse_functions(
-            templates.get("private_functions", []) or []
+            templates.get("private_functions", []) or [], owner=lib_name
         )
+
+        metadata.not_exported = {
+            record["name"]: record.get("kind", "function")
+            for record in manifest.get("not_exported", []) or []
+        }
 
         self._libraries[lib_name] = metadata
         return metadata
@@ -122,8 +132,14 @@ class LibraryRegistry:
             result[enum_name] = EnumType(name=enum_name, variants=tuple(variants))
         return result
 
-    def _parse_functions(self, func_list: list[dict]) -> dict[str, 'FuncSig']:
-        """Parse function signatures from manifest."""
+    def _parse_functions(self, func_list: list[dict],
+                         owner: str | None = None) -> dict[str, 'FuncSig']:
+        """Parse function signatures from manifest.
+
+        `owner` names the library for a record that is NOT part of its API: the export
+        closure ships it so the library's own bodies can call it, and the signature says
+        so, so that the CE3005 gate answers for it like any other private function.
+        """
         from sushi_lang.semantics.param_modes import ParamMode
         from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
         from sushi_lang.semantics.type_resolution import parse_type_string
@@ -162,7 +178,8 @@ class LibraryRegistry:
                 ret_type=ret_type,
                 ret_span=None,
                 params=params,
-                is_public=True,
+                is_public=owner is None,
+                unit_name=owner,
             )
 
         return result
@@ -188,6 +205,14 @@ class LibraryRegistry:
         for lib in self._libraries.values():
             for name, sig in lib.private_functions.items():
                 result[name] = (lib.name, sig)
+        return result
+
+    def get_all_not_exported(self) -> dict[str, tuple[str, str]]:
+        """Every kept name from every library (name -> (lib_name, kind))."""
+        result = {}
+        for lib in self._libraries.values():
+            for name, kind in lib.not_exported.items():
+                result[name] = (lib.name, kind)
         return result
 
     def get_all_structs(self) -> dict[str, StructType]:

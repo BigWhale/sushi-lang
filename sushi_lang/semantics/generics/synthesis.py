@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Optional, List
 
+from sushi_lang.internals.report import Origin
 from sushi_lang.semantics.ast import FuncDef, Program
 
 
@@ -12,6 +13,8 @@ def register_synthesized_function(
     program: Optional[Program] = None,
     units: Optional[List] = None,
     home_unit: Optional[str] = None,
+    from_library_template: bool = False,
+    origin: Optional[Origin] = None,
 ) -> bool:
     """Register a synthesized concrete function and queue it for backend emission.
 
@@ -26,6 +29,10 @@ def register_synthesized_function(
     instances breaks lookup of a monomorphized `<collections/iter>` combinator, and
     chasing that down is its own change. Everything outside a source library keeps
     landing in the first unit, as before.
+
+    The test for "a source library" is `Unit.from_library`, and not the provenance a
+    bundled stdlib module now carries too: reading the provenance here moved every
+    `<collections/iter>` instance and hit exactly the breakage above.
     """
     from sushi_lang.semantics.passes.collect import FuncSig
 
@@ -51,6 +58,17 @@ def register_synthesized_function(
     # rest of the program asked for.
     funcdef.is_synthesized = True
 
+    # Whose code this body is. An instance of a `.slib` template is the library's, wherever
+    # it lands, and it keeps calling the private helpers the export closure shipped for it
+    # (#468). An instance of the consumer's own generic is the consumer's, and reaches no
+    # further than the consumer's own code.
+    if from_library_template:
+        funcdef.is_library_template = True
+        # The rendering half of the same answer: the body's spans came from the
+        # manifest slice, so a diagnostic raised in it is rendered against the slice
+        # and named for the library (#471).
+        funcdef.library_origin = origin
+
     if program is not None:
         program.functions.append(funcdef)
     elif units:
@@ -58,7 +76,7 @@ def register_synthesized_function(
         if home_unit is not None:
             target = next((u for u in units
                            if u.name == home_unit and u.ast
-                           and getattr(u, "provenance", None) is not None), None)
+                           and getattr(u, "from_library", False)), None)
         if target is None and units[0].ast:
             target = units[0]
         if target is not None and target.ast:

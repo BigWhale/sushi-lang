@@ -1,15 +1,16 @@
 # Design: Documentation blocks
 
-**Status: none of this is built.** The document specifies a feature that does not exist
-yet. Each phase below moves one part from DESIGN to BUILT; this banner records where the
-line is.
+**Status: the language understands doc blocks, a library carries them, and the
+toolchain runs the examples.** Each phase below moves one part from DESIGN to BUILT; this
+banner records where the line is.
+The user-facing reference for what is built is `docs/documentation-blocks.md`.
 
 | Phase | Content | State |
 |---|---|---|
 | 1 | This document | BUILT |
-| 2 | Grammar, AST, attachment rules, the `docs` pass, CE6011/CE6012/CE6013 and CE70xx | DESIGN |
-| 3 | `.slib` manifest carriage; `slib-info` prints a plain dump | DESIGN |
-| 4 | `- Example:` blocks compile and run in the toolchain | DESIGN |
+| 2 | Grammar, AST, attachment rules, the `docs` pass, CE6011/CE6012/CE6013 and CE70xx | BUILT |
+| 3 | `.slib` manifest carriage; `slib-info` prints a plain dump | BUILT |
+| 4 | `- Example:` blocks compile and run in the toolchain | BUILT |
 | 5 | `--warn-missing-docs` completeness lints | DESIGN |
 | 6 | Markdown rendering, and a Markdown checker written in Sushi | DESIGN |
 
@@ -273,12 +274,42 @@ to `%ignore COMMENT` and is discarded, and a stray `:##` raises `UnexpectedChara
 colon — CE6002, pointing at a character, rather than CE6012 pointing at a delimiter. Neither
 code can fire at all.
 
-So both terminals are carried as `toplevel` alternatives that the builder rejects. That is
-the same "grammar permissive, builder rejects" shape the position rules use below, and it
-gives CE6011 and CE6012 a real location. Anywhere else in a file the LALR parser raises
-`UnexpectedToken`, and `lark_to_diagnostic` (`sushi_lang/internals/parse_errors.py`) has to
-match on `token.type` for these two before its generic CE6001 arm. No per-token-type mapping
-exists there today; `TOKEN_NAMES` and `TERMINAL_NAMES` are where one goes.
+**They are kept by `%ignore`, and a lexer callback raises the diagnostic.** `%ignore` counts
+as a reference, so the terminal survives the pruning; the token is then dropped before the
+parser, which is what makes the rest of the grammar unaware of it. The diagnostic comes from
+`lexer_callbacks`, which fire for an ignored terminal exactly as they do for a kept one.
+
+```lark
+// Ignored to keep Lark from deleting them, never to discard one: reaching
+// either terminal is a diagnostic, raised from its lexer callback.
+%ignore DOC_OPEN
+%ignore DOC_CLOSE
+```
+
+This is one mechanism for both codes, in every position, and the caret lands on the delimiter
+itself — which is what §7 asks for.
+
+Carrying the two as `toplevel` alternatives was tried first and rejected on measurement. It
+fails on §2's own runaway example: `##:` shifts as a legal `toplevel`, the following ` docs`
+lexes as `NAME`, and the parser dies on a `NAME` token several columns to the right. A
+`token.type` match in `lark_to_diagnostic` cannot rescue that, because the failing token is
+not `DOC_OPEN`. A bare `##:` and a bare `:##` at top level also parse to a complete tree, and
+reach a diagnostic only if the builder rejects them — two more places to be right, for a
+mechanism that still cannot reach the case the feature exists for.
+
+`lark_to_diagnostic` (`sushi_lang/internals/parse_errors.py`) therefore needs no per-token
+mapping, and `TOKEN_NAMES` is unchanged.
+
+### The third delimiter error comes from the same place
+
+CE6013 — a line-initial `##:` inside a block — is interior to a `DOC_BLOCK` token, so no
+terminal can match it and no rule can reach it. It is found by scanning the matched token,
+from a third `lexer_callbacks` entry on `DOC_BLOCK` itself.
+
+That keeps all three delimiter diagnostics in one place, at lex time, before the AST builder
+has an opinion about anything. `SushiError` already carries `notes`, and `emit_exception`
+renders them, so the relational note on the outer opener that §7 requires works from a
+callback without any new machinery.
 
 ### The newline terminal must be narrowed
 
@@ -299,11 +330,16 @@ _NEWLINE: /(\r?\n[ \t]*(?:#(?!#:)[^\n]*\r?\n[ \t]*)*)+/
 A `###` comment is unaffected: after the first `#`, the next two characters are `##`, not
 `#:`, so the group still matches it.
 
-**Measured** across 2058 `.sushi` files: zero occurrences of `:#` in any position, and zero
-line-initial `##`. No existing source changes meaning. There are no `###` banner comments in
-the corpus either — the only `###` in any `.sushi` file is string-literal test data in
-`tests/types/result/propagation/test_propagation_preserves_error_data.sushi` — so the
-paragraph above covers a case the tree does not yet contain.
+**Measured** across every `.sushi` file in the tree: zero occurrences of `:#` in any
+position, and zero line-initial `##`. No existing source changes meaning. There are no `###`
+banner comments in the corpus either — the only `###` in any `.sushi` file is string-literal
+test data in `tests/types/result/propagation/test_propagation_preserves_error_data.sushi` —
+so the paragraph above covers a case the tree does not yet contain.
+
+A file count is deliberately not quoted. It is stale the week after it is written, and the
+claim that matters is that the count of `:#` is zero, not how many files were read to find
+that out. Phase 2 re-runs the measurement rather than trusting this paragraph, and
+`tests/unit/test_doc_block_grammar.py` keeps it true afterwards.
 
 ### The rules
 
@@ -311,7 +347,7 @@ paragraph above covers a case the tree does not yet contain.
 declaration rules. Seven edits, near enough the same shape:
 
 ```lark
-toplevel: use_stmt | const_def | ... | external_block | DOC_BLOCK | DOC_OPEN | DOC_CLOSE
+program: (_NEWLINE | DOC_BLOCK | toplevel)+
 
 block: _NEWLINE _INDENT (_NEWLINE | DOC_BLOCK | statement)+ _DEDENT
 
@@ -322,9 +358,16 @@ external_block: ... _INDENT (DOC_BLOCK _NEWLINE | extern_decl)+   _DEDENT
 extend_suffix:  ... _INDENT (DOC_BLOCK _NEWLINE | function_def)+  _DEDENT
 ```
 
-`toplevel` and `block` need no trailing `_NEWLINE`, because both already carry `_NEWLINE`
+`program` and `block` need no trailing `_NEWLINE`, because both already carry `_NEWLINE`
 as an alternative in their repetition. The five member blocks admit only their own member
 rule, so they spell it.
+
+The top-level alternative goes on `program`, not on `toplevel`, so the token arrives as a
+direct child of `program`. `builder.build()` skips a non-`Tree` child already, so nothing in
+that loop changes. On `toplevel` the token would instead be wrapped in a `toplevel` tree that
+holds no declaration, and every `_first_tree` lookup in the loop would fall through it.
+`DOC_OPEN` and `DOC_CLOSE` appear in no rule at all — they are held by `%ignore` and reported
+from a lexer callback, as above.
 
 `extend_suffix` is the one edit that is not the shape it looks. It is two aliased
 alternatives: `extend_with_def` is the indented `function_def+` body the sketch shows, while
@@ -386,10 +429,11 @@ Two dataclasses in `sushi_lang/semantics/ast.py`:
 ```python
 @dataclass
 class DocTag:
-    kind: str                    # "parameter" | "returns" | "errors" | "example"
+    kind: str                    # "parameter" | "returns" | "errors" | "example" | "unknown"
     name: Optional[str]          # the parameter name, for kind == "parameter"
     text: str
     loc: Optional[Span] = None
+    word: str = ""               # the keyword AS WRITTEN; what CE7004 reports
 
 @dataclass
 class DocBlock:
@@ -397,11 +441,39 @@ class DocBlock:
     text: str                    # the whole block, dedented, tags included
     tags: List[DocTag]
     loc: Optional[Span] = None
+    orphan_reason: Optional[Literal["detached", "in-body"]] = None
 ```
+
+Two fields were added while phase 2 was built, and both carry a decision the pass cannot
+make for itself.
+
+`DocTag.word` holds the keyword exactly as the author typed it. A near miss reaches the
+pass as `kind == "unknown"`, and CE7004 has to name what was written, so `name` cannot
+carry it -- on an `unknown` tag `name` is not a parameter name and reusing it would say
+something false.
+
+`DocBlock.orphan_reason` says WHY a block reached `orphan_docs`. The two ways of
+documenting nothing are separate rules with separate codes -- CW7001 for a block that
+attaches to nothing, CE7005 for one that stands in a body it is not the first item of --
+and the builder is the only place that still knows which happened. Comparing spans in the
+pass to recover it would be the same fact derived twice.
 
 A `doc: Optional[DocBlock] = None` field goes on `FuncDef`, `ConstDef`, `StructDef`,
 `StructField`, `EnumDef`, `EnumVariant`, `PerkDef`, `PerkMethodSignature`, `ExtendDef`,
 `ExtendWithDef`, `ExternalBlock` and `ExternalDecl`.
+
+Two more classes carry one, and neither is a declaration:
+
+- **`Program.doc`** — §2's third position is a block that documents the unit. There is no
+  declaration to hang it on, so it lives on the unit's own node.
+- **`Block.doc`** — a body-first block is parsed before its enclosing declaration exists.
+  `parse_block` parks it here, and `parse_funcdef` and `parse_extenddef` lift it onto the
+  declaration.
+
+**`Program.orphan_docs: List[DocBlock]`** holds every block that attached to nothing. It has
+to exist because the builder cannot report: `ASTBuilder` takes no `Reporter`, and a block
+that documents nothing is a warning the `docs` pass raises. Dropping such a block in the
+builder would make it vanish silently, which is the failure mode of §1 read backwards.
 
 The nearest existing precedent for author prose surviving into the AST is
 `ExternalBlock.reason` (`ast.py:205`), the `because "..."` string.
@@ -417,11 +489,28 @@ the only place that understands doc syntax:
 
 - `parse_doc_block(token) -> DocBlock` — strip delimiters, dedent, split summary from
   body, recognise tags.
-- `attach_docs(items) -> None` — walk a sequence of sibling nodes, bind each block to the
-  node on the next line, and report the unattached ones.
+- `attach_docs(children, built, ast_builder) -> None` — walk a container's parse-tree
+  children beside the nodes just built from them, bind each block to the node that starts on
+  the next line, and send the rest to `ast_builder.orphan_docs`.
 
 The twelve declaration builders must not each grow doc handling of their own. They call
 `attach_docs` once per block they own.
+
+### Nothing may vanish
+
+A doc block that is written and then silently dropped is the failure this feature exists to
+remove, so the builder accounts for every one of them.
+
+`parse_block` parks a body-first block on `Block.doc` and records the pair in
+`ast_builder.pending_body_docs`. `parse_funcdef` and `parse_extenddef` lift `body.doc` onto
+the declaration and drop the pair. Any pair still standing when `build()` finishes belongs to
+a block that takes no docs — a lambda body, an `if` arm — and becomes an orphan. A block in a
+body that is not its first item is an orphan too, and a different code, because inside a body
+there is no declaration it could plausibly have meant.
+
+That is O(1) bookkeeping and total by construction: every block ends up attached, lifted, or
+in `orphan_docs`. `tests/unit/test_doc_block_attachment.py` is the gate, and it asserts the
+totality rather than any one of the three outcomes.
 
 ---
 
@@ -431,7 +520,8 @@ A new whole-program pass named `docs`, running **after `collect` and before `ext
 
 The order lives in the `SemanticAnalyzer.check()` docstring, which is the authority;
 `docs/internals/semantic-passes.md` describes each pass, and the pass list in `CLAUDE.md`
-gains one name. Fifteen passes becomes sixteen, a count also written into `ROADMAP.md`.
+gains one name. Fifteen passes becomes sixteen, so every place that states the count moves
+with it.
 
 Two reasons for that position:
 
@@ -458,39 +548,174 @@ undocumented symbol in every library it imports.
 
 ### Always on
 
-| Condition | Kind |
-|---|---|
-| `- Parameter` names a parameter this callable does not declare | error |
-| two `- Parameter` tags for the same name | error |
-| an unrecognised tag keyword, `- Paramter:` | error |
-| a doc block that documents nothing | warning |
+| Condition | Code | Kind |
+|---|---|---|
+| `- Parameter` names a parameter this callable does not declare | CE7001 | error |
+| two `- Parameter` tags for the same name | CE7002 | error |
+| a second `- Returns:` or `- Errors:` | CE7003 | error |
+| an unrecognised tag keyword, `- Paramter:` | CE7004 | error |
+| a doc block in a body that is not the first item | CE7005 | error |
+| a declaration with a block above it and a block first in its body | CE7006 | error |
+| a doc block that documents nothing | CW7001 | warning |
+
+CE7001 through CE7004 are tag errors and CE7005 and CE7006 are position errors, which is why
+they are numbered in those two runs. CE7001, CE7002, CE7003 and CE7006 are relational: a
+caret on the tag or the block, and a `note` with its own `file:line:col` on the declaration,
+on the first tag, or on the other block.
+
+**The two repeat cases are separate codes, because they are separate rules.** `- Parameter`
+is keyed by the name it carries — many of them are legal, one per parameter — so CE7002 says
+which parameter was documented twice, and its note points at the first tag for that name.
+`- Returns:` and `- Errors:` are singletons by §3, keyed by the tag alone, so CE7003 says the
+tag may appear once. The two mistakes read differently and are fixed differently: one is a
+copied-and-not-renamed tag, the other is a tag written twice.
 
 The typo case earns a code of its own rather than being treated as prose. A misspelled tag
 is silently invisible in every documentation system that treats it as text, and that is
 the failure this feature exists to remove.
+
+### Telling a typo from prose
+
+A tag is a Markdown list item (§3), and so is an ordinary prose bullet. The rule that
+separates them has to catch `- Paramter:` without claiming `- Note that this is fast.`
+
+A list item shaped `- <Word>[ <name>]:` is a **tag candidate**. A candidate whose word is a
+known keyword is a tag. A candidate whose word is within edit distance 2 of a keyword is
+CE7004, with a `help` line naming the tag that was meant. Everything else is prose.
+
+```
+- Parameter a: ...     tag
+- Returns: ...         tag
+- Paramter a: ...      CE7004, help: did you mean `- Parameter:`
+- Retruns: ...         CE7004, help: did you mean `- Returns:`
+- Note: ...            prose -- distance 4 from every keyword
+- Deprecated: ...      prose -- reserved by §3, and no code may be registered for it
+- see docs/ffi.md      prose -- no `Word:` shape
+```
+
+Distance 2 is the boundary because it catches a transposition plus a dropped letter, which
+is what a mistyped keyword looks like, and stops short of `Note`. The reserved tags stay
+prose deliberately: `tests/unit/test_error_registry.py` is an exact-match ratchet on codes
+nothing emits, so a code cannot be registered for `- Deprecated:` until phase 6 emits one.
 
 ### Behind `--warn-missing-docs`
 
 Completeness is opt-in, the way `missing_docs` is in Rust. A codebase that has not been
 documented yet must not become a wall of warnings on the day the feature lands.
 
-| Condition | Kind |
+**Five lints, not four.** The table below carries one row this section did not have before
+phase 5: a unit with no block. A unit block travels in the `.slib` as `unit_docs` and
+`--lib-info` prints it under the unit name, so a library whose units say nothing is the
+first hole a reader meets (R32).
+
+| Condition | Code |
 |---|---|
-| a public symbol with no doc block | warning |
-| a documented function with an undocumented parameter | warning |
-| a non-`~` function with no `- Returns:` | warning |
-| a function declaring `\| E` with no `- Errors:` | warning |
+| a declaration with no doc block | CW7002 |
+| a documented callable with a parameter that no `- Parameter` tag names | CW7003 |
+| a documented callable that returns a value, with no `- Returns:` | CW7004 |
+| a documented function that declares `\| E`, with no `- Errors:` | CW7005 |
+| a unit with no doc block | CW7006 |
+
+The codes go in `internals/errors/warnings.py`, which holds every warning whatever its
+family, with `Category.DOCS`. CW7001 is there already.
+
+**Every declaration is asked, public and private** (R29). The `public` marker is not the
+test, and the reason is the ruling itself: an internal API is documented surface as much as
+an exported one. The marker could not have answered the question either, because a constant
+carries no `PUBLIC` at all (#466, still open). A struct field and an enum variant are each
+asked on their own, because each carries its own `doc` key in the manifest and `--lib-info`
+prints each under its owner (R31).
+
+**Two exemptions** (R30). `fn main()` is nobody's API, and a library cannot declare one at
+all (CE3501). An `unsafe external` block and the declarations inside it carry
+`because "..."`, which acknowledges the contract that matters at that seam. Nothing else is
+exempt, and one predicate is the only place either one is named.
+
+**A block lint presupposes a block** (R33). CW7003, CW7004 and CW7005 fire only on a
+declaration that ALREADY carries a block. Without the rule every undocumented function
+would collect CW7002 AND CW7004 for one omission, and the whole tree would report 1130
+undocumented parameters and 3319 missing `- Returns:` instead of 8 and 15. A block that is
+absent is CW7002 and nothing else.
+
+**The caret.** Every declaration kind carries a span narrow enough to point at:
+`name_span` for a constant, struct, enum, perk, perk method, extern declaration, function
+and extension; `perk_name_span` for a perk implementation; `namespace_span` for an external
+block; `loc` for a struct field, an enum variant, and for the parameter CW7003 is about.
+CW7006 has no declaration to point at, so it is reported on the unit with no caret. It is
+the one lint about something that is not there.
 
 The flag is a long `--flag`, matching every flag in `sushi_lang/compiler/cli.py` but `-o`.
 A `-W` tier system was considered and set aside: it is a whole CLI surface to design, and
 it would have to decide which existing `CWxxxx` warnings move behind a tier. That is a
 separate piece of work, and this feature does not need it.
 
-One flag is still more than it looks. This would be the compiler's **first** warning-control
-flag. `cli.py` has no `warn` in it at all, `Reporter.warn()` records unconditionally, and
-`SemanticAnalyzer` takes no options object to thread a flag through. The nearest precedent is
-CW5001, silenced by writing `because "..."` on the declaration — a source opt-out, not a CLI
-gate. Phase 5 owns that plumbing, and it is why phase 5 is a phase of its own.
+One flag is still more than it looks. This is the compiler's **first** warning-control
+flag. The nearest precedent is CW5001, silenced by writing `because "..."` on the
+declaration — a source opt-out, not a CLI gate. Phase 5 owns that plumbing, and it is why
+phase 5 is a phase of its own.
+
+### Phase 5 rulings
+
+**R28 — one switch.** `--warn-missing-docs` is one long flag with no value, and it turns on
+every lint above. An optional value list can be added later without a change of spelling,
+so nothing is lost by starting with the switch.
+
+**R29 — every declaration warns, public and private.** Stated above. An author who leaves a
+private helper undocumented has to be told, because a reader of the code is a reader.
+
+**R30 — two exemptions: `fn main()` and the FFI seam.** Stated above.
+
+**R31 — a member warns.** A struct field and an enum variant each carry their own `doc` key
+in the manifest, and the index can see the gap, so the lint says so. This is 41 of the
+bundled stdlib's 114 findings.
+
+**R32 — a unit with no block warns.** The fifth lint. Section 6 named four.
+
+**R33 — the three block lints presuppose a block.** Stated above, with the measurement that
+settles it.
+
+**R34 — one walk.** `documented()` yields every block that is attached. The lint needs the
+other half, so `declarations(program)` yields `(kind, node)` for every declaration and
+`documented()` filters it. Two walks over one AST would drift, and `tests/docs_sweep.py`
+reads the same walk (R22). The walk keeps the order `documented()` used, because the sweep
+numbers its generated `doc_example_<n>` helpers from it.
+
+**R35 — the flag is a keyword argument, not an options object.** `SemanticAnalyzer.__init__`
+gains `warn_missing_docs: bool = False`, beside `unit_manager`, `library_linker` and
+`library_registry`, which are keywords already. `compile_multi_file` unpacks it from `args`
+the way `--ignore-compiler-version` is unpacked. A `CompilerOptions` object is the right
+answer to the SECOND warning flag and the wrong answer to the first.
+
+**R36 — the test runner gains a `COMPILER_FLAGS:` directive.** A `.sushi` fixture could not
+turn a compiler flag on, so a flag-gated diagnostic had no fixture. One field on
+`TestMetadata`, one branch in the directive parser, and one insertion at each of the two
+`./sushic` call sites. A flag the runner owns — `-o`, `--lib`, `--lib-info`,
+`--clean-cache`, `--build-stdlib`, `--cache-dir` — is refused with a printed warning.
+
+**R37 — phase 5 does not document the stdlib.** Documenting the bundled modules is a proof
+of concept that comes AFTER the implementation. The repo gate is a shrink-only budget, in
+the shape `REGISTRY_SIZE` already uses, and not an assertion of zero.
+
+### Measured, at phase 5
+
+The test tree is not a corpus: nobody runs this flag over it. What counts is the bundled
+stdlib and the toolchain.
+
+```
+== stdlib(src_sushi), 4 modules      == toolchain/src, 1 program
+   CW7002 no block       110            CW7002 no block        25
+   CW7003 parameter        0            CW7006 unit             1
+   CW7004 returns          0            TOTAL                  26
+   CW7005 errors           0
+   CW7006 unit             4         (function 25; main is exempt)
+   TOTAL                 114
+
+(function 51, variant 28, field 13, constant 8, struct 6, enum 4)
+```
+
+CW7003, CW7004 and CW7005 report nothing because no bundled module carries a block yet.
+They are self-limiting by R33, and they are what makes the flag useful once the blocks
+exist. `tests/unit/test_stdlib_doc_blocks.py` holds the 114 as a shrink-only budget.
 
 ---
 
@@ -510,12 +735,16 @@ above; all three codes are free.
   note is what says so, which makes this a relational diagnostic. Rendering it with a single
   location would be a regression.
 
+All three are raised from `lexer_callbacks`, as §4 sets out: CE6011 and CE6012 from the two
+`%ignore`d delimiter terminals, CE6013 from a scan of the matched `DOC_BLOCK` token. One
+place, at lex time, before the builder has an opinion.
+
 ### The doc family
 
 CE70xx, in a **new** `docs.py` module under `sushi_lang/internals/errors/`. A code may only be added
 in the file that owns its range, and CE7xxx is entirely unused today.
 
-This needs three supporting changes:
+This needs four supporting changes:
 
 1. A `DOCS = "docs"` member on `Category` in `internals/errors/registry.py`.
 2. An import of the new module in `internals/errors/__init__.py`. Registration is an
@@ -525,6 +754,10 @@ This needs three supporting changes:
    CE70xx would be forced into the wrong category. It becomes a bounded
    `if number < 7000: return {Category.SYNTAX}` followed by `return {Category.DOCS}`.
    `RANGE_EXEMPT` is not the escape: it is documented shrink-only.
+4. The removal of the `internals/errors/docs.py` entry from `ALLOWED` in
+   `tests/unit/test_path_references_exist.py`. It was added as an explicitly TEMPORARY
+   exemption so that this document could name a module that did not exist yet. Phase 2
+   creates the module, so phase 2 takes the exemption back out.
 
 Warnings go in `warnings.py` regardless of family, as every warning does. A doc warning can
 carry `Category.DOCS` and still live there, because the range test returns every category for
@@ -534,6 +767,12 @@ a `CW` code.
 bump. Nothing else: the running changelog that comment used to carry was deleted in #444, and
 the comment now says why. Why a code exists belongs in its `doc` field in
 `internals/errors/docs.py`; what changed belongs in the `CHANGELOG` and the git log.
+
+Phase 2 registers ten codes in all — CE6011, CE6012 and CE6013 in `syntax.py`, CE7001 to
+CE7006 in the new `docs.py`, and CW7001 in `warnings.py`. Every one of them is emitted by the
+end of the phase, because `test_unreferenced_codes_match_the_allowlist` is an exact-match
+ratchet: a code registered and never emitted fails the suite. Nothing may be reserved here
+for a later phase.
 
 ---
 
@@ -607,9 +846,10 @@ Two records deliberately do **not** gain the key:
 - **The binary closure path.** Those records describe private symbols shipped so that a
   binary library links. A private symbol is not part of the documented API.
 
-One gap has no home yet. The per-method record inside `serialize_perk_impl` is
-`{name, symbol}`, so a documented perk method does not survive the boundary. Phase 3 either
-adds a `doc` key there or says that it does not.
+One gap had no home when this section was written: the per-method record inside
+`serialize_perk_impl` was `{name, symbol}`, so a documented perk method did not survive the
+boundary. **R3 closes it** -- that record gains a `doc` key. A perk DEFINITION has no
+methods array, so its methods' blocks travel only inside the source slice.
 
 ### A generic's doc block does not travel for free
 
@@ -658,9 +898,13 @@ known keys, and it needs work:
 
 - **Parameters render in declaration order, read from the signature and looked up by name.**
   This is normative, not a suggestion. `ml_get_str(params, name)` while walking the
-  function's existing `params` array costs no new helper. Walking the doc map's own keys is
-  not possible: `ml_len` and `ml_at` are `Arr`-only, a `Map` has no iteration helper, and
-  whatever order a map happened to have would not be the signature's.
+  function's existing `params` array costs no new helper. The reason is the ORDER and only
+  the order: whatever order a map happened to have would not be the signature's.
+
+  An earlier draft of this bullet also said a `Map` cannot be walked at all. That is true
+  of the `ml_*` helpers -- `ml_len` and `ml_at` are `Arr`-only -- and not of the language.
+  `MsgValue.Map(MsgValue[], MsgValue[])` destructures in a `match`, and `mp_map_get` in the
+  stdlib does exactly that. Phase 3 reads `unit_docs` by key the same way.
 - **A multi-line `body` needs a line splitter**, and its indent has to match Python's byte
   for byte. §9 carries that obligation.
 - **`ml_get_str` cannot tell an absent key from an empty string.** Both give `""`. Suppress
@@ -668,20 +912,42 @@ known keys, and it needs work:
 
 ### Size
 
-The metadata blob is deliberately never compressed: it is the index, and every reader must be
-able to take it cheaply. Committed fixtures run 1-9 KB today, so prose for every public symbol
-is plausibly the same order as the entire existing index — in the one section that is always
-read in full and, for the default source kind, duplicating the source blob.
+The metadata blob is not compressed today: it is the index, and every reader must be able to
+take it cheaply. Committed fixtures run 1-9 KB, so prose for every public symbol is plausibly
+the same order as the entire existing index — in the one section that is always read in full
+and, for the default source kind, duplicating the source blob.
 
-Three things hold that in hand, in order. The key is absent when there is no doc block, so an
-undocumented library pays nothing. The record stores the parsed fields and not the raw block.
-And if it ever does bite, one of the two reasons `libraries.md` gives for not compressing has
-expired — `compression/zlib.sushi` is in the stdlib now, so a Sushi-side inflate is no longer
-missing, and `FLAGS` bit 0 is already claimed. That is a `libraries.md` decision and not this
-feature's to take.
+Two things hold that in hand whatever happens. The key is absent when there is no doc block,
+so an undocumented library pays nothing, and the record stores the parsed fields and not the
+raw block.
 
-Phase 3 reports measured `.slib` growth on a stdlib-sized library. Nothing here is revisited
-without a measurement.
+The third is that **the blob will be compressed** (R8). Both of the reasons `libraries.md`
+gave for not compressing have expired: `compression/zlib.sushi` is in the stdlib, so a
+Sushi-side inflate is no longer missing, and `FLAGS` bit 0 is already claimed. That is a
+`libraries.md` decision and a container decision, so it is not this feature's to take — but
+it is the reason nothing here is shaped around a byte budget.
+
+### Measured, at phase 3
+
+Two libraries were built against a real tree, each beside an undocumented twin carrying the
+same declarations:
+
+| Library | Index without docs | Index with docs | Growth |
+|---|---|---|---|
+| 16 records: every position this section names | 1,638 B | 3,130 B | +1,492 B (+91%) |
+| 83 records: 40 functions with all four tags, 8 structs, 6 enums | 5,787 B | 22,578 B | +16,791 B (+290%) |
+
+The second is the stdlib-sized case, and it is about **202 bytes a documented symbol**. Of
+its 16,791 bytes, **13,921 are the prose itself** and 2,870 are msgpack framing -- 35 bytes
+a record, which is the `doc` key, the field names and the length prefixes.
+
+The whole file for that library, at the default source kind: 9,176 B with no doc blocks in
+the source at all, 26,181 B with the blocks and no index carriage, and 42,972 B with both.
+So **doc prose costs about twice its own size in a source `.slib`**: once in the source
+section, once in the index — and both copies are plain text in an uncompressed container,
+which is what makes the number look large and what compression takes back.
+
+These are measurements and not a budget. **R8 is the ruling.**
 
 ### What phase 3 cannot promise
 
@@ -700,6 +966,104 @@ make it true:
 Making perk serialization unconditional is a `libraries.md` change and is out of scope here.
 Record the limit rather than papering over it.
 
+Phase 3 found three more, and each one is a limit of a record and not of the file:
+
+- **An extension has no manifest record at all.** `extend i32 squared()` reaches a consumer
+  through the source section or through monomorphized bitcode, and `--lib-info` has never
+  listed one. Its doc block cannot travel in the index.
+- **A generic struct's field blocks, and a perk definition's method blocks, travel only
+  inside the source slice** (R3). They are in the file; the index cannot answer for them.
+- **An `- Example:` is dropped from the index** (R7).
+
+### Phase 3 rulings
+
+Each one closes a question this section or S9 left open.
+
+**R1 — `body` is a parsed field, and it stops at the first tag.** `DocBlock.body`, set by
+`parse_doc_block` in the same walk that builds the summary and the tags. It is the entries
+between the end of the summary and the FIRST tag candidate; everything from that candidate
+onward belongs to the tags. Two consequences, both accepted: prose written after the tags is
+not carried, and a fenced example cannot leak into the body. `DocTag.word` and
+`DocBlock.orphan_reason` are the precedent -- the parse knows the answer and no consumer
+should derive it again.
+
+The derivation an earlier draft implied is not safe. "The block with the tag lines removed"
+leaks example code into the body, because a Markdown list item breaks at a blank line: a
+fenced `- Example:` tag stops at the fence's first blank line, and a line-removal rule then
+reads the rest of the fence as prose.
+
+**R2 — one function builds every record.** `doc_record(doc) -> Optional[dict]` in
+`semantics/library_templates.py`, called by both producers through the `with_doc(record,
+node)` convenience beside it. It returns `None` for a block that is absent or says nothing,
+and it omits every field that has no text. That module's docstring widens to say what it is:
+the parts of a manifest that come from the AST -- the generic templates, and the doc records.
+
+A new module of its own beside it was the alternative. Rejected: the backend manifest
+generator already imports this module, and one function does not earn a file. Note the
+second cost of naming one -- `tests/unit/test_path_references_exist.py` reads a path-shaped
+reference in `docs/` as a promise, so a path named here has to exist in the same commit,
+even when the sentence naming it says the file was NOT written.
+
+**R3 — the key goes where a record already exists.** `serialize_perk_impl` has a `methods`
+array, so each method record gains `doc`. `serialize_perk` has none, so the perk gains its
+own `doc` and nothing more; inventing an array there is a `library-format.md` change and is
+out of scope. The same limit applies to a generic struct's fields and a generic enum's
+variants: the record is a source slice with no member array.
+
+**R4 — a private record carries no doc.** `_extract_templates` marks a closure-shipped
+generic `record["private"] = True`, and drops the doc key on the same line.
+`templates.private_functions` and `templates.constants` never gain one. A private symbol is
+not part of the documented API.
+
+**R5 — the report prints the mode a type cannot carry, which is `nom`.** S9 said the report
+drops the mode. Measured: it drops `nom` only. `peek` and `poke` ride on `ReferenceType`, so
+`str(ty)` already spells them and `--lib-info` has been printing `fn reads(peek i32 n) i32`
+all along. `nom` is the one mode no type can spell, so the record's own `mode` field is its
+only source. Printing a mode that is already in the type string would double it, so
+`render_params` prefixes `nom ` and nothing else, on both sides. S1's claim is now true of
+the tool for all three.
+
+**R6 — the render order, and the blank lines.** Per record: the summary, a blank line, the
+body, then the tags. No blank line before the tags, which is what S9's example shows. The
+tags print in order: `- Parameter` in DECLARATION order, then `- Returns:`, then `- Errors:`.
+
+A blank line inside a body prints as an empty line with no indent, so the report carries no
+trailing whitespace. The blank line between the summary and the body prints only when there
+is a body to separate. S9's example has no body and is unchanged by this rule.
+
+**R7 — `- Example:` is not carried.** This section reserves the `examples` key for phase 4,
+so phase 3 stores no example and prints none. For a source library the text stays in the
+source section; for a binary library it is not in the file. This is the one thing an author
+can write that phase 3 drops.
+
+**R8 — the size is not a constraint, because the blob will be compressed.** Ruled by David
+on 2026-08-25, against an earlier draft of this ruling that accepted the size as a permanent
+cost: the index is going to be zlib-compressed, so its size is not a reason for this feature
+to store less than it needs. An undocumented library still pays nothing, because the key is
+absent.
+
+Phase 3 does not do the compressing. That is a `FLAGS` bit, a read side in both `slib.sushi`
+and the Python reader, and a `docs/design/libraries.md` decision about when the index is
+cheap to take — one feature at a time. What changes here is only what the number means: the
+measurement above is what tells that work what it is worth, and it is not an argument for
+carrying less text.
+
+**R9 — `unit_docs` uses `own_units()`.** The same filter as `collect_unit_source`, so the
+index, the unit array and the source section can never disagree about which units are ours.
+A bundled stdlib module's docs are not shipped.
+
+**R10 — no new codes.** A doc record is data. Every block in it already parsed and already
+passed the `docs` pass, so phase 3 has no new failure of its own.
+
+**R11 — the report prints docs in every section that exists.** Public functions, generic
+functions, public constants, structs and their fields, enums and their variants. Perks, perk
+implementations, generic structs and generic enums have no section in the report today, so
+their records carry the key and nothing prints it. Phase 3 adds no section.
+
+**R12 — the unit block prints under its unit name**, two spaces further in, in the existing
+`Units (n):` section. A record with no `params` array renders no parameter line, so a
+`- Parameter` tag on a unit, a struct or a template is stored and not printed.
+
 ---
 
 ## 9. `slib-info` rendering
@@ -714,15 +1078,32 @@ sections:
 Public Functions (1):
   fn hyperspace_jump(i32 a, u8 b) i32
     Jumps through hyperspace.
+
+    The drive needs a warm coil.
     - Parameter a: The incoming argument.
     - Parameter b: The second one.
     - Returns: The jump distance in parsecs.
     - Errors: When the drive is cold, this returns `JumpError.NotReady`.
 ```
 
+One blank line between the summary and the body, and none before the tags. R6 carries the
+whole rule, including what a blank line inside a body prints as.
+
 A symbol with no docs renders exactly as it does today, with no blank line and no
 placeholder. This matches the existing convention, where an empty section is suppressed
 rather than printed empty.
+
+The two implementations need three helpers each, and phase 3 wrote them under these names:
+
+- `ml_is_nil(MsgValue) -> bool`, because `ml_get_str` cannot tell an absent key from an
+  empty string -- both give `""`. A doc record is read with `ml_get` and tested for `Nil`.
+- `print_lines(indent, text)` -- `text.split("\n")`, one `println` per line, an empty line
+  printed empty. Python must use `str.split("\n")` and **not** `splitlines()`: the latter
+  drops the trailing empty field and also breaks on `\r`, `\x0b` and `\x0c`. Measured
+  against `.split("\n")` on `"a\nb"`, `"a\n"`, `"\na"`, `"a\n\nb"`, `"a"` and `""`, the
+  two agree on every one.
+- `print_doc_record(doc, owner, indent)` -- the whole record in R6's order. It reads the
+  owner's own `params` array for the order and looks each name up in `doc.params`.
 
 ### The parity obligation
 
@@ -732,10 +1113,12 @@ reports:
 - Python, `print_library_info` in `sushi_lang/compiler/cli.py`
 - Sushi, `toolchain/src/slib_info.sushi`
 
-`tests/unit/test_slib_info_parity.py:86` locks them with
+`tests/unit/test_slib_info_parity.py` locks them with
 `assert py_run.stdout.endswith(tool_run.stdout)`, and `toolchain/README.md` states the
 contract: error messages may differ between the tool and the fallback, the success report
-may not.
+may not. `tests/unit/test_slib_info_docs.py` locks the same thing on a DOCUMENTED library,
+and the older module keeps an undocumented one, which is the regression that says a report
+with no docs in it is unchanged.
 
 So every rendering change here is two implementations plus a rebuild through
 `toolchain/build.py`. This is the real cost of the requirement, and it is worth paying —
@@ -744,14 +1127,18 @@ the parity gate is what keeps the self-hosted tool honest.
 Three costs in particular, since "a plain dump" understates them:
 
 - **A multi-line body needs a line splitter on both sides**, with identical blank-line and
-  trailing-newline handling. `group_thousands` in `slib_info.sushi` — a whole recursive
-  function written to reproduce Python's `{n:,}` — is the precedent for what byte-exactness
-  costs by hand.
+  trailing-newline handling. This turned out to be the cheap half:
+  `Sushi .split("\n")` and Python `str.split("\n")` agree on every edge case, so the
+  splitter is one call on each side. `group_thousands` in `slib_info.sushi` is not the
+  precedent for it.
 - **`toolchain/build.py` runs by hand.** A stale `toolchain/bin/slib-info` keeps printing the
-  old report, and the parity test is the only thing that says so.
+  old report, and **nothing tells you.** An earlier draft of this bullet said the parity test
+  catches it. It does not: `test_slib_info_parity.py` compiles `TOOL_SRC` into a temporary
+  directory on every run, so no test reads the built binary. After a rendering change, run
+  `./toolchain/build.py` by hand; a green suite is not evidence that you did.
 - **Parameter modes.** §1 says `slib-info` can print `nom` / `peek` / `poke` from the manifest
-  alone. It can, and it does not: `print_library_info` formats `{type} {name}` and drops the
-  mode. Phase 3 either prints it in both implementations or §1 stops claiming it.
+  alone. Measured: it prints two of the three already, because `peek` and `poke` are part of
+  the type string. R5 adds the third and makes §1 true.
 
 ---
 
@@ -764,23 +1151,44 @@ Phase 4. A fenced code block under `- Example:` is compiled and run.
 A snippet with no `fn main(` is wrapped, the way rustdoc wraps one. Written by the author
 as two lines of intent:
 
-    - Example:
-    ```sushi
-    let i32 d = hyperspace_jump(3, 7)??
-    println("{d}")
-    ```
+~~~sushi
+- Example:
+```sushi
+let i32 d = hyperspace_jump(3, 7)??
+println("{d}")
+```
+~~~
 
 and compiled as a program, with the import injected, the body indented into
 `fn main() i32:`, and `return Result.Ok(0)` appended.
-
-(The fences above are drawn with tildes only so this document can show a fence inside a
-fence. A real doc block uses backticks.)
 
 A snippet that declares its own `main` is compiled verbatim. One rule, and it covers the
 whole-program case for free.
 
 The reason to wrap is that an example is documentation first. Six lines of ceremony around
 two lines of intent teaches the ceremony.
+
+### Showing a fence inside a fence: the outer one is `~~~`
+
+The illustration above is the shape every page that teaches this feature needs: a fenced
+block whose contents are a doc block that itself holds a fence. **The convention is a
+`~~~` outer fence**, in `docs/documentation-blocks.md`, in the language reference, and
+here.
+
+CommonMark closes a fence only with a fence of the SAME character that is at least as
+long, so a longer run of backticks would work too. Tildes are the convention because the
+outer and the inner delimiter then look different, which is the whole point of the
+illustration. `pymdownx.superfences` is in `mkdocs.yml` and renders both.
+
+`tests/docs_sweep.py` implemented no part of that rule. It matched ` ```sushi ` and
+` ``` ` at column 1 and nothing else, so it read INSIDE an illustration and collected the
+inner example as a block of its own -- measured with a tilde outer fence and with a
+four-backtick one, and it happened with both. R27 taught it to step over a fence it cannot
+close, and both collectors now share one implementation of the rule
+(`closes_fence`).
+
+A doc block cannot contain a doc block, so this is a problem for `.md` pages only: a `##:`
+inside a block is CE6013 whether it is indented or not.
 
 ### The runner
 
@@ -800,7 +1208,219 @@ to be present in a block, to tell a runnable example from a quoted signature. Wr
 makes that test wrong for doc snippets, so the new collector needs its own rule: a doc
 example is runnable unless it is marked otherwise. And its skip and expected-error markers
 are HTML comments, which a `.sushi` file cannot carry — the doc-block collector needs a
-marker that is legal inside a doc block.
+marker that is legal inside a doc block. R16 gives it one: the marker rides on the fence's
+own info string.
+
+An example is compiled from OUTSIDE the unit it documents, which is rustdoc's model and
+R18's ruling. Two things are then out of reach, and R21 makes each one a printed skip
+rather than a failure: a PRIVATE declaration, which the generated file cannot call, and a
+unit that declares `main`, which cannot be imported beside a second `main`.
+
+### Phase 4 rulings
+
+The numbering continues S8's list, so no number is used twice in this document.
+
+**R13 — the block is partitioned before the tags are read.** `parse_doc_block` first
+splits the dedented entries into prose regions and fenced regions. `_read_tags` and
+`_read_body` see only the prose. Three defects go away at once: a tag-shaped line inside
+example code is no longer a tag, an example is no longer truncated by a blank line, and
+the body rule needs no special case for a fence.
+
+Measured against the phase-3 parse, each defect was real. A line-initial `- Returns:` in
+example code parsed as a `returns` tag and truncated the example there. `_read_tags` folds
+a tag's continuation lines with `part.strip()`, so the indentation of an `if` body was
+destroyed. Both rules are right for prose and wrong for code.
+
+**R14 — an example is its own structure, kept verbatim.** A third dataclass in `ast.py`:
+
+```python
+@dataclass
+class DocExample:
+    code: str                    # the fence body, dedented by the fence's own indent
+    attrs: str = ""              # the fence info string, as written
+    loc: Optional[Span] = None   # the opening fence, so a diagnostic can point at it
+    defect: Optional[Literal["no-fence", "unterminated"]] = None
+```
+
+and `DocBlock.examples: List[DocExample]`. The `- Example:` tag keeps only its caption —
+the words on the tag line, usually none. An example carried in `DocTag.text` is not
+usable, because the text of a tag is stripped and folded.
+
+The code is dedented twice: once by the block rule, and once by the indent of its own
+opening fence. The second one is CommonMark's rule for a fenced block, and it is what lets
+an author indent the fence under its list item. Indentation INSIDE the fence is untouched,
+which is the whole reason the structure exists.
+
+The parse records the defect and the pass reports it, which is the split
+`DocBlock.orphan_reason` settled in phase 2. Both classes go in `__all__`, and
+`tests/unit/test_ast_all_is_complete.py` is the gate.
+
+**R15 — many examples are legal, in source order.** Nothing changes in the `docs` pass:
+`_SINGLETON_TAGS` is `("returns", "errors")` and an example was never in it. A declaration
+with two examples has two things to show.
+
+**R16 — the attributes ride on the fence info string, in the vocabulary the sweep already
+has.** A `.sushi` file cannot carry an HTML comment, so the marker moves into the fence:
+
+| Fence | Meaning |
+|---|---|
+| ` ```sushi ` | compile and run; a non-zero exit is a failure |
+| ` ```sushi no_run ` | compile only — the example needs a file, a socket, or a long loop |
+| ` ```sushi skip (reason) ` | do not compile; the reason is printed |
+| ` ```sushi error CExxxx ` | must exit 2 and name every code given |
+| any other info string | not a Sushi example; the sweep ignores it |
+
+`skip` and `error` are the words the Markdown collector already uses, so the tool keeps one
+dialect with two carriers. `no_run` is new and has no Markdown twin, because the Markdown
+collector does not run anything. A renderer takes the FIRST word of an info string as the
+language, so the extra words are harmless in phase 6.
+
+**R17 — two new codes, both always on.** `- Example:` with no fenced block after it is
+CE7007. A fence inside a doc block that never closes is CE7008. Both go in
+`internals/errors/docs.py`.
+
+They are always on rather than a phase-5 policy lint, because each one is a claim that
+contradicts itself. The whole job of the tag is to introduce a fence (S3), so a tag with
+nothing to introduce is wrong the way a `- Parameter q:` that names no parameter is wrong.
+S6's split holds: an ABSENT example is policy, and stays phase 5's business.
+
+**R18 — an example is compiled from OUTSIDE the unit.** One generated entry file, with
+`use "<the documented unit>"` at the top. This is rustdoc's model: a doctest links the
+crate and sees the public API. The import names the unit's own stem, not a path: the
+entry file stands beside the unit, so the sibling name is what an author would write.
+
+Compiling INSIDE the unit was measured and works — the generated file is the unit's own
+source with the wrapper appended, and it reaches private declarations. Rejected: an example
+that calls what a reader cannot call is not documentation, and the inside model still
+cannot handle a unit that declares `main`. One mechanism, not two.
+
+A unit import resolves against the ENTRY file's directory and there is no search path, so a
+`use "helpers/x"` inside the documented unit resolves only from that unit's own directory.
+The generated file therefore goes into a temp COPY of that directory. The copy is made once
+per unit, not once per example.
+
+**R19 — the wrapper is a helper plus a `match`, not a bare `main`.** For a snippet with no
+`fn main(`:
+
+```
+use "<unit>"
+<the snippet's own use lines>
+
+fn doc_example_<n>() ~:
+    <the snippet, indented four spaces, blank lines left blank>
+    return Result.Ok(~)
+
+fn main() i32:
+    match doc_example_<n>():
+        Result.Ok(_) ->
+            return Result.Ok(0)
+        Result.Err(_) ->
+            return Result.Ok(1)
+```
+
+A body with `??` directly inside `fn main()` warns CW2511 on every such example. That
+warning exists to discourage `??` in `main`, so a harness that writes the discouraged form
+on the author's behalf teaches it. Measured: the helper form warns nothing, and an example
+whose `??` fails still exits 1. The name carries the block index, so it cannot collide with
+a symbol in the imported unit.
+
+A snippet that declares its own `fn main(` is compiled verbatim, with the import injected
+above it. That is the wrapping rule above, and it is unchanged.
+
+**R20 — `use` lines are hoisted, and the injected import is not repeated.** A `use` inside
+a function body does not parse, so every line that matches `^use ` moves to the top of the
+generated file, in the order written. The unit import is injected only when the snippet does
+not already import that unit, because a duplicate `use` is CW3001. `println` needs no
+import at all, so the wrapper injects no stdio.
+
+**R21 — two skips, each with its reason printed.** An example is SKIPped, not failed, when
+the collector can see that it cannot be compiled from outside: the declaration is private
+(measured CE3005), or the unit declares `main` (measured CE0101). The collector knows both
+facts because it parses (R22). A skip prints its reason and is counted, the way the
+Markdown collector prints a marked skip, so the hole stays visible.
+
+**R22 — the collector parses, it does not scan.** It calls `parse_to_ast` and reuses the
+`docs` pass's own walk over documented declarations, so it sees exactly what the pass sees
+— a body-first block included — and it gets `is_public`, the declaration name and the unit's
+own `main` for free. The walk becomes public API: `_documented` is renamed `documented` in
+`semantics/passes/docs.py`, with its caller updated.
+
+A file with no `##:` in it is never parsed, so the walk costs about a second over the
+whole tree and the unparsed count means something: it is the files that carry a block and
+do not parse. There are three, and all three are the CE6011, CE6012 and CE6013 fixtures,
+which fail on purpose. The 33 other files in the tree that do not parse hold no block and
+are not read.
+
+**R23 — the manifest carries the code, and prints none of it.** `doc_record` gains
+`examples: [str]` — the code of each example in source order. The attributes are not
+carried, because an attribute is a harness instruction and not documentation. The key is
+absent when there is no example. `slib-info` does not print examples: S9 is a plain dump,
+and a fenced program inside it would bury the signature. Phase 6 renders them.
+
+This closes R7, the one thing an author could write that phase 3 dropped.
+
+**R24 — a bundled stdlib module is a library unit as far as the `docs` pass is concerned.**
+`_inject_source_stdlib_units` builds a `Unit` with no provenance, and the pass skips a unit
+only when it has one. Measured: a `CW7001` in `collections/iter.sushi` is then reported in
+every program that imports the module. So the injector sets a provenance, the same way
+`_inject_library_source` does, and a user is never told about a stdlib doc typo.
+
+Nothing triggers this today, because no bundled module carries a block. It is the trap
+waiting for whoever writes the first one, and it is the prerequisite for documenting the
+stdlib later. It lands here because it is one line, and because the measurement that
+justifies it is fresh.
+
+The same line silences the diagnostic for us, so the repo needs its own gate: one pytest
+module runs `check_docs` over every module in `SOURCE_STDLIB_MODULES` and asserts no CE70xx
+and no CW7001.
+
+**R25 — the sweep grows a selector, and runs each example in its own directory.**
+`--only {all,docs,examples}`, and `all` is the default. Each run gets its own working
+directory inside the temp tree, so an example that writes a file leaves nothing behind. The
+compile timeout is 60 s, as it is today, and the run timeout is 10 s. A timeout is a failure
+with its own label. Output is NOT asserted: an example is documentation, and an
+expected-output mechanism would make it a test.
+
+**R26 — the corpus proves the plumbing, and nothing more.** The tree holds 35 attached doc
+blocks and, before this phase, no `- Example:` with a fence at all. So the phase writes the
+smallest set of examples that exercises every fence, and then stops. It does NOT put an
+example on every documented declaration, and it does not document the stdlib.
+
+Four fixture files in `tests/docs/examples/`. An earlier draft of this ruling said
+three, on the strength of one measurement — that the contents of a fence never reach the
+host build, because a fence is text inside one `DOC_BLOCK` token, so a file whose fences
+hold deliberately broken Sushi still compiles clean. That is true, and it is not enough:
+R21 makes every example in a unit that declares `main` a SKIP, and a `test_` file has to
+declare one. One file cannot both exit 0 as a test and show the sweep four outcomes.
+
+- **`fence_outcomes.sushi`** carries all four attributes and declares no `main`, so it is
+  not a test and the collector can import it. This is where the four outcomes are
+  asserted, by `tests/unit/test_doc_examples_runner.py` and by the sweep.
+- **`test_doc_example_fences.sushi`** carries the same four spellings and declares `main`.
+  It asserts the other half, in CI: four legal fence spellings raise no CE70xx, and the
+  deliberately broken Sushi in its `error` fence never reaches the build. The sweep reports
+  its four examples as skips, which is R21 working.
+- **two `test_err_` files**, one for CE7007 and one for CE7008, because each has to exit 2
+  on its own.
+
+An example that cannot compile is a legitimate fixture and not a gap: `error` and `skip`
+exist precisely for code that must not build, or must not run.
+
+**Real examples are a later editorial pass.** The bundled stdlib modules are where they pay
+off, and writing them is a review of four modules' prose rather than plumbing. R24 is the
+prerequisite that pass needs, and it lands here so the pass can start whenever it is worth
+starting.
+
+**R27 — the Markdown collector honours CommonMark's own fence rule.** A fenced block is
+closed by a fence of the SAME character that is at least as long, which is how the format
+already lets one fence hold another. `collect_blocks` implements none of it. So when a line
+opens a fence that this collector cannot close — a `~~~`, or four or more backticks — it
+steps to that fence's own closer before it resumes scanning.
+
+Measured both ways: with a `~~~sushi` outer fence AND with a four-backtick one, the
+phase-3 collector reached inside an illustration and pulled the inner example out as a
+block of its own. The `~~~` convention above is the spelling; this ruling is what makes it
+safe.
 
 ---
 
@@ -870,7 +1490,10 @@ within the limits §8 records.
 **Phase 4 — the examples.** `- Example:` parsing, the wrapping rule, and the second
 collector in `docs_sweep.py`.
 
-**Phase 5 — completeness.** `--warn-missing-docs` and its four lints.
+**Phase 5 — completeness.** `--warn-missing-docs` and its five lints, the `declarations()`
+walk they read, and the `COMPILER_FLAGS:` test directive that lets a `.sushi` fixture turn
+a compiler flag on. At the end of this phase the compiler answers both halves of the
+question: what a block claims, and what it leaves out.
 
 **Phase 6 — Markdown.** Rendering, a richer `slib-info`, and the user-facing guide. The
 Markdown checker is written in Sushi and lives in `toolchain/`, which makes it the second
@@ -891,6 +1514,10 @@ feature removes.
 
 Phase 3 must not teach `slib-info` to parse source, must not move the container version for
 an added optional key, and must not put a `doc` key on a private or closure-path record.
+
+Phase 4 must not make the sweep a CI job, must not assert an example's output, and must not
+teach the wrapper to reach a private symbol. Each one turns documentation into a test, and
+the third one documents a call a reader cannot make.
 
 Phase 5 must not turn any always-on check into a warning, or any warning into an
 always-on error. The split in §6 is the contract: a claim that contradicts the declaration

@@ -78,12 +78,17 @@ def extract_call_type_args(call_node: Tree, ast_builder: 'ASTBuilder'):
     return (type_args or None), span_of(type_list_node)
 
 
-def call_from_parts(name_tok_or_str: Union[Token, str], call_tail: Tree, ast_builder: 'ASTBuilder') -> Call:
-    """Build Call from name and call tail."""
-    if isinstance(name_tok_or_str, Token):
-        callee = Name(id=str(name_tok_or_str), loc=span_of(name_tok_or_str))
-    elif isinstance(name_tok_or_str, str):
-        callee = Name(id=name_tok_or_str, loc=None)
+def call_from_parts(callee_name: Union[Name, Token], call_tail: Tree, ast_builder: 'ASTBuilder') -> Call:
+    """Build Call from its callee and its call tail.
+
+    The callee arrives as the `Name` the atom was already parsed into, SPAN AND ALL. Built
+    afresh from the bare id, it had no span, and every diagnostic anchored to a callee --
+    CE2008, CE2009, CE3005, the CE206x family -- rendered as text with no caret.
+    """
+    if isinstance(callee_name, Name):
+        callee = callee_name
+    elif isinstance(callee_name, Token):
+        callee = Name(id=str(callee_name), loc=span_of(callee_name))
     else:
         ice(call_tail, "invalid callee in call")
 

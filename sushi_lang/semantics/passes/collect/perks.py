@@ -18,6 +18,9 @@ class PerkTable:
     """Registry of all defined perks."""
     by_name: Dict[str, PerkDef] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
+    # The unit each perk was defined in. A PerkDef is an AST node and carries no file,
+    # and a duplicate is reported while ANOTHER unit is being collected (#473).
+    files: Dict[str, Optional[str]] = field(default_factory=dict)
 
     def register(self, perk: PerkDef) -> bool:
         """Register a perk. Returns False if duplicate."""
@@ -144,6 +147,9 @@ class PerkCollector:
     ) -> None:
         """Initialize perk collector."""
         self.r = reporter
+        # The unit being collected. This pass shares one reporter across every
+        # unit, so a record it stores has to remember its own file (#473).
+        self.current_unit_file: Optional[str] = None
         self.perks = perks
         self.perk_impls = perk_impls
         # Which unit is being collected, which units came from a source library, and
@@ -230,12 +236,14 @@ class PerkCollector:
                                 or getattr(method, "name_span", None) or name_span,
                                 ERR.CE2417)
 
-        if not self.perks.register(perk):
+        if self.perks.register(perk):
+            self.perks.files[name] = self.current_unit_file
+        else:
             prev = self.perks.get(name)
             prev_span = getattr(prev, "name_span", None) if prev else None
             diag = er.emit_with(self.r, ERR.CE4001, name_span, name=name)
             if prev_span is not None:
-                diag.note("first defined here", prev_span)
+                diag.note("first defined here", prev_span, self.perks.files.get(name))
             diag.emit()
             return
 

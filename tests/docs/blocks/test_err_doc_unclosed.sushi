@@ -1,0 +1,7 @@
+# Test: a doc block that is opened and never closed.
+# EXPECT_ERROR_CODE: CE6011
+
+##: This block is opened and never closed.
+
+fn main() i32:
+    return Result.Ok(0)

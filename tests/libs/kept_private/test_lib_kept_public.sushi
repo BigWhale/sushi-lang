@@ -1,0 +1,10 @@
+# The public half: `public` stays the discriminator, so the exported function
+# runs even though its own body calls a private the consumer may not name.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "42"
+
+use <lib/kept_private_lib>
+
+fn main() i32:
+    println("{double_it(21).realise(0)}")
+    return Result.Ok(0)

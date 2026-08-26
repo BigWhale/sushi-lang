@@ -6,6 +6,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, StructType
 from sushi_lang.semantics.ast import Call, Name, Spread
+from .visibility import reject_private_cross_unit_call
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
 
@@ -134,6 +135,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
             call.callee_fn_type = callee_ty  # backend reads this for the indirect call
             validate_indirect_call(validator, call, callee_ty)
         else:
+            call.callee_unresolved = True
             er.emit(validator.reporter, er.ERR.CE2092, getattr(call.callee, 'loc', call.loc),
                     expected="a function value",
                     actual=display_type(callee_ty) if callee_ty is not None else "a non-function expression")
@@ -166,6 +168,16 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         return
 
     if function_name not in validator.func_table.by_name:
+        call.callee_unresolved = True
+        # A name a library declares and keeps. It resolves to nothing here BECAUSE the
+        # library kept it, so "undefined" was the wrong word for it (#469). The callee
+        # stays unresolved either way: no signature travels with a kept name, so the
+        # borrow pass must judge no argument against one.
+        kept = validator.library_not_exported.get(function_name)
+        if kept is not None and reject_private_cross_unit_call(
+                validator, function_name, call.callee.loc,
+                visible=False, unit_name=kept[0]):
+            return
         diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.callee.loc,
                             name=function_name)
         # A generic struct constructor used inline is the most common cause; attach the
@@ -179,15 +191,10 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
 
     func_sig = validator.func_table.by_name[function_name]
 
-    if (validator.current_unit_name is not None and
-        func_sig.unit_name is not None and
-        func_sig.unit_name != validator.current_unit_name):
-        if not func_sig.is_public:
-            er.emit(validator.reporter, er.ERR.CE3005, call.callee.loc,
-                   name=function_name,
-                   current_unit=validator.current_unit_name,
-                   func_unit=func_sig.unit_name)
-            return
+    if reject_private_cross_unit_call(validator, function_name, call.callee.loc,
+                                      visible=func_sig.is_public,
+                                      unit_name=func_sig.unit_name):
+        return
 
     expected_params = func_sig.params
     actual_args = call.args

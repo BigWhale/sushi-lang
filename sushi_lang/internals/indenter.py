@@ -22,7 +22,8 @@ class LangIndenter(Indenter):
             line = getattr(token, "end_line", None) or getattr(token, "line", 1)
             raise SyntaxDiagnostic(
                 "CE6004",
-                span=Span(line, 1, line, max(1, indent)),
+                # +1: `end_col` is exclusive, so marking columns 1..indent ends one past it.
+                span=Span(line, 1, line, max(1, indent) + 1),
                 got=indent,
                 expected=self.indent_level[-1],
             ) from exc

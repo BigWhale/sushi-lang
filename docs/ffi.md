@@ -53,6 +53,19 @@ The Sushi-visible name and the C symbol are decoupled
 anything; the linker resolves the symbol after `=`. This is what lets you bind
 `printf` without shadowing any Sushi name.
 
+**The C symbol must be foreign.** An `unsafe external` reaches OUT of the program, so the
+name after `=` may not be one this build defines -- a function of any unit, a constant, or
+a symbol a linked library brought in, its private ones included. That is **CE5013**, and it
+names where the symbol is defined.
+
+The reason is that there is no link step left to keep the two apart. A program's units share
+one LLVM module and a linked library's module is merged into it, so a declaration and a
+definition of one name unify: the call enters the program's own body with the declared
+signature, unchecked. A library-*private* body could be run that way from consumer code, and
+with a mismatched signature the return value is read out of the wrong register. Two
+namespaces may still declare the same FOREIGN symbol -- LLVM deduplicates identical
+declarations, and `CE5001` is the rule for a mismatched one.
+
 ## Types at the boundary
 
 External signatures are limited to the **C-representable subset**:
@@ -305,6 +318,7 @@ intrinsic, never as `==` or a `null` literal.
 | `CE5010` | error | A `ptr` is used with an operator (comparison, arithmetic, bitwise, logical). An opaque handle has no identity or arithmetic. |
 | `CE5011` | error | A method is called on a `ptr`. Wrap the handle in a struct and extend the struct. |
 | `CE5012` | error | A `ptr` appears as a generic type argument outside `Result`/`Maybe` (e.g. `HashMap@(i32, ptr)`, `List@(ptr)`). |
+| `CE5013` | error | A link-name names a symbol this build **defines** -- a function of any unit, a constant, or one a linked library brought in. FFI names foreign symbols only. The note says where the symbol is defined. |
 
 ## Linking: what can actually be resolved
 

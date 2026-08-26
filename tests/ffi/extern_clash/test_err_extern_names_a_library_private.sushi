@@ -1,0 +1,14 @@
+# The silent case: a private a binary .slib kept ships nowhere the consumer can
+# name it, so the declaration bound to the library's own body and ran it, with the
+# ABI unchecked (#470).
+# EXPECT_ERROR_CODE: CE5013
+
+use <lib/kept_private_lib>
+
+unsafe external "C" as raw because "naming a library private":
+    fn reach(i32 n, i32 by) i32 = "scale"
+
+fn main() i32:
+    println("{double_it(21).realise(0)}")
+    println("{raw.reach(4, 2)}")
+    return Result.Ok(0)

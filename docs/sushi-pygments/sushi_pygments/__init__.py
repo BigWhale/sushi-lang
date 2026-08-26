@@ -70,6 +70,13 @@ class SushiLexer(RegexLexer):
         "root": [
             (r"[ \t]+", Text),
             (r"\n", Text),
+
+            # A `##: ... :##` documentation block, before the comment rule: the
+            # opener starts with `#`, so `#.*$` would take its first line and hand
+            # the rest of the block to the code rules. The interior is documentation
+            # whole, the fence of an `- Example:` included -- which is the only place
+            # a backtick appears in Sushi source.
+            (r"##:", String.Doc, "docblock"),
             (r"#.*$", Comment.Single),
 
             # Strings.
@@ -141,6 +148,15 @@ class SushiLexer(RegexLexer):
         "interp": [
             (r"\}", String.Interpol, "#pop"),
             include("root"),
+        ],
+
+        # The interior of a documentation block. It ends at the first `:##`, which is
+        # exact for a one-liner and close enough for a block: the compiler wants that
+        # closer line-initial, and a `:##` inside prose is not a thing anyone writes.
+        "docblock": [
+            (r":##", String.Doc, "#pop"),
+            (r"[^:]+", String.Doc),
+            (r".", String.Doc),
         ],
 
         # Single-quoted strings are literal (no interpolation).

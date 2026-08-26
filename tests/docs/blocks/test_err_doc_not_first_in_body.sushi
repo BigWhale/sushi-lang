@@ -1,0 +1,12 @@
+# Test: a doc block inside a body must be the first item there.
+# EXPECT_ERROR_CODE: CE7005
+
+fn probe() i32:
+    let i32 n = 7
+    ##: This block is not the first item in the body, and documents nothing. :##
+    return Result.Ok(n)
+
+fn main() i32:
+    let i32 n = probe().realise(0)
+    println("{n}")
+    return Result.Ok(0)

@@ -232,6 +232,25 @@ Run the compiled binary in a specific working directory.
 - Makes `getcwd()`-style output host-independent
 - Also applied to the `EXPECT_NO_LEAKS` re-run
 
+#### COMPILER_FLAGS
+
+Append flags to the `./sushic` command line, so a fixture can exercise a diagnostic that
+lives behind a compiler flag.
+
+```sushi
+# COMPILER_FLAGS: --warn-missing-docs
+```
+
+- Several flags on one line, or repeat the directive
+- Applied by both runners, the compilation-only one and the enhanced one
+- A flag the RUNNER owns is refused with a printed warning: `-o`, `--lib`, `--lib-info`,
+  `--clean-cache`, `--build-stdlib` and `--cache-dir` decide the output path, the build
+  kind and the cache, so a fixture that changed one would break the run rather than test
+  anything
+- Pair the fixture with a second one that carries the same source and NO directive. The
+  quiet twin is what proves the flag is a gate; without it a lint that became always-on
+  would pass both ways
+
 ## Test File Naming Conventions
 
 Test files must follow naming conventions to indicate expected compilation behavior:

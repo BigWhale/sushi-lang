@@ -20,6 +20,7 @@ from sushi_lang.internals.errors.registry import (
 # effect; nothing here references them by name.
 from sushi_lang.internals.errors import (  # noqa: F401
     borrow,
+    docs,
     ffi,
     func,
     internal,

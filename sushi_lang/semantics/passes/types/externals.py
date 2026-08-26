@@ -1,6 +1,6 @@
 """Semantic validation for FFI `unsafe external` blocks."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
@@ -38,6 +38,69 @@ def validate_external_signatures(reporter: Reporter, program: 'Program') -> None
         _validate_block_abi(reporter, block)
         _validate_block_signatures(reporter, block)
         _emit_block_warning(reporter, block)
+
+
+def _defining_site(symbol: str, tables, registry) -> Optional[tuple]:
+    """Where this build defines `symbol`, as (note, span, filename). None if nowhere.
+
+    Ordered by how much the answer can say. A library record carries no span, so its
+    note is a plain fact; a declaration this program holds carries its own file and
+    line, which makes the diagnostic relational.
+    """
+    if registry is not None:
+        kept = registry.get_all_not_exported().get(symbol)
+        if kept is not None:
+            return (f"library '{kept[0]}' declares it and does not export it", None, None)
+
+        shipped = registry.get_all_private_functions().get(symbol)
+        if shipped is not None:
+            return (f"library '{shipped[0]}' ships it in its export closure", None, None)
+
+        for lib in registry.get_all_libraries().values():
+            if symbol in lib.functions:
+                return (f"library '{lib.name}' exports it", None, None)
+
+    sig = tables.funcs.by_name.get(symbol)
+    if sig is not None:
+        if sig.name_span is not None:
+            return ("defined here", sig.name_span, sig.filename)
+        # A monomorphized instance carries no span of its own: it is a body the
+        # compiler synthesized, not one the user wrote.
+        return ("this program defines it", None, None)
+
+    if symbol in tables.constants.by_name:
+        return ("this program defines a constant of that name", None, None)
+
+    return None
+
+
+def reject_external_naming_a_defined_symbol(
+    reporter: Reporter, program: 'Program', tables, registry=None,
+) -> None:
+    """CE5013: an `unsafe external` may name a FOREIGN symbol, never one this build defines.
+
+    The declaration and the definition share one module and unify, so this is not a name
+    clash the linker would catch -- the call simply enters the program's own body with no
+    ABI check (#470). The link-name is what collides, not the Sushi name beside it.
+
+    Needs the whole program's symbols, the linked libraries included, so it runs after
+    the `libraries` step and not with the per-unit extern validation above.
+    """
+    externals = getattr(program, "externals", None)
+    if not externals:
+        return
+
+    for block in externals:
+        for decl in block.decls:
+            found = _defining_site(decl.link_name, tables, registry)
+            if found is None:
+                continue
+            note, span, filename = found
+            er.emit_with(reporter, er.ERR.CE5013,
+                         decl.name_span or decl.loc,
+                         symbol=decl.link_name) \
+                .note(note, span, filename) \
+                .emit()
 
 
 def validate_ptr_unit_gate(reporter: Reporter, program: 'Program') -> None:

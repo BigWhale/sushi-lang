@@ -1,0 +1,18 @@
+# Test: an `- Example:` tag with no fenced block after it. The whole job of the tag is
+# to introduce a fence, so a tag with nothing to introduce contradicts itself.
+# EXPECT_ERROR_CODE: CE7007
+
+##:
+Doubles a number.
+
+- Parameter n: The number to double.
+- Example: there is no fenced block after this tag.
+- Returns: Twice `n`.
+:##
+fn doubled(i32 n) i32:
+    return Result.Ok(n * 2)
+
+fn main() i32:
+    let i32 d = doubled(21).realise(0)
+    println("{d}")
+    return Result.Ok(0)

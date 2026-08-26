@@ -74,7 +74,10 @@ class BorrowChecker:
     def run(self, program: Program) -> None:
         """Run borrow checking on the entire program."""
         for func in program.functions:
+            # Whose file the diagnostics of this body belong to (#471).
+            self.reporter.origin = getattr(func, "library_origin", None)
             self._check_function(func)
+        self.reporter.origin = None
 
         for ext in program.extensions:
             self._check_extension(ext)

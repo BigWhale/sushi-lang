@@ -1,0 +1,11 @@
+# A library's unmarked generic is not callable from the consumer (#467). The
+# concrete twin of this call already answers CE3005; the generic answered a
+# KeyError from the backend, and answered it only on the incremental path.
+# EXPECT_ERROR_CODE: CE3005
+
+use <lib/private_generic_lib>
+
+fn main() i32:
+    let i32 a = unmarked(nom 7).realise(0)
+    println("{a}")
+    return Result.Ok(0)

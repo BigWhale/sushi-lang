@@ -5,6 +5,7 @@ from lark import Tree
 from sushi_lang.semantics.ast import StructDef, StructField
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, ice, expect
+from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.report import span_of
 
@@ -30,6 +31,8 @@ def parse_structdef(t: Tree, ast_builder: 'ASTBuilder') -> StructDef:
 
     if not fields:
         ice(t, "struct must have at least one field")
+
+    attach_docs(t.children, fields, ast_builder)
 
     return StructDef(
         name=str(name_tok),

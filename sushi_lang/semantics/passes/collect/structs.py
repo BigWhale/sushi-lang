@@ -24,6 +24,9 @@ class StructTable:
     # point at the original -- so the TABLE remembers. A name that is here but not in
     # `spans` was predefined by the compiler.
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
+    # The unit each span is in, keyed alike: a duplicate is reported while ANOTHER
+    # unit is being collected, so the note has to name this file (#473).
+    files: Dict[str, Optional[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -32,6 +35,9 @@ class GenericStructTable:
     by_name: Dict[str, GenericStructType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
+    # The unit each span is in, keyed alike: a duplicate is reported while ANOTHER
+    # unit is being collected, so the note has to name this file (#473).
+    files: Dict[str, Optional[str]] = field(default_factory=dict)
 
 
 class StructCollector:
@@ -46,6 +52,9 @@ class StructCollector:
     ) -> None:
         """Initialize struct collector."""
         self.r = reporter
+        # The unit being collected. This pass shares one reporter across every
+        # unit, so a record it stores has to remember its own file (#473).
+        self.current_unit_file: Optional[str] = None
         self.structs = structs
         self.generic_structs = generic_structs
         self.known_types = known_types
@@ -91,7 +100,7 @@ class StructCollector:
         if name in self.structs.by_name:
             note_first_declaration(
                 er.emit_with(self.r, ERR.CE0004, name_span, name=name),
-                self.structs.spans, name,
+                self.structs.spans, name, files=self.structs.files,
             ).emit()
             return
 
@@ -100,6 +109,7 @@ class StructCollector:
                 er.emit_with(self.r, ERR.CE0004, name_span, name=name),
                 self.generic_structs.spans, name,
                 what="first defined here, as a generic struct",
+                files=self.generic_structs.files,
             ).emit()
             return
 
@@ -157,6 +167,7 @@ class StructCollector:
             self.generic_structs.order.append(name)
             self.generic_structs.by_name[name] = generic_struct
             self.generic_structs.spans[name] = name_span
+            self.generic_structs.files[name] = self.current_unit_file
 
             # Note: Generic structs are not added to known_types until instantiated
         else:
@@ -168,6 +179,7 @@ class StructCollector:
             self.structs.order.append(name)
             self.structs.by_name[name] = struct_type
             self.structs.spans[name] = name_span
+            self.structs.files[name] = self.current_unit_file
 
             self.known_types.add(struct_type)
 

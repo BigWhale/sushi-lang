@@ -1,0 +1,16 @@
+# Test: two `- Parameter` tags for one parameter name.
+# EXPECT_ERROR_CODE: CE7002
+
+##:
+Adds two numbers.
+
+- Parameter a: The first addend.
+- Parameter a: The second addend, with the name never renamed.
+:##
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+fn main() i32:
+    let i32 n = add(1, 2).realise(0)
+    println("{n}")
+    return Result.Ok(0)

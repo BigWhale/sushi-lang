@@ -1,16 +1,18 @@
 """Lark parser setup and AST construction."""
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 from typing import Any, Optional
 
-from lark import Lark, UnexpectedInput
+from lark import Lark, Token, UnexpectedInput
 from lark.exceptions import LarkError
 
-from sushi_lang.internals.diagnostics import SushiError
+from sushi_lang.internals.diagnostics import SushiError, SyntaxDiagnostic
 from sushi_lang.internals.parse_errors import lark_to_diagnostic
 from sushi_lang.internals.indenter import LangIndenter
+from sushi_lang.internals.report import Span, span_of
 from sushi_lang.semantics.ast_builder import ASTBuilder
 
 GRAMMAR_PATH = Path(__file__).parent.parent / "grammar.lark"
@@ -18,6 +20,71 @@ GRAMMAR_PATH = Path(__file__).parent.parent / "grammar.lark"
 # The only postlexer is the indentation handler. Generics use `@(...)`, which
 # closes on a real `)`, so there is no `>>` ambiguity and no generic-type
 # postlexer to chain in front of it.
+
+DOC_OPEN = "##:"
+DOC_CLOSE = ":##"
+
+
+def _delimiter_span(token: Token) -> Optional[Span]:
+    """The span of a bare `##:` or `:##`, which is three columns wide."""
+    return span_of(token)
+
+
+def _reject_unclosed_doc_block(token: Token) -> Token:
+    """CE6011: a `##:` that reaches the lexer opened a block nothing closes."""
+    raise SyntaxDiagnostic("CE6011", span=_delimiter_span(token))
+
+
+def _reject_stray_doc_close(token: Token) -> Token:
+    """CE6012: a `:##` that reaches the lexer closes a block nothing opened."""
+    raise SyntaxDiagnostic("CE6012", span=_delimiter_span(token))
+
+
+def _reject_nested_doc_open(token: Token) -> Token:
+    """CE6013: a line-initial `##:` interior to a block, which cannot be a token.
+
+    The block that is broken is the OUTER one -- it swallowed everything between
+    the two openers -- so the caret goes on the inner opener and a note goes on
+    the outer. Rendering this with a single location would be a regression.
+    """
+    start_line = getattr(token, "line", 1) or 1
+    start_col = getattr(token, "column", 1) or 1
+
+    for offset, line in enumerate(str(token.value).split("\n")):
+        if offset == 0 or not line.lstrip().startswith(DOC_OPEN):
+            continue
+        col = len(line) - len(line.lstrip()) + 1
+        inner = Span(start_line + offset, col, start_line + offset, col + len(DOC_OPEN))
+        outer = Span(start_line, start_col, start_line, start_col + len(DOC_OPEN))
+        raise SyntaxDiagnostic("CE6013", span=inner).note(
+            "the enclosing documentation block opens here", outer)
+
+    return token
+
+
+@lru_cache(maxsize=1)
+def build_parser() -> Lark:
+    """The Lark parser for `grammar.lark`. One instance parses any number of sources.
+
+    The three doc-block diagnostics come from `lexer_callbacks`, which fire for an
+    `%ignore`d terminal exactly as they do for a kept one. That is one mechanism for
+    every delimiter mistake, in every position, with the caret on the delimiter --
+    see docs/design/documentation.md section 4.
+    """
+    kwargs: dict[str, Any] = dict(
+        parser="lalr",
+        propagate_positions=True,
+        maybe_placeholders=False,
+        postlex=LangIndenter(),
+        lexer="basic",
+        lexer_callbacks={
+            "DOC_OPEN": _reject_unclosed_doc_block,
+            "DOC_CLOSE": _reject_stray_doc_close,
+            "DOC_BLOCK": _reject_nested_doc_open,
+        },
+    )
+    # Lark.open raises GrammarError if grammar.lark itself is broken -- an ICE.
+    return Lark.open(str(GRAMMAR_PATH), **kwargs)
 
 
 def parse_error_hint(e: UnexpectedInput) -> Optional[str]:
@@ -36,17 +103,8 @@ def parse_error_hint(e: UnexpectedInput) -> Optional[str]:
 
 def parse_to_ast(src: str, dump_parse: bool = False):
     """Parse source code into an AST."""
-    kwargs: dict[str, Any] = dict(
-        parser="lalr",
-        propagate_positions=True,
-        maybe_placeholders=False,
-        postlex=LangIndenter(),
-        lexer="basic",
-    )
     try:
-        # Lark.open raises GrammarError if grammar.lark itself is broken -- an ICE.
-        parser = Lark.open(str(GRAMMAR_PATH), **kwargs)
-        tree = parser.parse(src)
+        tree = build_parser().parse(src)
     except SushiError:
         raise
     except LarkError as e:

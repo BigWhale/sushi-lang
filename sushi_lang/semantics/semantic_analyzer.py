@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
-from sushi_lang.internals.report import Reporter
+from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import Program, ExtendDef, ExtendWithDef
 from sushi_lang.semantics.passes.collect import CollectorPass, ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, PerkTable, PerkImplementationTable, FunctionTable, ExtensionTable, GenericExtensionTable, GenericFunctionTable
 
@@ -59,7 +59,7 @@ def _library_units_first(compilation_order):
 class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
 
-    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[object] = None, library_registry: Optional['LibraryRegistry'] = None) -> None:
+    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[object] = None, library_registry: Optional['LibraryRegistry'] = None, warn_missing_docs: bool = False) -> None:
         self.reporter = reporter
         self.filename = filename
         self.unit_manager = unit_manager
@@ -67,6 +67,10 @@ class SemanticAnalyzer:
         # backend (Tier 4.1 layering invariant), so no tighter annotation is legal.
         self.library_linker = library_linker
         self.library_registry = library_registry
+        # `--warn-missing-docs`. A keyword and not an options object on purpose: this is
+        # the compiler's FIRST warning-control flag, and a second one is what earns the
+        # object (documentation.md section 6).
+        self.warn_missing_docs = warn_missing_docs
         self.constants: Optional[ConstantTable] = None
         self.structs: Optional[StructTable] = None
         self.enums: Optional[EnumTable] = None
@@ -91,8 +95,10 @@ class SemanticAnalyzer:
         the old scheme ended up running the scope pass after the derive pass.
 
             collect       constants, headers, generic types      passes/collect/
+            docs          doc blocks against their declarations  passes/docs.py
             externs       extern signatures, ptr unit gate       passes/types/externals.py
             libraries     library symbol registration            _register_library_*
+            ffi-clash     an extern naming a defined symbol      passes/types/externals.py
             entrypoint    main()'s signature                     _check_main_function_args*
             instantiate   generic instantiation collection       generics/instantiate/
             monomorphize  generic -> concrete                    generics/monomorphize/
@@ -113,6 +119,16 @@ class SemanticAnalyzer:
         it as a helper.
         """
         self._check_multi_file()
+
+    @staticmethod
+    def _unit_reporter(unit) -> Reporter:
+        """A Reporter that knows one unit's file and source, for a per-unit pass."""
+        try:
+            source = unit.file_path.read_text(encoding="utf-8")
+        except Exception:
+            source = ""  # the diagnostic still renders, without its caret line
+        return Reporter(source=source, filename=str(unit.file_path),
+                        provenance=unit.provenance)
 
     def _check_multi_file(self) -> None:
         """Multi-file semantic analysis with cross-unit symbol resolution."""
@@ -179,6 +195,26 @@ class SemanticAnalyzer:
         self.externals = collector.externals
         global_tables.externals = collector.externals
 
+        # docs: check each doc block against the declaration beside it. Here because
+        # the pass needs the merged tables and nothing later, and because it must run
+        # ahead of instantiate/monomorphize -- a generic's block is written once, and
+        # checking it afterwards would report one mistake once per instantiation. A
+        # library unit is skipped: a consumer must not be told about the library
+        # author's doc typos.
+        from sushi_lang.semantics.passes.docs import check_docs, check_missing_docs
+        for unit in compilation_order:
+            if unit.ast is None or unit.provenance is not None:
+                continue
+            unit_reporter = self._unit_reporter(unit)
+            check_docs(unit_reporter, unit.ast)
+            # Completeness rides in the SAME loop, and nowhere later:
+            # `register_synthesized_function` appends a monomorphized clone to a unit's
+            # own `ast.functions`, so a lint that ran after `monomorphize` would demand
+            # a doc block on every instance the program asked for.
+            if self.warn_missing_docs:
+                check_missing_docs(unit_reporter, unit.ast)
+            self.reporter.items.extend(unit_reporter.items)
+
         # FFI: validate external signatures (CE5003), emit CW5001, and enforce
         # the ptr unit gate (CE5009) per unit.
         from sushi_lang.semantics.passes.types.externals import (
@@ -199,6 +235,9 @@ class SemanticAnalyzer:
             # with a local name is CE5007 (local-wins would silently change
             # what the library's monomorphized bodies call).
             self._register_library_private_functions()
+            # And the complement: what the library declares and ships nowhere. These
+            # are names, not callables, so they register in no function table (#469).
+            self._register_library_not_exported()
             self._register_library_constants(compilation_order)
             # Library perk IMPLEMENTATIONS register here: after the consumer's own impls
             # (local wins) and before instantiate/monomorphize, so the constraint validator
@@ -209,6 +248,21 @@ class SemanticAnalyzer:
             # before instantiate so the consumer's instantiations monomorphize locally.
             self._register_library_generic_structs()
             self._register_library_generic_enums()
+
+        # ffi-clash: an `unsafe external` may name a FOREIGN symbol, never one this
+        # build defines (#470). It reads the whole program's symbols, the linked
+        # libraries included, so it cannot run with the per-unit extern validation
+        # above -- the registry does not exist yet up there.
+        from sushi_lang.semantics.passes.types.externals import (
+            reject_external_naming_a_defined_symbol,
+        )
+        for unit in compilation_order:
+            if unit.ast is None:
+                continue
+            unit_reporter = self._unit_reporter(unit)
+            reject_external_naming_a_defined_symbol(
+                unit_reporter, unit.ast, self.tables, self.library_registry)
+            self.reporter.items.extend(unit_reporter.items)
 
         self._check_main_function_args_multi_file(compilation_order)
 
@@ -388,13 +442,7 @@ class SemanticAnalyzer:
             if unit.ast is None:
                 continue
 
-            try:
-                unit_source = unit.file_path.read_text(encoding="utf-8")
-            except Exception:
-                unit_source = ""  # Fallback if we can't read the source
-
-            unit_reporter = Reporter(source=unit_source, filename=str(unit.file_path),
-                                     provenance=unit.provenance)
+            unit_reporter = self._unit_reporter(unit)
 
             scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals)
             scope_analyzer.run(unit.ast)
@@ -597,6 +645,14 @@ class SemanticAnalyzer:
             self.funcs.by_name[name] = sig
             self.funcs.order.append(name)
 
+    def _register_library_not_exported(self) -> None:
+        """Record what a loaded library declares and does not export (#469)."""
+        if self.tables is None or self.library_registry is None:
+            return
+
+        self.tables.library_not_exported.update(
+            self.library_registry.get_all_not_exported())
+
     def _register_library_constants(self, compilation_order) -> None:
         """Register export-closure constants from loaded libraries (C4b/C5)."""
         if self.constants is None or self.library_linker is None:
@@ -759,6 +815,20 @@ class SemanticAnalyzer:
                     continue
 
                 gfd.is_library_template = True
+                # Whose code the body is, and what text its spans index into. The
+                # collector above already reports against the slice; the per-unit
+                # passes check the MONOMORPHIZED instance and need the same answer,
+                # or they render a library's mistake against the consumer's file
+                # (#471). The filename shape is the throwaway reporter's, so one
+                # convention names a template everywhere.
+                gfd.library_origin = Origin(
+                    filename=f"<template:{lib_name}:{func_name}>",
+                    source=source,
+                    provenance=(
+                        f"'{lib_name}' {manifest.get('library_version') or 'unknown'} "
+                        f"ships this template; it is monomorphized here because of "
+                        f"`use <lib/{lib_name}>`"),
+                )
 
                 # The snippet already carries these, but the record is the source of
                 # truth.

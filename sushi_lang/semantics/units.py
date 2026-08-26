@@ -35,10 +35,15 @@ class Unit:
     ast: Optional[Program]          # Parsed AST (None until loaded)
     dependencies: List[str]         # Other unit names this depends on (from use statements)
     public_symbols: Dict[str, Symbol]  # Symbols exported by this unit
-    # Set only on a unit that arrived from a source library. Every diagnostic raised
-    # against the unit carries it as a note, so a consumer is never shown a bare error
-    # about code they did not write.
+    # Set on every unit whose code the CONSUMER did not write -- a source library's
+    # unit, and a bundled Sushi-source stdlib module. Every diagnostic raised against
+    # the unit carries it as a note, so a consumer is never shown a bare error about
+    # code they did not write, and the `docs` pass skips the unit entirely.
     provenance: Optional[str] = None
+    # True only for a unit that came out of a `.slib`. A bundled stdlib module carries a
+    # provenance as well, so provenance alone cannot answer "is this a library": the two
+    # are different questions, and `generics/synthesis.py` needs this one.
+    from_library: bool = False
 
     def __post_init__(self):
         """Initialize computed fields after dataclass creation."""

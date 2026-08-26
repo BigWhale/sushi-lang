@@ -29,7 +29,7 @@ REFERENCE_PATTERNS = [
 # Why a code exists belongs in its module's `doc` field; what changed belongs in the
 # CHANGELOG and the git log. Neither belongs in this comment, which had grown to a
 # 5,000-character single line of per-code history.
-REGISTRY_SIZE = 303
+REGISTRY_SIZE = 321
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay
@@ -121,7 +121,9 @@ def _category_of_range(code: str) -> set[Category]:
         return {Category.PERK}
     if number < 6000:
         return {Category.FFI}
-    return {Category.SYNTAX}
+    if number < 7000:
+        return {Category.SYNTAX}
+    return {Category.DOCS}
 
 
 def test_category_matches_range():

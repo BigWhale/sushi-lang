@@ -5,6 +5,7 @@ from lark import Tree, Token
 from sushi_lang.semantics.ast import FuncDef, Param
 from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, find_tree_recursive, ice, expect
+from sushi_lang.semantics.ast_builder.declarations.docs import lift_body_doc
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
@@ -76,12 +77,13 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
     ret_ty: Optional[Type] = ast_builder._parse_type(ret_node) if ret_node is not None else None
     err_ty: Optional[Type] = ast_builder._parse_type(err_node) if err_node is not None else None
+    body = ast_builder._block(body_node)
 
     return FuncDef(
         name=str(name_tok),
         params=params,
         ret=ret_ty,
-        body=ast_builder._block(body_node),
+        body=body,
         is_public=is_public,
         type_params=type_params,
         err_type=err_ty,
@@ -90,6 +92,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
         ret_span=span_of(ret_node),
         self_mode=self_mode,
         self_mode_span=self_mode_span,
+        doc=lift_body_doc(body, ast_builder),
     )
 
 

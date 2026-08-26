@@ -1,7 +1,7 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Union, Literal, TYPE_CHECKING
-from sushi_lang.internals.report import Span
+from sushi_lang.internals.report import Origin, Span
 from sushi_lang.semantics.typesys import Type
 
 from lark import Token
@@ -17,6 +17,51 @@ class Node:
 @dataclass
 class Stmt(Node):
     pass
+
+
+@dataclass
+class DocTag:
+    """One recognised item of a doc block's Markdown list (documentation.md S3)."""
+    kind: str                    # "parameter" | "returns" | "errors" | "example" | "unknown"
+    name: Optional[str]          # the parameter name, for kind == "parameter"
+    text: str
+    loc: Optional[Span] = None
+    word: str = ""               # the keyword AS WRITTEN; what CE7004 reports
+
+
+@dataclass
+class DocExample:
+    """One fenced code block under an `- Example:` tag (documentation.md S10, R14).
+
+    Kept verbatim, because an example is code: the fold that joins a tag's
+    continuation lines strips every line, which destroys the indentation a program
+    needs. `defect` is set when the tag introduces nothing a runner could compile,
+    and the `docs` pass turns it into CE7007 or CE7008.
+    """
+    code: str                    # the fence body, dedented by the fence's own indent
+    attrs: str = ""              # the fence info string, as written
+    loc: Optional[Span] = None   # the opening fence, or the tag when there is none
+    defect: Optional[Literal["no-fence", "unterminated"]] = None
+
+
+@dataclass
+class DocBlock:
+    """A `##: ... :##` block, dedented, parked on the node it documents."""
+    summary: str                 # the first paragraph
+    text: str                    # the whole block, dedented, tags included
+    tags: List[DocTag]
+    # The prose between the summary and the FIRST tag, which is what a `.slib` record
+    # carries. Parsed and never derived: "the block with the tag lines taken out" reads
+    # the tail of a fenced example as prose (documentation.md section 8, R1).
+    body: str = ""
+    loc: Optional[Span] = None
+    # The fenced examples, in source order. Their own structure rather than the text of
+    # an `- Example:` tag, which is stripped and folded (documentation.md S10, R14).
+    examples: List[DocExample] = field(default_factory=list)
+    # Why this block reached `Program.orphan_docs`, and None while it is attached.
+    # "detached" documents nothing (CW7001); "in-body" stands in a body it is not
+    # the first item of (CE7005). The two are separate rules, not one.
+    orphan_reason: Optional[Literal["detached", "in-body"]] = None
 
 
 @dataclass
@@ -37,10 +82,14 @@ class Program(Node):
     generic_extensions: List["ExtendDef"]   # Generic extensions only (e.g., extend Box<T>)
     perk_impls: List["ExtendWithDef"]
     externals: List["ExternalBlock"] = None
+    doc: Optional["DocBlock"] = None            # the unit block: first item, attached to nothing
+    orphan_docs: List["DocBlock"] = None        # every block that documents nothing
 
     def __post_init__(self):
         if self.externals is None:
             self.externals = []
+        if self.orphan_docs is None:
+            self.orphan_docs = []
 
 @dataclass
 class Param:
@@ -90,10 +139,15 @@ class FuncDef(Node):
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     is_library_template: bool = False  # True if reconstructed from a consumed library's .slib templates
+    # Set with `is_library_template` and never without it: the mark answers who may
+    # be called from this body (#468), the origin answers how a diagnostic raised in
+    # it is rendered (#471).
+    library_origin: Optional[Origin] = None
     self_mode: Optional[str] = None  # "peek"/"poke" for a perk-IMPL method declared
                                      # `(poke self, ...)` (#327). Always None on a plain
                                      # top-level function (collect rejects it there).
     self_mode_span: Optional[Span] = None
+    doc: Optional[DocBlock] = None
 
 @dataclass
 class ConstDef(Node):
@@ -103,6 +157,7 @@ class ConstDef(Node):
     is_public: bool = False
     name_span: Optional[Span] = None
     type_span: Optional[Span] = None
+    doc: Optional[DocBlock] = None
 
 @dataclass
 class StructField:
@@ -110,6 +165,7 @@ class StructField:
     ty: Optional[Type]
     name: str
     loc: Optional[Span] = None
+    doc: Optional[DocBlock] = None
 
 @dataclass
 class StructDef(Node):
@@ -118,6 +174,7 @@ class StructDef(Node):
     fields: List[StructField]
     type_params: Optional[List[BoundedTypeParam]] = None
     name_span: Optional[Span] = None
+    doc: Optional[DocBlock] = None
 
 @dataclass
 class EnumVariant:
@@ -126,6 +183,7 @@ class EnumVariant:
     associated_types: List[Type]        # Associated data types (empty for unit variants)
     name_span: Optional[Span] = None
     loc: Optional[Span] = None
+    doc: Optional[DocBlock] = None
 
 @dataclass
 class EnumDef(Node):
@@ -134,6 +192,7 @@ class EnumDef(Node):
     variants: List[EnumVariant]
     type_params: Optional[List[BoundedTypeParam]] = None
     name_span: Optional[Span] = None
+    doc: Optional[DocBlock] = None
 
 @dataclass
 class ExtendDef(Node):
@@ -150,6 +209,7 @@ class ExtendDef(Node):
     # What a `@(...)` target's arguments mean: a constraint, parameter names, or a mix.
     # Stamped by the collect pass, which knows which names are declared types (#393).
     target_shape: Optional["ExtensionTarget"] = None
+    doc: Optional[DocBlock] = None
 
 @dataclass
 class PerkMethodSignature:
@@ -162,6 +222,7 @@ class PerkMethodSignature:
     ret_span: Optional[Span] = None
     self_mode: Optional[str] = None  # "peek"/"poke" when the perk declares `(poke self, ...)` (#327)
     self_mode_span: Optional[Span] = None
+    doc: Optional[DocBlock] = None
 
 @dataclass
 class PerkDef(Node):
@@ -170,6 +231,7 @@ class PerkDef(Node):
     methods: List[PerkMethodSignature]
     type_params: Optional[List[BoundedTypeParam]] = None
     name_span: Optional[Span] = None
+    doc: Optional[DocBlock] = None
 
 @dataclass
 class ExtendWithDef(Node):
@@ -179,6 +241,7 @@ class ExtendWithDef(Node):
     methods: List[FuncDef]
     target_type_span: Optional[Span] = None
     perk_name_span: Optional[Span] = None
+    doc: Optional[DocBlock] = None
 
 @dataclass
 class TypeConstraint:
@@ -196,6 +259,7 @@ class ExternalDecl(Node):
     is_variadic: bool = False     # Trailing `...` for untyped C varargs (e.g. printf)
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
+    doc: Optional[DocBlock] = None
 
 @dataclass
 class ExternalBlock(Node):
@@ -206,10 +270,12 @@ class ExternalBlock(Node):
     decls: List[ExternalDecl]
     abi_span: Optional[Span] = None
     namespace_span: Optional[Span] = None
+    doc: Optional[DocBlock] = None
 
 @dataclass
 class Block(Node):
     statements: List[Stmt]
+    doc: Optional[DocBlock] = None
 
 
 @dataclass
@@ -448,6 +514,9 @@ class Call(Node):
     # FunctionType: the backend uses it to emit the fat-pointer indirect call without
     # re-inferring the callee's signature.
     callee_fn_type: Optional[Type] = None
+    # Set by the type checker when it found no callee at all (CE2008, CE2092). The passes
+    # after it then know there is no signature, and say nothing about the arguments.
+    callee_unresolved: bool = False
 
 @dataclass
 class MethodCall(Node):
@@ -568,7 +637,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 
 __all__ = [
-    "Node", "Program", "UseStatement", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
+    "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding",

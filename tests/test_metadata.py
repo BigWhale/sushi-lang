@@ -34,6 +34,10 @@ class TestMetadata:
     test_env: Optional[Dict[str, str]] = None  # Env vars to set for the runtime binary
     test_cwd: Optional[str] = None  # Working directory to run the runtime binary in
 
+    # Extra flags appended to the ./sushic command line. A diagnostic behind a compiler
+    # flag has no other way to be exercised by a .sushi fixture.
+    compiler_flags: Optional[List[str]] = None
+
     # Test categorization
     test_type: str = "default"  # "default", "runtime", "compilation"
 
@@ -47,6 +51,8 @@ class TestMetadata:
             self.expect_error_code = []
         if self.test_env is None:
             self.test_env = {}
+        if self.compiler_flags is None:
+            self.compiler_flags = []
 
         # If any runtime expectations are set, this test requires runtime validation
         if (self.expect_runtime_exit is not None or
@@ -55,6 +61,13 @@ class TestMetadata:
             self.expect_stderr_contains or
             self.expect_stderr_empty):
             self.requires_runtime = True
+
+
+# Flags the RUNNER spells: they decide the output path, the build kind and the cache, so
+# a fixture that changed one would break the run rather than test anything.
+RUNNER_OWNED_FLAGS = frozenset({
+    '-o', '--lib', '--lib-info', '--clean-cache', '--build-stdlib', '--cache-dir',
+})
 
 
 def header_block(lines: List[str]) -> List[str]:
@@ -140,6 +153,17 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                 for token in re.split(r'[,\s]+', value):
                     if token:
                         metadata.expect_error_code.append(token)
+
+            elif directive.startswith('COMPILER_FLAGS:'):
+                value = directive.split(':', 1)[1].strip()
+                for token in re.split(r'[,\s]+', value):
+                    if not token:
+                        continue
+                    if token in RUNNER_OWNED_FLAGS:
+                        print(f"Warning: {token} is the runner's to spell in "
+                              f"{test_file}; COMPILER_FLAGS ignored it")
+                        continue
+                    metadata.compiler_flags.append(token)
 
             elif directive.startswith('TIMEOUT_SECONDS:'):
                 value = directive.split(':', 1)[1].strip()

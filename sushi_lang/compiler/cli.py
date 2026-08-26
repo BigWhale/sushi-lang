@@ -59,6 +59,70 @@ def library_info_command(library_path: Path) -> int:
     return print_library_info(library_path)
 
 
+def _render_params(params: list) -> str:
+    """One parameter list, as a signature reads it.
+
+    `nom` is the one mode a TYPE cannot spell, so the record's own `mode` field is the
+    only place it can come from. `peek` and `poke` ride on the type itself, so the type
+    string already carries them and printing the mode again would double it.
+    """
+    rendered = []
+    for param in params:
+        mode = "nom " if param.get("mode") == "nom" else ""
+        rendered.append(f"{mode}{param['type']} {param['name']}")
+    return ", ".join(rendered)
+
+
+def _print_doc_lines(indent: str, text: str) -> None:
+    """One line of output per line of `text`. A blank line prints EMPTY.
+
+    `split` and not `splitlines`: the latter drops a trailing empty field and also
+    breaks on `\r`, `\x0b`, `\x0c` and the Unicode separators, and the Sushi tool's
+    `.split("\n")` does neither. The two must cut the same bytes.
+    """
+    for line in text.split("\n"):
+        print(f"{indent}{line}" if line else "")
+
+
+def _print_doc_record(doc: dict | None, owner: dict | None, indent: str) -> None:
+    """One doc record: the summary, a blank line, the body, then the tags.
+
+    No blank line before the tags, and the one above the body prints only when there is
+    a summary to separate it from (`docs/design/documentation.md` section 9).
+
+    Parameters print in DECLARATION order, read from the owner's own `params` array and
+    looked up by name. A map's wire order is not the signature's order, and a record
+    with no `params` array -- a struct, a unit, a template -- renders no parameter line.
+    """
+    if not doc:
+        return
+
+    summary = doc.get('summary', '')
+    body = doc.get('body', '')
+    if summary:
+        _print_doc_lines(indent, summary)
+    if body:
+        if summary:
+            print()
+        _print_doc_lines(indent, body)
+
+    named = doc.get('params') or {}
+    for param in (owner or {}).get('params') or []:
+        text = named.get(param['name'])
+        if text:
+            _print_doc_lines(indent, f"- Parameter {param['name']}: {text}")
+
+    for key, label in (('returns', 'Returns'), ('errors', 'Errors')):
+        text = doc.get(key)
+        if text:
+            _print_doc_lines(indent, f"- {label}: {text}")
+
+
+def _print_doc(owner: dict, indent: str) -> None:
+    """The doc record of one manifest entry, when it carries one."""
+    _print_doc_record(owner.get('doc'), owner, indent)
+
+
 def print_library_info(library_path: Path) -> int:
     """Print formatted metadata from a .slib library file."""
     from sushi_lang.backend.library_format import LibraryFormat
@@ -97,17 +161,20 @@ def print_library_info(library_path: Path) -> int:
 
     units = metadata.get('units', [])
     if units:
+        unit_docs = metadata.get('unit_docs') or {}
         print(f"Units ({len(units)}):")
         for unit in units:
             print(f"  {unit}")
+            _print_doc_record(unit_docs.get(unit), None, "    ")
         print()
 
     funcs = metadata.get('public_functions', [])
     if funcs:
         print(f"Public Functions ({len(funcs)}):")
         for func in funcs:
-            params = ', '.join(f"{p['type']} {p['name']}" for p in func['params'])
+            params = _render_params(func['params'])
             print(f"  fn {func['name']}({params}) {func['return_type']}")
+            _print_doc(func, "    ")
         print()
 
     generic_funcs = metadata.get('templates', {}).get('generic_functions', [])
@@ -127,6 +194,7 @@ def print_library_info(library_path: Path) -> int:
             else:
                 generic = ""
             print(f"  fn {gf['name']}{generic} (template)")
+            _print_doc(gf, "    ")
         print()
 
     consts = metadata.get('public_constants', [])
@@ -134,6 +202,7 @@ def print_library_info(library_path: Path) -> int:
         print(f"Public Constants ({len(consts)}):")
         for const in consts:
             print(f"  const {const['type']} {const['name']}")
+            _print_doc(const, "    ")
         print()
 
     structs = metadata.get('structs', [])
@@ -145,8 +214,10 @@ def print_library_info(library_path: Path) -> int:
                 type_params = ', '.join(struct['type_params'])
                 generic = f"<{type_params}>"
             print(f"  struct {struct['name']}{generic}:")
+            _print_doc(struct, "    ")
             for field in struct['fields']:
                 print(f"    {field['type']} {field['name']}")
+                _print_doc(field, "      ")
         print()
 
     enums = metadata.get('enums', [])
@@ -158,11 +229,13 @@ def print_library_info(library_path: Path) -> int:
                 type_params = ', '.join(enum['type_params'])
                 generic = f"<{type_params}>"
             print(f"  enum {enum['name']}{generic}:")
+            _print_doc(enum, "    ")
             for variant in enum['variants']:
                 if variant.get('has_data'):
                     print(f"    {variant['name']}({variant['data_type']})")
                 else:
                     print(f"    {variant['name']}")
+                _print_doc(variant, "      ")
         print()
 
     deps = metadata.get('dependencies', [])
@@ -253,6 +326,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--ignore-compiler-version",
         action="store_true",
         help="Load libraries whose requires_compiler excludes this compiler (CE3503)",
+    )
+    ap.add_argument(
+        "--warn-missing-docs",
+        action="store_true",
+        help="Warn about a declaration, a parameter, a return value, an error arm or a "
+             "unit with no documentation (CW7002-CW7006)",
     )
     ap.add_argument(
         "--no-incremental",

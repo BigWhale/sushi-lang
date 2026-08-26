@@ -32,6 +32,10 @@ def validate_function(self, func: FuncDef) -> None:
     self.current_function = func
     _check_public_fn_ptr_fence(self, func)
     self.in_extension_context = False  # Normal functions are never extension/perk bodies
+    self.in_library_body = bool(getattr(func, "is_library_template", False))
+    # And whose file it is. Set on every entry, so an ordinary body clears what a
+    # transplanted one set (#471).
+    self.reporter.origin = getattr(func, "library_origin", None)
     self.extension_method_name = None
     self.extension_return_type = None
     self.variable_types = {}  # Reset for each function
@@ -79,6 +83,8 @@ def validate_extension_method(self, ext: ExtendDef) -> None:
     """Validate types within an extension method."""
     self.current_function = None  # Extension methods are not functions, but we can reuse some logic
     self.in_extension_context = True  # Dedicated flag: this body returns a bare value
+    self.in_library_body = False
+    self.reporter.origin = None
     self.extension_method_name = ext.name
     self.extension_return_type = ext.ret  # Bare return type; validate_return_statement checks against it
     self.variable_types = {}  # Reset for each extension method
@@ -135,6 +141,8 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
     for method in impl.methods:
         self.current_function = None
         self.in_extension_context = True  # Dedicated flag: this body returns a bare value
+        self.in_library_body = False
+        self.reporter.origin = None
         self.extension_method_name = method.name
         self.extension_return_type = method.ret  # Bare return type; checked in validate_return_statement
         self.variable_types = {}

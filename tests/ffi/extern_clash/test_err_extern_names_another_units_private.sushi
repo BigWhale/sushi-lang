@@ -1,0 +1,13 @@
+# A private function of another unit is still a symbol this build defines, and the
+# extern route ignored `public` altogether (#470).
+# EXPECT_ERROR_CODE: CE5013
+
+use "helpers/prog_helper"
+
+unsafe external "C" as raw because "naming a private of another unit":
+    fn hidden(i32 n) i32 = "kept"
+
+fn main() i32:
+    println("{shown(3).realise(0)}")
+    println("{raw.hidden(7)}")
+    return Result.Ok(0)

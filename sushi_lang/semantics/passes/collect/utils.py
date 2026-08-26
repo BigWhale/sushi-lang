@@ -53,11 +53,17 @@ def param_from_node(p: Any, idx: int) -> 'Param':
 
 
 def note_first_declaration(builder: Any, spans: dict, name: str,
-                           what: str = "first defined here") -> Any:
-    """Attach the ORIGINAL declaration's location to a duplicate-declaration error."""
+                           what: str = "first defined here",
+                           files: Optional[dict] = None) -> Any:
+    """Attach the ORIGINAL declaration's location to a duplicate-declaration error.
+
+    `files` answers which unit that declaration was in. The current unit is not the
+    answer: the note points at a table entry, and the entry may have been made while
+    another unit was being collected (#473).
+    """
     prev = spans.get(name)
     if prev is not None:
-        return builder.note(what, prev)
+        return builder.note(what, prev, files.get(name) if files else None)
     return builder.note("defined by the compiler")
 
 

@@ -1,0 +1,11 @@
+# Test: a line-initial opener inside a doc block. The outer block swallowed
+# the inner one, and the inner opener is still sitting in its interior.
+# EXPECT_ERROR_CODE: CE6013
+
+##:
+The outer block.
+
+##: The inner opener, line-initial and interior to the outer block.
+:##
+fn main() i32:
+    return Result.Ok(0)

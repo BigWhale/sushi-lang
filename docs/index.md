@@ -35,6 +35,7 @@ compiler internals in one place.
 ## Reference
 
 - [Language Reference](language-reference.md) — complete syntax and semantics
+- [Documentation Blocks](documentation-blocks.md) — `##: ... :##`, the tag vocabulary, and the checks
 - [Standard Library](standard-library.md) — built-in types (`Result`, `Maybe`, `List`, `HashMap`)
 - [Compiler Reference](compiler-reference.md) — CLI options, optimization levels, error codes
 - [Libraries](libraries.md) — creating and linking reusable libraries

@@ -80,7 +80,7 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
         if isinstance(call_node, Tree):
             if call_node.data == "call":
                 if isinstance(result_expr, Name):
-                    result_expr = calls.call_from_parts(result_expr.id, call_node, ast_builder)
+                    result_expr = calls.call_from_parts(result_expr, call_node, ast_builder)
                 elif first_tree(call_node.children, "type_list") is not None:
                     # A `@(...)` type-arg list on anything but a direct call to a named
                     # free function (method call, indexed/parenthesised callee) is out

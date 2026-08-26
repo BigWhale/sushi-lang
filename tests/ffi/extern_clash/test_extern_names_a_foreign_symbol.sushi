@@ -1,0 +1,12 @@
+# The rule is about symbols this build DEFINES. A genuinely foreign symbol is what
+# FFI is for, and it still binds (#470).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "4"
+
+unsafe external "C" as libc because "the ordinary case: a symbol libc defines":
+    fn strlen(string s) i64 = "strlen"
+
+fn main() i32:
+    let string s = "abcd"
+    println("{libc.strlen(s)}")
+    return Result.Ok(0)

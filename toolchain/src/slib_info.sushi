@@ -58,6 +58,72 @@ fn ml_at(MsgValue v, i32 i) MsgValue:
         _ ->
             return Result.Ok(MsgValue.Nil())
 
+# ml_is_nil: whether a value is the Nil kind. `ml_get_str` gives "" for an absent key
+# and for an empty string alike, so a doc record is tested for Nil before it is read.
+fn ml_is_nil(MsgValue v) bool:
+    match v:
+        MsgValue.Nil() ->
+            return Result.Ok(true)
+        _ ->
+            return Result.Ok(false)
+
+# print_lines: one println per line of `text`, each one indented. A blank line prints
+# EMPTY, so the report carries no trailing whitespace. `.split("\n")` agrees with
+# Python's `str.split("\n")` on every edge case, which is what the parity gate needs.
+fn print_lines(string indent, string text) ~:
+    let string[] lines = text.split("\n")
+    let i32 n = lines.len()
+    let i32 i = 0
+    while (i < n):
+        let string line = lines.get(i)??
+        if (line == ""):
+            println("")
+        else:
+            println("{indent}{line}")
+        i := i + 1
+    return Result.Ok(~)
+
+# print_doc_record: one doc record, in the order documentation.md section 9 gives --
+# the summary, a blank line, the body, then the tags with no blank line before them.
+# Parameters print in DECLARATION order, read from the owner's own `params` array and
+# looked up by name: a map's wire order is not the signature's order. An owner with no
+# `params` array -- a unit, a struct, a template -- renders no parameter line.
+fn print_doc_record(MsgValue doc, MsgValue owner, string indent) ~:
+    if (ml_is_nil(doc)??):
+        return Result.Ok(~)
+    let string summary = ml_get_str(doc, "summary")??
+    let string body = ml_get_str(doc, "body")??
+    if (summary != ""):
+        print_lines(indent, summary)??
+    if (body != ""):
+        if (summary != ""):
+            println("")
+        print_lines(indent, body)??
+    let MsgValue named = ml_get(doc, "params")??
+    let MsgValue declared = ml_get(owner, "params")??
+    let i32 n = ml_len(declared)??
+    let i32 i = 0
+    while (i < n):
+        let MsgValue p = ml_at(declared, i)??
+        let string pn = ml_get_str(p, "name")??
+        let string ptext = ml_get_str(named, pn)??
+        if (ptext != ""):
+            print_lines(indent, "- Parameter {pn}: {ptext}")??
+        i := i + 1
+    let string returns = ml_get_str(doc, "returns")??
+    if (returns != ""):
+        print_lines(indent, "- Returns: {returns}")??
+    let string errors = ml_get_str(doc, "errors")??
+    if (errors != ""):
+        print_lines(indent, "- Errors: {errors}")??
+    return Result.Ok(~)
+
+# print_doc: the doc record of one manifest entry, when it carries one.
+fn print_doc(MsgValue owner, string indent) ~:
+    let MsgValue doc = ml_get(owner, "doc")??
+    print_doc_record(doc, owner, indent)??
+    return Result.Ok(~)
+
 fn render_params(MsgValue f) string:
     let MsgValue ps = ml_get(f, "params")??
     let string out = ""
@@ -67,10 +133,16 @@ fn render_params(MsgValue f) string:
         let MsgValue p = ml_at(ps, i)??
         let string t = ml_get_str(p, "type")??
         let string pn = ml_get_str(p, "name")??
+        # `nom` is the one mode a TYPE cannot spell, so it comes from the record's own
+        # field. `peek` and `poke` are part of the type string already.
+        let string declared = ml_get_str(p, "mode")??
+        let string mode = ""
+        if (declared == "nom"):
+            mode := "nom "
         if (i == 0):
-            out := "{t} {pn}"
+            out := "{mode}{t} {pn}"
         else:
-            out := "{out}, {t} {pn}"
+            out := "{out}, {mode}{t} {pn}"
         i := i + 1
     return Result.Ok(out)
 
@@ -87,6 +159,7 @@ fn print_functions(MsgValue meta) ~:
         let string params = render_params(f)??
         let string ret = ml_get_str(f, "return_type")??
         println("  fn {name}({params}) {ret}")
+        print_doc(f, "    ")??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -142,6 +215,7 @@ fn print_generic_functions(MsgValue meta) ~:
         let string name = ml_get_str(gf, "name")??
         let string generic = render_type_params(gf)??
         println("  fn {name}{generic} (template)")
+        print_doc(gf, "    ")??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -158,6 +232,7 @@ fn print_constants(MsgValue meta) ~:
         let string t = ml_get_str(c, "type")??
         let string name = ml_get_str(c, "name")??
         println("  const {t} {name}")
+        print_doc(c, "    ")??
         i := i + 1
     println("")
     return Result.Ok(~)
@@ -194,6 +269,7 @@ fn print_structs(MsgValue meta) ~:
         let string name = ml_get_str(s, "name")??
         let string generic = render_named_type_params(s)??
         println("  struct {name}{generic}:")
+        print_doc(s, "    ")??
         let MsgValue fields = ml_get(s, "fields")??
         let i32 nf = ml_len(fields)??
         let i32 j = 0
@@ -202,6 +278,7 @@ fn print_structs(MsgValue meta) ~:
             let string ft = ml_get_str(fld, "type")??
             let string fname = ml_get_str(fld, "name")??
             println("    {ft} {fname}")
+            print_doc(fld, "      ")??
             j := j + 1
         i := i + 1
     println("")
@@ -219,6 +296,7 @@ fn print_enums(MsgValue meta) ~:
         let string name = ml_get_str(e, "name")??
         let string generic = render_named_type_params(e)??
         println("  enum {name}{generic}:")
+        print_doc(e, "    ")??
         let MsgValue variants = ml_get(e, "variants")??
         let i32 nv = ml_len(variants)??
         let i32 j = 0
@@ -230,6 +308,7 @@ fn print_enums(MsgValue meta) ~:
                 println("    {vname}({dt})")
             else:
                 println("    {vname}")
+            print_doc(v, "      ")??
             j := j + 1
         i := i + 1
     println("")
@@ -241,12 +320,15 @@ fn print_units(MsgValue meta) ~:
     let i32 n = ml_len(units)??
     if (n == 0):
         return Result.Ok(~)
+    let MsgValue unit_docs = ml_get(meta, "unit_docs")??
     println("Units ({n}):")
     let i32 i = 0
     while (i < n):
         let MsgValue u = ml_at(units, i)??
         let string name = ml_str(u)??
         println("  {name}")
+        let MsgValue doc = ml_get(unit_docs, name)??
+        print_doc_record(doc, MsgValue.Nil(), "    ")??
         i := i + 1
     println("")
     return Result.Ok(~)

@@ -17,6 +17,8 @@ Complete syntax and semantics reference for Sushi Lang. For a gentler introducti
 - [Enums](#enums)
 - [Pattern Matching](#pattern-matching)
 - [Module System](#module-system)
+- [Comments](#comments)
+- [Documentation Blocks](#documentation-blocks)
 
 ## Program Structure
 
@@ -941,7 +943,8 @@ fn add(i32 a, i32 b) i32:
 
 ### Visibility
 
-Functions are private by default. Use `public` for external access:
+Functions are private by default. Use `public` for external access. A generic function is
+no exception: a call from another unit to a private one is `CE3005`.
 
 ```sushi
 use "utils"
@@ -973,6 +976,38 @@ Single-line comments only:
 # This is a comment
 let i32 x = 42  # Inline comment
 ```
+
+## Documentation Blocks
+
+A documentation block is part of the declaration, not a comment near it. It opens with `##:` and
+closes with `:##`:
+
+```
+DOC_BLOCK: /##:[^\n]*?:##|##:[\s\S]*?\n[ \t]*:##/
+```
+
+The closer is line-initial, or the block is a one-liner. Blocks do not nest. An unmatched `##:`
+is `CE6011`, a `:##` with no opener is `CE6012`, and a line-initial `##:` inside a block is
+`CE6013`.
+
+A block stands in one of three positions:
+
+| Position | Documents |
+|---|---|
+| Immediately above a declaration | that declaration |
+| First item in a body | the function that encloses the body |
+| First item in a file, attached to nothing | the unit |
+
+The block attaches to the declaration on the next line; a blank line or a `#` comment breaks the
+attachment. The text is dedented and not reflowed.
+
+A tag is a Markdown list item: `- Parameter <name>:`, `- Returns:`, `- Errors:` or `- Example:`.
+Everything else is prose, and the first paragraph is the summary. An `- Example:` introduces a
+fenced code block, which `python tests/docs_sweep.py` compiles and runs; a tag with no fence
+after it is `CE7007`, and a fence the block's own `:##` truncates is `CE7008`.
+
+See [Documentation Blocks](documentation-blocks.md) for the positions, the tag vocabulary and
+every diagnostic.
 
 ## Keywords
 

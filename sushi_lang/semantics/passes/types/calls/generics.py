@@ -12,6 +12,7 @@ from sushi_lang.semantics.generics.explicit_type_args import (
     resolve_explicit_type_args,
     check_explicit_type_arg_arity,
 )
+from .visibility import reject_private_cross_unit_call
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
 
@@ -27,6 +28,15 @@ def validate_generic_function_call(
     """Validate generic function call and rewrite to use mangled name."""
 
     generic_func = validator.generic_func_table.by_name[function_name]
+
+    # Visibility first: nothing below it is worth saying. A source library's units are
+    # ordinary units here, so the call resolves and only the backend used to notice --
+    # and it noticed as a KeyError (#467).
+    if reject_private_cross_unit_call(
+            validator, function_name, call.callee.loc,
+            visible=generic_func.is_public,
+            unit_name=generic_func.unit_name):
+        return
 
     explicit = call.type_args
     if explicit:

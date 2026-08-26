@@ -166,27 +166,49 @@ is the authority, and the index is a cache of it.
     # struct or enum is filtered out of them and routes to "templates" instead: a
     # generic is not a concrete callable, and listing one here would hand the
     # consumer a signature with unresolved type parameters.
+    # DOC is the parsed parts of one `##: ... :##` block. Every field is optional and an
+    # empty one is OMITTED, so a reader cannot mistake an absent field for an empty
+    # string. The whole block is deliberately not stored. A record that names a symbol
+    # an author can document carries this key, and the key is ABSENT when there is no
+    # block -- an undocumented library grows by nothing.
+    #
+    #   DOC = {
+    #       "summary": str,            # The first paragraph
+    #       "body":    str,            # The prose between the summary and the first tag
+    #       "params":  {str: str},     # `- Parameter` text, keyed by parameter NAME
+    #       "returns": str,            # `- Returns:` text
+    #       "errors":  str,            # `- Errors:` text
+    #       "examples": [str]          # `- Example:` CODE, in source order; the fence
+    #   }                              #   attributes are a harness instruction, not docs
+    #
+    # A PARAMETER record deliberately carries no doc: its text lives in the enclosing
+    # symbol's `doc.params`. So does a private or closure-path record: a private symbol
+    # is not part of the documented API.
+
     "public_functions": [
         {
             "name": str,
             "params": [{"name": str, "type": str, "mode": str}],
-            "return_type": str
+            "return_type": str,
+            "doc": DOC                 # If documented
         }
     ],
 
     "public_constants": [
         {
             "name": str,
-            "type": str
+            "type": str,
+            "doc": DOC                 # If documented
         }
     ],
 
     "structs": [
         {
             "name": str,
-            "fields": [{"name": str, "type": str}],
+            "fields": [{"name": str, "type": str, "doc": DOC}],
             "is_generic": False,       # Always False; a generic struct is a template
-            "type_params": []          # Always empty, for the same reason
+            "type_params": [],         # Always empty, for the same reason
+            "doc": DOC                 # If documented
         }
     ],
 
@@ -197,18 +219,29 @@ is the authority, and the index is a cache of it.
                 {
                     "name": str,
                     "has_data": bool,
-                    "data_type": str   # If has_data
+                    "data_type": str,  # If has_data
+                    "doc": DOC         # If documented
                 }
             ],
             "is_generic": False,       # Always False; a generic enum is a template
-            "type_params": []          # Always empty, for the same reason
+            "type_params": [],         # Always empty, for the same reason
+            "doc": DOC                 # If documented
         }
     ],
 
+    # A unit's OWN doc block -- the one that stands first in its file and documents no
+    # declaration. A map beside "units" and not a change to it: "units" is an ordered
+    # list and the order is load-bearing for the consumer's injection. Keyed by unit
+    # name, over the library's own units only, so a bundled stdlib module cannot leak
+    # in. The whole key is absent when no unit carries a block.
+    "unit_docs": {str: DOC},
+
     "dependencies": [str],             # Stdlib/library dependencies
 
-    # Written only when kind != "source". A source library ships whole units, so
-    # every generic in it is already there as ordinary source.
+    # Written for EVERY kind. A source library ships whole units, so a generic in it is
+    # already there as ordinary source -- but the index must answer without a parser, and
+    # a template's own doc block stands OUTSIDE its source slice, so the record is the
+    # only place it can travel.
     "templates": {                     # Instantiable cross-library templates
         "version": 4,                  # Templates schema version
 
@@ -222,7 +255,8 @@ is the authority, and the index is a cache of it.
                 "type_params": [{"name": str, "constraints": [str], "is_pack": bool}],
                 "source": str,         # Self-contained, re-parsable decl text
                 "free_perks": [str],   # Perk names from type-param bounds
-                "private": bool        # Present (true) for closure-shipped helpers
+                "private": bool,       # Present (true) for closure-shipped helpers
+                "doc": DOC             # If documented, and never when private
             }
         ],
 
@@ -230,9 +264,10 @@ is the authority, and the index is a cache of it.
         "generic_structs": [ ... ],
         "generic_enums": [ ... ],
 
-        # Perk DEFINITIONS referenced by exported generics' constraints.
+        # Perk DEFINITIONS referenced by exported generics' constraints. There is no
+        # methods array here, so a perk method's own block travels only inside `source`.
         "perks": [
-            {"name": str, "source": str}
+            {"name": str, "source": str, "doc": DOC}
         ],
 
         # Concrete perk IMPLEMENTATIONS of those perks (v3). Bodies live in
@@ -243,7 +278,8 @@ is the authority, and the index is a cache of it.
                 "type": str,           # Concrete target type name
                 "perk": str,
                 "source": str,         # The whole `extend T with P:` block
-                "methods": [{"name": str, "symbol": str}]
+                "methods": [{"name": str, "symbol": str, "doc": DOC}],
+                "doc": DOC             # If documented
             }
         ],
 
@@ -266,7 +302,24 @@ is the authority, and the index is a cache of it.
             "private_generic_functions": [str],
             "constants": [str]
         }
-    }
+    },
+
+    # What the library DECLARES and does not export -- the closure's complement, and the
+    # other half of the same bookkeeping: a private is named in exactly one of the two.
+    # A name and its kind, and nothing else: no signature, no body, no source. Written
+    # for every kind, and the whole key is ABSENT when a library keeps nothing.
+    #
+    # It exists so that a consumer naming one hears CE3005 rather than CE2008 (#469): on
+    # the binary path the symbol is in the consumer's tables not at all, and "undefined"
+    # was the wrong word for a function the library defines and deliberately kept. A name
+    # here is not shipped and clashes with nothing, so a consumer may declare its own
+    # function of the same name.
+    "not_exported": [
+        {
+            "name": str,
+            "kind": str                # "function" / "generic_function"
+        }
+    ]
 }
 ```
 
@@ -308,18 +361,33 @@ Protocol: 2.0
 
 Units (1):
   mylib
+    Arithmetic that reports its own failures.
 
-Public Functions (2):
+Public Functions (3):
   fn add(i32 a, i32 b) i32
+    Adds two numbers.
+    - Parameter a: The first addend.
+    - Parameter b: The second addend.
+    - Returns: The sum.
   fn multiply(i32 a, i32 b) i32
+  fn shout(nom string s) string
 
 Structs (1):
   struct Point:
+    A point in the plane.
     i32 x
+      The distance along x.
     i32 y
+      The distance along y.
 
 Source: 1,204 bytes
 ```
+
+A documented symbol prints its block two spaces further in than its own line, and a symbol
+with no block prints exactly as it always did. `multiply` above has no doc block; `shout`
+has none either, and its `nom` shows the one parameter mode a type cannot spell (`peek` and
+`poke` are part of the type string). `docs/documentation-blocks.md` carries the record and
+what does not travel in it.
 
 ## Implementation Notes
 

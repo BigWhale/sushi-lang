@@ -1,0 +1,7 @@
+# A unit with one public and one private function, for an extern to name (#470).
+
+fn kept(i32 n) i32:
+    return Result.Ok(n * 3)
+
+public fn shown(i32 n) i32:
+    return Result.Ok(kept(n)??)

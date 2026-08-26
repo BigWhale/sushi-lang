@@ -1,6 +1,6 @@
 ?start: program
 
-program: (_NEWLINE | toplevel)+
+program: (_NEWLINE | DOC_BLOCK | toplevel)+
 toplevel: use_stmt | const_def | struct_def | enum_def | perk_def | function_def | extend_stmt | external_block
 
 const_def: CONST type NAME "=" expr _NEWLINE
@@ -9,10 +9,10 @@ stdlib_import: LT use_path GT
 lib_import: LT "lib" "/" use_path GT
 user_import: STRING
 use_path: NAME ("/" NAME)*
-struct_def: STRUCT NAME [type_params] ":" _NEWLINE _INDENT struct_field+ _DEDENT
+struct_def: STRUCT NAME [type_params] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | struct_field)+ _DEDENT
 struct_field: type NAME _NEWLINE
 
-enum_def: ENUM NAME [type_params] ":" _NEWLINE _INDENT enum_variant+ _DEDENT
+enum_def: ENUM NAME [type_params] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | enum_variant)+ _DEDENT
 # Generic type parameters, e.g. `struct Pair@(T, U):` / `fn id@(T)(T x) T:`.
 type_params: AT "(" type_param_list ")"
 type_param_list: type_param ("," type_param)*
@@ -22,21 +22,21 @@ perk_constraint_list: NAME ("+" NAME)*
 enum_variant: NAME ["(" [enum_variant_fields] ")"] _NEWLINE
 enum_variant_fields: type ("," type)*
 
-perk_def: PERK NAME [type_params] ":" _NEWLINE _INDENT perk_method+ _DEDENT
+perk_def: PERK NAME [type_params] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | perk_method)+ _DEDENT
 perk_method: FN NAME "(" [parameters] ")" type _NEWLINE
 
 // Foreign Function Interface (FFI) - unsafe external blocks
-external_block: UNSAFE EXTERNAL STRING AS NAME [BECAUSE STRING] ":" _NEWLINE _INDENT extern_decl+ _DEDENT
+external_block: UNSAFE EXTERNAL STRING AS NAME [BECAUSE STRING] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | extern_decl)+ _DEDENT
 extern_decl: FN NAME "(" [ extern_params ] ")" type "=" STRING _NEWLINE
 extern_params: typed_param ("," typed_param)* ["," ELLIPSIS]
              | ELLIPSIS
 
 // Extension statements - unified to avoid LALR ambiguity
 extend_stmt: EXTEND type extend_suffix
-extend_suffix: WITH NAME ":" _NEWLINE _INDENT function_def+ _DEDENT  -> extend_with_def
+extend_suffix: WITH NAME ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | function_def)+ _DEDENT  -> extend_with_def
              | NAME "(" [parameters] ")" type ":" block               -> extend_def
 
-block: _NEWLINE _INDENT (_NEWLINE | statement)+ _DEDENT
+block: _NEWLINE _INDENT (_NEWLINE | DOC_BLOCK | statement)+ _DEDENT
 
 
 function_def: PUBLIC? FN NAME [type_params] "(" [parameters] ")" type? ["|" type] ":" block
@@ -248,7 +248,20 @@ MATCH: "match"
 NEW: "new"
 
 COMMENT: /#+[^\n]*/
-_NEWLINE: /(\r?\n[ \t]*(?:#[^\n]*\r?\n[ \t]*)*)+/
+// A doc block is ONE token, so the indenter never sees inside it and the
+// interior layout is free. Two alternatives, one-liner first: a closer on the
+// opening line, then a line-initial closer. A single lazy match enforces
+// neither rule -- docs/design/documentation.md sections 2 and 4 measure what
+// that costs. The priorities put DOC_BLOCK above COMMENT, which would
+// otherwise claim a one-liner, and DOC_OPEN/DOC_CLOSE below DOC_BLOCK, so a
+// bare delimiter matches only when a whole block could not.
+DOC_BLOCK.10: /##:[^\n]*?:##|##:[\s\S]*?\n[ \t]*:##/
+DOC_OPEN.5: /##:/
+DOC_CLOSE.5: /:##/
+// The inner group absorbs a run of full-line comments into the newline token
+// itself, so it needs one lookahead: a doc block on its own line would
+// otherwise be swallowed before any terminal priority applied.
+_NEWLINE: /(\r?\n[ \t]*(?:#(?!#:)[^\n]*\r?\n[ \t]*)*)+/
 
 TRUE: "true"
 FALSE: "false"
@@ -324,3 +337,8 @@ INT.1: /\d[\d_]*/
 
 %ignore WS_INLINE
 %ignore COMMENT
+// Ignored to keep Lark from deleting a terminal no rule names, never to
+// discard one: reaching either delimiter is a diagnostic, raised from its
+// lexer callback in `internals/parser.py`.
+%ignore DOC_OPEN
+%ignore DOC_CLOSE

@@ -6,6 +6,7 @@ from lark import Tree, Token
 
 from sushi_lang.semantics.ast import ExternalBlock, ExternalDecl
 from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
+from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
 from sushi_lang.semantics.ast_builder.declarations.functions import parse_params
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice
 from sushi_lang.internals.report import span_of
@@ -57,6 +58,8 @@ def parse_external_block(t: Tree, ast_builder: 'ASTBuilder') -> ExternalBlock:
     for child in t.children:
         if isinstance(child, Tree) and child.data == "extern_decl":
             decls.append(parse_extern_decl(child, ast_builder))
+
+    attach_docs(t.children, decls, ast_builder)
 
     return ExternalBlock(
         abi=abi if abi is not None else "",

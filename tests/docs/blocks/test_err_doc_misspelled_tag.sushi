@@ -1,0 +1,15 @@
+# Test: a tag keyword within edit distance 2 of a real one is a typo, not prose.
+# EXPECT_ERROR_CODE: CE7004
+
+##:
+Adds two numbers.
+
+- Retruns: The sum.
+:##
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+fn main() i32:
+    let i32 n = add(1, 2).realise(0)
+    println("{n}")
+    return Result.Ok(0)

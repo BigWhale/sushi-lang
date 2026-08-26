@@ -15,6 +15,7 @@ advanced features and compiler internals.
 
 **Core language reference:**
 - [Language Reference](language-reference.md) - Complete syntax and semantics reference
+- [Documentation Blocks](documentation-blocks.md) - `##: ... :##`, the three positions, the tag vocabulary, and the checks
 - [Standard Library](standard-library.md) - Built-in types (`Result@(T)`, `Maybe@(T)`, `List@(T)`, `HashMap@(K,V)`)
 - [Error Handling](error-handling.md) - `Result@(T)`, `Maybe@(T)`, and the `??` operator
 - [Memory Management](memory-management.md) - RAII, references, borrowing, and `Own@(T)`
