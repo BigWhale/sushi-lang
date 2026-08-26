@@ -102,6 +102,36 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   And the syntax highlighter had no rule for a doc block at all: `#.*$` took the opening
   `##:` line and the code rules took the rest of the block.
 
+  **`--warn-missing-docs` says what is missing.** Every check above is always on, because
+  each one finds a claim that CONTRADICTS the declaration beside it. What a block leaves
+  OUT is policy, so it waits for one opt-in flag, and a codebase that has not been
+  documented yet does not become a wall of warnings on the day the feature lands.
+
+  Five warnings behind the switch. A declaration with no block is **CW7002**; a documented
+  callable with a parameter no `- Parameter` tag names is **CW7003**; a documented callable
+  that returns a value with no `- Returns:` is **CW7004**; a documented function that
+  declares `| E` with no `- Errors:` is **CW7005**; and a unit with no block of its own is
+  **CW7006** -- a unit block travels in the `.slib` as `unit_docs`, so a library whose units
+  say nothing is the first hole a reader meets.
+
+  A private declaration warns too. The `public` marker is not the test, because an internal
+  API is documented surface as much as an exported one. A struct field and an enum variant
+  are each asked on their own, because each carries its own `doc` key in the manifest and
+  `--lib-info` prints each one under its owner.
+
+  Two exemptions, and nothing else. `fn main()` is nobody's API, and a library cannot
+  declare one at all. An `unsafe external` block and the declarations inside it carry
+  `because "..."`, which acknowledges the contract that matters at that seam.
+
+  A block lint presupposes a block: CW7003, CW7004 and CW7005 fire only where a block
+  already exists, so a declaration with none collects CW7002 and stops. One omission stays
+  one diagnostic. A library's units are never linted, either way.
+
+  A `.sushi` test fixture can turn a compiler flag on now. The runner gained a
+  `COMPILER_FLAGS:` directive, which appends to the `sushic` command line; a flag the runner
+  owns -- `-o`, `--lib`, `--lib-info`, `--clean-cache`, `--build-stdlib`, `--cache-dir` --
+  is refused. Without it a flag-gated diagnostic had no fixture at all.
+
   `docs/documentation-blocks.md` is the reference and `docs/design/documentation.md` carries
   the phases that follow.
 - **An array literal element may repeat: `[value; count]`** (#446). A table of one value

@@ -392,6 +392,92 @@ example is not one. Close it with a run of the same character that is at least a
 The block attaches to no declaration, and it is not the first item in its file. A blank
 line or a `#` comment between the block and the declaration is the usual cause.
 
+## Completeness: `--warn-missing-docs`
+
+Every diagnostic above is always on, because every one of them finds a claim that
+CONTRADICTS the declaration beside it. What a block leaves OUT is a different question: it
+is a matter of policy, and a codebase that has not been documented yet must not become a
+wall of warnings on the day the feature lands. So completeness is opt-in, behind one flag:
+
+```
+./sushic myprogram.sushi --warn-missing-docs
+```
+
+The flag turns on five warnings. Each one is a warning and nothing more, so the compile
+succeeds and the exit code is 1.
+
+| Code | Condition |
+|---|---|
+| CW7002 | a declaration with no doc block |
+| CW7003 | a documented callable with a parameter that no `- Parameter` tag names |
+| CW7004 | a documented callable that returns a value, with no `- Returns:` |
+| CW7005 | a documented function that declares `\| E`, with no `- Errors:` |
+| CW7006 | a unit with no doc block |
+
+### Every declaration is asked, public and private
+
+The `public` marker is not the test. An internal API is documented surface as much as an
+exported one, so a private helper with no block is CW7002 like any other declaration. A
+struct field and an enum variant are each asked on their own, because each one carries its
+own `doc` key in a `.slib` and `--lib-info` prints each one under its owner.
+
+### Two exemptions
+
+`fn main()` is nobody's API, and a library cannot declare one at all (CE3501).
+
+An `unsafe external` block and the declarations inside it already carry `because "..."`,
+which acknowledges the contract that matters at that seam.
+
+```sushi
+##: The unit block, so CW7006 is quiet. :##
+
+unsafe external "C" as libc because "string length via libc strlen":
+    fn strlen(string s) i64 = "strlen"
+```
+
+Nothing else is exempt.
+
+### A block lint presupposes a block
+
+CW7003, CW7004 and CW7005 fire only on a declaration that ALREADY carries a block. A
+declaration with none is CW7002 and nothing else, so one omission stays one diagnostic.
+
+```sushi
+##:
+Divides one number by another.
+
+- Parameter a: The dividend.
+- Returns: The quotient.
+:##
+fn divide(i32 a, i32 b) i32 | DriveError:
+    if (b == 0):
+        return Result.Err(DriveError.DivisionByZero)
+    return Result.Ok(a / b)
+```
+
+This block draws two warnings: CW7003, because `b` is declared and not documented, and
+CW7005, because the declaration names its own error type and no `- Errors:` says when it
+is raised. Delete the whole block and both go away, replaced by one CW7002.
+
+A callable that returns `~` is never asked for `- Returns:`, and a function on the
+implicit `StdError` arm is never asked for `- Errors:`. A `self` receiver is never asked
+for either: it is not a parameter by the time the compiler reads one.
+
+### CW7006 has no caret
+
+The other four point at a declaration. A unit with no block is the one warning about
+something that is not there, so it is reported against the file and nothing is underlined:
+
+```
+mymodule.sushi: warning [CW7006]: this unit has no documentation block.
+```
+
+### A library is never linted
+
+A library's units are skipped, both here and by the always-on checks. A consumer is not
+told about a library author's undocumented symbols, so `--warn-missing-docs` over a
+program that imports four libraries reports on the program alone.
+
 ## What travels in a `.slib`
 
 A library carries the doc text of every symbol it exports, so `--lib-info` answers what a
@@ -453,12 +539,10 @@ not of the file, and `docs/design/documentation.md` section 8 carries the reason
 
 ## What is not built yet
 
-The compiler reads doc blocks and checks them, a library carries them, and the toolchain
-runs the examples. These parts come later, and `docs/design/documentation.md` is the plan
-for each of them:
+The compiler reads doc blocks and checks them, a library carries them, the toolchain runs
+the examples, and `--warn-missing-docs` says what is missing. One part comes later, and
+`docs/design/documentation.md` is the plan for it:
 
-- `--warn-missing-docs` reports a public symbol with no block, an undocumented parameter,
-  and a missing `- Returns:` or `- Errors:`.
 - Markdown rendering, and `--lib-info` printing an example rather than carrying it.
 
 ## See also

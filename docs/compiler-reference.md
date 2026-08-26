@@ -47,6 +47,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--lib-version X.Y.Z` | Version of the library being built                |
 | `--lib-info FILE`   | Print the metadata report of a `.slib` file        |
 | `--ignore-compiler-version` | Load libraries this compiler does not satisfy (CE3503) |
+| `--warn-missing-docs` | Warn about anything with no documentation block (CW7002-CW7006) |
 | `--traceback`       | Show full Python traceback on errors               |
 | `--dump-ast`        | Print abstract syntax tree                         |
 | `--dump-ll`         | Print LLVM IR to terminal                          |
@@ -54,6 +55,30 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--no-incremental`  | Force full rebuild, ignoring cached object files   |
 | `--clean-cache`     | Remove `__sushi_cache__/` directory and exit       |
 | `--cache-dir PATH`  | Custom cache directory location                    |
+
+### Documentation Completeness
+
+```bash
+./sushic --warn-missing-docs main.sushi
+```
+
+The compiler always checks what a doc block CLAIMS against the declaration beside it. This
+flag adds the other half: it reports what is missing.
+
+```
+mymodule.sushi: warning [CW7006]: this unit has no documentation block.
+mymodule.sushi:3:8: warning [CW7002]: this struct has no documentation block: 'Ship'.
+  | struct Ship:
+  `        --+-
+mymodule.sushi:9:4: warning [CW7004]: 'hull_of' returns a value, and no '- Returns:' tag says what it is.
+  | fn hull_of(Ship ship) i32:
+  `    ---+---
+```
+
+Every declaration is asked, public and private. `fn main()` and the `unsafe external` seam
+are the only exemptions, and a library's units are never linted. The five codes and the
+rules behind them are in
+[Documentation Blocks](documentation-blocks.md#completeness-warn-missing-docs).
 
 ### Library Compilation
 

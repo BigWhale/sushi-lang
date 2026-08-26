@@ -603,23 +603,119 @@ nothing emits, so a code cannot be registered for `- Deprecated:` until phase 6 
 Completeness is opt-in, the way `missing_docs` is in Rust. A codebase that has not been
 documented yet must not become a wall of warnings on the day the feature lands.
 
-| Condition | Kind |
+**Five lints, not four.** The table below carries one row this section did not have before
+phase 5: a unit with no block. A unit block travels in the `.slib` as `unit_docs` and
+`--lib-info` prints it under the unit name, so a library whose units say nothing is the
+first hole a reader meets (R32).
+
+| Condition | Code |
 |---|---|
-| a public symbol with no doc block | warning |
-| a documented function with an undocumented parameter | warning |
-| a non-`~` function with no `- Returns:` | warning |
-| a function declaring `\| E` with no `- Errors:` | warning |
+| a declaration with no doc block | CW7002 |
+| a documented callable with a parameter that no `- Parameter` tag names | CW7003 |
+| a documented callable that returns a value, with no `- Returns:` | CW7004 |
+| a documented function that declares `\| E`, with no `- Errors:` | CW7005 |
+| a unit with no doc block | CW7006 |
+
+The codes go in `internals/errors/warnings.py`, which holds every warning whatever its
+family, with `Category.DOCS`. CW7001 is there already.
+
+**Every declaration is asked, public and private** (R29). The `public` marker is not the
+test, and the reason is the ruling itself: an internal API is documented surface as much as
+an exported one. The marker could not have answered the question either, because a constant
+carries no `PUBLIC` at all (#466, still open). A struct field and an enum variant are each
+asked on their own, because each carries its own `doc` key in the manifest and `--lib-info`
+prints each under its owner (R31).
+
+**Two exemptions** (R30). `fn main()` is nobody's API, and a library cannot declare one at
+all (CE3501). An `unsafe external` block and the declarations inside it carry
+`because "..."`, which acknowledges the contract that matters at that seam. Nothing else is
+exempt, and one predicate is the only place either one is named.
+
+**A block lint presupposes a block** (R33). CW7003, CW7004 and CW7005 fire only on a
+declaration that ALREADY carries a block. Without the rule every undocumented function
+would collect CW7002 AND CW7004 for one omission, and the whole tree would report 1130
+undocumented parameters and 3319 missing `- Returns:` instead of 8 and 15. A block that is
+absent is CW7002 and nothing else.
+
+**The caret.** Every declaration kind carries a span narrow enough to point at:
+`name_span` for a constant, struct, enum, perk, perk method, extern declaration, function
+and extension; `perk_name_span` for a perk implementation; `namespace_span` for an external
+block; `loc` for a struct field, an enum variant, and for the parameter CW7003 is about.
+CW7006 has no declaration to point at, so it is reported on the unit with no caret. It is
+the one lint about something that is not there.
 
 The flag is a long `--flag`, matching every flag in `sushi_lang/compiler/cli.py` but `-o`.
 A `-W` tier system was considered and set aside: it is a whole CLI surface to design, and
 it would have to decide which existing `CWxxxx` warnings move behind a tier. That is a
 separate piece of work, and this feature does not need it.
 
-One flag is still more than it looks. This would be the compiler's **first** warning-control
-flag. `cli.py` has no `warn` in it at all, `Reporter.warn()` records unconditionally, and
-`SemanticAnalyzer` takes no options object to thread a flag through. The nearest precedent is
-CW5001, silenced by writing `because "..."` on the declaration — a source opt-out, not a CLI
-gate. Phase 5 owns that plumbing, and it is why phase 5 is a phase of its own.
+One flag is still more than it looks. This is the compiler's **first** warning-control
+flag. The nearest precedent is CW5001, silenced by writing `because "..."` on the
+declaration — a source opt-out, not a CLI gate. Phase 5 owns that plumbing, and it is why
+phase 5 is a phase of its own.
+
+### Phase 5 rulings
+
+**R28 — one switch.** `--warn-missing-docs` is one long flag with no value, and it turns on
+every lint above. An optional value list can be added later without a change of spelling,
+so nothing is lost by starting with the switch.
+
+**R29 — every declaration warns, public and private.** Stated above. An author who leaves a
+private helper undocumented has to be told, because a reader of the code is a reader.
+
+**R30 — two exemptions: `fn main()` and the FFI seam.** Stated above.
+
+**R31 — a member warns.** A struct field and an enum variant each carry their own `doc` key
+in the manifest, and the index can see the gap, so the lint says so. This is 41 of the
+bundled stdlib's 114 findings.
+
+**R32 — a unit with no block warns.** The fifth lint. Section 6 named four.
+
+**R33 — the three block lints presuppose a block.** Stated above, with the measurement that
+settles it.
+
+**R34 — one walk.** `documented()` yields every block that is attached. The lint needs the
+other half, so `declarations(program)` yields `(kind, node)` for every declaration and
+`documented()` filters it. Two walks over one AST would drift, and `tests/docs_sweep.py`
+reads the same walk (R22). The walk keeps the order `documented()` used, because the sweep
+numbers its generated `doc_example_<n>` helpers from it.
+
+**R35 — the flag is a keyword argument, not an options object.** `SemanticAnalyzer.__init__`
+gains `warn_missing_docs: bool = False`, beside `unit_manager`, `library_linker` and
+`library_registry`, which are keywords already. `compile_multi_file` unpacks it from `args`
+the way `--ignore-compiler-version` is unpacked. A `CompilerOptions` object is the right
+answer to the SECOND warning flag and the wrong answer to the first.
+
+**R36 — the test runner gains a `COMPILER_FLAGS:` directive.** A `.sushi` fixture could not
+turn a compiler flag on, so a flag-gated diagnostic had no fixture. One field on
+`TestMetadata`, one branch in the directive parser, and one insertion at each of the two
+`./sushic` call sites. A flag the runner owns — `-o`, `--lib`, `--lib-info`,
+`--clean-cache`, `--build-stdlib`, `--cache-dir` — is refused with a printed warning.
+
+**R37 — phase 5 does not document the stdlib.** Documenting the bundled modules is a proof
+of concept that comes AFTER the implementation. The repo gate is a shrink-only budget, in
+the shape `REGISTRY_SIZE` already uses, and not an assertion of zero.
+
+### Measured, at phase 5
+
+The test tree is not a corpus: nobody runs this flag over it. What counts is the bundled
+stdlib and the toolchain.
+
+```
+== stdlib(src_sushi), 4 modules      == toolchain/src, 1 program
+   CW7002 no block       110            CW7002 no block        25
+   CW7003 parameter        0            CW7006 unit             1
+   CW7004 returns          0            TOTAL                  26
+   CW7005 errors           0
+   CW7006 unit             4         (function 25; main is exempt)
+   TOTAL                 114
+
+(function 51, variant 28, field 13, constant 8, struct 6, enum 4)
+```
+
+CW7003, CW7004 and CW7005 report nothing because no bundled module carries a block yet.
+They are self-limiting by R33, and they are what makes the flag useful once the blocks
+exist. `tests/unit/test_stdlib_doc_blocks.py` holds the 114 as a shrink-only budget.
 
 ---
 
@@ -1394,7 +1490,10 @@ within the limits §8 records.
 **Phase 4 — the examples.** `- Example:` parsing, the wrapping rule, and the second
 collector in `docs_sweep.py`.
 
-**Phase 5 — completeness.** `--warn-missing-docs` and its four lints.
+**Phase 5 — completeness.** `--warn-missing-docs` and its five lints, the `declarations()`
+walk they read, and the `COMPILER_FLAGS:` test directive that lets a `.sushi` fixture turn
+a compiler flag on. At the end of this phase the compiler answers both halves of the
+question: what a block claims, and what it leaves out.
 
 **Phase 6 — Markdown.** Rendering, a richer `slib-info`, and the user-facing guide. The
 Markdown checker is written in Sushi and lives in `toolchain/`, which makes it the second

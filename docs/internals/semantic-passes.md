@@ -14,7 +14,7 @@ order; this list mirrors it.
 | Pass | What it does | Where |
 |---|---|---|
 | `collect` | constants, function headers, generic types, externals | `semantics/passes/collect/` |
-| `docs` | check each doc block against its declaration (CE70xx, CW7001) | `semantics/passes/docs.py` |
+| `docs` | check each doc block against its declaration (CE7001-CE7008, CW7001), and its completeness under `--warn-missing-docs` (CW7002-CW7006) | `semantics/passes/docs.py` |
 | `externs` | extern signatures (CE5003), `CW5001`, the `ptr` unit gate (CE5009) | `semantics/passes/types/externals.py` |
 | `libraries` | register every symbol a `.slib` exports | `semantics/semantic_analyzer.py` |
 | `entrypoint` | `main()`'s signature and its `string[] args` | `semantics/semantic_analyzer.py` |
@@ -126,7 +126,7 @@ fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
 ```
 
-Six errors and one warning, all of them always on:
+Eight errors and one warning, all of them always on. `check_docs` is the entry point:
 
 | Condition | Code |
 |---|---|
@@ -136,17 +136,53 @@ Six errors and one warning, all of them always on:
 | an unrecognised tag keyword | CE7004 |
 | a block in a body that is not the first item | CE7005 |
 | a declaration with a block above it and a block first in its body | CE7006 |
+| an `- Example:` tag that introduces no fenced block | CE7007 |
+| a fence inside a block that is never closed | CE7008 |
 | a block that documents nothing | CW7001 |
 
 Every check finds a claim that CONTRADICTS the declaration, which is why none of them is
-behind a flag. Completeness — a public symbol with no block at all — is a matter of policy,
-and belongs behind `--warn-missing-docs`.
+behind a flag.
+
+### Behind `--warn-missing-docs`
+
+Completeness is the other half, and it is policy rather than contradiction, so the CALLER
+decides. `check_missing_docs` is a second entry point, and `_check_multi_file` runs it in
+the same loop only when the flag is set. The pass holds no policy flag of its own: that is
+what keeps the always-on side unable to drift behind a flag.
+
+| Condition | Code |
+|---|---|
+| a declaration with no doc block | CW7002 |
+| a documented callable with a parameter that no `- Parameter` tag names | CW7003 |
+| a documented callable that returns a value, with no `- Returns:` | CW7004 |
+| a documented function that declares `\| E`, with no `- Errors:` | CW7005 |
+| a unit with no doc block | CW7006 |
+
+Three rules shape the table. Every declaration is asked, public and private, because an
+internal API is documented surface too. `fn main()` and the `unsafe external` seam are the
+two exemptions, named in one predicate. And CW7003, CW7004 and CW7005 presuppose a block:
+a declaration with none collects CW7002 and stops, so one omission is one diagnostic.
+
+### One walk
+
+`declarations()` yields every declaration of a unit with the word for its kind, block or
+none. `documented()` filters it, and `check_missing_docs` asks each yield whether it
+carries a block. `tests/docs_sweep.py` reads the same walk, and its order is fixed: the
+sweep numbers its generated `doc_example_<n>` helpers from it.
+`tests/unit/test_declaration_walk_is_total.py` is the gate.
+
+### Placement
 
 Placement is load-bearing on one side. The pass needs the merged unit table and nothing
 later, and it must run before `instantiate` and `monomorphize`: a generic's block is written
-once, and checking it afterwards would report one mistake once per instantiation.
+once, and checking it afterwards would report one mistake once per instantiation. The
+completeness lint has a second reason to stay there. `register_synthesized_function`
+appends a monomorphized clone to a unit's own `ast.functions`, so a lint that ran later
+would demand a doc block on every instance the program asked for.
 
-Library units are skipped. A consumer must not be told about the library author's doc typos.
+Library units are skipped, both ways. A consumer must not be told about the library
+author's doc typos, and must not be warned once per undocumented symbol in every library
+it imports.
 
 ## The `externs` pass: FFI signature validation
 
@@ -670,7 +706,8 @@ then per unit, in one loop:
 
 **Dependencies:**
 - `docs` needs `collect` (the merged unit table), and must run BEFORE `instantiate` and
-  `monomorphize`, or one mistake in a generic's block is reported once per instantiation
+  `monomorphize`, or one mistake in a generic's block is reported once per instantiation,
+  and `--warn-missing-docs` demands a block on every monomorphized clone
 - `externs`, `libraries` and `entrypoint` need `collect` (the tables and the signatures)
 - `instantiate` needs `libraries` (a library template must be visible to instantiate at
   the consumer)

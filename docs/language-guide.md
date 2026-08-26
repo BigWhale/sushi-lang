@@ -295,6 +295,11 @@ as text.
 An `- Example:` introduces a fenced code block, and `python tests/docs_sweep.py` compiles and
 runs it: an example that stops compiling is documentation that has drifted.
 
+Those checks are always on, because each one finds a claim that contradicts the declaration.
+What is simply MISSING is a matter of policy, so it waits for a flag: compile with
+`./sushic --warn-missing-docs` and the compiler names every declaration, parameter, return
+value, error arm and unit with no documentation.
+
 See [Documentation Blocks](documentation-blocks.md) for the full reference.
 
 ## Control Flow
