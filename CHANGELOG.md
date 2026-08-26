@@ -394,6 +394,33 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   is what it already did for a method call the type checker left unresolved. A callee that
   DOES resolve is judged as before, `open` included -- it carries no signature record, but
   the type checker resolves it.
+- **An `unsafe external "C"` could name a symbol the program itself defines** (#470). A
+  program's units share one LLVM module and a linked library's module is merged into it, so
+  a `declare` and a `define` of one name unify. There was no rule against it, and the
+  consequences split two ways. Naming a private a binary `.slib` kept COMPILED, LINKED and
+  RAN: the library's private body was entered from consumer code that may not call it, and
+  because the declaration promised a bare `i32` where the body returns a `Result`
+  aggregate, the answer came out of the wrong register -- `0` instead of `21`. Naming
+  anything the compiler already held a declaration for was a **CE0000** internal error
+  (`DuplicatedNameError`) instead: a private of another unit, a function of the extern's own
+  unit, a PUBLIC function of another unit, a shipped export-closure private, or a constant.
+
+  One rule now answers for all of it, **CE5013**: an `unsafe external` reaches out of the
+  program, so its link-name may not be a symbol this build defines. It is relational -- the
+  note carries the definition's own file, line and caret for a symbol this program declares,
+  and names the library otherwise, saying whether the library exports the symbol, ships it in
+  its export closure, or keeps it. `CE2008`-style guessing is not involved: the rule reads
+  the func table, the constant table and the library registry, so it is a new named step
+  `ffi-clash`, running after `libraries` because that is when the program's symbols are all
+  in place.
+
+  What stays legal is what FFI is for. A genuinely foreign symbol binds as before, and two
+  namespaces may still declare the same one -- LLVM deduplicates identical declarations, and
+  `CE5001` remains the rule for a mismatched one.
+
+  One gap is left and it is narrow: a symbol the stdlib GENERATORS emit (`string_len` and
+  its ~180 siblings) is named in no semantic table, so the rule cannot see it. It is not
+  catchable in the backend either -- externs are declared before any of it is in the module.
 - **Every diagnostic from a binary library's template body was reported against the
   CONSUMER's file** (#471). A binary `.slib` ships a public generic as a re-parsable source
   slice, and the consumer monomorphizes it. The instance lands in one of the consumer's own

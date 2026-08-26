@@ -53,6 +53,10 @@ _add(ErrorMessage("CE5011", Severity.ERROR,
     "foreign `ptr` has no methods (attempted '.{method}()')",
     Category.FFI, "A `ptr` is an opaque handle with no hash, no string form, and no methods. Pass it back to an external function, or wrap it in a struct and attach extension methods to the struct."))
 
+_add(ErrorMessage("CE5013", Severity.ERROR,
+    "external link-name '{symbol}' names a symbol this program defines",
+    Category.FFI, "An `unsafe external` reaches OUT of the program: it may name a foreign symbol, never one this build defines. A program's units share one LLVM module and a linked library's module is merged into it, so a declaration and a definition of one name UNIFY -- the declaration then enters the program's own body with no ABI check, which is how a library-PRIVATE body could be run from code that may not call it, returning garbage read out of the wrong register (#470). Where the compiler already held a declaration of the name, the same program was an internal error (`DuplicatedNameError`) instead of a diagnostic. Rename the link-name, or call the Sushi function directly. CE5001 is the neighbouring rule for a built-in extern DECLARATION, which LLVM deduplicates when the signatures match."))
+
 _add(ErrorMessage("CE5012", Severity.ERROR,
     "foreign `ptr` cannot be a type argument of '{base}'",
     Category.FFI, "Only Result@(ptr, E) and Maybe@(ptr) support carrying a foreign `ptr`. Other generic containers (HashMap, List, user-defined generics) cannot store an opaque handle. Wrap the pointer in a concrete struct and store that instead."))

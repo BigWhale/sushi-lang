@@ -94,6 +94,7 @@ class SemanticAnalyzer:
             docs          doc blocks against their declarations  passes/docs.py
             externs       extern signatures, ptr unit gate       passes/types/externals.py
             libraries     library symbol registration            _register_library_*
+            ffi-clash     an extern naming a defined symbol      passes/types/externals.py
             entrypoint    main()'s signature                     _check_main_function_args*
             instantiate   generic instantiation collection       generics/instantiate/
             monomorphize  generic -> concrete                    generics/monomorphize/
@@ -237,6 +238,21 @@ class SemanticAnalyzer:
             # before instantiate so the consumer's instantiations monomorphize locally.
             self._register_library_generic_structs()
             self._register_library_generic_enums()
+
+        # ffi-clash: an `unsafe external` may name a FOREIGN symbol, never one this
+        # build defines (#470). It reads the whole program's symbols, the linked
+        # libraries included, so it cannot run with the per-unit extern validation
+        # above -- the registry does not exist yet up there.
+        from sushi_lang.semantics.passes.types.externals import (
+            reject_external_naming_a_defined_symbol,
+        )
+        for unit in compilation_order:
+            if unit.ast is None:
+                continue
+            unit_reporter = self._unit_reporter(unit)
+            reject_external_naming_a_defined_symbol(
+                unit_reporter, unit.ast, self.tables, self.library_registry)
+            self.reporter.items.extend(unit_reporter.items)
 
         self._check_main_function_args_multi_file(compilation_order)
 

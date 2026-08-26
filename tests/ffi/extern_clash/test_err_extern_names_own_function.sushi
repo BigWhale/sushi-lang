@@ -1,0 +1,14 @@
+# An `unsafe external` reaches OUT of the program. Naming a function of this very
+# unit was an internal error (DuplicatedNameError) rendered as CE0000 (#470).
+# EXPECT_ERROR_CODE: CE5013
+
+unsafe external "C" as raw because "naming a function of this unit":
+    fn mine(i32 n) i32 = "mine"
+
+fn mine(i32 n) i32:
+    return Result.Ok(n * 3)
+
+fn main() i32:
+    println("{mine(3).realise(0)}")
+    println("{raw.mine(7)}")
+    return Result.Ok(0)

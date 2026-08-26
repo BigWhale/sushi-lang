@@ -1,0 +1,13 @@
+# A constant is a global this build defines, so the name is taken (#470). This was
+# a DuplicatedNameError.
+# EXPECT_ERROR_CODE: CE5013
+
+const i32 LIMIT = 7
+
+unsafe external "C" as raw because "naming a constant":
+    fn limit() i32 = "LIMIT"
+
+fn main() i32:
+    println("{LIMIT}")
+    println("{raw.limit()}")
+    return Result.Ok(0)
