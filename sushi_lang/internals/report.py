@@ -44,6 +44,26 @@ class Diagnostic:
     # honest rendering of a multi-line span, because the marker takes its width from
     # the span's last line and is drawn under its first.
     show_source: bool = True
+    # The text this span indexes into, when it is not a file on disk: a library
+    # template arrives as a source slice in the manifest, and its spans belong to the
+    # slice and to nothing else (#471). It rides on the diagnostic so it survives the
+    # per-unit reporters being merged into the top-level one.
+    source: Optional[str] = None
+
+@dataclass(frozen=True)
+class Origin:
+    """Whose code a body is, when it is not the file a reporter covers.
+
+    A binary `.slib` ships a public generic as a source SLICE, re-parsed at the
+    consumer, so the instance's spans are line 1 of that slice and mean nothing against
+    the consumer's file. All three fields answer one question each: what to call it,
+    what text the caret marks, and why it is being compiled here at all.
+    """
+
+    filename: str
+    source: Optional[str]
+    provenance: str
+
 
 def span_of(t: Any) -> Optional[Span]:
     m = getattr(t, "meta", None)
@@ -94,10 +114,23 @@ class Reporter:
         # where the failure is in code the consumer never wrote and an unattributed
         # error would be unreadable.
         self.provenance = provenance
+        # Set while a pass checks a body that is NOT this reporter's file: a
+        # monomorphized instance of a binary library's template. Its spans came from
+        # parsing the manifest slice, so rendering them against the consumer's file
+        # names a line the consumer never wrote (#471). One place stamps it, because
+        # `_record` is the one place every diagnostic passes through.
+        self.origin: Optional[Origin] = None
         self.items: List[Diagnostic] = []
 
     def _record(self, d: Diagnostic) -> Diagnostic:
-        if self.provenance:
+        if self.origin is not None:
+            # An emit site that named a file of its own keeps it; `error()` fills the
+            # reporter's own name in otherwise, and that is the one to replace.
+            if d.filename == self.filename:
+                d.filename = self.origin.filename
+                d.source = self.origin.source
+            d.sub.append(SubDiagnostic("note", self.origin.provenance))
+        elif self.provenance:
             d.sub.append(SubDiagnostic("note", self.provenance))
         self.items.append(d)
         return d
@@ -128,6 +161,11 @@ class Reporter:
 
     def _resolve_filename(self, filename: str) -> str:
         """Convert absolute path to relative path with ./ prefix."""
+        # A name in angle brackets is not a path and has no directory to strip:
+        # `<input>` for a single string, `<template:lib:name>` for a slice a library
+        # shipped. Prefixing `./` onto one made it read as a file next door.
+        if filename.startswith("<") and filename.endswith(">"):
+            return filename
         try:
             from pathlib import Path
             abs_path = Path(filename).resolve()
@@ -210,7 +248,10 @@ class Reporter:
                 head = f"{loc}: {d.kind} [{d.code}]: {message}"
 
             if d.span and d.show_source:
-                diagnostic_src_lines = self._get_source_lines(d.filename or self.filename, src_lines)
+                diagnostic_src_lines = (
+                    d.source.splitlines() if d.source is not None
+                    else self._get_source_lines(d.filename or self.filename, src_lines)
+                )
 
                 if diagnostic_src_lines is not None:
                     line_idx = d.span.line - 1
@@ -321,7 +362,11 @@ class Reporter:
                 sub_filename = sub.filename or d.filename or self.filename
                 sub_filename = self._resolve_filename(sub_filename)
                 sub_loc = f"{sub_filename}:{sub_span.line}:{sub_span.col}"
-                sub_src_lines = self._get_source_lines(sub.filename or d.filename or self.filename, src_lines)
+                sub_src_lines = (
+                    d.source.splitlines() if d.source is not None and sub.filename is None
+                    else self._get_source_lines(
+                        sub.filename or d.filename or self.filename, src_lines)
+                )
                 is_last = (i == len(span_subs) - 1) and not (in_box and no_span_subs)
 
                 if use_unicode:

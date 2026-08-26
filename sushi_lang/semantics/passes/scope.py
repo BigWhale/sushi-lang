@@ -60,6 +60,8 @@ class ScopeAnalyzer:
                 continue
             self._check_function(func)
 
+        self.reporter.origin = None
+
         for ext in program.extensions:
             self._check_extension_method(ext)
 
@@ -182,6 +184,10 @@ class ScopeAnalyzer:
 
     def _check_function(self, func: FuncDef) -> None:
         """Check a function definition."""
+        # A transplanted library template's spans belong to the manifest slice, so a
+        # diagnostic raised in this body is rendered against it and named for the
+        # library (#471). None for every body the consumer wrote.
+        self.reporter.origin = getattr(func, "library_origin", None)
         self._push_scope()
 
         # A plain function has no receiver; a stale flag from a previously checked

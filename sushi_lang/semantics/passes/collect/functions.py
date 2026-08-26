@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
-from sushi_lang.internals.report import Reporter, Span
+from sushi_lang.internals.report import Origin, Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 
@@ -185,6 +185,7 @@ class GenericFuncDef:
     ret_span: Optional[Span] = None
     err_type: Optional[Type] = None              # Error type for Result<T, E> (None = StdError default)
     is_library_template: bool = False            # True if registered from a consumed library's .slib templates
+    library_origin: Optional[Origin] = None      # Set with the mark: how to render a diagnostic from this body
     unit_name: Optional[str] = None              # Unit that declared it; a monomorphized instance goes home to it
 
 

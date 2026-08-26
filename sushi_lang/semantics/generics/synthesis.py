@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Optional, List
 
+from sushi_lang.internals.report import Origin
 from sushi_lang.semantics.ast import FuncDef, Program
 
 
@@ -13,6 +14,7 @@ def register_synthesized_function(
     units: Optional[List] = None,
     home_unit: Optional[str] = None,
     from_library_template: bool = False,
+    origin: Optional[Origin] = None,
 ) -> bool:
     """Register a synthesized concrete function and queue it for backend emission.
 
@@ -62,6 +64,10 @@ def register_synthesized_function(
     # further than the consumer's own code.
     if from_library_template:
         funcdef.is_library_template = True
+        # The rendering half of the same answer: the body's spans came from the
+        # manifest slice, so a diagnostic raised in it is rendered against the slice
+        # and named for the library (#471).
+        funcdef.library_origin = origin
 
     if program is not None:
         program.functions.append(funcdef)

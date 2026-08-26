@@ -242,6 +242,10 @@ existing ladder in `internals/report.py` covers it.
 The user-visible contract is that a consumer must never see a bare error with no
 explanation of why code they did not write is being compiled.
 
+**The binary path owes the same contract** and did not pay it until #471; §5.2 has the
+mechanism. A source library gets this for free because it arrives as a `Unit` with a
+`provenance`, and every per-unit pass runs against `_unit_reporter(unit)`.
+
 ### 4.5 Where CE5007 went
 
 The binary path needs CE5007 because an export-closure private shares the consumer's
@@ -357,6 +361,34 @@ compile — a parse failure is silently skipped, not fatal), pull the resulting
 table under its original name — indistinguishable, from that point on, from a generic
 the consumer wrote itself. **Local definitions win silently**: a template is
 registered only if its name is not already present.
+
+**A diagnostic raised in a transplanted template body belongs to the library** (#471).
+The throwaway reporter above covers the collect pass only. What the consumer's per-unit
+passes check is the MONOMORPHIZED INSTANCE, which is a `FuncDef` in one of the
+consumer's own unit ASTs (`register_synthesized_function`'s `units[0]` fallback, since
+`home_unit` is honoured only for a `from_library` unit -- §4.2). Its spans came from
+parsing the SLICE, where the declaration is on line 1, so rendering them against the
+consumer's file named a line the consumer never wrote: an error landed on a blank line
+and a caret could mark unrelated consumer text.
+
+`report.Origin` is the answer, and it carries exactly three things -- what to call the
+body, what text the caret marks, and why it is being compiled here:
+
+| field | value |
+|---|---|
+| `filename` | `<template:<library>:<name>>`, the same shape the throwaway reporter already used |
+| `source` | the record's `source` slice, so the caret marks the template's own line |
+| `provenance` | `'<library>' <version> ships this template; it is monomorphized here because of \`use <lib/<library>>\`` |
+
+It is set on the `GenericFuncDef` beside `is_library_template` and copied onto every
+instance and onto every lambda lifted out of one -- the two travel together, and the
+mark answers *who may be called* while the origin answers *how a failure reads*. The
+per-function entry of each per-unit pass (`scope`, `typecheck`, `borrow`) stamps
+`Reporter.origin`, and `Reporter._record` -- the one place every diagnostic passes
+through -- applies it. A diagnostic that names a file of its own keeps it.
+
+`Diagnostic.source` carries the slice text rather than a source map, so it survives the
+per-unit reporters being merged into the top-level one, and no lookup can go stale.
 
 Structs are registered before enums (an enum variant payload may reference a struct).
 Generic *function* registration happens before generic struct/enum registration, and

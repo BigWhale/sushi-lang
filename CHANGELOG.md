@@ -394,6 +394,34 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   is what it already did for a method call the type checker left unresolved. A callee that
   DOES resolve is judged as before, `open` included -- it carries no signature record, but
   the type checker resolves it.
+- **Every diagnostic from a binary library's template body was reported against the
+  CONSUMER's file** (#471). A binary `.slib` ships a public generic as a re-parsable source
+  slice, and the consumer monomorphizes it. The instance lands in one of the consumer's own
+  unit ASTs, so the consumer's reporter rendered it -- while its spans came from parsing the
+  slice, where the declaration is on line 1. An error landed on a blank consumer line with a
+  caret under nothing, and one warning's caret marked the consumer's own `fn main() i32:` for
+  a mistake in code they cannot see. Two passes were affected, `scope` and `typecheck`, so it
+  was never one emitter's quirk.
+
+  A source library was always right, because it arrives as a unit with a `provenance` and
+  every per-unit pass runs against that unit's reporter. The binary path now reads the same:
+
+  ```
+  <template:errlib:add_one>:2:22: error [CE2509]: operator '+' cannot be used with string types.
+    |     return Result.Ok(a + 1)
+    `                      --+--
+    = note: 'errlib' 0.1.0 ships this template; it is monomorphized here because of `use <lib/errlib>`
+  ```
+
+  `report.Origin` carries the three things such a body needs -- what to call it, what text
+  the caret marks, and why it is being compiled here -- and it is set on the template beside
+  `is_library_template`, then copied onto every instance and every lambda lifted out of one.
+  The mark answers who may be called from the body; the origin answers how a failure reads.
+  `Reporter._record` applies it, because that is the one place every diagnostic passes
+  through, and a diagnostic that names a file of its own keeps it.
+
+  A name in angle brackets is no longer given a `./` prefix. `<input>` and
+  `<template:lib:name>` are not paths, and one rendered as `./<input>`.
 - **A binary library said "undefined function" where a source library said "private"**
   (#469). The export closure walks what a public GENERIC's body needs, because that body is
   monomorphized at the consumer. A private that only a concrete function calls, or that

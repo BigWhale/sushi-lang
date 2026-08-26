@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
-from sushi_lang.internals.report import Reporter
+from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import Program, ExtendDef, ExtendWithDef
 from sushi_lang.semantics.passes.collect import CollectorPass, ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, PerkTable, PerkImplementationTable, FunctionTable, ExtensionTable, GenericExtensionTable, GenericFunctionTable
 
@@ -789,6 +789,20 @@ class SemanticAnalyzer:
                     continue
 
                 gfd.is_library_template = True
+                # Whose code the body is, and what text its spans index into. The
+                # collector above already reports against the slice; the per-unit
+                # passes check the MONOMORPHIZED instance and need the same answer,
+                # or they render a library's mistake against the consumer's file
+                # (#471). The filename shape is the throwaway reporter's, so one
+                # convention names a template everywhere.
+                gfd.library_origin = Origin(
+                    filename=f"<template:{lib_name}:{func_name}>",
+                    source=source,
+                    provenance=(
+                        f"'{lib_name}' {manifest.get('library_version') or 'unknown'} "
+                        f"ships this template; it is monomorphized here because of "
+                        f"`use <lib/{lib_name}>`"),
+                )
 
                 # The snippet already carries these, but the record is the source of
                 # truth.

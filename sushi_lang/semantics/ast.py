@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Union, Literal, TYPE_CHECKING
-from sushi_lang.internals.report import Span
+from sushi_lang.internals.report import Origin, Span
 from sushi_lang.semantics.typesys import Type
 
 from lark import Token
@@ -139,6 +139,10 @@ class FuncDef(Node):
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     is_library_template: bool = False  # True if reconstructed from a consumed library's .slib templates
+    # Set with `is_library_template` and never without it: the mark answers who may
+    # be called from this body (#468), the origin answers how a diagnostic raised in
+    # it is rendered (#471).
+    library_origin: Optional[Origin] = None
     self_mode: Optional[str] = None  # "peek"/"poke" for a perk-IMPL method declared
                                      # `(poke self, ...)` (#327). Always None on a plain
                                      # top-level function (collect rejects it there).
