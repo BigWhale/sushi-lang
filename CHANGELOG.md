@@ -371,6 +371,19 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **A call to a function the compiler could not find was judged against a signature it
+  invented.** The mode resolver answers `borrow` for a name it does not carry, so the
+  borrow pass compared the call-site marker against that answer: `no_such(nom s)` reported
+  **CE2008** and then **CE2427**, whose help line said to drop the `nom` -- advice that
+  breaks correct code, because the callee it could not find may well declare `nom`. The
+  loudest case was a private generic of a binary `.slib`, where the whole reason the name
+  does not resolve is that the library kept it.
+
+  The type checker now records that it found no callee (CE2008, CE2092), and the borrow
+  pass applies no mode to the arguments of such a call. It says nothing about them, which
+  is what it already did for a method call the type checker left unresolved. A callee that
+  DOES resolve is judged as before, `open` included -- it carries no signature record, but
+  the type checker resolves it.
 - **A binary library's private helpers were callable from consumer code** (#468). The
   export closure ships what a public generic's body needs -- a private concrete helper, a
   private generic template, a constant -- because the body is monomorphized at the

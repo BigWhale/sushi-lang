@@ -510,6 +510,9 @@ class Call(Node):
     # FunctionType: the backend uses it to emit the fat-pointer indirect call without
     # re-inferring the callee's signature.
     callee_fn_type: Optional[Type] = None
+    # Set by the type checker when it found no callee at all (CE2008, CE2092). The passes
+    # after it then know there is no signature, and say nothing about the arguments.
+    callee_unresolved: bool = False
 
 @dataclass
 class MethodCall(Node):

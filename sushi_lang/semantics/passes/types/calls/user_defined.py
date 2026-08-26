@@ -135,6 +135,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
             call.callee_fn_type = callee_ty  # backend reads this for the indirect call
             validate_indirect_call(validator, call, callee_ty)
         else:
+            call.callee_unresolved = True
             er.emit(validator.reporter, er.ERR.CE2092, getattr(call.callee, 'loc', call.loc),
                     expected="a function value",
                     actual=display_type(callee_ty) if callee_ty is not None else "a non-function expression")
@@ -167,6 +168,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         return
 
     if function_name not in validator.func_table.by_name:
+        call.callee_unresolved = True
         diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.callee.loc,
                             name=function_name)
         # A generic struct constructor used inline is the most common cause; attach the

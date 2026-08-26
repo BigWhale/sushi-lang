@@ -113,3 +113,72 @@ def test_no_cell_reports_anything_else(analyze, mode):
     errors = {item.code for item in analyze(_program(mode)).items
               if item.code.startswith("CE")}
     assert errors <= {"CE2405"}, sorted(errors)
+
+
+# 3. A callee the compiler could not resolve declares nothing, so nothing is judged
+
+UNRESOLVED = """\
+fn main() i32:
+    let string s = "Ford"
+    let i32 a = no_such(nom s).realise(0)
+    println("{a}")
+    return Result.Ok(0)
+"""
+
+MISMARKED_BORROW = """\
+fn look(string s) i32:
+    return Result.Ok(s.len())
+
+fn main() i32:
+    let string s = "Ford"
+    let i32 n = look(nom s).realise(0)
+    println("{n}")
+    return Result.Ok(0)
+"""
+
+MISSING_NOM = """\
+fn eat(nom string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn main() i32:
+    let string s = "Ford"
+    eat(s)
+    return Result.Ok(0)
+"""
+
+OPEN_MISMARKED = """\
+use <io/files>
+
+fn read_it(string p) i32:
+    let file f = open(nom p, FileMode.Read())??
+    f.close()
+    return Result.Ok(0)
+
+fn main() i32:
+    let string path = "cfg.txt"
+    let i32 rc = read_it(path).realise(0)
+    println("{rc}")
+    return Result.Ok(0)
+"""
+
+
+def test_an_unresolved_callee_is_not_judged_against_an_invented_signature(analyze):
+    """The mode resolver has no signature for `no_such`, so the marker means nothing.
+
+    Reporting CE2427 here told the user to drop a `nom` that nobody declared -- advice
+    that breaks correct code when the callee turns out to declare `nom` after all.
+    """
+    codes = {item.code for item in analyze(UNRESOLVED).items}
+    assert "CE2008" in codes, sorted(codes)
+    assert "CE2427" not in codes, sorted(codes)
+
+
+def test_a_resolved_callee_is_still_judged_in_both_directions(analyze):
+    assert "CE2427" in {item.code for item in analyze(MISMARKED_BORROW).items}
+    assert "CE2427" in {item.code for item in analyze(MISSING_NOM).items}
+
+
+def test_a_built_in_callee_is_still_judged(analyze):
+    """`open` carries no FuncSig, but the type checker resolves it, so it is judged."""
+    assert "CE2427" in {item.code for item in analyze(OPEN_MISMARKED).items}
