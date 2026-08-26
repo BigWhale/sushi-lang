@@ -401,6 +401,25 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   and 0.28s after.
 
 ### Fixed
+- **An owning temporary handed to a built-in method was never freed.**
+  `src.contains(src.s(2, 5))` leaked one block a call, and `src.replace(src.s(2, 4),
+  src.s(5, 7))` leaked two -- one for each owning argument. About fourteen `string`
+  methods took an argument, so every one of them leaked; so did a `HashMap` key lookup,
+  a `stdout.write`, a `file.write`, a `run()` command and every C-string callee. The
+  workaround was to bind each temporary to a `let` first, which is a rule no author can
+  be expected to know.
+
+  Ownership at a call boundary is decided from the argument's provenance, which is what
+  #358 built. A DECLARED callee reaches that seam and reads the parameter's mode off the
+  signature; a built-in declares no parameters, so its emitter built its own argument
+  list and there was no mode to read. `emit_borrowed_arg` is the built-in half of the
+  seam and the twin of the receiver's: every built-in argument goes through it, and a
+  built-in that TAKES ownership -- `List.push`, `HashMap.insert`, `Own.alloc` -- goes
+  through `consume` as before.
+
+  A PERK method was leaking for a different reason. It carries the same declared modes an
+  extension method does, and its emitter simply never read them; it now settles its
+  arguments through the same function the extension emitter calls.
 - **Every diagnostic about a callee rendered as text with no caret.** The builder parsed
   the callee into a `Name` carrying its span, then rebuilt one from the bare identifier
   and dropped it, so `call.callee.loc` was `None` for every ordinary call. The head line

@@ -376,8 +376,10 @@ def try_emit_perk_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
         from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
         receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
 
-    emitted_args = [receiver_value]
-    emitted_args.extend(codegen.expressions.emit_expr(arg) for arg in expr.args)
+    from sushi_lang.backend.expressions.calls.dispatcher import settle_method_call_arguments
+    arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    settle_method_call_arguments(codegen, expr, arg_values)
+    emitted_args = [receiver_value, *arg_values]
 
     params = list(llvm_fn.args)
     casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params, strict=True)]

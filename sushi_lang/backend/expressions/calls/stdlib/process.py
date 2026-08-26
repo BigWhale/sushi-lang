@@ -7,7 +7,7 @@ from sushi_lang.backend.constants import INT32_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.backend.utils import require_builder
-from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg
+from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg, emit_cstr_arg
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -51,7 +51,7 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
         from sushi_lang.backend.expressions.calls.variadic import build_variadic_array
         from sushi_lang.semantics.typesys import DynamicArrayType
 
-        cmd_value = codegen.expressions.emit_expr(expr.args[0])   # string {i8*,i32}
+        cmd_value = emit_borrowed_arg(codegen, expr.args[0])   # string {i8*,i32}
         if isinstance(cmd_value.type, ir.PointerType):
             cmd_value = codegen.builder.load(cmd_value, name="run_cmd_val")
 
