@@ -328,6 +328,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Load libraries whose requires_compiler excludes this compiler (CE3503)",
     )
     ap.add_argument(
+        "--warn-missing-docs",
+        action="store_true",
+        help="Warn about a declaration, a parameter, a return value, an error arm or a "
+             "unit with no documentation (CW7002-CW7006)",
+    )
+    ap.add_argument(
         "--no-incremental",
         action="store_true",
         help="Force full rebuild, ignoring cached object files",

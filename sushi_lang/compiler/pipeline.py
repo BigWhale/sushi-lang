@@ -318,9 +318,10 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
     get_stdlib_registry()
 
-    multi_file_analyzer = SemanticAnalyzer(reporter, filename=main_unit_name,
-                                           unit_manager=unit_manager,
-                                           library_linker=library_linker)
+    multi_file_analyzer = SemanticAnalyzer(
+        reporter, filename=main_unit_name, unit_manager=unit_manager,
+        library_linker=library_linker,
+        warn_missing_docs=bool(getattr(args, "warn_missing_docs", False)))
     multi_file_analyzer.check(main_ast)
 
     # A library must not carry main(): --lib used to embed it into the .slib silently,

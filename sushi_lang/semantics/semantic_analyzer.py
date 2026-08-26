@@ -59,7 +59,7 @@ def _library_units_first(compilation_order):
 class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
 
-    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[object] = None, library_registry: Optional['LibraryRegistry'] = None) -> None:
+    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[object] = None, library_registry: Optional['LibraryRegistry'] = None, warn_missing_docs: bool = False) -> None:
         self.reporter = reporter
         self.filename = filename
         self.unit_manager = unit_manager
@@ -67,6 +67,10 @@ class SemanticAnalyzer:
         # backend (Tier 4.1 layering invariant), so no tighter annotation is legal.
         self.library_linker = library_linker
         self.library_registry = library_registry
+        # `--warn-missing-docs`. A keyword and not an options object on purpose: this is
+        # the compiler's FIRST warning-control flag, and a second one is what earns the
+        # object (documentation.md section 6).
+        self.warn_missing_docs = warn_missing_docs
         self.constants: Optional[ConstantTable] = None
         self.structs: Optional[StructTable] = None
         self.enums: Optional[EnumTable] = None
@@ -197,12 +201,18 @@ class SemanticAnalyzer:
         # checking it afterwards would report one mistake once per instantiation. A
         # library unit is skipped: a consumer must not be told about the library
         # author's doc typos.
-        from sushi_lang.semantics.passes.docs import check_docs
+        from sushi_lang.semantics.passes.docs import check_docs, check_missing_docs
         for unit in compilation_order:
             if unit.ast is None or unit.provenance is not None:
                 continue
             unit_reporter = self._unit_reporter(unit)
             check_docs(unit_reporter, unit.ast)
+            # Completeness rides in the SAME loop, and nowhere later:
+            # `register_synthesized_function` appends a monomorphized clone to a unit's
+            # own `ast.functions`, so a lint that ran after `monomorphize` would demand
+            # a doc block on every instance the program asked for.
+            if self.warn_missing_docs:
+                check_missing_docs(unit_reporter, unit.ast)
             self.reporter.items.extend(unit_reporter.items)
 
         # FFI: validate external signatures (CE5003), emit CW5001, and enforce
