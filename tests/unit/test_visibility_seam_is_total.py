@@ -121,6 +121,42 @@ def test_a_kind_that_carries_no_marker_is_not_recorded():
     assert not unexpected, f"recorded kind(s) that carry no marker: {unexpected}"
 
 
+def test_a_marker_carrying_kind_has_the_fields_to_carry_it():
+    """The seam's classification and the AST must agree.
+
+    A kind in `CARRIES_MARKER` whose node has no `is_public` reads the getattr default,
+    so it would be silently public forever; one with no `public_span` cannot tell a
+    written marker from an absent one, which is what CE6103 and the flip both need.
+    """
+    missing: list[str] = []
+    for kind, node in declarations(_program(EVERY_KIND)):
+        if kind not in CARRIES_MARKER:
+            continue
+        fields = getattr(type(node), "__dataclass_fields__", {})
+        for required in ("is_public", "public_span"):
+            if required not in fields:
+                missing.append(f"{kind} ({type(node).__name__}) has no {required}")
+    assert not missing, sorted(set(missing))
+
+
+def test_a_kind_that_carries_no_marker_never_has_one_written():
+    """The mirror, and it is CE6103's invariant.
+
+    A perk-implementation method is built out of the `function_def` rule, so its node
+    carries the field whether the rule wants it or not. What must hold is that the marker
+    was never WRITTEN there -- the span is the only thing that can say so.
+    """
+    written: list[str] = []
+    for kind, node in declarations(_program(EVERY_KIND)):
+        if kind in CARRIES_MARKER:
+            continue
+        if getattr(node, "public_span", None) is not None:
+            written.append(f"{kind} ({type(node).__name__})")
+    assert not written, (
+        f"a marker is recorded on a kind that carries none: {sorted(set(written))}"
+    )
+
+
 def test_an_unrecorded_name_is_visible_from_anywhere():
     """What the compiler synthesizes has no declaration, and must stay nameable."""
     table = VisibilityTable()
