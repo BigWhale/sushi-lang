@@ -500,7 +500,7 @@ names the same symbol is `CE3005`. The two are told apart by whose body the call
 never by the symbol: `FuncDef.is_library_template` marks an instance of a `.slib`
 template (stamped in `register_synthesized_function`, and carried onto a lambda lifted
 out of such a body), the typecheck pass reads it as `in_library_body`, and the gate in
-`passes/types/calls/visibility.py` exempts that and nothing else. An instance of the
+`passes/types/visibility.py` exempts that and nothing else. An instance of the
 *consumer's* generic is synthesized the same way and is not exempt — it is the user's
 code. A constant is the one kind still readable, because a private constant cannot be
 written yet (#466).

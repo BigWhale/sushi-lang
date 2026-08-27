@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Tuple
 
 from sushi_lang.internals import errors as er
-from .visibility import name_is_contested
+from ..visibility import name_is_contested
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import StructType, Type
 from sushi_lang.semantics.ast import Call

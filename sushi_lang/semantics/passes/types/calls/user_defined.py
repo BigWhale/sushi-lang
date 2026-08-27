@@ -6,8 +6,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, StructType
 from sushi_lang.semantics.ast import Call, Name, Spread
-from .visibility import (name_is_contested, reject_private_call,
-                         reject_private_kept_call)
+from ..visibility import (name_is_contested, reject_private_call,
+                          reject_private_kept_call)
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
 

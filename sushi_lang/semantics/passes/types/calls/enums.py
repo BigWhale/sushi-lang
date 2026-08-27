@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
-from .visibility import name_is_contested
+from ..visibility import name_is_contested
 from sushi_lang.semantics.typesys import BuiltinType, EnumType
 from sushi_lang.semantics.ast import EnumConstructor, DotCall, Name
 from ..compatibility import types_compatible

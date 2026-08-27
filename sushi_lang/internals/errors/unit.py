@@ -20,7 +20,7 @@ _add(ErrorMessage("CE3002", Severity.ERROR,
 
 _add(ErrorMessage("CE3003", Severity.ERROR,
     "duplicate public symbol '{symbol}' found in units: {units}",
-    Category.UNIT, "Multiple units export the same public symbol name, creating an ambiguity."))
+    Category.UNIT, "Multiple units export the same public symbol name, creating an ambiguity. Names are flat across a program, so one exported name has one owner. Rename one of them, or keep one of them private. A note points at each declaration."))
 
 _add(ErrorMessage("CE3004", Severity.ERROR,
     "invalid unit path '{path}': {reason}",

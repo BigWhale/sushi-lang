@@ -1,9 +1,10 @@
-"""Who may call whom across units: the call site's view of the visibility seam.
+"""Who may name what: the typecheck pass's view of the visibility seam.
 
 The rule itself lives in `semantics/visibility.py`, which answers for every kind of
-declaration. This module is the CALL site's adapter: it holds the two things only a call
+declaration. This module is the pass's adapter: it holds the two things only a use site
 knows -- the validator it is running inside, and that a transplanted library body is
-allowed to call its own library's privates (#468).
+allowed to call its own library's privates (#468). A call and a bare constant read ask
+the same two questions, so they ask them here.
 """
 from __future__ import annotations
 
@@ -16,9 +17,10 @@ from sushi_lang.semantics.visibility import (
 )
 
 if TYPE_CHECKING:
-    from .. import TypeValidator
+    from . import TypeValidator
 
-__all__ = ["name_is_contested", "reject_private_call", "reject_private_kept_call"]
+__all__ = ["name_is_contested", "reject_private_call", "reject_private_kept_call",
+           "reject_private_name"]
 
 
 def name_is_contested(validator: 'TypeValidator', kind: str, name: str) -> bool:
@@ -61,3 +63,13 @@ def reject_private_kept_call(
     return _reject(validator, DeclOrigin(
         kind=kind or "function", name=name, unit_name=library, is_public=False,
     ), loc)
+
+
+def reject_private_name(validator: 'TypeValidator', kind: str, record: Any,
+                        loc: Any) -> bool:
+    """Reject a bare mention of another unit's private declaration (a constant).
+
+    A constant has no call to hang the rule on: `visit_name` is where a bare name is
+    validated, so it is where the fence sits (D3).
+    """
+    return _reject(validator, origin_of(kind, record), loc)

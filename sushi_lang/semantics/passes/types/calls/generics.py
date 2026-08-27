@@ -12,7 +12,7 @@ from sushi_lang.semantics.generics.explicit_type_args import (
     resolve_explicit_type_args,
     check_explicit_type_arg_arity,
 )
-from .visibility import name_is_contested, reject_private_call
+from ..visibility import name_is_contested, reject_private_call
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
 

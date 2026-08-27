@@ -1,0 +1,12 @@
+# The marked constant crosses the unit boundary, and the unmarked one is read
+# by its own unit through a public function.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "100 7\n"
+
+use "helpers/limits"
+
+fn main() i32:
+    let i32 shared = SHARED_LIMIT
+    let i32 own = own_limit().realise(0)
+    println("{shared} {own}")
+    return Result.Ok(0)

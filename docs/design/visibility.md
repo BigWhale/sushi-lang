@@ -46,7 +46,7 @@ the collect pass builds one table for the whole program, and any unit may name a
 
 | Seam | Where | What it does |
 |---|---|---|
-| The use-site fence | `passes/types/calls/visibility.py:12` — `reject_private_cross_unit_call(name, loc, visible=, unit_name=)` | Already generic in shape. Only the CE3005 text says "function" |
+| The use-site fence | `passes/types/visibility.py:12` — `reject_private_cross_unit_call(name, loc, visible=, unit_name=)` | Already generic in shape. Only the CE3005 text says "function" |
 | The leak fence | `passes/types/signatures.py:16` — `_check_public_fn_ptr_fence`, with `type_predicates.py:110` — `contains_foreign_ptr` | CE5008 already answers "a `public fn` exposes a type it must not" |
 | The type funnel | `passes/types/utils.py:16` — `validate_type_name` | Every named type flows through it, and it recurses through arrays and type arguments |
 

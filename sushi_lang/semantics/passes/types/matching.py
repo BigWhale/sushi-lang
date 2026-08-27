@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Set, Tuple
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.passes.types.calls.visibility import name_is_contested
+from sushi_lang.semantics.passes.types.visibility import name_is_contested
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, UnknownType, StructType
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import (
