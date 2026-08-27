@@ -3,11 +3,11 @@
 # Tests that library-defined types can be used by consumers
 # for type checking, construction, and pattern matching.
 
-struct Point:
+public struct Point:
     i32 x
     i32 y
 
-enum Color:
+public enum Color:
     Red
     Green
     Blue(i32)

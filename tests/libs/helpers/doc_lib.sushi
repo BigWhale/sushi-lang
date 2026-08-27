@@ -4,10 +4,10 @@
 # doc blocks (documentation.md section 8).
 
 ##: The answer to life, the universe and everything. :##
-const i32 ANSWER = 42
+public const i32 ANSWER = 42
 
 ##: A doubler contract, documented. :##
-perk Doubler:
+public perk Doubler:
     ##: Twice the receiver. :##
     fn doubled() i32
 
@@ -32,7 +32,7 @@ public fn pick_bigger@(T: Doubler)(T a, T b) T:
     return Result.Ok(b)
 
 ##: A box that holds one value. :##
-struct Box@(T):
+public struct Box@(T):
     ##: The value inside. :##
     T value
 

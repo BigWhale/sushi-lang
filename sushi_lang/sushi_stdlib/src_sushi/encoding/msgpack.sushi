@@ -9,7 +9,7 @@
 # is left in the buffer as it is read, so a length too large to satisfy -- a
 # hostile 2^32-1 included -- is Truncated at the header (#463).
 
-enum MsgValue:
+public enum MsgValue:
     Nil()
     Bool(bool)
     Int(i64)
@@ -20,7 +20,7 @@ enum MsgValue:
     Arr(MsgValue[])
     Map(MsgValue[], MsgValue[])
 
-enum MpError:
+public enum MpError:
     Truncated(i32)
     Unsupported(u8)
     BadUtf8(i32)

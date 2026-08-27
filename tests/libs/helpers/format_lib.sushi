@@ -2,7 +2,7 @@
 # function. The library ships the `Display` perk definition plus the
 # `show_all<...Ts: Display>` pack template; the consumer supplies the per-type
 # `Display` implementations for the types it instantiates the pack with.
-perk Display:
+public perk Display:
     fn display() string
 
 public fn show_all@(...Ts: Display)(...Ts args) ~:
