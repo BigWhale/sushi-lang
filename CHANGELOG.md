@@ -27,8 +27,8 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   still need a count the compiler can read. A `from()` array carries its length in its
   descriptor, so a count or a bound there may be any `i32` expression. A bound that is not
   readable where it must be is **CE2019**, and so is a readable range that yields nothing;
-  a range carrying a repeat count is **CE2020**. A run-time count that is negative traps
-  **RE2024**, because the fill walks with an unsigned compare.
+  a range carrying a repeat count is **CE2020**. A run-time count that is negative is
+  clamped to zero and gives the same empty array a zero count gives.
 
   A readable count never pays for the run-time mechanism. llvmlite does not fold, so a
   short readable range emits literal stores with no arithmetic, a longer one walks a
@@ -41,19 +41,26 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   ```sushi
   out.extend(body)                  # append all of body
   out.extend_range(src, pos, len)   # append a range, no temporary
-  let i32[] part = src.ss(2, 3)     # a fresh array of a range
+  let i32[] part = src.s(2, 5)      # a fresh array, by exclusive END index
+  let i32[] same = src.ss(2, 3)     # the same, by LENGTH
   ```
 
-  Three spellings over ONE emitter: `extend` is `extend_range(src, 0, src.len())`, and
-  `.ss()` is a fresh array of a run-time length plus the same range copy. `.ss()` is named
-  for `string.ss(start, length)`, which already means this for text.
+  Four spellings over ONE emitter: `extend` is `extend_range(src, 0, src.len())`, `s(a, b)`
+  is `ss(a, b - a)`, and `.ss()` is a fresh array of a run-time length plus the same range
+  copy. `.s()` and `.ss()` are named for `string.s(start, end)` and
+  `string.ss(start, length)`, which already mean this for text.
+
+  A range outside the source is CLAMPED, exactly as it is for the string twins: a start
+  before the beginning becomes 0, a start past the end gives an empty array, a run past the
+  end stops at the end, and an end before the start gives an empty array. That is unlike
+  `arr[i]`, which traps -- an index names ONE element and either has it or does not, while a
+  range asks for what overlaps and can always answer.
 
   The source is a **borrow**, and every copied slot takes its own `copy_out` -- one value
   and N slots, or N values and N slots, is the same rule. A plain element type copies with a
-  `memcpy`. The destination grows once, to exactly the length it needs. A negative `start`
-  or `count` traps **RE2024** and a range past the source traps **RE2020**, both before
-  anything is allocated, and a source that aliases its destination is **CE2430** -- growing
-  the destination may reallocate the buffer the copy is reading.
+  `memcpy`. The destination grows once, to exactly the length it needs. A source that
+  aliases its destination is **CE2430** -- growing the destination may reallocate the buffer
+  the copy is reading.
 
   `compression/zlib` loses 30 lines of hand-rolled loops, five copies and two fills.
 

@@ -36,14 +36,10 @@ _add(ErrorMessage("RE2023", Severity.ERROR,
     Category.RUNTIME, "A nested pattern reached the end of its arms without matching. "
     "Exhaustiveness checking should make this unreachable."))
 
-_add(ErrorMessage("RE2024", Severity.ERROR,
-    "array element count %d is negative",
-    Category.RUNTIME, "A count of ELEMENTS reached the fill with a negative value. The "
-    "counted walk compares with an unsigned predicate, so -1 reads as four billion and the "
-    "fill runs off the end of the buffer -- a memory-safety hole rather than a wrong answer, "
-    "which is why it traps instead of being left to fall out. A clamp to zero would turn a "
-    "wrong program into a silently empty array. It is worded for any element count and not "
-    "for a repeat count alone, because every writer of N slots has the same hazard from the "
-    "same cause; one code carries them, the precedent CE2017 sets for a count that goes "
-    "wrong. Zero is not negative, so a run-time count of zero is DATA and gives an empty "
-    "array. A range never reaches this: its count is an absolute value."))
+# RE2024 ("array element count %d is negative") was RETIRED before it ever shipped. It
+# trapped a negative count reaching a fill or a copy, because the counted walk compares with
+# an unsigned predicate and -1 would read as four billion. Both writers now CLAMP instead --
+# `clamp_range` for a copy and `_clamp_count` for a repeated element -- which removes the
+# hazard by construction rather than by a guard that has to fire, and matches `string.s` and
+# `string.ss`, which have always clamped. A count of zero was already data rather than an
+# error, so a negative one reaching the same answer needed no rule of its own.

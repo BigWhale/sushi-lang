@@ -112,7 +112,7 @@ def emit_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement'],
 
         if run.count is None:
             count = codegen.utils.as_i32(codegen.expressions.emit_expr(run.count_expr))
-            count = _reject_negative_count(codegen, count)
+            count = _clamp_count(codegen, count)
         else:
             count = ir.Constant(i32, run.count)
 
@@ -134,29 +134,23 @@ def emit_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement'],
     return emitted
 
 
-def _reject_negative_count(codegen: 'LLVMCodegen', count: ir.Value) -> ir.Value:
-    """Trap RE2024 on a negative run-time count (Ruling 6, #478).
+def _clamp_count(codegen: 'LLVMCodegen', count: ir.Value) -> ir.Value:
+    """A run-time repeat count, narrowed to zero when it is negative.
 
-    `emit_container_walk` compares with an unsigned predicate, so -1 reads as four billion
-    and the fill runs off the end of the buffer. That is a memory-safety hole, so it cannot
-    be left to fall out, and a clamp to zero would turn a wrong program into a silently
-    empty one. Emitted only for a count that is not already a constant.
+    `emit_container_walk` compares with an unsigned predicate, so -1 would read as four
+    billion and the fill would run off the end of the buffer. The clamp removes that by
+    construction, the way `clamp_range` does for a copy.
+
+    A count of zero is already DATA rather than an error (Ruling 2, #478), so a negative one
+    reaching the same answer needs no rule of its own. Emitted only for a count that is not
+    already a constant -- a constant one the compiler can read is CE2017 long before here.
     """
     if isinstance(count, ir.Constant):
         return count
 
     b = codegen.builder
-    ok = b.icmp_signed(">=", count, ir.Constant(codegen.types.i32, 0), name="count_not_negative")
-    ok_block = b.append_basic_block(name="count_ok")
-    fail_block = b.append_basic_block(name="count_negative")
-    b.cbranch(ok, ok_block, fail_block)
-
-    b.position_at_end(fail_block)
-    codegen.runtime.errors.emit_runtime_error_with_values("RE2024", count)
-    b.unreachable()
-
-    b.position_at_end(ok_block)
-    return count
+    zero = ir.Constant(codegen.types.i32, 0)
+    return b.select(b.icmp_signed("<", count, zero), zero, count, name="run_count")
 
 
 def single_runs(values: Sequence[ir.Value]) -> List[EmittedRun]:

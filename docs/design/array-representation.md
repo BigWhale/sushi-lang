@@ -143,9 +143,9 @@ right operand before place.
 
 ## The one bulk copy
 
-`extend`, `extend_range` and `ss` are the same operation with different arguments, so they
-share one emitter (`backend/types/arrays/copy.py`). Three emitters would mean three bounds
-rules and three answers to what the source owns -- the shape the fixed-array receiver took,
+`extend`, `extend_range`, `s` and `ss` are the same operation with different arguments, so
+they share one emitter (`backend/types/arrays/copy.py`). Four emitters would mean four
+bounds rules and four answers to what the source owns -- the shape the fixed-array receiver took,
 where nine sites carried nine address rules and two of them were silently wrong.
 
 The rule the copy follows is #478's Ruling 7 in its general form:
@@ -159,6 +159,19 @@ repeated element, and `.fill()` -- and it covers N source values and N slots.
 A plain element type takes a `memcpy`, because a shallow store of a plain value IS the
 value and a walk would emit N stores for nothing. An owning one walks and clones through
 `copy_out`, the decision `backend/lifecycle.py`'s handler table already makes.
+
+`.s(start, end)` and `.ss(start, count)` differ in one thing: whether the second argument is
+an exclusive END or a LENGTH. `clamp_range` takes that as a flag and narrows both the same
+way, and the arguments reach it RAW -- the start is clamped FIRST, which is what makes
+`.s(-2, 3)` three elements and not five.
+
+**A range outside the source is clamped, never trapped**, the answer `string.s` and
+`string.ss` have always given. That also makes the walk safe by construction: it compares
+with an unsigned predicate, so a negative count would read as four billion, and the clamp
+removes that rather than leaving a guard to fire. RE2024 existed to trap it and is retired.
+
+Clamping is deliberately unlike `arr[i]`, which traps RE2020. An index names ONE element and
+either has it or does not; a range asks for what overlaps, and can always answer.
 
 **The source may not alias the destination** (CE2430). Growing the destination may
 reallocate its buffer, which leaves the source pointer dangling mid-copy. A copy that must

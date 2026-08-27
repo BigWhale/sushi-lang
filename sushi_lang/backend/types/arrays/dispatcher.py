@@ -23,7 +23,7 @@ def is_builtin_array_method(method_name: str) -> bool:
     return method_name in {
         "len", "get", "push", "pop", "capacity", "destroy", "free",
         "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse",
-        "extend", "extend_range", "ss"
+        "extend", "extend_range", "s", "ss"
     }
 
 
@@ -66,6 +66,21 @@ def _source_data_and_len(codegen: 'LLVMCodegen', expr, source_arg):
     return (codegen.builder.load(data_ptr_ptr, name="copy_src_data"),
             codegen.builder.load(len_ptr, name="copy_src_len"),
             source_type.base_type)
+
+
+def _slice_args(codegen: 'LLVMCodegen', method_name: str, args) -> tuple:
+    """The (start, extent, extent_is_end) behind `.s(start, end)` and `.ss(start, count)`.
+
+    Two spellings of ONE operation, so they differ here and nowhere else. `.s` takes an
+    exclusive END, the way `string.s(start, end)` does, and `.ss` takes a LENGTH, the way
+    `string.ss(start, length)` does.
+
+    The arguments are handed on RAW. `clamp_range` narrows them, and it must clamp the
+    START before it reads the end -- `"hello".s(-2, 3)` is three characters and not five,
+    so subtracting here would give the wrong count.
+    """
+    return (_index_arg(codegen, args[0]), _index_arg(codegen, args[1]),
+            method_name == "s")
 
 
 def _index_arg(codegen: 'LLVMCodegen', arg) -> ir.Value:
@@ -146,15 +161,16 @@ def emit_array_method(
             case "reverse":
                 return core.emit_fixed_array_reverse(codegen, address(writable=True), fixed_ir_type)
 
-            case "ss":
+            case "s" | "ss":
                 zero = ir.Constant(codegen.types.i32, 0)
                 data = codegen.builder.gep(address(writable=False), [zero, zero],
                                            name="slice_src_data")
+                start, extent, by_end = _slice_args(codegen, method_name, expr.args)
                 return core.emit_dynamic_array_slice(
                     codegen, fixed_ir_type.element, data,
                     ir.Constant(codegen.types.i32, fixed_ir_type.count),
-                    _index_arg(codegen, expr.args[0]), _index_arg(codegen, expr.args[1]),
-                    fixed_semantic_type.base_type)
+                    start, extent, fixed_semantic_type.base_type,
+                    extent_is_end=by_end)
 
             case _:
                 raise NotImplementedError(f"Fixed array method not implemented: {method_name}")
@@ -268,17 +284,17 @@ def emit_array_method(
                                                   source_data, source_len, start, count,
                                                   semantic_type.base_type)
 
-        case "ss":
+        case "s" | "ss":
             if not isinstance(semantic_type, DynamicArrayType):
                 raise_internal_error("CE0042", type=type(semantic_type).__name__)
             data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, receiver_value)
             len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, receiver_value)
+            start, extent, by_end = _slice_args(codegen, method_name, expr.args)
             return core.emit_dynamic_array_slice(
                 codegen, array_struct_type.elements[2].pointee,
                 codegen.builder.load(data_ptr_ptr, name="slice_src_data"),
                 codegen.builder.load(len_ptr, name="slice_src_len"),
-                _index_arg(codegen, expr.args[0]), _index_arg(codegen, expr.args[1]),
-                semantic_type.base_type)
+                start, extent, semantic_type.base_type, extent_is_end=by_end)
 
         case _:
             raise NotImplementedError(f"Dynamic array method not implemented: {method_name}")

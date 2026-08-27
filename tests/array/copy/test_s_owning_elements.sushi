@@ -1,0 +1,17 @@
+# `.s()` shares `.ss()`'s copy, so an owning element takes its own `copy_out` per slot.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 guide babel\n3 towel guide babel\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let string[] words = from(["towel", "guide", "babel"])
+    let string[] mid = words.s(1, 3)
+    println("{mid.len()} {mid[0]} {mid[1]}")
+    println("{words.len()} {words[0]} {words[1]} {words[2]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)
