@@ -32,6 +32,21 @@ class SymbolTableMerger:
         self._merge_by_type(unit_tables.extensions, global_tables.extensions)
         self._merge_by_type(unit_tables.generic_extensions, global_tables.generic_extensions)
         self._merge_by_name(unit_tables.generic_funcs, global_tables.generic_funcs)
+        self._merge_visibility(unit_tables.visibility, global_tables.visibility)
+
+    @staticmethod
+    def _merge_visibility(unit_table, global_table) -> None:
+        """Replay one unit's declarations into the global table.
+
+        `record()` IS the merge: it keeps the first and books every later one as
+        contested, which is what a name-keyed merge does plus the loser it has to
+        remember. Without this the global table stays empty and every rule that reads it
+        answers from absence.
+        """
+        for origin in unit_table.by_key.values():
+            global_table.record(origin)
+        for key, units in unit_table.contested.items():
+            global_table.contested.setdefault(key, set()).update(units)
 
     @staticmethod
     def _merge_by_name(unit_table, global_table) -> None:

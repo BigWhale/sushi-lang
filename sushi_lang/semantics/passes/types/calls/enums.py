@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
+from .visibility import name_is_contested
 from sushi_lang.semantics.typesys import BuiltinType, EnumType
 from sushi_lang.semantics.ast import EnumConstructor, DotCall, Name
 from ..compatibility import types_compatible
@@ -60,8 +61,11 @@ def validate_variant_exists(
     variant = enum_type.get_variant(variant_name)
 
     if variant is None:
-        er.emit(validator.reporter, er.ERR.CE2045, constructor.variant_name_span or constructor.loc,
-               variant=variant_name, enum=enum_type.name)
+        # A contested name is the winner's enum, not this unit's (D2). CE2045 would name
+        # a variant the user did write, against an enum they did not.
+        if not name_is_contested(validator, "enum", enum_type.name):
+            er.emit(validator.reporter, er.ERR.CE2045, constructor.variant_name_span or constructor.loc,
+                   variant=variant_name, enum=enum_type.name)
         return None
 
     return variant

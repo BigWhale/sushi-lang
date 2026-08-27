@@ -43,3 +43,7 @@ _add(ErrorMessage("CE3007", Severity.ERROR,
 _add(ErrorMessage("CE3008", Severity.ERROR,
     "linking failed: '{cc}' exited with status {status}",
     Category.UNIT, "The C compiler used as the linker rejected the object file. Its own output is attached as a note. This is an environment condition, not a compiler bug."))
+
+_add(ErrorMessage("CE3011", Severity.ERROR,
+    "cannot declare {kind} '{name}': '{owner}' declares it too",
+    Category.UNIT, "Names are flat across a program. A source library's units and a bundled stdlib module are ordinary compilation units at the consumer, so a name either of them declares is a name the consumer cannot declare again. The compiler used to let the consumer's declaration replace the library's without saying anything, which is not safe in one namespace: the library's own bodies then call the consumer's function. In practice it was worse, because the replacement was never registered -- the consumer lost its own declaration as well, and heard CE3005 about a private it wrote itself, or CE2027 about a struct shape it never spelled. Rename your declaration. `docs/design/unit-namespaces.md` carries the qualified-name design that would lift this."))

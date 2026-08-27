@@ -34,6 +34,12 @@ from sushi_lang.semantics.generics.types import (
     TypeParam,
 )
 
+from sushi_lang.semantics.visibility import (
+    VisibilityTable,
+    library_clash_origin,
+    reject_library_clash,
+)
+
 from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
                     reject_try_in_body)
 from sushi_lang.semantics.generics.extension_targets import classify_extension_target
@@ -187,6 +193,8 @@ class GenericFuncDef:
     is_library_template: bool = False            # True if registered from a consumed library's .slib templates
     library_origin: Optional[Origin] = None      # Set with the mark: how to render a diagnostic from this body
     unit_name: Optional[str] = None              # Unit that declared it; a monomorphized instance goes home to it
+    filename: Optional[str] = None               # The file it was declared in, for the same reason `FuncSig`
+                                                 # carries one: this pass shares ONE reporter across units
 
 
 @dataclass
@@ -342,6 +350,10 @@ class FunctionCollector:
         # library already follows (docs/design/libraries.md section 7). Without this,
         # `--lib-kind` would change program semantics rather than just distribution.
         self.library_units: Set[str] = set()
+        # Who declared what, across the whole program: the one reader for the question
+        # "did a library take this name already?" A struct table carries a file and not
+        # a unit, so every collector that refuses a redeclaration asks this table.
+        self.visibility: Optional[VisibilityTable] = None
         self.funcs = funcs
         self.generic_funcs = generic_funcs
         self.extensions = extensions
@@ -399,19 +411,44 @@ class FunctionCollector:
             for _const_name, stdlib_const in module.constants.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_const)
 
-    def _shadows_library(self, prev) -> bool:
-        """True when a consumer definition legitimately replaces a library one."""
-        prev_unit = getattr(prev, "unit_name", None)
-        return (prev_unit is not None
-                and prev_unit in self.library_units
-                and self.current_unit_name not in self.library_units)
+    def _reject_redeclaration(self, name: str, name_span: Optional[Span],
+                              prev) -> bool:
+        """A name already taken. True when this declaration must be dropped.
 
-    def _emit_duplicate_function(self, name: str, name_span: Optional[Span],
-                                 prev: 'FuncSig') -> None:
-        """Report a duplicate function, pointing at the first definition."""
+        Three answers, and who owns the previous declaration decides which. Another of
+        the program's own units is the plain duplicate. A library's PUBLIC name may be
+        replaced -- symbol priority puts the program's own declaration first, and
+        `tests/libs/test_lib_override.sushi` is that contract -- so this returns False
+        and the caller completes the replacement. A library's PRIVATE name may not be
+        replaced (CE3011): one namespace means the library's own bodies would start
+        calling the consumer's function, and the consumer cannot even see the name it
+        collides with.
+        """
+        clash = library_clash_origin(
+            self.visibility, "function", name,
+            current_unit=self.current_unit_name, library_units=self.library_units)
+        if clash is not None:
+            if clash.is_public:
+                return False
+            reject_library_clash(self.r, clash, name_span, kind="function", name=name,
+                                 filename=self.current_unit_file)
+            return True
         er.emit_with(self.r, ERR.CE0101, name_span,
                      filename=self.current_unit_file, name=name) \
-            .note("first defined here", prev.name_span, prev.filename).emit()
+            .note("first defined here", prev.name_span,
+                  getattr(prev, "filename", None)).emit()
+        return True
+
+    @staticmethod
+    def _drop(table, name: str) -> None:
+        """Forget a registration, so the caller's own can take the name.
+
+        The branch this replaces dropped the previous entry and returned without
+        registering anything, so the consumer lost its own declaration as well and the
+        library's came back through the `libraries` pass.
+        """
+        table.order.remove(name)
+        del table.by_name[name]
 
     def _collect_function_def(self, fn: FuncDef) -> None:
         """Dispatch function collection based on whether it's generic."""
@@ -485,22 +522,15 @@ class FunctionCollector:
         validate_type_pack_params(self.r, getattr(fn, "type_params", None), params, name_span)
 
         if name in self.funcs.by_name:
-            prev = self.funcs.by_name[name]
-            if not self._shadows_library(prev):
-                self._emit_duplicate_function(name, name_span, prev)
+            if self._reject_redeclaration(name, name_span, self.funcs.by_name[name]):
                 return
-            self.funcs.order.remove(name)
-            del self.funcs.by_name[name]
-            return
+            self._drop(self.funcs, name)
 
         if name in self.generic_funcs.by_name:
-            prev = self.generic_funcs.by_name[name]
-            if not self._shadows_library(prev):
-                self._emit_duplicate_function(name, name_span, prev)
+            if self._reject_redeclaration(name, name_span,
+                                          self.generic_funcs.by_name[name]):
                 return
-            self.generic_funcs.order.remove(name)
-            del self.generic_funcs.by_name[name]
-            return
+            self._drop(self.generic_funcs, name)
 
         sig = FuncSig(
             name=name,
@@ -535,22 +565,15 @@ class FunctionCollector:
         name_span = getattr(fn, "name_span", None) or getattr(fn, "loc", None)
 
         if name in self.generic_funcs.by_name:
-            prev = self.generic_funcs.by_name[name]
-            if not self._shadows_library(prev):
-                er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
-                    .note("first defined here", prev.name_span).emit()
+            if self._reject_redeclaration(name, name_span,
+                                          self.generic_funcs.by_name[name]):
                 return
-            self.generic_funcs.order.remove(name)
-            del self.generic_funcs.by_name[name]
+            self._drop(self.generic_funcs, name)
 
         if name in self.funcs.by_name:
-            prev = self.funcs.by_name[name]
-            if not self._shadows_library(prev):
-                er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
-                    .note("first defined here", prev.name_span).emit()
+            if self._reject_redeclaration(name, name_span, self.funcs.by_name[name]):
                 return
-            self.funcs.order.remove(name)
-            del self.funcs.by_name[name]
+            self._drop(self.funcs, name)
 
         type_param_instances = tuple(
             tp if isinstance(tp, BoundedTypeParam)
@@ -614,6 +637,7 @@ class FunctionCollector:
             ret_span=ret_span,
             err_type=fn.err_type,
             unit_name=self.current_unit_name,
+            filename=self.current_unit_file,
         )
 
         self.generic_funcs.order.append(name)

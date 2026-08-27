@@ -24,7 +24,7 @@ Either way the rule is one function, `_permitted`, and the record is one datacla
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import AbstractSet, Any, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
@@ -108,17 +108,44 @@ class VisibilityTable:
 
     by_key: dict[tuple[str, str], DeclOrigin] = field(default_factory=dict)
 
+    # The units that declared a name the table had already taken. The winner is in
+    # `by_key`; these are the losers, and each of them has heard why it lost (CE0101,
+    # CE0004, CE0006, CE3011). No rule may then measure a loser's own code against the
+    # winner's declaration, which is the whole of the D2 cascade family.
+    contested: dict[tuple[str, str], set[str]] = field(default_factory=dict)
+
     def record(self, origin: DeclOrigin) -> None:
         """Remember a declaration. The FIRST one wins, as every symbol table does.
 
         A duplicate is a separate error with its own diagnostic (CE0004, CE0101, CE0105),
         and answering visibility from the first declaration matches what the symbol tables
-        themselves kept.
+        themselves kept. The loser is remembered too, because a unit that declared a name
+        must not then be told the name is somebody else's.
         """
-        self.by_key.setdefault((origin.kind, origin.name), origin)
+        key = (origin.kind, origin.name)
+        kept = self.by_key.get(key)
+        if kept is not None:
+            # Only a loss to ANOTHER unit is contested. Recording the same unit again is
+            # either the same declaration replayed -- the collect pass builds one table
+            # and the merger replays it per unit -- or a duplicate inside one unit, which
+            # CE0101 already answers with no other unit to name.
+            if origin.unit_name is not None and origin.unit_name != kept.unit_name:
+                self.contested.setdefault(key, set()).add(origin.unit_name)
+            return
+        self.by_key[key] = origin
 
     def origin(self, kind: str, name: str) -> Optional[DeclOrigin]:
         return self.by_key.get((kind, name))
+
+    def contested_by(self, kind: str, name: str, unit: Optional[str]) -> bool:
+        """Did `unit` declare this name and LOSE it to another unit's declaration?
+
+        Only the loser. A unit that declared the name and WON reads its own record, which
+        is trustworthy, and every ordinary rule may measure its code against it.
+        """
+        if unit is None:
+            return False
+        return unit in self.contested.get((kind, name), ())
 
     def is_visible_from(self, kind: str, name: str, unit: Optional[str]) -> bool:
         """May `unit` name this declaration? An unrecorded name always may."""
@@ -148,6 +175,7 @@ def reject_private_cross_unit_use(
     loc: Any,
     *,
     current_unit: Optional[str],
+    table: Optional[VisibilityTable] = None,
     in_library_body: bool = False,
 ) -> bool:
     """Refuse a use of another unit's private declaration. True when it was refused.
@@ -155,8 +183,14 @@ def reject_private_cross_unit_use(
     `in_library_body` is the one caller-side escape: a library body transplanted into the
     consumer's compile may call the library's own privates, and the code the user wrote may
     not (#468).
+
+    `table` is the second escape: a unit that declared this name ITSELF has already been
+    told that its declaration lost, so telling it the name is private somewhere else is
+    the cascade and not the diagnosis (D2 shapes a and b).
     """
     if in_library_body:
+        return False
+    if table is not None and table.contested_by(origin.kind, origin.name, current_unit):
         return False
     if _permitted(origin, current_unit):
         return False
@@ -174,6 +208,76 @@ def reject_private_cross_unit_use(
             "declared here, without `public`", origin.name_span, origin.filename)
     diagnostic.emit()
     return True
+
+
+def library_clash_origin(
+    table: Optional[VisibilityTable],
+    kind: str,
+    name: str,
+    *,
+    current_unit: Optional[str],
+    library_units: AbstractSet[str],
+) -> Optional[DeclOrigin]:
+    """The LIBRARY declaration a consumer's own declaration collides with, or None.
+
+    A consumer cannot win a name a source library or a bundled stdlib module already
+    declared. There used to be a shadow branch that let it try; it deleted the library's
+    entry and registered no replacement, so the consumer lost its own declaration too.
+    Completing it is not safe either, because one namespace means the library's own bodies
+    would then call the consumer's function. CE3011 refuses it instead.
+
+    The answer is read from this table rather than from each symbol table, because a
+    struct table carries a file and not a unit. The table is filled at the END of each
+    unit's collection, so a name the CURRENT unit declared twice is absent here and stays
+    an ordinary duplicate.
+    """
+    if table is None or current_unit is None or current_unit in library_units:
+        return None
+    origin = table.origin(kind, name)
+    if origin is None or origin.unit_name is None:
+        return None
+    if origin.unit_name not in library_units:
+        return None
+    return origin
+
+
+def library_clash_for_type_name(
+    table: Optional[VisibilityTable],
+    name: str,
+    *,
+    current_unit: Optional[str],
+    library_units: AbstractSet[str],
+) -> Optional[DeclOrigin]:
+    """The library STRUCT or ENUM a consumer's type name collides with, or None.
+
+    One namespace holds both kinds, so a consumer's `enum Mood` loses to a library's
+    `struct Mood` exactly as it loses to a library's `enum Mood`.
+    """
+    for kind in ("struct", "enum"):
+        origin = library_clash_origin(table, kind, name, current_unit=current_unit,
+                                      library_units=library_units)
+        if origin is not None:
+            return origin
+    return None
+
+
+def reject_library_clash(
+    reporter: Reporter,
+    origin: DeclOrigin,
+    loc: Any,
+    *,
+    kind: str,
+    name: str,
+    filename: Optional[str],
+) -> None:
+    """CE3011 at the consumer's declaration, with a note at the library's."""
+    diagnostic = er.emit_with(
+        reporter, er.ERR.CE3011, loc,
+        filename=filename, kind=kind, name=name, owner=origin.unit_name,
+    )
+    if origin.name_span is not None and origin.filename is not None:
+        diagnostic = diagnostic.note("declared here", origin.name_span, origin.filename)
+    diagnostic.emit()
 
 
 def record_declarations(

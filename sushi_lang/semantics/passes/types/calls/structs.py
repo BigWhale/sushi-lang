@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Tuple
 
 from sushi_lang.internals import errors as er
+from .visibility import name_is_contested
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import StructType, Type
 from sushi_lang.semantics.ast import Call
@@ -127,7 +128,8 @@ def _validate_positional_struct_constructor(
     """Validate positional struct constructor (existing logic)."""
     actual_args = call.args
 
-    if len(actual_args) != len(expected_fields):
+    if (len(actual_args) != len(expected_fields)
+            and not name_is_contested(validator, "struct", struct_type.name)):
         er.emit(validator.reporter, er.ERR.CE2027, call.callee.loc,
                name=struct_type.name, expected=len(expected_fields), got=len(actual_args))
 

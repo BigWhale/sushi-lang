@@ -140,8 +140,16 @@ class CollectorPass:
             generic_structs=self.generic_structs,
             generic_enums=self.generic_enums
         )
-        self.function_collector.library_units = set(library_units or ())
-        self.perk_collector.library_units = set(library_units or ())
+        # Which units came from a library, for every collector that has to know.
+        for collector in (self.struct_collector, self.enum_collector,
+                          self.perk_collector, self.function_collector):
+            collector.library_units = set(library_units or ())
+
+        # And who declared what, for the three that refuse a library clash with CE3011.
+        # A struct table carries a file and not a unit, so the answer comes from here.
+        for collector in (self.struct_collector, self.enum_collector,
+                          self.function_collector):
+            collector.visibility = self.visibility
 
         self._register_predefined_structs()
         self._register_predefined_enums()

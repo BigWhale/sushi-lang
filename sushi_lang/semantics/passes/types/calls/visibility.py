@@ -18,13 +18,28 @@ from sushi_lang.semantics.visibility import (
 if TYPE_CHECKING:
     from .. import TypeValidator
 
-__all__ = ["reject_private_call", "reject_private_kept_call"]
+__all__ = ["name_is_contested", "reject_private_call", "reject_private_kept_call"]
+
+
+def name_is_contested(validator: 'TypeValidator', kind: str, name: str) -> bool:
+    """Did the unit being validated declare this name and LOSE it?
+
+    A contested name has no trustworthy declaration for the unit that lost it: the table
+    holds somebody else's, and the loser has already heard why (CE0101, CE0004, CE2046,
+    CE3011). Every rule that reads the winner's record asks this first, or the loser is
+    shown its own code measured against a declaration it never wrote (D2).
+    """
+    table = getattr(validator, "visibility", None)
+    if table is None:
+        return False
+    return table.contested_by(kind, name, validator.current_unit_name)
 
 
 def _reject(validator: 'TypeValidator', origin: DeclOrigin, loc: Any) -> bool:
     return reject_private_cross_unit_use(
         validator.reporter, origin, loc,
         current_unit=validator.current_unit_name,
+        table=getattr(validator, "visibility", None),
         in_library_body=bool(getattr(validator, "in_library_body", False)),
     )
 

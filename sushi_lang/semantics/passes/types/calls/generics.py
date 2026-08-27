@@ -12,7 +12,7 @@ from sushi_lang.semantics.generics.explicit_type_args import (
     resolve_explicit_type_args,
     check_explicit_type_arg_arity,
 )
-from .visibility import reject_private_call
+from .visibility import name_is_contested, reject_private_call
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
 
@@ -55,13 +55,14 @@ def validate_generic_function_call(
     else:
         type_args = _infer_type_args_from_call_site(validator, call, generic_func)
         if type_args is None:
-            er.emit(
-                validator.reporter,
-                er.ERR.CE2060,
-                call.callee.loc,
-                name=function_name,
-                reason="could not infer type arguments from call site"
-            )
+            if not name_is_contested(validator, "function", function_name):
+                er.emit(
+                    validator.reporter,
+                    er.ERR.CE2060,
+                    call.callee.loc,
+                    name=function_name,
+                    reason="could not infer type arguments from call site"
+                )
             return
 
     # Per-element perk-constraint check for a constrained type-pack (CE2090).
