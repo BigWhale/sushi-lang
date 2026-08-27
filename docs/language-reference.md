@@ -702,9 +702,9 @@ fn main() i32:
 
 A count you can see that spells nothing is a typo, so `[0; 0]` stays an error. A count
 you cannot see is **data**: `from([0; n])` with `n` at zero gives an empty `T[]`, the
-same value `new()` gives. A run-time count that is **negative** traps **RE2024**,
-because the fill walks with an unsigned compare and a negative count would read as a
-very large one.
+same value `new()` gives. A run-time count that is **negative** is clamped to zero and
+gives the same empty array: a count of zero is already data rather than an error, so a
+negative one reaching the same answer needs no rule of its own.
 
 The value is evaluated once, and every slot takes its own copy. A type that owns heap
 memory costs one allocation per slot, so use a long run of one only when you mean that.

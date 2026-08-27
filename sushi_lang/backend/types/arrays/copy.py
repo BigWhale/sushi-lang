@@ -14,10 +14,12 @@ A plain element type copies with a `memcpy` -- a shallow store of a plain value 
 value, so the walk would emit N stores for no gain. An owning one walks and clones, the
 decision `backend/lifecycle.py`'s handler table already makes through `copy_out`.
 
-Two traps, and neither is new. A negative count is **RE2024**, the code a negative repeat
-count takes: the walk compares with an unsigned predicate, so one hazard from one cause
-carries one code. A `start + count` past the source is **RE2020**, which is already the
-out-of-range read.
+**A range outside the source is CLAMPED, never trapped.** `string.s` and `string.ss` have
+always clamped, and these are their array twins, so they answer the same way: a start past
+the end gives nothing, a run past the end stops at the end, and an end before the start
+gives nothing. Clamping is also what makes the walk safe -- it compares with an unsigned
+predicate, so a negative count would otherwise read as four billion and run off the buffer.
+The clamp removes that by construction rather than by a guard that has to fire.
 """
 from __future__ import annotations
 
@@ -70,39 +72,42 @@ def _emit_memcpy(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value, count
     memory.emit_memcpy_bytes(codegen, dest, source, total_bytes)
 
 
-def reject_bad_range(codegen: 'LLVMCodegen', start: ir.Value, count: ir.Value,
-                     source_len: ir.Value) -> None:
-    """Trap a range the source cannot answer.
+def clamp_range(codegen: 'LLVMCodegen', start: ir.Value, extent: ir.Value,
+                source_len: ir.Value, *, extent_is_end: bool) -> tuple:
+    """A requested range, narrowed to what the source can answer.
 
-    RE2024 for a negative `start` or `count`, and RE2020 for a `start + count` past the end.
-    Both are checked before anything is allocated, so a trap leaves nothing behind.
+    ONE rule for every spelling. `.s` and `.extend_range` differ only in whether `extent` is
+    an exclusive END index or a LENGTH, which is the one branch here:
+
+        start = clamp(start, 0, len)
+        count = clamp(end, start, len) - start     # an end index
+        count = clamp(count, 0, len - start)       # a length
+
+    Checked against the string twins, which this must agree with: `"hello".s(-2, 3)` is
+    "hel", `.s(9, 12)` and `.s(3, 1)` are both "", `.ss(2, 99)` is "llo" and `.ss(2, -2)`
+    is "". The start is clamped FIRST, which is what makes `.s(-2, 3)` three elements and
+    not five.
+
+    Nothing traps. A negative count cannot reach `emit_container_walk`, so the unsigned
+    compare there is safe by construction.
     """
     b = codegen.builder
     i32 = codegen.types.i32
     zero = ir.Constant(i32, 0)
 
-    start_ok = b.icmp_signed(">=", start, zero, name="copy_start_not_negative")
-    count_ok = b.icmp_signed(">=", count, zero, name="count_not_negative")
-    both_ok = b.and_(start_ok, count_ok, name="copy_counts_ok")
+    start = _clamp(codegen, start, zero, source_len, "copy_start")
 
-    ok_block = b.append_basic_block(name="copy_counts_ok")
-    fail_block = b.append_basic_block(name="copy_count_negative")
-    b.cbranch(both_ok, ok_block, fail_block)
+    if extent_is_end:
+        end = _clamp(codegen, extent, start, source_len, "copy_end")
+        return start, b.sub(end, start, name="copy_count")
 
-    b.position_at_end(fail_block)
-    codegen.runtime.errors.emit_runtime_error_with_values("RE2024", count)
-    b.unreachable()
+    room = b.sub(source_len, start, name="copy_room")
+    return start, _clamp(codegen, extent, zero, room, "copy_count")
 
-    b.position_at_end(ok_block)
-    end = b.add(start, count, name="copy_end")
-    in_bounds = b.icmp_signed("<=", end, source_len, name="copy_in_bounds")
 
-    range_ok = b.append_basic_block(name="copy_range_ok")
-    range_fail = b.append_basic_block(name="copy_range_fail")
-    b.cbranch(in_bounds, range_ok, range_fail)
-
-    b.position_at_end(range_fail)
-    codegen.runtime.errors.emit_runtime_error_with_values("RE2020", end, source_len)
-    b.unreachable()
-
-    b.position_at_end(range_ok)
+def _clamp(codegen: 'LLVMCodegen', value: ir.Value, low: ir.Value, high: ir.Value,
+           name: str) -> ir.Value:
+    """`min(max(value, low), high)`, signed. Two compares and two selects."""
+    b = codegen.builder
+    at_least = b.select(b.icmp_signed("<", value, low), low, value, name=f"{name}_low")
+    return b.select(b.icmp_signed(">", at_least, high), high, at_least, name=name)

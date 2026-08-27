@@ -78,8 +78,11 @@ def test_a_short_readable_repeat_still_emits_stores(tmp_path):
     assert body.count("store i32 7") == 3
 
 
-def test_a_run_time_repeat_count_is_guarded(tmp_path):
-    """Ruling 6: the RE2024 guard rides on a count that is not a constant."""
+def test_a_run_time_repeat_count_is_clamped(tmp_path):
+    """A negative count cannot reach the walk, which compares with an unsigned predicate.
+
+    The clamp removes that hazard by construction; RE2024 used to trap it instead.
+    """
     ll = _emit(tmp_path, """fn zeros(i32 n) i32[]:
     return Result.Ok(from([0; n]))
 
@@ -87,10 +90,11 @@ fn main() i32:
     let i32[] a = zeros(3)??
     return Result.Ok(a.len())
 """)
-    assert "count_not_negative" in ll, "a run-time repeat count carried no RE2024 guard"
+    assert "run_count" in ll, "a run-time repeat count carried no clamp"
+    assert "RE2024" not in ll, "the retired trap is still emitted"
 
 
-def test_a_constant_count_carries_no_guard(tmp_path):
-    """The guard is emitted only where it can fire."""
+def test_a_constant_count_carries_no_clamp(tmp_path):
+    """The clamp is emitted only where it can matter. A readable count is CE2017 if bad."""
     body = _fill_body(tmp_path, "from([7; 3])")
-    assert "count_not_negative" not in body, "a constant count paid for the guard"
+    assert "run_count" not in body, "a constant count paid for the clamp"

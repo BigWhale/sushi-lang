@@ -1,0 +1,28 @@
+# A run-time repeat count that is negative CLAMPS to zero. A count of zero was already
+# data rather than an error (#478, Ruling 2), so a negative one reaching the same answer
+# needs no rule of its own. It also keeps the unsigned walk safe by construction.
+#
+# A RANGE needs no clamp: its count is an absolute value, so `0..-1` is a DESCENDING range
+# of one element and agrees with `foreach(i in 0..-1)`, which yields 0.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "0\n1 0\n1 7\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let i32 neg = 0 - 1
+    let i32[] a = from([7; neg])
+    println(a.len())
+
+    let i32[] b = from([0..neg])
+    println("{b.len()} {b[0]}")
+
+    # Still an ordinary array afterwards.
+    a.push(7)
+    println("{a.len()} {a[0]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

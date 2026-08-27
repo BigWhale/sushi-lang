@@ -78,18 +78,21 @@ def emit_dynamic_array_capacity(codegen: 'LLVMCodegen', array_value: ir.Value, t
 
 def emit_dynamic_array_extend(codegen: 'LLVMCodegen', array_value: ir.Value,
                               array_type: ir.LiteralStructType, source_data: ir.Value,
-                              source_len: ir.Value, start: ir.Value, count: ir.Value,
-                              element_type) -> ir.Value:
+                              source_len: ir.Value, start: ir.Value, extent: ir.Value,
+                              element_type, *, extent_is_end: bool = False) -> ir.Value:
     """Append `source[start .. start + count)` to the receiver, growing it once (#462).
 
     Once, not `count` times: a `.push()` loop reallocates on a doubling schedule and pays a
     bounds check and a capacity check per element, which is the cost this operation exists
     to remove.
+
+    The range is CLAMPED to what the source can answer, the way the string twins clamp.
     """
     from sushi_lang.backend.expressions import memory
-    from sushi_lang.backend.types.arrays.copy import emit_range_copy, reject_bad_range
+    from sushi_lang.backend.types.arrays.copy import clamp_range, emit_range_copy
 
-    reject_bad_range(codegen, start, count, source_len)
+    start, count = clamp_range(codegen, start, extent, source_len,
+                               extent_is_end=extent_is_end)
 
     b = codegen.builder
     len_ptr = codegen.types.get_dynamic_array_len_ptr(b, array_value)
@@ -125,15 +128,18 @@ def emit_dynamic_array_extend(codegen: 'LLVMCodegen', array_value: ir.Value,
 
 def emit_dynamic_array_slice(codegen: 'LLVMCodegen', element_llvm_type: ir.Type,
                              source_data: ir.Value, source_len: ir.Value, start: ir.Value,
-                             count: ir.Value, element_type) -> ir.Value:
+                             extent: ir.Value, element_type, *,
+                             extent_is_end: bool = False) -> ir.Value:
     """A FRESH `T[]` holding `source[start .. start + count)` (#462).
 
-    The allocation is the one `from([0; n])` uses, which is why it is a named helper.
+    The allocation is the one `from([0; n])` uses, which is why it is a named helper. The
+    range is CLAMPED to what the source can answer, the way the string twins clamp.
     """
-    from sushi_lang.backend.types.arrays.copy import emit_range_copy, reject_bad_range
+    from sushi_lang.backend.types.arrays.copy import clamp_range, emit_range_copy
     from sushi_lang.backend.types.arrays.utils import emit_dynamic_array_of_length
 
-    reject_bad_range(codegen, start, count, source_len)
+    start, count = clamp_range(codegen, start, extent, source_len,
+                               extent_is_end=extent_is_end)
 
     array_struct, data_ptr = emit_dynamic_array_of_length(codegen, element_llvm_type, count)
     emit_range_copy(codegen, data_ptr, source_data, start, count, element_type,

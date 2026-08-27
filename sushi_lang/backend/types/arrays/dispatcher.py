@@ -68,23 +68,19 @@ def _source_data_and_len(codegen: 'LLVMCodegen', expr, source_arg):
             source_type.base_type)
 
 
-def _slice_start_and_count(codegen: 'LLVMCodegen', method_name: str, args) -> tuple:
-    """The (start, count) behind `.s(start, end)` and `.ss(start, count)`.
+def _slice_args(codegen: 'LLVMCodegen', method_name: str, args) -> tuple:
+    """The (start, extent, extent_is_end) behind `.s(start, end)` and `.ss(start, count)`.
 
     Two spellings of ONE operation, so they differ here and nowhere else. `.s` takes an
     exclusive END, the way `string.s(start, end)` does, and `.ss` takes a LENGTH, the way
-    `string.ss(start, length)` does. `s(a, b)` is `ss(a, b - a)`.
+    `string.ss(start, length)` does.
 
-    An end BEFORE the start gives a negative count, which the copy's own guard traps as
-    RE2024. That is deliberate: `string.s` clamps such a range to empty, and an array does
-    not, because an array index traps everywhere in Sushi and the two array spellings must
-    agree with each other before either agrees with text.
+    The arguments are handed on RAW. `clamp_range` narrows them, and it must clamp the
+    START before it reads the end -- `"hello".s(-2, 3)` is three characters and not five,
+    so subtracting here would give the wrong count.
     """
-    start = _index_arg(codegen, args[0])
-    second = _index_arg(codegen, args[1])
-    if method_name == "s":
-        return start, codegen.builder.sub(second, start, name="slice_count")
-    return start, second
+    return (_index_arg(codegen, args[0]), _index_arg(codegen, args[1]),
+            method_name == "s")
 
 
 def _index_arg(codegen: 'LLVMCodegen', arg) -> ir.Value:
@@ -169,11 +165,12 @@ def emit_array_method(
                 zero = ir.Constant(codegen.types.i32, 0)
                 data = codegen.builder.gep(address(writable=False), [zero, zero],
                                            name="slice_src_data")
-                start, count = _slice_start_and_count(codegen, method_name, expr.args)
+                start, extent, by_end = _slice_args(codegen, method_name, expr.args)
                 return core.emit_dynamic_array_slice(
                     codegen, fixed_ir_type.element, data,
                     ir.Constant(codegen.types.i32, fixed_ir_type.count),
-                    start, count, fixed_semantic_type.base_type)
+                    start, extent, fixed_semantic_type.base_type,
+                    extent_is_end=by_end)
 
             case _:
                 raise NotImplementedError(f"Fixed array method not implemented: {method_name}")
@@ -292,12 +289,12 @@ def emit_array_method(
                 raise_internal_error("CE0042", type=type(semantic_type).__name__)
             data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, receiver_value)
             len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, receiver_value)
-            start, count = _slice_start_and_count(codegen, method_name, expr.args)
+            start, extent, by_end = _slice_args(codegen, method_name, expr.args)
             return core.emit_dynamic_array_slice(
                 codegen, array_struct_type.elements[2].pointee,
                 codegen.builder.load(data_ptr_ptr, name="slice_src_data"),
                 codegen.builder.load(len_ptr, name="slice_src_len"),
-                start, count, semantic_type.base_type)
+                start, extent, semantic_type.base_type, extent_is_end=by_end)
 
         case _:
             raise NotImplementedError(f"Dynamic array method not implemented: {method_name}")

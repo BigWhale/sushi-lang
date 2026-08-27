@@ -160,12 +160,18 @@ A plain element type takes a `memcpy`, because a shallow store of a plain value 
 value and a walk would emit N stores for nothing. An owning one walks and clones through
 `copy_out`, the decision `backend/lifecycle.py`'s handler table already makes.
 
-`.s(start, end)` and `.ss(start, count)` differ where they READ their arguments and nowhere
-else: `_slice_start_and_count` subtracts for `.s` and both then call one emitter. An end
-before the start is therefore a negative count, which the copy's own guard traps as RE2024.
-That is where the array forms part company with `string.s` and `string.ss`, which clamp a
-bad range: an array index traps everywhere in Sushi, and the two array spellings must agree
-with each other before either agrees with text.
+`.s(start, end)` and `.ss(start, count)` differ in one thing: whether the second argument is
+an exclusive END or a LENGTH. `clamp_range` takes that as a flag and narrows both the same
+way, and the arguments reach it RAW -- the start is clamped FIRST, which is what makes
+`.s(-2, 3)` three elements and not five.
+
+**A range outside the source is clamped, never trapped**, the answer `string.s` and
+`string.ss` have always given. That also makes the walk safe by construction: it compares
+with an unsigned predicate, so a negative count would read as four billion, and the clamp
+removes that rather than leaving a guard to fire. RE2024 existed to trap it and is retired.
+
+Clamping is deliberately unlike `arr[i]`, which traps RE2020. An index names ONE element and
+either has it or does not; a range asks for what overlaps, and can always answer.
 
 **The source may not alias the destination** (CE2430). Growing the destination may
 reallocate its buffer, which leaves the source pointer dangling mid-copy. A copy that must

@@ -272,11 +272,20 @@ better with `.ss()`.
 Both work on a fixed array too, and both always answer a `T[]`, because the length is a
 run-time value.
 
-**They do NOT clamp**, unlike their string twins. `"hello".s(2, 99)` answers `"llo"`, and
-`src.s(2, 99)` traps **RE2020**; `"hello".s(3, 1)` answers `""`, and `src.s(3, 1)` traps
-**RE2024**, because an end before the start is a negative count. An array index traps
-everywhere in Sushi -- `arr[i]` does, and `.get(i)` is the safe form -- so the copy family
-follows the array rule rather than the text one.
+**A range outside the source is CLAMPED**, exactly as it is for the string twins. Nothing
+traps and nothing is refused: a start before the beginning becomes 0, a start past the end
+gives an empty array, a run past the end stops at the end, and an end before the start
+gives an empty array.
+
+| call on a 5-element source | answer |
+|---|---|
+| `.s(-2, 3)` | the first 3 elements -- the start clamps FIRST |
+| `.s(9, 12)` | empty |
+| `.s(3, 1)` | empty -- an end before the start |
+| `.ss(2, 99)` | the last 3 elements |
+| `.ss(2, -2)` | empty |
+
+Every row is what `string.s` and `string.ss` answer for the same arguments.
 
 ### The rules the three share
 
@@ -291,10 +300,11 @@ out.extend(more)
 println("{out[1]} {more[0]}")  # babel babel -- two owners, two buffers
 ```
 
-**A bad range traps**, the way an out-of-range `arr[i]` does. A negative `start` or
-`count` is **RE2024**, and a range past the end of the source is **RE2020**.
-Both fire before anything is allocated. A `count` of zero is not an error: it copies
-nothing.
+**A bad range is clamped, never trapped.** `.extend_range()` narrows the same way the
+slices do -- one rule, one place -- so a count past the end appends what is there and a
+negative one appends nothing. A `count` of zero copies nothing. This is deliberately
+unlike `arr[i]`, which traps **RE2020**: an index names ONE element and either has it or
+does not, while a range asks for what overlaps and can always answer.
 
 **The source may not be the destination.** `out.extend(out)` is **CE2430**. Growing the
 destination may reallocate its buffer, which would leave the source pointer dangling in

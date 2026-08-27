@@ -1,0 +1,41 @@
+# A range outside the source is CLAMPED, never trapped -- the answer `string.s` and
+# `string.ss` have always given. Checked against those twins case for case:
+# "hello".s(-2, 3) is "hel", .s(9, 12) and .s(3, 1) are "", .ss(2, 99) is "llo".
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 10 20 30\n0\n0\n3 30 40 50\n0\n3 10 20 30\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let i32[] src = from([10, 20, 30, 40, 50])
+    let i32 neg = 0 - 2
+
+    # A start before the beginning: clamped to 0, so `.s(-2, 3)` is three elements.
+    let i32[] a = src.s(neg, 3)
+    println("{a.len()} {a[0]} {a[1]} {a[2]}")
+
+    # A start past the end gives nothing.
+    let i32[] b = src.s(9, 12)
+    println(b.len())
+
+    # An end before the start gives nothing.
+    let i32[] c = src.s(3, 1)
+    println(c.len())
+
+    # A length past the end stops at the end.
+    let i32[] d = src.ss(2, 99)
+    println("{d.len()} {d[0]} {d[1]} {d[2]}")
+
+    # A negative length gives nothing.
+    let i32[] e = src.ss(2, neg)
+    println(e.len())
+
+    # A negative start on the length form clamps the same way.
+    let i32[] f = src.ss(neg, 3)
+    println("{f.len()} {f[0]} {f[1]} {f[2]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)
