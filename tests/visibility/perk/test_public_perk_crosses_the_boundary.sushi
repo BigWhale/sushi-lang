@@ -1,0 +1,23 @@
+# The marked perk is the control: a consumer may implement it and may
+# constrain a type parameter with it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "MUFFLER\nPALLET\n"
+
+use <lib/private_perk_lib>
+
+struct Pallet:
+    i32 crates
+
+extend Pallet with Loud:
+    fn shout() string:
+        return "PALLET"
+
+fn say@(T: Loud)(T thing) string:
+    return Result.Ok(thing.shout())
+
+fn main() i32:
+    let Muffler m = Muffler(3)
+    let Pallet p = Pallet(2)
+    println(say(m).realise("none"))
+    println(say(p).realise("none"))
+    return Result.Ok(0)

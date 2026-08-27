@@ -1,0 +1,13 @@
+# CE4011: constraining a type parameter with another unit's private perk names
+# the perk exactly as an implementation does.
+# EXPECT_ERROR_CODE: CE4011
+
+use <lib/private_perk_lib>
+
+fn hush_all@(T: Quiet)(T thing) string:
+    return Result.Ok(thing.hush())
+
+fn main() i32:
+    let Muffler m = Muffler(3)
+    println(hush_all(m).realise("none"))
+    return Result.Ok(0)

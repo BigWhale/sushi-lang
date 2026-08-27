@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Set, Tuple
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
+from sushi_lang.semantics.visibility import (
+    VisibilityTable, reject_private_perk_contract)
 from sushi_lang.semantics.ast import PerkDef, ExtendWithDef, FuncDef, Program
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
 
@@ -189,6 +191,8 @@ class PerkCollector:
         # and the method symbol is defined twice. (A binary library has no such problem:
         # its body is weak_odr in the .slib object and the linker discards it.)
         self.shadowed_impls: List[ExtendWithDef] = []
+        # Who declared what, for the perk-contract rule (CE4011).
+        self.visibility: Optional[VisibilityTable] = None
 
     def collect_definitions(self, root: Program) -> None:
         """Collect all perk definitions from program AST."""
@@ -299,6 +303,14 @@ class PerkCollector:
 
         if not self.perks.get(perk_name):
             er.emit(self.r, ERR.CE4003, perk_name_span, perk=perk_name)
+            return
+
+        # Ruling 3: a private perk keeps its CONTRACT, so another unit may not implement
+        # it. The method it provides stays callable, which is the rest of the ruling.
+        if reject_private_perk_contract(
+                self.r, self.visibility, perk_name, perk_name_span,
+                action="implement", current_unit=self.current_unit_name,
+                filename=self.current_unit_file):
             return
 
         if not self.perk_impls.register(impl, type_name,

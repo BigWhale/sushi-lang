@@ -50,11 +50,10 @@ FOLLOWS_TARGET_TYPE = frozenset({"extension", "perk implementation"})
 NO_VISIBILITY = frozenset({"external block", "external declaration"})
 
 
-# Which kinds still read PUBLIC when they carry no marker. `docs/design/visibility.md`
-# Ruling 1 makes private the default for all of them, and Phase 2 empties this set one
-# kind at a time, so the marker parses and is recorded from the grammar commit on while
-# each flip stays one line with a batch of its own.
-UNMARKED_IS_PUBLIC = frozenset({"perk"})
+# Every kind that carries a marker is now private by default, which is Ruling 1 and
+# Ruling 3 in full. The set stays because it is the one place that says so, and because
+# `declared_public` is what every builder asks -- a kind added later starts here.
+UNMARKED_IS_PUBLIC: frozenset[str] = frozenset()
 
 
 def declared_public(kind: str, marked: bool) -> bool:
@@ -302,6 +301,59 @@ def reject_library_clash(
     if origin.name_span is not None and origin.filename is not None:
         diagnostic = diagnostic.note("declared here", origin.name_span, origin.filename)
     diagnostic.emit()
+
+
+def reject_private_perk_contract(
+    reporter: Reporter,
+    table: Optional[VisibilityTable],
+    name: str,
+    loc: Any,
+    *,
+    action: str,
+    current_unit: Optional[str],
+    filename: Optional[str],
+) -> bool:
+    """Refuse a promise about another unit's private perk (CE4011). True when refused.
+
+    Two use sites, one rule: implementing the perk, and constraining a type parameter
+    with it. Both are statements about the contract, which is what a private perk keeps.
+    Calling a method the perk provides is neither, and stays legal -- Ruling 3.
+    """
+    if table is None:
+        return False
+    origin = table.origin("perk", name)
+    if origin is None or _permitted(origin, current_unit):
+        return False
+    diagnostic = er.emit_with(
+        reporter, er.ERR.CE4011, loc,
+        filename=filename, action=action, name=name,
+        current_unit=current_unit, owner=origin.unit_name,
+    )
+    if origin.name_span is not None and origin.filename is not None:
+        diagnostic = diagnostic.note(
+            "declared here, without `public`", origin.name_span, origin.filename)
+    diagnostic.emit()
+    return True
+
+
+def reject_private_perk_constraints(
+    reporter: Reporter,
+    table: Optional[VisibilityTable],
+    type_params: Any,
+    loc: Any,
+    *,
+    current_unit: Optional[str],
+    filename: Optional[str],
+) -> None:
+    """Every constraint on every type parameter of one declaration."""
+    for param in type_params or ():
+        for constraint in getattr(param, "constraints", None) or ():
+            if isinstance(constraint, str):
+                reject_private_perk_contract(
+                    reporter, table, constraint,
+                    getattr(param, "loc", None) or loc,
+                    action="constrain a type parameter with",
+                    current_unit=current_unit, filename=filename)
 
 
 def record_declarations(

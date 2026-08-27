@@ -15,6 +15,7 @@ from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_for_type_name,
     reject_library_clash,
+    reject_private_perk_constraints,
 )
 
 from .utils import extract_type_param_names, note_first_declaration, reject_reference_in
@@ -181,6 +182,10 @@ class StructCollector:
                 else BoundedTypeParam(name=tp, constraints=[], loc=None)
                 for tp in type_params_raw
             )
+
+            reject_private_perk_constraints(
+                self.r, self.visibility, type_param_instances, name_span,
+                current_unit=self.current_unit_name, filename=self.current_unit_file)
 
             generic_struct = GenericStructType(
                 name=name,

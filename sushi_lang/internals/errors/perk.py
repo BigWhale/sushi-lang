@@ -46,3 +46,7 @@ _add(ErrorMessage("CE4007", Severity.ERROR,
 _add(ErrorMessage("CE4010", Severity.ERROR,
     "perk {name} cannot have type parameters",
     Category.PERK, "Perks cannot be generic. Remove the <...> type parameter list; constrain generic functions with '<T: {name}>' instead."))
+
+_add(ErrorMessage("CE4011", Severity.ERROR,
+    "cannot {action} private perk '{name}' from unit '{current_unit}' (perk is defined in '{owner}')",
+    Category.PERK, "Ruling 3 of `docs/design/visibility.md`: a perk carries `public` and is private by default, and what a private perk hides is the CONTRACT. Another unit may not implement it and may not constrain a type parameter with it, because both of those are promises about the perk itself. Calling a method it provides is untouched: method resolution is blind to the caller, so a unit that can name the type can call what the type implements. This is a different rule from CE3005, which is about naming a declaration; a perk contract has its own code because it has its own answer -- the method stays reachable while the contract does not. Mark the perk `public`, or ask its unit for a function that does the work."))

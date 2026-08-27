@@ -46,7 +46,9 @@ def test_an_unmarked_declaration_carries_no_span(kind):
     assert plain.is_public is declared_public(kind, False)
 
 
-def test_a_flipped_kind_is_private_when_unmarked():
-    """The switch is the whole of a flip: a kind leaves the set and its default changes."""
-    assert declared_public("function", False) is False
-    assert "function" not in UNMARKED_IS_PUBLIC
+def test_every_marked_kind_is_private_when_unmarked():
+    """Phase 2 emptied the set: private is the default for all five kinds."""
+    assert not UNMARKED_IS_PUBLIC
+    for kind in SOURCES:
+        assert declared_public(kind, False) is False, kind
+        assert declared_public(kind, True) is True, kind

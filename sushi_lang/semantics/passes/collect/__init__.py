@@ -145,10 +145,11 @@ class CollectorPass:
                           self.perk_collector, self.function_collector):
             collector.library_units = set(library_units or ())
 
-        # And who declared what, for the three that refuse a library clash with CE3011.
-        # A struct table carries a file and not a unit, so the answer comes from here.
+        # And who declared what, for the four that ask it: three refuse a library clash
+        # with CE3011, and all four refuse a promise about a private perk with CE4011. A
+        # struct table carries a file and not a unit, so the answer comes from here.
         for collector in (self.struct_collector, self.enum_collector,
-                          self.function_collector):
+                          self.function_collector, self.perk_collector):
             collector.visibility = self.visibility
 
         self._register_predefined_structs()
