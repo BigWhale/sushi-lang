@@ -241,6 +241,8 @@ class ExtensionMethod:
     ret_span: Optional[Span] = None
     params: List[Param] = field(default_factory=list)  # Parameters excluding implicit 'self'
     self_mode: Optional[str] = None  # "peek"/"poke" for a `poke self` receiver (#327);
+    filename: Optional[str] = None   # The file it was declared in; #473 missed this record
+    unit_name: Optional[str] = None  # The unit that declared it
 
 
 @dataclass
@@ -276,6 +278,8 @@ class GenericExtensionMethod:
     params: List[Param] = field(default_factory=list)  # May contain TypeParameter in param types
     body: Optional[Any] = None       # Method body (Block AST node)
     self_mode: Optional[str] = None  # "peek"/"poke" for a `poke self` receiver (#327)
+    filename: Optional[str] = None   # The file it was declared in; #473 missed this record
+    unit_name: Optional[str] = None  # The unit that declared it
 
 
 @dataclass
@@ -332,6 +336,7 @@ class FunctionCollector:
         """Initialize function collector."""
         self.r = reporter
         self.current_unit_file: Optional[str] = None  # File of the unit being collected
+        self.current_unit_name: Optional[str] = None
         # Unit names that came from a source library. A consumer definition that
         # collides with one of theirs SHADOWS it silently, which is the rule a binary
         # library already follows (docs/design/libraries.md section 7). Without this,
@@ -346,13 +351,13 @@ class FunctionCollector:
         self.generic_structs = generic_structs
         self.generic_enums = generic_enums
 
-    def collect_functions(self, root: Program, unit_name: Optional[str] = None) -> None:
+    def collect_functions(self, root: Program) -> None:
         """Collect all function definitions from program AST."""
         funcs = getattr(root, "functions", None)
         if isinstance(funcs, list):
             for fn in funcs:
                 if isinstance(fn, FuncDef):
-                    self._collect_function_def(fn, unit_name=unit_name)
+                    self._collect_function_def(fn)
 
     def collect_extensions(self, root: Program) -> None:
         """Collect all extension method definitions from program AST."""
@@ -394,12 +399,12 @@ class FunctionCollector:
             for _const_name, stdlib_const in module.constants.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_const)
 
-    def _shadows_library(self, prev, unit_name: Optional[str]) -> bool:
+    def _shadows_library(self, prev) -> bool:
         """True when a consumer definition legitimately replaces a library one."""
         prev_unit = getattr(prev, "unit_name", None)
         return (prev_unit is not None
                 and prev_unit in self.library_units
-                and unit_name not in self.library_units)
+                and self.current_unit_name not in self.library_units)
 
     def _emit_duplicate_function(self, name: str, name_span: Optional[Span],
                                  prev: 'FuncSig') -> None:
@@ -408,7 +413,7 @@ class FunctionCollector:
                      filename=self.current_unit_file, name=name) \
             .note("first defined here", prev.name_span, prev.filename).emit()
 
-    def _collect_function_def(self, fn: FuncDef, unit_name: Optional[str] = None) -> None:
+    def _collect_function_def(self, fn: FuncDef) -> None:
         """Dispatch function collection based on whether it's generic."""
         name = getattr(fn, "name", None)
         if not isinstance(name, str):
@@ -425,11 +430,11 @@ class FunctionCollector:
         type_params = extract_type_param_names(type_params_raw)
 
         if type_params and len(type_params) > 0:
-            self._collect_generic_function_def(fn, type_params_raw, unit_name)
+            self._collect_generic_function_def(fn, type_params_raw)
         else:
-            self._collect_concrete_function_def(fn, unit_name)
+            self._collect_concrete_function_def(fn)
 
-    def _collect_concrete_function_def(self, fn: FuncDef, unit_name: Optional[str] = None) -> None:
+    def _collect_concrete_function_def(self, fn: FuncDef) -> None:
         """Collect concrete (non-generic) function definition."""
         name = getattr(fn, "name", None)
         if not isinstance(name, str):
@@ -481,7 +486,7 @@ class FunctionCollector:
 
         if name in self.funcs.by_name:
             prev = self.funcs.by_name[name]
-            if not self._shadows_library(prev, unit_name):
+            if not self._shadows_library(prev):
                 self._emit_duplicate_function(name, name_span, prev)
                 return
             self.funcs.order.remove(name)
@@ -490,7 +495,7 @@ class FunctionCollector:
 
         if name in self.generic_funcs.by_name:
             prev = self.generic_funcs.by_name[name]
-            if not self._shadows_library(prev, unit_name):
+            if not self._shadows_library(prev):
                 self._emit_duplicate_function(name, name_span, prev)
                 return
             self.generic_funcs.order.remove(name)
@@ -505,7 +510,7 @@ class FunctionCollector:
             ret_span=ret_span,
             params=params,
             is_public=is_public,
-            unit_name=unit_name,
+            unit_name=self.current_unit_name,
             err_type=fn.err_type,
         )
 
@@ -524,7 +529,6 @@ class FunctionCollector:
         self,
         fn: FuncDef,
         type_params_raw: List,
-        unit_name: Optional[str] = None
     ) -> None:
         """Collect generic function definition."""
         name = fn.name
@@ -532,7 +536,7 @@ class FunctionCollector:
 
         if name in self.generic_funcs.by_name:
             prev = self.generic_funcs.by_name[name]
-            if not self._shadows_library(prev, unit_name):
+            if not self._shadows_library(prev):
                 er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
                     .note("first defined here", prev.name_span).emit()
                 return
@@ -541,7 +545,7 @@ class FunctionCollector:
 
         if name in self.funcs.by_name:
             prev = self.funcs.by_name[name]
-            if not self._shadows_library(prev, unit_name):
+            if not self._shadows_library(prev):
                 er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
                     .note("first defined here", prev.name_span).emit()
                 return
@@ -609,7 +613,7 @@ class FunctionCollector:
             name_span=name_span,
             ret_span=ret_span,
             err_type=fn.err_type,
-            unit_name=unit_name,
+            unit_name=self.current_unit_name,
         )
 
         self.generic_funcs.order.append(name)
@@ -716,6 +720,8 @@ class FunctionCollector:
                 params=concrete_params,
                 body=body,
                 self_mode=getattr(ext, "self_mode", None),
+                filename=self.current_unit_file,
+                unit_name=self.current_unit_name,
             )
 
             if self._reject_overlapping_target(generic_method, target_type, name_span):
@@ -741,14 +747,18 @@ class FunctionCollector:
                 ret_span=ret_span,
                 params=params,
                 self_mode=getattr(ext, "self_mode", None),
+                filename=self.current_unit_file,
+                unit_name=self.current_unit_name,
             )
 
             if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, StructType, EnumType)):
                 existing = self.extensions.get_method(resolved_type, name)
                 if existing is not None:
                     er.emit_with(self.r, ERR.CE0101, name_span,
+                           filename=self.current_unit_file,
                            name=f"extension method '{name}' for '{display_type(resolved_type)}'") \
-                        .note("first defined here", existing.name_span).emit()
+                        .note("first defined here", existing.name_span,
+                              existing.filename).emit()
                     return
 
             if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, StructType, EnumType)):

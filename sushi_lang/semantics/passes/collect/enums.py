@@ -61,6 +61,7 @@ class EnumCollector:
         # The unit being collected. This pass shares one reporter across every
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
+        self.current_unit_name: Optional[str] = None
         self.enums = enums
         self.generic_enums = generic_enums
         self.structs = structs

@@ -163,20 +163,20 @@ class CollectorPass:
 
     def _collect(self, root: Program, unit_name: Optional[str],
                  unit_file: Optional[str]) -> 'SymbolTables':
-        # One way in for all six: the field, not a parameter on one collector's method.
+        # One way in for all six: the fields, not a parameter on one collector's method.
         for collector in (self.constant_collector, self.struct_collector,
                           self.enum_collector, self.perk_collector,
                           self.external_collector, self.function_collector):
             collector.current_unit_file = unit_file
+            collector.current_unit_name = unit_name
 
         self.constant_collector.collect(root)
         self.struct_collector.collect(root)
         self.enum_collector.collect(root)
-        self.perk_collector.current_unit_name = unit_name
         self.perk_collector.collect_definitions(root)
         self.perk_collector.collect_implementations(root)
         self.perk_collector.register_synthetic_impls()
-        self.function_collector.collect_functions(root, unit_name)
+        self.function_collector.collect_functions(root)
         self.function_collector.collect_extensions(root)
         self.function_collector.register_stdlib_functions(root)
         self.external_collector.collect(root)
