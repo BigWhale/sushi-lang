@@ -1,0 +1,13 @@
+# Perks: `extend ~ shout()` is CE2032 and `extend ~ with Loud` was not, because the two
+# validators each checked the target type in their own way. One check for both, so the
+# blank type is refused wherever a target is written.
+# EXPECT_ERROR_CODE: CE2032
+perk Loud:
+    fn shout() i32
+
+extend ~ with Loud:
+    fn shout() i32:
+        return 1
+
+fn main() i32:
+    return Result.Ok(0)
