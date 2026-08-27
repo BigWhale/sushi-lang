@@ -1,0 +1,26 @@
+# Regression for #460: `.realise(new())` on a `Result@(i32[], E)` was a CE0017 ICE, "cannot
+# convert value of type 'i32' to '{i32, i32, i32*}'". `new()` reached the realise path as a
+# scalar placeholder rather than as an empty `{len, cap, data}` descriptor. An empty array is
+# the natural default for an array payload, and `new()` is the only way to spell one.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "ok = 8\nerr = 0\n"
+# EXPECT_NO_LEAKS: true
+
+fn mk(bool good) i32[]:
+    if (not good):
+        return Result.Err(StdError.Error)
+    return Result.Ok(from([1, 2, 3, 4, 5, 6, 7, 8]))
+
+fn probe() ~:
+    let Result@(i32[], StdError) ok = mk(true)
+    let i32[] v = ok.realise(new())
+    println("ok = {v.len()}")
+
+    let Result@(i32[], StdError) bad = mk(false)
+    let i32[] e = bad.realise(new())
+    println("err = {e.len()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    probe()
+    return Result.Ok(0)

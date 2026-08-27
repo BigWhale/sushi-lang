@@ -561,7 +561,7 @@ class EnumConstructor(Node):
 
 @dataclass
 class DynamicArrayNew(Node):
-    pass  # Empty constructor new()
+    resolved_type: Optional["Type"] = None  # The `T[]` this empty array is (typecheck pass)
 
 @dataclass
 class DynamicArrayFrom(Node):

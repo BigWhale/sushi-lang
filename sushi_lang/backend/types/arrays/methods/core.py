@@ -4,8 +4,9 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import DynamicArrayNew, DynamicArrayFrom
-from sushi_lang.semantics.typesys import BuiltinType
+from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType
 from sushi_lang.backend import gep_utils
+from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -28,11 +29,20 @@ def _infer_builtin_type_from_llvm(llvm_type: ir.Type) -> BuiltinType:
 
 
 def emit_dynamic_array_new(codegen: 'LLVMCodegen', expr: DynamicArrayNew) -> ir.Value:
-    """Emit new() constructor for dynamic arrays."""
-    # For new() constructor, the array is already initialized by declaration
-    # We just need to return a null value to indicate success
-    # In a full implementation, this might return the array struct itself
-    return ir.Constant(codegen.types.i32, 0)
+    """Emit the `new()` constructor: an empty `{len, cap, data}` descriptor, BY VALUE.
+
+    `new()` names no element type, so the typecheck pass stamps the one its position expects.
+    Returning a scalar placeholder instead made `new()` a value nowhere: a call argument and
+    `.realise(new())` were CE0017, a `Result.Ok(new())` payload aborted at scope exit, and a
+    rebind crashed outright (#460).
+    """
+    from ..utils import emit_empty_dynamic_array
+
+    array_type = expr.resolved_type
+    if not isinstance(array_type, DynamicArrayType):
+        raise_internal_error("CE0042", type=type(array_type).__name__)
+
+    return emit_empty_dynamic_array(codegen, codegen.types.ll_type(array_type.base_type))
 
 
 def emit_dynamic_array_from(codegen: 'LLVMCodegen', expr: DynamicArrayFrom) -> ir.Value:

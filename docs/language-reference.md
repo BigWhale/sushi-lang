@@ -780,6 +780,23 @@ arr.push(4)
 let i32 last = arr.pop().realise(-1)   # .pop() answers Maybe@(T)
 ```
 
+`new()` is a value, not only a declaration form. It takes its element type from the position
+it stands in, so it spells the empty array anywhere one is expected -- a call argument, an
+enum payload, a rebind, a struct field, and the default of a `.realise()`:
+
+```sushi
+fn count(i32[] xs) i32:
+    return Result.Ok(xs.len())
+
+fn mk(bool good) i32[]:
+    if (not good):
+        return Result.Ok(new())
+    return Result.Ok(from([1, 2, 3]))
+
+let i32 none = count(new())??
+let i32[] taken = mk(false).realise(new())
+```
+
 ### Indexed Assignment
 
 `arr[index] := value` writes one element, on a fixed array and a dynamic array alike:

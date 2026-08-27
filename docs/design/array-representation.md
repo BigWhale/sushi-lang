@@ -129,6 +129,29 @@ second chance. Three tiers, gated by `tests/unit/test_range_fill_tiers.py`: a re
 under `UNROLL_LIMIT` stores literals and emits no arithmetic, a longer one walks a constant
 trip count, and an unreadable one walks with `first`, `step` and `count` computed.
 
+## The empty array, and `new()`
+
+An empty array is `{0, 0, null}`. `emit_empty_dynamic_array` (`backend/types/arrays/utils.py`)
+is the one builder of it, and a literal that counts nothing routes through it too -- `new()`
+and `from([0; 0])` are the same array.
+
+`new()` names no element type. It takes one from the position it stands in: the typecheck pass
+stamps `DynamicArrayNew.resolved_type` in `propagate_types_to_value`, beside the arm that gives
+an array literal's elements their declared type. Every value position funnels there -- a call
+argument, an enum payload, a struct field, a rebind, and a `.realise()` default -- so the
+emitter always has a type to build from, and a missing stamp is CE0042 rather than a guess.
+
+The `let` route is separate and stays so: `declare_dynamic_array` writes `{0, 0, null}` into
+the slot it allocates, so `let i32[] e = new()` has nothing left to do and stores nothing.
+That is the same reason `from()` has its own arm there -- a declaration fills the slot it owns
+rather than building a value to copy into it.
+
+Before the stamp existed the emitter had nothing to build from and answered with a scalar
+placeholder, so `new()` was a value only where a caller special-cased it: a `let` and a struct
+constructor. As an argument and as a `.realise()` default it was CE0017, as a `Result.Ok()`
+payload it packed the placeholder and aborted at scope exit, and a rebind crashed the compiler
+(#460).
+
 ## The one element address
 
 `emit_element_pointer` (`backend/types/arrays/indexing.py`) is the single place that turns an
