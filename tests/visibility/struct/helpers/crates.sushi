@@ -1,0 +1,9 @@
+public struct Crate:
+    i32 weight
+
+struct Pallet:
+    i32 crates
+
+public fn pallet_size() i32:
+    let Pallet p = Pallet(4)
+    return Result.Ok(p.crates)

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from . import TypeValidator
 
 __all__ = ["name_is_contested", "reject_private_call", "reject_private_kept_call",
-           "reject_private_name"]
+           "reject_private_name", "reject_private_type"]
 
 
 def name_is_contested(validator: 'TypeValidator', kind: str, name: str) -> bool:
@@ -73,3 +73,21 @@ def reject_private_name(validator: 'TypeValidator', kind: str, record: Any,
     validated, so it is where the fence sits (D3).
     """
     return _reject(validator, origin_of(kind, record), loc)
+
+
+def reject_private_type(validator: 'TypeValidator', name: str, loc: Any) -> bool:
+    """Reject a use of another unit's private struct or enum. True when refused.
+
+    One namespace holds both kinds, so the name is looked up in both: a consumer naming
+    `Mood` is refused whether the private declaration next door is a struct or an enum.
+    A name with no record -- every monomorphized instance, `Result`, `FileMode`, a lifted
+    closure environment -- is public by absence.
+    """
+    table = getattr(validator, "visibility", None)
+    if table is None:
+        return False
+    for kind in ("struct", "enum"):
+        origin = table.origin(kind, name)
+        if origin is not None:
+            return _reject(validator, origin, loc)
+    return False

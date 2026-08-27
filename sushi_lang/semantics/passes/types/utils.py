@@ -7,6 +7,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ReferenceType
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
+from sushi_lang.semantics.passes.types.visibility import reject_private_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Param, Expr
@@ -68,8 +69,10 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
 
     if isinstance(type_obj, UnknownType):
         if type_obj.name in validator.struct_table.by_name:
+            reject_private_type(validator, type_obj.name, span)
             return
         if type_obj.name in validator.enum_table.by_name:
+            reject_private_type(validator, type_obj.name, span)
             return
         er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
     elif isinstance(type_obj, BuiltinType) and type_obj not in validator.known_types:
@@ -94,6 +97,10 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
         # same way. Without this arm a `peek Nope` fell through and reached the backend as
         # CE0020, telling the user their program was a compiler bug.
         validate_type_name(validator, type_obj.referenced_type, span)
+    elif isinstance(type_obj, (StructType, EnumType)):
+        # A named type that the resolve pass already interned. It exists by construction,
+        # so the only question left is whether this unit may name it.
+        reject_private_type(validator, type_obj.name, span)
     else:
         from sushi_lang.semantics.typesys import FunctionType, IteratorType, PointerType
         if isinstance(type_obj, FunctionType):

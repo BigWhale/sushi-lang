@@ -1,0 +1,12 @@
+# CE3005: an enum is private by default now, and a variant follows its enum --
+# a private variant would make a total `match` unwritable across a boundary,
+# so the enum is the thing that carries the marker.
+# EXPECT_ERROR_CODE: CE3005
+
+use "helpers/moods"
+
+fn main() i32:
+    let Secret s = Secret.Hidden
+    match s:
+        Secret.Hidden -> println("hidden")
+    return Result.Ok(0)

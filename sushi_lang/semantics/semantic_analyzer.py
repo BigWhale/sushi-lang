@@ -453,7 +453,10 @@ class SemanticAnalyzer:
             scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals)
             scope_analyzer.run(unit.ast)
 
-            type_validator = TypeValidator(unit_reporter, self.tables, current_unit_name=unit.name, monomorphized_functions=monomorphizer.monomorphized_functions)
+            type_validator = TypeValidator(
+                unit_reporter, self.tables, current_unit_name=unit.name,
+                monomorphized_functions=monomorphizer.monomorphized_functions,
+                in_library_unit=unit.provenance is not None)
             type_validator.run(unit.ast)
 
             from sushi_lang.semantics.passes.lift import LambdaLifter

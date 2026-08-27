@@ -1,0 +1,12 @@
+# The marked struct crosses the boundary; the unmarked one stays home and is
+# reached through a public function.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7 4\n"
+
+use "helpers/crates"
+
+fn main() i32:
+    let Crate c = Crate(7)
+    let i32 size = pallet_size().realise(0)
+    println("{c.weight} {size}")
+    return Result.Ok(0)

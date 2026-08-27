@@ -17,7 +17,8 @@ def validate_function(self, func: FuncDef) -> None:
     """Validate types within a function."""
     self.current_function = func
     self.in_extension_context = False  # Normal functions are never extension/perk bodies
-    self.in_library_body = bool(getattr(func, "is_library_template", False))
+    self.in_library_body = (self.in_library_unit
+                            or bool(getattr(func, "is_library_template", False)))
     # And whose file it is. Set on every entry, so an ordinary body clears what a
     # transplanted one set (#471).
     self.reporter.origin = getattr(func, "library_origin", None)
@@ -106,7 +107,7 @@ def _validate_method_body(self, target_type, method) -> None:
     """
     self.current_function = None  # A method is not a function, but the logic is shared.
     self.in_extension_context = True  # Dedicated flag: this body returns a bare value.
-    self.in_library_body = False
+    self.in_library_body = self.in_library_unit
     self.reporter.origin = None
     self.extension_method_name = method.name
     self.extension_return_type = method.ret  # Checked in validate_return_statement.

@@ -54,7 +54,7 @@ NO_VISIBILITY = frozenset({"external block", "external declaration"})
 # Ruling 1 makes private the default for all of them, and Phase 2 empties this set one
 # kind at a time, so the marker parses and is recorded from the grammar commit on while
 # each flip stays one line with a batch of its own.
-UNMARKED_IS_PUBLIC = frozenset({"struct", "enum", "perk"})
+UNMARKED_IS_PUBLIC = frozenset({"perk"})
 
 
 def declared_public(kind: str, marked: bool) -> bool:

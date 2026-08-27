@@ -176,10 +176,11 @@ fn main() i32:
     println("{p.tag}")
     return Result.Ok(0)
 """)
-    # CE3011 waits for the `public` marker on a struct (I5): every struct is public
-    # today, and only a PRIVATE library declaration is refused. What R9 owes here is the
-    # cascade -- the consumer's own construction measured against the library's fields.
-    assert "CE0004" in out, out
+    # The library's struct carries no marker, so it is private and the consumer may not
+    # take the name at all (CE3011). A library type the library DOES export stays the
+    # plain duplicate, CE0004: type identity is nominal, so one name is one shape and the
+    # consumer cannot have its own.
+    assert "CE3011" in out, out
     assert "CE2027" not in out, out
 
 
@@ -208,10 +209,10 @@ fn main() i32:
         Mood.Sleepy -> println("sleepy")
     return Result.Ok(0)
 """)
-    # As with the struct: CE3011 for a type name waits for I5's marker. CE2046 is the
-    # plain duplicate, and CE2045/CE2040 are the cascade -- a variant the user did write,
-    # against an enum they did not, and an exhaustiveness they cannot satisfy.
-    assert "CE2046" in out, out
+    # As with the struct: the library's enum is private, so CE3011 refuses the name.
+    # CE2045/CE2040 are the cascade -- a variant the user did write, against an enum they
+    # did not, and an exhaustiveness they cannot satisfy.
+    assert "CE3011" in out, out
     assert "CE2045" not in out, out
     assert "CE2040" not in out, out
 

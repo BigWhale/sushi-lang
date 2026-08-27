@@ -1,0 +1,10 @@
+# CE3005: a struct is private by default now (Ruling 1), so another unit
+# cannot name it. Its own unit builds one in `pallet_size()`.
+# EXPECT_ERROR_CODE: CE3005
+
+use "helpers/crates"
+
+fn main() i32:
+    let Pallet p = Pallet(2)
+    println("{p.crates}")
+    return Result.Ok(0)
