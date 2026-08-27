@@ -1,38 +1,48 @@
-"""Who may call whom across units: the CE3005 gate."""
+"""Who may call whom across units: the call site's view of the visibility seam.
+
+The rule itself lives in `semantics/visibility.py`, which answers for every kind of
+declaration. This module is the CALL site's adapter: it holds the two things only a call
+knows -- the validator it is running inside, and that a transplanted library body is
+allowed to call its own library's privates (#468).
+"""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional
 
-from sushi_lang.internals import errors as er
+from sushi_lang.semantics.visibility import (
+    DeclOrigin,
+    origin_of,
+    reject_private_cross_unit_use,
+)
 
 if TYPE_CHECKING:
     from .. import TypeValidator
 
+__all__ = ["reject_private_call", "reject_private_kept_call"]
 
-def reject_private_cross_unit_call(
-    validator: 'TypeValidator',
-    name: str,
-    loc: Any,
-    *,
-    visible: bool,
-    unit_name: Optional[str],
+
+def _reject(validator: 'TypeValidator', origin: DeclOrigin, loc: Any) -> bool:
+    return reject_private_cross_unit_use(
+        validator.reporter, origin, loc,
+        current_unit=validator.current_unit_name,
+        in_library_body=bool(getattr(validator, "in_library_body", False)),
+    )
+
+
+def reject_private_call(validator: 'TypeValidator', kind: str, sig: Any, loc: Any) -> bool:
+    """Reject a call to a private function of another unit. True when it was rejected."""
+    return _reject(validator, origin_of(kind, sig), loc)
+
+
+def reject_private_kept_call(
+    validator: 'TypeValidator', name: str, loc: Any,
+    *, library: str, kind: Optional[str],
 ) -> bool:
-    """Reject a call to a private function of another unit. True when it was rejected.
+    """Reject a call to a name a LIBRARY declares and does not export (#469).
 
-    `visible` is the callee's own claim on being callable from elsewhere: `public`, and
-    nothing else. What a library ships privately for its own bodies to call is answered
-    by the call site instead -- a transplanted library body may call it, and the code the
-    user wrote may not (#468).
+    No signature travels with a kept name, so there is no record to read: the manifest
+    says which kind it was and that the library kept it, and that is the whole origin.
     """
-    if visible or unit_name is None or validator.current_unit_name is None:
-        return False
-    if getattr(validator, "in_library_body", False):
-        return False
-    if unit_name == validator.current_unit_name:
-        return False
-
-    er.emit(validator.reporter, er.ERR.CE3005, loc,
-            name=name,
-            current_unit=validator.current_unit_name,
-            func_unit=unit_name)
-    return True
+    return _reject(validator, DeclOrigin(
+        kind=kind or "function", name=name, unit_name=library, is_public=False,
+    ), loc)

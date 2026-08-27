@@ -6,7 +6,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, StructType
 from sushi_lang.semantics.ast import Call, Name, Spread
-from .visibility import reject_private_cross_unit_call
+from .visibility import reject_private_call, reject_private_kept_call
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
 
@@ -174,9 +174,9 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         # stays unresolved either way: no signature travels with a kept name, so the
         # borrow pass must judge no argument against one.
         kept = validator.library_not_exported.get(function_name)
-        if kept is not None and reject_private_cross_unit_call(
+        if kept is not None and reject_private_kept_call(
                 validator, function_name, call.callee.loc,
-                visible=False, unit_name=kept[0]):
+                library=kept[0], kind=kept[1]):
             return
         diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.callee.loc,
                             name=function_name)
@@ -191,9 +191,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
 
     func_sig = validator.func_table.by_name[function_name]
 
-    if reject_private_cross_unit_call(validator, function_name, call.callee.loc,
-                                      visible=func_sig.is_public,
-                                      unit_name=func_sig.unit_name):
+    if reject_private_call(validator, "function", func_sig, call.callee.loc):
         return
 
     expected_params = func_sig.params

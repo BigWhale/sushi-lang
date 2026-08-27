@@ -27,8 +27,8 @@ _add(ErrorMessage("CE3004", Severity.ERROR,
     Category.UNIT, "Unit path contains invalid characters or structure."))
 
 _add(ErrorMessage("CE3005", Severity.ERROR,
-    "cannot call private function '{name}' from unit '{current_unit}' (function is defined in '{func_unit}')",
-    Category.UNIT, "Private functions can only be called from within the same unit. Use 'public fn' to make the function accessible across units. A generic is no exception (#467): a source library's units are ordinary units at the consumer, so a private generic of one resolves like any other symbol, and this is where it is refused. Before that the only place that noticed was the backend, which had no template to emit. A binary library answers here too (#469): the manifest names what the library declares and does not export, so a name that reaches the consumer's tables not at all is still private and not undefined. `{func_unit}` is then the library rather than a unit."))
+    "cannot {verb} private {kind} '{name}' from unit '{current_unit}' ({kind} is defined in '{owner}')",
+    Category.UNIT, "A private declaration can only be named from within the unit that declares it. Mark it `public` to let another unit name it. The `{kind}` and `{verb}` fields carry which kind of declaration it was, so one gate answers for a function, a constant, a struct and an enum rather than four. A generic is no exception (#467): a source library's units are ordinary units at the consumer, so a private generic of one resolves like any other symbol, and this is where it is refused. Before that the only place that noticed was the backend, which had no template to emit. A binary library answers here too (#469): the manifest names what the library declares and does not export, so a name that reaches the consumer's tables not at all is still private and not undefined. `{owner}` is then the library rather than a unit."))
 
 _add(ErrorMessage("CE3006", Severity.ERROR,
     "unknown stdlib module <{module}>",
