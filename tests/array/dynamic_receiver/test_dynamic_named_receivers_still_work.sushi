@@ -1,0 +1,39 @@
+# Regression for #482: the receivers that DID work keep working. A local names itself, and a
+# `peek`/`poke` parameter arrives as a reference that has to be unwrapped before the element
+# type can be read.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "6\n6\n6\n1\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/stdio>
+
+fn sum_peek(peek i32[] xs) i32:
+    let i32 total = 0
+    foreach(n in xs.iter()):
+        total := total + n
+    return Result.Ok(total)
+
+fn sum_poke(poke i32[] xs) i32:
+    let i32 total = 0
+    foreach(n in xs.iter()):
+        total := total + n
+    return Result.Ok(total)
+
+fn run_test() i32:
+    let i32[] xs = from([1, 2, 3])
+
+    let i32 total = 0
+    foreach(n in xs.iter()):
+        total := total + n
+    println(total)
+
+    println(sum_peek(peek xs)??)
+    println(sum_poke(poke xs)??)
+
+    let i32[] same = from([1, 2, 3])
+    println(xs.hash() == same.hash())
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

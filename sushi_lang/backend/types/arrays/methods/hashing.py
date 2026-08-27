@@ -206,17 +206,14 @@ def emit_fixed_array_hash_direct(codegen: Any, expr: Any, array_ptr: ir.Value,
 
 
 def emit_dynamic_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Value,
-                                   receiver_type: ir.Type, to_i1: bool) -> ir.Value:
-    """Direct emitter for dynamic array hash (called from backend/expressions/calls.py)."""
-    from sushi_lang.semantics.ast import Name
+                                   receiver_type: ir.Type, array_type: DynamicArrayType,
+                                   to_i1: bool) -> ir.Value:
+    """Direct emitter for dynamic array hash.
 
-    if isinstance(expr.receiver, Name):
-        array_type = codegen.variable_types.get(expr.receiver.id)
-        if array_type is None:
-            raise_internal_error("CE0056", name=expr.receiver.id)
-    else:
-        raise_internal_error("CE0056", name=f"<{type(expr.receiver).__name__}>")
-
+    The receiver's type arrives with it, the way the fixed twin above takes one. Reading it
+    out of the name tables rejected every receiver that has no name, so `h.nums.hash()` on a
+    field was CE0056 (#482).
+    """
     emitter = _emit_dynamic_array_hash(array_type)
     return emitter(codegen, expr, receiver_value, receiver_type, to_i1)
 

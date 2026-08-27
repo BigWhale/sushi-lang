@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import MethodCall, Name
+from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.backend import gep_utils
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -50,8 +50,14 @@ def emit_fixed_array_iter(codegen: 'LLVMCodegen', call: MethodCall, array_slot: 
 
 
 def emit_dynamic_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_value: ir.Value,
-                             receiver_type: ir.LiteralStructType, to_i1: bool) -> ir.Value:
-    """Emit LLVM IR for dynamic array iter() method."""
+                             receiver_type: ir.LiteralStructType,
+                             element_semantic_type: 'Type', to_i1: bool) -> ir.Value:
+    """Emit LLVM IR for dynamic array iter() method.
+
+    The element type arrives with the receiver. Looking it up by NAME rejected every receiver
+    that has no name, so `h.nums.iter()` on a field, on a `from()` temporary and on a chained
+    call result were all CE0072 (#482) -- the half of #480 the dynamic side kept.
+    """
     if len(call.args) != 0:
         raise_internal_error("CE0071", got=len(call.args))
 
@@ -61,22 +67,7 @@ def emit_dynamic_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_v
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, receiver_value)
     data_ptr = codegen.builder.load(data_ptr_ptr)
 
-    from sushi_lang.semantics.typesys import IteratorType, DynamicArrayType as SushiDynamicArrayType
-
-    from sushi_lang.semantics.typesys import ReferenceType
-    if isinstance(call.receiver, Name):
-        semantic_type = codegen.memory.find_semantic_type(call.receiver.id)
-        # A borrowed array (peek/poke T[]) surfaces as a ReferenceType; unwrap it
-        # to the referenced DynamicArrayType. The receiver_value is already the
-        # array-struct pointer (emit_receiver_value loads the reference slot).
-        if isinstance(semantic_type, ReferenceType):
-            semantic_type = semantic_type.referenced_type
-        if isinstance(semantic_type, SushiDynamicArrayType):
-            element_semantic_type = semantic_type.base_type
-        else:
-            raise_internal_error("CE0042", type=type(semantic_type).__name__)
-    else:
-        raise_internal_error("CE0072", operation="iter() on a complex dynamic array expression")
+    from sushi_lang.semantics.typesys import IteratorType
 
     iterator_type = IteratorType(element_type=element_semantic_type)
     iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)

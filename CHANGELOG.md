@@ -77,6 +77,46 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   because it still occupies one slot.
 
 ### Fixed
+- **`.iter()` and `.hash()` on a dynamic array now work through every receiver.** This was
+  the half of the fixed-array receiver fix below that the DYNAMIC side kept. `as_array_address`
+  already gave a `T[]` one address rule, so a field read hands over a GEP and every other
+  method worked; these two arms went looking for their ELEMENT type in the name tables
+  instead, and a receiver with no name has no entry there.
+
+  ```sushi
+  foreach(x in h.nums.iter())          # a struct field -- was CE0072
+  foreach(x in from([1, 2, 3]).iter()) # a temporary    -- was CE0072
+  foreach(x in src.ss(1, 3).iter())    # a chained call -- was CE0072
+  let u64 h = h.nums.hash()            # the same field -- was CE0056
+  ```
+
+  The dispatcher already unwraps the receiver's semantic type once for every dynamic arm,
+  which is where `pop`, `free`, `clone` and `fill` read their element type. The two arms that
+  looked it up now read it from there, and the check that it IS an array type moved beside
+  the unwrap, so no arm repeats it.
+
+  **CE0072 retires.** It only ever refused a receiver whose element type the name tables did
+  not hold, so nothing reaches it now. The number is not reused.
+
+- **`new()` is a value in every position, not only a declaration form.** `new()` spells the
+  empty dynamic array. It named no element type, so the backend had no descriptor to build
+  and emitted a scalar placeholder -- which meant `new()` worked in a `let` and in a struct
+  constructor, because both special-cased it, and was broken everywhere else. As an argument
+  and as a `.realise()` default it was CE0017; as a `Result.Ok()` payload it packed the
+  placeholder, printed a length of zero and aborted at scope exit; a rebind crashed the
+  compiler outright.
+
+  ```sushi
+  let i32[] taken = mk().realise(new())   # the natural default for an array payload
+  let i32 none    = count(new())??
+  r := new()
+  ```
+
+  The typecheck pass stamps `new()` with the `T[]` its position expects -- the same
+  propagation that gives an array literal's elements their declared type -- and one emitter
+  builds the `{0, 0, null}` descriptor an empty array is. The struct constructor's own copy of
+  that descriptor is gone with it.
+
 - **Every built-in method on a fixed array now works through every receiver.** A `T[N]`
   reached as a struct field, a nested field or an array element had no address rule of its
   own, so nine sites re-derived one and each fell back to a stack COPY of the receiver.

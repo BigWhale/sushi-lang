@@ -69,6 +69,17 @@ def _descriptor(codegen: 'LLVMCodegen', element_llvm_type: ir.Type, length: ir.V
     return codegen.builder.insert_value(array_struct, data_ptr, 2)
 
 
+def emit_empty_dynamic_array(codegen: 'LLVMCodegen', element_llvm_type: ir.Type) -> ir.Value:
+    """The descriptor an EMPTY `T[]` is: no elements, no capacity, no buffer.
+
+    `new()` and a literal that counts nothing are the same array, and `emit_dynamic_array_push`
+    already reads a capacity of zero as "allocate one", so this grows normally.
+    """
+    zero_i32 = ir.Constant(codegen.types.i32, 0)
+    null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
+    return _descriptor(codegen, element_llvm_type, zero_i32, zero_i32, null_ptr)
+
+
 def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_type, element_llvm_type: ir.Type,
                                        elements) -> ir.Value:
     """Create a dynamic array struct value from emitted runs."""
@@ -88,9 +99,7 @@ def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_type, ele
         return array_struct
 
     if initial_len == 0:
-        zero_i32 = ir.Constant(codegen.types.i32, 0)
-        null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
-        return _descriptor(codegen, element_llvm_type, zero_i32, zero_i32, null_ptr)
+        return emit_empty_dynamic_array(codegen, element_llvm_type)
 
     capacity = 1
     while capacity < initial_len:

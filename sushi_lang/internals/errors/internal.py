@@ -267,14 +267,14 @@ _add(ErrorMessage("CE0069", Severity.ERROR,
     Category.INTERNAL, "Struct type inference failed for dot-call expression."))
 
 
-# Iterator Operations (CE0071-CE0072)
+# Iterator Operations (CE0071)
 _add(ErrorMessage("CE0071", Severity.ERROR,
     "iter() expects 0 arguments, got {got}",
     Category.INTERNAL, "Iterator method called with incorrect number of arguments."))
 
-_add(ErrorMessage("CE0072", Severity.ERROR,
-    "unsupported iterator operation: {operation}",
-    Category.INTERNAL, "Iterator operation not implemented for this type."))
+# CE0072 ("unsupported iterator operation") is retired. It refused a dynamic-array receiver
+# whose element type the name tables did not hold, and #482 gave every receiver its type, so
+# nothing reached it. The number is not reused.
 
 # Primitive Type Operations (CE0073-CE0076)
 _add(ErrorMessage("CE0073", Severity.ERROR,

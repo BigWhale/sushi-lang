@@ -1,0 +1,39 @@
+# Regression for #460: the stamp `new()` takes its element type from has to reach every value
+# position, not only the realise default. A container insert, a generic return and an
+# extension return are the three that carry it furthest from the declaration.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "generic = 0\nextend = 0\nlist = 1\nmap = 1\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/hashmap>
+
+struct Box:
+    i32 n
+
+fn empty@(T)() T[]:
+    return Result.Ok(new())
+
+extend Box slots() i32[]:
+    return new()
+
+fn probe() ~:
+    let i32[] a = empty@(i32)()??
+    println("generic = {a.len()}")
+
+    let Box b = Box(n: 1)
+    let i32[] s = b.slots()
+    println("extend = {s.len()}")
+
+    let List@(i32[]) rows = List.new()
+    rows.push(new())
+    println("list = {rows.len()}")
+
+    let HashMap@(i32, i32[]) m = HashMap.new()
+    m.insert(1, new())
+    println("map = {m.len()}")
+    m.free()
+    return Result.Ok(~)
+
+fn main() i32:
+    probe()
+    return Result.Ok(0)

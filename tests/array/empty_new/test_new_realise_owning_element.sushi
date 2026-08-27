@@ -1,0 +1,23 @@
+# Regression for #460: an owning ELEMENT takes the realise path that keeps exactly one owner,
+# so the unused empty default is destroyed on the success side. A `{0, 0, null}` descriptor
+# has to survive that.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "ok = mostly\nerr = 0\n"
+# EXPECT_NO_LEAKS: true
+
+fn mk(bool good) string[]:
+    if (not good):
+        return Result.Err(StdError.Error)
+    return Result.Ok(from(["mostly", "harmless"]))
+
+fn probe() ~:
+    let string[] words = mk(true).realise(new())
+    println("ok = {words.get(0)??}")
+
+    let string[] empty = mk(false).realise(new())
+    println("err = {empty.len()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    probe()
+    return Result.Ok(0)

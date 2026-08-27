@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.semantics.typesys import (EnumType, StructType, BuiltinType, ArrayType,
                                           DynamicArrayType)
 from sushi_lang.semantics.ast import (EnumConstructor, DotCall, Call, Name, IntLit, FloatLit,
-                                      UnaryOp, BinaryOp, ArrayLiteral, DynamicArrayFrom)
+                                      UnaryOp, BinaryOp, ArrayLiteral, DynamicArrayFrom,
+                                      DynamicArrayNew)
 from sushi_lang.internals import errors as er
 from .inference import int_literal_fits, float_literal_fits
 
@@ -264,6 +265,12 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
     # `[1, 2]` inferred `i32[2]` and was rejected against an `i64[2]` field, argument,
     # return or enum payload (#378).
     if isinstance(expected_type, (ArrayType, DynamicArrayType)):
+        # `new()` spells no element type of its own, so a value position is the only place it
+        # can learn one. With nothing stamped the backend had no descriptor to build and
+        # emitted a scalar placeholder, which every value position then choked on (#460).
+        if isinstance(value_expr, DynamicArrayNew) and isinstance(expected_type, DynamicArrayType):
+            value_expr.resolved_type = expected_type
+            return
         _propagate_array_element_type(validator, value_expr, expected_type.base_type)
         return
 

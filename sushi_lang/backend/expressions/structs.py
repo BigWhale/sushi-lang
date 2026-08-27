@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import (
-    Expr, Name, Call, MemberAccess, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom,
+    Expr, Name, Call, MemberAccess, MethodCall, DotCall, DynamicArrayFrom,
     IndexAccess,
 )
 from sushi_lang.semantics.typesys import (
@@ -29,21 +29,7 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
     field_values = []
     for arg, (_field_name, field_type) in zip(expr.args, struct_type.fields, strict=True):
         if isinstance(field_type, DynamicArrayType):
-            if isinstance(arg, DynamicArrayNew):
-                element_llvm_type = codegen.types.ll_type(field_type.base_type)
-                array_struct_type = ir.LiteralStructType([
-                    codegen.types.i32,                     # len
-                    codegen.types.i32,                     # cap
-                    ir.PointerType(element_llvm_type)           # data*
-                ])
-                zero_i32 = ir.Constant(codegen.types.i32, 0)
-                null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
-                array_struct = ir.Constant(array_struct_type, ir.Undefined)
-                array_struct = codegen.builder.insert_value(array_struct, zero_i32, 0)
-                array_struct = codegen.builder.insert_value(array_struct, zero_i32, 1)
-                array_struct = codegen.builder.insert_value(array_struct, null_ptr, 2)
-                field_values.append(array_struct)
-            elif isinstance(arg, DynamicArrayFrom):
+            if isinstance(arg, DynamicArrayFrom):
                 # Create initialized dynamic array struct from array literal. A heap-owning
                 # element that aliases a live owner is deep-copied so the struct field and
                 # the source each own independent buffers (#139); a fresh temp is moved in.
