@@ -13,6 +13,13 @@ A name with NO record is public. That is not a shortcut: the compiler synthesize
 nothing declared (a monomorphized instance, a lifted closure environment, `FileMode`), and
 none of them can carry a source marker. The existing gate already read a missing origin as
 permission, and this keeps that reading.
+
+A `DeclOrigin` is read from either of two places, and that is deliberate rather than
+duplication. A function and a constant are answered from the collected record, because the
+symbol table's own first-writer-wins rule decides WHICH declaration answers a call and the
+origin has to be that one. A struct, an enum and a perk are answered from
+`VisibilityTable`, because their symbol tables carry a file but no unit and no marker.
+Either way the rule is one function, `_permitted`, and the record is one dataclass.
 """
 from __future__ import annotations
 
@@ -21,6 +28,26 @@ from typing import Any, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
+
+
+# Every kind `semantics/ast_walk.declarations()` yields, classified by where its answer
+# comes from. `docs/design/visibility.md` rules on all four groups, and
+# `tests/unit/test_visibility_seam_is_total.py` asserts the union is the whole walk, so a
+# new declaration kind cannot get half the rule.
+CARRIES_MARKER = frozenset({"constant", "struct", "enum", "perk", "function"})
+
+# As visible as the declaration it is part of. A private enum variant would make a total
+# `match` unwritable across a unit boundary, so exhaustiveness decides this one.
+FOLLOWS_DECLARATION = frozenset({"field", "variant", "perk method"})
+
+# As visible as the type it is attached to (Ruling 2). Self-enforcing: a private type
+# cannot be named, constructed or received elsewhere, so its methods are unreachable
+# already, and method resolution stays blind to the caller.
+FOLLOWS_TARGET_TYPE = frozenset({"extension", "perk implementation"})
+
+# No visibility at all. An `unsafe external` block is a unit's private implementation
+# detail by construction -- `ptr` is quarantined and CE5008 stops one crossing a boundary.
+NO_VISIBILITY = frozenset({"external block", "external declaration"})
 
 
 # The verb a diagnostic uses for each kind. Derived rather than passed, so a kind cannot
@@ -147,3 +174,33 @@ def reject_private_cross_unit_use(
             "declared here, without `public`", origin.name_span, origin.filename)
     diagnostic.emit()
     return True
+
+
+def record_declarations(
+    table: VisibilityTable,
+    program: Any,
+    *,
+    unit_name: Optional[str],
+    filename: Optional[str],
+) -> None:
+    """Record one unit's declarations, for the kinds that carry a marker.
+
+    Driven by `declarations()` rather than by the symbol tables, so the walk that is
+    already gated for totality is what decides the list.
+    """
+    from sushi_lang.semantics.ast_walk import declarations
+
+    for kind, node in declarations(program):
+        if kind not in CARRIES_MARKER:
+            continue
+        name = getattr(node, "name", None)
+        if not isinstance(name, str):
+            continue
+        table.record(DeclOrigin(
+            kind=kind,
+            name=name,
+            unit_name=unit_name,
+            filename=filename,
+            name_span=getattr(node, "name_span", None) or getattr(node, "loc", None),
+            is_public=getattr(node, "is_public", True),
+        ))

@@ -38,6 +38,7 @@ from .functions import (
 from .perks import PerkCollector, PerkTable, PerkImplementationTable
 from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
+from sushi_lang.semantics.visibility import VisibilityTable, record_declarations
 
 __all__ = [
     'CollectorPass',
@@ -88,6 +89,7 @@ class CollectorPass:
         self.perks = PerkTable()
         self.perk_impls = PerkImplementationTable()
         self.externals = ExternalTable()
+        self.visibility = VisibilityTable()
 
         self.known_types: Set[Type] = {
             BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
@@ -181,6 +183,9 @@ class CollectorPass:
         self.function_collector.register_stdlib_functions(root)
         self.external_collector.collect(root)
 
+        record_declarations(self.visibility, root,
+                            unit_name=unit_name, filename=unit_file)
+
         from sushi_lang.semantics.tables import SymbolTables
         return SymbolTables(
             constants=self.constants,
@@ -195,6 +200,7 @@ class CollectorPass:
             generic_extensions=self.generic_extensions,
             generic_funcs=self.generic_funcs,
             externals=self.externals,
+            visibility=self.visibility,
         )
 
     def _register_predefined_structs(self) -> None:
