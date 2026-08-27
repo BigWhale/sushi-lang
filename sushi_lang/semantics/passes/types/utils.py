@@ -89,6 +89,22 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
             er.emit(validator.reporter, er.ERR.CE2032, span)
             return
         validate_type_name(validator, type_obj.base_type, span)
+    elif isinstance(type_obj, ReferenceType):
+        # A borrow of a type is not a different type (#305), so the REFERENT is checked the
+        # same way. Without this arm a `peek Nope` fell through and reached the backend as
+        # CE0020, telling the user their program was a compiler bug.
+        validate_type_name(validator, type_obj.referenced_type, span)
+    else:
+        from sushi_lang.semantics.typesys import FunctionType, IteratorType, PointerType
+        if isinstance(type_obj, FunctionType):
+            for param_type in type_obj.param_types or ():
+                validate_type_name(validator, param_type, span)
+            validate_type_name(validator, type_obj.ok_type, span)
+            validate_type_name(validator, type_obj.err_type, span)
+        elif isinstance(type_obj, PointerType):
+            validate_type_name(validator, type_obj.pointee_type, span)
+        elif isinstance(type_obj, IteratorType):
+            validate_type_name(validator, type_obj.element_type, span)
 
 
 def read_constant_index(expr: 'Expr') -> Optional[int]:

@@ -1,0 +1,9 @@
+# Error: a `peek` borrow of a type no unit declares.
+# The funnel fell through ReferenceType, so this reached the backend as CE0020.
+# EXPECT_ERROR_CODE: CE2001
+
+fn look(peek Nope x) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(0)
