@@ -112,6 +112,26 @@ so a library exports what it means to export and nothing else.
 
   `compression/zlib` loses 30 lines of hand-rolled loops, five copies and two fills.
 
+- **A binary library's public constants reach the consumer.** `--lib-info` printed them
+  and nothing could read them: the manifest carried a name and a type, and a constant has
+  no body to link, so `LIMIT` next to a linked binary library was `CE1001`. Each published
+  constant now carries its own declaration source, and the consumer registers it exactly as
+  the export closure's private constants have always been registered.
+
+  ```sushi
+  # lib.sushi, built with --lib-kind binary
+  public const i32 LIMIT = 100
+
+  # main.sushi
+  use <lib/lib>
+  println("{LIMIT}")                  # 100
+  ```
+
+  A consumer's own constant of the published name is **CE0105**, the answer a source
+  library gives for the same program. A constant the library KEEPS is **CE3005** and no
+  longer `CE1001`: the manifest records the name, so "not yours" is the true sentence and
+  "no such name" was not.
+
 ### Changed
 - **CE2018 retires: a repeated value may own heap memory.** `[towel; 3]` was refused
   because N copies of an owning value would need N-1 deep copies and the compiler never
@@ -125,6 +145,29 @@ so a library exports what it means to export and nothing else.
   because it still occupies one slot.
 
 ### Fixed
+- **Two ordinary units may implement each other's perks.** A perk declared next door and
+  implemented at home was `CE4003: unknown perk`, and the same shape across a `.slib`
+  worked. Nothing about the perk was wrong: the compilation order puts a dependent before
+  its dependency, so the perk table was empty when the implementation was collected. Every
+  unit's perk DEFINITIONS are collected before any implementation now, which is the rule
+  the library path had all along.
+
+  ```sushi
+  # helpers/traits.sushi
+  public perk Heavy:
+      fn weigh() i32
+
+  # main.sushi
+  use "helpers/traits"
+
+  extend Pallet with Heavy:           # was CE4003
+      fn weigh() i32:
+          return self.crates
+  ```
+
+  A private perk next door answers **CE4011** now, which is the contract rule, and not
+  "unknown perk". Two units declaring one perk name are still **CE4001**.
+
 - **A contested name gets one diagnostic, and it is aimed at the right unit.** Two units
   declaring one name heard the duplicate AND a second diagnostic measuring the loser's own
   code against the winner's declaration: `CE3005` telling a unit it may not call the

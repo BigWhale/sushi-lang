@@ -216,6 +216,7 @@ is the authority, and the index is a cache of it.
         {
             "name": str,
             "type": str,
+            "source": str,             # The whole `public const ...` declaration
             "doc": DOC                 # If documented
         }
     ],
@@ -337,9 +338,10 @@ is the authority, and the index is a cache of it.
     # was the wrong word for a function the library defines and deliberately kept. A name
     # here is not shipped and clashes with nothing, so a consumer may declare its own
     # function of the same name. A kept TYPE answers the same way from the type funnel,
-    # where the wrong word was "unknown type". A kept CONSTANT is recorded but has no use
-    # site yet: a binary library's constants reach a consumer only through the export
-    # closure, so none of them is nameable, marked or not.
+    # where the wrong word was "unknown type". A kept CONSTANT answers from the scope
+    # pass, which lets the name through so the type pass can say whose it is (#487): a
+    # PUBLIC constant registers from `public_constants[].source`, so "no such name" would
+    # be the wrong word for the one next to it that the library kept.
     #
     # A name the CLOSURE ships is not here. Each private is named in exactly one of the
     # two places, and the closure carries a private constant and a private type as

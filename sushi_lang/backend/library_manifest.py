@@ -267,18 +267,29 @@ class LibraryManifestGenerator:
         unit at build time, so without it `<encoding/msgpack>`'s constants shipped as this
         library's API. And a constant carries a marker now, so an unmarked one is a
         decoder detail and not a promise.
+
+        Each record carries the declaration's SOURCE as well as its type, because that is
+        what a consumer needs to read the constant at all: a binary library ships bodies
+        as bitcode, and a constant has no body to ship. It is the answer the export
+        closure has always given for a private constant a template body names (#487).
         """
+        from sushi_lang.semantics.library_templates import slice_decl_source
+
         public_consts = []
 
         for unit in own_units(units):
             if unit.ast is None:
                 continue
+            source = None
             for const in unit.ast.constants:
                 if not const.is_public:
                     continue
+                if source is None:
+                    source = unit.file_path.read_text()
                 public_consts.append(with_doc({
                     "name": const.name,
                     "type": self._type_to_string(const.ty),
+                    "source": slice_decl_source(const, source),
                 }, const))
 
         return public_consts

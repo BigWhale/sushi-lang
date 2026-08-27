@@ -153,6 +153,10 @@ Two consequences worth knowing:
 - **A private declaration a template body needs still travels.** A public generic's body
   may name a private type, constant or helper; the export closure ships them so the
   consumer can monomorphize, and the consumer still cannot name them itself.
+- **A public constant is API, on both library kinds.** A constant has no body to link, so
+  the manifest carries the declaration's own source and the consumer registers it under
+  its own name. A consumer's own constant of that name is `CE0105`, exactly as it is when
+  the two declarations are two ordinary units.
 
 A consumer that writes a library-private name hears `CE3005` -- "private struct 'Cursor',
 defined in that library" -- and not "unknown type".

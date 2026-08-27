@@ -1,0 +1,13 @@
+# Constants that cross a BINARY library boundary. The published ones are API and
+# reach a consumer through the manifest; the kept one is recorded by name alone.
+
+public const i32 LIMIT = 100
+
+public const string TAG = "mostly harmless"
+
+public const i32[3] STEPS = [2, 3, 5]
+
+const i32 SCRATCH = 7
+
+public fn scratch_plus(i32 n) i32:
+    return Result.Ok(SCRATCH + n)

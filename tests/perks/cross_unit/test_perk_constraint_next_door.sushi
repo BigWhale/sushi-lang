@@ -1,0 +1,22 @@
+# A generic constrained by another unit's perk, satisfied by an implementation
+# this unit wrote. The constraint validator reads the same table the collector
+# fills, so it answers only when the definition arrived first.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "5\n"
+
+use "helpers/traits"
+
+struct Crate:
+    i32 mass
+
+extend Crate with Heavy:
+    fn weigh() i32:
+        return self.mass
+
+fn total@(T: Heavy)(peek T item) i32:
+    return Result.Ok(item.weigh())
+
+fn main() i32:
+    let Crate c = Crate(5)
+    println("{total(peek c).realise(0)}")
+    return Result.Ok(0)

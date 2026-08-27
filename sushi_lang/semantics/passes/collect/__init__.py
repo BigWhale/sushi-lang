@@ -156,6 +156,29 @@ class CollectorPass:
         self._register_predefined_enums()
         self._register_predefined_generics()
 
+    def collect_perk_definitions(self, root: Program, unit_name: Optional[str] = None,
+                                 unit_file: Optional[str] = None) -> None:
+        """Collect one unit's perk DEFINITIONS, ahead of every unit's implementations.
+
+        A perk is a contract, and an implementation meets two rules that read a table:
+        the perk exists (CE4003), and its marker lets this unit implement it (CE4011).
+        Neither answer may depend on which unit the collect loop reached first, so every
+        definition is registered before any implementation is collected (#487). The
+        visibility record travels with the definition, because the second rule reads
+        that table and not the perk table.
+        """
+        previous_origin = self.r.origin
+        if unit_file is not None:
+            self.r.origin = Origin(filename=unit_file)
+        try:
+            self.perk_collector.current_unit_file = unit_file
+            self.perk_collector.current_unit_name = unit_name
+            self.perk_collector.collect_definitions(root)
+            record_declarations(self.visibility, root, unit_name=unit_name,
+                                filename=unit_file, kinds={"perk"})
+        finally:
+            self.r.origin = previous_origin
+
     def run(self, root: Program, unit_name: Optional[str] = None,
             unit_file: Optional[str] = None) -> 'SymbolTables':
         """Run all collection passes in dependency order."""

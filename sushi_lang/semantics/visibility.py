@@ -362,16 +362,24 @@ def record_declarations(
     *,
     unit_name: Optional[str],
     filename: Optional[str],
+    kinds: Optional[AbstractSet[str]] = None,
 ) -> None:
     """Record one unit's declarations, for the kinds that carry a marker.
 
     Driven by `declarations()` rather than by the symbol tables, so the walk that is
     already gated for totality is what decides the list.
+
+    `kinds` narrows the walk to those kinds. The perk sweep asks for `{"perk"}`, because
+    an implementation next door reads a perk's marker before its own unit is collected
+    (#487). Recording the same declaration twice from the same unit is a no-op, so the
+    unit's own full pass repeats it without booking a contest.
     """
     from sushi_lang.semantics.ast_walk import declarations
 
     for kind, node in declarations(program):
         if kind not in CARRIES_MARKER:
+            continue
+        if kinds is not None and kind not in kinds:
             continue
         name = getattr(node, "name", None)
         if not isinstance(name, str):

@@ -10,7 +10,8 @@ if TYPE_CHECKING:
 from sushi_lang.semantics.visitors import NodeVisitor, RecursiveVisitor
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, StructType, ForeignPtrType
 from sushi_lang.semantics.type_predicates import is_string_convertible
-from sushi_lang.semantics.passes.types.visibility import reject_private_name
+from sushi_lang.semantics.passes.types.visibility import (
+    reject_private_kept, reject_private_name)
 from sushi_lang.semantics.ast import (
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
@@ -556,6 +557,10 @@ class ExpressionValidator(RecursiveVisitor):
             # The one place a bare constant is validated, so the one place the fence
             # sits (D3). A local of the same name shadows it and never reaches here.
             reject_private_name(tv, "constant", const_sig, node.loc)
+            return
+        # A constant a binary library declares and keeps registers in no table: the
+        # manifest holds the name and the kind, and that is the whole origin (#487).
+        if reject_private_kept(tv, node.id, node.loc, kinds={"constant"}):
             return
         if node.id in tv.generic_func_table.by_name:
             # A generic-fn reference is allowed WITH an explicit expected fn type: solve

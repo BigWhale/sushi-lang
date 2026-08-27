@@ -1,0 +1,9 @@
+# The library keeps this constant. The manifest records the name, so the answer
+# is "not yours" (CE3005) and not "no such name" (CE1001).
+# EXPECT_ERROR_CODE: CE3005
+
+use <lib/const_lib>
+
+fn main() i32:
+    println("{SCRATCH}")
+    return Result.Ok(0)
