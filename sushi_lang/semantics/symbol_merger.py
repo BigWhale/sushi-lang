@@ -146,6 +146,7 @@ class SymbolTableMerger:
             if key not in global_perk_impls.implementations:
                 type_name, perk_name = key
                 global_perk_impls.implementations[key] = impl
+                global_perk_impls.units[key] = unit_perk_impls.units.get(key)
                 if type_name not in global_perk_impls.by_type:
                     global_perk_impls.by_type[type_name] = set()
                 global_perk_impls.by_type[type_name].add(perk_name)

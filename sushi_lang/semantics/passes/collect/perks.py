@@ -44,13 +44,21 @@ class PerkImplementationTable:
 
     by_perk: Dict[str, Set[str]] = field(default_factory=dict)
 
-    def register(self, impl: ExtendWithDef, type_name: str) -> bool:
+    # Which unit declared each implementation. Here and not on the collector, because
+    # the question "may this implementation be replaced?" is asked of the table
+    # (decision 11 of `docs/design/visibility.md`). A synthetic implementation and a
+    # library manifest record have no declaring unit, so the answer may be None.
+    units: Dict[Tuple[str, str], Optional[str]] = field(default_factory=dict)
+
+    def register(self, impl: ExtendWithDef, type_name: str,
+                 *, unit_name: Optional[str] = None) -> bool:
         """Register an implementation. Returns False if duplicate."""
         key = (type_name, impl.perk_name)
         if key in self.implementations:
             return False  # Duplicate implementation
 
         self.implementations[key] = impl
+        self.units[key] = unit_name
 
         if type_name not in self.by_type:
             self.by_type[type_name] = set()
@@ -61,6 +69,24 @@ class PerkImplementationTable:
         self.by_perk[impl.perk_name].add(type_name)
 
         return True
+
+    def replace(self, impl: ExtendWithDef, type_name: str,
+                *, unit_name: Optional[str] = None) -> Optional[ExtendWithDef]:
+        """Take a pair over, and hand back the implementation it displaced.
+
+        The sanctioned override: a consumer's `extend X with P` wins over a library's
+        (CLAUDE.md's method-resolution rule). The displaced body is real Sushi in a real
+        unit, so the caller has to drop it from that unit's AST.
+        """
+        key = (type_name, impl.perk_name)
+        previous = self.implementations.get(key)
+        self.implementations[key] = impl
+        self.units[key] = unit_name
+        return previous
+
+    def owner(self, type_name: str, perk_name: str) -> Optional[str]:
+        """The unit that declared this implementation, if a unit declared it."""
+        return self.units.get((type_name, perk_name))
 
     def implements(self, type_name: str, perk_name: str) -> bool:
         """Check if a type implements a perk."""
@@ -158,7 +184,6 @@ class PerkCollector:
         # (docs/design/libraries.md section 7).
         self.current_unit_name: Optional[str] = None
         self.library_units: Set[str] = set()
-        self._impl_units: Dict[Tuple[str, str], Optional[str]] = {}
         # Library impls a consumer replaced. Their bodies are real Sushi code in a real
         # unit, so unless they are dropped from that unit's AST the backend emits both
         # and the method symbol is defined twice. (A binary library has no such problem:
@@ -276,17 +301,16 @@ class PerkCollector:
             er.emit(self.r, ERR.CE4003, perk_name_span, perk=perk_name)
             return
 
-        key = (type_name, perk_name)
-        if not self.perk_impls.register(impl, type_name):
-            owner = self._impl_units.get(key)
+        if not self.perk_impls.register(impl, type_name,
+                                        unit_name=self.current_unit_name):
+            owner = self.perk_impls.owner(type_name, perk_name)
             shadows_library = (owner is not None and owner in self.library_units
                                and self.current_unit_name not in self.library_units)
             if not shadows_library:
                 er.emit(self.r, ERR.CE4002, getattr(impl, "loc", None),
                         type=type_name, perk=perk_name)
                 return
-            previous = self.perk_impls.implementations.get(key)
+            previous = self.perk_impls.replace(impl, type_name,
+                                               unit_name=self.current_unit_name)
             if previous is not None:
                 self.shadowed_impls.append(previous)
-            self.perk_impls.implementations[key] = impl
-        self._impl_units[key] = self.current_unit_name
