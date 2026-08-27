@@ -122,6 +122,7 @@ def validate_ptr_unit_gate(reporter: Reporter, program: 'Program') -> None:
     if getattr(program, "externals", None):
         return  # The unit declares a danger zone; ptr is legal here.
 
+    from sushi_lang.semantics.ast_walk import signature_types
     from sushi_lang.semantics.type_predicates import contains_foreign_ptr
 
     def check(ty, span) -> None:
@@ -150,37 +151,16 @@ def validate_ptr_unit_gate(reporter: Reporter, program: 'Program') -> None:
                             elif isinstance(item, Node) and isinstance(getattr(item, "body", None), Block):
                                 walk_block(item.body)
 
-    def walk_signature(fn) -> None:
-        span = getattr(fn, "name_span", None) or getattr(fn, "loc", None)
-        check(getattr(fn, "ret", None), getattr(fn, "ret_span", None) or span)
-        check(getattr(fn, "err_type", None), span)
-        for p in getattr(fn, "params", ()):
-            check(getattr(p, "ty", None), span)
-        walk_block(getattr(fn, "body", None))
+    for site in signature_types(program):
+        check(site.ty, site.span)
 
     for func in program.functions:
-        walk_signature(func)
+        walk_block(getattr(func, "body", None))
     for ext in program.extensions + program.generic_extensions:
-        check(getattr(ext, "target_type", None),
-              getattr(ext, "target_type_span", None) or ext.loc)
-        walk_signature(ext)
+        walk_block(getattr(ext, "body", None))
     for impl in program.perk_impls:
-        check(getattr(impl, "target_type", None),
-              getattr(impl, "target_type_span", None) or impl.loc)
         for method in impl.methods:
-            walk_signature(method)
-    for struct in program.structs:
-        for field in struct.fields:
-            if contains_foreign_ptr(getattr(field, "ty", None)):
-                er.emit(reporter, er.ERR.CE5009,
-                        getattr(struct, "name_span", None) or struct.loc)
-    for enum in program.enums:
-        for variant in enum.variants:
-            for ty in getattr(variant, "associated_types", ()) or ():
-                check(ty, getattr(enum, "name_span", None) or enum.loc)
-    for const in program.constants:
-        check(getattr(const, "ty", None),
-              getattr(const, "type_span", None) or const.loc)
+            walk_block(getattr(method, "body", None))
 
 
 def _validate_block_abi(reporter: Reporter, block: 'ExternalBlock') -> None:

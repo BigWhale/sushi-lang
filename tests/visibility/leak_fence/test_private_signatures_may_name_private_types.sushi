@@ -1,0 +1,30 @@
+# The control: a PRIVATE signature may name whatever its unit declares. The
+# fence is about what leaves the unit, not about what the unit does at home.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0 3 1\n"
+
+struct Point:
+    i32 x
+
+perk Loud:
+    fn shout() i32
+
+extend Point with Loud:
+    fn shout() i32:
+        return self.x
+
+fn origin() Point:
+    return Result.Ok(Point(0))
+
+fn measure(peek Point p) i32:
+    return Result.Ok(p.x)
+
+fn loudest@(T: Loud)(T thing) i32:
+    return Result.Ok(thing.shout())
+
+fn main() i32:
+    let Point o = origin().realise(Point(9))
+    let Point three = Point(3)
+    let Point one = Point(1)
+    println("{o.x} {measure(peek three).realise(0)} {loudest(one).realise(0)}")
+    return Result.Ok(0)

@@ -1,0 +1,19 @@
+# The control: an implementation method with no marker is what Ruling 2 wants,
+# and it is as visible as `Crate` is.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "loud\n"
+
+perk Loud:
+    fn shout() string
+
+struct Crate:
+    i32 weight
+
+extend Crate with Loud:
+    fn shout() string:
+        return "loud"
+
+fn main() i32:
+    let Crate c = Crate(7)
+    println(c.shout())
+    return Result.Ok(0)

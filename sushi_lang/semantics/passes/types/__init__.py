@@ -17,6 +17,7 @@ from sushi_lang.semantics.passes.types.visitor import StatementValidator, Expres
 
 from .compatibility import types_compatible
 from .constants import validate_constant
+from .public_signatures import check_public_signatures
 from .signatures import (
     validate_function,
     validate_extension_method,
@@ -58,7 +59,10 @@ from sushi_lang.semantics.generics.type_display import display_type
 class TypeValidator:
     """The typecheck pass: type validation and inference."""
 
-    def __init__(self, reporter: Reporter, tables: 'SymbolTables', current_unit_name: Optional[str] = None, monomorphized_functions: Optional[Dict[str, tuple]] = None) -> None:
+    def __init__(self, reporter: Reporter, tables: 'SymbolTables',
+                 current_unit_name: Optional[str] = None,
+                 monomorphized_functions: Optional[Dict[str, tuple]] = None,
+                 in_library_unit: bool = False) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         self.const_table = tables.constants
@@ -74,6 +78,7 @@ class TypeValidator:
         self.perk_table = tables.perks
         self.perk_impl_table = tables.perk_impls
         self.library_not_exported = tables.library_not_exported
+        self.visibility = tables.visibility
         self.current_unit_name = current_unit_name  # Track which unit is being validated (for visibility checking)
         self.monomorphized_functions = monomorphized_functions or {}
         self.known_types: Set[BuiltinType] = {
@@ -84,10 +89,16 @@ class TypeValidator:
             BuiltinType.FILE
         }  # Built-in types
         self.current_function: Optional[FuncDef] = None
+        # Whose code is being validated. A source library's unit is compiled at the
+        # consumer, and its bodies mention whatever the consumer's call substituted into
+        # a template -- a private type of the consumer's included. The consumer must not
+        # be shown a diagnostic about code they did not write, which is the same reason
+        # the `docs` pass skips a library unit whole.
+        self.in_library_unit = in_library_unit
         # A library body transplanted into this program: a monomorphized instance of a
         # `.slib` template, or a lambda lifted out of one. It calls what it called at
         # home, the export closure included (#468).
-        self.in_library_body = False
+        self.in_library_body = in_library_unit
         self.variable_types: Dict[str, Type] = {}
         self.destroyed_arrays: List[set[str]] = []
         # `run` fills these from the program. A validator built to infer one type --
@@ -102,6 +113,10 @@ class TypeValidator:
     def run(self, program: Program) -> None:
         """Entry point for type validation."""
         self.ast_constants = {const.name: const for const in program.constants}
+
+        # Whole-unit, and BEFORE the per-declaration walk: it is the only way a public
+        # generic is reached, since the loop below skips one.
+        check_public_signatures(self, program)
 
         for const in program.constants:
             self._validate_constant(const)

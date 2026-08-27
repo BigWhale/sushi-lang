@@ -1,0 +1,14 @@
+# CE3009: a parameter hands the type out just as a return does, and a type
+# ARGUMENT hands it out through the container that carries it.
+# EXPECT_ERROR_CODE: CE3009
+
+struct Point:
+    i32 x
+
+public fn measure(peek Point p) i32:
+    return Result.Ok(p.x)
+
+fn main() i32:
+    let Point p = Point(3)
+    println("{measure(peek p).realise(0)}")
+    return Result.Ok(0)

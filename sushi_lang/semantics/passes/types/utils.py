@@ -7,10 +7,16 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ReferenceType
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
+from sushi_lang.semantics.passes.types.visibility import (
+    reject_private_kept, reject_private_type)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Param, Expr
     from . import TypeValidator
+
+
+# What a kept NAME may be, when it is written where a type belongs.
+_KEPT_TYPE_KINDS = frozenset({"struct", "enum"})
 
 
 def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], span: Optional[Span]) -> None:
@@ -68,8 +74,15 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
 
     if isinstance(type_obj, UnknownType):
         if type_obj.name in validator.struct_table.by_name:
+            reject_private_type(validator, type_obj.name, span)
             return
         if type_obj.name in validator.enum_table.by_name:
+            reject_private_type(validator, type_obj.name, span)
+            return
+        # A binary library's kept type reaches no table at all, so "unknown" was the
+        # wrong word for it (#469, the type half).
+        if reject_private_kept(validator, type_obj.name, span,
+                               kinds=_KEPT_TYPE_KINDS):
             return
         er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
     elif isinstance(type_obj, BuiltinType) and type_obj not in validator.known_types:
@@ -89,6 +102,26 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
             er.emit(validator.reporter, er.ERR.CE2032, span)
             return
         validate_type_name(validator, type_obj.base_type, span)
+    elif isinstance(type_obj, ReferenceType):
+        # A borrow of a type is not a different type (#305), so the REFERENT is checked the
+        # same way. Without this arm a `peek Nope` fell through and reached the backend as
+        # CE0020, telling the user their program was a compiler bug.
+        validate_type_name(validator, type_obj.referenced_type, span)
+    elif isinstance(type_obj, (StructType, EnumType)):
+        # A named type that the resolve pass already interned. It exists by construction,
+        # so the only question left is whether this unit may name it.
+        reject_private_type(validator, type_obj.name, span)
+    else:
+        from sushi_lang.semantics.typesys import FunctionType, IteratorType, PointerType
+        if isinstance(type_obj, FunctionType):
+            for param_type in type_obj.param_types or ():
+                validate_type_name(validator, param_type, span)
+            validate_type_name(validator, type_obj.ok_type, span)
+            validate_type_name(validator, type_obj.err_type, span)
+        elif isinstance(type_obj, PointerType):
+            validate_type_name(validator, type_obj.pointee_type, span)
+        elif isinstance(type_obj, IteratorType):
+            validate_type_name(validator, type_obj.element_type, span)
 
 
 def read_constant_index(expr: 'Expr') -> Optional[int]:

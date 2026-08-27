@@ -3,7 +3,7 @@
 # body, so a consumer instantiation at i32 actually calls the shipped
 # i32_doubled symbol from this library's bitcode.
 
-perk Doubler:
+public perk Doubler:
     fn doubled() i32
 
 extend i32 with Doubler:

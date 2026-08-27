@@ -1,0 +1,14 @@
+# CE3009, decision 2: a public struct's FIELD types are part of what it hands
+# out. Section 5's own example marks this an error.
+# EXPECT_ERROR_CODE: CE3009
+
+struct Point:
+    i32 x
+
+public struct Box:
+    Point at
+
+fn main() i32:
+    let Box b = Box(Point(1))
+    println("{b.at.x}")
+    return Result.Ok(0)

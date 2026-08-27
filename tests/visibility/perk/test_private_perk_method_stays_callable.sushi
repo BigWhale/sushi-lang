@@ -1,0 +1,15 @@
+# Ruling 3, second half: a private perk hides the CONTRACT, not the method.
+# The library implements `Quiet` for its own public `Muffler`, and any unit that
+# can name a Muffler can call the method -- method resolution is blind to the
+# caller.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "shh shh\n"
+
+use <lib/private_perk_lib>
+
+fn main() i32:
+    let Muffler m = Muffler(3)
+    let string direct = m.hush()
+    let string through = hush_of(peek m).realise("none")
+    println("{direct} {through}")
+    return Result.Ok(0)

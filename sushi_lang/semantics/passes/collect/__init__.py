@@ -38,6 +38,7 @@ from .functions import (
 from .perks import PerkCollector, PerkTable, PerkImplementationTable
 from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
+from sushi_lang.semantics.visibility import VisibilityTable, record_declarations
 
 __all__ = [
     'CollectorPass',
@@ -88,6 +89,7 @@ class CollectorPass:
         self.perks = PerkTable()
         self.perk_impls = PerkImplementationTable()
         self.externals = ExternalTable()
+        self.visibility = VisibilityTable()
 
         self.known_types: Set[Type] = {
             BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
@@ -138,8 +140,17 @@ class CollectorPass:
             generic_structs=self.generic_structs,
             generic_enums=self.generic_enums
         )
-        self.function_collector.library_units = set(library_units or ())
-        self.perk_collector.library_units = set(library_units or ())
+        # Which units came from a library, for every collector that has to know.
+        for collector in (self.struct_collector, self.enum_collector,
+                          self.perk_collector, self.function_collector):
+            collector.library_units = set(library_units or ())
+
+        # And who declared what, for the four that ask it: three refuse a library clash
+        # with CE3011, and all four refuse a promise about a private perk with CE4011. A
+        # struct table carries a file and not a unit, so the answer comes from here.
+        for collector in (self.struct_collector, self.enum_collector,
+                          self.function_collector, self.perk_collector):
+            collector.visibility = self.visibility
 
         self._register_predefined_structs()
         self._register_predefined_enums()
@@ -163,23 +174,26 @@ class CollectorPass:
 
     def _collect(self, root: Program, unit_name: Optional[str],
                  unit_file: Optional[str]) -> 'SymbolTables':
-        # One way in for all six: the field, not a parameter on one collector's method.
+        # One way in for all six: the fields, not a parameter on one collector's method.
         for collector in (self.constant_collector, self.struct_collector,
                           self.enum_collector, self.perk_collector,
                           self.external_collector, self.function_collector):
             collector.current_unit_file = unit_file
+            collector.current_unit_name = unit_name
 
         self.constant_collector.collect(root)
         self.struct_collector.collect(root)
         self.enum_collector.collect(root)
-        self.perk_collector.current_unit_name = unit_name
         self.perk_collector.collect_definitions(root)
         self.perk_collector.collect_implementations(root)
         self.perk_collector.register_synthetic_impls()
-        self.function_collector.collect_functions(root, unit_name)
+        self.function_collector.collect_functions(root)
         self.function_collector.collect_extensions(root)
         self.function_collector.register_stdlib_functions(root)
         self.external_collector.collect(root)
+
+        record_declarations(self.visibility, root,
+                            unit_name=unit_name, filename=unit_file)
 
         from sushi_lang.semantics.tables import SymbolTables
         return SymbolTables(
@@ -195,6 +209,7 @@ class CollectorPass:
             generic_extensions=self.generic_extensions,
             generic_funcs=self.generic_funcs,
             externals=self.externals,
+            visibility=self.visibility,
         )
 
     def _register_predefined_structs(self) -> None:

@@ -1,0 +1,6 @@
+public const i32 SHARED_LIMIT = 100
+
+const i32 PRIVATE_LIMIT = 7
+
+public fn own_limit() i32:
+    return Result.Ok(PRIVATE_LIMIT)

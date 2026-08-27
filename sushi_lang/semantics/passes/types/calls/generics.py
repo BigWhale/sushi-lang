@@ -12,7 +12,7 @@ from sushi_lang.semantics.generics.explicit_type_args import (
     resolve_explicit_type_args,
     check_explicit_type_arg_arity,
 )
-from .visibility import reject_private_cross_unit_call
+from ..visibility import name_is_contested, reject_private_call
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
 
@@ -32,10 +32,7 @@ def validate_generic_function_call(
     # Visibility first: nothing below it is worth saying. A source library's units are
     # ordinary units here, so the call resolves and only the backend used to notice --
     # and it noticed as a KeyError (#467).
-    if reject_private_cross_unit_call(
-            validator, function_name, call.callee.loc,
-            visible=generic_func.is_public,
-            unit_name=generic_func.unit_name):
+    if reject_private_call(validator, "function", generic_func, call.callee.loc):
         return
 
     explicit = call.type_args
@@ -58,13 +55,14 @@ def validate_generic_function_call(
     else:
         type_args = _infer_type_args_from_call_site(validator, call, generic_func)
         if type_args is None:
-            er.emit(
-                validator.reporter,
-                er.ERR.CE2060,
-                call.callee.loc,
-                name=function_name,
-                reason="could not infer type arguments from call site"
-            )
+            if not name_is_contested(validator, "function", function_name):
+                er.emit(
+                    validator.reporter,
+                    er.ERR.CE2060,
+                    call.callee.loc,
+                    name=function_name,
+                    reason="could not infer type arguments from call site"
+                )
             return
 
     # Per-element perk-constraint check for a constrained type-pack (CE2090).

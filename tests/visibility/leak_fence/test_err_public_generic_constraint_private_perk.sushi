@@ -1,0 +1,14 @@
+# CE3010: a public signature's constraint names a private perk -- Rust's E0445.
+# It is not CE4011: the perk IS nameable right here, in its own unit. What the
+# signature does is hand it to a unit where it is not.
+# EXPECT_ERROR_CODE: CE3010
+
+perk Loud:
+    fn shout() i32
+
+public fn loudest@(T: Loud)(T x) i32:
+    return Result.Ok(x.shout())
+
+fn main() i32:
+    println("0")
+    return Result.Ok(0)

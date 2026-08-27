@@ -43,7 +43,7 @@ gzip (RFC 1952) is not handled, so there is no CRC-32 here.
 ## Types
 
 ```
-enum ZError:
+public enum ZError:
     Truncated(i32)              # byte offset where the input ran out
     BadBlockType(i32)           # BTYPE 3 is reserved
     BadStoredLength(i32, i32)   # LEN and NLEN, which must be complements

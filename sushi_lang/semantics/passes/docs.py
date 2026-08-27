@@ -14,10 +14,11 @@ flag. Library units are skipped by the caller, both ways.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Iterator, Optional, Tuple
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast_builder.declarations.docs import suggest_tag
+from sushi_lang.semantics.ast_walk import bodied, declarations
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType
 
@@ -29,9 +30,6 @@ if TYPE_CHECKING:
 # which documents no declaration.
 Documented = Tuple['DocBlock', Optional[object]]
 
-# A declaration, and the word a diagnostic calls its kind by.
-Declaration = Tuple[str, object]
-
 # `- Returns:` and `- Errors:` are singletons by documentation.md section 3.
 _SINGLETON_TAGS = ("returns", "errors")
 
@@ -42,62 +40,6 @@ def check_docs(reporter: 'Reporter', program: 'Program') -> None:
         _check_tags(reporter, doc, owner)
         _check_examples(reporter, doc)
     _check_positions(reporter, program)
-
-
-def _bodied_kinds(program: 'Program') -> Iterator[Declaration]:
-    """Every declaration with a body, with the word a diagnostic calls it by.
-
-    A body is what lets a declaration hold two blocks, one above it and one first
-    inside it, and it is why these come last in both walks.
-    """
-    for func in program.functions:
-        yield "function", func
-    for extension in [*program.extensions, *program.generic_extensions]:
-        yield "extension", extension
-    for impl in program.perk_impls:
-        for method in impl.methods:
-            yield "perk method", method
-
-
-def _bodied(program: 'Program') -> List:
-    """Every declaration with a body, in the one order both walks use."""
-    return [node for _kind, node in _bodied_kinds(program)]
-
-
-def declarations(program: 'Program') -> Iterator[Declaration]:
-    """Every declaration of one unit, block or none, with the word for its kind.
-
-    ONE walk over the AST (documentation.md S10, R34). `documented()` filters this, and
-    `check_missing_docs` asks each yield whether it carries a block, so the two can
-    never disagree about what a unit declares. Two walks would drift.
-
-    The unit block is not here: it documents no declaration, and `Program` is not one.
-    Nor is a body-first block, which the builders lift onto the declaration around it.
-
-    The ORDER is fixed. `tests/docs_sweep.py` numbers its generated `doc_example_<n>`
-    helpers from it, so a rearrangement renames every one of them.
-    """
-    for const in program.constants:
-        yield "constant", const
-    for struct in program.structs:
-        yield "struct", struct
-        for field in struct.fields:
-            yield "field", field
-    for enum in program.enums:
-        yield "enum", enum
-        for variant in enum.variants:
-            yield "variant", variant
-    for perk in program.perks:
-        yield "perk", perk
-        for method in perk.methods:
-            yield "perk method", method
-    for impl in program.perk_impls:
-        yield "perk implementation", impl
-    for block in program.externals:
-        yield "external block", block
-        for decl in block.decls:
-            yield "external declaration", decl
-    yield from _bodied_kinds(program)
 
 
 def documented(program: 'Program') -> Iterator[Documented]:
@@ -208,7 +150,7 @@ def _check_positions(reporter: 'Reporter', program: 'Program') -> None:
                 "a block documents the declaration on the next line; a blank line or "
                 "a comment between the two breaks the attachment")
 
-    for decl in _bodied(program):
+    for decl in bodied(program):
         body_doc = getattr(decl.body, "doc", None)
         if decl.doc is not None and body_doc is not None and body_doc is not decl.doc:
             er.emit_with(reporter, er.ERR.CE7006, body_doc.loc,

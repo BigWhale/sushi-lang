@@ -503,7 +503,7 @@ fn render_named_type_params(MsgValue rec) string:
 fn print_structs(MsgValue meta, Opts o) ~:
     let MsgValue structs = ml_get(meta, "structs")??
     let i32 n = ml_len(structs)??
-    if (not section("Structs", n, o)??):
+    if (not section("Public Structs", n, o)??):
         return Result.Ok(~)
     let bool pending = false
     let i32 i = 0
@@ -534,7 +534,7 @@ fn print_structs(MsgValue meta, Opts o) ~:
 fn print_enums(MsgValue meta, Opts o) ~:
     let MsgValue enums = ml_get(meta, "enums")??
     let i32 n = ml_len(enums)??
-    if (not section("Enums", n, o)??):
+    if (not section("Public Enums", n, o)??):
         return Result.Ok(~)
     let bool pending = false
     let i32 i = 0

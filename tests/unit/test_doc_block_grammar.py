@@ -39,12 +39,7 @@ DOC_SOURCES = ("tests/docs", "tests/libs/helpers/doc_lib.sushi")
 # `.sushi` files that do not parse, and did not before doc blocks existed. Each entry
 # carries its reason; adding one is deliberate. A `test_err_` file declaring a CE6xxx
 # code is exempt by its own header and is not listed here.
-PARSE_EXEMPT = {
-    # `public const` is not in the grammar -- `const_def` carries no PUBLIC, and a
-    # constant is public regardless (#466). This helper is only reached by
-    # test_err_array_size_from_another_unit.sushi, which fails before it is read.
-    "tests/array/declared_size/helper_sizes.sushi",
-}
+PARSE_EXEMPT: set[str] = set()
 
 MAIN = "fn main() i32:\n    return Result.Ok(0)\n"
 

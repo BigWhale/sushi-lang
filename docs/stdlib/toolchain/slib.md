@@ -28,14 +28,14 @@ imports another source module.
 ## Types
 
 ```
-enum SlibError:
+public enum SlibError:
     OpenFailed(string)  # the path that did not open
     BadMagic()          # the 16 magic bytes do not match
     BadVersion(u32)     # header version is not 4
     Truncated()         # the file ends inside the header or the blob
     Decode(MpError)     # the metadata blob does not decode
 
-struct SlibSizes:
+public struct SlibSizes:
     u64 source          # the length of the source section
     u64 bitcode         # the length of the bitcode section
 ```

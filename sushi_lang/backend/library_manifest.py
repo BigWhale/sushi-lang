@@ -124,7 +124,7 @@ class LibraryManifestGenerator:
         )
 
         manifest = {
-            "sushi_lib_version": "2.0",
+            "sushi_lib_version": "2.1",
             "library_name": library_name,
             "library_version": library_version,
             "kind": kind,
@@ -224,9 +224,10 @@ class LibraryManifestGenerator:
         Each private is named in exactly ONE place: the closure, or this list.
         """
         summary = templates.get("closure_summary") or {}
-        shipped = set(summary.get("private_functions", [])) | set(
-            summary.get("private_generic_functions", [])
-        )
+        shipped = (set(summary.get("private_functions", []))
+                   | set(summary.get("private_generic_functions", []))
+                   | set(summary.get("private_types", []))
+                   | set(summary.get("constants", [])))
 
         kept: dict[str, str] = {}
         for unit in own_units(units):
@@ -242,17 +243,39 @@ class LibraryManifestGenerator:
                 kept[func.name] = (
                     "generic_function" if func.type_params else "function"
                 )
+            # A type and a constant are kept the same way, and for the same reason: the
+            # name reaches the consumer's tables not at all, so without it the answer was
+            # CE2001 "unknown type" or CE1001 "undeclared identifier" about a declaration
+            # this library does make.
+            for struct_def in unit.ast.structs:
+                if not struct_def.is_public and struct_def.name not in shipped:
+                    kept[struct_def.name] = "struct"
+            for enum_def in unit.ast.enums:
+                if not enum_def.is_public and enum_def.name not in shipped:
+                    kept[enum_def.name] = "enum"
+            for const in unit.ast.constants:
+                if not const.is_public and const.name not in shipped:
+                    kept[const.name] = "constant"
 
         return [{"name": name, "kind": kept[name]} for name in sorted(kept)]
 
     def _extract_public_constants(self, units: list['Unit']) -> list[dict]:
-        """Extract public constants (all constants are public)."""
+        """The constants this library MARKS public.
+
+        Two gates, and both were missing. `own_units` is the filter the `units` index and
+        the source section already use: a bundled stdlib module arrives as an ordinary
+        unit at build time, so without it `<encoding/msgpack>`'s constants shipped as this
+        library's API. And a constant carries a marker now, so an unmarked one is a
+        decoder detail and not a promise.
+        """
         public_consts = []
 
-        for unit in units:
+        for unit in own_units(units):
             if unit.ast is None:
                 continue
             for const in unit.ast.constants:
+                if not const.is_public:
+                    continue
                 public_consts.append(with_doc({
                     "name": const.name,
                     "type": self._type_to_string(const.ty),
@@ -261,7 +284,11 @@ class LibraryManifestGenerator:
         return public_consts
 
     def _extract_structs(self, units: list['Unit']) -> list[dict]:
-        """Extract struct definitions from units."""
+        """The structs this library MARKS public.
+
+        It had no gate, so a decoder detail shipped as frozen API and `--lib-info`
+        printed its whole field layout.
+        """
         structs = []
         seen_names = set()
 
@@ -272,6 +299,8 @@ class LibraryManifestGenerator:
                 # Generic structs ship as re-parsable templates (see
                 # _extract_templates), never as concrete entries.
                 if struct_def.type_params:
+                    continue
+                if not struct_def.is_public:
                     continue
                 if struct_def.name in seen_names:
                     continue
@@ -291,7 +320,7 @@ class LibraryManifestGenerator:
         return structs
 
     def _extract_enums(self, units: list['Unit']) -> list[dict]:
-        """Extract enum definitions from units."""
+        """The enums this library MARKS public. It had no gate either."""
         enums = []
         seen_names = set()
 
@@ -302,6 +331,8 @@ class LibraryManifestGenerator:
                 # Generic enums ship as re-parsable templates (see
                 # _extract_templates), never as concrete entries.
                 if enum_def.type_params:
+                    continue
+                if not enum_def.is_public:
                     continue
                 if enum_def.name in seen_names:
                     continue
@@ -423,6 +454,7 @@ class LibraryManifestGenerator:
         shipped_fns: dict[str, tuple] = {}
         shipped_generic_fns: dict[str, tuple] = {}
         shipped_consts: dict[str, tuple] = {}
+        shipped_types: dict[str, tuple] = {}
         visited: set[str] = set()
 
         rejected = False
@@ -483,8 +515,15 @@ class LibraryManifestGenerator:
                     shipped_consts[name] = (c, src)
                     _walk(c, root)
                 elif name in types_by_name:
-                    tnode, _src = types_by_name[name]
+                    tnode, src = types_by_name[name]
                     visited.add(name)
+                    # A private type has to travel with the template that names it. The
+                    # public list is gated on the marker, so before this the template
+                    # arrived at the consumer with a type nothing had registered, and the
+                    # transplanted body was CE2001 "unknown type" about the library's own
+                    # struct.
+                    if not getattr(tnode, "is_public", True):
+                        shipped_types[name] = (tnode, src)
                     _walk(tnode, root)
 
         for node, _source in exported:
@@ -496,6 +535,7 @@ class LibraryManifestGenerator:
             "private_functions": list(shipped_fns.values()),
             "private_generic_functions": list(shipped_generic_fns.values()),
             "constants": list(shipped_consts.values()),
+            "private_types": list(shipped_types.values()),
         }
 
     def _extract_templates(self, units: list['Unit']) -> dict:
@@ -562,12 +602,21 @@ class LibraryManifestGenerator:
             {"name": c.name, "source": slice_decl_source(c, src)}
             for c, src in closure["constants"]
         ]
+        # A private type travels as source, exactly as a private constant does, and for
+        # the same reason: the consumer re-parses it and registers it so a transplanted
+        # template body can name it. It is NOT in the public `structs` / `enums` index,
+        # which is what the marker gates.
+        shipped_types = [
+            {"name": node.name, "source": slice_decl_source(node, src)}
+            for node, src in closure["private_types"]
+        ]
         closure_summary = {
             "private_functions": sorted(r["name"] for r in private_functions),
             "private_generic_functions": sorted(
                 fn.name for fn, _ in closure["private_generic_functions"]
             ),
             "constants": sorted(r["name"] for r in shipped_constants),
+            "private_types": sorted(r["name"] for r in shipped_types),
         }
 
         perks: list[dict] = []
@@ -617,6 +666,7 @@ class LibraryManifestGenerator:
             "perk_impls": perk_impls,
             "private_functions": private_functions,
             "constants": shipped_constants,
+            "private_types": shipped_types,
             "closure_summary": closure_summary,
         }
 

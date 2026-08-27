@@ -25,8 +25,11 @@ source module with concrete (non-generic) public functions.
 
 ## Types
 
+Both are `public`: a consumer names them, so they are API. The module's own `MpCursor` is
+not, which is what keeps it changeable.
+
 ```
-enum MsgValue:
+public enum MsgValue:
     Nil()
     Bool(bool)
     Int(i64)                       # every signed int, and every uint that fits i64
@@ -37,7 +40,7 @@ enum MsgValue:
     Arr(MsgValue[])
     Map(MsgValue[], MsgValue[])    # parallel keys/values, wire order kept
 
-enum MpError:
+public enum MpError:
     Truncated(i32)      # byte offset where the input ran out
     Unsupported(u8)     # ext, fixext, timestamp, or the never-used 0xc1 tag
     BadUtf8(i32)        # offset just past the offending str payload

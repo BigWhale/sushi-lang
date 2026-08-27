@@ -14,7 +14,7 @@
 use <io/files>
 use <encoding/msgpack>
 
-enum SlibError:
+public enum SlibError:
     OpenFailed(string)
     BadMagic()
     BadVersion(u32)
@@ -69,7 +69,7 @@ public fn slib_read_metadata(string path) MsgValue | SlibError:
 
 # SlibSizes: the byte length of the two payload sections that follow the
 # metadata blob. A source library records no bitcode, a binary one no source.
-struct SlibSizes:
+public struct SlibSizes:
     u64 source
     u64 bitcode
 

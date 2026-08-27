@@ -1,0 +1,17 @@
+# CE3009, decision 2: a public enum's variant PAYLOAD is the enum half of the
+# same rule.
+# EXPECT_ERROR_CODE: CE3009
+
+struct Point:
+    i32 x
+
+public enum Slot:
+    Filled(Point)
+    Empty
+
+fn main() i32:
+    let Slot s = Slot.Empty
+    match s:
+        Slot.Filled(p) -> println("{p.x}")
+        Slot.Empty -> println("empty")
+    return Result.Ok(0)

@@ -59,3 +59,22 @@ def test_error_outside_a_receiver_still_reported_once(tmp_path):
     return Result.Ok(0)
 """)
     assert _count(stderr, "CE2008") == 1, stderr
+
+
+def test_perk_impl_target_type_reported_once(tmp_path):
+    """A perk implementation checked its target type once per METHOD, so N methods with
+    a bad target gave N identical diagnostics. The check belongs to the header."""
+    stderr = _compile(tmp_path, """perk Loud:
+    fn shout() i32
+    fn whisper() i32
+
+extend Nope with Loud:
+    fn shout() i32:
+        return 1
+    fn whisper() i32:
+        return 2
+
+fn main() i32:
+    return Result.Ok(0)
+""")
+    assert _count(stderr, "CE2001") == 1, stderr

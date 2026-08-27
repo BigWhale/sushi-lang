@@ -1,0 +1,14 @@
+# CW3002: the program declares `get_value`, which the library exports, so the
+# name is shadowed. The declaration has a DIFFERENT signature, which the merge
+# used to refuse with CE2009 -- the frontend measured the call against the
+# library's declaration while the linker would have called this one.
+# EXPECT_ERROR_CODE: CW3002
+
+use <lib/override_lib>
+
+fn get_value(i32 n) i32:
+    return Result.Ok(n + 7)
+
+fn main() i32:
+    println("{get_value(1).realise(0)}")
+    return Result.Ok(0)

@@ -148,16 +148,18 @@ class FuncDef(Node):
                                      # top-level function (collect rejects it there).
     self_mode_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
+    public_span: Optional[Span] = None
 
 @dataclass
 class ConstDef(Node):
     name: str
     ty: Optional[Type]           # Constant type (must be specified)
     value: "Expr"
-    is_public: bool = False
+    is_public: bool = True
     name_span: Optional[Span] = None
     type_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
+    public_span: Optional[Span] = None
 
 @dataclass
 class StructField:
@@ -175,6 +177,8 @@ class StructDef(Node):
     type_params: Optional[List[BoundedTypeParam]] = None
     name_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
+    is_public: bool = True
+    public_span: Optional[Span] = None
 
 @dataclass
 class EnumVariant:
@@ -193,6 +197,8 @@ class EnumDef(Node):
     type_params: Optional[List[BoundedTypeParam]] = None
     name_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
+    is_public: bool = True
+    public_span: Optional[Span] = None
 
 @dataclass
 class ExtendDef(Node):
@@ -232,6 +238,8 @@ class PerkDef(Node):
     type_params: Optional[List[BoundedTypeParam]] = None
     name_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
+    is_public: bool = True
+    public_span: Optional[Span] = None
 
 @dataclass
 class ExtendWithDef(Node):

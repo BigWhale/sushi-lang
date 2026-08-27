@@ -213,7 +213,8 @@ Finally, your own code. There are two ways to reuse Sushi across files.
 The simplest is **source import**: `use "path"` (quotes, no extension) pulls another `.sushi`
 file in directly and compiles it together with yours. The path is relative to the importing
 file. Here is a small `guidelib.sushi` whose API functions are marked `public` so other files
-can see them:
+can see them. Everything a unit exports carries the marker -- a `const`, a `struct`, an
+`enum` and a `perk` as much as a `fn` -- and everything unmarked stays that unit's own:
 
 ```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/guidelib.sushi"

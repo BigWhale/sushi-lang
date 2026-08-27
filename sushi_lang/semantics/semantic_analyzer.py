@@ -244,6 +244,7 @@ class SemanticAnalyzer:
             # are names, not callables, so they register in no function table (#469).
             self._register_library_not_exported()
             self._register_library_constants(compilation_order)
+            self._register_library_private_types()
             # Library perk IMPLEMENTATIONS register here: after the consumer's own impls
             # (local wins) and before instantiate/monomorphize, so the constraint validator
             # sees them. The DEFINITIONS were seeded earlier, in the collect loop above.
@@ -453,7 +454,10 @@ class SemanticAnalyzer:
             scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals)
             scope_analyzer.run(unit.ast)
 
-            type_validator = TypeValidator(unit_reporter, self.tables, current_unit_name=unit.name, monomorphized_functions=monomorphizer.monomorphized_functions)
+            type_validator = TypeValidator(
+                unit_reporter, self.tables, current_unit_name=unit.name,
+                monomorphized_functions=monomorphizer.monomorphized_functions,
+                in_library_unit=unit.provenance is not None)
             type_validator.run(unit.ast)
 
             from sushi_lang.semantics.passes.lift import LambdaLifter
@@ -703,6 +707,51 @@ class SemanticAnalyzer:
                 self.constants.by_name[const_name] = sig
                 self.constants.order.append(const_name)
                 host_unit.ast.constants.append(const_defs[0])
+
+    def _register_library_private_types(self) -> None:
+        """Register the private structs and enums the export closure ships.
+
+        A private type is not in the manifest's `structs` / `enums` index -- the marker
+        gates that -- so it travels as source beside the closure's private constants, and
+        it is re-parsed here for the same reason: a monomorphized template body names it.
+
+        The visibility table gets a PRIVATE record for each, so the consumer's own code
+        cannot name it while the transplanted body can (#468).
+        """
+        if self.structs is None or self.enums is None or self.library_linker is None:
+            return
+
+        from sushi_lang.internals.parser import parse_to_ast
+        from sushi_lang.semantics.passes.collect import CollectorPass
+        from sushi_lang.semantics.visibility import DeclOrigin
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            templates = manifest.get("templates") or {}
+            for record in templates.get("private_types", []) or []:
+                name = record.get("name")
+                source = record.get("source")
+                if not name or not source:
+                    continue
+                if name in self.structs.by_name or name in self.enums.by_name:
+                    continue
+
+                program, _tree = parse_to_ast(source)
+                throwaway = Reporter(
+                    source=source, filename=f"<type:{lib_name}:{name}>")
+                collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
+
+                for table, source_table in ((self.structs, collected.structs),
+                                            (self.enums, collected.enums)):
+                    entry = source_table.by_name.get(name)
+                    if entry is None:
+                        continue
+                    table.by_name[name] = entry
+                    table.order.append(name)
+
+                kind = "struct" if name in self.structs.by_name else "enum"
+                if self.tables is not None:
+                    self.tables.visibility.record(DeclOrigin(
+                        kind=kind, name=name, unit_name=lib_name, is_public=False))
 
     def _seed_library_perks(self, perk_table) -> None:
         """Seed perk DEFINITIONS shipped by loaded libraries into ``perk_table``."""

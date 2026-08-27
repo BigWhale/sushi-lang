@@ -1,0 +1,37 @@
+# Every declaration Ruling 1 and Ruling 3 give a marker now takes `public`:
+# a constant, a struct, an enum and a perk, beside the function that already
+# had one. Nothing flips yet -- an unmarked declaration still reads public --
+# so this compiles and runs.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42 7 loud calm\n"
+
+public const i32 ANSWER = 42
+
+public struct Crate:
+    i32 weight
+
+public enum Mood:
+    Calm
+    Cross
+
+public perk Loud:
+    fn shout() string
+
+extend Crate with Loud:
+    fn shout() string:
+        return "loud"
+
+public fn weigh(peek Crate c) i32:
+    return Result.Ok(c.weight)
+
+fn name_of(Mood m) string:
+    match m:
+        Mood.Calm -> return Result.Ok("calm")
+        Mood.Cross -> return Result.Ok("cross")
+
+fn main() i32:
+    let Crate c = Crate(7)
+    let i32 w = weigh(peek c).realise(0)
+    let string mood = name_of(Mood.Calm).realise("none")
+    println("{ANSWER} {w} {c.shout()} {mood}")
+    return Result.Ok(0)

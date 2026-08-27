@@ -1,0 +1,22 @@
+# A library that keeps one perk to itself and exports another. `Quiet` is the
+# library's own contract: it implements it for its own public type, so a
+# consumer can CALL the method without ever naming the perk (Ruling 3).
+public perk Loud:
+    fn shout() string
+
+perk Quiet:
+    fn hush() string
+
+public struct Muffler:
+    i32 layers
+
+extend Muffler with Quiet:
+    fn hush() string:
+        return "shh"
+
+extend Muffler with Loud:
+    fn shout() string:
+        return "MUFFLER"
+
+public fn hush_of(peek Muffler m) string:
+    return Result.Ok(m.hush())

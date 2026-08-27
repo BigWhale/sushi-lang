@@ -19,6 +19,13 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.semantics.generics.types import GenericEnumType, TypeParameter
 
+from sushi_lang.semantics.visibility import (
+    VisibilityTable,
+    library_clash_for_type_name,
+    reject_library_clash,
+    reject_private_perk_constraints,
+)
+
 from .utils import extract_type_param_names, note_first_declaration, reject_reference_in
 
 
@@ -61,6 +68,9 @@ class EnumCollector:
         # The unit being collected. This pass shares one reporter across every
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
+        self.current_unit_name: Optional[str] = None
+        self.library_units: Set[str] = set()
+        self.visibility: Optional[VisibilityTable] = None
         self.enums = enums
         self.generic_enums = generic_enums
         self.structs = structs
@@ -197,6 +207,17 @@ class EnumCollector:
         self.enums.order.append("MathError")
         self.known_types.add(math_error_enum)
 
+    def _reject_library_clash(self, name: str, name_span: Optional[Span]) -> bool:
+        """CE3011 when a library already took this name. True when it was refused."""
+        clash = library_clash_for_type_name(
+            self.visibility, name,
+            current_unit=self.current_unit_name, library_units=self.library_units)
+        if clash is None or clash.is_public:
+            return False  # A public library type stays the plain duplicate (CE0004).
+        reject_library_clash(self.r, clash, name_span, kind="enum", name=name,
+                             filename=self.current_unit_file)
+        return True
+
     def _collect_enum_def(self, enum: EnumDef) -> None:
         """Collect enum definition and create EnumType or GenericEnumType."""
         name = getattr(enum, "name", None)
@@ -209,6 +230,12 @@ class EnumCollector:
         # Note: In the collect pass, type_params is always None -- the grammar has no syntax for it yet
         type_params_raw = getattr(enum, "type_params", None)
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
+
+        if (name in self.enums.by_name or name in self.structs.by_name
+                or name in self.generic_structs.by_name
+                or name in self.generic_enums.by_name):
+            if self._reject_library_clash(name, name_span):
+                return
 
         if name in self.enums.by_name:
             note_first_declaration(
@@ -285,6 +312,10 @@ class EnumCollector:
                 else BoundedTypeParam(name=tp, constraints=[], loc=None)
                 for tp in type_params_raw
             )
+
+            reject_private_perk_constraints(
+                self.r, self.visibility, type_param_instances, name_span,
+                current_unit=self.current_unit_name, filename=self.current_unit_file)
 
             generic_enum = GenericEnumType(
                 name=name,

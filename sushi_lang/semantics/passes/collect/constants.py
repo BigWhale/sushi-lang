@@ -19,7 +19,9 @@ class ConstSig:
     name_span: Optional[Span] = None
     const_type: Optional[Type] = None
     type_span: Optional[Span] = None
-    filename: Optional[str] = None  # The unit it was declared in (#473)
+    filename: Optional[str] = None  # The file it was declared in (#473)
+    unit_name: Optional[str] = None  # The unit that declared it, for the visibility gate
+    is_public: bool = True           # Every constant is public until the default flips
     # Note: value is validated later in type checking pass
 
 
@@ -39,6 +41,7 @@ class ConstantCollector:
         # The unit being collected. This pass shares one reporter across every
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
+        self.current_unit_name: Optional[str] = None
         self.constants = constants
 
     def collect(self, root: Program) -> None:
@@ -70,6 +73,8 @@ class ConstantCollector:
             const_type=const_type,
             type_span=type_span,
             filename=self.current_unit_file,
+            unit_name=self.current_unit_name,
+            is_public=getattr(const, "is_public", True),
         )
 
         if name in self.constants.by_name:

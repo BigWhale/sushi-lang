@@ -34,6 +34,13 @@ from sushi_lang.semantics.generics.types import (
     TypeParam,
 )
 
+from sushi_lang.semantics.visibility import (
+    VisibilityTable,
+    library_clash_origin,
+    reject_library_clash,
+    reject_private_perk_constraints,
+)
+
 from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
                     reject_try_in_body)
 from sushi_lang.semantics.generics.extension_targets import classify_extension_target
@@ -187,6 +194,8 @@ class GenericFuncDef:
     is_library_template: bool = False            # True if registered from a consumed library's .slib templates
     library_origin: Optional[Origin] = None      # Set with the mark: how to render a diagnostic from this body
     unit_name: Optional[str] = None              # Unit that declared it; a monomorphized instance goes home to it
+    filename: Optional[str] = None               # The file it was declared in, for the same reason `FuncSig`
+                                                 # carries one: this pass shares ONE reporter across units
 
 
 @dataclass
@@ -241,6 +250,8 @@ class ExtensionMethod:
     ret_span: Optional[Span] = None
     params: List[Param] = field(default_factory=list)  # Parameters excluding implicit 'self'
     self_mode: Optional[str] = None  # "peek"/"poke" for a `poke self` receiver (#327);
+    filename: Optional[str] = None   # The file it was declared in; #473 missed this record
+    unit_name: Optional[str] = None  # The unit that declared it
 
 
 @dataclass
@@ -276,6 +287,8 @@ class GenericExtensionMethod:
     params: List[Param] = field(default_factory=list)  # May contain TypeParameter in param types
     body: Optional[Any] = None       # Method body (Block AST node)
     self_mode: Optional[str] = None  # "peek"/"poke" for a `poke self` receiver (#327)
+    filename: Optional[str] = None   # The file it was declared in; #473 missed this record
+    unit_name: Optional[str] = None  # The unit that declared it
 
 
 @dataclass
@@ -332,11 +345,16 @@ class FunctionCollector:
         """Initialize function collector."""
         self.r = reporter
         self.current_unit_file: Optional[str] = None  # File of the unit being collected
+        self.current_unit_name: Optional[str] = None
         # Unit names that came from a source library. A consumer definition that
         # collides with one of theirs SHADOWS it silently, which is the rule a binary
         # library already follows (docs/design/libraries.md section 7). Without this,
         # `--lib-kind` would change program semantics rather than just distribution.
         self.library_units: Set[str] = set()
+        # Who declared what, across the whole program: the one reader for the question
+        # "did a library take this name already?" A struct table carries a file and not
+        # a unit, so every collector that refuses a redeclaration asks this table.
+        self.visibility: Optional[VisibilityTable] = None
         self.funcs = funcs
         self.generic_funcs = generic_funcs
         self.extensions = extensions
@@ -346,13 +364,13 @@ class FunctionCollector:
         self.generic_structs = generic_structs
         self.generic_enums = generic_enums
 
-    def collect_functions(self, root: Program, unit_name: Optional[str] = None) -> None:
+    def collect_functions(self, root: Program) -> None:
         """Collect all function definitions from program AST."""
         funcs = getattr(root, "functions", None)
         if isinstance(funcs, list):
             for fn in funcs:
                 if isinstance(fn, FuncDef):
-                    self._collect_function_def(fn, unit_name=unit_name)
+                    self._collect_function_def(fn)
 
     def collect_extensions(self, root: Program) -> None:
         """Collect all extension method definitions from program AST."""
@@ -394,21 +412,63 @@ class FunctionCollector:
             for _const_name, stdlib_const in module.constants.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_const)
 
-    def _shadows_library(self, prev, unit_name: Optional[str]) -> bool:
-        """True when a consumer definition legitimately replaces a library one."""
-        prev_unit = getattr(prev, "unit_name", None)
-        return (prev_unit is not None
-                and prev_unit in self.library_units
-                and unit_name not in self.library_units)
+    def _reject_redeclaration(self, name: str, name_span: Optional[Span],
+                              prev) -> bool:
+        """A name already taken. True when this declaration must be dropped.
 
-    def _emit_duplicate_function(self, name: str, name_span: Optional[Span],
-                                 prev: 'FuncSig') -> None:
-        """Report a duplicate function, pointing at the first definition."""
+        Three answers, and who owns the previous declaration decides which. Another of
+        the program's own units is the plain duplicate. A library's PUBLIC name may be
+        replaced -- symbol priority puts the program's own declaration first, and
+        `tests/libs/test_warn_lib_override.sushi` is that contract -- so this returns
+        False, warns with CW3002, and the caller completes the replacement. A library's PRIVATE name may not be
+        replaced (CE3011): one namespace means the library's own bodies would start
+        calling the consumer's function, and the consumer cannot even see the name it
+        collides with.
+        """
+        clash = library_clash_origin(
+            self.visibility, "function", name,
+            current_unit=self.current_unit_name, library_units=self.library_units)
+        if clash is not None:
+            if clash.is_public:
+                self._warn_shadowed_export(name, name_span, clash)
+                return False
+            reject_library_clash(self.r, clash, name_span, kind="function", name=name,
+                                 filename=self.current_unit_file)
+            return True
         er.emit_with(self.r, ERR.CE0101, name_span,
                      filename=self.current_unit_file, name=name) \
-            .note("first defined here", prev.name_span, prev.filename).emit()
+            .note("first defined here", prev.name_span,
+                  getattr(prev, "filename", None)).emit()
+        return True
 
-    def _collect_function_def(self, fn: FuncDef, unit_name: Optional[str] = None) -> None:
+    def _warn_shadowed_export(self, name: str, name_span: Optional[Span],
+                              clash) -> None:
+        """CW3002: the consumer takes a name the library exports (decision 10).
+
+        Legal, and rarely intended. The reader of the call site cannot see which of the
+        two declarations answers it, so the compiler says which one does.
+        """
+        diagnostic = er.emit_with(
+            self.r, ERR.CW3002, name_span,
+            filename=self.current_unit_file,
+            name=name, kind=clash.kind, owner=clash.unit_name,
+        )
+        if clash.name_span is not None and clash.filename is not None:
+            diagnostic = diagnostic.note("exported here", clash.name_span, clash.filename)
+        diagnostic.emit()
+
+    @staticmethod
+    def _drop(table, name: str) -> None:
+        """Forget a registration, so the caller's own can take the name.
+
+        The branch this replaces dropped the previous entry and returned without
+        registering anything, so the consumer lost its own declaration as well and the
+        library's came back through the `libraries` pass.
+        """
+        table.order.remove(name)
+        del table.by_name[name]
+
+    def _collect_function_def(self, fn: FuncDef) -> None:
         """Dispatch function collection based on whether it's generic."""
         name = getattr(fn, "name", None)
         if not isinstance(name, str):
@@ -425,11 +485,11 @@ class FunctionCollector:
         type_params = extract_type_param_names(type_params_raw)
 
         if type_params and len(type_params) > 0:
-            self._collect_generic_function_def(fn, type_params_raw, unit_name)
+            self._collect_generic_function_def(fn, type_params_raw)
         else:
-            self._collect_concrete_function_def(fn, unit_name)
+            self._collect_concrete_function_def(fn)
 
-    def _collect_concrete_function_def(self, fn: FuncDef, unit_name: Optional[str] = None) -> None:
+    def _collect_concrete_function_def(self, fn: FuncDef) -> None:
         """Collect concrete (non-generic) function definition."""
         name = getattr(fn, "name", None)
         if not isinstance(name, str):
@@ -480,22 +540,15 @@ class FunctionCollector:
         validate_type_pack_params(self.r, getattr(fn, "type_params", None), params, name_span)
 
         if name in self.funcs.by_name:
-            prev = self.funcs.by_name[name]
-            if not self._shadows_library(prev, unit_name):
-                self._emit_duplicate_function(name, name_span, prev)
+            if self._reject_redeclaration(name, name_span, self.funcs.by_name[name]):
                 return
-            self.funcs.order.remove(name)
-            del self.funcs.by_name[name]
-            return
+            self._drop(self.funcs, name)
 
         if name in self.generic_funcs.by_name:
-            prev = self.generic_funcs.by_name[name]
-            if not self._shadows_library(prev, unit_name):
-                self._emit_duplicate_function(name, name_span, prev)
+            if self._reject_redeclaration(name, name_span,
+                                          self.generic_funcs.by_name[name]):
                 return
-            self.generic_funcs.order.remove(name)
-            del self.generic_funcs.by_name[name]
-            return
+            self._drop(self.generic_funcs, name)
 
         sig = FuncSig(
             name=name,
@@ -505,7 +558,7 @@ class FunctionCollector:
             ret_span=ret_span,
             params=params,
             is_public=is_public,
-            unit_name=unit_name,
+            unit_name=self.current_unit_name,
             err_type=fn.err_type,
         )
 
@@ -524,35 +577,31 @@ class FunctionCollector:
         self,
         fn: FuncDef,
         type_params_raw: List,
-        unit_name: Optional[str] = None
     ) -> None:
         """Collect generic function definition."""
         name = fn.name
         name_span = getattr(fn, "name_span", None) or getattr(fn, "loc", None)
 
         if name in self.generic_funcs.by_name:
-            prev = self.generic_funcs.by_name[name]
-            if not self._shadows_library(prev, unit_name):
-                er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
-                    .note("first defined here", prev.name_span).emit()
+            if self._reject_redeclaration(name, name_span,
+                                          self.generic_funcs.by_name[name]):
                 return
-            self.generic_funcs.order.remove(name)
-            del self.generic_funcs.by_name[name]
+            self._drop(self.generic_funcs, name)
 
         if name in self.funcs.by_name:
-            prev = self.funcs.by_name[name]
-            if not self._shadows_library(prev, unit_name):
-                er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
-                    .note("first defined here", prev.name_span).emit()
+            if self._reject_redeclaration(name, name_span, self.funcs.by_name[name]):
                 return
-            self.funcs.order.remove(name)
-            del self.funcs.by_name[name]
+            self._drop(self.funcs, name)
 
         type_param_instances = tuple(
             tp if isinstance(tp, BoundedTypeParam)
             else BoundedTypeParam(name=tp, constraints=[], loc=None)
             for tp in type_params_raw
         )
+
+        reject_private_perk_constraints(
+            self.r, self.visibility, type_param_instances, name_span,
+            current_unit=self.current_unit_name, filename=self.current_unit_file)
 
         params = []
         param_names = set()
@@ -609,7 +658,8 @@ class FunctionCollector:
             name_span=name_span,
             ret_span=ret_span,
             err_type=fn.err_type,
-            unit_name=unit_name,
+            unit_name=self.current_unit_name,
+            filename=self.current_unit_file,
         )
 
         self.generic_funcs.order.append(name)
@@ -716,6 +766,8 @@ class FunctionCollector:
                 params=concrete_params,
                 body=body,
                 self_mode=getattr(ext, "self_mode", None),
+                filename=self.current_unit_file,
+                unit_name=self.current_unit_name,
             )
 
             if self._reject_overlapping_target(generic_method, target_type, name_span):
@@ -741,14 +793,18 @@ class FunctionCollector:
                 ret_span=ret_span,
                 params=params,
                 self_mode=getattr(ext, "self_mode", None),
+                filename=self.current_unit_file,
+                unit_name=self.current_unit_name,
             )
 
             if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, StructType, EnumType)):
                 existing = self.extensions.get_method(resolved_type, name)
                 if existing is not None:
                     er.emit_with(self.r, ERR.CE0101, name_span,
+                           filename=self.current_unit_file,
                            name=f"extension method '{name}' for '{display_type(resolved_type)}'") \
-                        .note("first defined here", existing.name_span).emit()
+                        .note("first defined here", existing.name_span,
+                              existing.filename).emit()
                     return
 
             if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, StructType, EnumType)):

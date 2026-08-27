@@ -500,7 +500,7 @@ names the same symbol is `CE3005`. The two are told apart by whose body the call
 never by the symbol: `FuncDef.is_library_template` marks an instance of a `.slib`
 template (stamped in `register_synthesized_function`, and carried onto a lambda lifted
 out of such a body), the typecheck pass reads it as `in_library_body`, and the gate in
-`passes/types/calls/visibility.py` exempts that and nothing else. An instance of the
+`passes/types/visibility.py` exempts that and nothing else. An instance of the
 *consumer's* generic is synthesized the same way and is not exempt — it is the user's
 code. A constant is the one kind still readable, because a private constant cannot be
 written yet (#466).
@@ -676,8 +676,10 @@ Rules marked **binary** apply only when `kind != "source"`.
 
 | Situation | Rule | Why |
 |---|---|---|
-| Consumer name == public library symbol | local wins, silent | ordinary shadowing; the consumer never has to know a name collided |
-| Consumer name == **export-closure private** symbol (**binary**) | **CE5007**, hard error | the library's own monomorphized bodies call that private symbol by name; silently shadowing it would change what the library's shipped code does. Cannot arise on the source path — library units are namespaced |
+| Consumer FUNCTION name == public library function | local wins, and **CW3002** says so | a private function has internal linkage, so the two are separate symbols: the consumer's call binds to its own and the library's body to its own. Legal, and rarely intended, so it warns. Both public is the only real clash and is **CE3003** already. `docs/design/visibility.md` §9.1 |
+| Consumer TYPE name == public library type | **CE0004** / **CE2046**, hard error | type identity is nominal, so one name is one shape; the consumer cannot have its own |
+| Consumer name == library-PRIVATE name (**source**) | **CE3011**, hard error | one flat namespace, and the consumer collides with a name it cannot see, so renaming is its only move. The branch that let it try deleted the library's entry and registered no replacement, so the consumer lost its own declaration too |
+| Consumer name == **export-closure private** symbol (**binary**) | **CE5007**, hard error | the library's own monomorphized bodies call that private symbol by name; silently shadowing it would change what the library's shipped code does. CE3011 is its source-path twin |
 | Consumer perk-impl `(type, perk)` == library-shipped perk-impl (**binary**) | local wins, silent, both semantically and at link time (§5.4, §5.7) | a consumer providing its own impl is expected, not an error |
 | Consumer extension method name == library perk-impl method name (**binary**) | library impl skipped entirely (no error) | avoids recreating CE4007 as a breaking change on every library update |
 | Exported generic references an `unsafe external` namespace | **CE5006** | FFI bindings cannot be re-declared at a consumer that never saw the block. Fires on EVERY kind: `_extract_templates` runs the export-closure walk before the kind branch in `compiler/pipeline.py`. Arguably wrong on the source path, where the `unsafe external` block ships inside its own unit — see §9 |

@@ -1,0 +1,11 @@
+public enum Mood:
+    Calm
+    Cross
+
+enum Secret:
+    Hidden
+
+public fn is_hidden() bool:
+    let Secret s = Secret.Hidden
+    match s:
+        Secret.Hidden -> return Result.Ok(true)

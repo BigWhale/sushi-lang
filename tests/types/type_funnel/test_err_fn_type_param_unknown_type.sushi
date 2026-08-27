@@ -1,0 +1,9 @@
+# Error: a function type whose PARAMETER names a type no unit declares.
+# The funnel never entered FunctionType, so this compiled clean.
+# EXPECT_ERROR_CODE: CE2001
+
+fn apply(fn(Nope) -> i32 f) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(0)

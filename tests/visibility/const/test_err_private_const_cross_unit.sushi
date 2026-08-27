@@ -1,0 +1,11 @@
+# CE3005: a constant is private by default now (Ruling 1), so another unit
+# cannot read it. The declaring unit reads it happily -- `own_limit()` is the
+# proof, and it is in the same program.
+# EXPECT_ERROR_CODE: CE3005
+
+use "helpers/limits"
+
+fn main() i32:
+    let i32 n = PRIVATE_LIMIT
+    println("{n}")
+    return Result.Ok(0)

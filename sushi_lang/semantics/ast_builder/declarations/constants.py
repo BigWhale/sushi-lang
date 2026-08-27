@@ -4,9 +4,11 @@ from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import ConstDef
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, ice
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
+    first_name, ice, read_public)
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import _EXPR_NODES
 from sushi_lang.internals.report import span_of
+from sushi_lang.semantics.visibility import declared_public
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -37,12 +39,15 @@ def parse_constdef(t: Tree, ast_builder: 'ASTBuilder') -> ConstDef:
     const_type = ast_builder._parse_type(type_node) if type_node else None
     value = ast_builder._expr(value_expr)
 
+    marked, public_span = read_public(t.children)
+
     return ConstDef(
         name=str(name_tok),
         ty=const_type,
         value=value,
-        is_public=True,  # Constants are always global
+        is_public=declared_public("constant", marked),
         loc=span_of(t),
         name_span=span_of(name_tok),
         type_span=span_of(type_node),
+        public_span=public_span,
     )

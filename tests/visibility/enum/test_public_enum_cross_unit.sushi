@@ -1,0 +1,16 @@
+# The marked enum crosses the boundary, variants and all.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "calm 1\n"
+
+use "helpers/moods"
+
+fn name_of(Mood m) string:
+    match m:
+        Mood.Calm -> return Result.Ok("calm")
+        Mood.Cross -> return Result.Ok("cross")
+
+fn main() i32:
+    let string n = name_of(Mood.Calm).realise("none")
+    let bool hidden = is_hidden().realise(false)
+    println("{n} {hidden}")
+    return Result.Ok(0)

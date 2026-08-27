@@ -564,17 +564,17 @@ def test_generic_types_route_to_templates_only(tmp_path):
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
 
     src = (
-        "struct Box@(T):\n"
+        "public struct Box@(T):\n"
         "    T value\n"
         "\n"
-        "struct Point:\n"
+        "public struct Point:\n"
         "    i32 x\n"
         "\n"
-        "enum Opt@(T):\n"
+        "public enum Opt@(T):\n"
         "    Nope\n"
         "    Yep(T)\n"
         "\n"
-        "enum Color:\n"
+        "public enum Color:\n"
         "    Red\n"
     )
     unit = _make_unit(tmp_path, src)

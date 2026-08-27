@@ -2,7 +2,7 @@
 # Phase 2 cross-library generics: the consumer registers these templates and
 # monomorphizes them at its own call sites.
 
-perk Ord:
+public perk Ord:
     fn gt(i32 other) bool
 
 # Unconstrained generic: returns its first argument (uses both params so the

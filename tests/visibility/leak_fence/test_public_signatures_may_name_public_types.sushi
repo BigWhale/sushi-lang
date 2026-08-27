@@ -1,0 +1,29 @@
+# The other control: marked types cross freely, and a public struct holding
+# another public struct is not a leak.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0 3\n"
+
+public struct Point:
+    i32 x
+
+public struct Box:
+    Point at
+
+public perk Loud:
+    fn shout() i32
+
+extend Point with Loud:
+    fn shout() i32:
+        return self.x
+
+public fn origin() Point:
+    return Result.Ok(Point(0))
+
+public fn loudest@(T: Loud)(T thing) i32:
+    return Result.Ok(thing.shout())
+
+fn main() i32:
+    let Box b = Box(origin().realise(Point(9)))
+    let Point three = Point(3)
+    println("{b.at.x} {loudest(three).realise(0)}")
+    return Result.Ok(0)

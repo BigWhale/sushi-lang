@@ -1,0 +1,18 @@
+# CE4011: a perk is private by default now (Ruling 3), so a consumer cannot
+# implement the library's own contract. The library implements it for its own
+# type, which is what makes the method reachable at all.
+# EXPECT_ERROR_CODE: CE4011
+
+use <lib/private_perk_lib>
+
+struct Pallet:
+    i32 crates
+
+extend Pallet with Quiet:
+    fn hush() string:
+        return "pallet"
+
+fn main() i32:
+    let Pallet p = Pallet(2)
+    println(p.hush())
+    return Result.Ok(0)

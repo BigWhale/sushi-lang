@@ -1,0 +1,16 @@
+# FFI: a perk implementation's method is as visible as its target type, so it may not
+# take a foreign `ptr`. The fence never ran on a perk method.
+# EXPECT_ERROR_CODE: CE5008
+unsafe external "C" as libc because "intentional public ptr exposure":
+    fn free(ptr p) ~ = "free"
+
+perk Releaser:
+    fn release_with(ptr p) i32
+
+extend i32 with Releaser:
+    fn release_with(ptr p) i32:
+        libc.free(p)
+        return self
+
+fn main() i32:
+    return Result.Ok(0)

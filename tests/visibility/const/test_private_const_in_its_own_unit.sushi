@@ -1,0 +1,10 @@
+# A single-unit program: every constant it declares is its own, and private is
+# no obstacle.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n"
+
+const i32 ANSWER = 42
+
+fn main() i32:
+    println("{ANSWER}")
+    return Result.Ok(0)

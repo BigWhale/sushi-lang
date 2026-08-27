@@ -4,13 +4,37 @@ from typing import TYPE_CHECKING, List
 from lark import Tree, Token
 from sushi_lang.semantics.ast import PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, ice, expect
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
+    expect, first_name, first_tree, ice, read_public)
 from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
+from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
+from sushi_lang.semantics.visibility import declared_public
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
+
+
+def parse_impl_methods(children: List, ast_builder: 'ASTBuilder') -> List[FuncDef]:
+    """Build an implementation's methods, and refuse a marker on one (CE6103).
+
+    An implementation body is made of `function_def`, so `public` parses here and used to
+    be stored on the method where nothing read it. Ruling 2 says an implementation has no
+    marker of its own.
+    """
+    from sushi_lang.semantics.ast_builder.declarations.functions import parse_funcdef
+
+    methods: List[FuncDef] = []
+    for child in children:
+        if isinstance(child, Tree) and child.data == "function_def":
+            method = parse_funcdef(child, ast_builder)
+            if method.public_span is not None:
+                raise SyntaxDiagnostic("CE6103", span=method.public_span) \
+                    .help("an implementation is as visible as its target type; "
+                          "mark the type instead")
+            methods.append(method)
+    return methods
 
 
 def parse_perkdef(t: Tree, ast_builder: 'ASTBuilder') -> PerkDef:
@@ -34,12 +58,16 @@ def parse_perkdef(t: Tree, ast_builder: 'ASTBuilder') -> PerkDef:
 
     attach_docs(t.children, methods, ast_builder)
 
+    marked, public_span = read_public(t.children)
+
     return PerkDef(
         name=str(name_tok),
         methods=methods,
         type_params=type_params,
         loc=span_of(t),
         name_span=span_of(name_tok),
+        is_public=declared_public("perk", marked),
+        public_span=public_span,
     )
 
 
@@ -101,11 +129,7 @@ def parse_extendwithdef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendWithDef:
     if perk_name_tok is None:
         ice(t, "missing perk NAME")
 
-    from sushi_lang.semantics.ast_builder.declarations.functions import parse_funcdef
-    methods: List[FuncDef] = []
-    for child in t.children:
-        if isinstance(child, Tree) and child.data == "function_def":
-            methods.append(parse_funcdef(child, ast_builder))
+    methods = parse_impl_methods(t.children, ast_builder)
 
     if not methods:
         ice(t, "must have at least one method implementation")
@@ -145,11 +169,7 @@ def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendW
     if perk_name_tok is None:
         ice(suffix, "missing perk NAME")
 
-    from sushi_lang.semantics.ast_builder.declarations.functions import parse_funcdef
-    methods = []
-    for child in suffix.children:
-        if isinstance(child, Tree) and child.data == "function_def":
-            methods.append(parse_funcdef(child, ast_builder))
+    methods = parse_impl_methods(suffix.children, ast_builder)
 
     if not methods:
         ice(suffix, "must have at least one method implementation")

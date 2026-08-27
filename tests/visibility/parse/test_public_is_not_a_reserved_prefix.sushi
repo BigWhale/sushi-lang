@@ -1,0 +1,18 @@
+# `PUBLIC` gains the `\b` guard its keyword neighbours carry, so a name that
+# only STARTS with the word is a name. `public` itself stays reserved.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n"
+
+const i32 PUBLICATION = 1
+
+struct Publisher:
+    i32 issues
+
+fn publish(peek Publisher p) i32:
+    return Result.Ok(p.issues)
+
+fn main() i32:
+    let Publisher p = Publisher(2)
+    let i32 total = PUBLICATION + publish(peek p).realise(0)
+    println("{total}")
+    return Result.Ok(0)

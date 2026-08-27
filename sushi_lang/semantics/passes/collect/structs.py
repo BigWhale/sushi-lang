@@ -11,6 +11,13 @@ from sushi_lang.semantics.ast import StructDef, Program, BoundedTypeParam
 from sushi_lang.semantics.typesys import Type, StructType
 from sushi_lang.semantics.generics.types import GenericStructType, TypeParameter
 
+from sushi_lang.semantics.visibility import (
+    VisibilityTable,
+    library_clash_for_type_name,
+    reject_library_clash,
+    reject_private_perk_constraints,
+)
+
 from .utils import extract_type_param_names, note_first_declaration, reject_reference_in
 
 
@@ -55,9 +62,23 @@ class StructCollector:
         # The unit being collected. This pass shares one reporter across every
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
+        self.current_unit_name: Optional[str] = None
+        self.library_units: Set[str] = set()
+        self.visibility: Optional[VisibilityTable] = None
         self.structs = structs
         self.generic_structs = generic_structs
         self.known_types = known_types
+
+    def _reject_library_clash(self, name: str, name_span: Optional[Span]) -> bool:
+        """CE3011 when a library already took this name. True when it was refused."""
+        clash = library_clash_for_type_name(
+            self.visibility, name,
+            current_unit=self.current_unit_name, library_units=self.library_units)
+        if clash is None or clash.is_public:
+            return False  # A public library type stays the plain duplicate (CE0004).
+        reject_library_clash(self.r, clash, name_span, kind="struct", name=name,
+                             filename=self.current_unit_file)
+        return True
 
     def collect(self, root: Program) -> None:
         """Collect all struct definitions from program AST."""
@@ -96,6 +117,10 @@ class StructCollector:
 
         type_params_raw = getattr(struct, "type_params", None)
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
+
+        if name in self.structs.by_name or name in self.generic_structs.by_name:
+            if self._reject_library_clash(name, name_span):
+                return
 
         if name in self.structs.by_name:
             note_first_declaration(
@@ -157,6 +182,10 @@ class StructCollector:
                 else BoundedTypeParam(name=tp, constraints=[], loc=None)
                 for tp in type_params_raw
             )
+
+            reject_private_perk_constraints(
+                self.r, self.visibility, type_param_instances, name_span,
+                current_unit=self.current_unit_name, filename=self.current_unit_file)
 
             generic_struct = GenericStructType(
                 name=name,
