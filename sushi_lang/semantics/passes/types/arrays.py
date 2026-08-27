@@ -222,14 +222,14 @@ def _validate_bulk_copy(call: MethodCall, array_type: Any, reporter: Any, valida
     The source is a BORROW whose ELEMENT type must match, which is the only thing that
     separates this from an ordinary index check.
     """
-    expected = index_args + (0 if name == "ss" else 1)
+    expected = index_args + (0 if name in ("s", "ss") else 1)
     if len(call.args) != expected:
         er.emit(reporter, er.ERR.CE0023, call.loc,
                 name=f"{display_type(array_type)}.{name}", expected=expected,
                 got=len(call.args))
         return
 
-    if name != "ss":
+    if name not in ("s", "ss"):
         source_type = validator.infer_expression_type(call.args[0]) if validator else None
         if source_type is not None:
             source_type = deref_type(source_type)
@@ -266,11 +266,11 @@ def _validate_dynamic_array_reverse(call: MethodCall, array_type: DynamicArrayTy
 
 def is_builtin_array_method(method_name: str) -> bool:
     """Check if a method name is a built-in array method."""
-    # Fixed array methods: len, get, iter, hash, clone, fill, reverse, ss
+    # Fixed array methods: len, get, iter, hash, clone, fill, reverse, s, ss
     # Dynamic array methods: the same, plus push, pop, capacity, destroy, free, extend,
     #   extend_range
     # u8[] specific methods: to_string
-    return method_name in {"len", "get", "push", "pop", "capacity", "destroy", "free", "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse", "extend", "extend_range", "ss"}
+    return method_name in {"len", "get", "push", "pop", "capacity", "destroy", "free", "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse", "extend", "extend_range", "s", "ss"}
 
 
 def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | DynamicArrayType, reporter: Any, validator: Any = None) -> None:
@@ -379,8 +379,9 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         _validate_bulk_copy(call, array_type, reporter, validator, name=method_name,
                             index_args=2 if method_name == "extend_range" else 0)
 
-    elif method_name == "ss":
-        _validate_bulk_copy(call, array_type, reporter, validator, name="ss", index_args=2)
+    elif method_name in ("s", "ss"):
+        _validate_bulk_copy(call, array_type, reporter, validator, name=method_name,
+                            index_args=2)
 
 
 def get_builtin_array_method_return_type(method_name: str, array_type: ArrayType | DynamicArrayType) -> Type | None:
@@ -424,7 +425,7 @@ def get_builtin_array_method_return_type(method_name: str, array_type: ArrayType
         return BuiltinType.BLANK
     elif method_name in ("extend", "extend_range"):
         return BuiltinType.BLANK
-    elif method_name == "ss":
+    elif method_name in ("s", "ss"):
         # A FRESH array, so a `T[]` whatever the source was: a fixed source gives a
         # dynamic result, because the length is a run-time value.
         return DynamicArrayType(base_type=array_type.base_type)

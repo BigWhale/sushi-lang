@@ -41,12 +41,18 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   ```sushi
   out.extend(body)                  # append all of body
   out.extend_range(src, pos, len)   # append a range, no temporary
-  let i32[] part = src.ss(2, 3)     # a fresh array of a range
+  let i32[] part = src.s(2, 5)      # a fresh array, by exclusive END index
+  let i32[] same = src.ss(2, 3)     # the same, by LENGTH
   ```
 
-  Three spellings over ONE emitter: `extend` is `extend_range(src, 0, src.len())`, and
-  `.ss()` is a fresh array of a run-time length plus the same range copy. `.ss()` is named
-  for `string.ss(start, length)`, which already means this for text.
+  Four spellings over ONE emitter: `extend` is `extend_range(src, 0, src.len())`, `s(a, b)`
+  is `ss(a, b - a)`, and `.ss()` is a fresh array of a run-time length plus the same range
+  copy. `.s()` and `.ss()` are named for `string.s(start, end)` and
+  `string.ss(start, length)`, which already mean this for text.
+
+  They differ from their string twins in one way, and deliberately: the string forms CLAMP
+  a bad range and the array forms TRAP it. An array index traps everywhere in Sushi, and
+  the two array spellings must agree with each other before either agrees with text.
 
   The source is a **borrow**, and every copied slot takes its own `copy_out` -- one value
   and N slots, or N values and N slots, is the same rule. A plain element type copies with a

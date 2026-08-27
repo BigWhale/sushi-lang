@@ -610,7 +610,7 @@ public fn zlib_uncompress(u8[] src) u8[] | ZError:
         return Result.Err(ZError.DictNeeded())
 
     let i32 endp = src.len() - 4
-    let u8[] body = src.ss(2, endp - 2)
+    let u8[] body = src.s(2, endp)
 
     let u8[] out = inflate_raw(body)??
     let u32 want = (src[endp] as u32) << 24

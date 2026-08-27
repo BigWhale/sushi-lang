@@ -1,0 +1,37 @@
+# The two spellings are the same operation: `s(a, b)` is `ss(a, b - a)`. If they ever
+# disagree, one of them grew a copy of its own.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1\n1\n1\n"
+
+use <io/stdio>
+
+fn same(peek i32[] a, peek i32[] b) bool:
+    if (a.len() != b.len()):
+        return Result.Ok(false)
+    let i32 i = 0
+    while (i < a.len()):
+        if (a[i] != b[i]):
+            return Result.Ok(false)
+        i := i + 1
+    return Result.Ok(true)
+
+fn run_test() i32:
+    let i32[] src = from([10, 20, 30, 40, 50, 60])
+
+    let i32[] whole_s = src.s(0, 6)
+    let i32[] whole_ss = src.ss(0, 6)
+    println(same(peek whole_s, peek whole_ss)??)
+
+    let i32[] mid_s = src.s(2, 5)
+    let i32[] mid_ss = src.ss(2, 3)
+    println(same(peek mid_s, peek mid_ss)??)
+
+    let i32[] none_s = src.s(4, 4)
+    let i32[] none_ss = src.ss(4, 0)
+    println(same(peek none_s, peek none_ss)??)
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

@@ -252,18 +252,31 @@ out.extend_range(src, 2, 3)    # out is now [0, 30, 40, 50]
 
 `.extend(src)` is `extend_range(src, 0, src.len())`.
 
-### `.ss(i32 start, i32 count) -> T[]`
+### `.s(i32 start, i32 end) -> T[]` and `.ss(i32 start, i32 count) -> T[]`
 
-A **fresh** array holding `other[start .. start + count)`. Named for
-`string.ss(i32 start, i32 length)`, which means the same thing for text.
+A **fresh** array holding a range of the source. The two spell the range differently and
+do nothing else differently: `.s()` takes an exclusive END index, and `.ss()` takes a
+LENGTH. They are named for `string.s(start, end)` and `string.ss(start, length)`, which
+mean the same for text.
 
 ```sushi
 let i32[] src = from([10, 20, 30, 40, 50, 60])
-let i32[] part = src.ss(2, 3)  # [30, 40, 50], and src is untouched
+let i32[] by_end = src.s(2, 5)    # [30, 40, 50]
+let i32[] by_len = src.ss(2, 3)   # the same, and src is untouched
 ```
 
-`.ss()` works on a fixed array too, and always answers a `T[]`, because the length is a
+`s(a, b)` is `ss(a, b - a)`. Use whichever the surrounding code already computes: a loop
+that carries an end index reads better with `.s()`, and one that carries a count reads
+better with `.ss()`.
+
+Both work on a fixed array too, and both always answer a `T[]`, because the length is a
 run-time value.
+
+**They do NOT clamp**, unlike their string twins. `"hello".s(2, 99)` answers `"llo"`, and
+`src.s(2, 99)` traps **RE2020**; `"hello".s(3, 1)` answers `""`, and `src.s(3, 1)` traps
+**RE2024**, because an end before the start is a negative count. An array index traps
+everywhere in Sushi -- `arr[i]` does, and `.get(i)` is the safe form -- so the copy family
+follows the array rule rather than the text one.
 
 ### The rules the three share
 
@@ -279,7 +292,7 @@ println("{out[1]} {more[0]}")  # babel babel -- two owners, two buffers
 ```
 
 **A bad range traps**, the way an out-of-range `arr[i]` does. A negative `start` or
-`count` is **RE2024**, and a `start + count` past the end of the source is **RE2020**.
+`count` is **RE2024**, and a range past the end of the source is **RE2020**.
 Both fire before anything is allocated. A `count` of zero is not an error: it copies
 nothing.
 
@@ -372,7 +385,7 @@ arr[0] := 42
 - **Access** (`.get()`, `[index]`): O(1)
 - **Element write** (`arr[i] := v`): O(1), plus the destructor of the element it replaces
 - **Push** (`.push()`): Amortized O(1)
-- **Extend** (`.extend()`, `.extend_range()`, `.ss()`): O(n) with ONE allocation -- a
+- **Extend** (`.extend()`, `.extend_range()`, `.s()`, `.ss()`): O(n) with ONE allocation -- a
   `memcpy` for a plain element type, one clone per slot for an owning one
 - **Pop** (`.pop()`): O(1)
 - **Fill** (`.fill()`): O(n)

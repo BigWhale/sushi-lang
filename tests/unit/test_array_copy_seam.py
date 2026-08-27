@@ -1,7 +1,7 @@
-"""The gate on #462: three spellings, ONE copy.
+"""The gate on #462: four spellings, ONE copy.
 
-`extend`, `extend_range` and `ss` are the same operation with different arguments. If each
-grew its own emitter, each would grow its own bounds rule and its own idea of what the
+`extend`, `extend_range`, `s` and `ss` are the same operation with different arguments. If
+each grew its own emitter, each would grow its own bounds rule and its own idea of what the
 source owns -- the shape the fixed-array receiver bug (#480) took, where nine sites carried
 nine address rules and two of them were silently wrong.
 """
@@ -37,8 +37,8 @@ def _ir(tmp_path, body: str) -> str:
     return (tmp_path / "out.ll").read_text(encoding="utf-8")
 
 
-def test_the_three_spellings_agree(tmp_path):
-    """`extend`, `extend_range` over the whole source, and `ss` all copy the same bytes."""
+def test_the_four_spellings_agree(tmp_path):
+    """All four copy the same bytes when they name the same range."""
     out = _run(tmp_path, """fn main() i32:
     let i32[] src = from([1, 2, 3])
 
@@ -49,11 +49,42 @@ def test_the_three_spellings_agree(tmp_path):
     b.extend_range(src, 0, src.len())
 
     let i32[] c = src.ss(0, src.len())
+    let i32[] d = src.s(0, src.len())
 
-    println("{a.len()}{b.len()}{c.len()} {a[2]}{b[2]}{c[2]}")
+    println("{a.len()}{b.len()}{c.len()}{d.len()} {a[2]}{b[2]}{c[2]}{d[2]}")
     return Result.Ok(0)
 """)
-    assert out.strip() == "333 333"
+    assert out.strip() == "3333 3333"
+
+
+def test_s_is_ss_with_the_end_subtracted(tmp_path):
+    """`s(a, b)` is `ss(a, b - a)`. The two differ where they read their arguments and
+    nowhere else, which is what stops one of them growing a bounds rule of its own."""
+    out = _run(tmp_path, """fn main() i32:
+    let i32[] src = from([10, 20, 30, 40, 50, 60])
+    let i32[] by_end = src.s(2, 5)
+    let i32[] by_len = src.ss(2, 3)
+    println("{by_end.len()}{by_len.len()} {by_end[0]}{by_len[0]} {by_end[2]}{by_len[2]}")
+    return Result.Ok(0)
+""")
+    assert out.strip() == "33 3030 5050"
+
+
+def test_an_end_before_the_start_traps_rather_than_clamping(tmp_path):
+    """`string.s` clamps such a range to empty. An array does not: an array index traps
+    everywhere in Sushi, and the two array spellings must agree with each other first."""
+    (tmp_path / "main.sushi").write_text(PRELUDE + """fn main() i32:
+    let i32[] src = from([1, 2, 3])
+    let i32[] part = src.s(2, 1)
+    println(part.len())
+    return Result.Ok(0)
+""", encoding="utf-8")
+    built = subprocess.run(["sushic", "main.sushi", "-o", "out"],
+                           cwd=tmp_path, capture_output=True, text=True, timeout=300)
+    assert built.returncode in (0, 1), built.stdout + built.stderr
+    ran = subprocess.run([str(tmp_path / "out")], capture_output=True, text=True)
+    assert ran.returncode != 0
+    assert "RE2024" in ran.stderr
 
 
 def test_a_plain_element_type_copies_with_a_memcpy(tmp_path):
@@ -86,10 +117,11 @@ def test_the_source_survives_every_spelling(tmp_path):
     let string[] a = new()
     a.extend(src)
     let string[] b = src.ss(0, 2)
-    println("{src[0]} {a[0]} {b[0]} {src.len()}")
+    let string[] c = src.s(0, 2)
+    println("{src[0]} {a[0]} {b[0]} {c[0]} {src.len()}")
     return Result.Ok(0)
 """)
-    assert out.strip() == "towel towel towel 2"
+    assert out.strip() == "towel towel towel towel 2"
 
 
 def test_a_fixed_array_is_a_source_but_not_a_destination(tmp_path):
@@ -99,10 +131,11 @@ def test_a_fixed_array_is_a_source_but_not_a_destination(tmp_path):
     let i32[] out = new()
     out.extend(fixed)
     let i32[] tail = fixed.ss(1, 2)
-    println("{out.len()} {tail[0]}")
+    let i32[] by_end = fixed.s(1, 3)
+    println("{out.len()} {tail[0]} {by_end[1]}")
     return Result.Ok(0)
 """)
-    assert out.strip() == "3 8"
+    assert out.strip() == "3 8 9"
 
     (tmp_path / "bad.sushi").write_text(PRELUDE + """fn main() i32:
     let i32[3] fixed = [7, 8, 9]

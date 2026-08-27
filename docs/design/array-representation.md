@@ -143,9 +143,9 @@ right operand before place.
 
 ## The one bulk copy
 
-`extend`, `extend_range` and `ss` are the same operation with different arguments, so they
-share one emitter (`backend/types/arrays/copy.py`). Three emitters would mean three bounds
-rules and three answers to what the source owns -- the shape the fixed-array receiver took,
+`extend`, `extend_range`, `s` and `ss` are the same operation with different arguments, so
+they share one emitter (`backend/types/arrays/copy.py`). Four emitters would mean four
+bounds rules and four answers to what the source owns -- the shape the fixed-array receiver took,
 where nine sites carried nine address rules and two of them were silently wrong.
 
 The rule the copy follows is #478's Ruling 7 in its general form:
@@ -159,6 +159,13 @@ repeated element, and `.fill()` -- and it covers N source values and N slots.
 A plain element type takes a `memcpy`, because a shallow store of a plain value IS the
 value and a walk would emit N stores for nothing. An owning one walks and clones through
 `copy_out`, the decision `backend/lifecycle.py`'s handler table already makes.
+
+`.s(start, end)` and `.ss(start, count)` differ where they READ their arguments and nowhere
+else: `_slice_start_and_count` subtracts for `.s` and both then call one emitter. An end
+before the start is therefore a negative count, which the copy's own guard traps as RE2024.
+That is where the array forms part company with `string.s` and `string.ss`, which clamp a
+bad range: an array index traps everywhere in Sushi, and the two array spellings must agree
+with each other before either agrees with text.
 
 **The source may not alias the destination** (CE2430). Growing the destination may
 reallocate its buffer, which leaves the source pointer dangling mid-copy. A copy that must
