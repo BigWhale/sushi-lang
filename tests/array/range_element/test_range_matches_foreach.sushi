@@ -1,9 +1,9 @@
 # The Python formula and the IR formula must not drift: the same bounds print the same
 # sequence from a `foreach` and from an array literal (#478).
 #
-# The literal is bound to a local first. `.iter()` on a `from()` temporary is CE0072 on
-# main, with no range involved, and that gap belongs to the dynamic iterator rather than
-# to this feature.
+# The literal is bound to a local first. `.iter()` on a `from()` temporary was CE0072 when
+# this was written -- a gap in the dynamic iterator rather than in this feature -- and #482
+# retired it.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "3 4 5 6 |3 4 5 6 |\n8 7 6 |8 7 6 |\n"

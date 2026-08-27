@@ -5,9 +5,8 @@
 # the List one -- eagerly, in emit_struct_constructor's insert_value, rather than as a
 # malformed-IR parse error -- so both are pinned.
 #
-# `.iter()` on a dynamic-array FIELD is a separate open limitation (CE0072: "iter() on a
-# complex dynamic array expression"), so this walks by index. The List twin can use
-# .iter() because a List field supports it.
+# This walks by index. `.iter()` on a dynamic-array FIELD was CE0072 when this was written;
+# #482 retired that, and the index walk stays as the shape #257 was pinned in.
 # EXPECT_STDOUT_CONTAINS: "root: 1"
 # EXPECT_STDOUT_CONTAINS: "kids: 3"
 # EXPECT_STDOUT_CONTAINS: "each: 10 20 30"

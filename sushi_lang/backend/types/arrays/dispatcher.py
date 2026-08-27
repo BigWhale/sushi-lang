@@ -189,8 +189,12 @@ def emit_array_method(
 
     # The methods on `&T` are the methods on `T`. The arms below read
     # `semantic_type.base_type`, so a reference receiver raised CE0042 and made `a.clone()`
-    # unusable as CE2411's escape (#301). Unwrapped ONCE here, not per arm.
+    # unusable as CE2411's escape (#301). Unwrapped ONCE here, not per arm -- and checked
+    # once too, so an arm needing the ELEMENT type just reads it.
     semantic_type = deref_type(semantic_type)
+    if not isinstance(semantic_type, DynamicArrayType):
+        raise_internal_error("CE0042", type=type(semantic_type).__name__)
+    element_semantic_type = semantic_type.base_type
 
     match method_name:
         case "len":
@@ -214,37 +218,31 @@ def emit_array_method(
             from sushi_lang.backend.ownership import ConsumingUse, consume
             element_value = consume(
                 codegen, expr.args[0], codegen.expressions.emit_expr(expr.args[0]),
-                getattr(semantic_type, "base_type", None),
-                ConsumingUse.CONTAINER_INSERT,
+                element_semantic_type, ConsumingUse.CONTAINER_INSERT,
             )
             return core.emit_dynamic_array_push(codegen, receiver_value, array_struct_type, element_value)
 
         case "pop":
-            if not isinstance(semantic_type, DynamicArrayType):
-                raise_internal_error("CE0042", type=type(semantic_type).__name__)
             return core.emit_dynamic_array_pop(codegen, receiver_value, array_struct_type,
-                                               semantic_type.base_type, to_i1)
+                                               element_semantic_type, to_i1)
 
         case "free":
-            if isinstance(semantic_type, DynamicArrayType):
-                element_semantic_type = semantic_type.base_type
-            else:
-                raise_internal_error("CE0042", type=type(semantic_type).__name__)
-            return core.emit_dynamic_array_free(codegen, receiver_value, array_struct_type, element_semantic_type)
+            return core.emit_dynamic_array_free(codegen, receiver_value, array_struct_type,
+                                                element_semantic_type)
 
         case "destroy":
             return core.emit_dynamic_array_destroy(codegen, receiver_value, array_struct_type, semantic_type)
 
         case "iter":
-            return iterators.emit_dynamic_array_iter(codegen, expr, receiver_value, array_struct_type, to_i1)
+            return iterators.emit_dynamic_array_iter(codegen, expr, receiver_value,
+                                                     array_struct_type, element_semantic_type,
+                                                     to_i1)
 
         case "clone":
             from .methods.transforms import emit_dynamic_array_clone
             # The element type drives the per-element deep copy of owning elements (#158).
-            if not isinstance(semantic_type, DynamicArrayType):
-                raise_internal_error("CE0042", type=type(semantic_type).__name__)
             return emit_dynamic_array_clone(codegen, expr, receiver_value, array_struct_type,
-                                            to_i1, semantic_type.base_type)
+                                            to_i1, element_semantic_type)
 
         case "to_string":
             from .methods.transforms import emit_byte_array_to_string
@@ -255,24 +253,22 @@ def emit_array_method(
             return emit_byte_array_to_string_checked(codegen, expr, receiver_value, array_struct_type, to_i1)
 
         case "hash":
-            return hashing.emit_dynamic_array_hash_direct(codegen, expr, receiver_value, array_struct_type, to_i1)
+            return hashing.emit_dynamic_array_hash_direct(codegen, expr, receiver_value,
+                                                          array_struct_type, semantic_type,
+                                                          to_i1)
 
         case "fill":
             # The element type drives the per-slot deep copy of an owning element (#476).
-            if not isinstance(semantic_type, DynamicArrayType):
-                raise_internal_error("CE0042", type=type(semantic_type).__name__)
             # A borrow, so the temporary behind `arr.fill(s.s(2, 5))` needs an owner (#475).
             from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
-            fill_value = emit_borrowed_arg(codegen, expr.args[0], semantic_type.base_type)
+            fill_value = emit_borrowed_arg(codegen, expr.args[0], element_semantic_type)
             return core.emit_dynamic_array_fill(codegen, receiver_value, array_struct_type,
-                                                fill_value, semantic_type.base_type)
+                                                fill_value, element_semantic_type)
 
         case "reverse":
             return core.emit_dynamic_array_reverse(codegen, receiver_value, array_struct_type)
 
         case "extend" | "extend_range":
-            if not isinstance(semantic_type, DynamicArrayType):
-                raise_internal_error("CE0042", type=type(semantic_type).__name__)
             source_data, source_len, _ = _source_data_and_len(codegen, expr, expr.args[0])
             if method_name == "extend_range":
                 start = _index_arg(codegen, expr.args[1])
@@ -282,11 +278,9 @@ def emit_array_method(
                 count = source_len
             return core.emit_dynamic_array_extend(codegen, receiver_value, array_struct_type,
                                                   source_data, source_len, start, count,
-                                                  semantic_type.base_type)
+                                                  element_semantic_type)
 
         case "s" | "ss":
-            if not isinstance(semantic_type, DynamicArrayType):
-                raise_internal_error("CE0042", type=type(semantic_type).__name__)
             data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, receiver_value)
             len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, receiver_value)
             start, extent, by_end = _slice_args(codegen, method_name, expr.args)
@@ -294,7 +288,7 @@ def emit_array_method(
                 codegen, array_struct_type.elements[2].pointee,
                 codegen.builder.load(data_ptr_ptr, name="slice_src_data"),
                 codegen.builder.load(len_ptr, name="slice_src_len"),
-                start, extent, semantic_type.base_type, extent_is_end=by_end)
+                start, extent, element_semantic_type, extent_is_end=by_end)
 
         case _:
             raise NotImplementedError(f"Dynamic array method not implemented: {method_name}")

@@ -6,8 +6,8 @@
 # than loudly. A nested tree means the destructor's self-call is actually taken, so every
 # level's heap buffer has to be accounted for.
 #
-# Walks by index because `.iter()` on a dynamic-array field is a separate open limitation
-# (CE0072).
+# Walks by index. `.iter()` on a dynamic-array field was CE0072 when this was written, and
+# #482 retired that.
 # EXPECT_STDOUT_EXACT: "nodes=6\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
