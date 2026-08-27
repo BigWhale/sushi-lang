@@ -12,7 +12,7 @@ import pytest
 
 
 LIB_SOURCE = """\
-perk Doubler:
+public perk Doubler:
     fn doubled() i32
 
 extend i32 with Doubler:

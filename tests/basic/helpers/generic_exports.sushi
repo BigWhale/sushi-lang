@@ -4,7 +4,7 @@
 public fn identity@(T)(T x) T:
     return Result.Ok(x)
 
-perk Hashable:
+public perk Hashable:
     fn hash() u64
 
 public fn pick_larger_hash@(T: Hashable)(T a, T b) T:

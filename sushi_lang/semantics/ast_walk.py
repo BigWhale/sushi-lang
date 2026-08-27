@@ -100,6 +100,42 @@ def declarations(program: 'Program') -> Iterator[Declaration]:
     yield from _bodied_kinds(program)
 
 
+@dataclass(frozen=True)
+class ConstraintSite:
+    """One perk a declaration names in a type-parameter constraint.
+
+    Not a `TypeSite`: a constraint names a PERK, and a perk is not a type. `decl` is the
+    declaration whose visibility decides whether the constraint leaks (CE3010).
+    """
+
+    kind: str
+    decl: Any
+    perk_name: str
+    span: Optional[Any]
+
+
+def signature_constraints(program: 'Program') -> Iterator[ConstraintSite]:
+    """Every perk one unit's declarations name in a `@(T: P)` constraint.
+
+    A separate walk from `signature_types` for one reason: a constraint carries a name and
+    not a type, so a rule over it reads a different field. Both walks cover the same
+    declarations.
+    """
+    for kind, decl in (
+        *(("function", func) for func in program.functions),
+        *(("struct", struct) for struct in program.structs),
+        *(("enum", enum) for enum in program.enums),
+        *(("extension", ext) for ext in
+          [*program.extensions, *program.generic_extensions]),
+    ):
+        fallback = getattr(decl, "name_span", None) or getattr(decl, "loc", None)
+        for param in getattr(decl, "type_params", None) or ():
+            for constraint in getattr(param, "constraints", None) or ():
+                if isinstance(constraint, str):
+                    yield ConstraintSite(kind, decl, constraint,
+                                         getattr(param, "loc", None) or fallback)
+
+
 def _callable_sites(kind: str, decl: Any, callable_node: Any) -> Iterator[TypeSite]:
     """The return, the error arm and every parameter of one callable.
 

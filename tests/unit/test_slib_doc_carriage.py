@@ -34,7 +34,7 @@ The unit block stands first in the file and documents no declaration.
 use <collections/strings>
 
 ##: The answer to life, the universe and everything. :##
-const i32 ANSWER = 42
+public const i32 ANSWER = 42
 
 ##:
 A point in the plane.
@@ -42,7 +42,7 @@ A point in the plane.
 Two coordinates, and nothing else.
 - Parameter x: a struct declares no parameters, so this is stored and never printed.
 :##
-struct Point:
+public struct Point:
     ##: The distance along x. :##
     i32 x
     ##: The distance along y. :##
@@ -53,7 +53,7 @@ How bright a shade is.
 
 Every variant carries its own block.
 :##
-enum Shade:
+public enum Shade:
     ##: No data at all. :##
     Plain()
     ##: A brightness from 0 to 255. :##
@@ -82,7 +82,7 @@ public fn shout(nom string s) string:
     return Result.Ok(s)
 
 ##: Doubles a number, and says so. :##
-perk Doubler:
+public perk Doubler:
     ##: Twice the receiver. :##
     fn doubled() i32
 
@@ -108,19 +108,19 @@ A box that holds one value.
 
 The field block travels only inside the source slice.
 :##
-struct Box@(T):
+public struct Box@(T):
     ##: The value inside. :##
     T value
 
 ##: Either one thing or the other. :##
-enum Either@(T):
+public enum Either@(T):
     ##: The left side. :##
     Left(T)
     ##: The right side. :##
     Right(T)
 
 ##: How a jump can fail. :##
-enum JumpError:
+public enum JumpError:
     ColdCoil
 
 ##:

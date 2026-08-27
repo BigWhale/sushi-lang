@@ -13,7 +13,7 @@ from sushi_lang.semantics.generics.name_mangling import mangle_function_name
 
 
 LIB_SOURCE = """\
-perk Ord:
+public perk Ord:
     fn gt(i32 other) bool
 
 public fn max_of@(T: Ord)(T a, T b) T:

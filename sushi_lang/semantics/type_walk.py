@@ -57,12 +57,19 @@ def walk_named_types(
     structs: Optional[dict] = None,
     enums: Optional[dict] = None,
     _visited: Optional[Set[str]] = None,
+    *,
+    through_declarations: bool = True,
 ) -> Iterator[Type]:
     """Every type reachable from `ty`, `ty` itself first.
 
     `structs` and `enums` let a bare `UnknownType` name resolve to its declaration and be
     walked through. Without them a bare name is a leaf: a caller that has no tables gets
     the name, not a crash.
+
+    `through_declarations=False` stops at a NAMED declaration: it is yielded, but its
+    fields and variants are not entered. A rule about what a signature hands out wants
+    that, because what a named type holds is its own declaration's business and is fenced
+    there; a rule about what a type CONTAINS wants the default.
     """
     if ty is None:
         return
@@ -80,7 +87,8 @@ def walk_named_types(
     yield ty
 
     def below(inner: Optional[Type]) -> Iterator[Type]:
-        yield from walk_named_types(inner, structs, enums, _visited)
+        yield from walk_named_types(inner, structs, enums, _visited,
+                                    through_declarations=through_declarations)
 
     if isinstance(ty, (ArrayType, DynamicArrayType)):
         yield from below(ty.base_type)
@@ -96,12 +104,14 @@ def walk_named_types(
         yield from below(ty.ok_type)
         yield from below(ty.err_type)
     elif isinstance(ty, StructType):
-        for _field_name, field_type in ty.fields:
-            yield from below(field_type)
+        if through_declarations:
+            for _field_name, field_type in ty.fields:
+                yield from below(field_type)
     elif isinstance(ty, EnumType):
-        for variant in ty.variants:
-            for associated in variant.associated_types:
-                yield from below(associated)
+        if through_declarations:
+            for variant in ty.variants:
+                for associated in variant.associated_types:
+                    yield from below(associated)
     elif isinstance(ty, UnknownType):
         resolved = None
         if structs and ty.name in structs:
@@ -111,10 +121,10 @@ def walk_named_types(
         if resolved is not None:
             yield from below(resolved)
     else:
-        yield from _walk_generic(ty, below)
+        yield from _walk_generic(ty, below, through_declarations)
 
 
-def _walk_generic(ty: Type, below) -> Iterator[Type]:
+def _walk_generic(ty: Type, below, through_declarations: bool = True) -> Iterator[Type]:
     """The kinds that live in `semantics/generics`, kept out of the main dispatch.
 
     A generic TEMPLATE and a type PACK are not in the `Type` union, but both hold types and
@@ -135,9 +145,11 @@ def _walk_generic(ty: Type, below) -> Iterator[Type]:
         for member in ty.types or ():
             yield from below(member)
     elif isinstance(ty, GenericStructType):
-        for _field_name, field_type in ty.fields:
-            yield from below(field_type)
+        if through_declarations:
+            for _field_name, field_type in ty.fields:
+                yield from below(field_type)
     elif isinstance(ty, GenericEnumType):
-        for variant in ty.variants:
-            for associated in variant.associated_types:
-                yield from below(associated)
+        if through_declarations:
+            for variant in ty.variants:
+                for associated in variant.associated_types:
+                    yield from below(associated)

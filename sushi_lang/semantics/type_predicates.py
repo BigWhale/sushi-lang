@@ -123,6 +123,29 @@ def contains_foreign_ptr(ty: Type, struct_table: Optional[dict] = None,
     )
 
 
+def first_private_name(ty: Optional[Type], is_private) -> Optional[str]:
+    """The first name in `ty` that `is_private` refuses, or None. `ty` itself counts.
+
+    The twin of `contains_foreign_ptr`, over the same walk, and it names the offender
+    rather than answering yes or no -- a leak diagnostic has to say which type it is.
+
+    The walk stops at a named declaration. A signature hands out the names it SPELLS;
+    what one of those names holds belongs to its own declaration, and a public struct's
+    private field is fenced there (decision 2). Entering it here would report the same
+    condition twice, once at the field and once at every signature that mentions the
+    struct.
+    """
+    from sushi_lang.semantics.type_walk import walk_named_types
+
+    for reached in walk_named_types(ty, through_declarations=False):
+        # A `GenericTypeRef` spells its base name rather than carrying one, and a private
+        # generic struct leaks through exactly that.
+        name = getattr(reached, "name", None) or getattr(reached, "base_name", None)
+        if isinstance(name, str) and is_private(name):
+            return name
+    return None
+
+
 def contains_reference(ty: Optional[Type]) -> bool:
     """Does this declared type contain a `peek` / `poke` anywhere it is not supported?
 
