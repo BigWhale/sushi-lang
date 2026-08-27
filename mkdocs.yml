@@ -141,4 +141,6 @@ nav:
       - "Type Identity (design)": design/type-identity.md
       - "Ownership Conventions (design)": design/ownership-conventions.md
       - "Borrowing (design)": design/borrowing.md
+      - "Visibility (design)": design/visibility.md
+      - "Unit Namespaces (design)": design/unit-namespaces.md
   - Examples: examples/README.md
