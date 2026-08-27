@@ -1,0 +1,14 @@
+# FFI: a `public fn` may not expose a foreign `ptr` through its ERROR type either.
+# The fence read `ret` and `params` and never `err_type`.
+# EXPECT_ERROR_CODE: CE5008
+unsafe external "C" as libc because "intentional public ptr exposure":
+    fn free(ptr p) ~ = "free"
+
+enum AllocError:
+    Failed(ptr)
+
+public fn grab() i32 | AllocError:
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(0)

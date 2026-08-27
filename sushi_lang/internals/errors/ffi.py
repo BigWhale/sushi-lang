@@ -38,8 +38,8 @@ _add(ErrorMessage("CE5007", Severity.ERROR,
     Category.FFI, "An imported library's exported generics depend on this private helper, which ships in the .slib export closure and must be registered at the consumer under its original name. A local symbol with the same name would silently change what the library's monomorphized bodies call. Rename the local symbol."))
 
 _add(ErrorMessage("CE5008", Severity.ERROR,
-    "public function '{name}' exposes a foreign `ptr` in its signature and cannot cross a unit boundary",
-    Category.FFI, "FFI is a private implementation detail of a unit. A `public fn` whose parameters or return type contain `ptr` (including inside Result or Maybe) cannot be part of a unit's public API. Keep the function private, or wrap the pointer in a struct (struct fields may carry `ptr` across units)."))
+    "public {kind} '{name}' exposes a foreign `ptr` in its signature and cannot cross a unit boundary",
+    Category.FFI, "FFI is a private implementation detail of a unit. A public declaration whose parameters, return type or error arm contain `ptr` (including inside Result or Maybe) cannot be part of a unit's public API. `{kind}` says which declaration it was: a public generic, an extension method and a perk method are all reached, and each used to compile clean. Keep the function private, or wrap the pointer in a struct (struct fields may carry `ptr` across units)."))
 
 _add(ErrorMessage("CE5009", Severity.ERROR,
     "foreign `ptr` used in a unit with no `unsafe external` block",

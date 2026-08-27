@@ -1,0 +1,29 @@
+# FFI: the RECEIVER is exempt from the public `ptr` fence. `Handle` carries a foreign
+# handle in a field, which CE5008's own text sanctions, so an extension on it exposes
+# nothing the struct did not. A fence that read the target type would make the wrapper
+# struct unextendable, which is the pattern the error message recommends.
+# EXPECT_STDOUT_EXACT: "size 16\n"
+unsafe external "C" as libc because "the receiver needs a field the fence would refuse":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+struct Handle:
+    ptr raw
+    i64 size
+
+extend Handle described() i64:
+    return self.size
+
+perk Measured:
+    fn measure() i64
+
+extend Handle with Measured:
+    fn measure() i64:
+        return self.size
+
+fn main() i32:
+    let ptr p = libc.malloc(16 as i64)
+    let Handle h = Handle(p, 16 as i64)
+    println("size {h.described()}")
+    libc.free(h.raw)
+    return Result.Ok(0)

@@ -12,13 +12,43 @@ renames every one of them. `tests/unit/test_declaration_walk_is_total.py` is the
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator, List, Tuple
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program
 
 # A declaration, and the word a diagnostic calls its kind by.
 Declaration = Tuple[str, object]
+
+
+# Every slot a declared type can sit in. Two facts decide whether a rule polices a
+# position -- WHAT declares it and WHERE in the declaration it sits -- and a rule that
+# conflates them gets one of them wrong. `RECEIVER` is the extension or perk-implementation
+# target type; it is a position because the `ptr` rule exempts it and a leak rule does not.
+POSITIONS = frozenset({
+    "type", "receiver", "return", "error", "parameter", "field", "variant",
+})
+
+
+@dataclass(frozen=True)
+class TypeSite:
+    """One place a declaration's SIGNATURE names a type, and where to point at it.
+
+    `decl` is the TOP-LEVEL declaration, never the field or the method inside it, because
+    that is what visibility comes from: a field is as visible as its struct and a perk
+    method as its perk or its target type. `kind` is the `declarations()` word for what
+    declares the position, `position` is the slot within it, and `span` locates the slot.
+    """
+
+    kind: str
+    position: str
+    decl: Any
+    ty: Optional[Any]
+    span: Optional[Any]
+    # The inner node, when the position belongs to one: the method, the field, the
+    # variant. A diagnostic names THIS, while visibility comes from `decl`.
+    at: Optional[Any] = None
 
 
 def _bodied_kinds(program: 'Program') -> Iterator[Declaration]:
@@ -68,3 +98,67 @@ def declarations(program: 'Program') -> Iterator[Declaration]:
         for decl in block.decls:
             yield "external declaration", decl
     yield from _bodied_kinds(program)
+
+
+def _callable_sites(kind: str, decl: Any, callable_node: Any) -> Iterator[TypeSite]:
+    """The return, the error arm and every parameter of one callable.
+
+    `decl` and `callable_node` are the same object for a free function, and differ for a
+    method: the signature is the method's, the visibility is its perk's or its target's.
+    """
+    fallback = (getattr(callable_node, "name_span", None)
+                or getattr(callable_node, "loc", None))
+    yield TypeSite(kind, "return", decl, getattr(callable_node, "ret", None),
+                   getattr(callable_node, "ret_span", None) or fallback, callable_node)
+    yield TypeSite(kind, "error", decl, getattr(callable_node, "err_type", None),
+                   fallback, callable_node)
+    for param in getattr(callable_node, "params", ()) or ():
+        yield TypeSite(kind, "parameter", decl, getattr(param, "ty", None),
+                       getattr(param, "type_span", None) or fallback, callable_node)
+
+
+def signature_types(program: 'Program') -> Iterator[TypeSite]:
+    """Every type one unit's declarations name in a SIGNATURE. Never in a body.
+
+    The signature is where a type crosses a boundary, so this is the walk both fences over
+    declared types run on: the `ptr` quarantine (CE5009), the public-signature rules
+    (CE5008, CE3009), and nothing that cares about a local.
+
+    A body is deliberately absent. A private type is perfectly legal in a local variable,
+    and CE5009 -- which does care -- keeps its own body walk.
+    """
+    for const in program.constants:
+        yield TypeSite("constant", "type", const, getattr(const, "ty", None),
+                       getattr(const, "type_span", None) or const.loc)
+
+    for struct in program.structs:
+        for field in struct.fields:
+            yield TypeSite("struct", "field", struct, getattr(field, "ty", None),
+                           getattr(field, "loc", None)
+                           or getattr(struct, "name_span", None) or struct.loc, field)
+
+    for enum in program.enums:
+        for variant in enum.variants:
+            span = (getattr(variant, "name_span", None) or getattr(variant, "loc", None)
+                    or getattr(enum, "name_span", None) or enum.loc)
+            for ty in getattr(variant, "associated_types", ()) or ():
+                yield TypeSite("enum", "variant", enum, ty, span, variant)
+
+    for perk in program.perks:
+        for method in perk.methods:
+            yield from _callable_sites("perk method", perk, method)
+
+    for impl in program.perk_impls:
+        yield TypeSite("perk implementation", "receiver", impl,
+                       getattr(impl, "target_type", None),
+                       getattr(impl, "target_type_span", None) or impl.loc)
+        for method in impl.methods:
+            yield from _callable_sites("perk method", impl, method)
+
+    for func in program.functions:
+        yield from _callable_sites("function", func, func)
+
+    for ext in [*program.extensions, *program.generic_extensions]:
+        yield TypeSite("extension", "receiver", ext, getattr(ext, "target_type", None),
+                       getattr(ext, "target_type_span", None) or ext.loc)
+        yield from _callable_sites("extension", ext, ext)

@@ -17,6 +17,7 @@ from sushi_lang.semantics.passes.types.visitor import StatementValidator, Expres
 
 from .compatibility import types_compatible
 from .constants import validate_constant
+from .public_signatures import check_public_signatures
 from .signatures import (
     validate_function,
     validate_extension_method,
@@ -74,6 +75,7 @@ class TypeValidator:
         self.perk_table = tables.perks
         self.perk_impl_table = tables.perk_impls
         self.library_not_exported = tables.library_not_exported
+        self.visibility = tables.visibility
         self.current_unit_name = current_unit_name  # Track which unit is being validated (for visibility checking)
         self.monomorphized_functions = monomorphized_functions or {}
         self.known_types: Set[BuiltinType] = {
@@ -102,6 +104,10 @@ class TypeValidator:
     def run(self, program: Program) -> None:
         """Entry point for type validation."""
         self.ast_constants = {const.name: const for const in program.constants}
+
+        # Whole-unit, and BEFORE the per-declaration walk: it is the only way a public
+        # generic is reached, since the loop below skips one.
+        check_public_signatures(self, program)
 
         for const in program.constants:
             self._validate_constant(const)

@@ -13,24 +13,9 @@ from .perks import validate_perk_implementation, check_no_conflicts_with_regular
 from sushi_lang.semantics.generics.type_display import display_type
 
 
-def _check_public_fn_ptr_fence(self, func: FuncDef) -> None:
-    """CE5008: a `public fn` may not expose a foreign `ptr` in its signature."""
-    from sushi_lang.semantics.type_predicates import contains_foreign_ptr
-
-    if not func.is_public:
-        return
-    structs = self.struct_table.by_name
-    enums = self.enum_table.by_name
-    if contains_foreign_ptr(func.ret, structs, enums) or any(
-        contains_foreign_ptr(p.ty, structs, enums) for p in func.params
-    ):
-        self.err.emit(er.ERR.CE5008, func.name_span, name=func.name)
-
-
 def validate_function(self, func: FuncDef) -> None:
     """Validate types within a function."""
     self.current_function = func
-    _check_public_fn_ptr_fence(self, func)
     self.in_extension_context = False  # Normal functions are never extension/perk bodies
     self.in_library_body = bool(getattr(func, "is_library_template", False))
     # And whose file it is. Set on every entry, so an ordinary body clears what a
