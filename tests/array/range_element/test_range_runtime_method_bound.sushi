@@ -1,0 +1,16 @@
+# A bound may be any i32 expression in a `from()` literal, a method call included (#478).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 0 1 2\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let i32[] xs = from([10, 20, 30])
+    let i32[] index = from([0..xs.len()])
+    println("{index.len()} {index[0]} {index[1]} {index[2]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

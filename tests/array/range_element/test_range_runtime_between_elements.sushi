@@ -1,0 +1,17 @@
+# A run-time element may sit anywhere in a `from()` literal, because the fill threads a
+# CURSOR rather than a compile-time start (#478, Phase 3).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "6 -1 0 1 2 3 99\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let i32 k = 4
+    let i32[] mixed = from([-1, 0..k, 99])
+    println("{mixed.len()} {mixed[0]} {mixed[1]} {mixed[2]} {mixed[3]} {mixed[4]} {mixed[5]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

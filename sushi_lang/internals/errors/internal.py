@@ -365,6 +365,19 @@ _add(ErrorMessage("CE0129", Severity.ERROR,
     "decision would be a twelfth derivation of the rule, which is the thing the seam exists to "
     "make impossible. Same treatment CE0124 gives a missing try-expression annotation."))
 
+_add(ErrorMessage("CE0132", Severity.ERROR,
+    "no write address for a fixed-array receiver of kind {node}",
+    Category.INTERNAL,
+    "A mutating built-in on a fixed array -- fill, reverse -- routes its receiver through "
+    "backend/types/arrays/fixed_addressing.py::as_fixed_array_address with writable=True, "
+    "which resolves an address from the AST. A receiver that names no storage has no write "
+    "address, and every such receiver already has a diagnostic: CE2096 for a constant, and "
+    "CE2408, CE2414, CE2421, CE2422, CE2426 or CE2429 for the read-only receivers. Reaching "
+    "this means one of them did not fire, so it is a gap in that coverage and not a user "
+    "error. It is fatal ON PURPOSE: the `alloca` fallback that stood here filled a COPY of "
+    "the receiver and reported nothing, which is the silent no-op #480 records. Same "
+    "treatment CE0129 gives a consuming use with no ownership decision."))
+
 _add(ErrorMessage("CE0126", Severity.ERROR,
     "poisoned intern of '{name}': already interned as {existing}, rebuilt as {rebuilt}",
     Category.INTERNAL,

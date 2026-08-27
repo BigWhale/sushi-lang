@@ -46,9 +46,14 @@ def first_name(children: List[object]) -> Optional[Token]:
     return first(children, lambda c: isinstance(c, Token) and c.type == "NAME")  # type: ignore[return-value]
 
 
+# The tokens the grammar's `method_name` admits. A keyword after a DOT is a method name
+# and never a statement, so the set grows with the grammar rule and nowhere else.
+_METHOD_NAME_TOKENS = ("NAME", "NEW", "EXTEND")
+
+
 def first_method_name(children: List[object]) -> Optional[Token]:
-    """Get first NAME or NEW token from children (for method names)."""
-    return first(children, lambda c: isinstance(c, Token) and c.type in ("NAME", "NEW"))  # type: ignore[return-value]
+    """Get the first method-name token from children."""
+    return first(children, lambda c: isinstance(c, Token) and c.type in _METHOD_NAME_TOKENS)  # type: ignore[return-value]
 
 
 def first_tree(children: List[object], data: str) -> Optional[Tree]:

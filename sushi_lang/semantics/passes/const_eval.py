@@ -253,8 +253,19 @@ class ConstantEvaluator:
         if runs is None:
             return None
 
+        # A constant's evaluator needs the VALUES and not only the count, so a bound or a
+        # count it cannot read is CE2019 or CE2017 here (Ruling 3, #478).
+        if array_runs.require_readable_length(runs, self.reporter) is None:
+            return None
+
         element_values = []
         for run in runs:
+            if run.plan is not None:
+                # A readable range expands to literals, so the table lands in .rodata with
+                # no arithmetic behind it.
+                element_values.extend(
+                    ConstantValue(value, element_type) for value in run.plan.values())
+                continue
             run_val = self.evaluate(run.value, element_type, run.value.loc)
             if run_val is None:
                 return None  # Non-constant element

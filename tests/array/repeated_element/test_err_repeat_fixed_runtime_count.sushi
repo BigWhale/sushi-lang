@@ -1,0 +1,9 @@
+# Ruling 3, for a repeated value: a fixed array still needs a count the compiler can read,
+# and the escape is `from()`.
+# EXPECT_ERROR_CODE: CE2017
+
+fn main() i32:
+    let i32 n = 4
+    let i32[4] t = [7; n + 0]
+    println(t[0])
+    return Result.Ok(0)

@@ -162,7 +162,10 @@ method_call: "." method_name "(" [args] ")"
 member_access: "." method_name
 index: "[" expr "]"
 try_op: DOUBLE_QUESTION
-method_name: NAME | NEW
+// A keyword after a DOT is a method name, never a statement: `new` has been admitted
+// here since dynamic arrays, and `extend` joins it for `a.extend(b)` (#462). Contextual,
+// so `extend i32 squared()` at statement position is unaffected.
+method_name: NAME | NEW | EXTEND
 
 ?atom: FLOAT
      | HEX_INT

@@ -9,6 +9,86 @@ a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
 ### Added
+- **A range element in an array literal, and a run-time count in `from()`.** An element can
+  already fill more than one slot with `value; count`. It can now be a RANGE, and the count
+  no longer has to be readable at compile time.
+
+  ```sushi
+  let i32[6] table   = [0..=5]           # 0 1 2 3 4 5
+  let i32[]  down    = from([5..0])      # 5 4 3 2 1, the direction `foreach` uses
+  let i32[]  mixed   = from([-1, 0..3, 99])
+
+  fn zeros(i32 n) i32[]:
+      return Result.Ok(from([0; n]))     # a length known only at run time
+  ```
+
+  **Where a count must be readable depends on the position, not on the element.** A fixed
+  array's length is part of its TYPE and a constant's evaluator needs the values, so both
+  still need a count the compiler can read. A `from()` array carries its length in its
+  descriptor, so a count or a bound there may be any `i32` expression. A bound that is not
+  readable where it must be is **CE2019**, and so is a readable range that yields nothing;
+  a range carrying a repeat count is **CE2020**. A run-time count that is negative traps
+  **RE2024**, because the fill walks with an unsigned compare.
+
+  A readable count never pays for the run-time mechanism. llvmlite does not fold, so a
+  short readable range emits literal stores with no arithmetic, a longer one walks a
+  constant trip count, and only an unreadable one computes anything.
+
+- **A bulk array copy: `.extend()`, `.extend_range()` and `.ss()`.** Copying a range of one
+  array into another had no spelling, so every site wrote an element loop and paid a bounds
+  check, a capacity check and an amortized realloc per element.
+
+  ```sushi
+  out.extend(body)                  # append all of body
+  out.extend_range(src, pos, len)   # append a range, no temporary
+  let i32[] part = src.ss(2, 3)     # a fresh array of a range
+  ```
+
+  Three spellings over ONE emitter: `extend` is `extend_range(src, 0, src.len())`, and
+  `.ss()` is a fresh array of a run-time length plus the same range copy. `.ss()` is named
+  for `string.ss(start, length)`, which already means this for text.
+
+  The source is a **borrow**, and every copied slot takes its own `copy_out` -- one value
+  and N slots, or N values and N slots, is the same rule. A plain element type copies with a
+  `memcpy`. The destination grows once, to exactly the length it needs. A negative `start`
+  or `count` traps **RE2024** and a range past the source traps **RE2020**, both before
+  anything is allocated, and a source that aliases its destination is **CE2430** -- growing
+  the destination may reallocate the buffer the copy is reading.
+
+  `compression/zlib` loses 30 lines of hand-rolled loops, five copies and two fills.
+
+### Changed
+- **CE2018 retires: a repeated value may own heap memory.** `[towel; 3]` was refused
+  because N copies of an owning value would need N-1 deep copies and the compiler never
+  inserts one. That stopped being true when `.fill()` gained a per-slot `copy_out`, and the
+  language answered one question two ways: `a.fill(towel)` was legal beside
+  `from([towel; 2])`, which was not.
+
+  A repeated value is now a **borrow**, as `.fill()`'s argument is, and every slot takes its
+  own copy. A run has one value and N slots, so it has no single position to consume into --
+  the general rule is that a bulk write borrows its source. A plain element still consumes,
+  because it still occupies one slot.
+
+### Fixed
+- **Every built-in method on a fixed array now works through every receiver.** A `T[N]`
+  reached as a struct field, a nested field or an array element had no address rule of its
+  own, so nine sites re-derived one and each fell back to a stack COPY of the receiver.
+  `b.slots.fill(9)` and `b.slots.reverse()` therefore compiled, ran, and left the field
+  unchanged -- no diagnostic was possible, because the store is legal. `.iter()` and
+  `.hash()` on a field refused instead, with CE0072 and CE0056, because they looked the
+  element type up by NAME and a field has none. Through a `peek` or `poke` parameter every
+  method was CE0000: such a receiver arrives as `[N x T]*`, which the dispatch gate did not
+  accept, so the call fell through to the user-extension lookup and mangled the type name
+  into `i32[3]_len`.
+
+  `as_fixed_array_address` is the one rule now, the fixed twin of `as_array_address`. It
+  resolves the address from the AST, and it takes one flag: a READ may spill a value that
+  names no storage, and a WRITE may not. That is what keeps a store out of `.rodata` -- a
+  constant resolves for a read and to nothing for a write, so no such binary can be built
+  even if CE2096 were bypassed. There is no fallback behind the write arm: reaching it means
+  a typecheck rejection did not fire, and that is the new CE0132.
+
+### Added
 - **`--color=always|never|auto`, and one colour decision behind it.** Everything the
   compiler prints to a terminal -- a diagnostic, the version banner and the `--lib-info`
   report -- now reads one ladder: the flag, then `NO_COLOR` (present at any value, which

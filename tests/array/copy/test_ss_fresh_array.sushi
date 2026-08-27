@@ -1,0 +1,23 @@
+# `.ss(start, count)` is a fresh array of a range, named for `string.ss(start, length)`
+# so the two modules keep one vocabulary (#462). `ztake` and `zlib_uncompress` want this.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 30 40 50\n6 10 60\n1 10\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let i32[] src = from([10, 20, 30, 40, 50, 60])
+    let i32[] part = src.ss(2, 3)
+    println("{part.len()} {part[0]} {part[1]} {part[2]}")
+
+    # A borrow, so the source is untouched.
+    println("{src.len()} {src[0]} {src[5]}")
+
+    let i32[] one = src.ss(0, 1)
+    println("{one.len()} {one[0]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

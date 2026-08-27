@@ -27,10 +27,14 @@ def _literal(src: str) -> ArrayLiteral:
 
 
 def _read_int(expr):
-    """A count reader for a bare literal, with unary minus. The real one evaluates."""
+    """A count reader for a bare literal, with unary minus. The real one evaluates.
+
+    The operator is spelled `neg`, not `-`. It was tested for as `-` until #478, so the
+    "negative" row below read as UNREADABLE and the two rows tested one thing.
+    """
     if isinstance(expr, IntLit):
         return expr.value
-    if isinstance(expr, UnaryOp) and expr.op == "-" and isinstance(expr.expr, IntLit):
+    if isinstance(expr, UnaryOp) and expr.op == "neg" and isinstance(expr.expr, IntLit):
         return -expr.expr.value
     return None
 
@@ -74,11 +78,11 @@ def test_a_run_keeps_its_value_expression():
     assert all(isinstance(r.value, IntLit) for r in runs)
 
 
-# (id, source) -- every way a count is not a count. One code carries all of them.
+# (id, source) -- every way a count the compiler CAN read is not a count. One code carries
+# all of them. A count it cannot read is a different question -- see below.
 _BAD_COUNTS = [
     ("zero", "[0; 0]"),
     ("negative", "[0; -2]"),
-    ("unreadable", "[0; n]"),
 ]
 
 
@@ -87,6 +91,38 @@ def test_a_bad_count_is_ce2017_and_no_runs(_id, src):
     runs, reporter = _runs(src)
     assert runs is None
     assert [d.code for d in reporter.items] == ["CE2017"]
+
+
+def test_an_unreadable_count_is_recorded_and_not_reported():
+    """Ruling 3 (#478): where a count must be readable is the CALLER's question.
+
+    `read_runs` records None and says nothing, because `from([0; n])` is legal and a fixed
+    array's `[0; n]` is not. The reader cannot tell them apart, and it does not try.
+    """
+    runs, reporter = _runs("[0; n]")
+    assert runs is not None
+    assert [r.count for r in runs] == [None]
+    assert not reporter.items
+
+
+def test_require_readable_length_reports_the_first_unreadable_run():
+    """The caller that needs a number asks for one, and gets CE2017 when there is none."""
+    from sushi_lang.semantics.array_runs import require_readable_length
+
+    runs, _reporter = _runs("[1, 0; n, 9]")
+    assert runs is not None
+    reporter = Reporter()
+    assert require_readable_length(runs, reporter) is None
+    assert [d.code for d in reporter.items] == ["CE2017"]
+
+
+def test_require_readable_length_answers_when_every_count_is_readable():
+    from sushi_lang.semantics.array_runs import require_readable_length
+
+    runs, _reporter = _runs("[8;144, 9;112]")
+    reporter = Reporter()
+    assert require_readable_length(runs, reporter) == 256
+    assert not reporter.items
 
 
 def test_a_silent_reporter_still_refuses_a_bad_count():

@@ -668,33 +668,93 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-The count is a positive integer the compiler can read: a literal in any base, the name
-of an integer constant, or an expression of them. Unlike an array size, it is read late
-enough to name a constant of **another** unit. A count that is not a count is
-**CE2017** -- a zero, a negative, or a value the compiler cannot read:
+**Where the count must be readable depends on the position, not on the element.** A
+fixed array's length is part of its TYPE, and a constant's evaluator needs the values,
+so both need a count the compiler can read: a literal in any base, the name of an
+integer constant, or an expression of them. Unlike an array size, the count is read late
+enough to name a constant of **another** unit.
+
+A `from()` array carries its length at run time, so the count there may be **any i32
+expression**:
+
+```sushi
+fn zeros(i32 n) i32[]:
+    return Result.Ok(from([0; n]))
+
+fn main() i32:
+    let i32[] xs = from([10, 20, 30])
+    let i32[] prev = from([-1; xs.len()])
+    println("{prev.len()} {prev[0]}")       # 3 -1
+    return Result.Ok(0)
+```
+
+A count the compiler CAN read and that is not a count is **CE2017** -- a zero, a
+negative, or, in a fixed array or a constant, a value it cannot read:
 
 <!-- docs-sweep: error CE2017 -->
 ```sushi
 fn main() i32:
     let i32 n = 4
-    let i32[4] t = [7; n]           # CE2017: a local is not a value the compiler reads
+    let i32[4] t = [7; n]           # CE2017: a fixed array needs a readable count
     println(t[0])
     return Result.Ok(0)
 ```
 
-The value is evaluated once and copied, so a repeated element must be of a type that
-copies. A type that owns heap memory would need a deep copy per slot, and `.clone()` is
-the only deep copy in Sushi -- the compiler never inserts one. Repeating one is
-**CE2018**:
+A count you can see that spells nothing is a typo, so `[0; 0]` stays an error. A count
+you cannot see is **data**: `from([0; n])` with `n` at zero gives an empty `T[]`, the
+same value `new()` gives. A run-time count that is **negative** traps **RE2024**,
+because the fill walks with an unsigned compare and a negative count would read as a
+very large one.
 
-<!-- docs-sweep: error CE2018 -->
+The value is evaluated once, and every slot takes its own copy. A type that owns heap
+memory costs one allocation per slot, so use a long run of one only when you mean that.
+The repeated value is a **borrow**, which makes it the one literal element that does not
+consume -- a run has one value and N slots, so it has no single position to take
+ownership into. The source stays yours:
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let string towel = "mostly harmless".upper()
+    let string[3] t = [towel; 3]
+    println("{t[0]} {towel}")       # both usable
+    return Result.Ok(0)
+```
+
+#### A range element
+
+An element may be a **range**, and it fills the slots it spans. `start..end` is exclusive
+and `start..=end` is inclusive, and the direction follows `foreach`, so a descending
+range descends:
+
 ```sushi
 fn main() i32:
-    let string s = "mostly harmless"
-    let string[3] t = [s; 3]        # CE2018: string owns heap memory
-    println(t[0])
+    let i32[]  up      = from([0..5])       # 0 1 2 3 4
+    let i32[]  through = from([0..=5])      # 0 1 2 3 4 5
+    let i32[]  down    = from([5..0])       # 5 4 3 2 1
+    let i32[6] table   = [0..=5]
+    let i32[]  mixed   = from([-1, 0..3, 99])   # -1 0 1 2 99
+    println("{up.len()} {through.len()} {down.len()} {table[5]} {mixed.len()}")
     return Result.Ok(0)
 ```
+
+A range yields **i32**, exactly as `foreach(i in 0..5)` does, so `let i64[] a =
+from([0..5])` is a type mismatch. It obeys the same position rule as a repeat: a bound in
+a `from()` literal may be any i32 expression, and a fixed array or a constant needs one
+the compiler can read. A bound it cannot read there is **CE2019**, and so is a readable
+range that yields nothing:
+
+<!-- docs-sweep: error CE2019 -->
+```sushi
+fn main() i32:
+    let i32[] a = from([3..3])      # CE2019: this range yields no value
+    println(a.len())
+    return Result.Ok(0)
+```
+
+A range cannot carry a repeat count. `value; count` repeats ONE value, and a range is
+already a sequence, so `[0..2; 3]` is **CE2020**.
 
 What CE2011 compares is the **expanded** count, so a run of 144 is 144 slots. When a
 literal has a run, CE2011 lists every run with the span it fills, because the compiler

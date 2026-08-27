@@ -36,7 +36,7 @@ def _infer_semantic_type_from_ir(ir_type: ir.Type) -> 'Type':
 
 def emit_fixed_array_get_maybe(
     codegen: 'LLVMCodegen',
-    array_value: ir.Value,
+    array_ptr: ir.Value,
     array_type: ir.ArrayType,
     index_value: ir.Value,
     semantic_type: 'Type',
@@ -71,13 +71,9 @@ def emit_fixed_array_get_maybe(
 
     emit_bounds_check(codegen, index_value, array_size, prefix="get", on_fail=on_fail)
 
-    # Bounds OK block: return Maybe.Some(element)
-    # Need to get pointer to array for GEP
-    # If array_value is already loaded, we need to store it temporarily
-    array_temp = codegen.builder.alloca(array_type, name="array_temp")
-    codegen.builder.store(array_value, array_temp)
-
-    element_ptr = codegen.builder.gep(array_temp, [zero, index_value], name="element_ptr")
+    # The receiver arrives as an address from `as_fixed_array_address` (#480), so the GEP
+    # reads the owner rather than an `alloca`'d copy of it.
+    element_ptr = codegen.builder.gep(array_ptr, [zero, index_value], name="element_ptr")
     element_value = codegen.builder.load(element_ptr, name="element")
 
     # `.get()` READS. It does not detach (#242): the array keeps the element and still

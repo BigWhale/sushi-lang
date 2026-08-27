@@ -1,0 +1,17 @@
+# A bound may name an integer constant, which is a value the compiler can read (#478).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4 0 3\n"
+
+use <io/stdio>
+
+const i32 LIMIT = 4
+
+fn run_test() i32:
+    let i32[] a = from([0..LIMIT])
+    println("{a.len()} {a[0]} {a[3]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

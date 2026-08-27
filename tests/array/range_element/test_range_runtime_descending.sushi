@@ -1,0 +1,19 @@
+# The direction is a run-time `select` when the bounds are not readable (#478, Ruling 1).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "5 4 0\n4 4 1\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let i32 k = 4
+    let i32[] down = from([k..=0])
+    println("{down.len()} {down[0]} {down[4]}")
+
+    let i32[] short = from([k..0])
+    println("{short.len()} {short[0]} {short[3]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

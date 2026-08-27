@@ -1,0 +1,21 @@
+# A FIXED array is a legal source for all three: `.ss()` returns a `T[]`, and a fixed
+# destination cannot grow, so it is not a legal receiver (#462).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "5 1 2 7 8 9\n2 8 9\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let i32[3] fixed = [7, 8, 9]
+    let i32[] out = from([1, 2])
+    out.extend(fixed)
+    println("{out.len()} {out[0]} {out[1]} {out[2]} {out[3]} {out[4]}")
+
+    let i32[] tail = fixed.ss(1, 2)
+    println("{tail.len()} {tail[0]} {tail[1]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

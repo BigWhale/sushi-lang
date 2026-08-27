@@ -2,7 +2,7 @@
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
-from sushi_lang.semantics.typesys import Type, ArrayType, DynamicArrayType, BuiltinType, IteratorType
+from sushi_lang.semantics.typesys import Type, ArrayType, DynamicArrayType, BuiltinType, IteratorType, deref_type
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from .utils import validate_constant_array_index
@@ -10,7 +10,7 @@ from .utils import validate_constant_array_index
 
 # Array methods that mutate their receiver in place. A constant is emitted as a
 # read-only global, so these cannot target one (CE2096).
-_MUTATING_ARRAY_METHODS = frozenset({"fill", "reverse"})
+_MUTATING_ARRAY_METHODS = frozenset({"fill", "reverse", "extend", "extend_range"})
 
 
 def _validate_element_argument(call: MethodCall, element_type: Type, reporter: Any,
@@ -215,6 +215,41 @@ def _validate_dynamic_array_fill(call: MethodCall, array_type: DynamicArrayType,
     _validate_element_argument(call, array_type.base_type, reporter, validator)
 
 
+def _validate_bulk_copy(call: MethodCall, array_type: Any, reporter: Any, validator: Any,
+                        *, name: str, index_args: int) -> None:
+    """`extend`, `extend_range` and `ss` share one shape: a source, and 0 or 2 indices.
+
+    The source is a BORROW whose ELEMENT type must match, which is the only thing that
+    separates this from an ordinary index check.
+    """
+    expected = index_args + (0 if name == "ss" else 1)
+    if len(call.args) != expected:
+        er.emit(reporter, er.ERR.CE0023, call.loc,
+                name=f"{display_type(array_type)}.{name}", expected=expected,
+                got=len(call.args))
+        return
+
+    if name != "ss":
+        source_type = validator.infer_expression_type(call.args[0]) if validator else None
+        if source_type is not None:
+            source_type = deref_type(source_type)
+            if not isinstance(source_type, (ArrayType, DynamicArrayType)):
+                er.emit(reporter, er.ERR.CE2023, call.loc, method=name,
+                        expected="an array", got=display_type(source_type))
+                return
+            if source_type.base_type != array_type.base_type:
+                er.emit(reporter, er.ERR.CE2023, call.loc, method=name,
+                        expected=display_type(array_type),
+                        got=display_type(source_type))
+                return
+
+    for index in call.args[len(call.args) - index_args:]:
+        index_type = validator.infer_expression_type(index) if validator else None
+        if index_type is not None and index_type != BuiltinType.I32:
+            er.emit(reporter, er.ERR.CE2002, index.loc,
+                    got=display_type(index_type), expected=display_type(BuiltinType.I32))
+
+
 def _validate_fixed_array_reverse(call: MethodCall, array_type: ArrayType, reporter: Any) -> None:
     """Validate reverse() method call on fixed arrays."""
     if call.args:
@@ -231,10 +266,11 @@ def _validate_dynamic_array_reverse(call: MethodCall, array_type: DynamicArrayTy
 
 def is_builtin_array_method(method_name: str) -> bool:
     """Check if a method name is a built-in array method."""
-    # Fixed array methods: len, get, iter, hash, fill, reverse
-    # Dynamic array methods: len, get, push, pop, capacity, destroy, free, iter, clone, hash, fill, reverse
+    # Fixed array methods: len, get, iter, hash, clone, fill, reverse, ss
+    # Dynamic array methods: the same, plus push, pop, capacity, destroy, free, extend,
+    #   extend_range
     # u8[] specific methods: to_string
-    return method_name in {"len", "get", "push", "pop", "capacity", "destroy", "free", "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse"}
+    return method_name in {"len", "get", "push", "pop", "capacity", "destroy", "free", "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse", "extend", "extend_range", "ss"}
 
 
 def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | DynamicArrayType, reporter: Any, validator: Any = None) -> None:
@@ -331,6 +367,21 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         else:
             _validate_dynamic_array_reverse(call, array_type, reporter)
 
+    elif method_name in ("extend", "extend_range"):
+        # The destination must be able to GROW, so a fixed array is not a receiver: its
+        # length is part of its type, the reason `.push()` refuses one too. A fixed array
+        # is a legal SOURCE, and `.ss()` works on either.
+        if not isinstance(array_type, DynamicArrayType):
+            er.emit(reporter, er.ERR.CE2023, call.loc,
+                    method=method_name, expected="dynamic array",
+                    got=display_type(array_type))
+            return
+        _validate_bulk_copy(call, array_type, reporter, validator, name=method_name,
+                            index_args=2 if method_name == "extend_range" else 0)
+
+    elif method_name == "ss":
+        _validate_bulk_copy(call, array_type, reporter, validator, name="ss", index_args=2)
+
 
 def get_builtin_array_method_return_type(method_name: str, array_type: ArrayType | DynamicArrayType) -> Type | None:
     """Get the return type of a built-in array method.
@@ -371,4 +422,10 @@ def get_builtin_array_method_return_type(method_name: str, array_type: ArrayType
         return BuiltinType.BLANK
     elif method_name == "reverse":
         return BuiltinType.BLANK
+    elif method_name in ("extend", "extend_range"):
+        return BuiltinType.BLANK
+    elif method_name == "ss":
+        # A FRESH array, so a `T[]` whatever the source was: a fixed source gives a
+        # dynamic result, because the length is a run-time value.
+        return DynamicArrayType(base_type=array_type.base_type)
     return None

@@ -384,6 +384,23 @@ def _declare_memcpy(codegen: 'LLVMCodegen'):
     )
 
 
+def emit_memcpy_bytes(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
+                      byte_count: ir.Value) -> None:
+    """`byte_count` bytes from `source` to `dest`, whatever the pointee types are.
+
+    The i64-length form with a zero-extended count, never the raw i32: the upper half of a
+    64-bit length register is otherwise garbage that glibc's memcpy reads (#149).
+    """
+    b = codegen.builder
+    i8_ptr = ir.PointerType(codegen.types.i8)
+    count_i64 = byte_count
+    if byte_count.type != ir.IntType(INT64_BIT_WIDTH):
+        count_i64 = b.zext(byte_count, ir.IntType(INT64_BIT_WIDTH), name="copy_bytes_i64")
+    b.call(_declare_memcpy(codegen),
+           [b.bitcast(dest, i8_ptr), b.bitcast(source, i8_ptr), count_i64,
+            ir.Constant(ir.IntType(1), 0)])
+
+
 def _clone_string_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
     """Deep-copy a string's buffer, UNCONDITIONALLY."""
     b = codegen.builder

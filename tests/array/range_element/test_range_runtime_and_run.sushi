@@ -1,0 +1,17 @@
+# A run-time range and a run-time repeated value in ONE literal, to pin the cursor across
+# both kinds of element (#478).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7 0 1 2 8 8 8 5\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let i32 k = 3
+    let i32[] a = from([0..k, 8; k, 5])
+    println("{a.len()} {a[0]} {a[1]} {a[2]} {a[3]} {a[4]} {a[5]} {a[6]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

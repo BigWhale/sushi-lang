@@ -14,18 +14,31 @@ if TYPE_CHECKING:
     from . import TypeValidator
 
 
+def infer_array_element_type(validator: 'TypeValidator', element_value: Expr,
+                             expected_type: Optional[Type] = None) -> Optional[Type]:
+    """The type this element puts in a SLOT.
+
+    A range yields i32 (Ruling 4, #478) and not the `Iterator@(i32)` it types as in every
+    other position. It is the one element whose slot type is not its own type, which is why
+    both literal inference paths read it here rather than each testing for a range.
+    """
+    if isinstance(element_value, RangeExpr):
+        return BuiltinType.I32
+    return infer_element_type_with_context(validator, element_value, expected_type)
+
+
 def infer_array_literal_type(validator: 'TypeValidator', expr: ArrayLiteral) -> Optional[Type]:
     """Infer type of array literal based on elements (validates all elements match)."""
     if not expr.elements:
         return None
 
-    first_element_type = validator.infer_expression_type(expr.elements[0].value)
+    first_element_type = infer_array_element_type(validator, expr.elements[0].value)
     if first_element_type is None:
         return None
 
     # Verify all elements have the same type (CE2013)
     for element in expr.elements[1:]:
-        element_type = validator.infer_expression_type(element.value)
+        element_type = infer_array_element_type(validator, element.value)
         if element_type is not None and element_type != first_element_type:
             er.emit(validator.reporter, er.ERR.CE2013, element.value.loc,
                    expected=display_type(first_element_type), got=display_type(element_type))
@@ -39,7 +52,13 @@ def infer_array_literal_type(validator: 'TypeValidator', expr: ArrayLiteral) -> 
     if runs is None:
         return None
 
-    return ArrayType(base_type=first_element_type, size=array_runs.expanded_length(runs))
+    # A fixed array literal needs a readable size. Silent here: `validate_array_literal`
+    # speaks for this literal, and inference must not report the same thing twice.
+    size = array_runs.expanded_length(runs)
+    if size is None:
+        return None
+
+    return ArrayType(base_type=first_element_type, size=size)
 
 
 def infer_index_access_type(validator: 'TypeValidator', expr: IndexAccess) -> Optional[Type]:
@@ -63,12 +82,13 @@ def infer_dynamic_array_from_type(validator: 'TypeValidator', expr: DynamicArray
 
     expected_element_type = expected_type.base_type if expected_type else None
 
-    first_element_type = infer_element_type_with_context(validator, array_literal.elements[0].value, expected_element_type)
+    first_element_type = infer_array_element_type(validator, array_literal.elements[0].value,
+                                                  expected_element_type)
     if first_element_type is None:
         return None
 
     for element in array_literal.elements[1:]:
-        element_type = infer_element_type_with_context(validator, element.value, expected_element_type)
+        element_type = infer_array_element_type(validator, element.value, expected_element_type)
         if element_type != first_element_type:
             return None
 

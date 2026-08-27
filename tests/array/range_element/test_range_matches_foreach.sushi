@@ -1,0 +1,33 @@
+# The Python formula and the IR formula must not drift: the same bounds print the same
+# sequence from a `foreach` and from an array literal (#478).
+#
+# The literal is bound to a local first. `.iter()` on a `from()` temporary is CE0072 on
+# main, with no range involved, and that gap belongs to the dynamic iterator rather than
+# to this feature.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 4 5 6 |3 4 5 6 |\n8 7 6 |8 7 6 |\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    foreach(i in 3..=6):
+        print("{i} ")
+    print("|")
+    let i32[] up = from([3..=6])
+    foreach(n in up.iter()):
+        print("{n} ")
+    println("|")
+
+    foreach(i in 8..5):
+        print("{i} ")
+    print("|")
+    let i32[] down = from([8..5])
+    foreach(n in down.iter()):
+        print("{n} ")
+    println("|")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

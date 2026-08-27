@@ -190,3 +190,18 @@ _add(ErrorMessage("CE2428", Severity.ERROR,
 _add(ErrorMessage("CE2429", Severity.ERROR,
     "cannot write through an unbound chained borrow",
     Category.BORROW, "The value past a call boundary is a temporary copy, not the owner's storage: `o.get()` is a get-out, so `o.get().items.push(9)` would land on the copy and be lost, while the `Own` keeps and frees the real buffer (issue #407 -- the write compiled, printed the old length, and the leak counters balanced). A FRESH temporary is rejected by the same rule, because the statement discards the value and the write is dead either way. Bind a clone, mutate it, and rebuild the owner -- `let Holder h = o.get().clone()`, `h.items.push(9)`, `o := Own.alloc(h)` -- or, where the `Own` sits in an enum payload, mutate in place through a nested `Own(poke inner)` reference binding (#300)."))
+
+
+_add(ErrorMessage("CE2430", Severity.ERROR,
+    "'{name}' cannot be the source of a bulk write into itself",
+    Category.BORROW,
+    "A bulk write -- `.extend()`, `.extend_range()` -- borrows its source and grows its "
+    "destination. When the two are the same array the growth may REALLOCATE the buffer, "
+    "which leaves the source pointer dangling in the middle of the copy. That is a "
+    "memory-safety hole rather than a wrong answer, so it is refused rather than defined. "
+    "The escape is `.clone()`, or `.ss(start, count)` for a range, either of which gives an "
+    "independent source. CE2412 is the neighbouring question -- may the OWNER be changed "
+    "while a `let`-borrow of it lives -- and not this one, because here the borrow is a "
+    "method argument. A copy that must read what it is writing is not this operation at "
+    "all: a DEFLATE back-reference expands a run by reading bytes the same loop just wrote, "
+    "and it stays a per-element loop for that reason."))

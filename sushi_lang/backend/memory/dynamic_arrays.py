@@ -197,7 +197,21 @@ class DynamicArrayManager:
         if descriptor.destroyed:
             raise_internal_error("CE0058", name=name)
 
-        initial_len = runs.total_elements(elements)
+        element_llvm_type = self._get_llvm_type_for_element(descriptor.element_type)
+        initial_len = runs.readable_total(elements)
+
+        if initial_len is None:
+            # A run-time length (#478). The capacity equals the length, and a run-time zero
+            # is DATA rather than an error (Ruling 2), so there is no short circuit.
+            from sushi_lang.backend.types.arrays.utils import emit_dynamic_array_of_length
+
+            length = runs.emit_total_length(self.codegen, elements)
+            _, typed_data_ptr = emit_dynamic_array_of_length(
+                self.codegen, element_llvm_type, length)
+            runs.fill_runs(self.codegen, typed_data_ptr, elements, element_llvm_type)
+            self._update_array_fields_dynamic(name, length, length, typed_data_ptr)
+            return
+
         if initial_len == 0:
             return  # Empty array, already initialized
 
@@ -209,7 +223,6 @@ class DynamicArrayManager:
 
         data_ptr = emit_malloc(self.codegen, self.builder, total_bytes)
 
-        element_llvm_type = self._get_llvm_type_for_element(descriptor.element_type)
         typed_data_ptr = self.builder.bitcast(data_ptr, ir.PointerType(element_llvm_type), name="typed_data_ptr")
 
         runs.fill_runs(self.codegen, typed_data_ptr, elements, element_llvm_type)
@@ -333,6 +346,12 @@ class DynamicArrayManager:
 
     def _update_array_fields(self, name: str, length: int, capacity: int, data_ptr: ir.Value) -> None:
         """Update the len, cap, and data fields of a dynamic array struct."""
+        self._update_array_fields_dynamic(name, make_i32_const(length),
+                                          make_i32_const(capacity), data_ptr)
+
+    def _update_array_fields_dynamic(self, name: str, length: ir.Value, capacity: ir.Value,
+                                     data_ptr: ir.Value) -> None:
+        """The same, for a length only known at run time (#478)."""
         descriptor = self._array(name)
         if descriptor is None:
             raise_internal_error("CE0057", name=name)
@@ -341,8 +360,8 @@ class DynamicArrayManager:
         cap_ptr = self.codegen.types.get_dynamic_array_cap_ptr(self.builder, descriptor.llvm_alloca)
         data_ptr_ptr = self.codegen.types.get_dynamic_array_data_ptr(self.builder, descriptor.llvm_alloca)
 
-        self.builder.store(make_i32_const(length), len_ptr)
-        self.builder.store(make_i32_const(capacity), cap_ptr)
+        self.builder.store(length, len_ptr)
+        self.builder.store(capacity, cap_ptr)
         self.builder.store(data_ptr, data_ptr_ptr)
 
     def _get_llvm_type_for_element(self, element_type: Type) -> ir.Type:

@@ -79,9 +79,23 @@ _add(ErrorMessage("CE2017", Severity.ERROR,
     "invalid repeat count in an array literal: {reason}",
     Category.TYPE, "A repeated element is 'value; count', and the count is a count of elements: a positive integer the compiler can read. That is a literal in any base, the name of an integer constant, or an expression of them -- the same reader a fixed array size uses. One code carries every way it can go wrong, because they share one rule and one fix, which is the precedent CE2099 sets for an array size. A count of zero spells nothing and Sushi has no zero-length array, so the lower bound is one. The count is read at the typecheck pass, so unlike an array size it may name a constant of ANOTHER unit."))
 
-_add(ErrorMessage("CE2018", Severity.ERROR,
-    "a repeated element cannot be of type '{type}', which owns heap memory",
-    Category.TYPE, "'value; count' makes count copies of one value. For a type that owns heap memory that would need a deep copy per element, and in Sushi '.clone()' is the only deep copy -- the compiler never inserts one. So a run is limited to a type that copies: a number, a bool, or a composite of those. Write the elements out, or fill the array with a loop at run time and clone into each slot. The rule is by type and not by expression, so a string literal is rejected as well even though its bytes live in .rodata and copying its descriptor would be safe; no case needed it when Ruling 2 went in, and the rule relaxes without breaking a program."))
+# CE2018 ("a repeated element cannot be of type '{type}', which owns heap memory") was
+# RETIRED by #478, Ruling 7. It refused '[towel; 3]' because N copies of an owning value
+# would need N-1 deep copies and the compiler never inserts one. That stopped being true
+# when #479 gave '.fill()' a per-slot 'copy_out': the language then answered one question
+# two ways, since 'a.fill(towel)' was legal beside 'from([towel; 2])', which was not. A
+# repeated value is now a BORROW and each slot takes its own copy. Its own doc anticipated
+# this -- "no case needed it when Ruling 2 went in, and the rule relaxes without breaking a
+# program". The const path has no case left either: a constant cannot name a local, so a run
+# there can only repeat a literal, and a constant array of string literals already worked.
+
+_add(ErrorMessage("CE2019", Severity.ERROR,
+    "invalid range in an array literal: {reason}",
+    Category.TYPE, "A range element fills the slots it spans: '0..5' is five elements and '0..=5' is six, and the direction follows `foreach`, so '5..0' descends. One code carries every way a range cannot fill slots, the way CE2017 carries every bad repeat count, because they share one rule and one fix. Two ways: a bound the compiler cannot read in a position that needs a readable LENGTH -- a fixed array, whose length is part of its type, and a constant, whose evaluator needs the values -- and a readable range that yields nothing, because Sushi has no zero-length array and '3..3' spells nothing. The escape for the first is `from()`, which carries its length in the descriptor and accepts any i32 expression as a bound. A range yields i32 (CE2002 for anything else), and it cannot carry a repeat count (CE2020)."))
+
+_add(ErrorMessage("CE2020", Severity.ERROR,
+    "a range element cannot carry a repeat count",
+    Category.TYPE, "'value; count' repeats ONE value, and a range is not one value: it is already a sequence. '[0..2; 3]' has no reading a person would agree on -- three copies of the span, or a span of three -- so it is refused rather than given one. Write the repeat out as a plain element ('[0, 1, 0, 1]'), or use a range alone. CE2017 is the code for a count that is wrong; this one is for a count that has nothing to repeat."))
 
 # Dynamic array-specific errors (compile-time only)
 

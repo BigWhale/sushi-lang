@@ -42,6 +42,7 @@ from .calls import (
     is_enum_constructor,
     maybe_mark_container_insert,
     maybe_mark_own_alloc_move,
+    reject_self_aliasing_copy,
     settle_method_args,
 )
 from .consume import consume, consume_each, consume_named, name_provenance
@@ -90,9 +91,11 @@ def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
         case EnumConstructor():
             _check_sink_elements(checker, expr.args, ConsumingUse.ENUM_PAYLOAD)
         case DynamicArrayFrom():
+            _check_run_elements(checker, expr.elements.elements)
             _check_sink_elements(checker, array_runs.values(expr.elements.elements),
                                  ConsumingUse.ARRAY_ELEMENT)
         case ArrayLiteral():
+            _check_run_elements(checker, expr.elements)
             _check_sink_elements(checker, array_runs.values(expr.elements),
                                  ConsumingUse.ARRAY_ELEMENT)
         case InterpolatedString():
@@ -142,6 +145,7 @@ def _check_method_call(checker: 'BorrowChecker', expr: MethodCall) -> None:
     """`x.m(args)`: gate the write, then apply the method's declared modes."""
     _check_receiver_and_args(checker, expr)
     maybe_reject_mutation(checker, expr)
+    reject_self_aliasing_copy(checker, expr)
     settle_method_args(checker, expr)
     maybe_mark_container_insert(checker, expr)
     maybe_mark_own_alloc_move(checker, expr)
@@ -156,6 +160,7 @@ def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
     # site a false CE2405. `tests/ffi/test_ffi_string_arg_not_consumed.sushi` is the gate.
     _check_receiver_and_args(checker, expr)
     maybe_reject_mutation(checker, expr)
+    reject_self_aliasing_copy(checker, expr)
     if is_enum_constructor(checker, expr):
         # `Box.Full(a)` arrives here as a DotCall, not an EnumConstructor.
         consume_each(checker, expr.args, ConsumingUse.ENUM_PAYLOAD)
@@ -186,6 +191,25 @@ def _check_receiver_and_args(checker: 'BorrowChecker', expr) -> None:
     check_expr(checker, expr.receiver)
     for arg in expr.args:
         check_expr(checker, arg)
+
+
+def _check_run_elements(checker: 'BorrowChecker', elements) -> None:
+    """Walk what an array literal USES but does not consume (#478, Ruling 7).
+
+    A range run is inert at an ownership sink: it yields i32 (Ruling 4), so it owns nothing.
+    Its bounds are ordinary expressions, though, so `from([0..xs.len()])` must still report
+    a moved `xs`.
+
+    A repeated value BORROWS: `[towel; 3]` copies three times and leaves `towel` usable, so
+    it is USED here and not consumed. A run-time count is an ordinary expression too.
+    """
+    for bound in array_runs.range_bounds(elements):
+        check_expr(checker, bound)
+    for value in array_runs.repeated_values(elements):
+        check_expr(checker, value)
+    for element in elements:
+        if element.count is not None:
+            check_expr(checker, element.count)
 
 
 def _check_sink_elements(checker: 'BorrowChecker', elements, use) -> None:

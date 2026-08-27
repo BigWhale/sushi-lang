@@ -68,7 +68,12 @@ def reject_array_size_mismatch(validator: 'TypeValidator', declared_type: ArrayT
     if runs is None:
         return True  # a bad count. CE2017 said so; a size report would pile on.
 
-    got = array_runs.expanded_length(runs)
+    # A fixed array's length is part of its TYPE, so this caller needs a number (Ruling 3).
+    # The readable-length diagnostic speaks first and CE2011 stays silent after it, the way
+    # it already stays silent after CE2017.
+    got = array_runs.require_readable_length(runs, validator.reporter)
+    if got is None:
+        return True
     if got == declared_type.size:
         return False
 

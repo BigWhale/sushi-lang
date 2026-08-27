@@ -1,0 +1,14 @@
+# CE0072 survives on the DYNAMIC side. #480 gave the fixed-array receiver an address seam,
+# so `h.nums.iter()` on an `i32[3]` field now works and its old CE0072 test retired with the
+# limitation. `emit_dynamic_array_iter` still reads its element type out of the name tables,
+# so a receiver with no name still has none. Same shape, other container.
+# EXPECT_ERROR_CODE: CE0072
+
+struct Holder:
+    i32[] nums
+
+fn main() i32:
+    let Holder h = Holder(nums: from([10, 20, 30]))
+    foreach(x in h.nums.iter()):
+        println(x)
+    return Result.Ok(0)

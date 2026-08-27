@@ -1,0 +1,9 @@
+# Ruling 3: a fixed array's length is part of its TYPE, so a bound that the compiler
+# cannot read has no length to compare against.
+# EXPECT_ERROR_CODE: CE2019
+
+fn main() i32:
+    let i32 n = 5
+    let i32[5] a = [0..n]
+    println(a[0])
+    return Result.Ok(0)

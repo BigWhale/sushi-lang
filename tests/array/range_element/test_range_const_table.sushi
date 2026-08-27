@@ -1,0 +1,14 @@
+# A constant reaches none of the run-time machinery: the evaluator expands the plan to
+# values, and the table lands in .rodata as literals (#478).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0 5\n9 6\n"
+
+use <io/stdio>
+
+const i32[6] UP = [0..=5]
+const i32[4] DOWN = [9..=6]
+
+fn main() i32:
+    println("{UP[0]} {UP[5]}")
+    println("{DOWN[0]} {DOWN[3]}")
+    return Result.Ok(0)

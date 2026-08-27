@@ -141,7 +141,15 @@ def try_emit_array_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
     is_dynamic_array = (codegen.types.is_dynamic_array_type(receiver_type) or
                        type_utils.is_dynamic_array_pointer(codegen, receiver_type))
 
-    if not isinstance(receiver_type, ir.ArrayType) and not is_dynamic_array:
+    # A `peek` / `poke` fixed array arrives as `[N x T]*`: `_deref_borrowed_receiver` loads
+    # through a borrow only when the referent is a BuiltinType, and an array is not one. The
+    # pointer arm is what stops dispatch falling through to the user-extension fallback,
+    # which mangled the type name into `i32[3]_len` and raised CE0000 (#480).
+    is_fixed_array = isinstance(receiver_type, ir.ArrayType) or (
+        isinstance(receiver_type, ir.PointerType)
+        and isinstance(receiver_type.pointee, ir.ArrayType))
+
+    if not is_fixed_array and not is_dynamic_array:
         return None
 
     if not is_builtin_array_method(expr.method):
