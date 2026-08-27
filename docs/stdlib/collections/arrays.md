@@ -223,6 +223,72 @@ match arr.pop():
 let i32 last = arr.pop().realise(-1)   # or a default
 ```
 
+### `.extend(T[] other) -> ~`
+
+Append every element of `other`. The destination grows ONCE, to exactly the length it
+needs -- a `.push()` loop pays a bounds check, a capacity check and an amortized realloc
+per element.
+
+```sushi
+let i32[] out = from([1, 2])
+let i32[] body = from([3, 4, 5])
+out.extend(body)               # out is now [1, 2, 3, 4, 5]
+println(body.len())            # 3: the source is a BORROW and stays yours
+```
+
+The source may be a fixed array or a dynamic one. The **destination** must be dynamic: a
+fixed array's length is part of its type, so it cannot grow, and `.extend()` on one is
+**CE2023** for the reason `.push()` is.
+
+### `.extend_range(T[] other, i32 start, i32 count) -> ~`
+
+Append `other[start .. start + count)`, with no temporary array in between.
+
+```sushi
+let i32[] out = from([0])
+let i32[] src = from([10, 20, 30, 40, 50, 60])
+out.extend_range(src, 2, 3)    # out is now [0, 30, 40, 50]
+```
+
+`.extend(src)` is `extend_range(src, 0, src.len())`.
+
+### `.ss(i32 start, i32 count) -> T[]`
+
+A **fresh** array holding `other[start .. start + count)`. Named for
+`string.ss(i32 start, i32 length)`, which means the same thing for text.
+
+```sushi
+let i32[] src = from([10, 20, 30, 40, 50, 60])
+let i32[] part = src.ss(2, 3)  # [30, 40, 50], and src is untouched
+```
+
+`.ss()` works on a fixed array too, and always answers a `T[]`, because the length is a
+run-time value.
+
+### The rules the three share
+
+**The source is a borrow**, so it stays yours and both arrays end up independent. For a
+plain element type the copy is a `memcpy`. For an owning one every copied slot takes its
+own deep copy, so a `string[]` costs one allocation per element:
+
+```sushi
+let string[] out = from(["towel"])
+let string[] more = from(["babel", "fish"])
+out.extend(more)
+println("{out[1]} {more[0]}")  # babel babel -- two owners, two buffers
+```
+
+**A bad range traps**, the way an out-of-range `arr[i]` does. A negative `start` or
+`count` is **RE2024**, and a `start + count` past the end of the source is **RE2020**.
+Both fire before anything is allocated. A `count` of zero is not an error: it copies
+nothing.
+
+**The source may not be the destination.** `out.extend(out)` is **CE2430**. Growing the
+destination may reallocate its buffer, which would leave the source pointer dangling in
+the middle of the copy. Use `.clone()` or `.ss()` to take an independent source. A copy
+that must read what it is writing -- a run expanded from its own tail -- is a different
+operation, and stays a per-element loop.
+
 ### `.capacity() -> i32`
 
 Get allocated capacity.
@@ -306,6 +372,8 @@ arr[0] := 42
 - **Access** (`.get()`, `[index]`): O(1)
 - **Element write** (`arr[i] := v`): O(1), plus the destructor of the element it replaces
 - **Push** (`.push()`): Amortized O(1)
+- **Extend** (`.extend()`, `.extend_range()`, `.ss()`): O(n) with ONE allocation -- a
+  `memcpy` for a plain element type, one clone per slot for an owning one
 - **Pop** (`.pop()`): O(1)
 - **Fill** (`.fill()`): O(n)
 - **Reverse** (`.reverse()`): O(n)

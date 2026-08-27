@@ -1,0 +1,19 @@
+# `.extend_range(src, start, count)` appends a RANGE with no temporary array (#462).
+# `zinflate_stored` and `zdeflate_stored` write this loop.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "5 0 30 40 50 9\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let i32[] out = from([0])
+    let i32[] src = from([10, 20, 30, 40, 50, 60])
+    out.extend_range(src, 2, 3)
+    out.push(9)
+    println("{out.len()} {out[0]} {out[1]} {out[2]} {out[3]} {out[4]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

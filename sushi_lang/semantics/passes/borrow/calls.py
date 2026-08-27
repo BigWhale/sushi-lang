@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import Borrow, Call, Expr, Name, Spread
+from sushi_lang.semantics.ast import Borrow, Call, Expr, MemberAccess, Name, Spread
 from sushi_lang.semantics.ownership import ConsumingUse
 from sushi_lang.semantics.param_modes import CalleeKind, ParamMode, effective_modes
 
@@ -39,6 +39,39 @@ def maybe_mark_container_insert(checker: 'BorrowChecker', expr: Expr) -> None:
     if receiver is None or not checker.types.is_container(read_type(checker, receiver)):
         return
     consume_each(checker, expr.args, ConsumingUse.CONTAINER_INSERT)
+
+
+# The bulk writes: a source they borrow, and a destination they grow.
+_BULK_WRITE_METHODS = ("extend", "extend_range")
+
+
+def reject_self_aliasing_copy(checker: 'BorrowChecker', expr: Expr) -> None:
+    """CE2430: a bulk write may not read the array it is writing.
+
+    Growing the destination may REALLOCATE its buffer, which leaves the source pointer
+    dangling in the middle of the copy. The check compares PLACES rather than values,
+    because `b.items.extend(b.items)` aliases exactly as `a.extend(a)` does.
+    """
+    receiver = called_on(expr, *_BULK_WRITE_METHODS)
+    if receiver is None or not getattr(expr, "args", None):
+        return
+    place = _place_of(receiver)
+    if place is None or place != _place_of(expr.args[0]):
+        return
+    er.emit(checker.reporter, er.ERR.CE2430, expr.args[0].loc, name=place)
+
+
+def _place_of(expr: Expr) -> Optional[str]:
+    """The storage an expression names, as a dotted path, or None when it names none.
+
+    A call result, a literal or an index names no storage a second expression can share.
+    """
+    if isinstance(expr, Name):
+        return expr.id
+    if isinstance(expr, MemberAccess):
+        base = _place_of(expr.receiver)
+        return None if base is None else f"{base}.{expr.member}"
+    return None
 
 
 def maybe_mark_own_alloc_move(checker: 'BorrowChecker', expr: Expr) -> None:

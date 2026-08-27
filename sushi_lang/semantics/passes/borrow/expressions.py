@@ -42,6 +42,7 @@ from .calls import (
     is_enum_constructor,
     maybe_mark_container_insert,
     maybe_mark_own_alloc_move,
+    reject_self_aliasing_copy,
     settle_method_args,
 )
 from .consume import consume, consume_each, consume_named, name_provenance
@@ -144,6 +145,7 @@ def _check_method_call(checker: 'BorrowChecker', expr: MethodCall) -> None:
     """`x.m(args)`: gate the write, then apply the method's declared modes."""
     _check_receiver_and_args(checker, expr)
     maybe_reject_mutation(checker, expr)
+    reject_self_aliasing_copy(checker, expr)
     settle_method_args(checker, expr)
     maybe_mark_container_insert(checker, expr)
     maybe_mark_own_alloc_move(checker, expr)
@@ -158,6 +160,7 @@ def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
     # site a false CE2405. `tests/ffi/test_ffi_string_arg_not_consumed.sushi` is the gate.
     _check_receiver_and_args(checker, expr)
     maybe_reject_mutation(checker, expr)
+    reject_self_aliasing_copy(checker, expr)
     if is_enum_constructor(checker, expr):
         # `Box.Full(a)` arrives here as a DotCall, not an EnumConstructor.
         consume_each(checker, expr.args, ConsumingUse.ENUM_PAYLOAD)

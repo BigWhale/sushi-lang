@@ -76,6 +76,71 @@ def emit_dynamic_array_capacity(codegen: 'LLVMCodegen', array_value: ir.Value, t
     return codegen.utils.as_i1(cap_value) if to_i1 else cap_value
 
 
+def emit_dynamic_array_extend(codegen: 'LLVMCodegen', array_value: ir.Value,
+                              array_type: ir.LiteralStructType, source_data: ir.Value,
+                              source_len: ir.Value, start: ir.Value, count: ir.Value,
+                              element_type) -> ir.Value:
+    """Append `source[start .. start + count)` to the receiver, growing it once (#462).
+
+    Once, not `count` times: a `.push()` loop reallocates on a doubling schedule and pays a
+    bounds check and a capacity check per element, which is the cost this operation exists
+    to remove.
+    """
+    from sushi_lang.backend.expressions import memory
+    from sushi_lang.backend.types.arrays.copy import emit_range_copy, reject_bad_range
+
+    reject_bad_range(codegen, start, count, source_len)
+
+    b = codegen.builder
+    len_ptr = codegen.types.get_dynamic_array_len_ptr(b, array_value)
+    cap_ptr = codegen.types.get_dynamic_array_cap_ptr(b, array_value)
+    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(b, array_value)
+
+    current_len = b.load(len_ptr, name="extend_len")
+    current_cap = b.load(cap_ptr, name="extend_cap")
+    needed = b.add(current_len, count, name="extend_needed")
+
+    element_llvm_type = array_type.elements[2].pointee
+    element_size = memory.get_element_size_constant(codegen, element_llvm_type)
+
+    need_growth = b.icmp_signed(">", needed, current_cap, name="extend_need_growth")
+    with b.if_then(need_growth):
+        # Grown to exactly what is needed. A doubling schedule buys nothing here, because
+        # the whole length is known before the copy starts.
+        total_bytes = b.mul(needed, element_size, name="extend_total_bytes")
+        old_data = b.load(data_ptr_ptr, name="extend_old_data")
+        raw = memory.emit_realloc_call(codegen, b.bitcast(old_data, ir.PointerType(codegen.types.i8)),
+                                       total_bytes)
+        b.store(b.bitcast(raw, ir.PointerType(element_llvm_type)), data_ptr_ptr)
+        b.store(needed, cap_ptr)
+
+    data_ptr = b.load(data_ptr_ptr, name="extend_data")
+    dest = gep_utils.gep_array_element(codegen, data_ptr, current_len, "extend_dest")
+    emit_range_copy(codegen, dest, source_data, start, count, element_type,
+                    element_llvm_type, prefix="extend")
+    b.store(needed, len_ptr)
+
+    return ir.Constant(codegen.types.i32, 0)
+
+
+def emit_dynamic_array_slice(codegen: 'LLVMCodegen', element_llvm_type: ir.Type,
+                             source_data: ir.Value, source_len: ir.Value, start: ir.Value,
+                             count: ir.Value, element_type) -> ir.Value:
+    """A FRESH `T[]` holding `source[start .. start + count)` (#462).
+
+    The allocation is the one `from([0; n])` uses, which is why it is a named helper.
+    """
+    from sushi_lang.backend.types.arrays.copy import emit_range_copy, reject_bad_range
+    from sushi_lang.backend.types.arrays.utils import emit_dynamic_array_of_length
+
+    reject_bad_range(codegen, start, count, source_len)
+
+    array_struct, data_ptr = emit_dynamic_array_of_length(codegen, element_llvm_type, count)
+    emit_range_copy(codegen, data_ptr, source_data, start, count, element_type,
+                    element_llvm_type, prefix="slice")
+    return array_struct
+
+
 def emit_dynamic_array_push(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                             element_value: ir.Value) -> ir.Value:
     """Emit code to append an element to a dynamic array."""

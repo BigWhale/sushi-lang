@@ -141,6 +141,30 @@ the value is being emitted -- `a[0] := grow(poke a)??` is a legal program -- so 
 first would point into the buffer that `realloc` released. Rust orders `a[i] = v` the same way,
 right operand before place.
 
+## The one bulk copy
+
+`extend`, `extend_range` and `ss` are the same operation with different arguments, so they
+share one emitter (`backend/types/arrays/copy.py`). Three emitters would mean three bounds
+rules and three answers to what the source owns -- the shape the fixed-array receiver took,
+where nine sites carried nine address rules and two of them were silently wrong.
+
+The rule the copy follows is #478's Ruling 7 in its general form:
+
+> **A bulk write borrows its source, and every slot it writes takes its own `copy_out`.**
+
+A write that fills N slots cannot consume, because consuming means one value reaching one
+position and a bulk write has no single position. That covers one value and N slots -- the
+repeated element, and `.fill()` -- and it covers N source values and N slots.
+
+A plain element type takes a `memcpy`, because a shallow store of a plain value IS the
+value and a walk would emit N stores for nothing. An owning one walks and clones through
+`copy_out`, the decision `backend/lifecycle.py`'s handler table already makes.
+
+**The source may not alias the destination** (CE2430). Growing the destination may
+reallocate its buffer, which leaves the source pointer dangling mid-copy. A copy that must
+read what it is writing is a different operation: a DEFLATE back-reference expands a run by
+reading bytes the same loop just wrote, and it stays a per-element loop.
+
 ## The type-argument reader
 
 `List@(i32[])` and `HashMap@(K, V[])` failed for a second, independent reason. A container

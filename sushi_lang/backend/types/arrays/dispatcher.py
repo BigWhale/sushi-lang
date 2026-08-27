@@ -22,7 +22,8 @@ def is_builtin_array_method(method_name: str) -> bool:
     # u8[] specific methods: to_string
     return method_name in {
         "len", "get", "push", "pop", "capacity", "destroy", "free",
-        "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse"
+        "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse",
+        "extend", "extend_range", "ss"
     }
 
 
@@ -33,6 +34,47 @@ def _as_fixed_ir_type(receiver_type: ir.Type) -> ir.ArrayType | None:
     if isinstance(receiver_type, ir.PointerType) and isinstance(receiver_type.pointee, ir.ArrayType):
         return receiver_type.pointee
     return None
+
+
+
+def _source_data_and_len(codegen: 'LLVMCodegen', expr, source_arg):
+    """A copy SOURCE as (data pointer, length), for either array kind.
+
+    A bulk copy borrows its source, so both seams apply: `as_array_address` for a `T[]`
+    descriptor and `as_fixed_array_address` for a `T[N]` receiver-shaped value. One reader,
+    because `extend`, `extend_range` and `ss` would otherwise each carry it.
+    """
+    from sushi_lang.semantics.typesys import ArrayType as SushiArrayType
+
+    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+
+    source_type = deref_type(infer_expr_semantic_type(codegen, source_arg))
+    value = codegen.expressions.emit_expr(source_arg)
+
+    if isinstance(source_type, SushiArrayType):
+        ir_type = _as_fixed_ir_type(value.type) or codegen.types.ll_type(source_type)
+        address = as_fixed_array_address(codegen, source_arg, value, ir_type, source_type,
+                                         writable=False)
+        zero = ir.Constant(codegen.types.i32, 0)
+        data = codegen.builder.gep(address, [zero, zero], name="copy_src_data")
+        return data, ir.Constant(codegen.types.i32, ir_type.count), source_type.base_type
+
+    struct_type = value.type.pointee if isinstance(value.type, ir.PointerType) else value.type
+    address = as_array_address(codegen, value, struct_type, source_arg, source_type)
+    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, address)
+    len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, address)
+    return (codegen.builder.load(data_ptr_ptr, name="copy_src_data"),
+            codegen.builder.load(len_ptr, name="copy_src_len"),
+            source_type.base_type)
+
+
+def _index_arg(codegen: 'LLVMCodegen', arg) -> ir.Value:
+    """One i32 index argument, widened or narrowed like every other array index."""
+    value = codegen.expressions.emit_expr(arg)
+    if value.type != codegen.types.i32:
+        is_signed = value.type in (codegen.types.i8, codegen.types.i16, codegen.types.i64)
+        value = codegen.utils.convert_int_to_i32(value, is_signed=is_signed)
+    return value
 
 
 def emit_array_method(
@@ -103,6 +145,16 @@ def emit_array_method(
 
             case "reverse":
                 return core.emit_fixed_array_reverse(codegen, address(writable=True), fixed_ir_type)
+
+            case "ss":
+                zero = ir.Constant(codegen.types.i32, 0)
+                data = codegen.builder.gep(address(writable=False), [zero, zero],
+                                           name="slice_src_data")
+                return core.emit_dynamic_array_slice(
+                    codegen, fixed_ir_type.element, data,
+                    ir.Constant(codegen.types.i32, fixed_ir_type.count),
+                    _index_arg(codegen, expr.args[0]), _index_arg(codegen, expr.args[1]),
+                    fixed_semantic_type.base_type)
 
             case _:
                 raise NotImplementedError(f"Fixed array method not implemented: {method_name}")
@@ -202,6 +254,31 @@ def emit_array_method(
         case "reverse":
             return core.emit_dynamic_array_reverse(codegen, receiver_value, array_struct_type)
 
+        case "extend" | "extend_range":
+            if not isinstance(semantic_type, DynamicArrayType):
+                raise_internal_error("CE0042", type=type(semantic_type).__name__)
+            source_data, source_len, _ = _source_data_and_len(codegen, expr, expr.args[0])
+            if method_name == "extend_range":
+                start = _index_arg(codegen, expr.args[1])
+                count = _index_arg(codegen, expr.args[2])
+            else:
+                start = ir.Constant(codegen.types.i32, 0)
+                count = source_len
+            return core.emit_dynamic_array_extend(codegen, receiver_value, array_struct_type,
+                                                  source_data, source_len, start, count,
+                                                  semantic_type.base_type)
+
+        case "ss":
+            if not isinstance(semantic_type, DynamicArrayType):
+                raise_internal_error("CE0042", type=type(semantic_type).__name__)
+            data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, receiver_value)
+            len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, receiver_value)
+            return core.emit_dynamic_array_slice(
+                codegen, array_struct_type.elements[2].pointee,
+                codegen.builder.load(data_ptr_ptr, name="slice_src_data"),
+                codegen.builder.load(len_ptr, name="slice_src_len"),
+                _index_arg(codegen, expr.args[0]), _index_arg(codegen, expr.args[1]),
+                semantic_type.base_type)
+
         case _:
             raise NotImplementedError(f"Dynamic array method not implemented: {method_name}")
-

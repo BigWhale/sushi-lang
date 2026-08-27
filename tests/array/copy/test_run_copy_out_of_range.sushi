@@ -1,0 +1,18 @@
+# `start + count` past the source length traps RE2020, the code an out-of-range READ
+# already uses (#462).
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2020"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let i32[] src = from([1, 2, 3])
+    let i32[] out = new()
+    out.extend_range(src, 2, 5)
+    println(out.len())
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

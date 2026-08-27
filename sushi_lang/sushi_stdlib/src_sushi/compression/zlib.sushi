@@ -143,13 +143,7 @@ fn zhuff_build(peek i32[] lengths, i32 n) ZHuff | ZError:
         offs[len + 1] := offs[len] + count[len]
         len := len + 1
 
-    # n is a parameter, so this length is not readable at compile time and the
-    # fill cannot be a repeated element.
-    let i32[] symbol = new()
-    let i32 i = 0
-    while (i < n):
-        symbol.push(0)
-        i := i + 1
+    let i32[] symbol = from([0; n])
     sym := 0
     while (sym < n):
         let i32 sl = lengths[sym]
@@ -203,10 +197,7 @@ fn zinflate_stored(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
         return Result.Err(ZError.BadStoredLength(len, nlen))
     if ((s.pos + len) > src.len()):
         return Result.Err(ZError.Truncated(s.pos))
-    let i32 i = 0
-    while (i < len):
-        out.push(src[s.pos + i])
-        i := i + 1
+    out.extend_range(src, s.pos, len)
     s.pos := s.pos + len
     return Result.Ok(~)
 
@@ -293,12 +284,7 @@ fn zinflate_lengths(peek u8[] src, poke ZBits s, peek ZHuff clencode,
 
 # ztake: the run of n lengths that starts at `start`, as a fresh array.
 fn ztake(peek i32[] lengths, i32 start, i32 n) i32[] | ZError:
-    let i32[] out = new()
-    let i32 i = 0
-    while (i < n):
-        out.push(lengths[start + i])
-        i := i + 1
-    return Result.Ok(out)
+    return Result.Ok(lengths.ss(start, n))
 
 # zinflate_dynamic: a BTYPE=10 block. Only a code with at most one used symbol
 # may be incomplete, which is the rule puff.c applies.
@@ -458,10 +444,7 @@ fn zdeflate_stored(peek u8[] src, poke u8[] out) ~ | ZError:
         let i32 nlen = 65535 - chunk
         out.push((nlen & 255) as u8)
         out.push(((nlen >> 8) & 255) as u8)
-        let i32 i = 0
-        while (i < chunk):
-            out.push(src[pos + i])
-            i := i + 1
+        out.extend_range(src, pos, chunk)
         pos := pos + chunk
     return Result.Ok(~)
 
@@ -475,13 +458,7 @@ fn zdeflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~ | ZError:
 
     let i32 n = src.len()
     let i32[] head = from([-1; 32768])
-    # `prev` is one slot per input byte, so its length is not readable at
-    # compile time and the fill cannot be a repeated element.
-    let i32[] prev = new()
-    let i32 i = 0
-    while (i < n):
-        prev.push(-1)
-        i := i + 1
+    let i32[] prev = from([-1; n])
 
     let i32 max_chain = level * 8
     let i32 pos = 0
@@ -590,10 +567,7 @@ public fn zlib_compress(u8[] src, i32 level) u8[] | ZError:
     out.push(zlib_flg(level)?? as u8)
 
     let u8[] body = deflate_raw(src, level)??
-    let i32 i = 0
-    while (i < body.len()):
-        out.push(body[i])
-        i := i + 1
+    out.extend(body)
 
     let u32 sum = adler32(src).realise(0)
     out.push(((sum >> 24) & 255) as u8)
@@ -636,11 +610,7 @@ public fn zlib_uncompress(u8[] src) u8[] | ZError:
         return Result.Err(ZError.DictNeeded())
 
     let i32 endp = src.len() - 4
-    let u8[] body = new()
-    let i32 i = 2
-    while (i < endp):
-        body.push(src[i])
-        i := i + 1
+    let u8[] body = src.ss(2, endp - 2)
 
     let u8[] out = inflate_raw(body)??
     let u32 want = (src[endp] as u32) << 24

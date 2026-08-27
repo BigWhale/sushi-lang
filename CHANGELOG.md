@@ -34,6 +34,29 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   short readable range emits literal stores with no arithmetic, a longer one walks a
   constant trip count, and only an unreadable one computes anything.
 
+- **A bulk array copy: `.extend()`, `.extend_range()` and `.ss()`.** Copying a range of one
+  array into another had no spelling, so every site wrote an element loop and paid a bounds
+  check, a capacity check and an amortized realloc per element.
+
+  ```sushi
+  out.extend(body)                  # append all of body
+  out.extend_range(src, pos, len)   # append a range, no temporary
+  let i32[] part = src.ss(2, 3)     # a fresh array of a range
+  ```
+
+  Three spellings over ONE emitter: `extend` is `extend_range(src, 0, src.len())`, and
+  `.ss()` is a fresh array of a run-time length plus the same range copy. `.ss()` is named
+  for `string.ss(start, length)`, which already means this for text.
+
+  The source is a **borrow**, and every copied slot takes its own `copy_out` -- one value
+  and N slots, or N values and N slots, is the same rule. A plain element type copies with a
+  `memcpy`. The destination grows once, to exactly the length it needs. A negative `start`
+  or `count` traps **RE2024** and a range past the source traps **RE2020**, both before
+  anything is allocated, and a source that aliases its destination is **CE2430** -- growing
+  the destination may reallocate the buffer the copy is reading.
+
+  `compression/zlib` loses 30 lines of hand-rolled loops, five copies and two fills.
+
 ### Changed
 - **CE2018 retires: a repeated value may own heap memory.** `[towel; 3]` was refused
   because N copies of an owning value would need N-1 deep copies and the compiler never

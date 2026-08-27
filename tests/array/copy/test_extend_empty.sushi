@@ -1,0 +1,26 @@
+# The edges: an empty source, an empty destination, and a zero count. None is an error --
+# a run-time zero is data (#478, Ruling 2).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 1 2\n3 7 8 9\n2 1 2\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let i32[] a = from([1, 2])
+    let i32[] empty = new()
+    a.extend(empty)
+    println("{a.len()} {a[0]} {a[1]}")
+
+    let i32[] b = new()
+    let i32[] src = from([7, 8, 9])
+    b.extend(src)
+    println("{b.len()} {b[0]} {b[1]} {b[2]}")
+
+    a.extend_range(src, 1, 0)
+    println("{a.len()} {a[0]} {a[1]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

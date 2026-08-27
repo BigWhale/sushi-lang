@@ -1,0 +1,22 @@
+# A bulk write BORROWS its source, and every slot it writes takes its own `copy_out`
+# (#478 Ruling 7, in its general form). Both arrays own independent buffers.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4 towel guide babel fish\n2 babel fish\n2 guide babel\n"
+
+use <io/stdio>
+
+fn run_test() i32:
+    let string[] out = from(["towel", "guide"])
+    let string[] more = from(["babel", "fish"])
+    out.extend(more)
+    println("{out.len()} {out[0]} {out[1]} {out[2]} {out[3]}")
+    println("{more.len()} {more[0]} {more[1]}")
+
+    let string[] part = out.ss(1, 2)
+    println("{part.len()} {part[0]} {part[1]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)
