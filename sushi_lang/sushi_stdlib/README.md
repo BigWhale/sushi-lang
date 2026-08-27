@@ -15,14 +15,21 @@ sushi_stdlib/
   src/            generators: time/, math/, random/, sys/, io/, collections/, _platform/
   src_sushi/      bundled real-Sushi source modules (see section 2)
   dist/<platform>/  precompiled .bc, organized by module (e.g. dist/darwin/math.bc)
+                    plus symbols.json: what those .bc files DEFINE
   build.py        drives src/ -> dist/<platform>/*.bc
 ```
+
+`symbols.json` is read by CE5013, which refuses an `unsafe external "C"` that names a
+symbol this build defines. A generated symbol is in no semantic table, so the list is
+harvested where the bitcode is written and never kept by hand (#472). The three symbols
+the backend emits INLINE are in no `.bc` at all; they are named in
+`sushi_lang/semantics/externs_manifest.py`.
 
 `dist/` is a build artifact (not authoritative — regenerate, don't hand-edit).
 `sushi_lang/backend/stdlib_builder.py` keeps it fresh automatically: it hashes all
 generator sources via `compute_stdlib_source_fingerprint()`
 (`sushi_lang/compiler/fingerprint.py`) against a per-platform marker and rebuilds
-on mismatch, so editing a generator is picked up on the next `./sushic` invocation
+on mismatch, or when `symbols.json` is absent, so editing a generator is picked up on the next `./sushic` invocation
 with no manual step. `./sushic --build-stdlib` forces a rebuild regardless of the
 fingerprint.
 

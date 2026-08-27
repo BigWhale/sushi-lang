@@ -1,0 +1,14 @@
+# The dangerous shape: the module links `string_len` and never calls it, so nothing
+# compares the two signatures. The build was clean and the binary died with a bus
+# error (#472, shape b).
+# EXPECT_ERROR_CODE: CE5013
+
+use <collections/strings>
+
+unsafe external "C" as raw because "naming a linked generated symbol":
+    fn slen(string s) i64 = "string_len"
+
+fn main() i32:
+    let string s = "abcd"
+    println("{raw.slen(s)}")
+    return Result.Ok(0)

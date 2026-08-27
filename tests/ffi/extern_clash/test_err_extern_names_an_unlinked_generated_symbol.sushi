@@ -1,0 +1,12 @@
+# A generated stdlib name is reserved whether this program links the unit or not.
+# Without the `use` the linker used to answer, late and by symbol name (CE3008);
+# the rule answers first now (#472, shape c).
+# EXPECT_ERROR_CODE: CE5013
+
+unsafe external "C" as raw because "naming a generated symbol this build never links":
+    fn slen(string s) i64 = "string_len"
+
+fn main() i32:
+    let string s = "abcd"
+    println("{raw.slen(s)}")
+    return Result.Ok(0)

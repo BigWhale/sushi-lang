@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, List, Optional
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
+from sushi_lang.semantics.externs_manifest import GENERATED_INLINE_SYMBOLS
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
@@ -40,7 +41,7 @@ def validate_external_signatures(reporter: Reporter, program: 'Program') -> None
         _emit_block_warning(reporter, block)
 
 
-def _defining_site(symbol: str, tables, registry) -> Optional[tuple]:
+def _defining_site(symbol: str, tables, registry, generated=frozenset()) -> Optional[tuple]:
     """Where this build defines `symbol`, as (note, span, filename). None if nowhere.
 
     Ordered by how much the answer can say. A library record carries no span, so its
@@ -71,11 +72,20 @@ def _defining_site(symbol: str, tables, registry) -> Optional[tuple]:
     if symbol in tables.constants.by_name:
         return ("this program defines a constant of that name", None, None)
 
+    # The generated half: a symbol the stdlib generators emit, or one the backend
+    # emits inline. No semantic table holds either, so both arrive as names (#472).
+    if symbol in GENERATED_INLINE_SYMBOLS:
+        return ("the compiler generates a symbol of that name", None, None)
+
+    if symbol in generated:
+        return ("the standard library defines it", None, None)
+
     return None
 
 
 def reject_external_naming_a_defined_symbol(
     reporter: Reporter, program: 'Program', tables, registry=None,
+    generated_symbols=frozenset(),
 ) -> None:
     """CE5013: an `unsafe external` may name a FOREIGN symbol, never one this build defines.
 
@@ -85,6 +95,10 @@ def reject_external_naming_a_defined_symbol(
 
     Needs the whole program's symbols, the linked libraries included, so it runs after
     the `libraries` step and not with the per-unit extern validation above.
+
+    `generated_symbols` is what the stdlib generators define, read from the manifest
+    the stdlib build writes. It is reserved whether this program links the unit or
+    not: otherwise adding a `use` line breaks a build that compiled a minute ago.
     """
     externals = getattr(program, "externals", None)
     if not externals:
@@ -92,7 +106,7 @@ def reject_external_naming_a_defined_symbol(
 
     for block in externals:
         for decl in block.decls:
-            found = _defining_site(decl.link_name, tables, registry)
+            found = _defining_site(decl.link_name, tables, registry, generated_symbols)
             if found is None:
                 continue
             note, span, filename = found

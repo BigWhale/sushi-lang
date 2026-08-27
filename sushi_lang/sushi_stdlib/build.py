@@ -25,8 +25,13 @@ def create_module(name: str) -> ir.Module:
     return ir.Module(name=name)
 
 
-def compile_module_to_bc(module: ir.Module, output_path: Path, quiet: bool = False):
-    """Compile LLVM module to bitcode file."""
+def compile_module_to_bc(module: ir.Module, output_path: Path, quiet: bool = False) -> list[str]:
+    """Compile LLVM module to bitcode file, and return the symbols it DEFINES.
+
+    The generators are the only authority on these names, and CE5013 needs them to
+    refuse an `unsafe external` that reaches for one (#472). They are read where the
+    bitcode is written, so the list cannot drift from the artifact.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     mod = llvm.parse_assembly(str(module))
@@ -37,8 +42,10 @@ def compile_module_to_bc(module: ir.Module, output_path: Path, quiet: bool = Fal
     if not quiet:
         print(f"  → {output_path}")
 
+    return [fn.name for fn in mod.functions if not fn.is_declaration]
 
-def build_collections_strings(platform_dir: Path, quiet: bool = False):
+
+def build_collections_strings(platform_dir: Path, quiet: bool = False) -> list[str]:
     """Build collections/strings unit (platform-agnostic)."""
     if not quiet:
         print("Building collections/strings...")
@@ -46,10 +53,10 @@ def build_collections_strings(platform_dir: Path, quiet: bool = False):
     module = strings.generate_module_ir()
 
     output = platform_dir / "collections" / "strings.bc"
-    compile_module_to_bc(module, output, quiet=quiet)
+    return compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_core_primitives(platform_dir: Path, quiet: bool = False):
+def build_core_primitives(platform_dir: Path, quiet: bool = False) -> list[str]:
     """Build core/primitives unit (platform-agnostic)."""
     if not quiet:
         print("Building core/primitives...")
@@ -57,10 +64,10 @@ def build_core_primitives(platform_dir: Path, quiet: bool = False):
     module = primitives.generate_module_ir()
 
     output = platform_dir / "core" / "primitives.bc"
-    compile_module_to_bc(module, output, quiet=quiet)
+    return compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_io_stdio(platform_dir: Path, platform: TargetPlatform, quiet: bool = False):
+def build_io_stdio(platform_dir: Path, platform: TargetPlatform, quiet: bool = False) -> list[str]:
     """Build io/stdio unit (platform-specific)."""
     if not quiet:
         print(f"Building io/stdio (platform: {platform.os})...")
@@ -68,10 +75,10 @@ def build_io_stdio(platform_dir: Path, platform: TargetPlatform, quiet: bool = F
     module = stdio.generate_module_ir()
 
     output = platform_dir / "io" / "stdio.bc"
-    compile_module_to_bc(module, output, quiet=quiet)
+    return compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_io_files(platform_dir: Path, quiet: bool = False):
+def build_io_files(platform_dir: Path, quiet: bool = False) -> list[str]:
     """Build io/files unit (platform-agnostic)."""
     if not quiet:
         print("Building io/files...")
@@ -80,10 +87,10 @@ def build_io_files(platform_dir: Path, quiet: bool = False):
     module = files.generate_module_ir()
 
     output = platform_dir / "io" / "files.bc"
-    compile_module_to_bc(module, output, quiet=quiet)
+    return compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_time(platform_dir: Path, quiet: bool = False):
+def build_time(platform_dir: Path, quiet: bool = False) -> list[str]:
     """Build time unit (includes platform-specific nanosleep declarations)."""
     if not quiet:
         print("Building time...")
@@ -92,10 +99,10 @@ def build_time(platform_dir: Path, quiet: bool = False):
     module = time.generate_module_ir()
 
     output = platform_dir / "time.bc"
-    compile_module_to_bc(module, output, quiet=quiet)
+    return compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_math(platform_dir: Path, quiet: bool = False):
+def build_math(platform_dir: Path, quiet: bool = False) -> list[str]:
     """Build math unit (platform-agnostic)."""
     if not quiet:
         print("Building math...")
@@ -104,10 +111,10 @@ def build_math(platform_dir: Path, quiet: bool = False):
     module = math.generate_module_ir()
 
     output = platform_dir / "math.bc"
-    compile_module_to_bc(module, output, quiet=quiet)
+    return compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_sys_env(platform_dir: Path, quiet: bool = False):
+def build_sys_env(platform_dir: Path, quiet: bool = False) -> list[str]:
     """Build sys/env unit (includes platform-specific getenv/setenv declarations)."""
     if not quiet:
         print("Building sys/env...")
@@ -116,10 +123,10 @@ def build_sys_env(platform_dir: Path, quiet: bool = False):
     module = env.generate_module_ir()
 
     output = platform_dir / "sys" / "env.bc"
-    compile_module_to_bc(module, output, quiet=quiet)
+    return compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_random(platform_dir: Path, quiet: bool = False):
+def build_random(platform_dir: Path, quiet: bool = False) -> list[str]:
     """Build random unit (includes platform-specific random declarations)."""
     if not quiet:
         print("Building random...")
@@ -128,10 +135,10 @@ def build_random(platform_dir: Path, quiet: bool = False):
     module = random.generate_module_ir()
 
     output = platform_dir / "random.bc"
-    compile_module_to_bc(module, output, quiet=quiet)
+    return compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_sys_process(platform_dir: Path, quiet: bool = False):
+def build_sys_process(platform_dir: Path, quiet: bool = False) -> list[str]:
     """Build sys/process unit (includes platform-specific process control declarations)."""
     if not quiet:
         print("Building sys/process...")
@@ -140,7 +147,7 @@ def build_sys_process(platform_dir: Path, quiet: bool = False):
     module = process.generate_module_ir()
 
     output = platform_dir / "sys" / "process.bc"
-    compile_module_to_bc(module, output, quiet=quiet)
+    return compile_module_to_bc(module, output, quiet=quiet)
 
 
 def build_all(platform_name: str, quiet: bool = False) -> None:
@@ -157,22 +164,28 @@ def build_all(platform_name: str, quiet: bool = False) -> None:
         print(f"Output directory: {platform_dir}")
         print()
 
-    build_collections_strings(platform_dir, quiet=quiet)
-    build_core_primitives(platform_dir, quiet=quiet)
-    build_io_files(platform_dir, quiet=quiet)
-    build_time(platform_dir, quiet=quiet)
-    build_math(platform_dir, quiet=quiet)
-    build_sys_env(platform_dir, quiet=quiet)
-    build_sys_process(platform_dir, quiet=quiet)
-    build_random(platform_dir, quiet=quiet)
+    defined: set[str] = set()
+    defined.update(build_collections_strings(platform_dir, quiet=quiet))
+    defined.update(build_core_primitives(platform_dir, quiet=quiet))
+    defined.update(build_io_files(platform_dir, quiet=quiet))
+    defined.update(build_time(platform_dir, quiet=quiet))
+    defined.update(build_math(platform_dir, quiet=quiet))
+    defined.update(build_sys_env(platform_dir, quiet=quiet))
+    defined.update(build_sys_process(platform_dir, quiet=quiet))
+    defined.update(build_random(platform_dir, quiet=quiet))
 
-    build_io_stdio(platform_dir, platform, quiet=quiet)
+    defined.update(build_io_stdio(platform_dir, platform, quiet=quiet))
 
     # Note: core/results and core/maybe use inline emission only
     # They are not built as stdlib units because monomorphizing for
     # all possible user types is impractical.
 
-    from sushi_lang.backend.stdlib_builder import write_build_marker
+    from sushi_lang.backend.stdlib_builder import (
+        write_build_marker, write_symbol_manifest,
+    )
+    # The manifest before the marker: the marker is the freshness token, so a build
+    # that dies in between leaves no marker and the next compile rebuilds.
+    write_symbol_manifest(platform_name, defined)
     write_build_marker(platform_name)
 
 

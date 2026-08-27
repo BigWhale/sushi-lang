@@ -1,0 +1,15 @@
+# The stdlib generators emit `string_len`, and no semantic table holds it. The
+# program also calls it, so the extern won the name and `.len()` built its call
+# against the wrong signature: a CE0000 TypeError (#472, shape a).
+# EXPECT_ERROR_CODE: CE5013
+
+use <collections/strings>
+
+unsafe external "C" as raw because "naming a generated stdlib symbol":
+    fn slen(string s) i64 = "string_len"
+
+fn main() i32:
+    let string s = "abcd"
+    println("{s.len()}")
+    println("{raw.slen(s)}")
+    return Result.Ok(0)

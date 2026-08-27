@@ -986,11 +986,6 @@ class LLVMCodegen:
         return value.to_llvm_constant(self.types)
 
 
-_INLINE_RUNTIME_FUNCTIONS = frozenset({
-    "llvm_strlen",
-    "llvm_strcmp",
-    "utf8_char_count",
-})
 
 
 def _set_weak_odr_on_perk_impls(module: ir.Module, units: list[Unit]) -> None:
@@ -1013,8 +1008,14 @@ def _set_weak_odr_on_perk_impls(module: ir.Module, units: list[Unit]) -> None:
 
 
 def _set_linkonce_odr_on_inline_runtime(module: ir.Module) -> None:
-    """Set linkonce_odr linkage on inline-defined runtime functions."""
-    for name in _INLINE_RUNTIME_FUNCTIONS:
+    """Set linkonce_odr linkage on inline-defined runtime functions.
+
+    The set is `semantics/externs_manifest.py`'s: one list, read here for linkage and
+    by CE5013 to refuse an `unsafe external` that names one (#472).
+    """
+    from sushi_lang.semantics.externs_manifest import GENERATED_INLINE_SYMBOLS
+
+    for name in GENERATED_INLINE_SYMBOLS:
         fn = module.globals.get(name)
         if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
             fn.linkage = "linkonce_odr"
