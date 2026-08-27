@@ -48,6 +48,10 @@ _add(ErrorMessage("CW3001", Severity.WARNING,
 # CE3504 at warning severity, and a platform mismatch is not a warning -- the link
 # cannot succeed. The error, CE3504, is the survivor.
 
+_add(ErrorMessage("CW3002", Severity.WARNING,
+    "'{name}' shadows the {kind} '{owner}' exports", Category.UNIT,
+    "A program's own declaration takes priority over a name a source library or a bundled stdlib module exports, and that is legal: a private function is emitted with internal linkage, so the two are separate symbols. The consumer's call binds to the consumer's declaration, the library's own body keeps calling its own, and the one combination that would break the link -- both declarations public -- is CE3003 already. It warns because shadowing an export is rarely intended, and because the reader of the call site cannot see which of the two answers it. Rename your declaration, or keep it and accept that the library's body is unaffected. A name the library declares PRIVATELY cannot be shadowed at all (CE3011). `docs/design/unit-namespaces.md` carries the qualified-name design that would make the choice explicit."))
+
 _add(ErrorMessage("CW3506", Severity.WARNING,
     "library perk implementation for '{type}' could not be loaded and was skipped",
     Category.LIBRARY, "A perk implementation shipped by a library failed to deserialize. "

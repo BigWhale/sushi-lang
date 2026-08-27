@@ -10,7 +10,8 @@ of fields, CE2045 names a variant it did write against an enum it did not, and C
 a generic cannot be inferred. Every one of those names the winner's declaration.
 
 A library's PUBLIC name is a different rule and stays one: the program's own declaration
-takes priority, which `tests/libs/test_lib_override.sushi` is the contract for.
+takes priority and warns (CW3002), which `tests/libs/test_warn_lib_override.sushi` and
+`tests/unit/test_library_shadow_warning.py` are the contract for.
 """
 from __future__ import annotations
 

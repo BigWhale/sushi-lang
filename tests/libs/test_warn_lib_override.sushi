@@ -1,11 +1,12 @@
-# Test main overriding library functions
-# EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "library_only() = 42"
-# EXPECT_STDOUT_CONTAINS: "All override tests passed"
+# CW3002: the program declares `get_value`, which the library exports.
+# Shadowing an export is legal -- symbol priority puts the program's own
+# declaration first -- and it warns, because it is rarely intended.
+# EXPECT_ERROR_CODE: CW3002
 #
-# Tests that main program symbols take priority over library symbols.
-# Main defines get_value() which should shadow the library's version.
-# Symbol priority: Main (1) > Library (2) > Stdlib (3) > Runtime (4)
+# Symbol priority: Main (1) > Library (2) > Stdlib (3) > Runtime (4).
+# A warning test's binary is not executed, so the runtime half of this
+# contract -- the consumer's call gets 500 and the library's body still gets
+# 200 -- is asserted in tests/unit/test_library_shadow_warning.py.
 
 use <lib/override_lib>
 

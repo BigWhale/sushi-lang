@@ -418,8 +418,8 @@ class FunctionCollector:
         Three answers, and who owns the previous declaration decides which. Another of
         the program's own units is the plain duplicate. A library's PUBLIC name may be
         replaced -- symbol priority puts the program's own declaration first, and
-        `tests/libs/test_lib_override.sushi` is that contract -- so this returns False
-        and the caller completes the replacement. A library's PRIVATE name may not be
+        `tests/libs/test_warn_lib_override.sushi` is that contract -- so this returns
+        False, warns with CW3002, and the caller completes the replacement. A library's PRIVATE name may not be
         replaced (CE3011): one namespace means the library's own bodies would start
         calling the consumer's function, and the consumer cannot even see the name it
         collides with.
@@ -429,6 +429,7 @@ class FunctionCollector:
             current_unit=self.current_unit_name, library_units=self.library_units)
         if clash is not None:
             if clash.is_public:
+                self._warn_shadowed_export(name, name_span, clash)
                 return False
             reject_library_clash(self.r, clash, name_span, kind="function", name=name,
                                  filename=self.current_unit_file)
@@ -438,6 +439,22 @@ class FunctionCollector:
             .note("first defined here", prev.name_span,
                   getattr(prev, "filename", None)).emit()
         return True
+
+    def _warn_shadowed_export(self, name: str, name_span: Optional[Span],
+                              clash) -> None:
+        """CW3002: the consumer takes a name the library exports (decision 10).
+
+        Legal, and rarely intended. The reader of the call site cannot see which of the
+        two declarations answers it, so the compiler says which one does.
+        """
+        diagnostic = er.emit_with(
+            self.r, ERR.CW3002, name_span,
+            filename=self.current_unit_file,
+            name=name, kind=clash.kind, owner=clash.unit_name,
+        )
+        if clash.name_span is not None and clash.filename is not None:
+            diagnostic = diagnostic.note("exported here", clash.name_span, clash.filename)
+        diagnostic.emit()
 
     @staticmethod
     def _drop(table, name: str) -> None:

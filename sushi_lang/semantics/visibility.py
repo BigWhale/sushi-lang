@@ -134,6 +134,18 @@ class VisibilityTable:
             return
         self.by_key[key] = origin
 
+    def mark_contested(self, kind: str, name: str, unit: Optional[str]) -> None:
+        """Book `unit` as a loser of this name, without a declaration to read from.
+
+        The merge uses it: a consumer's declaration replaces a library's export
+        (decision 10), so the library unit is now the loser of a name it declared, and
+        every rule that would measure the library's own body against the consumer's
+        declaration has to know.
+        """
+        if unit is None:
+            return
+        self.contested.setdefault((kind, name), set()).add(unit)
+
     def origin(self, kind: str, name: str) -> Optional[DeclOrigin]:
         return self.by_key.get((kind, name))
 
