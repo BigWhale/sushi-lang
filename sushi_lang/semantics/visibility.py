@@ -50,6 +50,18 @@ FOLLOWS_TARGET_TYPE = frozenset({"extension", "perk implementation"})
 NO_VISIBILITY = frozenset({"external block", "external declaration"})
 
 
+# Which kinds still read PUBLIC when they carry no marker. `docs/design/visibility.md`
+# Ruling 1 makes private the default for all of them, and Phase 2 empties this set one
+# kind at a time, so the marker parses and is recorded from the grammar commit on while
+# each flip stays one line with a batch of its own.
+UNMARKED_IS_PUBLIC = frozenset({"constant", "struct", "enum", "perk"})
+
+
+def declared_public(kind: str, marked: bool) -> bool:
+    """Is a declaration of this kind public, given whether it carries the marker?"""
+    return marked or kind in UNMARKED_IS_PUBLIC
+
+
 # The verb a diagnostic uses for each kind. Derived rather than passed, so a kind cannot
 # be given the wrong one at one call site out of four.
 _VERB = {

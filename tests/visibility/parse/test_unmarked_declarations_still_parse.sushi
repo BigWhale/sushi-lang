@@ -1,0 +1,29 @@
+# The marker is optional, and an unmarked declaration parses exactly as before.
+# The control for the grammar change: `PUBLIC?` on four more rules must not
+# make the token required, and LALR must still tell the five rules apart.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42 7 loud\n"
+
+const i32 ANSWER = 42
+
+struct Crate:
+    i32 weight
+
+enum Mood:
+    Calm
+
+perk Loud:
+    fn shout() string
+
+extend Crate with Loud:
+    fn shout() string:
+        return "loud"
+
+fn weigh(peek Crate c) i32:
+    return Result.Ok(c.weight)
+
+fn main() i32:
+    let Crate c = Crate(7)
+    let i32 w = weigh(peek c).realise(0)
+    println("{ANSWER} {w} {c.shout()}")
+    return Result.Ok(0)

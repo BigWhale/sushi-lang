@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING, List, Optional
 from lark import Tree, Token
 from sushi_lang.semantics.ast import FuncDef, Param
 from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, find_tree_recursive, ice, expect
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
+    expect, find_tree_recursive, first_name, first_tree, ice, read_public)
 from sushi_lang.semantics.ast_builder.declarations.docs import lift_body_doc
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
@@ -38,11 +39,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     if name_tok is None:
         ice(t, "missing NAME")
 
-    is_public = False
-    for child in t.children:
-        if isinstance(child, Token) and child.type == "PUBLIC":
-            is_public = True
-            break
+    is_public, public_span = read_public(t.children)
 
     type_params_node = first_tree(t.children, "type_params")
     type_params = parse_bounded_type_params(type_params_node) if type_params_node else None
@@ -93,6 +90,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
         self_mode=self_mode,
         self_mode_span=self_mode_span,
         doc=lift_body_doc(body, ast_builder),
+        public_span=public_span,
     )
 
 

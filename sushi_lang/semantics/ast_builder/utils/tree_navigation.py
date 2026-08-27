@@ -4,7 +4,7 @@ from typing import List, NoReturn, Optional, Callable
 from lark import Tree, Token
 
 from sushi_lang.internals.diagnostics import AstBuilderICE
-from sushi_lang.internals.report import span_of
+from sushi_lang.internals.report import Span, span_of
 
 
 def _kind_of(node: object) -> str:
@@ -54,6 +54,19 @@ _METHOD_NAME_TOKENS = ("NAME", "NEW", "EXTEND")
 def first_method_name(children: List[object]) -> Optional[Token]:
     """Get the first method-name token from children."""
     return first(children, lambda c: isinstance(c, Token) and c.type in _METHOD_NAME_TOKENS)  # type: ignore[return-value]
+
+
+def read_public(children: List[object]) -> tuple[bool, Optional[Span]]:
+    """Is the `public` marker written here, and where?
+
+    One reader for every rule that carries `PUBLIC?`. The span is what a diagnostic
+    points at when the marker is in the wrong place (CE6103), and it is also the only
+    way to tell a written marker from a kind whose unmarked default is still public.
+    """
+    token = first(children, lambda c: isinstance(c, Token) and c.type == "PUBLIC")
+    if token is None:
+        return False, None
+    return True, span_of(token)
 
 
 def first_tree(children: List[object], data: str) -> Optional[Tree]:
