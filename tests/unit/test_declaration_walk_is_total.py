@@ -17,7 +17,8 @@ import dataclasses
 
 from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.semantics import ast as ast_mod
-from sushi_lang.semantics.passes.docs import declarations, documented
+from sushi_lang.semantics.ast_walk import declarations
+from sushi_lang.semantics.passes.docs import documented
 
 # Every declaration kind at once. Nothing here is documented: the walk is about what is
 # DECLARED, and a block would only prove the other walk.
