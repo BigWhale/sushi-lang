@@ -67,6 +67,10 @@ _add(ErrorMessage("CE6101", Severity.ERROR,
     Category.SYNTAX, "A function may only be defined at the top level. Use a lambda for a "
                      "local callable."))
 
+_add(ErrorMessage("CE6103", Severity.ERROR,
+    "a perk implementation method cannot be marked `public`",
+    Category.SYNTAX, "Ruling 2 of `docs/design/visibility.md`: an implementation carries no marker, because it is exactly as visible as the type it is attached to. A private type cannot be named, constructed or received in another unit, so its methods are already unreachable there, and a public type's methods are reachable wherever the type is. The marker used to parse here and be stored on the method, where nothing read it. Remove it, and mark the target type instead."))
+
 _add(ErrorMessage("CE6102", Severity.ERROR,
     "explicit type arguments are only supported on direct function calls",
     Category.SYNTAX, "The `@(...)` type-argument list may appear only on a call to a named "

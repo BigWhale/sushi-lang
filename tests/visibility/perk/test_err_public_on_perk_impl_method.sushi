@@ -1,0 +1,19 @@
+# CE6103: a perk implementation carries no marker. Ruling 2 makes it as
+# visible as its target type, so the grammar's `function_def` swallowed the
+# `public` here, stored it, and nobody read it.
+# EXPECT_ERROR_CODE: CE6103
+
+perk Loud:
+    fn shout() string
+
+struct Crate:
+    i32 weight
+
+extend Crate with Loud:
+    public fn shout() string:
+        return "loud"
+
+fn main() i32:
+    let Crate c = Crate(7)
+    println(c.shout())
+    return Result.Ok(0)
