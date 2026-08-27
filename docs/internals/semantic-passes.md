@@ -56,6 +56,7 @@ Collect global definitions before analyzing function bodies.
 2. **Function Signatures**: Collect return types and parameters
 3. **Generic Types**: Register struct and enum definitions
 4. **Symbol Table**: Build initial global scope
+5. **Visibility**: Record who declared what, and whether it says `public`
 
 ### Example
 
@@ -74,6 +75,32 @@ fn add(i32 a, i32 b) i32:  # Register signature
 - `constants = {'MAX': 100}`
 - `functions = {'add': FunctionSignature(...)}`
 - `generic_types = {'Pair': GenericStruct(...)}`
+
+### One seam for who may name what
+
+`semantics/visibility.py` is the one answer to "may unit U name declaration D". One record
+(`DeclOrigin`), one predicate, and four sets that classify every kind the declaration walk
+yields: a kind carries its own marker, follows the declaration it is part of, follows the
+type it is attached to, or has no visibility at all.
+`tests/unit/test_visibility_seam_is_total.py` asserts the union is exactly the walk, in
+both directions, so a new declaration kind cannot get half the rule.
+
+The table is filled at the END of each unit's collection, from `declarations()` -- the same
+total walk the `docs` pass uses -- so the gate on that walk protects the seam. The merger
+replays it once per unit, which is why `record()` is idempotent.
+
+Two facts it has to carry beyond the marker. **A name with no record is public**: the
+compiler synthesizes types nothing declared (a monomorphized instance, a lifted closure
+environment, `FileMode`), and none of them can carry a source marker. And the table
+remembers the LOSER of every contested name, because a unit that declared a name must
+never be shown its own code measured against somebody else's declaration -- which is what
+"cannot call private function 'helper'" said to the unit that wrote `helper` itself.
+
+The rules that read it live where the use is: `passes/types/visibility.py` for a call and a
+bare constant read, the type funnel for a named type, the collect pass itself for a
+declaration that collides with a library's (CE3011) or promises something about a private
+perk (CE4011), and `passes/types/public_signatures.py` for the leak fence (CE3009,
+CE3010). `docs/design/visibility.md` is normative.
 
 ### One reporter, many files
 

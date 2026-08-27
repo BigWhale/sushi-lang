@@ -84,9 +84,11 @@ does **not** buy: a generic cannot be pre-compiled, because monomorphization nee
 consumer's concrete type arguments, so a binary library carries the source text of its
 generics in the index regardless. Binary distribution hides concrete bodies only.
 
-### Public Functions
+### Public Declarations
 
-Only functions marked `public` are accessible from other compilation units:
+Only declarations marked `public` are accessible from other compilation units. Five kinds
+carry the marker -- `fn`, `const`, `struct`, `enum` and `perk` -- and private is the
+default for all of them:
 
 ```sushi
 # mylib.sushi
@@ -115,25 +117,45 @@ is left for what it is for: a name that no unit and no linked library declares.
 
 Libraries do not need a `main()` function. If you include one, compilation will fail.
 
-### Structs and Enums
+### Structs, Enums, Constants and Perks
 
-Structs and enums defined in libraries are automatically available to programs that use them:
+A type, a constant and a perk are private to the library unless they say `public`. Only a
+marked one is in the manifest, so only a marked one is API a consumer can name -- and only
+a marked one is frozen: an unmarked declaration can change shape in the next version
+without breaking anybody.
 
 ```sushi
 # shapes.sushi
 
-struct Point:
+public struct Point:                # API: a consumer may name the type
     i32 x
     i32 y
 
-enum Color:
+public enum Color:
     Red
     Green
     Blue
 
+public const i32 MAX_SHAPES = 64
+
+struct Cursor:                      # a decoder detail; not in the manifest
+    i32 at
+
 public fn make_point(i32 x, i32 y) Point:
     return Result.Ok(Point(x, y))
 ```
+
+Two consequences worth knowing:
+
+- **A public signature may not name a private type** (`CE3009`), and a public constraint
+  may not name a private perk (`CE3010`). Privacy is worth nothing if the signature hands
+  the type out anyway, so mark what the API returns and takes.
+- **A private declaration a template body needs still travels.** A public generic's body
+  may name a private type, constant or helper; the export closure ships them so the
+  consumer can monomorphize, and the consumer still cannot name them itself.
+
+A consumer that writes a library-private name hears `CE3005` -- "private struct 'Cursor',
+defined in that library" -- and not "unknown type".
 
 ## Using Libraries
 
@@ -411,16 +433,25 @@ Only symbols reachable from `main()` are included in the final executable. Unuse
 
 ### 1. Use Public Sparingly
 
-Only mark functions as `public` if they are part of your library's API:
+Mark a declaration `public` only if it is part of your library's API. Everything you mark
+is API you have to keep; everything you leave unmarked you can change:
 
 ```sushi
-# Good: Only expose the API
+# Good: only the API is marked
+public const i32 SCALE = 2
+
 public fn calculate(i32 x) i32:
     return Result.Ok(internal_helper(x)??)
 
+struct Work:
+    i32 at
+
 fn internal_helper(i32 x) i32:
-    return Result.Ok(x * 2)
+    return Result.Ok(x * SCALE)
 ```
+
+`zlib` is the example the rule is for: 38 functions and 13 types and constants, of which 6
+functions and one enum belong in the API. It exports 7 names instead of 19.
 
 ### 2. Document Your Library
 

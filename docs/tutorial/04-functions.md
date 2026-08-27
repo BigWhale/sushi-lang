@@ -117,6 +117,9 @@ By default a function is private to its file. Marking it `public` makes it part 
 file's exported surface, so other units in a multi-file project can call it. The syntax is
 just the keyword `public` in front of `fn`:
 
+The same marker, and the same default, apply to a `const`, a `struct`, an `enum` and a
+`perk` — five declarations, all private until they say otherwise.
+
 ```sushi
 --8<-- "docs/tutorial/examples/04-functions/public-fn.sushi"
 ```
@@ -131,6 +134,10 @@ perimeter: 26
 In a single-file program like this, `public` makes no practical difference — but it's the
 habit you'll want once your programs grow past one file.
 
+One rule to know before you get there: a **public thing may not hand out a private one**.
+If `public fn area()` returns a `Rect`, then `Rect` has to be `public` too, or the compiler
+refuses the signature — a caller in another unit would receive a type it cannot even name.
+
 ## What you learned
 
 - Declare functions with `fn name(Type param, ...) ReturnType:` and call them by name.
@@ -140,7 +147,9 @@ habit you'll want once your programs grow past one file.
   `.realise(default)`.
 - Declare a custom error type with `fn foo() T | ErrorType` — explored fully in
   [Chapter 6](06-error-handling.md).
-- `public fn` exports a function for use by other units.
+- `public fn` exports a function for use by other units, and `public` does the same for a
+  `const`, a `struct`, an `enum` and a `perk`. A public signature may only name public
+  types.
 
 Functions give us reusable building blocks. Next we look closely at the type we've been
 printing all along: text. On to [Strings](05-strings.md).

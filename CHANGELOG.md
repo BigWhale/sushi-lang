@@ -8,7 +8,55 @@ Two libraries written in Sushi itself, and the distribution form that carries th
 a `.slib` is now Sushi source plus an index, so one library file works on every
 platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C behind it.
 
+And a unit can now keep something to itself. `public` reaches every declaration that has
+a name, private is the default, and a public signature may not hand out a private type --
+so a library exports what it means to export and nothing else.
+
 ### Added
+- **`public` reaches every declaration, and private is the default.** The marker used to
+  reach one declaration out of six. A `const`, a `struct`, an `enum` and a `perk` carry it
+  now, and each of the five is private to the unit that declares it unless it says
+  otherwise. `public const` was a parse error; it is the spelling.
+
+  ```sushi
+  public const i32 MAX_DEPTH = 32     # another unit may read it
+  const i32 SCRATCH = 4096            # this unit only
+
+  public struct Point:                # another unit may name the type
+      i32 x
+
+  enum Cursor:                        # this unit only
+      Start
+  ```
+
+  An enum VARIANT carries no marker: it is as visible as its enum, because a private
+  variant would make a total `match` unwritable across a unit boundary. An extension and a
+  perk implementation carry none either -- each is exactly as visible as the type it is
+  attached to, so nothing is threaded into method resolution and `extend i32 squared()`
+  stays public because `i32` is. Writing `public` on an implementation method is
+  **CE6103**.
+
+  A private PERK hides the contract, not the method. Another unit may not implement it and
+  may not constrain a type parameter with it (**CE4011**), while a method it provides stays
+  callable on any type you publish.
+
+  **A public thing may not hand out a private one.** A public signature that names a
+  private type is **CE3009**, and a public constraint that names a private perk is
+  **CE3010** -- covering a return, an error arm, a parameter, a constant's type, a public
+  struct's field and a public enum's variant payload. A single-unit file never notices any
+  of this: an extension on a builtin inherits no marker, so it promises nothing.
+
+  A `.slib` exports what it marks. Three manifest extractors had no gate at all, so a
+  decoder detail shipped as frozen API and `--lib-info` printed its whole field layout;
+  `zlib` goes from 19 exported names to 7. What a library keeps is NAMED, so a consumer
+  writing the name hears "private struct, defined in that library" and not "unknown type".
+  A private type a public generic's body needs still travels, in the export closure, and
+  the consumer still cannot name it. The manifest protocol is 2.1, so an older `.slib` is
+  rebuilt.
+
+  Closes #466. The design and the reasoning for each ruling are
+  `docs/design/visibility.md`.
+
 - **A range element in an array literal, and a run-time count in `from()`.** An element can
   already fill more than one slot with `value; count`. It can now be a RANGE, and the count
   no longer has to be readable at compile time.
@@ -77,6 +125,50 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   because it still occupies one slot.
 
 ### Fixed
+- **A contested name gets one diagnostic, and it is aimed at the right unit.** Two units
+  declaring one name heard the duplicate AND a second diagnostic measuring the loser's own
+  code against the winner's declaration: `CE3005` telling a unit it may not call the
+  function it wrote itself, `CE2027` about a struct shape it never spelled, `CE2045` and
+  `CE2040` about an enum it did not declare, or `CE2060` about a generic it never wrote.
+  The loser of a contested name is recorded now, and no rule speaks about a declaration
+  the unit did not write.
+
+  A consumer that declares a name a source library declares PRIVATELY is refused cleanly
+  with a new **CE3011**: one flat namespace means it collides with a name it cannot see, so
+  renaming is its only move. The branch that used to let it try deleted the library's entry
+  and registered no replacement, so the consumer lost its own declaration as well -- which
+  is why a program's own `fn map` beside `use <collections/iter>` heard CE2060 about
+  `iter`'s generic.
+
+- **A consumer's own declaration answers its own call, and says it shadows.** A program may
+  declare a name a library exports; that is the documented symbol priority. The frontend
+  did not agree with the linker: every table merges first-wins and library units merge
+  first, so the library's signature answered the consumer's call and a replacement with a
+  different signature was refused with a spurious CE2009.
+
+  It is safe because a private function has internal linkage -- the two are separate
+  symbols, the consumer's call binds to its own definition and the library's body keeps
+  calling its own -- and the one combination that could break the link, both public, is
+  CE3003 already. A new **CW3002** says the name is shadowed, because it is legal and
+  rarely intended.
+
+- **A borrow and a function type reach the type funnel.** `fn look(peek Nope x)` printed
+  `CE0020: unresolved type 'Nope' - semantic analysis should have caught this`, telling the
+  user their program was a compiler bug; `fn apply(fn(Nope) -> i32 f)` compiled clean. Four
+  spellings now give the same `CE2001: unknown type 'Nope'` with a caret. One walk over a
+  type answers for every predicate over types, with a gate on it.
+
+- **The public-signature `ptr` fence covers what it always claimed to.** CE5008 read a
+  `public fn`'s return and parameters and nothing else, so a public function's ERROR arm, a
+  public GENERIC, an extension method and a perk method each carried a foreign `ptr` across
+  a unit boundary and compiled clean. One walk over every signature closes all four, and
+  the diagnostic says which kind of declaration it refused.
+
+- **A perk implementation checks its target type once.** Two methods and one unknown target
+  printed the same CE2001 twice, because the check sat inside the per-method loop. And
+  `extend ~ shout()` was CE2032 while `extend ~ with Loud` compiled clean: two copies of
+  one validator had drifted, and only one of them refused the blank type.
+
 - **CE5013 now sees a symbol the standard library generates.** An `unsafe external "C"`
   whose link-name is a symbol this build defines is CE5013. The rule read the function
   table, the constant table and the library registry -- and the stdlib GENERATORS emit

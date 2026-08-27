@@ -1020,18 +1020,53 @@ fn add(i32 a, i32 b) i32:
 
 ### Visibility
 
-Functions are private by default. Use `public` for external access. A generic function is
-no exception: a call from another unit to a private one is `CE3005`.
+**Private is the default.** Five declarations carry the marker -- `fn`, `const`, `struct`,
+`enum` and `perk` -- and each is private to the unit that declares it unless it says
+`public`. Naming another unit's private declaration is `CE3005`. A generic function is no
+exception.
 
 ```sushi
-use "utils"
+public const i32 MAX_DEPTH = 32     # another unit may read it
+const i32 SCRATCH = 4096            # this unit only
+
+public struct Point:                # another unit may name the type
+    i32 x
+    i32 y
+
+enum Cursor:                        # this unit only
+    Start
+    Mid(i32)
+
+public perk Loud:                   # another unit may implement it
+    fn shout() i32
 
 public fn helper() i32:
-    return Result.Ok(private_helper())
+    return Result.Ok(private_helper()??)
 
 fn private_helper() i32:
     return Result.Ok(42)
 ```
+
+An **enum variant** carries no marker: it is as visible as its enum, because a private
+variant would make a total `match` unwritable across a unit boundary.
+
+An **extension** and a **perk implementation** carry no marker either. Each is exactly as
+visible as the type it is attached to, so `extend Point doubled()` is public because
+`Point` is, and `extend Cursor step()` is unreachable elsewhere because `Cursor` is not.
+Writing `public` on an implementation method is `CE6103`.
+
+A **private perk** hides the CONTRACT, not the method. Another unit may not implement it
+(`extend X with Loud`) and may not constrain a type parameter with it (`@(T: Loud)`) --
+both are `CE4011` -- but a method it provides stays callable on any type you publish,
+because method resolution is keyed on the receiver and blind to the caller.
+
+**A public thing may not hand out a private one.** A public signature that names a private
+type is `CE3009`, and a public constraint that names a private perk is `CE3010`. The rule
+covers a return, an error arm, a parameter, a constant's type, a public struct's field and
+a public enum's variant payload -- privacy on a type is worth nothing if a signature hands
+the type out anyway.
+
+The full design, with the reasoning for each ruling, is `docs/design/visibility.md`.
 
 ### Standard Library
 
@@ -1104,7 +1139,7 @@ Reserved keywords:
 - `true`, `false` - Boolean literals
 - `as` - Type casting
 - `unit` - Unit declaration
-- `public` - Visibility modifier
+- `public` - Visibility marker (`fn`, `const`, `struct`, `enum`, `perk`)
 - `use` - Module import
 - `extend` - Extension method
 - `self` - Extension method receiver
