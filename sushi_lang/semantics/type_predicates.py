@@ -54,7 +54,11 @@ def is_string_convertible(ty: Type) -> bool:
 def is_abstract_type(ty: Type, struct_table: Optional[dict] = None,
                      enum_table: Optional[dict] = None,
                      _visited: Optional[Set[str]] = None) -> bool:
-    """Whether a type still mentions an unbound type parameter."""
+    """Whether a type still mentions an unbound type parameter.
+
+    Not built on `walk_named_types`: an `UnknownType` absent from the tables is ABSTRACT
+    here and a leaf there, and this walk also reads `generic_args`.
+    """
     from sushi_lang.semantics.typesys import (
         ArrayType, DynamicArrayType, ReferenceType, PointerType,
         IteratorType, StructType, EnumType, UnknownType,
@@ -108,60 +112,23 @@ def is_abstract_type(ty: Type, struct_table: Optional[dict] = None,
 
 
 def contains_foreign_ptr(ty: Type, struct_table: Optional[dict] = None,
-                         enum_table: Optional[dict] = None,
-                         _visited: Optional[Set[str]] = None) -> bool:
+                         enum_table: Optional[dict] = None) -> bool:
     """Recursively check whether a type exposes a foreign `ptr` (ForeignPtrType)."""
-    from sushi_lang.semantics.typesys import (
-        ForeignPtrType, ArrayType, DynamicArrayType, ReferenceType,
-        PointerType, IteratorType, StructType, EnumType, UnknownType,
+    from sushi_lang.semantics.type_walk import walk_named_types
+    from sushi_lang.semantics.typesys import ForeignPtrType
+
+    return any(
+        isinstance(reached, ForeignPtrType)
+        for reached in walk_named_types(ty, struct_table, enum_table)
     )
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    if ty is None:
-        return False
-    if _visited is None:
-        _visited = set()
-
-    def recurse(inner: Type) -> bool:
-        return contains_foreign_ptr(inner, struct_table, enum_table, _visited)
-
-    if isinstance(ty, ForeignPtrType):
-        return True
-    if isinstance(ty, (ArrayType, DynamicArrayType)):
-        return recurse(ty.base_type)
-    if isinstance(ty, ReferenceType):
-        return recurse(ty.referenced_type)
-    if isinstance(ty, PointerType):
-        return recurse(ty.pointee_type)
-    if isinstance(ty, IteratorType):
-        return recurse(ty.element_type)
-    if isinstance(ty, GenericTypeRef):
-        return any(recurse(arg) for arg in (ty.type_args or ()))
-    if isinstance(ty, UnknownType):
-        resolved = None
-        if struct_table and ty.name in struct_table:
-            resolved = struct_table[ty.name]
-        elif enum_table and ty.name in enum_table:
-            resolved = enum_table[ty.name]
-        return recurse(resolved) if resolved is not None else False
-    if isinstance(ty, StructType):
-        if ty.name in _visited:
-            return False
-        _visited.add(ty.name)
-        return any(recurse(ft) for _, ft in ty.fields)
-    if isinstance(ty, EnumType):
-        if ty.name in _visited:
-            return False
-        _visited.add(ty.name)
-        return any(
-            recurse(at)
-            for v in ty.variants for at in v.associated_types
-        )
-    return False
 
 
 def contains_reference(ty: Optional[Type]) -> bool:
-    """Does this declared type contain a `peek` / `poke` anywhere it is not supported?"""
+    """Does this declared type contain a `peek` / `poke` anywhere it is not supported?
+
+    Not built on `walk_named_types`: a reference IS supported as a lambda parameter, so
+    this walk skips `FunctionType.param_types` on purpose and the shared walk does not.
+    """
     from sushi_lang.semantics.typesys import (
         ArrayType, DynamicArrayType, FunctionType, IteratorType, PointerType,
         ReferenceType,
