@@ -151,7 +151,7 @@ is the authority, and the index is a cache of it.
 
 ```python
 {
-    "sushi_lib_version": "2.0",        # Protocol version
+    "sushi_lib_version": "2.1",        # Protocol version
     "library_name": str,               # Library identifier, from the output filename
     "library_version": str,            # The library's own version, "major.minor.patch"
     "kind": str,                       # "source" / "binary" / "hybrid", matching KIND
@@ -162,10 +162,12 @@ is the authority, and the index is a cache of it.
                                        #   meaningful only when kind != "source"
     "compiler_version": str,           # Exactly which compiler built the file
 
-    # The three lists below carry only CONCRETE declarations. A generic function,
-    # struct or enum is filtered out of them and routes to "templates" instead: a
-    # generic is not a concrete callable, and listing one here would hand the
-    # consumer a signature with unresolved type parameters.
+    # The three lists below carry only CONCRETE declarations that the library MARKS
+    # `public`. A generic function, struct or enum is filtered out of them and routes
+    # to "templates" instead: a generic is not a concrete callable, and listing one
+    # here would hand the consumer a signature with unresolved type parameters. An
+    # unmarked declaration is not API and goes to "not_exported" instead -- protocol
+    # 2.1, and the reason an older `.slib` has to be rebuilt.
     # DOC is the parsed parts of one `##: ... :##` block. Every field is optional and an
     # empty one is OMITTED, so a reader cannot mistake an absent field for an empty
     # string. The whole block is deliberately not stored. A record that names a symbol
@@ -304,18 +306,24 @@ is the authority, and the index is a cache of it.
 
         # Export closure (v4): private symbols exported generics transitively
         # reference. Concrete helpers ship as signature records (definitions
-        # carry external linkage in the bitcode); constants ship with source
-        # (the consumer needs the value for compile-time evaluation).
+        # carry external linkage in the bitcode); constants and types ship with
+        # source -- the consumer needs a constant's value for compile-time
+        # evaluation, and a type's shape to register it before a monomorphized
+        # template body names it.
         "private_functions": [
             {"name": str, **SIG}       # No doc: a private symbol is not documented API
         ],
         "constants": [
             {"name": str, "source": str}
         ],
+        "private_types": [             # A private struct or enum a template body names
+            {"name": str, "source": str}
+        ],
         "closure_summary": {           # What shipped, by kind (sorted names)
             "private_functions": [str],
             "private_generic_functions": [str],
-            "constants": [str]
+            "constants": [str],
+            "private_types": [str]
         }
     },
 
@@ -328,11 +336,20 @@ is the authority, and the index is a cache of it.
     # the binary path the symbol is in the consumer's tables not at all, and "undefined"
     # was the wrong word for a function the library defines and deliberately kept. A name
     # here is not shipped and clashes with nothing, so a consumer may declare its own
-    # function of the same name.
+    # function of the same name. A kept TYPE answers the same way from the type funnel,
+    # where the wrong word was "unknown type". A kept CONSTANT is recorded but has no use
+    # site yet: a binary library's constants reach a consumer only through the export
+    # closure, so none of them is nameable, marked or not.
+    #
+    # A name the CLOSURE ships is not here. Each private is named in exactly one of the
+    # two places, and the closure carries a private constant and a private type as
+    # SOURCE (`templates.constants`, `templates.private_types`), because a monomorphized
+    # template body names them and the consumer has to register them.
     "not_exported": [
         {
             "name": str,
-            "kind": str                # "function" / "generic_function"
+            "kind": str                # "function" / "generic_function" / "struct"
+                                       #   / "enum" / "constant"
         }
     ]
 }
@@ -372,7 +389,7 @@ Kind: source
 Compiler: 0.11.1
 Requires compiler: ~0.11
 Compiled: 2026-08-23T10:30:00+00:00
-Protocol: 2.0
+Protocol: 2.1
 
 Units (1):
   mylib
@@ -387,7 +404,7 @@ Public Functions (3):
   fn multiply(i32 a, i32 b) i32
   fn shout(nom string s) string
 
-Structs (1):
+Public Structs (1):
   struct Point:
     A point in the plane.
     i32 x

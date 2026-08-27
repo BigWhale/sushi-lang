@@ -8,7 +8,7 @@ the same two questions, so they ask them here.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, AbstractSet, Any, Optional
 
 from sushi_lang.semantics.visibility import (
     DeclOrigin,
@@ -19,8 +19,9 @@ from sushi_lang.semantics.visibility import (
 if TYPE_CHECKING:
     from . import TypeValidator
 
-__all__ = ["name_is_contested", "reject_private_call", "reject_private_kept_call",
-           "reject_private_name", "reject_private_type"]
+__all__ = ["name_is_contested", "reject_private_call", "reject_private_kept",
+           "reject_private_kept_call", "reject_private_name",
+           "reject_private_type"]
 
 
 def name_is_contested(validator: 'TypeValidator', kind: str, name: str) -> bool:
@@ -62,6 +63,25 @@ def reject_private_kept_call(
     """
     return _reject(validator, DeclOrigin(
         kind=kind or "function", name=name, unit_name=library, is_public=False,
+    ), loc)
+
+
+def reject_private_kept(validator: 'TypeValidator', name: str, loc: Any,
+                        *, kinds: AbstractSet[str]) -> bool:
+    """Reject a MENTION of a name a library declares and keeps, of one of these kinds.
+
+    The call site has its own entry above, because a call knows the name is a callee.
+    Every other position -- a type name, a bare constant read -- looks the name up and
+    finds nothing, so it has to ask the manifest before it says "unknown".
+    """
+    kept = validator.library_not_exported.get(name)
+    if kept is None:
+        return False
+    library, kind = kept
+    if kind not in kinds:
+        return False
+    return _reject(validator, DeclOrigin(
+        kind=kind, name=name, unit_name=library, is_public=False,
     ), loc)
 
 

@@ -53,7 +53,9 @@ def manifest(tmp_path_factory):
 
 
 def test_the_protocol_string_is_bumped(manifest):
-    assert manifest["sushi_lib_version"] == "2.0"
+    # 2.1: the three concrete lists gained an `is_public` gate and `not_exported` grew
+    # three kinds, so an older `.slib` has to be rebuilt.
+    assert manifest["sushi_lib_version"] == "2.1"
 
 
 def test_the_manifest_records_its_kind(manifest):

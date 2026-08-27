@@ -28,7 +28,9 @@ class LibraryMetadata:
     # What the library declares and does NOT export (#469): name -> kind, and nothing
     # else. No signature travels with them, so they are not callables the consumer can
     # register -- they exist so the CE3005 gate can say "private" where it used to have
-    # to say "undefined".
+    # to say "undefined". Five kinds now: a function, a generic function, a struct, an
+    # enum and a constant. A type is the one the type funnel asks about, because a kept
+    # type reaches no table and "unknown type" was the wrong word for it.
     not_exported: dict[str, str] = field(default_factory=dict)
     structs: dict[str, StructType] = field(default_factory=dict)
     enums: dict[str, EnumType] = field(default_factory=dict)

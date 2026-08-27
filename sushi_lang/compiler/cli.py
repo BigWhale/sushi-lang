@@ -453,7 +453,7 @@ def print_library_info(library_path: Path, show_docs: bool = False,
         print()
 
     structs = metadata.get('structs', [])
-    if _section("Structs", structs, opts.p):
+    if _section("Public Structs", structs, opts.p):
         records = _Records()
         for struct in structs:
             records.open()
@@ -476,7 +476,7 @@ def print_library_info(library_path: Path, show_docs: bool = False,
                          opts)
 
     enums = metadata.get('enums', [])
-    if _section("Enums", enums, opts.p):
+    if _section("Public Enums", enums, opts.p):
         records = _Records()
         for enum in enums:
             records.open()

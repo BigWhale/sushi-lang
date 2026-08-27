@@ -24,13 +24,13 @@ TOOL_SRC = REPO / "toolchain" / "src" / "slib_info.sushi"
 DEMO_LIB = """\
 use <collections/strings>
 
-const i32 ANSWER = 42
+public const i32 ANSWER = 42
 
-struct Point:
+public struct Point:
     i32 x
     i32 y
 
-enum Shade:
+public enum Shade:
     Plain()
     Custom(i32)
 
