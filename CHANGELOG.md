@@ -77,6 +77,35 @@ platform, and `use <compression/zlib>` is a complete DEFLATE codec with no C beh
   because it still occupies one slot.
 
 ### Fixed
+- **CE5013 now sees a symbol the standard library generates.** An `unsafe external "C"`
+  whose link-name is a symbol this build defines is CE5013. The rule read the function
+  table, the constant table and the library registry -- and the stdlib GENERATORS emit
+  about 146 symbols that live in none of them, so the rule was blind to every one.
+
+  ```sushi
+  use <collections/strings>
+
+  unsafe external "C" as raw because "naming a generated stdlib symbol":
+      fn slen(string s) i64 = "string_len"   # now CE5013
+  ```
+
+  The real declaration is `i32 string_len({ptr, i32, i8})`. Declared as above, three
+  things could happen: the program that also called `.len()` got a CE0000 TypeError; the
+  program that linked the symbol and never called it BUILT CLEAN and died with a bus
+  error; and the program that linked nothing got a linker error late, by symbol name.
+
+  The generators are the only authority on those names, so `--build-stdlib` now writes
+  them down beside the bitcode it produced (`dist/<platform>/symbols.json`), and the
+  manifest is part of a built platform directory -- a stale one rebuilds. A second, small
+  set in `semantics/externs_manifest.py` covers the three the backend emits INLINE into
+  the module it compiles (`llvm_strlen`, `llvm_strcmp`, `utf8_char_count`), which no
+  bitcode file holds; the backend reads that same set to give them their linkage.
+
+  A generated name is refused whether the program links that stdlib unit or not.
+  Otherwise adding a `use` line would break a build that compiled a minute ago. No libc
+  name is affected: 140 of the 146 already carry a `sushi_` prefix, and none of them is
+  a bare C name, so `= "strlen"` and friends still bind.
+
 - **`.iter()` and `.hash()` on a dynamic array now work through every receiver.** This was
   the half of the fixed-array receiver fix below that the DYNAMIC side kept. `as_array_address`
   already gave a `T[]` one address rule, so a field read hands over a GEP and every other

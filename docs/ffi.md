@@ -54,9 +54,11 @@ anything; the linker resolves the symbol after `=`. This is what lets you bind
 `printf` without shadowing any Sushi name.
 
 **The C symbol must be foreign.** An `unsafe external` reaches OUT of the program, so the
-name after `=` may not be one this build defines -- a function of any unit, a constant, or
-a symbol a linked library brought in, its private ones included. That is **CE5013**, and it
-names where the symbol is defined.
+name after `=` may not be one this build defines -- a function of any unit, a constant, a
+symbol a linked library brought in, its private ones included, or one the standard library
+generates (`string_len`, `sushi_sin`, and about 145 more). That is **CE5013**, and it names
+where the symbol is defined. A generated name is refused whether the program links that
+stdlib unit or not, so adding a `use` line never breaks a build that compiled before.
 
 The reason is that there is no link step left to keep the two apart. A program's units share
 one LLVM module and a linked library's module is merged into it, so a declaration and a
@@ -318,7 +320,7 @@ intrinsic, never as `==` or a `null` literal.
 | `CE5010` | error | A `ptr` is used with an operator (comparison, arithmetic, bitwise, logical). An opaque handle has no identity or arithmetic. |
 | `CE5011` | error | A method is called on a `ptr`. Wrap the handle in a struct and extend the struct. |
 | `CE5012` | error | A `ptr` appears as a generic type argument outside `Result`/`Maybe` (e.g. `HashMap@(i32, ptr)`, `List@(ptr)`). |
-| `CE5013` | error | A link-name names a symbol this build **defines** -- a function of any unit, a constant, or one a linked library brought in. FFI names foreign symbols only. The note says where the symbol is defined. |
+| `CE5013` | error | A link-name names a symbol this build **defines** -- a function of any unit, a constant, one a linked library brought in, or one the standard library generates. FFI names foreign symbols only. The note says where the symbol is defined. |
 
 ## Linking: what can actually be resolved
 

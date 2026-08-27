@@ -318,10 +318,28 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
     get_stdlib_registry()
 
+    from sushi_lang.backend.stdlib_builder import read_generated_symbols
+
+    generated_symbols = read_generated_symbols()
+    if not generated_symbols and any(
+            unit.ast is not None and unit.ast.externals for unit in compilation_order):
+        # CE5013 refuses a generated stdlib symbol whether the program links that unit
+        # or not (#472), so the list may not depend on whether the platform happens to
+        # be built. Only a program that declares FFI pays for it, and only once.
+        from sushi_lang.backend.stdlib_builder import ensure_stdlib_built
+        try:
+            ensure_stdlib_built()
+        except SushiError:
+            raise
+        except Exception as e:
+            raise StdlibBuildError("CE0007", detail=str(e)) from e
+        generated_symbols = read_generated_symbols()
+
     multi_file_analyzer = SemanticAnalyzer(
         reporter, filename=main_unit_name, unit_manager=unit_manager,
         library_linker=library_linker,
-        warn_missing_docs=bool(getattr(args, "warn_missing_docs", False)))
+        warn_missing_docs=bool(getattr(args, "warn_missing_docs", False)),
+        generated_symbols=generated_symbols)
     multi_file_analyzer.check(main_ast)
 
     # A library must not carry main(): --lib used to embed it into the .slib silently,

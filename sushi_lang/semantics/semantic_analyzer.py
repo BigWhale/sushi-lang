@@ -59,7 +59,8 @@ def _library_units_first(compilation_order):
 class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
 
-    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[object] = None, library_registry: Optional['LibraryRegistry'] = None, warn_missing_docs: bool = False) -> None:
+    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[object] = None, library_registry: Optional['LibraryRegistry'] = None, warn_missing_docs: bool = False,
+                 generated_symbols: frozenset[str] = frozenset()) -> None:
         self.reporter = reporter
         self.filename = filename
         self.unit_manager = unit_manager
@@ -67,6 +68,10 @@ class SemanticAnalyzer:
         # backend (Tier 4.1 layering invariant), so no tighter annotation is legal.
         self.library_linker = library_linker
         self.library_registry = library_registry
+        # What the stdlib generators define, read from the manifest their build writes.
+        # A NAME list and nothing else: no semantic table holds these symbols, which is
+        # why CE5013 could not see them (#472).
+        self.generated_symbols = generated_symbols
         # `--warn-missing-docs`. A keyword and not an options object on purpose: this is
         # the compiler's FIRST warning-control flag, and a second one is what earns the
         # object (documentation.md section 6).
@@ -261,7 +266,8 @@ class SemanticAnalyzer:
                 continue
             unit_reporter = self._unit_reporter(unit)
             reject_external_naming_a_defined_symbol(
-                unit_reporter, unit.ast, self.tables, self.library_registry)
+                unit_reporter, unit.ast, self.tables, self.library_registry,
+                self.generated_symbols)
             self.reporter.items.extend(unit_reporter.items)
 
         self._check_main_function_args_multi_file(compilation_order)
