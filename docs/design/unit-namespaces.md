@@ -75,9 +75,12 @@ public fn deep_value() i32:       use "deep"               use "mid"
 ```
 
 It compiles, links and prints `7`, and the reason is worth getting right because phase 1
-replaces the thing that causes it. The flat scope is `SymbolTableMerger.merge_all`
-(`semantics/symbol_merger.py:17`): the collect loop builds one `SymbolTables` per unit and
-folds every one of them into a single `global_tables`, which is what
+replaces the thing that causes it. The flat scope is made twice over. `CollectorPass` is
+**one instance for the whole program** (`semantics/semantic_analyzer.py:147`): its tables
+are instance fields, so `_collect` returns a `SymbolTables` wrapping the same cumulative
+table objects on every call (`passes/collect/__init__.py:222-236`).
+`SymbolTableMerger.merge_all` (`semantics/symbol_merger.py:17`) then folds that one table
+into a single `global_tables` once per unit, which is what
 `validator.func_table.by_name` reads at the call site
 (`passes/types/calls/user_defined.py:171`). A `use` statement today does not decide what
 this unit can see. It decides what gets compiled.
@@ -314,7 +317,7 @@ Four constraints fix it there, and each names the step that supplies something:
 
 | A provider needs | Supplied by | Where |
 |---|---|---|
-| a unit's own declarations (`UnitNamespace`) | `collect` | one `SymbolTables` per unit, `semantic_analyzer.py:178` |
+| a unit's own declarations (`UnitNamespace`) | `collect` | the collect loop, `semantic_analyzer.py:174-181`. Its tables are cumulative today; phase 1 is what gives them a unit key |
 | an FFI block's foreign functions (`ExternalNamespace`) | `collect` as well — NOT the `externs` pass | `external_collector.collect(root)`, `passes/collect/__init__.py:216`. The `externs` pass validates the signatures it finds; it does not fill the table |
 | a BINARY library's declarations (`UnitNamespace` over a `.slib`) | `libraries` | the twelve `_register_library_*` methods, `semantic_analyzer.py:242-262` |
 | a registry module's functions (`StdlibNamespace`) | `collect` | `register_stdlib_functions`, `passes/collect/__init__.py:215` |
@@ -333,10 +336,11 @@ new pass goes immediately before it.
 
 **The per-unit scope is a separate deletion, and section 1.2 says why.** Phase 1 does not
 "replace `build_global_symbol_table`" — that function is write-only and retires with
-`CE3003`. What phase 1 replaces is `merge_all`: the collect loop stops folding each unit's
-`SymbolTables` into one `global_tables` and keeps them, which is the same change section
-13.1 needs and the same one that retires `_replace_shadowed_functions`. One deletion, one
-rekey, and they are not the same edit.
+`CE3003`. What phase 1 replaces is `merge_all`, and the replacement **builds** the per-unit
+table rather than keeping one, because there is none to keep (section 13.1):
+`FunctionTable`, `ConstantTable` and `VisibilityTable` gain a unit key inside the one
+shared collector. That is the same change section 13.1 needs and the same one that retires
+`_replace_shadowed_functions`. One deletion, one rekey, and they are not the same edit.
 
 ## 4. Ruling 3: a namespace holds exactly what its `use` brings into scope
 
@@ -487,42 +491,42 @@ The perk rule is a split as well as a qualifier: today the list is
 `perk_constraint_list: NAME ("+" NAME)*` (`grammar.lark:21`) and there is no
 `perk_constraint` rule to hang the second segment on.
 
-Expression positions need one change, and only one. `my_math.sin(0.0)` already parses as a
-`DotCall` and `my_math.MAX_DEPTH` as a `MemberAccess`; both reach a resolver that returns
-nothing today. What does not parse is a qualified call carrying explicit type arguments:
+**No expression position needs grammar.** `my_math.sin(0.0)` already parses as a `DotCall`,
+`my_math.MAX_DEPTH` as a `MemberAccess`, and `my_math.Sign.Plus` as a `DotCall` over a
+`MemberAccess`. All three reach a resolver that returns nothing today.
 
-```
-call:        [AT "(" type_list ")"] "(" [args] ")"     # foo@(i32)(5)   -- has the slot
-method_call: "."  method_name      "(" [args] ")"      # x.foo(5)       -- has none
-```
-
-A type argument is REQUIRED where the type parameter appears only in the return type,
-because there is no argument to infer it from:
+A qualified call carrying explicit type arguments parses as well, and that is worth
+spelling out because it looks like the counter-example. A type argument is REQUIRED where
+the type parameter appears only in the return type, because there is no argument to infer
+it from:
 
 <!-- docs-sweep: skip (proposed syntax, not implemented) -->
 ```sushi
 use <collections/iter> as it
 
 fn main() i32:
-    let List@(i32) a = it.empty_list@(i32)()??   # `it.` makes this a method_call
+    let List@(i32) a = it.empty_list@(i32)()??
     return Result.Ok(0)
 ```
 
-`method_call` has nowhere to put `@(i32)`, so the form is a parse error — and omitting the
-argument is CE2060. **Aliasing a unit would make its return-type-only generics
-uncallable.** Seven call sites in the tree carry explicit type arguments, and one of them
-is the negative test that asserts CE6102.
+LALR reduces `.empty_list` to `member_access` and not to `method_call`, because the token
+after it is `AT` and not `(`. The chain therefore arrives as
+`maybe_call: atom(it) member_access(.empty_list) call(@(i32) ())`, and what refuses it is
+`CE6102`, raised in the AST builder (`ast_builder/expressions/chains.py:84-89`) whenever a
+`type_list` rides a call whose accumulated callee is not a bare `Name`. Omitting the
+argument instead is CE2060, so without a change here **aliasing a unit would make its
+return-type-only generics uncallable.** Seven call sites in the tree carry explicit type
+arguments, and one of them is the negative test that asserts CE6102.
 
-So `method_call` gains the slot, and `CE6102` narrows from "it is a method call" to "the
-receiver is a VALUE":
-
-```
-method_call: "." method_name [AT "(" type_list ")"] "(" [args] ")"
-```
+So the change is an AST field and a moved decision. `DotCall` gains `type_args`, which it
+has none of today (`semantics/ast.py:541-551`), and `CE6102` **moves out of the AST builder
+into a semantic pass**, narrowing from "it is a method call" to "the receiver is a VALUE".
+It cannot stay a `SyntaxDiagnostic`: the builder cannot know whether a receiver `Name` is a
+bound alias, and only a pass that has the `NamespaceTable` can.
 
 The rule behind CE6102 is unharmed. Section 5's folding turns `it.empty_list@(i32)()` into
 `empty_list@(i32)()` resolved against one unit, which is a direct call to a named free
-function — exactly what CE6102 permits. It was the grammar in the way, not the rule.
+function — exactly what CE6102 permits. It was the builder in the way, not the rule.
 
 ### 5.2 A pattern is a written-name position, and its grammar is one segment short
 
@@ -842,9 +846,9 @@ one does. Only the incremental path emits a module per unit
 The scheme: `<unit>$<name>`, with every `/` in the unit name replaced by `$`, so
 `collections/iter`'s `next` becomes `collections$iter$next`. `$` is legal in an LLVM
 identifier and lies outside the alphabet of every existing symbol component, so the
-generic mangler's structural invariant (D) (`generics/name_mangling.py:11`) is untouched.
-`main` is exempt: the linker needs the name. An FFI `link_name` is never mangled: it names
-a C symbol that somebody else compiled.
+generic mangler's structural invariant (D) is untouched
+(`semantics/generics/name_mangling.py:11`). `main` is exempt: the linker needs the name.
+An FFI `link_name` is never mangled: it names a C symbol that somebody else compiled.
 
 A binary `.slib` then needs the link symbol recorded next to the Sushi name in its
 manifest, which is one field. `CE3503` already pins the compiler version a `.slib` may be
@@ -993,14 +997,26 @@ That is the question Ruling 6's phase-1 row answers: once `FunctionTable` and
 the library's own signature. The item does not need a fix of its own — it disappears with
 the key.
 
-**The correct answer already exists and is thrown away.** `collector.run(unit.ast, unit_name=…, unit_file=…)`
-builds one `SymbolTables` per unit, and `merge_all` folds it into the global tables and
-drops it (`semantic_analyzer.py:174-181`). `_replace_shadowed_functions`
+**The per-unit answer is never built, and that is the defect.**
+`collector.run(unit.ast, unit_name=…, unit_file=…)` reads as though it returns one unit's
+symbols, and it does not. `CollectorPass` is one instance for the whole program
+(`semantic_analyzer.py:147`), its tables are instance fields, and `_collect` returns a
+`SymbolTables` wrapping **the same table objects on every call**
+(`passes/collect/__init__.py:222-236`). So the `unit_tables` that `merge_all` folds into
+`global_tables` (`semantic_analyzer.py:174-181`) is the cumulative program table, replayed
+once per unit — first-wins is the only reason that replay is near-idempotent, and
+`VisibilityTable.record`'s own comment says exactly this
+(`semantics/visibility.py:139-142`). `_replace_shadowed_functions`
 (`semantics/symbol_merger.py`) then lets the consumer's declaration replace the library's
 and books the library as a loser of the name. The type pass knows it is looking at a loser
-and validates the arguments alone, because the loser's signature is gone. Phase 1 keeps the
-per-unit table instead of building it and discarding it, which is why this is a key change
-and not a new mechanism.
+and validates the arguments alone, because the loser's signature is gone.
+
+Phase 1 gives the three name-keyed tables a unit key inside that shared collector. It is a
+key change and not a new mechanism, but it BUILDS the per-unit table rather than stopping a
+discard — and the cumulative table is load-bearing while it lasts, because it is how a
+collector detects a cross-unit duplicate at all (`if name in self.funcs.by_name`,
+`passes/collect/functions.py:542`). The unit key and the duplicate diagnostics therefore
+move together.
 
 **What waiting costs, and the bound on it.** The wrong-file diagnostic stays until the epic
 lands. Two facts bound it: only a SOURCE library is exposed, plus a binary library's
