@@ -1,0 +1,14 @@
+# A bundled Sushi-source module is a user unit in every respect (section 4.3, row 2),
+# and its exports are generic. A generic behind a dot resolves to the same
+# monomorphized instance the bare form resolves to.
+# EXPECT_STDOUT_EXACT: "6\n"
+use <collections/iter> as it
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    println("{it.fold(xs, 0, |i32 a, i32 b| a + b).realise(-1)}")
+    xs.free()
+    return Result.Ok(0)

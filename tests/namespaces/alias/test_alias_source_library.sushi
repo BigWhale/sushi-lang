@@ -1,0 +1,9 @@
+# A library import binds a namespace too, and the binding holds a PROVIDER: the unit
+# rename that packaging performs cannot reach it (section 3.1).
+# EXPECT_STDOUT_EXACT: "Hello, Ford!\nGoodbye from library!\n"
+use <lib/runtime_lib> as rt
+
+fn main() i32:
+    rt.greet("Ford")
+    rt.say_goodbye()
+    return Result.Ok(0)

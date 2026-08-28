@@ -1,0 +1,9 @@
+# The marker is written at both ends or neither, and the aliased unit's declaration
+# is what the call is measured against (CE2427).
+# EXPECT_ERROR_CODE: CE2427
+use "helpers/geo" as geo
+
+fn main() i32:
+    let string s = "mostly harmless"
+    geo.eat(s)
+    return Result.Ok(0)

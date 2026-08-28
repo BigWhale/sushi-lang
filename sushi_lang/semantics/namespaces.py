@@ -42,8 +42,14 @@ class Binding:
 
 
 class Provider:
-    """What a namespace binds to. One `lookup`, one `members`, one `origin`."""
+    """What a namespace binds to. One `lookup`, one `members`, one `origin`.
 
+    `namespace_kind` is the CLOSED set of producers -- "extern", "unit", "stdlib",
+    "generic". A resolver reads it to pick the emitter, and the AST carries it beside
+    the origin so the back end needs no table of its own.
+    """
+
+    namespace_kind: str
     origin: str
 
     def lookup(self, name: str) -> Optional[Binding]:
@@ -55,6 +61,8 @@ class Provider:
 
 class ExternalNamespace(Provider):
     """An `unsafe external "C" as <ns>` block. One kind, and the alias is mandatory."""
+
+    namespace_kind = "extern"
 
     def __init__(self, external_table: Any, ns: str) -> None:
         self._table = external_table
@@ -76,18 +84,22 @@ class UnitNamespace(Provider):
     manifest names the unit of every one of them. Both producers hand the same three
     mappings to this one provider.
 
-    `others` carries the kinds a qualified form cannot reach yet -- a struct, an enum, a
-    perk, a generic function. They are members, so an alias over a unit that declares
-    only those is not empty, and the grammar is what still refuses to write them
-    (section 5 is the phase that lifts it).
+    `others` carries the kinds a qualified form cannot reach yet -- a struct, an enum
+    and a perk. They are members, so an alias over a unit that declares only those is
+    not empty, and the grammar is what still refuses to write them (section 5 is the
+    phase that lifts it).
     """
+
+    namespace_kind = "unit"
 
     def __init__(self, origin: str, *, functions: Mapping[str, Any],
                  constants: Mapping[str, Any],
+                 generics: Optional[Mapping[str, Any]] = None,
                  others: Optional[Mapping[str, str]] = None) -> None:
         self.origin = origin
         self._functions = functions
         self._constants = constants
+        self._generics = generics or {}
         self._others = others or {}
 
     def lookup(self, name: str) -> Optional[Binding]:
@@ -97,15 +109,20 @@ class UnitNamespace(Provider):
         sig = self._constants.get(name)
         if sig is not None:
             return Binding("constant", name, self, sig)
+        generic = self._generics.get(name)
+        if generic is not None:
+            return Binding("generic function", name, self, generic)
         kind = self._others.get(name)
         return None if kind is None else Binding(kind, name, self)
 
     def members(self) -> Iterable[str]:
-        return (*self._functions, *self._constants, *self._others)
+        return (*self._functions, *self._constants, *self._generics, *self._others)
 
 
 class StdlibNamespace(Provider):
     """A registry stdlib module. Already keyed by `(module, name)` -- section 1.4."""
+
+    namespace_kind = "stdlib"
 
     def __init__(self, module_path: str, module: Any) -> None:
         self.origin = module_path
@@ -128,6 +145,8 @@ class GenericNamespace(Provider):
     The import brings the name, so the namespace holds it. The type itself is one per
     program (Ruling 6), and what a namespace decides is the right to write the name.
     """
+
+    namespace_kind = "generic"
 
     def __init__(self, module_path: str, names: AbstractSet[str]) -> None:
         self.origin = module_path
@@ -181,3 +200,16 @@ class NamespaceTable:
         """Where the clause that bound this alias stands, for CE3013's note."""
         bound = self._bound.get(alias)
         return None if bound is None else bound.loc
+
+
+def externals_only(external_table: Any) -> NamespaceTable:
+    """The FFI namespaces alone, for a reader with no unit of its own.
+
+    `ExternalTable` is flat and has always answered a `libc.printf` from any unit, so
+    every unit's table carries every FFI namespace. A scratch validator -- the one that
+    walks a monomorphized extension body -- has no unit and gets this.
+    """
+    table = NamespaceTable()
+    for ns in getattr(external_table, "by_namespace", {}):
+        table.bind(ns, ExternalNamespace(external_table, ns))
+    return table

@@ -1,0 +1,9 @@
+# A call written behind a dot is a FUNCTION, not a method: its parameter modes are
+# the ones the aliased unit declared, and `nom` is written at both ends.
+# EXPECT_STDOUT_EXACT: "eaten: mostly harmless\n"
+use "helpers/geo" as geo
+
+fn main() i32:
+    let string s = "mostly harmless"
+    geo.eat(nom s)
+    return Result.Ok(0)

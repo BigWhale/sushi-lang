@@ -44,6 +44,7 @@ from .calls import (
     maybe_mark_own_alloc_move,
     reject_self_aliasing_copy,
     settle_method_args,
+    settle_namespaced_args,
 )
 from .consume import consume, consume_each, consume_named, name_provenance
 from .diagnostics import emit_use_after_move, emit_use_of_invalidated_borrow
@@ -168,6 +169,10 @@ def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
         # Keyed on the typecheck pass's `callee_fn_type` stamp, so an FFI / extension / builtin
         # method keeps the rule above.
         consume_indirect_args(checker, expr)
+    elif getattr(expr, "namespace_ref", None) is not None:
+        # `geo.eat(nom s)` is a FUNCTION written behind a dot, not a method: the
+        # receiver names a namespace and takes no argument position.
+        settle_namespaced_args(checker, expr)
     else:
         settle_method_args(checker, expr)
         maybe_mark_container_insert(checker, expr)

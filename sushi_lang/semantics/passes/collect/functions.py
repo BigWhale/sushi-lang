@@ -456,6 +456,12 @@ class FunctionCollector:
         for use_stmt in uses:
             if not use_stmt.is_stdlib:
                 continue  # Skip user modules
+            if use_stmt.alias is not None:
+                # `as` decides WHERE the names land, and an aliased import puts nothing
+                # in the flat scope (`unit-namespaces.md` Ruling 1). This table IS the
+                # flat scope for a registry module, and skipping it here is what lets a
+                # unit declare `sin` beside `use <math> as std_math` (section 1.3).
+                continue
 
             module_path = use_stmt.path
 

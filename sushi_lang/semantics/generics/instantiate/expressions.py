@@ -20,6 +20,7 @@ class ExpressionScanner:
         function_instantiations: Set[Tuple[str, Tuple["Type", ...]]],
         generic_funcs: dict,
         type_validator=None,
+        namespaces=None,
     ):
         """Initialize expression scanner."""
         self.type_inferrer = type_inferrer
@@ -27,6 +28,7 @@ class ExpressionScanner:
         self.function_instantiations = function_instantiations
         self.generic_funcs = generic_funcs
         self.type_validator = type_validator
+        self.namespaces = namespaces
         # Callback to scan a lambda's block body (a statement Block). Wired by the
         # InstantiationCollector to its FunctionCollector._collect_from_block; left None on
         # the unit-test paths that drive the scanner directly (a block-body lambda is a
@@ -56,8 +58,9 @@ class ExpressionScanner:
             # Chained method calls (result.method())
             # DotCall can be either a method call or enum constructor
             # We treat it as a potential method call for generic return types
-            self._scan_dot_call(expr)
-            self.scan_expression(expr.receiver)
+            if not self._scan_namespaced_call(expr):
+                self._scan_dot_call(expr)
+                self.scan_expression(expr.receiver)
             for arg in expr.args:
                 self.scan_expression(arg)
 
@@ -144,6 +147,28 @@ class ExpressionScanner:
 
             if return_type is not None and isinstance(return_type, GenericTypeRef):
                 self._collect_from_type(return_type)
+
+    def _scan_namespaced_call(self, call) -> bool:
+        """`alias.f(args)` where the alias names a unit declaring a generic `f`.
+
+        True when this owned the node: the receiver is a namespace and not an
+        expression, so walking it as one would look up a variable that is not there.
+        The stand-in `Call` is the same device the typecheck pass uses for this shape.
+        """
+        from sushi_lang.semantics.ast import Call, Name
+        if self.namespaces is None or not isinstance(call.receiver, Name):
+            return False
+        if call.receiver.id in self.type_inferrer.variable_types:
+            return False
+        binding = self.namespaces.lookup(call.receiver.id, call.method)
+        if binding is None:
+            return self.namespaces.is_namespace(call.receiver.id)
+        if binding.kind == "generic function":
+            self._scan_call(Call(callee=Name(id=call.method, loc=call.loc),
+                                 args=call.args, loc=call.loc))
+        for arg in call.args:
+            self.scan_expression(arg)
+        return True
 
     def _scan_call(self, call) -> None:
         """Detect generic function calls and infer type arguments."""

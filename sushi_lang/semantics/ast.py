@@ -557,6 +557,11 @@ class DotCall(Node):
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
     resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type (populated by type checker)
     external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for FFI calls (set by type checker)
+    # `(namespace kind, origin, name)` for a call through a `use ... as` alias: which
+    # kind of producer answered, the unit or module it named, and the declared name.
+    # The back end resolves through the origin, so a shadowed name reaches the right
+    # declaration (`docs/design/unit-namespaces.md` section 5).
+    namespace_ref: Optional[Tuple[str, str, str]] = None
     callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
                                             # `poke self` (#327); see MethodCall
 
@@ -565,6 +570,7 @@ class MemberAccess(Node):
     """Member access expression: obj.field"""
     receiver: "Expr"    # The struct expression (p in p.x)
     member: str
+    namespace_ref: Optional[Tuple[str, str, str]] = None  # a constant read through an alias
 
 @dataclass
 class EnumConstructor(Node):

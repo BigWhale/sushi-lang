@@ -409,10 +409,13 @@ class ExpressionValidator(RecursiveVisitor):
 
     def visit_dotcall(self, node: DotCall) -> None:
         """Validate dot-call expression - resolve to enum constructor or method call."""
-        if self.type_validator._resolve_external_call(node):
-            for arg in node.args:
-                self.type_validator.validate_expression(arg)
-            self.type_validator._validate_external_call_args(node)
+        # A namespace answers first, and it answers for every producer: an FFI block, a
+        # unit behind a `use ... as`, a registry stdlib module. Local-wins is inside
+        # `namespace_of`, so a variable of the same name never reaches here.
+        if self.type_validator.namespace_of(node.receiver) is not None:
+            from sushi_lang.semantics.passes.types.calls.namespaced import (
+                validate_namespaced_call)
+            validate_namespaced_call(self.type_validator, node)
             return
 
         # f64.from_bits(bits) / f32.from_bits(bits): static bit-reinterpret constructor.
@@ -681,7 +684,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return self.type_validator._infer_index_access_type(node)
 
     def visit_memberaccess(self, node: MemberAccess) -> Optional[Type]:
-        """Infer member access type (struct field access)."""
+        """Infer member access type (a struct field, or a constant behind an alias)."""
+        if self.type_validator.namespace_of(node.receiver) is not None:
+            from sushi_lang.semantics.passes.types.calls.namespaced import (
+                infer_namespaced_member)
+            return infer_namespaced_member(self.type_validator, node)
+
         receiver_type = self.type_validator.infer_expression_type(node.receiver)
 
         if receiver_type is None:
@@ -875,35 +883,42 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             return None
 
         func_sig = self.type_validator.func_sig(function_name)
-        if func_sig is not None:
-            if func_sig.ret_type is not None:
-                from sushi_lang.semantics.generics.types import GenericTypeRef
-                from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        return None if func_sig is None else self.result_type_of(func_sig)
 
-                from sushi_lang.semantics.generics.results import is_result_enum
+    def result_type_of(self, func_sig) -> Optional[Type]:
+        """What a call to this signature yields: its return type, wrapped in Result.
 
-                # Already the interned enum (the signature was resolved in place): return it.
-                # Wrapping it again would produce Result<Result<T, E>, StdError>.
-                if is_result_enum(func_sig.ret_type):
-                    return func_sig.ret_type
+        One derivation, so a call written through a namespace agrees with the bare
+        form. Every arm below is the same rule read from a different spelling of the
+        declared return.
+        """
+        if func_sig.ret_type is None:
+            return None
 
-                if isinstance(func_sig.ret_type, GenericTypeRef) and func_sig.ret_type.base_name == "Result":
-                    if len(func_sig.ret_type.type_args) == 2:
-                        return self._intern_result(func_sig.ret_type.type_args[0],
-                                                   func_sig.ret_type.type_args[1])
-                    return resolve_unknown_type(
-                        func_sig.ret_type,
-                        self.type_validator.struct_table.by_name,
-                        self.type_validator.enum_table.by_name
-                    )
-                elif func_sig.err_type is not None:
-                    return self._intern_result(func_sig.ret_type, func_sig.err_type)
-                else:
-                    err_type = self.type_validator.enum_table.by_name.get("StdError")
-                    if err_type is not None:
-                        return self._intern_result(func_sig.ret_type, err_type)
-                return func_sig.ret_type
-        return None
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        from sushi_lang.semantics.generics.results import is_result_enum
+
+        # Already the interned enum (the signature was resolved in place): return it.
+        # Wrapping it again would produce Result<Result<T, E>, StdError>.
+        if is_result_enum(func_sig.ret_type):
+            return func_sig.ret_type
+
+        if isinstance(func_sig.ret_type, GenericTypeRef) and func_sig.ret_type.base_name == "Result":
+            if len(func_sig.ret_type.type_args) == 2:
+                return self._intern_result(func_sig.ret_type.type_args[0],
+                                           func_sig.ret_type.type_args[1])
+            return resolve_unknown_type(
+                func_sig.ret_type,
+                self.type_validator.struct_table.by_name,
+                self.type_validator.enum_table.by_name
+            )
+        if func_sig.err_type is not None:
+            return self._intern_result(func_sig.ret_type, func_sig.err_type)
+        err_type = self.type_validator.enum_table.by_name.get("StdError")
+        if err_type is not None:
+            return self._intern_result(func_sig.ret_type, err_type)
+        return func_sig.ret_type
 
     def visit_methodcall(self, node: MethodCall) -> Optional[Type]:
         """Infer method call type and annotate node with inferred return type."""
@@ -967,10 +982,10 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_dotcall(self, node: DotCall) -> Optional[Type]:
         """Infer dot-call type and annotate node with inferred return type."""
-        sig = self.type_validator._resolve_external_call(node)
-        if sig is not None:
-            node.inferred_return_type = sig.ret_type
-            return sig.ret_type
+        if self.type_validator.namespace_of(node.receiver) is not None:
+            from sushi_lang.semantics.passes.types.calls.namespaced import (
+                infer_namespaced_call)
+            return infer_namespaced_call(self.type_validator, node)
 
         if (isinstance(node.receiver, Name) and node.receiver.id in ("f64", "f32")
                 and node.method == "from_bits"):

@@ -286,7 +286,9 @@ class SemanticAnalyzer:
         )
         for unit in compilation_order:
             if unit.ast is not None:
+                instantiation_collector.namespaces = self.namespaces.get(unit.name)
                 instantiation_collector.run(unit.ast)
+        instantiation_collector.namespaces = None
         # AFTER every unit: an extension on a generic target is read per instantiation of
         # that target, and the instantiation may come from another unit (#389).
         instantiation_collector.collect_from_generic_extensions(
@@ -453,14 +455,18 @@ class SemanticAnalyzer:
 
             unit_reporter = self._unit_reporter(unit)
 
+            namespaces = self.namespaces.get(unit.name)
+
             scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals,
-                                           kept_constants=self._kept_constant_names())
+                                           kept_constants=self._kept_constant_names(),
+                                           namespaces=namespaces)
             scope_analyzer.run(unit.ast)
 
             type_validator = TypeValidator(
                 unit_reporter, self.tables, current_unit_name=unit.name,
                 monomorphized_functions=monomorphizer.monomorphized_functions,
-                in_library_unit=unit.provenance is not None)
+                in_library_unit=unit.provenance is not None,
+                namespaces=namespaces)
             type_validator.run(unit.ast)
 
             from sushi_lang.semantics.passes.lift import LambdaLifter

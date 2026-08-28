@@ -58,3 +58,25 @@ def emit_name(codegen: 'LLVMCodegen', expr: Name, to_i1: bool) -> ir.Value:
         return closures.materialize_function_ref(codegen, llvm_fn)
     raise_internal_error("CE0055", name=expr.id)
 
+
+
+def emit_namespaced_value(codegen: 'LLVMCodegen', ref, to_i1: bool) -> ir.Value:
+    """Read `<namespace>.<name>` as a value. Under this epic that is a constant.
+
+    The unit or module the typecheck pass resolved answers, never the emitting one:
+    two units may each declare `SCRATCH`, and the alias says which was meant.
+    """
+    kind, origin, name = ref
+    if kind == "stdlib":
+        from sushi_lang.sushi_stdlib.src import math as math_module
+        if math_module.is_builtin_math_constant(name):
+            _, value = math_module.get_builtin_math_constant_value(name)
+            f64_value = ir.Constant(ir.DoubleType(), value)
+            return codegen.utils.as_i1(f64_value) if to_i1 else f64_value
+        raise_internal_error("CE0055", name=f"{origin}.{name}")
+
+    slot = codegen.constants.lookup(name, origin)
+    if slot is None:
+        raise_internal_error("CE0055", name=f"{origin}.{name}")
+    value = codegen.builder.load(slot, name=name)
+    return codegen.utils.as_i1(value) if to_i1 else value

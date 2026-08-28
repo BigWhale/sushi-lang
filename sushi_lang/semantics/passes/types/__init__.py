@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.namespaces import Binding, NamespaceTable
     from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.passes.collect.externals import ExternalSig
     from sushi_lang.semantics.passes.collect.functions import FuncSig
@@ -65,7 +66,8 @@ class TypeValidator:
     def __init__(self, reporter: Reporter, tables: 'SymbolTables',
                  current_unit_name: Optional[str] = None,
                  monomorphized_functions: Optional[Dict[str, tuple]] = None,
-                 in_library_unit: bool = False) -> None:
+                 in_library_unit: bool = False,
+                 namespaces: Optional['NamespaceTable'] = None) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         self.const_table = tables.constants
@@ -82,6 +84,12 @@ class TypeValidator:
         self.perk_impl_table = tables.perk_impls
         self.library_not_exported = tables.library_not_exported
         self.visibility = tables.visibility
+        # What this unit may write behind a dot. One seam for an FFI namespace and a
+        # `use ... as` alias alike; with no unit of its own a validator still reaches
+        # every FFI namespace, which is what `externals_only` gives it.
+        from sushi_lang.semantics.namespaces import externals_only
+        self.namespaces = (namespaces if namespaces is not None
+                           else externals_only(self.external_table))
         self.current_unit_name = current_unit_name  # Track which unit is being validated (for visibility checking)
         self.monomorphized_functions = monomorphized_functions or {}
         self.known_types: Set[BuiltinType] = {
@@ -162,22 +170,31 @@ class TypeValidator:
         """Infer the type of an expression using the Visitor Pattern."""
         return self.type_inference_visitor.visit(expr)
 
-    def _resolve_external_call(self, node) -> Optional['ExternalSig']:
-        """Resolve a DotCall to a foreign function signature, if applicable."""
+    def namespace_of(self, receiver) -> Optional[str]:
+        """The namespace a receiver names, or None when it names something else.
+
+        Local-wins, and it is the whole of section 8's first row: a variable named
+        `libc` or `geo` shadows the namespace for the rest of its scope.
+        """
         from sushi_lang.semantics.ast import Name
-        receiver = node.receiver
         if not isinstance(receiver, Name):
             return None
-        ns = receiver.id
-        if ns in self.variable_types:
+        if receiver.id in self.variable_types:
             return None
-        if not self.external_table.is_namespace(ns):
+        return receiver.id if self.namespaces.is_namespace(receiver.id) else None
+
+    def resolve_namespaced(self, receiver, name: str) -> Optional['Binding']:
+        """What `<namespace>.<name>` denotes. The ONE reader, for every kind."""
+        ns = self.namespace_of(receiver)
+        return None if ns is None else self.namespaces.lookup(ns, name)
+
+    def _resolve_external_call(self, node) -> Optional['ExternalSig']:
+        """Resolve a DotCall to a foreign function signature, if applicable."""
+        binding = self.resolve_namespaced(node.receiver, node.method)
+        if binding is None or binding.kind != "extern":
             return None
-        sig = self.external_table.lookup(ns, node.method)
-        if sig is None:
-            return None
-        node.external_ref = (ns, node.method)
-        return sig
+        node.external_ref = (binding.provider.origin, node.method)
+        return binding.record
 
     def _validate_external_call_args(self, node) -> None:
         """Validate argument count and types for a resolved foreign call."""

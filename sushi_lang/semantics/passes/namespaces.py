@@ -16,12 +16,12 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program, UseStatement
 from sushi_lang.semantics.namespaces import (
-    ExternalNamespace,
     GenericNamespace,
     NamespaceTable,
     Provider,
     StdlibNamespace,
     UnitNamespace,
+    externals_only,
 )
 
 # The kinds a namespace holds that a qualified form cannot reach yet. They are members
@@ -33,18 +33,14 @@ def build_namespaces(reporter: Reporter, unit: Any, tables: Any, *,
                      units: Dict[str, Any],
                      library_registry: Any = None) -> NamespaceTable:
     """Bind every namespace `unit` may write, and report what its imports get wrong."""
-    table = NamespaceTable()
     program: Program = unit.ast
 
     _reject_use_below_declaration(reporter, unit)
 
-    # Every FFI namespace in the program, because `ExternalTable` is flat and has always
+    # Every FFI namespace in the program first: `ExternalTable` is flat and has always
     # answered a `libc.printf` from any unit. The alias is what this pass adds; the FFI
     # reach is what it preserves.
-    externals = getattr(tables, "externals", None)
-    if externals is not None:
-        for ns in externals.by_namespace:
-            table.bind(ns, ExternalNamespace(externals, ns))
+    table = externals_only(getattr(tables, "externals", None))
 
     declared = _names_declared_by(program)
 
@@ -148,12 +144,26 @@ def _unit_provider(unit_name: str, tables: Any) -> UnitNamespace:
         for (kind, name), origin in getattr(tables.visibility, "by_key", {}).items()
         if origin.unit_name == unit_name and kind in _MEMBER_ONLY_KINDS
     }
+    # A generic function has no per-unit view of its own (#495), so the declaring unit
+    # is read from the visibility record beside it.
+    generics = {
+        name: definition
+        for name, definition in tables.generic_funcs.by_name.items()
+        if _declaring_unit(tables, "function", name) == unit_name
+    }
     return UnitNamespace(
         unit_name,
         functions=dict(tables.funcs.by_unit.get(unit_name, {})),
         constants=dict(tables.constants.by_unit.get(unit_name, {})),
+        generics=generics,
         others=others,
     )
+
+
+def _declaring_unit(tables: Any, kind: str, name: str) -> Optional[str]:
+    """Which unit declared `name`, as the visibility table recorded it."""
+    origin = tables.visibility.origin(kind, name)
+    return None if origin is None else origin.unit_name
 
 
 def _stdlib_provider(use_stmt: UseStatement, tables: Any,

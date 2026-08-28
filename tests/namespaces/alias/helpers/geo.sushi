@@ -7,3 +7,7 @@ public fn twice(i32 x) i32:
 
 fn hidden(i32 x) i32:
     return Result.Ok(x + 1)
+
+public fn eat(nom string s) ~:
+    println("eaten: {s}")
+    return Result.Ok(~)

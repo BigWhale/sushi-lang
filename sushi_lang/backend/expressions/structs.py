@@ -88,7 +88,12 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
 
 
 def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool = False) -> ir.Value:
-    """Emit member access expression for struct fields."""
+    """Emit member access: a struct field, or a constant read through an alias."""
+    ref = getattr(expr, 'namespace_ref', None)
+    if ref is not None:
+        from sushi_lang.backend.expressions.names import emit_namespaced_value
+        return emit_namespaced_value(codegen, ref, to_i1)
+
     struct_type = infer_struct_type(codegen, expr.receiver)
 
     field_index = struct_type.get_field_index(expr.member)

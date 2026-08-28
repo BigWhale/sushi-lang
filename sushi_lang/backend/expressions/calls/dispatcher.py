@@ -55,13 +55,24 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if llvm_fn is None:
         raise KeyError(f"unknown function: {callee}")
 
-    # Native variadic call: collapse the trailing arguments into one synthesized,
-    # owned T[] which is moved into the callee. Must happen BEFORE the arity guard
-    # so the produced argument count matches the (non-variadic) LLVM signature.
     # The unit being emitted answers for the name, exactly as the borrow pass's
     # `view_for` does: a source library's own body must read the library's
     # signature and not the consumer's declaration of the same name (#487).
     func_sig = codegen.func_table.lookup(callee, codegen.emitting_unit)
+    return emit_named_call(codegen, expr, callee, llvm_fn, func_sig, to_i1)
+
+
+def emit_named_call(codegen: 'LLVMCodegen', expr, callee: str, llvm_fn, func_sig,
+                    to_i1: bool) -> ir.Value:
+    """Emit a call to a resolved named function, from its LLVM value and signature.
+
+    Split out of `emit_function_call` because a call written through a namespace
+    arrives as a `DotCall` and resolves through the ORIGIN unit rather than the
+    emitting one. Everything after the lookup is the same call.
+    """
+    # Native variadic call: collapse the trailing arguments into one synthesized,
+    # owned T[] which is moved into the callee. Must happen BEFORE the arity guard
+    # so the produced argument count matches the (non-variadic) LLVM signature.
     variadic_param = (
         func_sig.params[-1]
         if func_sig is not None and func_sig.params
@@ -233,6 +244,13 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if result is not None:
         return result
 
+    # 0b. A call through a `use ... as` alias. The typecheck pass stamped which
+    #     producer answered and which unit or module it named, so nothing is looked
+    #     up by bare name here (`docs/design/unit-namespaces.md` section 5).
+    result = _try_emit_namespaced_call(codegen, expr, to_i1)
+    if result is not None:
+        return result
+
     result = intrinsics.try_emit_enum_constructor(codegen, expr)
     if result is not None:
         return result
@@ -387,6 +405,31 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     result_value = codegen.builder.call(llvm_fn, casted)
 
     return codegen.utils.as_i1(result_value) if to_i1 else result_value
+
+
+def _try_emit_namespaced_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                              to_i1: bool) -> ir.Value | None:
+    """Emit `<namespace>.<name>(args)` if the typecheck pass resolved one."""
+    ref = getattr(expr, 'namespace_ref', None)
+    if ref is None:
+        return None
+    kind, origin, name = ref
+
+    if kind == "stdlib":
+        # The REGISTRY, not the flat table: an aliased import puts nothing in the flat
+        # scope, which is the whole of Ruling 1 and what makes section 1.3 expressible.
+        from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
+        module = get_stdlib_registry().get_module(origin)
+        stdlib_func = module.functions.get(name) if module is not None else None
+        if stdlib_func is None:
+            raise_internal_error("CE0055", name=f"{origin}.{name}")
+        return _emit_stdlib_function(codegen, expr, name, (origin, stdlib_func), to_i1)
+
+    llvm_fn = codegen.funcs.lookup(name, origin)
+    if llvm_fn is None:
+        raise_internal_error("CE0055", name=f"{origin}.{name}")
+    func_sig = codegen.func_table.lookup(name, origin)
+    return emit_named_call(codegen, expr, name, llvm_fn, func_sig, to_i1)
 
 
 def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]) -> ir.Value | None:

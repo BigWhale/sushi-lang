@@ -1,4 +1,4 @@
 # A unit that declares `sin` itself. With `<math>` imported behind an alias, the
 # bare name is the unit's own function and nothing enters the flat scope.
 public fn sin(f64 x) f64:
-    return Result.Ok(999.0)
+    return Result.Ok(999.0 + x)

@@ -153,6 +153,15 @@ def settle_method_args(checker: 'BorrowChecker', expr) -> None:
         apply_mode(checker, expr, arg, i, modes, CalleeKind.METHOD)
 
 
+def settle_namespaced_args(checker: 'BorrowChecker', expr) -> None:
+    """A call written through a namespace follows its callee's declared modes."""
+    modes = getattr(expr, "callee_param_modes", None)
+    if modes is None:
+        return
+    for i, arg in enumerate(expr.args):
+        apply_mode(checker, expr, arg, i, modes, CalleeKind.FUNCTION)
+
+
 def consume_indirect_args(checker: 'BorrowChecker', expr) -> None:
     """An indirect call through a fn-typed field follows the fn type's declared modes."""
     # `apply_mode`, like every other call shape: a thinner arm here skipped the implicit
