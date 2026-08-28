@@ -1041,6 +1041,34 @@ compiler stops at that line and lists the candidates. Your own unit's declaratio
 wins, so it is never the ambiguous one -- and that is also why `use <math>` no longer
 takes `sin` away from a unit that declares a `sin` of its own.
 
+### What an import reaches
+
+Your unit sees what it declares and what its own `use` statements bring. Nothing else.
+An import is not passed on: if the unit you imported imported something in its turn, that
+something is its business and not yours. Write the `use` yourself and you have the name.
+
+That holds for every kind of import. A standard-library module is in the scope of the
+file that wrote `use <math>`; the built-in `HashMap` is a name in the file that wrote
+`use <collections/hashmap>`; and an `unsafe external` block binds its namespace in the
+file that declares it. It also holds behind the dot: `geo.circle_area` reaches what
+`geometry` **declares**, never what `geometry` imported.
+
+One consequence is worth knowing before it surprises you. A function you can call may
+return a type you cannot write:
+
+<!-- docs-sweep: skip (three units) -->
+```sushi
+# geometry.sushi        # shapes.sushi            # main.sushi
+public struct Vec:      use "geometry"            use "shapes"
+    f64 x               public fn origin() Vec:   fn main() i32:
+                            return Result.Ok(...)     let Vec v = origin()??
+```
+
+`main` may call `origin()`, because `origin` is in scope. It may not write `Vec` until it
+imports `geometry` too -- and it cannot avoid writing it, because a `let` needs a type.
+So the rule is short: **to name a type, import the unit that declares it.** The compiler
+says which import is missing.
+
 ## Memory Management
 
 Sushi provides memory safety without garbage collection through a combination of RAII (Resource Acquisition Is Initialization), compile-time borrow checking, and move semantics. These features work together to prevent common memory bugs while maintaining C-like performance.

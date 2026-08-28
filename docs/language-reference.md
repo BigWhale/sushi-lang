@@ -1031,7 +1031,7 @@ land, and nothing else:
 | Form | What it binds |
 |---|---|
 | `use "math"` | every name `math` brings enters this unit's flat scope |
-| `use "math" as my_math` | every name `math` brings is reachable as `my_math.<name>` |
+| `use "math" as my_math` | every name `math` brings is reachable as `my_math.<name>`, and **nothing** enters the flat scope |
 
 <!-- docs-sweep: skip (two units) -->
 ```sushi
@@ -1044,6 +1044,38 @@ fn main() i32:
     let i32 depth = my_math.MAX_DEPTH
     return Result.Ok(0)
 ```
+
+#### Scope is per unit, and it is not transitive
+
+A unit sees its own declarations, plus what its own `use` statements bring. Nothing else.
+An import is not re-exported: if `mid` imports `deep`, a unit that imports `mid` still
+cannot name what `deep` declares, and `my_math.<name>` reaches what `math` *declares* and
+never what `math` imported.
+
+<!-- docs-sweep: skip (three units) -->
+```sushi
+# deep.sushi                    # mid.sushi              # top.sushi
+public fn deep_value() i32:     use "deep"               use "mid"
+    return Result.Ok(7)                                  fn main() i32:
+                                                             # CE2008 here
+                                                             let i32 a = deep_value()??
+```
+
+`top` adds `use "deep"`. The refusal is the ordinary "no such name" -- `CE2008` for a
+call, `CE2001` for a type, `CE1001` for a bare read -- with a help line naming the import
+that would bring it.
+
+**To name a type, import the unit that declares it.** A public signature may name a type
+its caller cannot name, and there is no way round it: a `let` needs a written type, so a
+value of an unnameable type cannot be bound. If `shapes.origin()` returns `geometry.Vec`,
+a unit that calls `origin()` and binds the result imports `geometry` as well.
+
+**A standard-library module is a flat import like any other.** `use <math>` puts `sqrt`
+in the scope of the unit that wrote the line, and of no other. So is the built-in generic
+an import activates: `HashMap` is a name in a unit that wrote `use <collections/hashmap>`.
+
+**An FFI namespace belongs to the unit that declares the block.** An `unsafe external
+"C" as libc` block binds `libc` where it is written, and nothing imports it.
 
 #### Where a qualified name may be written
 

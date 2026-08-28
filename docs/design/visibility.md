@@ -574,10 +574,13 @@ construction and no user-defined constructor. Rust survives this only because yo
 `Point::new()`. If an opaque type is wanted later, the cheaper route is a marker that hides
 *all* fields — the C header idiom — and not a marker per field.
 
-**Per-unit namespacing.** Nominal identity forbids it (section 1). Two units still cannot
-each declare a private `Node`. If that is ever wanted, it is a change to type identity, not
-to visibility, and it should be argued there. `docs/design/unit-namespaces.md` carries the
-design; CE3011 and CW3002 both cite it as the rule that would lift them.
+**Per-unit namespacing.** Nominal identity forbids it for a TYPE (section 1), and two
+units still cannot each declare a private `Node`. That is a change to type identity, not
+to visibility, and it is argued in `docs/design/type-identity.md`. The rest of the row has
+since been lifted by `docs/design/unit-namespaces.md`: a `fn` and a `const` coexist, an
+`as` clause binds an imported unit behind a dot, and a unit's scope is now its own
+declarations plus what its own `use` statements bring. CE3011 and CW3002 both cite that
+document, and it is section 14 there that records what this one owes it.
 
 **The CE0101 → CE3005 cascade.** Telling a unit it may not call its own function was wrong
 independent of every ruling here, and it rode this work rather than waiting: four more
