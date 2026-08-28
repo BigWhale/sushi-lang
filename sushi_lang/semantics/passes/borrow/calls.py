@@ -154,7 +154,19 @@ def settle_method_args(checker: 'BorrowChecker', expr) -> None:
 
 
 def settle_namespaced_args(checker: 'BorrowChecker', expr) -> None:
-    """A call written through a namespace follows its callee's declared modes."""
+    """A name written through a namespace follows the modes its KIND declares.
+
+    A function's modes are stamped on the node by the typecheck pass. A STRUCT declares
+    none: a constructor consumes by position, so the answer comes from the one resolver
+    every callee kind asks, exactly as the bare `Vec(1, 2)` gets it.
+    """
+    ref = getattr(expr, "namespace_ref", None)
+    if ref is not None and ref.kind == "struct":
+        kind, modes = checker.callee_modes.for_name(ref.name)
+        for i, arg in enumerate(expr.args):
+            apply_mode(checker, expr, arg, i, modes, kind)
+        return
+
     modes = getattr(expr, "callee_param_modes", None)
     if modes is None:
         return

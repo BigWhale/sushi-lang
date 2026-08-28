@@ -66,8 +66,8 @@ def emit_namespaced_value(codegen: 'LLVMCodegen', ref, to_i1: bool) -> ir.Value:
     The unit or module the typecheck pass resolved answers, never the emitting one:
     two units may each declare `SCRATCH`, and the alias says which was meant.
     """
-    kind, origin, name = ref
-    if kind == "stdlib":
+    origin, name = ref.origin, ref.name
+    if ref.producer == "stdlib":
         from sushi_lang.sushi_stdlib.src import math as math_module
         if math_module.is_builtin_math_constant(name):
             _, value = math_module.get_builtin_math_constant_value(name)

@@ -110,15 +110,18 @@ def parse_literal_pattern(t: Tree, ast_builder: 'ASTBuilder') -> LiteralPattern:
 
 
 def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> Pattern:
-    """Parse pattern: NAME "." NAME ["(" pattern_list ")"]"""
+    """Parse pattern: [NAME "."] NAME "." NAME ["(" pattern_list ")"]"""
     t = expect(t, "pattern")
 
     names = [ch for ch in t.children if isinstance(ch, Token) and ch.type == "NAME"]
     if len(names) < 2:
         ice(t, "expected EnumName.VariantName format")
 
-    enum_name_tok = names[0]
-    variant_name_tok = names[1]
+    # Three segments is `alias.Enum.Variant`; two is the bare form. A match arm has its
+    # own production and counted to exactly two before section 5.2.
+    namespace_tok = names[-3] if len(names) > 2 else None
+    enum_name_tok = names[-2]
+    variant_name_tok = names[-1]
 
     bindings: List[Union[str, Pattern]] = []
     pattern_list_tree = first_tree(t.children, "pattern_list")
@@ -171,6 +174,7 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> P
         bindings=bindings,
         enum_name_span=span_of(enum_name_tok),
         variant_name_span=span_of(variant_name_tok),
+        namespace=None if namespace_tok is None else str(namespace_tok.value),
         loc=span_of(t),
     )
 

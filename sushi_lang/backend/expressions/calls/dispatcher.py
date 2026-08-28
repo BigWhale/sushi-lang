@@ -413,9 +413,18 @@ def _try_emit_namespaced_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
     ref = getattr(expr, 'namespace_ref', None)
     if ref is None:
         return None
-    kind, origin, name = ref
+    origin, name = ref.origin, ref.name
 
-    if kind == "stdlib":
+    if ref.kind == "struct":
+        # A construction, not a call. The stamp says which kind of declaration the
+        # namespace held, so nothing here reads the shape of the node to find out.
+        from sushi_lang.backend.expressions import structs
+        stand_in = Call(callee=Name(id=name, loc=expr.loc), args=expr.args,
+                        field_names=getattr(expr, "field_names", None), loc=expr.loc)
+        stand_in.resolved_struct_type = getattr(expr, "resolved_struct_type", None)
+        return structs.emit_struct_constructor(codegen, stand_in, to_i1)
+
+    if ref.producer == "stdlib":
         # The REGISTRY, not the flat table: an aliased import puts nothing in the flat
         # scope, which is the whole of Ruling 1 and what makes section 1.3 expressible.
         from sushi_lang.semantics.stdlib_registry import get_stdlib_registry

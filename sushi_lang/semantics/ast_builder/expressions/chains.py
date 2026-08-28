@@ -5,7 +5,6 @@ from lark import Tree, Token
 from sushi_lang.semantics.ast import Expr, Name, BlankLit, MemberAccess, DotCall, TryExpr, Call
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, first_method_name, ice, unhandled
 from sushi_lang.internals.report import span_of
-from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -81,20 +80,21 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
             if call_node.data == "call":
                 if isinstance(result_expr, Name):
                     result_expr = calls.call_from_parts(result_expr, call_node, ast_builder)
-                elif first_tree(call_node.children, "type_list") is not None:
-                    # A `@(...)` type-arg list on anything but a direct call to a named
-                    # free function (method call, indexed/parenthesised callee) is out
-                    # of scope -- reject it rather than silently dropping the args.
-                    raise SyntaxDiagnostic("CE6102", span=span_of(call_node)) \
-                        .help("call the generic function directly, e.g. foo@(i32)(x)")
                 elif isinstance(result_expr, MemberAccess):
                     args, field_names = calls.extract_call_args(call_node, ast_builder)
-                    # Note: field_names for DotCall (enum constructors) are ignored for now
-                    # Named parameters for enum variants are not yet supported
+                    type_args, type_args_loc = calls.extract_call_type_args(
+                        call_node, ast_builder)
+                    # A `@(...)` list is carried, never refused here: whether the
+                    # receiver is a VALUE or a bound alias is a question only a pass
+                    # with the namespace table can answer, and CE6102 asks it there
+                    # (`docs/design/unit-namespaces.md` section 5.1).
                     result_expr = DotCall(
                         receiver=result_expr.receiver,
                         method=result_expr.member,
                         args=args,
+                        field_names=field_names,
+                        type_args=type_args,
+                        type_args_loc=type_args_loc,
                         loc=span_of(t)
                     )
                 else:
@@ -102,10 +102,14 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                     # function value: arr[0](), (e)(), getfn()(). The callee is
                     # any Expr; the type checker requires it to be a FunctionType.
                     args, field_names = calls.extract_call_args(call_node, ast_builder)
+                    type_args, type_args_loc = calls.extract_call_type_args(
+                        call_node, ast_builder)
                     result_expr = Call(
                         callee=result_expr,
                         args=args,
                         field_names=field_names,
+                        type_args=type_args,
+                        type_args_loc=type_args_loc,
                         loc=span_of(t),
                     )
 

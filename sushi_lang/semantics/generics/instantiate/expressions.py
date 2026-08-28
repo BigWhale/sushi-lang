@@ -165,7 +165,8 @@ class ExpressionScanner:
             return self.namespaces.is_namespace(call.receiver.id)
         if binding.kind == "generic function":
             self._scan_call(Call(callee=Name(id=call.method, loc=call.loc),
-                                 args=call.args, loc=call.loc))
+                                 args=call.args, type_args=call.type_args,
+                                 type_args_loc=call.type_args_loc, loc=call.loc))
         for arg in call.args:
             self.scan_expression(arg)
         return True

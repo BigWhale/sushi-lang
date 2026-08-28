@@ -8,6 +8,7 @@ from lark import Token
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
+    from sushi_lang.semantics.namespaces import NamespaceRef
 
 
 @dataclass
@@ -382,6 +383,10 @@ class Pattern(Node):
     bindings: List[Union[str, 'Pattern', 'OwnPattern', 'RefBinding']]
     enum_name_span: Optional[Span] = None
     variant_name_span: Optional[Span] = None
+    # The alias the enum was written behind: `geo.Sign.Plus ->`. The enum name stays
+    # the key, so exhaustiveness, payload binding and the literal-arm rules read
+    # exactly what they read for a bare arm (unit-namespaces.md section 5.2).
+    namespace: Optional[str] = None
 
 @dataclass
 class WildcardPattern(Node):
@@ -573,16 +578,23 @@ class DotCall(Node):
     # kind of producer answered, the unit or module it named, and the declared name.
     # The back end resolves through the origin, so a shadowed name reaches the right
     # declaration (`docs/design/unit-namespaces.md` section 5).
-    namespace_ref: Optional[Tuple[str, str, str]] = None
+    namespace_ref: Optional["NamespaceRef"] = None
     callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
                                             # `poke self` (#327); see MethodCall
+    field_names: Optional[List[str]] = None  # named construction through a namespace
+    # Explicit call-site type arguments, as `Call` carries them. A qualified call to a
+    # return-type-only generic is the reason they are here: `it.empty_list@(i32)()` is a
+    # direct call to a named free function once the alias folds away, so the rule CE6102
+    # states is unharmed and only the parse shape changed (unit-namespaces.md 5.1).
+    type_args: Optional[List["Type"]] = None
+    type_args_loc: Optional["Span"] = None
 
 @dataclass
 class MemberAccess(Node):
     """Member access expression: obj.field"""
     receiver: "Expr"    # The struct expression (p in p.x)
     member: str
-    namespace_ref: Optional[Tuple[str, str, str]] = None  # a constant read through an alias
+    namespace_ref: Optional["NamespaceRef"] = None  # a name read through an alias
 
 @dataclass
 class EnumConstructor(Node):

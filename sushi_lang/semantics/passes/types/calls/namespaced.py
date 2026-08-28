@@ -40,13 +40,16 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
         validator._validate_external_call_args(node)
         return
 
+    if binding.kind == "struct":
+        _validate_struct_construction(validator, node, binding)
+        return
+
     if binding.kind == "generic function":
         _validate_generic_call(validator, node, binding)
         return
 
     if binding.kind != "function":
-        # A member that exists and is not callable: a constant, or a kind the
-        # qualified grammar of section 5 has yet to reach.
+        # A member that exists and is not callable: a constant, an enum, or a perk.
         for arg in node.args:
             validator.validate_expression(arg)
         _reject_unknown_member(validator, node.receiver, node.method, node.loc)
@@ -70,6 +73,29 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
                             binding.record, node.args, node.loc)
 
 
+def _validate_struct_construction(validator: 'TypeValidator', node: 'DotCall',
+                                  binding: 'Binding') -> None:
+    """A struct constructor behind a dot: `geo.Vec(1, 2)`.
+
+    Read through a stand-in `Call`, the device every other kind behind the dot uses,
+    so construction is measured by exactly the rules the bare form is measured by. A
+    struct is one declaration per program under phase 1 (Ruling 6), so the stamp tells
+    the back end WHAT to emit and the name is the whole address.
+    """
+    from sushi_lang.semantics.ast import Call, Name
+    from sushi_lang.semantics.passes.types.visibility import reject_private_type
+    from .structs import validate_struct_constructor
+
+    if reject_private_type(validator, binding.name, node.loc):
+        return
+
+    stand_in = Call(callee=Name(id=binding.name, loc=node.loc), args=node.args,
+                    field_names=node.field_names, loc=node.loc)
+    validate_struct_constructor(validator, stand_in)
+    node.resolved_struct_type = validator.struct_table.by_name.get(binding.name)
+    _stamp(node, binding)
+
+
 def _validate_generic_call(validator: 'TypeValidator', node: 'DotCall',
                            binding: 'Binding') -> None:
     """A generic function behind a dot. The instance it names is program-wide.
@@ -84,11 +110,12 @@ def _validate_generic_call(validator: 'TypeValidator', node: 'DotCall',
     from .generics import validate_generic_function_call
 
     name = binding.name
-    stand_in = Call(callee=Name(id=name, loc=node.loc), args=node.args, loc=node.loc)
+    stand_in = Call(callee=Name(id=name, loc=node.loc), args=node.args,
+                    type_args=node.type_args, type_args_loc=node.type_args_loc,
+                    loc=node.loc)
     validate_generic_function_call(validator, stand_in, name)
     if stand_in.callee.id != name:
-        node.namespace_ref = (binding.provider.namespace_kind,
-                              binding.provider.origin, stand_in.callee.id)
+        _stamp(node, binding, name=stand_in.callee.id)
 
 
 def infer_namespaced_call(validator: 'TypeValidator',
@@ -136,10 +163,42 @@ def infer_namespaced_member(validator: 'TypeValidator',
     return binding.record.const_type
 
 
-def _stamp(node, binding: 'Binding') -> None:
-    """Record which producer answered, and what it named. The back end reads this."""
-    node.namespace_ref = (binding.provider.namespace_kind,
-                          binding.provider.origin, binding.name)
+def fold_namespaced_enum(validator: 'TypeValidator', node) -> bool:
+    """`geo.Sign.Plus` becomes `Sign.Plus`, in place. True when a qualifier was folded.
+
+    Section 5's rule is a fold: a leading `NAME .` that names a namespace is stripped
+    and attached to the name after it. An enum is one declaration per program under
+    phase 1, so once the qualifier is gone the node IS the bare form and every reader
+    after this one -- inference, the borrow pass, the back end -- needs to know nothing
+    about namespaces. Both shapes fold here: `MemberAccess` for a variant with no
+    payload, `DotCall` for one with a payload.
+
+    A private enum is reported and folded all the same. The type exists, so leaving the
+    node half-resolved would report the same mistake again at every rule below.
+    """
+    from sushi_lang.semantics.ast import MemberAccess, Name
+    from sushi_lang.semantics.passes.types.visibility import reject_private_type
+
+    receiver = node.receiver
+    if not isinstance(receiver, MemberAccess):
+        return False
+    binding = validator.resolve_namespaced(receiver.receiver, receiver.member)
+    if binding is None or binding.kind != "enum":
+        return False
+
+    reject_private_type(validator, binding.name, receiver.loc)
+    node.receiver = Name(id=binding.name, loc=receiver.loc)
+    return True
+
+
+def _stamp(node, binding: 'Binding', *, name: Optional[str] = None) -> None:
+    """Record what the qualified name resolved to. The back end reads this."""
+    from sushi_lang.semantics.namespaces import NamespaceRef
+    node.namespace_ref = NamespaceRef(
+        producer=binding.provider.namespace_kind,
+        origin=binding.provider.origin,
+        name=name or binding.name,
+        kind=binding.kind)
 
 
 def _stamp_param_modes(node, func_sig) -> None:
@@ -171,7 +230,14 @@ def _reject_unknown_member(validator: 'TypeValidator', receiver, name: str,
     if id(loc) in validator._namespaced_reported:
         return
     validator._namespaced_reported.add(id(loc))
-    er.emit(validator.reporter, er.ERR.CE2008, loc, name=_written(receiver, name))
+    from sushi_lang.semantics.namespaces import suggest_member
+    written = _written(receiver, name)
+    diagnostic = er.emit_with(validator.reporter, er.ERR.CE2008, loc, name=written)
+    ns = validator.namespace_of(receiver)
+    closest = suggest_member(validator.namespaces.members(ns), name) if ns else None
+    if closest is not None:
+        diagnostic = diagnostic.help(f"did you mean '{ns}.{closest}'?")
+    diagnostic.emit()
 
 
 def _stdlib_return_type(validator: 'TypeValidator', node: 'DotCall',
@@ -218,7 +284,7 @@ def _infer_generic_call(validator: 'TypeValidator',
     ref = getattr(node, "namespace_ref", None)
     if ref is None:
         return None
-    func_sig = validator.func_table.by_name.get(ref[2])
+    func_sig = validator.func_table.by_name.get(ref.name)
     if func_sig is None:
         return None
     inferred = validator.type_inference_visitor.result_type_of(func_sig)

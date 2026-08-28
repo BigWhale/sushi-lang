@@ -160,6 +160,22 @@ class GenericNamespace(Provider):
 
 
 @dataclass(frozen=True)
+class NamespaceRef:
+    """What the typecheck pass resolved a qualified name to, for the back end.
+
+    Four facts and no lookup: which PRODUCER answered, the unit or module it named,
+    the declared name, and the KIND of declaration. The back end routes on `kind` --
+    a function is a call through `origin`, a struct is a construction, a constant is a
+    load -- so nothing downstream has to guess from the shape of the node.
+    """
+
+    producer: str
+    origin: str
+    name: str
+    kind: str
+
+
+@dataclass(frozen=True)
 class _Bound:
     """What one alias binds, and where the clause that bound it stands."""
 

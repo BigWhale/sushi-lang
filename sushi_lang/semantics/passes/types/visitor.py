@@ -409,14 +409,29 @@ class ExpressionValidator(RecursiveVisitor):
 
     def visit_dotcall(self, node: DotCall) -> None:
         """Validate dot-call expression - resolve to enum constructor or method call."""
+        from sushi_lang.semantics.passes.types.calls.namespaced import (
+            fold_namespaced_enum, validate_namespaced_call)
+
+        # `geo.Sign.Plus(1)`: the qualifier folds away and what is left is the bare
+        # constructor every rule below already knows (unit-namespaces.md section 5).
+        fold_namespaced_enum(self.type_validator, node)
+
         # A namespace answers first, and it answers for every producer: an FFI block, a
         # unit behind a `use ... as`, a registry stdlib module. Local-wins is inside
         # `namespace_of`, so a variable of the same name never reaches here.
         if self.type_validator.namespace_of(node.receiver) is not None:
-            from sushi_lang.semantics.passes.types.calls.namespaced import (
-                validate_namespaced_call)
             validate_namespaced_call(self.type_validator, node)
             return
+
+        # CE6102 reads the RECEIVER, not the parse shape: a type-argument list rides a
+        # direct call to a named free function, and every receiver that reaches this
+        # line is a value. The rule used to live in the AST builder, which cannot know
+        # whether a receiver names a bound alias (section 5.1).
+        if node.type_args:
+            er.emit_with(self.type_validator.reporter, er.ERR.CE6102,
+                         node.type_args_loc or node.loc) \
+                .help("call the generic function directly, e.g. foo@(i32)(x)") \
+                .emit()
 
         # f64.from_bits(bits) / f32.from_bits(bits): static bit-reinterpret constructor.
         # The receiver is a primitive float type NAME, not a value, so handle it before
@@ -685,9 +700,14 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_memberaccess(self, node: MemberAccess) -> Optional[Type]:
         """Infer member access type (a struct field, or a constant behind an alias)."""
+        from sushi_lang.semantics.passes.types.calls.namespaced import (
+            fold_namespaced_enum, infer_namespaced_member)
+
+        # `geo.Sign.Plus` with no payload is a MemberAccess over a MemberAccess. The
+        # fold leaves `Sign.Plus`, which the arms below and the back end already read.
+        fold_namespaced_enum(self.type_validator, node)
+
         if self.type_validator.namespace_of(node.receiver) is not None:
-            from sushi_lang.semantics.passes.types.calls.namespaced import (
-                infer_namespaced_member)
             return infer_namespaced_member(self.type_validator, node)
 
         receiver_type = self.type_validator.infer_expression_type(node.receiver)
@@ -982,9 +1002,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_dotcall(self, node: DotCall) -> Optional[Type]:
         """Infer dot-call type and annotate node with inferred return type."""
+        from sushi_lang.semantics.passes.types.calls.namespaced import (
+            fold_namespaced_enum, infer_namespaced_call)
+
+        fold_namespaced_enum(self.type_validator, node)
+
         if self.type_validator.namespace_of(node.receiver) is not None:
-            from sushi_lang.semantics.passes.types.calls.namespaced import (
-                infer_namespaced_call)
             return infer_namespaced_call(self.type_validator, node)
 
         if (isinstance(node.receiver, Name) and node.receiver.id in ("f64", "f32")
