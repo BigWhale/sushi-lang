@@ -1,0 +1,16 @@
+# Reading through the borrow is free, and a `let` BINDS rather than consuming, so
+# neither shape is touched by the rule (#498).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\na 1\nc\n"
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+const string[3] NAMES = ["a", "b", "c"]
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let string first = NAMES[0]
+    println("{first} {NAMES[0].len()}")
+    println("{NAMES[2]}")
+
+    return Result.Ok(0)

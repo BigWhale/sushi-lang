@@ -1,0 +1,20 @@
+# The escape CE2411 names. `.clone()` takes an independent value, and the payload
+# owns that (#498).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nb\n"
+# EXPECT_NO_LEAKS
+
+enum Token:
+    Word(string)
+    End
+
+const string[3] NAMES = ["a", "b", "c"]
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let Token t = Token.Word(NAMES[1].clone())
+    match t:
+        Token.Word(w) -> println("{w}")
+        Token.End -> println("end")
+
+    return Result.Ok(0)
