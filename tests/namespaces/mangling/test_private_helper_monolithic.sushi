@@ -1,0 +1,10 @@
+# The same program on the MONOLITHIC path, where every unit lands in one
+# ir.Module and an `internal` symbol collides exactly as an `external` one does.
+# COMPILER_FLAGS: --no-incremental
+# EXPECT_STDOUT_EXACT: "12 24\n"
+use "helpers/mangle_left"
+use "helpers/mangle_right"
+
+fn main() i32:
+    println("{left_value().realise(0)} {right_value().realise(0)}")
+    return Result.Ok(0)

@@ -1,0 +1,9 @@
+# Two units each declare a private `SCRATCH`. A constant is a symbol too, so the
+# two globals must coexist and every unit must read its own.
+# EXPECT_STDOUT_EXACT: "41 58\n"
+use "helpers/const_left"
+use "helpers/const_right"
+
+fn main() i32:
+    println("{left_scratch().realise(0)} {right_scratch().realise(0)}")
+    return Result.Ok(0)

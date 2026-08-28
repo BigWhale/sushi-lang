@@ -1,0 +1,9 @@
+# A BINARY library whose public generic calls a library-PRIVATE helper. The
+# helper has no source at the consumer: its body is in the shipped bitcode, so
+# the consumer must call it by the symbol the PRODUCER gave it. That symbol is
+# the manifest's `link_symbol` (docs/design/unit-namespaces.md section 9).
+fn secret_bump(i32 x) i32:
+    return Result.Ok(x + 7)
+
+public fn bumped@(T)(i32 n) i32:
+    return Result.Ok(secret_bump(n)??)

@@ -1,0 +1,5 @@
+# The same private name, a different value.
+const i32 SCRATCH = 58
+
+public fn right_scratch() i32:
+    return Result.Ok(SCRATCH)

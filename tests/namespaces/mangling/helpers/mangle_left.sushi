@@ -1,0 +1,6 @@
+# Two units declare a private `helper`. Each unit's own call must reach its own.
+fn helper() i32:
+    return Result.Ok(11)
+
+public fn left_value() i32:
+    return Result.Ok(helper()?? + 1)
