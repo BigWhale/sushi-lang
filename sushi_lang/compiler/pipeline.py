@@ -243,6 +243,7 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     main_unit = unit_manager.load_unit(main_unit_name, main_ast)
     if main_unit is None:
         return 2
+    main_unit.is_entry = True
 
     loaded_units = {main_unit_name}
     for dep_name in main_unit.dependencies:

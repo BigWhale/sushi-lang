@@ -581,7 +581,15 @@ class LLVMCodegen:
         # First round: declare function prototypes
         # For the target unit: declare ALL functions (public + private, they'll get bodies)
         # For other units: only declare PUBLIC functions (private ones can't be cross-referenced)
-        for unit in all_units:
+        #
+        # THE TARGET UNIT IS DECLARED FIRST. One symbol name holds one declaration in a
+        # module, so where a unit shadows a name another unit exports, whichever is
+        # declared first takes the symbol and the other reuses it. This module emits the
+        # target unit's BODIES, so the target unit's own declaration is the one that has
+        # to win -- a private one keeps internal linkage, which is what makes the
+        # consumer's call bind to its own definition (`visibility.md` decision 10). It
+        # used to be decided by the compilation order, which put the consumer first.
+        for unit in sorted(all_units, key=lambda u: u.name != target_unit.name):
             if unit.ast is None:
                 continue
             for fn in unit.ast.functions:

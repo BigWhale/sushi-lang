@@ -45,17 +45,6 @@ def _diagnostic_identity(diagnostic):
     )
 
 
-def _library_units_first(compilation_order):
-    """Compilation order with source-library units moved to the front.
-
-    Only collection needs this. A library unit is a dependency of everything the
-    consumer wrote, and declarations have to be in the table before the units that
-    name them are checked.
-    """
-    return ([u for u in compilation_order if u.provenance is not None]
-            + [u for u in compilation_order if u.provenance is None])
-
-
 class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
 
@@ -158,20 +147,7 @@ class SemanticAnalyzer:
         if self.library_linker is not None:
             self._seed_library_perks(collector.perks)
 
-        # Every perk DEFINITION of every unit, before any implementation is collected.
-        # The compilation order puts a dependent before its dependency, so a perk
-        # declared next door used to arrive after the unit that implements it, and the
-        # answer was CE4003 -- an ordering accident, not a rule (#487).
         for unit in compilation_order:
-            if unit.ast is None:
-                continue
-            collector.collect_perk_definitions(unit.ast, unit_name=unit.name,
-                                               unit_file=str(unit.file_path))
-
-        # A source library's units are collected first, for the tables that are still
-        # order-sensitive: a first-wins merge, and the function shadowing that
-        # `_replace_shadowed_functions` carries across it.
-        for unit in _library_units_first(compilation_order):
             if unit.ast is None:
                 continue
 
@@ -481,7 +457,16 @@ class SemanticAnalyzer:
             self.reporter.items.extend(unit_reporter.items)
 
         if self.monomorphized_extensions:
-            lift_target = next((u.ast for u in compilation_order if u.ast is not None), None)
+            # The ENTRY unit, for the same reason `generics/synthesis.py` names it: a
+            # lifted body belongs to the unit the compiler was pointed at, not to
+            # whichever unit the compilation order happens to put first.
+            lift_target = next(
+                (u.ast for u in compilation_order
+                 if u.ast is not None and getattr(u, "is_entry", False)),
+                None)
+            if lift_target is None:
+                lift_target = next(
+                    (u.ast for u in compilation_order if u.ast is not None), None)
             self._check_monomorphized_extensions(destroy_effects, enum_names, lift_target)
 
     def _check_monomorphized_extensions(self, destroy_effects, enum_names,

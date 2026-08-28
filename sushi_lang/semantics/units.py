@@ -44,6 +44,10 @@ class Unit:
     # provenance as well, so provenance alone cannot answer "is this a library": the two
     # are different questions, and `generics/synthesis.py` needs this one.
     from_library: bool = False
+    # The unit the compiler was pointed at. A synthesized instance goes here, which used
+    # to be spelled "the first unit of the compilation order" and was only the same thing
+    # while that order put a dependent before its dependency.
+    is_entry: bool = False
 
     def __post_init__(self):
         """Initialize computed fields after dataclass creation."""
@@ -151,11 +155,47 @@ class UnitManager:
         return unit
 
     def build_dependency_graph(self) -> Dict[str, List[str]]:
-        """Build a dependency graph from all loaded units."""
-        return {unit.name: unit.dependencies for unit in self.units.values()}
+        """Every unit's dependencies, as the compilation order reads them.
+
+        `Unit.dependencies` holds user-unit imports alone. A SOURCE library's units and a
+        bundled Sushi-source stdlib module are injected as ordinary compilation units,
+        and a unit that imports one depends on it exactly as it depends on a unit next
+        door -- the import simply does not spell a user path. That edge is added here
+        rather than stored, because injection happens after the units are loaded.
+
+        It used to be a hand-patch in the collect loop instead: library units pulled to
+        the front, because the order could not say why they belonged there. An import a
+        binary `.slib` answers matches no unit and adds no edge, which is right -- a
+        binary library has no unit to compile.
+        """
+        graph = {unit.name: list(unit.dependencies) for unit in self.units.values()}
+        for unit in self.units.values():
+            if unit.ast is None:
+                continue
+            for use_stmt in unit.ast.uses:
+                if not (use_stmt.is_stdlib or use_stmt.is_library):
+                    continue
+                prefix = use_stmt.path + "/"
+                for name in self.units:
+                    if name == unit.name or name in graph[unit.name]:
+                        continue
+                    if name == use_stmt.path or name.startswith(prefix):
+                        graph[unit.name].append(name)
+        return graph
 
     def topological_sort(self) -> Optional[List[str]]:
-        """Perform topological sorting to determine compilation order."""
+        """Compilation order: every unit after the units it depends on.
+
+        The in-degree counted here is "how many units depend on me", and the queue starts
+        at the units nothing depends on, so the walk itself yields DEPENDENTS first. The
+        result is reversed once at the end.
+
+        The direction is a ruling, not a taste (`docs/design/unit-namespaces.md` section
+        13.2): a unit's scope is built from what its own imports declare, so a dependency
+        has to be collected before the unit that names it. Two hand-patches retired with
+        the reversal -- library units pulled to the front of the collect loop, and a
+        pre-sweep that collected every perk definition ahead of every implementation.
+        """
         dependency_graph = self.build_dependency_graph()
 
         in_degree = {unit: 0 for unit in dependency_graph}
@@ -176,6 +216,8 @@ class UnitManager:
                     in_degree[dep] -= 1
                     if in_degree[dep] == 0:
                         queue.append(dep)
+
+        result.reverse()
 
         if len(result) != len(dependency_graph):
             cycle = self._find_cycle(dependency_graph)
