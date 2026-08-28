@@ -16,6 +16,7 @@ This guide provides a friendly tour of Sushi's features. If you're new to Sushi,
 - [Structs and Enums](#structs-and-enums)
 - [Pattern Matching](#pattern-matching)
 - [Generics](#generics)
+- [Units and Imports](#units-and-imports)
 - [Memory Management](#memory-management)
 
 ## Hello World
@@ -978,6 +979,39 @@ extend Point with Hashable:       # allowed -- this is the supported override
 **Standard Library Use**: much of the Sushi standard library is exposed through this same method-call syntax. String methods like `.len()`, `.find()` and `.split()`, the collection methods on `List@(T)`, and the array methods all reach you as `receiver.method(...)`. They are built-in providers rather than ordinary extensions, though, which is why the names above are reserved -- your own extensions live alongside them, not on top of them.
 
 The full precedence chain and its rationale are in [docs/design/method-resolution.md](design/method-resolution.md).
+
+## Units and Imports
+
+Each source file is a unit. `use` brings another unit's names into this one, and every
+`use` stands at the top of the file, above the first declaration:
+
+```sushi
+use "helpers/geometry"      # another unit of this program
+use <collections/hashmap>   # a standard-library module
+```
+
+By default an import puts the names it brings straight into this unit's scope, so you
+write them bare. Add `as NAME` and they go behind a dot instead:
+
+<!-- docs-sweep: skip (two units) -->
+```sushi
+use "helpers/geometry" as geo
+
+fn main() i32:
+    let f64 area = geo.circle_area(2.0).realise(0.0)
+    println("{area} {geo.MAX_SIDES}")
+    return Result.Ok(0)
+```
+
+Reach for the alias when two units disagree about a name, or when the reader of a call
+should be able to see where the name came from. The two forms compose: import one unit
+flat and another behind a dot, and each brings what it says and no more.
+
+An alias behaves like any other name in the unit. A local variable of the same name
+shadows it, one name cannot hold two namespaces, and the alias is yours alone -- a unit
+that imports yours never sees it. Privacy is unchanged: `geo.helper` where `helper` is
+private to `geometry` is an error that says so, not one that says the name does not
+exist.
 
 ## Memory Management
 

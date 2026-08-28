@@ -1018,6 +1018,55 @@ fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
 ```
 
+### Importing a unit
+
+`use "path"` imports another unit of the program, `use <module>` a standard-library
+module, and `use <lib/name>` a library. **Every import stands above the first
+declaration**, after the unit's own doc block if it has one; a `use` below a declaration
+is `CE3014`.
+
+An import may carry an `as NAME` clause. The clause decides WHERE the imported names
+land, and nothing else:
+
+| Form | What it binds |
+|---|---|
+| `use "math"` | every name `math` brings enters this unit's flat scope |
+| `use "math" as my_math` | every name `math` brings is reachable as `my_math.<name>` |
+
+<!-- docs-sweep: skip (two units) -->
+```sushi
+use "math" as my_math               # the unit next door
+use <math> as std_math              # the standard library
+
+fn main() i32:
+    let f64 mine = my_math.sin(0.0).realise(0.0)
+    let f64 theirs = std_math.sin(0.0)
+    let i32 depth = my_math.MAX_DEPTH
+    return Result.Ok(0)
+```
+
+The dot reaches a `fn` -- generic included -- and a `const`. A qualified TYPE is not
+written yet.
+
+**A local variable wins.** A variable named `my_math` shadows the alias for the rest of
+its scope, exactly as one shadows an FFI namespace.
+
+**An alias is local to the unit that wrote it.** Nothing about it is exported, and a unit
+that imports the aliasing unit does not see it.
+
+**One name holds one namespace.** A second binding of the name -- another alias, an
+`unsafe external` namespace, or one of the unit's own declarations -- is `CE3013`. Two
+aliases for one import are legal and both work.
+
+**An empty namespace warns.** `use <io/stdio> as io` binds nothing, because the import
+enables methods on `stdin` and brings no name: that is `CW3004`, a warning, and the
+import still does its work.
+
+A namespace holds a unit's declarations **whatever their visibility**, so naming a
+private one through the dot is `CE3005` -- "not yours", never "no such name".
+
+The full design is `docs/design/unit-namespaces.md`.
+
 ### Visibility
 
 **Private is the default.** Five declarations carry the marker -- `fn`, `const`, `struct`,
