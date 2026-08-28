@@ -29,7 +29,7 @@ def function_value_type_of(type_validator, name: str) -> Optional[Type]:
     """Build the FunctionType for a bare reference to a plain top-level function."""
     from sushi_lang.semantics.param_modes import declared_modes
     from sushi_lang.semantics.typesys import FunctionType, UnknownType
-    sig = type_validator.func_table.by_name.get(name)
+    sig = type_validator.func_sig(name)
     if sig is None:
         return None
     for p in sig.params:
@@ -874,8 +874,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
             return None
 
-        if function_name in self.type_validator.func_table.by_name:
-            func_sig = self.type_validator.func_table.by_name[function_name]
+        func_sig = self.type_validator.func_sig(function_name)
+        if func_sig is not None:
             if func_sig.ret_type is not None:
                 from sushi_lang.semantics.generics.types import GenericTypeRef
                 from sushi_lang.semantics.type_resolution import resolve_unknown_type

@@ -51,7 +51,7 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if stdlib_func is not None:
         return _emit_stdlib_function(codegen, expr, callee, stdlib_func, to_i1)
 
-    llvm_fn = codegen.funcs.get(callee)
+    llvm_fn = codegen.funcs.lookup(callee, codegen.emitting_unit)
     if llvm_fn is None:
         raise KeyError(f"unknown function: {callee}")
 

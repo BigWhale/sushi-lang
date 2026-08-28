@@ -438,9 +438,15 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
         # the build, the same way the pre-codegen gate above does (#436).
         if reporter.has_errors:
             return 2
-        closure_fn_names = set(
-            (templates.get("closure_summary") or {}).get("private_functions", [])
-        )
+        # The SYMBOLS, not the names: a private helper's symbol carries its unit, and
+        # the promotion below looks it up in the emitted module by symbol. The manifest
+        # record that the consumer reads and this set are the same field, so the two
+        # cannot drift.
+        closure_fn_symbols = {
+            record["link_symbol"]
+            for record in templates.get("private_functions", []) or []
+            if record.get("link_symbol")
+        }
 
         kind = args.lib_kind
         # A source library needs no bitcode at all. A hybrid still compiles it, and so
@@ -452,7 +458,7 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
                                             debug=bool(args.dump_ll), opt=args.opt,
                                             verify=not args.no_verify,
                                             monomorphized_extensions=monomorphized_extensions,
-                                            exported_private_functions=closure_fn_names)
+                                            exported_private_functions=closure_fn_symbols)
 
         source = collect_unit_source(compilation_order) if kind != "binary" else None
 

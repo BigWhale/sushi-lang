@@ -27,6 +27,7 @@ from sushi_lang.backend.memory.moves import MoveTracker
 from sushi_lang.backend.expressions import ExpressionEmitter
 from sushi_lang.backend.statements import StatementEmitter
 from sushi_lang.backend.functions import LLVMFunctionManager
+from sushi_lang.backend.functions.symbols import UnitKeyedSymbols
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
@@ -135,7 +136,9 @@ class LLVMCodegen:
         # index bounds break/continue RAII cleanup to the loop's own scopes.
         self.loop_stack: list[tuple[ir.Block, ir.Block, int]] = []
 
-        self.funcs: Dict[str, ir.Function] = {}
+        # Two views: the unit that declared a name, and the flat one. `emitting_unit`
+        # is what turns a bare Sushi name into the right declaration.
+        self.funcs: UnitKeyedSymbols[ir.Function] = UnitKeyedSymbols()
 
         self.constants: Dict[str, ir.GlobalVariable] = {}
 
@@ -175,7 +178,7 @@ class LLVMCodegen:
         # Function return type tracking (Sushi language types, not LLVM types)
         # Maps function name to its return type (pre-Result wrapping)
         # Used for inferring Result<T> types from function call expressions
-        self.function_return_types: Dict[str, 'Type'] = {}
+        self.function_return_types: UnitKeyedSymbols['Type'] = UnitKeyedSymbols()
 
         self.current_function_ast: Optional['FuncDef'] = None
 
@@ -544,7 +547,7 @@ class LLVMCodegen:
         # across units, so this module must be able to declare the identified struct types
         # the cache already handed out (#257).
         self.module = ir.Module(name=f"unit_{target_unit.name}", context=self.llvm_context)
-        self.funcs = {}
+        self.funcs = UnitKeyedSymbols()
         self.constants = {}
         self.ast_constants = {}
         self._malloc_func = None
@@ -597,7 +600,7 @@ class LLVMCodegen:
                     continue
                 if unit.name != target_unit.name and not fn.is_public:
                     continue
-                self.functions.emit_func_decl(fn)
+                self.functions.emit_func_decl(fn, unit.name)
 
             for ext in unit.ast.extensions:
                 self.functions.emit_extension_method_decl(ext)
@@ -619,7 +622,7 @@ class LLVMCodegen:
             for fn in target_unit.ast.functions:
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
-                self.functions.emit_func_def(fn)
+                self.functions.emit_func_def(fn, target_unit.name)
 
             for ext in target_unit.ast.extensions:
                 self.functions.emit_extension_method_def(ext)
@@ -755,7 +758,7 @@ class LLVMCodegen:
             for fn in unit.ast.functions:
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
-                self.functions.emit_func_decl(fn)
+                self.functions.emit_func_decl(fn, unit.name)
 
             for ext in unit.ast.extensions:
                 self.functions.emit_extension_method_decl(ext)
@@ -780,7 +783,7 @@ class LLVMCodegen:
             for fn in unit.ast.functions:
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
-                self.functions.emit_func_def(fn)
+                self.functions.emit_func_def(fn, unit.name)
 
             for ext in unit.ast.extensions:
                 self.functions.emit_extension_method_def(ext)
@@ -872,15 +875,20 @@ class LLVMCodegen:
                 ll_ret = self.types.ll_type(result_type)
 
                 fnty = ir.FunctionType(ll_ret, param_types)
-                llvm_fn = ir.Function(self.module, fnty, name=func_name)
+                # The PRODUCER named the symbol in its own bitcode. A source library
+                # recompiles here and derives its own; a binary one links, so its
+                # symbol can only be read (`docs/design/unit-namespaces.md` section 9).
+                llvm_fn = ir.Function(
+                    self.module, fnty,
+                    name=func_info.get("link_symbol") or func_name)
                 llvm_fn.linkage = 'external'
 
                 for i, p in enumerate(func_info.get("params", [])):
                     if i < len(llvm_fn.args):
                         llvm_fn.args[i].name = p["name"]
 
-                self.funcs[func_name] = llvm_fn
-                self.function_return_types[func_name] = result_type
+                self.funcs.declare(func_name, llvm_fn)
+                self.function_return_types.declare(func_name, result_type)
 
     def _declare_library_functions_from_registry(self) -> None:
         """Declare library functions using pre-parsed FuncSig from registry."""
@@ -902,15 +910,17 @@ class LLVMCodegen:
             ll_ret = self.types.ll_type(result_type)
 
             fnty = ir.FunctionType(ll_ret, param_types)
-            llvm_fn = ir.Function(self.module, fnty, name=func_name)
+            llvm_fn = ir.Function(
+                self.module, fnty,
+                name=getattr(func_sig, "link_symbol", None) or func_name)
             llvm_fn.linkage = 'external'
 
             for i, p in enumerate(func_sig.params):
                 if i < len(llvm_fn.args):
                     llvm_fn.args[i].name = p.name
 
-            self.funcs[func_name] = llvm_fn
-            self.function_return_types[func_name] = result_type
+            self.funcs.declare(func_name, llvm_fn)
+            self.function_return_types.declare(func_name, result_type)
 
     def _constant_string_value(self, text: str, data_name: str) -> ir.Constant:
         """A `{i8*, i32, i8 owned}` constant, with its backing byte array global.

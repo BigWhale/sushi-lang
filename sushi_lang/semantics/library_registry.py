@@ -182,6 +182,7 @@ class LibraryRegistry:
                 params=params,
                 is_public=owner is None,
                 unit_name=owner,
+                link_symbol=func_info.get("link_symbol"),
             )
 
         return result

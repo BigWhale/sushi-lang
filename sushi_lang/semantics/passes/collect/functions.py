@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 from sushi_lang.internals.report import Origin, Reporter, Span
@@ -176,6 +177,10 @@ class FuncSig:
                                          # to name its file explicitly or it renders against
                                          # whichever file the reporter happens to be pointing at.
     err_type: Optional[Type] = None      # Error type for Result<T, E> (None = StdError default)
+    link_symbol: Optional[str] = None    # The symbol a BINARY .slib's bitcode gave this
+                                         # function. Read from the manifest and never
+                                         # derived: a producer's `<unit>$<name>` is not a
+                                         # name the consumer can compute (section 9).
 
 
 @dataclass
@@ -198,6 +203,14 @@ class GenericFuncDef:
                                                  # carries one: this pass shares ONE reporter across units
 
 
+class Redeclaration(Enum):
+    """What a name already taken means for the declaration that takes it again."""
+
+    REFUSED = "refused"   # dropped; a diagnostic named why
+    REPLACE = "replace"   # this one takes the flat name from the other (CW3002)
+    COEXIST = "coexist"   # both stand: two units, two symbols
+
+
 @dataclass
 class FunctionTable:
     """Table of function signatures collected by the collect pass.
@@ -214,9 +227,16 @@ class FunctionTable:
     _stdlib_functions: Dict[Tuple[str, str], Any] = field(default_factory=dict)
 
     def declare(self, name: str, sig: FuncSig) -> None:
-        """Register one declaration in both views. The ONE insert."""
-        self.order.append(name)
-        self.by_name[name] = sig
+        """Register one declaration in both views. The ONE insert.
+
+        The flat view is FIRST-wins, which is what it always was: a caller that means
+        to take a name another unit holds drops it first (`_drop`). Two units that
+        merely both declare `helper` leave the flat answer alone and each read their
+        own through `by_unit`.
+        """
+        if name not in self.by_name:
+            self.order.append(name)
+            self.by_name[name] = sig
         unit = getattr(sig, "unit_name", None)
         if unit is not None:
             self.by_unit.setdefault(unit, {})[name] = sig
@@ -449,18 +469,20 @@ class FunctionCollector:
             for _const_name, stdlib_const in module.constants.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_const)
 
-    def _reject_redeclaration(self, name: str, name_span: Optional[Span],
-                              prev) -> bool:
-        """A name already taken. True when this declaration must be dropped.
+    def _redeclaration(self, name: str, name_span: Optional[Span],
+                       prev) -> Redeclaration:
+        """A name already taken. What that means for the declaration taking it again.
 
-        Three answers, and who owns the previous declaration decides which. Another of
-        the program's own units is the plain duplicate. A library's PUBLIC name may be
-        replaced -- symbol priority puts the program's own declaration first, and
-        `tests/libs/test_warn_lib_override.sushi` is that contract -- so this returns
-        False, warns with CW3002, and the caller completes the replacement. A library's PRIVATE name may not be
-        replaced (CE3011): one namespace means the library's own bodies would start
-        calling the consumer's function, and the consumer cannot even see the name it
-        collides with.
+        Four answers, and who owns the previous declaration decides which. A library's
+        PUBLIC name may be replaced -- symbol priority puts the program's own
+        declaration first, and `tests/libs/test_warn_lib_override.sushi` is that
+        contract -- so this warns with CW3002 and the caller completes the replacement.
+        A library's PRIVATE name may not be replaced (CE3011): one namespace means the
+        library's own bodies would start calling the consumer's function, and the
+        consumer cannot even see the name it collides with. Another of the program's own
+        units COEXISTS: each declaration takes its own `<unit>$<name>` symbol, so
+        neither has to lose (`docs/design/unit-namespaces.md` section 9). The same name
+        twice inside ONE unit is the duplicate CE0101 still answers.
         """
         clash = library_clash_origin(
             self.visibility, "function", name,
@@ -468,15 +490,18 @@ class FunctionCollector:
         if clash is not None:
             if clash.is_public:
                 self._warn_shadowed_export(name, name_span, clash)
-                return False
+                return Redeclaration.REPLACE
             reject_library_clash(self.r, clash, name_span, kind="function", name=name,
                                  filename=self.current_unit_file)
-            return True
+            return Redeclaration.REFUSED
+        prev_unit = getattr(prev, "unit_name", None)
+        if prev_unit is not None and prev_unit != self.current_unit_name:
+            return Redeclaration.COEXIST
         er.emit_with(self.r, ERR.CE0101, name_span,
                      filename=self.current_unit_file, name=name) \
             .note("first defined here", prev.name_span,
                   getattr(prev, "filename", None)).emit()
-        return True
+        return Redeclaration.REFUSED
 
     def _warn_shadowed_export(self, name: str, name_span: Optional[Span],
                               clash) -> None:
@@ -580,15 +605,19 @@ class FunctionCollector:
         validate_type_pack_params(self.r, getattr(fn, "type_params", None), params, name_span)
 
         if name in self.funcs.by_name:
-            if self._reject_redeclaration(name, name_span, self.funcs.by_name[name]):
+            verdict = self._redeclaration(name, name_span, self.funcs.by_name[name])
+            if verdict is Redeclaration.REFUSED:
                 return
-            self._drop(self.funcs, name)
+            if verdict is Redeclaration.REPLACE:
+                self._drop(self.funcs, name)
 
         if name in self.generic_funcs.by_name:
-            if self._reject_redeclaration(name, name_span,
-                                          self.generic_funcs.by_name[name]):
+            verdict = self._redeclaration(name, name_span,
+                                          self.generic_funcs.by_name[name])
+            if verdict is Redeclaration.REFUSED:
                 return
-            self._drop(self.generic_funcs, name)
+            if verdict is Redeclaration.REPLACE:
+                self._drop(self.generic_funcs, name)
 
         sig = FuncSig(
             name=name,
@@ -622,15 +651,19 @@ class FunctionCollector:
         name_span = getattr(fn, "name_span", None) or getattr(fn, "loc", None)
 
         if name in self.generic_funcs.by_name:
-            if self._reject_redeclaration(name, name_span,
-                                          self.generic_funcs.by_name[name]):
+            verdict = self._redeclaration(name, name_span,
+                                          self.generic_funcs.by_name[name])
+            if verdict is Redeclaration.REFUSED:
                 return
-            self._drop(self.generic_funcs, name)
+            if verdict is Redeclaration.REPLACE:
+                self._drop(self.generic_funcs, name)
 
         if name in self.funcs.by_name:
-            if self._reject_redeclaration(name, name_span, self.funcs.by_name[name]):
+            verdict = self._redeclaration(name, name_span, self.funcs.by_name[name])
+            if verdict is Redeclaration.REFUSED:
                 return
-            self._drop(self.funcs, name)
+            if verdict is Redeclaration.REPLACE:
+                self._drop(self.funcs, name)
 
         type_param_instances = tuple(
             tp if isinstance(tp, BoundedTypeParam)

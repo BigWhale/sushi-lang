@@ -52,7 +52,7 @@ def emit_name(codegen: 'LLVMCodegen', expr: Name, to_i1: bool) -> ir.Value:
     # Neither a local nor a constant: a bare reference to a top-level function is a
     # first-class function value -> a non-capturing fat pointer {thunk, null, null}.
     # The thunk bridges the bare fn into the uniform env-passing indirect ABI.
-    llvm_fn = codegen.funcs.get(expr.id)
+    llvm_fn = codegen.funcs.lookup(expr.id, codegen.emitting_unit)
     if llvm_fn is not None:
         from sushi_lang.backend.runtime import closures
         return closures.materialize_function_ref(codegen, llvm_fn)

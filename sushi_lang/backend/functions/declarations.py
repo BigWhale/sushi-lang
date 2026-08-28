@@ -4,9 +4,19 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, ExtendDef
+from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+
+
+def declaring_unit(fn: FuncDef, unit_name: str | None) -> str | None:
+    """Whose symbol this declaration takes.
+
+    A synthesized body -- a monomorphized instance, a lifted lambda -- belongs to no
+    unit and keeps the bare name it was given, whichever unit's AST carries it.
+    """
+    return None if getattr(fn, "is_synthesized", False) else unit_name
 
 
 class FunctionDeclarations:
@@ -16,11 +26,20 @@ class FunctionDeclarations:
         """Initialize declarations handler with reference to main codegen instance."""
         self.codegen = codegen
 
-    def emit_func_decl(self, fn: FuncDef, params_of_fn, helpers) -> ir.Function:
-        """Create LLVM function prototype for regular function."""
-        existing = self.codegen.funcs.get(fn.name)
+    def emit_func_decl(self, fn: FuncDef, params_of_fn, helpers,
+                       unit_name: str | None = None) -> ir.Function:
+        """Create LLVM function prototype for regular function.
+
+        `unit_name` is the unit whose declaration this is, and it decides the LLVM
+        symbol: two units may each declare a private `helper`, and the monolithic path
+        puts both into one module. A synthesized body -- a monomorphized instance, a
+        lifted lambda -- belongs to no unit and keeps the bare name it was given.
+        """
+        unit_name = declaring_unit(fn, unit_name)
+        existing = self.codegen.funcs.declared(fn.name, unit_name)
         if existing is not None:
             return existing
+        symbol = mangle_unit_symbol(unit_name, fn.name)
 
         # Special handling for main function - it needs C-compatible signature
         # Main always needs a wrapper because Sushi functions return Result<T>
@@ -37,7 +56,7 @@ class FunctionDeclarations:
 
             ll_ret = self.codegen.types.i32  # main always returns int in C
             fnty = ir.FunctionType(ll_ret, ll_param_tys)
-            llvm_fn = ir.Function(self.codegen.module, fnty, name=fn.name)
+            llvm_fn = ir.Function(self.codegen.module, fnty, name=symbol)
 
             if self.codegen.main_expects_args:
                 llvm_fn.args[0].name = "argc"
@@ -62,7 +81,7 @@ class FunctionDeclarations:
             ll_ret = self.codegen.types.ll_type(result_ty)
 
             fnty = ir.FunctionType(ll_ret, ll_param_tys)
-            llvm_fn = ir.Function(self.codegen.module, fnty, name=fn.name)
+            llvm_fn = ir.Function(self.codegen.module, fnty, name=symbol)
 
             for i, (pname, _) in enumerate(params):
                 llvm_fn.args[i].name = pname
@@ -77,15 +96,17 @@ class FunctionDeclarations:
         else:
             llvm_fn.linkage = 'external' if fn.is_public else 'internal'
 
-        self.codegen.funcs[fn.name] = llvm_fn
+        self.codegen.funcs.declare(fn.name, llvm_fn, unit=unit_name)
 
         if fn.name != 'main' and fn.ret is not None:
             is_explicit_result = (
                 is_result_enum(fn.ret) or
                 (isinstance(fn.ret, GenericTypeRef) and fn.ret.base_name == "Result")
             )
-            self.codegen.function_return_types[fn.name] = (
-                fn.ret if is_explicit_result else implicit_result_of(self.codegen, fn)
+            self.codegen.function_return_types.declare(
+                fn.name,
+                fn.ret if is_explicit_result else implicit_result_of(self.codegen, fn),
+                unit=unit_name,
             )
 
         return llvm_fn
@@ -123,5 +144,5 @@ class FunctionDeclarations:
             if i < len(llvm_fn.args):
                 llvm_fn.args[i].name = name
 
-        self.codegen.funcs[func_name] = llvm_fn
+        self.codegen.funcs.declare(func_name, llvm_fn)
         return llvm_fn

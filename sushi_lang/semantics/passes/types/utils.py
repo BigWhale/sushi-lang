@@ -221,8 +221,9 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
                     validator.variable_types[param.name] = resolved_type
                     param.ty = resolved_type  # Update AST node for backend
 
-                    if validator.current_function and validator.current_function.name in validator.func_table.by_name:
-                        func_sig = validator.func_table.by_name[validator.current_function.name]
+                    func_sig = (validator.func_sig(validator.current_function.name)
+                                if validator.current_function else None)
+                    if func_sig is not None:
                         for sig_param in func_sig.params:
                             if sig_param.name == param.name:
                                 sig_param.ty = resolved_type

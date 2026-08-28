@@ -173,7 +173,10 @@ def test_private_helper_defined_in_lib_object_only(tmp_path):
     project = _build_consumer(tmp_path, env)
 
     cache = project / "__sushi_cache__"
-    pattern = re.compile(r"^_?scale_up$")
+    # The symbol carries the declaring unit as a `<unit>$` prefix
+    # (`docs/design/unit-namespaces.md` section 9), and a Mach-O name carries a leading
+    # underscore. What is being counted is unchanged: definitions of this one helper.
+    pattern = re.compile(r"^_?(?:[A-Za-z0-9_$]*\$)?scale_up$")
 
     def _definitions(obj: Path) -> int:
         nm_out = subprocess.run(["nm", str(obj)], capture_output=True, text=True)

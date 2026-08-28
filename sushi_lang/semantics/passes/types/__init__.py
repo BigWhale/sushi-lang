@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Set, TYPE_CHECKING
 if TYPE_CHECKING:
     from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.passes.collect.externals import ExternalSig
+    from sushi_lang.semantics.passes.collect.functions import FuncSig
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
@@ -131,6 +132,17 @@ class TypeValidator:
 
         for impl in program.perk_impls:
             self._validate_perk_implementation(impl)
+
+    def func_sig(self, name: str) -> Optional['FuncSig']:
+        """What the name of a function means INSIDE the unit being validated.
+
+        The unit's own declaration answers its own call, and every other name resolves
+        through the flat view. Reading `by_name` directly measured a unit's call against
+        another unit's declaration of the same name, which is section 13.1 of
+        `docs/design/unit-namespaces.md` -- #487 for a library, and an ICE (CE0026) for
+        two ordinary units once the two symbols were allowed to coexist.
+        """
+        return self.func_table.lookup(name, self.current_unit_name)
 
     def validate_expression(self, expr: Expr) -> Optional[Type]:
         """Validate an expression and its subexpressions using the Visitor Pattern."""

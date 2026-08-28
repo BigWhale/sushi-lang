@@ -1,6 +1,8 @@
 """Unit tests for FFI internals that the .sushi corpus cannot reach directly."""
 from __future__ import annotations
 
+import re
+
 from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.units import Unit
@@ -96,14 +98,19 @@ def test_string_marshalling_frees_cstr_in_ir(tmp_path):
 
 
 def _function_body(ir_text: str, fn_name: str) -> str:
-    """Return the IR text of the body of `define ... @fn_name(...)`."""
+    """Return the IR text of the body of `define ... @fn_name(...)`.
+
+    A symbol carries the declaring unit as a `<unit>$` prefix, and `main` does not
+    (`docs/design/unit-namespaces.md` section 9), so the match reads both. The unit is
+    the source file's stem, which a tmp_path fixture chooses, so it is never spelled out
+    here.
+    """
+    marker = re.compile(r'@"(?:[^"]*\$)?' + re.escape(fn_name) + r'"\(')
     start = ir_text.index('define ')
     while True:
-        # Find a `define` whose name matches `@"fn_name"(`.
-        marker = f'@"{fn_name}"('
         def_at = ir_text.index('define', start)
         line_end = ir_text.index("\n", def_at)
-        if marker in ir_text[def_at:line_end]:
+        if marker.search(ir_text[def_at:line_end]):
             break
         start = line_end
     brace = ir_text.index("{\n", def_at)

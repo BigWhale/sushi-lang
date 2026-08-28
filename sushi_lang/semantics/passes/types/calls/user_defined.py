@@ -168,7 +168,8 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         validate_stdlib_function(validator, call, stdlib_func)
         return
 
-    if function_name not in validator.func_table.by_name:
+    func_sig = validator.func_sig(function_name)
+    if func_sig is None:
         call.callee_unresolved = True
         # A name a library declares and keeps. It resolves to nothing here BECAUSE the
         # library kept it, so "undefined" was the wrong word for it (#469). The callee
@@ -190,16 +191,18 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         diag.emit()
         return
 
-    func_sig = validator.func_table.by_name[function_name]
-
     if reject_private_call(validator, "function", func_sig, call.callee.loc):
         return
 
-    # A unit that declared this name and lost it reads somebody else's signature here.
-    # Measuring its own call against that is the D2 cascade: the arity and every
-    # argument would be reported against a declaration this unit never wrote. The
-    # arguments are still validated in their own right.
-    if name_is_contested(validator, "function", function_name):
+    # A unit that declared this name and lost it may STILL be reading somebody else's
+    # signature: only the concrete table carries a per-unit view, so a displaced GENERIC
+    # declaration has none. Measuring the unit's own call against the winner's signature
+    # is the D2 cascade -- the arity and every argument reported against a declaration
+    # this unit never wrote -- so the arguments are validated in their own right and
+    # nothing else is. Where the per-unit view did answer, the unit reads its own and
+    # every ordinary rule applies.
+    if (name_is_contested(validator, "function", function_name)
+            and getattr(func_sig, "unit_name", None) != validator.current_unit_name):
         for arg in call.args:
             validator.validate_expression(arg)
         return

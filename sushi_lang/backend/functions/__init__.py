@@ -26,18 +26,22 @@ class LLVMFunctionManager:
         self.definitions = FunctionDefinitions(codegen)
         self.main_wrapper = MainFunctionWrapper(codegen)
 
-    def emit_func_decl(self, fn: FuncDef) -> ir.Function:
+    def emit_func_decl(self, fn: FuncDef,
+                       unit_name: str | None = None) -> ir.Function:
         """Create LLVM function prototype for regular function."""
         return self.declarations.emit_func_decl(
             fn,
             params_of_fn=self.helpers.params_of,
-            helpers=self.helpers
+            helpers=self.helpers,
+            unit_name=unit_name,
         )
 
-    def emit_func_def(self, fn: FuncDef) -> ir.Function:
+    def emit_func_def(self, fn: FuncDef,
+                      unit_name: str | None = None) -> ir.Function:
         """Define the body of a regular function."""
         return self.definitions.emit_func_def(
             fn,
+            unit_name=unit_name,
             emit_func_decl_fn=self.emit_func_decl,
             begin_function_fn=self.helpers.begin_function,
             end_function_fn=self.helpers.end_function,
