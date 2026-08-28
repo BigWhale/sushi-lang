@@ -1,7 +1,7 @@
 """Regression tests for #248: using an array constant directly is a CE0000 ICE."""
 from __future__ import annotations
 
-from tests.unit.test_ffi import _emit_ir, _function_body
+from tests.unit.test_ffi import _emit_ir, _function_body, _mentions_symbol
 
 
 _PRIMES = "const i32[3] PRIMES = [2, 3, 5]\n\n"
@@ -14,7 +14,7 @@ def test_index_in_interpolation(tmp_path):
         '    println("{PRIMES[0]}")\n'
         "    return Result.Ok(0)\n"
     )
-    assert "@\"PRIMES\"" in _emit_ir(tmp_path, src)
+    assert _mentions_symbol(_emit_ir(tmp_path, src), "PRIMES")
 
 
 def test_index_in_let(tmp_path):
@@ -25,7 +25,7 @@ def test_index_in_let(tmp_path):
         "    println(first)\n"
         "    return Result.Ok(0)\n"
     )
-    assert "@\"PRIMES\"" in _emit_ir(tmp_path, src)
+    assert _mentions_symbol(_emit_ir(tmp_path, src), "PRIMES")
 
 
 def test_index_in_non_main_function(tmp_path):
@@ -38,7 +38,7 @@ def test_index_in_non_main_function(tmp_path):
         "    println(third().realise(0))\n"
         "    return Result.Ok(0)\n"
     )
-    assert "@\"PRIMES\"" in _function_body(_emit_ir(tmp_path, src), "third")
+    assert _mentions_symbol(_function_body(_emit_ir(tmp_path, src), "third"), "PRIMES")
 
 
 def test_len(tmp_path):
@@ -61,7 +61,7 @@ def test_get_maybe(tmp_path):
         "    println(first().realise(0))\n"
         "    return Result.Ok(0)\n"
     )
-    assert "@\"PRIMES\"" in _emit_ir(tmp_path, src)
+    assert _mentions_symbol(_emit_ir(tmp_path, src), "PRIMES")
 
 
 def test_iter_foreach(tmp_path):
@@ -72,7 +72,7 @@ def test_iter_foreach(tmp_path):
         "        println(p)\n"
         "    return Result.Ok(0)\n"
     )
-    assert "@\"PRIMES\"" in _emit_ir(tmp_path, src)
+    assert _mentions_symbol(_emit_ir(tmp_path, src), "PRIMES")
 
 
 def test_hash(tmp_path):
@@ -98,7 +98,8 @@ def test_local_shadows_constant(tmp_path):
     )
     body = _function_body(_emit_ir(tmp_path, src), "shadowed")
     assert 'alloca [3 x i32]' in body, "the local array must still be allocated"
-    assert '@"PRIMES"' not in body, "the local shadows the constant; the global must not be read"
+    assert not _mentions_symbol(body, "PRIMES"), \
+        "the local shadows the constant; the global must not be read"
 
 
 def test_read_is_zero_copy(tmp_path):
@@ -112,6 +113,6 @@ def test_read_is_zero_copy(tmp_path):
         "    return Result.Ok(0)\n"
     )
     body = _function_body(_emit_ir(tmp_path, src), "read")
-    assert '@"PRIMES"' in body
+    assert _mentions_symbol(body, "PRIMES")
     assert 'alloca [3 x i32]' not in body, "the constant must not be copied into a local"
     assert 'memcpy' not in body, "the constant must not be copied into a local"

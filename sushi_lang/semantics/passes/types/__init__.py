@@ -6,6 +6,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.passes.collect.externals import ExternalSig
     from sushi_lang.semantics.passes.collect.functions import FuncSig
+    from sushi_lang.semantics.passes.collect.constants import ConstSig
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
@@ -14,6 +15,7 @@ from sushi_lang.semantics.ast import (
     If, Expr
 )
 from sushi_lang.semantics.typesys import Type, BuiltinType
+from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 from sushi_lang.semantics.passes.types.visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
 
 from .compatibility import types_compatible
@@ -105,7 +107,7 @@ class TypeValidator:
         # `run` fills these from the program. A validator built to infer one type --
         # the monomorphizer and the instantiator both build one -- never runs, and it
         # reads no constant, so an empty map is the truth and not a fallback.
-        self.ast_constants: Dict[str, ConstDef] = {}
+        self.ast_constants: UnitKeyedSymbols[ConstDef] = UnitKeyedSymbols()
 
         self.statement_validator = StatementValidator(self)
         self.expression_validator = ExpressionValidator(self)
@@ -113,7 +115,9 @@ class TypeValidator:
 
     def run(self, program: Program) -> None:
         """Entry point for type validation."""
-        self.ast_constants = {const.name: const for const in program.constants}
+        self.ast_constants = UnitKeyedSymbols()
+        for const in program.constants:
+            self.ast_constants.declare(const.name, const, unit=self.current_unit_name)
 
         # Whole-unit, and BEFORE the per-declaration walk: it is the only way a public
         # generic is reached, since the loop below skips one.
@@ -143,6 +147,10 @@ class TypeValidator:
         two ordinary units once the two symbols were allowed to coexist.
         """
         return self.func_table.lookup(name, self.current_unit_name)
+
+    def const_sig(self, name: str) -> Optional['ConstSig']:
+        """What the name of a constant means INSIDE the unit being validated."""
+        return self.const_table.lookup(name, self.current_unit_name)
 
     def validate_expression(self, expr: Expr) -> Optional[Type]:
         """Validate an expression and its subexpressions using the Visitor Pattern."""

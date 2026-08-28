@@ -3,12 +3,13 @@
 Ruling 1 of `docs/design/visibility.md`. Three shapes, one diagnostic each:
 
   both public   -> CE3003, the ambiguous export, now with a note at each declaration
-  both private  -> CE0105, the plain duplicate, which the collect pass already rendered
-                   relationally
-  a library's   -> CE0105 as well. D1 asked whether a private library constant deserves
+  both private  -> nothing. Each declaration takes its own `<unit>$<name>` global, so the
+                   two coexist (`docs/design/unit-namespaces.md` section 9). CE0105 keeps
+                   the same name twice inside ONE unit.
+  a library's   -> CE0105 still. D1 asked whether a private library constant deserves
                    CE3011 like a function does; it does not, because CE0105 already names
                    the library's file in its note and is the only diagnostic for the
-                   condition.
+                   condition. A library clash is not this epic's to lift.
 """
 from __future__ import annotations
 
@@ -70,10 +71,14 @@ def test_two_public_constants_are_an_ambiguous_export(tmp_path):
 
 
 @needs_sushic
-def test_two_private_constants_are_a_plain_duplicate(tmp_path):
+def test_two_private_constants_coexist(tmp_path):
+    """Each takes its own `<unit>$<name>` global, so neither has to lose.
+
+    That the two values actually read back is `tests/namespaces/mangling/`; this asserts
+    that no diagnostic is spent on them (`docs/design/unit-namespaces.md` section 9).
+    """
     out = _compile_units(tmp_path, _units(""))
-    assert "CE0105" in out, out
-    assert "first defined here" in out, out
+    assert "CE0105" not in out, out
     assert "CE3003" not in out, out
 
 

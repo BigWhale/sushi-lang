@@ -132,6 +132,15 @@ def _count_in_function(ir_text: str, fn_name: str, needle: str) -> int:
     return _function_body(ir_text, fn_name).count(needle)
 
 
+def _mentions_symbol(ir_text: str, name: str) -> bool:
+    """Does the IR name this Sushi declaration, whichever unit prefix it carries?
+
+    A symbol is `<unit>$<name>` (`docs/design/unit-namespaces.md` section 9), and the
+    unit is the source file's stem, which a tmp_path fixture chooses.
+    """
+    return re.search(r'@"(?:[^"]*\$)?' + re.escape(name) + r'"', ir_text) is not None
+
+
 def test_string_marshalling_no_leak_multi_return(tmp_path):
     """Multi-exit function: every return path frees the marshalled char* exactly once."""
     src = (

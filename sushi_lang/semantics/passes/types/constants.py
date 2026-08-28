@@ -41,7 +41,8 @@ def validate_constant(self, const: ConstDef) -> None:
         return
 
     from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
-    evaluator = ConstantEvaluator(self.reporter, self.const_table, self.ast_constants)
+    evaluator = ConstantEvaluator(self.reporter, self.const_table, self.ast_constants,
+                                  self.current_unit_name)
     const_value = evaluator.evaluate(const.value, const.ty, const.loc)
 
     if const_value is None:

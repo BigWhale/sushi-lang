@@ -34,7 +34,8 @@ def validate_array_literal(validator: 'TypeValidator', expr: ArrayLiteral) -> No
     # call is here to SPEAK, and every caller that needs the runs reads them itself.
     array_runs.read_runs(
         expr.elements,
-        array_runs.const_int_reader(validator.const_table, validator.ast_constants),
+        array_runs.const_int_reader(validator.const_table, validator.ast_constants,
+                                    validator.current_unit_name),
         validator.reporter)
 
     # Check type consistency of all elements (CE2013). A range element compares as the i32
@@ -396,7 +397,9 @@ def reject_overflowing_operation(validator: 'TypeValidator', expr: Expr,
     from sushi_lang.internals.report import Reporter
     from sushi_lang.semantics.passes.const_eval import ConstantEvaluator, emit_overflow
 
-    evaluator = ConstantEvaluator(Reporter(), validator.const_table, validator.ast_constants)
+    evaluator = ConstantEvaluator(Reporter(), validator.const_table,
+                                  validator.ast_constants,
+                                  validator.current_unit_name)
     evaluator.evaluate(expr, result_type, expr.loc)
 
     overflow = evaluator.overflow
@@ -415,7 +418,9 @@ def _provable_shift_count(validator: 'TypeValidator', count: Expr) -> Optional[i
     from sushi_lang.internals.report import Reporter
     from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
 
-    evaluator = ConstantEvaluator(Reporter(), validator.const_table, validator.ast_constants)
+    evaluator = ConstantEvaluator(Reporter(), validator.const_table,
+                                  validator.ast_constants,
+                                  validator.current_unit_name)
     value = evaluator.evaluate(count, BuiltinType.I64, None)
     if value is None or not isinstance(value.value, int) or isinstance(value.value, bool):
         return None

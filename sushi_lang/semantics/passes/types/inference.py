@@ -47,7 +47,8 @@ def infer_array_literal_type(validator: 'TypeValidator', expr: ArrayLiteral) -> 
     # silently: CE2017 belongs to validate_array_literal, which speaks for this literal.
     runs = array_runs.read_runs(
         expr.elements,
-        array_runs.const_int_reader(validator.const_table, validator.ast_constants),
+        array_runs.const_int_reader(validator.const_table, validator.ast_constants,
+                                    validator.current_unit_name),
         Reporter())
     if runs is None:
         return None

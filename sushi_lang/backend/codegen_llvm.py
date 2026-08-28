@@ -27,7 +27,7 @@ from sushi_lang.backend.memory.moves import MoveTracker
 from sushi_lang.backend.expressions import ExpressionEmitter
 from sushi_lang.backend.statements import StatementEmitter
 from sushi_lang.backend.functions import LLVMFunctionManager
-from sushi_lang.backend.functions.symbols import UnitKeyedSymbols
+from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols, mangle_unit_symbol
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
@@ -140,7 +140,7 @@ class LLVMCodegen:
         # is what turns a bare Sushi name into the right declaration.
         self.funcs: UnitKeyedSymbols[ir.Function] = UnitKeyedSymbols()
 
-        self.constants: Dict[str, ir.GlobalVariable] = {}
+        self.constants: UnitKeyedSymbols[ir.GlobalVariable] = UnitKeyedSymbols()
 
         self._malloc_func: Optional[ir.Function] = None
         self._free_func: Optional[ir.Function] = None
@@ -182,7 +182,7 @@ class LLVMCodegen:
 
         self.current_function_ast: Optional['FuncDef'] = None
 
-        self.ast_constants: Dict[str, ConstDef] = {}
+        self.ast_constants: UnitKeyedSymbols[ConstDef] = UnitKeyedSymbols()
 
         # Recursive-destructor state, declared here rather than conjured on at first use:
         # `_dtor_inprogress` is the stack of type keys being inlined, so a re-entry means
@@ -548,8 +548,8 @@ class LLVMCodegen:
         # the cache already handed out (#257).
         self.module = ir.Module(name=f"unit_{target_unit.name}", context=self.llvm_context)
         self.funcs = UnitKeyedSymbols()
-        self.constants = {}
-        self.ast_constants = {}
+        self.constants = UnitKeyedSymbols()
+        self.ast_constants = UnitKeyedSymbols()
         self._malloc_func = None
         self._free_func = None
         self._realloc_func = None
@@ -573,13 +573,13 @@ class LLVMCodegen:
             if unit.ast is None:
                 continue
             for const in unit.ast.constants:
-                self.ast_constants[const.name] = const
+                self.ast_constants.declare(const.name, const, unit=unit.name)
 
         for unit in all_units:
             if unit.ast is None:
                 continue
             for const in unit.ast.constants:
-                self._emit_global_constant(const)
+                self._emit_global_constant(const, unit.name)
 
         # First round: declare function prototypes
         # For the target unit: declare ALL functions (public + private, they'll get bodies)
@@ -746,10 +746,10 @@ class LLVMCodegen:
                 continue
 
             for const in unit.ast.constants:
-                self.ast_constants[const.name] = const
+                self.ast_constants.declare(const.name, const, unit=unit.name)
 
             for const in unit.ast.constants:
-                self._emit_global_constant(const)
+                self._emit_global_constant(const, unit.name)
 
         for unit in units:
             if unit.ast is None:
@@ -945,18 +945,26 @@ class LLVMCodegen:
             [data_ptr, ir.Constant(self.i32, size), ir.Constant(self.i8, 0)])
 
     def _register_global_constant(self, name: str, llvm_type: ir.Type,
-                                  value: ir.Constant) -> None:
-        """Publish an evaluated constant as a read-only global."""
+                                  value: ir.Constant,
+                                  unit_name: str | None = None) -> None:
+        """Publish an evaluated constant as a read-only global.
+
+        The global's NAME carries the declaring unit, exactly as a function symbol does:
+        two units may each declare a private `SCRATCH`, and the monolithic path puts both
+        into one module (`docs/design/unit-namespaces.md` section 9).
+        """
         # Internal linkage: cross-unit visibility comes from sharing one LLVM module.
         # True separate compilation would need external linkage for a public constant.
-        global_const = ir.GlobalVariable(self.module, llvm_type, name=name)
+        global_const = ir.GlobalVariable(
+            self.module, llvm_type, name=mangle_unit_symbol(unit_name, name))
         global_const.linkage = 'internal'
         global_const.global_constant = True
         global_const.initializer = value
         global_const.unnamed_addr = True  # Allow merging identical constants
-        self.constants[name] = global_const
+        self.constants.declare(name, global_const, unit=unit_name)
 
-    def _emit_global_constant(self, const: ConstDef) -> None:
+    def _emit_global_constant(self, const: ConstDef,
+                              unit_name: str | None = None) -> None:
         """Emit a global constant definition.
 
         The route is the VALUE the evaluator produced, never the shape of the
@@ -970,24 +978,28 @@ class LLVMCodegen:
 
         # Materializing at the DECLARED type keeps a context-typed literal at its own
         # width: `const u8 MAX = 200` yields a u8 initializer, not an i32 one.
-        const_value = self._evaluate_constant_expression(const.value, const.ty)
+        const_value = self._evaluate_constant_expression(const.value, const.ty, unit_name)
         if const_value is None:
             return  # Skip non-constant expressions
 
-        initializer = self._materialize_constant(const_value, f".str_data.{const.name}")
+        initializer = self._materialize_constant(
+            const_value, mangle_unit_symbol(unit_name, f".str_data.{const.name}"))
         if initializer is None:
             return  # Skip unsupported types
 
-        self._register_global_constant(const.name, self.types.ll_type(const.ty), initializer)
+        self._register_global_constant(
+            const.name, self.types.ll_type(const.ty), initializer, unit_name)
 
-    def _evaluate_constant_expression(self, expr, expected_type=None) -> Optional["ConstantValue"]:
+    def _evaluate_constant_expression(self, expr, expected_type=None,
+                                      unit_name=None) -> Optional["ConstantValue"]:
         """Evaluate a constant expression at compile time, as a value not an initializer."""
         from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
         from sushi_lang.internals.report import Reporter
 
         # A silent reporter: the typecheck pass has already reported anything wrong with this.
         silent_reporter = Reporter()
-        evaluator = ConstantEvaluator(silent_reporter, self.const_table, self.ast_constants)
+        evaluator = ConstantEvaluator(silent_reporter, self.const_table, self.ast_constants,
+                                      unit_name or self.emitting_unit)
         return evaluator.evaluate(expr, expected_type, None)
 
     def _materialize_constant(self, value, data_name: str) -> Optional[ir.Constant]:

@@ -1,5 +1,9 @@
-# The same private name, a different value.
+# The same two private names, different values. Each unit reads its own.
 const i32 SCRATCH = 58
+const i32 DOUBLE = SCRATCH * 2
 
 public fn right_scratch() i32:
     return Result.Ok(SCRATCH)
+
+public fn right_double() i32:
+    return Result.Ok(DOUBLE)

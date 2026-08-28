@@ -142,7 +142,8 @@ class CollectorPass:
         )
         # Which units came from a library, for every collector that has to know.
         for collector in (self.struct_collector, self.enum_collector,
-                          self.perk_collector, self.function_collector):
+                          self.perk_collector, self.function_collector,
+                          self.constant_collector):
             collector.library_units = set(library_units or ())
 
         # And who declared what, for the four that ask it: three refuse a library clash

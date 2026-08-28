@@ -552,7 +552,7 @@ class ExpressionValidator(RecursiveVisitor):
         tv = self.type_validator
         if node.id in tv.variable_types:
             return
-        const_sig = tv.const_table.by_name.get(node.id)
+        const_sig = tv.const_sig(node.id)
         if const_sig is not None:
             # The one place a bare constant is validated, so the one place the fence
             # sits (D3). A local of the same name shadows it and never reaches here.
@@ -719,8 +719,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 return var_type.referenced_type
             return var_type
 
-        if node.id in self.type_validator.const_table.by_name:
-            const_sig = self.type_validator.const_table.by_name[node.id]
+        const_sig = self.type_validator.const_sig(node.id)
+        if const_sig is not None:
             return const_sig.const_type
 
         fn_value_type = function_value_type_of(self.type_validator, node.id)

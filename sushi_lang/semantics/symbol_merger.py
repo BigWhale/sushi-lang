@@ -21,7 +21,7 @@ class SymbolTableMerger:
         global_tables: 'SymbolTables',
     ) -> None:
         """Merge all symbols from a unit into the global tables."""
-        self._merge_by_name(unit_tables.constants, global_tables.constants)
+        self._merge_constants(unit_tables.constants, global_tables.constants)
         self._merge_by_name(unit_tables.structs, global_tables.structs)
         self._merge_by_name(unit_tables.enums, global_tables.enums)
         self._merge_by_name(unit_tables.generic_enums, global_tables.generic_enums)
@@ -153,6 +153,17 @@ class SymbolTableMerger:
                 if perk_name not in global_perk_impls.by_perk:
                     global_perk_impls.by_perk[perk_name] = set()
                 global_perk_impls.by_perk[perk_name].add(type_name)
+
+    @staticmethod
+    def _merge_constants(unit_consts, global_consts) -> None:
+        """Merge constants, both views. The per-unit half carries across whole.
+
+        The same shape as `_merge_functions`, and for the same reason: a name two units
+        declare has one entry per unit, which is what `lookup` gives back.
+        """
+        SymbolTableMerger._merge_by_name(unit_consts, global_consts)
+        for unit_name, declared in unit_consts.by_unit.items():
+            global_consts.by_unit.setdefault(unit_name, {}).update(declared)
 
     def _merge_functions(
         self,

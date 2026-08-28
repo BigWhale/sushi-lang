@@ -138,7 +138,8 @@ def require_readable_length(runs: Sequence[Run], reporter: Reporter) -> Optional
     return expanded_length(runs)
 
 
-def const_int_reader(const_table, ast_constants) -> ReadInt:
+def const_int_reader(const_table, ast_constants,
+                    unit_name: Optional[str] = None) -> ReadInt:
     """A count reader backed by the constant evaluator. Always silent.
 
     CE2017 is the diagnostic a bad count gets, and `read_runs` is what raises it. A reader
@@ -148,8 +149,9 @@ def const_int_reader(const_table, ast_constants) -> ReadInt:
         from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
         from sushi_lang.semantics.typesys import BuiltinType
 
-        evaluated = ConstantEvaluator(Reporter(), const_table, ast_constants).evaluate(
-            expr, BuiltinType.I32, expr.loc)
+        evaluated = ConstantEvaluator(
+            Reporter(), const_table, ast_constants, unit_name,
+        ).evaluate(expr, BuiltinType.I32, expr.loc)
         if evaluated is None or isinstance(evaluated.value, bool):
             return None
         return evaluated.value if isinstance(evaluated.value, int) else None

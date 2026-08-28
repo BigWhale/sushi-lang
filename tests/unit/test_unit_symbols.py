@@ -12,7 +12,9 @@ import subprocess
 
 import pytest
 
-from sushi_lang.semantics.unit_symbols import UNIT_SEP, mangle_unit_symbol
+from sushi_lang.semantics.unit_symbols import (
+    UNIT_SEP, UnitKeyedSymbols, mangle_unit_symbol,
+)
 
 
 needs_sushic = pytest.mark.skipif(shutil.which("sushic") is None,
@@ -58,6 +60,38 @@ def test_the_separator_lies_outside_every_other_symbol_alphabet():
     ]
     for symbol in produced:
         assert UNIT_SEP not in symbol, symbol
+
+
+# --- the index that reads a symbol back ------------------------------------------
+
+def test_the_asking_unit_answers_first():
+    """`UnitKeyedSymbols.lookup` is `FunctionTable.lookup`'s rule over any value."""
+    table: UnitKeyedSymbols[str] = UnitKeyedSymbols()
+    table.declare("helper", "left", unit="helpers/left")
+    table.declare("helper", "right", unit="helpers/right")
+
+    assert table.lookup("helper", "helpers/left") == "left"
+    assert table.lookup("helper", "helpers/right") == "right"
+    # A third unit reads the flat view, which is FIRST-wins.
+    assert table.lookup("helper", "main") == "left"
+    assert table.lookup("helper") == "left"
+
+
+def test_a_dedup_guard_asks_for_the_units_own_declaration():
+    """`declared` never falls back: two units are two declarations, not one."""
+    table: UnitKeyedSymbols[str] = UnitKeyedSymbols()
+    table.declare("helper", "left", unit="helpers/left")
+
+    assert table.declared("helper", "helpers/left") == "left"
+    assert table.declared("helper", "helpers/right") is None
+
+
+def test_a_symbol_with_no_unit_lives_in_the_flat_view_alone():
+    table: UnitKeyedSymbols[str] = UnitKeyedSymbols()
+    table.declare("identity__i32", "instance")
+
+    assert table.get("identity__i32") == "instance"
+    assert table.by_unit == {}
 
 
 # --- what a `.slib` records ------------------------------------------------------

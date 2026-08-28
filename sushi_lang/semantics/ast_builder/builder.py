@@ -5,6 +5,7 @@ from typing import List, Optional
 from lark import Tree, Token
 
 from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 from sushi_lang.semantics.generics.types import GenericTypeRef
 
 from sushi_lang.semantics.ast import (
@@ -30,7 +31,10 @@ class ASTBuilder:
         # This unit's constants, by name. A fixed array's size may name one, and a
         # type is read while the AST is built -- long before the collect pass has a
         # constant table -- so the builder keeps its own.
-        self.unit_constants: dict = {}
+        # This unit's own constants, which is all a size may name (Known Limitation
+        # 14). One unit, so no unit key: `declare` with none and the flat view is
+        # the whole answer.
+        self.unit_constants: UnitKeyedSymbols = UnitKeyedSymbols()
         # Doc blocks the builder cannot report on: it takes no Reporter, and a block
         # that documents nothing is the `docs` pass's warning to raise. Every block
         # ends up attached, lifted, or here -- see documentation.md section 5.
@@ -59,9 +63,9 @@ class ASTBuilder:
             return None
 
         table = ConstantTable()
-        for known in self.unit_constants.values():
-            table.by_name[known.name] = ConstSig(name=known.name, loc=known.loc,
-                                                 const_type=known.ty)
+        for known in self.unit_constants.by_name.values():
+            table.declare(known.name, ConstSig(name=known.name, loc=known.loc,
+                                               const_type=known.ty))
 
         evaluated = ConstantEvaluator(Reporter(), table, self.unit_constants).evaluate(
             const_def.value, const_def.ty, const_def.loc)
@@ -120,7 +124,7 @@ class ASTBuilder:
             if const is not None:
                 const_def = constants.parse_constdef(const, self)
                 constants_list.append(const_def)
-                self.unit_constants[const_def.name] = const_def
+                self.unit_constants.declare(const_def.name, const_def)
 
         for ch in tree.children:
             if not isinstance(ch, Tree):

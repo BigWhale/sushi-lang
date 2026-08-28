@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -27,9 +27,33 @@ class ConstSig:
 
 @dataclass
 class ConstantTable:
-    """Registry of all constants collected by the collect pass."""
+    """Registry of all constants collected by the collect pass.
+
+    Two views, the same pair and the same rule as `FunctionTable`: `by_name` is the FLAT
+    one, and `by_unit` keeps every declaration under the unit that wrote it. Two units
+    may each declare a private `SCRATCH`, so a bare name is no longer an answer on its
+    own (`docs/design/unit-namespaces.md` section 9).
+    """
     by_name: Dict[str, ConstSig] = field(default_factory=dict)
+    by_unit: Dict[str, Dict[str, ConstSig]] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
+
+    def declare(self, name: str, sig: ConstSig) -> None:
+        """Register one declaration in both views. The ONE insert."""
+        if name not in self.by_name:
+            self.order.append(name)
+            self.by_name[name] = sig
+        unit = getattr(sig, "unit_name", None)
+        if unit is not None:
+            self.by_unit.setdefault(unit, {})[name] = sig
+
+    def lookup(self, name: str, unit_name: Optional[str] = None) -> Optional[ConstSig]:
+        """What the name means inside `unit_name`. One name, no dict built."""
+        if unit_name is not None:
+            own = self.by_unit.get(unit_name)
+            if own is not None and name in own:
+                return own[name]
+        return self.by_name.get(name)
 
 
 class ConstantCollector:
@@ -42,6 +66,10 @@ class ConstantCollector:
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
         self.current_unit_name: Optional[str] = None
+        # Which units came from a source library. A library clash is not this epic's to
+        # lift: the consumer cannot see the library's private, and CE3011 for a function
+        # narrows at the same phase as this would (section 7's table).
+        self.library_units: Set[str] = set()
         self.constants = constants
 
     def collect(self, root: Program) -> None:
@@ -77,11 +105,18 @@ class ConstantCollector:
             is_public=getattr(const, "is_public", True),
         )
 
-        if name in self.constants.by_name:
-            prev = self.constants.by_name[name]
-            er.emit_with(self.r, ERR.CE0105, name_span, name=name) \
-                .note("first defined here", prev.name_span, prev.filename).emit()
-            return
+        prev = self.constants.by_name.get(name)
+        if prev is not None:
+            # Another unit's declaration COEXISTS: each takes its own `<unit>$<name>`
+            # global, so neither has to lose. The same name twice inside ONE unit is
+            # the duplicate CE0105 still answers.
+            prev_unit = getattr(prev, "unit_name", None)
+            if (prev_unit is None
+                    or prev_unit == self.current_unit_name
+                    or prev_unit in self.library_units
+                    or self.current_unit_name in self.library_units):
+                er.emit_with(self.r, ERR.CE0105, name_span, name=name) \
+                    .note("first defined here", prev.name_span, prev.filename).emit()
+                return
 
-        self.constants.order.append(name)
-        self.constants.by_name[name] = sig
+        self.constants.declare(name, sig)
