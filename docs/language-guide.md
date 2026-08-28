@@ -1007,11 +1007,39 @@ Reach for the alias when two units disagree about a name, or when the reader of 
 should be able to see where the name came from. The two forms compose: import one unit
 flat and another behind a dot, and each brings what it says and no more.
 
+The dot works wherever a name is written, not only in front of a call. A type, a
+constructor, a match arm and a perk constraint all take one:
+
+<!-- docs-sweep: skip (two units) -->
+```sushi
+use "helpers/geometry" as geo
+
+fn describe(geo.Vec v) string:
+    match geo.Sign.Plus:
+        geo.Sign.Plus -> return Result.Ok("north of {v.y}")
+        geo.Sign.Minus -> return Result.Ok("south of {v.y}")
+
+fn main() i32:
+    let geo.Vec here = geo.Vec(1, 2)
+    println("{describe(here).realise(\"nowhere\")}")
+    return Result.Ok(0)
+```
+
+One place refuses it: a fixed array's size. `i32[geo.SIZE]` is an error, because the
+size is read while your file is being parsed and an alias is bound long after that.
+Declare the constant in your own unit and name it bare.
+
 An alias behaves like any other name in the unit. A local variable of the same name
 shadows it, one name cannot hold two namespaces, and the alias is yours alone -- a unit
 that imports yours never sees it. Privacy is unchanged: `geo.helper` where `helper` is
 private to `geometry` is an error that says so, not one that says the name does not
 exist.
+
+Two units may export one name and the program still builds. It only becomes a problem
+where you write that name bare with nothing to say which one you mean, and then the
+compiler stops at that line and lists the candidates. Your own unit's declaration always
+wins, so it is never the ambiguous one -- and that is also why `use <math>` no longer
+takes `sin` away from a unit that declares a `sin` of its own.
 
 ## Memory Management
 

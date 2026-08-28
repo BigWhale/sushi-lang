@@ -1045,8 +1045,55 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-The dot reaches a `fn` -- generic included -- and a `const`. A qualified TYPE is not
-written yet.
+#### Where a qualified name may be written
+
+The qualifier folds into the name after it, so resolution then runs exactly as it does
+for the bare name -- against one unit instead of the flat scope. Every position that
+turns written text into a name takes one:
+
+| Position | Qualified form |
+|---|---|
+| a named type | `my_math.Vec` |
+| a generic named type | `my_math.Box@(i32)` |
+| a called function, generic included | `my_math.sin(0.0)` |
+| a struct constructor | `my_math.Vec(1, 2)` |
+| an enum constructor | `my_math.Sign.Plus` |
+| an enum pattern | `my_math.Sign.Plus ->` |
+| a named value | `my_math.MAX_DEPTH` |
+| a perk in a constraint | `@(T: my_math.Loud)` |
+| explicit type arguments | `my_math.empty@(i32)()` |
+
+<!-- docs-sweep: skip (two units) -->
+```sushi
+use "geometry" as geo
+
+struct Holder:
+    geo.Vec spot                            # a field
+
+fn total(geo.Vec v) i32:                    # a parameter
+    return Result.Ok(v.x + v.y)
+
+fn run() i32:
+    let geo.Vec v = geo.Vec(1, 2)           # an annotation, and a constructor
+    let geo.Sign s = geo.Sign.Plus          # an enum constructor
+    match s:
+        geo.Sign.Plus -> println("+")       # an enum pattern
+        geo.Sign.Minus -> println("-")
+    return Result.Ok(total(v)??)
+```
+
+**One position cannot be qualified.** A fixed array's size is read while the unit's own
+AST is built and an alias is bound long after that, so `i32[my_math.SIZE]` is `CE2099`.
+
+A qualifier naming no namespace, or a name the namespace does not hold, is `CE2001` in a
+type position and `CE2008` in a call, each with a help line drawn from what the namespace
+does hold.
+
+**Two units may export one name.** That is not an error by itself; it is an error only
+where the unqualified name is written and nothing says which one is meant, and then it is
+`CE3012` at the use, with a note at each candidate. The unit's OWN declaration always
+wins, so it never becomes ambiguous, and a flat `use <math>` no longer takes `sin` away
+from a unit that declares its own.
 
 **A local variable wins.** A variable named `my_math` shadows the alias for the rest of
 its scope, exactly as one shadows an FFI namespace.
