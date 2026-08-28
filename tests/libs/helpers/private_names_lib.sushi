@@ -1,0 +1,17 @@
+# A library with one PRIVATE function and one PRIVATE type, each used by a
+# public entry point. A consumer that declares the same names is what
+# `tests/namespaces/library/` measures: the function coexists, the type does
+# not.
+
+struct Tally:
+    i32 count
+
+fn bump(i32 n) i32:
+    return Result.Ok(n + 1)
+
+public fn lib_bump(i32 n) i32:
+    return Result.Ok(bump(n)?? * 10)
+
+public fn lib_tally(i32 n) i32:
+    let Tally t = Tally(n)
+    return Result.Ok(t.count + 100)

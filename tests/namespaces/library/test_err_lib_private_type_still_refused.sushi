@@ -1,0 +1,14 @@
+# A TYPE is one per program, so the consumer may not declare a name the library
+# declares privately: nominal identity means one name is one shape, and the
+# library's own bodies read the shape it declared. CE3011's struct and enum arms
+# stay until types coexist (phase 2 of docs/design/type-identity.md).
+# EXPECT_ERROR_CODE: CE3011
+use <lib/private_names_lib>
+
+struct Tally:
+    i32 total
+
+fn main() i32:
+    let Tally t = Tally(7)
+    println("{t.total} {lib_tally(1).realise(0)}")
+    return Result.Ok(0)
