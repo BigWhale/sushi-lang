@@ -1,0 +1,9 @@
+# A namespace holds a unit's declarations whatever their visibility, so naming a
+# private one through the dot is refused where it is written (CE3005), never
+# reported as an unknown name.
+# EXPECT_ERROR_CODE: CE3005
+use "helpers/geo" as geo
+
+fn main() i32:
+    println("{geo.hidden(1).realise(0)}")
+    return Result.Ok(0)

@@ -182,12 +182,15 @@ Three rules make this sound:
 - **The registry is skipped.** For `kind = "source"`, none of the
   `_register_library_*` helpers in `semantics/semantic_analyzer.py` runs. A library
   unit is an ordinary unit, so the ordinary passes handle it.
-- **Library units are COLLECTED first.** The compilation order puts dependents before
-  dependencies, which is right for codegen and wrong for collection: a consumer's
+- **Library units are COLLECTED first, and the order says why.** A consumer's
   `extend i32 with Display` is checked against the perks visible when its own unit is
-  collected, so a perk the library declares has to be in the table already. Seeding it
-  ahead of the loop the way `_seed_library_perks` does for a binary library would
-  register the same perk twice (CE4001), because this one also arrives in a real unit.
+  collected, so a perk the library declares has to be in the table already. The
+  compilation order yields every unit after the units it depends on
+  (`docs/design/unit-namespaces.md` section 13.2), and `build_dependency_graph` records
+  the edge a `use <lib/...>` creates, so a source library's units come first without a
+  hand-patch. Seeding them ahead of the loop the way `_seed_library_perks` does for a
+  binary library would register the same perk twice (CE4001), because this one also
+  arrives in a real unit.
 - **A consumer definition SHADOWS a library one, silently.** Same rule the binary path
   documents in §7, now enforced for functions, generics and perk impls by
   `passes/collect/`. Without it, `--lib-kind` would change program semantics instead of
@@ -676,10 +679,11 @@ Rules marked **binary** apply only when `kind != "source"`.
 
 | Situation | Rule | Why |
 |---|---|---|
-| Consumer FUNCTION name == public library function | local wins, and **CW3002** says so | a private function has internal linkage, so the two are separate symbols: the consumer's call binds to its own and the library's body to its own. Legal, and rarely intended, so it warns. Both public is the only real clash and is **CE3003** already. `docs/design/visibility.md` §9.1 |
+| Consumer FUNCTION name == public library function | local wins, and **CW3002** says so | the two are separate symbols, because each carries the unit that declared it: the consumer's call binds to its own and the library's body to its own. Legal, and rarely intended, so it warns. Both public is legal too and warns the same way; `CE3003` refused that program once and retired with unit namespaces. `docs/design/visibility.md` §9.1 |
 | Consumer TYPE name == public library type | **CE0004** / **CE2046**, hard error | type identity is nominal, so one name is one shape; the consumer cannot have its own |
-| Consumer name == library-PRIVATE name (**source**) | **CE3011**, hard error | one flat namespace, and the consumer collides with a name it cannot see, so renaming is its only move. The branch that let it try deleted the library's entry and registered no replacement, so the consumer lost its own declaration too |
-| Consumer name == **export-closure private** symbol (**binary**) | **CE5007**, hard error | the library's own monomorphized bodies call that private symbol by name; silently shadowing it would change what the library's shipped code does. CE3011 is its source-path twin |
+| Consumer TYPE name == library-PRIVATE type (**source**) | **CE3011**, hard error | type identity is nominal, so one name is one shape even where the consumer cannot see the library's declaration. Renaming is the only move, and `docs/design/type-identity.md` phase 2 is what would lift it |
+| Consumer FUNCTION name == library-PRIVATE function (**source**) | legal, and silent | each declaration carries the unit that declared it, so the two coexist and each body calls its own (`docs/design/unit-namespaces.md` sections 6 and 9). A CONSTANT is the same shape and is still refused with **CE0105** (#507) |
+| Consumer name == **export-closure private** symbol (**binary**) | **CE5007**, hard error | the library's own monomorphized bodies call that private symbol by name; silently shadowing it would change what the library's shipped code does. The source path needs no twin for a function, because a source library's units are compiled and each keeps its own scope |
 | Consumer perk-impl `(type, perk)` == library-shipped perk-impl (**binary**) | local wins, silent, both semantically and at link time (§5.4, §5.7) | a consumer providing its own impl is expected, not an error |
 | Consumer extension method name == library perk-impl method name (**binary**) | library impl skipped entirely (no error) | avoids recreating CE4007 as a breaking change on every library update |
 | Exported generic references an `unsafe external` namespace | **CE5006** | FFI bindings cannot be re-declared at a consumer that never saw the block. Fires on EVERY kind: `_extract_templates` runs the export-closure walk before the kind branch in `compiler/pipeline.py`. Arguably wrong on the source path, where the `unsafe external` block ships inside its own unit — see §9 |

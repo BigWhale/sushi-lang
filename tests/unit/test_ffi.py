@@ -1,6 +1,8 @@
 """Unit tests for FFI internals that the .sushi corpus cannot reach directly."""
 from __future__ import annotations
 
+import re
+
 from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.units import Unit
@@ -96,14 +98,19 @@ def test_string_marshalling_frees_cstr_in_ir(tmp_path):
 
 
 def _function_body(ir_text: str, fn_name: str) -> str:
-    """Return the IR text of the body of `define ... @fn_name(...)`."""
+    """Return the IR text of the body of `define ... @fn_name(...)`.
+
+    A symbol carries the declaring unit as a `<unit>$` prefix, and `main` does not
+    (`docs/design/unit-namespaces.md` section 9), so the match reads both. The unit is
+    the source file's stem, which a tmp_path fixture chooses, so it is never spelled out
+    here.
+    """
+    marker = re.compile(r'@"(?:[^"]*\$)?' + re.escape(fn_name) + r'"\(')
     start = ir_text.index('define ')
     while True:
-        # Find a `define` whose name matches `@"fn_name"(`.
-        marker = f'@"{fn_name}"('
         def_at = ir_text.index('define', start)
         line_end = ir_text.index("\n", def_at)
-        if marker in ir_text[def_at:line_end]:
+        if marker.search(ir_text[def_at:line_end]):
             break
         start = line_end
     brace = ir_text.index("{\n", def_at)
@@ -123,6 +130,15 @@ def _function_body(ir_text: str, fn_name: str) -> str:
 def _count_in_function(ir_text: str, fn_name: str, needle: str) -> int:
     """Count occurrences of `needle` inside the body of `@fn_name` only."""
     return _function_body(ir_text, fn_name).count(needle)
+
+
+def _mentions_symbol(ir_text: str, name: str) -> bool:
+    """Does the IR name this Sushi declaration, whichever unit prefix it carries?
+
+    A symbol is `<unit>$<name>` (`docs/design/unit-namespaces.md` section 9), and the
+    unit is the source file's stem, which a tmp_path fixture chooses.
+    """
+    return re.search(r'@"(?:[^"]*\$)?' + re.escape(name) + r'"', ir_text) is not None
 
 
 def test_string_marshalling_no_leak_multi_return(tmp_path):
@@ -307,7 +323,6 @@ def test_reserved_externs_are_declared():
 
 def _emit_ir(tmp_path, src: str) -> str:
     """Compile `src` to LLVM IR text via the production multi-file pipeline."""
-    from sushi_lang.semantics.generics.active_generics import reset_active_generics
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
     from sushi_lang.semantics.units import UnitManager
     from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
@@ -319,13 +334,11 @@ def _emit_ir(tmp_path, src: str) -> str:
     program, _tree = parse_to_ast(text)
 
     reporter = Reporter(source=text, filename="main")
-    reset_active_generics()
     get_stdlib_registry()
 
     unit_manager = UnitManager(root_path=tmp_path, reporter=reporter)
     unit = unit_manager.load_unit("main", program)
     assert unit is not None
-    unit_manager.build_global_symbol_table()
     order = unit_manager.get_compilation_order()
 
     analyzer = SemanticAnalyzer(reporter, filename="main", unit_manager=unit_manager)

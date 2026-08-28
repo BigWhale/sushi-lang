@@ -17,6 +17,8 @@ order; this list mirrors it.
 | `docs` | check each doc block against its declaration (CE7001-CE7008, CW7001), and its completeness under `--warn-missing-docs` (CW7002-CW7006) | `semantics/passes/docs.py` |
 | `externs` | extern signatures (CE5003), `CW5001`, the `ptr` unit gate (CE5009) | `semantics/passes/types/externals.py` |
 | `libraries` | register every symbol a `.slib` exports | `semantics/semantic_analyzer.py` |
+| `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds (CE3013, CE3014, CW3004) | `semantics/passes/namespaces.py` |
+| `ffi-clash` | reject an `unsafe external` that names a symbol this build defines (CE5013) | `semantics/passes/types/externals.py` |
 | `entrypoint` | `main()`'s signature and its `string[] args` | `semantics/semantic_analyzer.py` |
 | `instantiate` | collect every generic instantiation the program asks for | `semantics/generics/instantiate/` |
 | `monomorphize` | generic definitions become concrete instances | `semantics/generics/monomorphize/` |
@@ -58,15 +60,24 @@ Collect global definitions before analyzing function bodies.
 4. **Symbol Table**: Build initial global scope
 5. **Visibility**: Record who declared what, and whether it says `public`
 
-### Perk definitions come first, from every unit
+### A unit is collected after the units it depends on
 
-The loop that collects the units is not the first walk. Every unit's perk DEFINITIONS are
-collected ahead of it (`CollectorPass.collect_perk_definitions`), because a perk is a
-contract and an implementation meets two rules that read a table: the perk exists
-(`CE4003`), and its marker lets this unit implement it (`CE4011`). The compilation order
-puts a dependent before its dependency, so without the sweep a perk declared next door
-arrived after the unit that implements it. Registering one declaration twice is a no-op,
-so the unit's own pass walks it again without reporting `CE4001`.
+The compilation order (`UnitManager.topological_sort`) yields every unit AFTER the units
+it depends on. The walk itself counts in-degree as "how many units depend on me" and so
+produces the opposite; the result is reversed once, and the direction is a ruling
+(`docs/design/unit-namespaces.md` section 13.2): a unit's scope is built from what its own
+imports declare, so the declaring unit has to be collected already.
+
+A source library's units and a bundled Sushi-source stdlib module are injected as ordinary
+compilation units, and `build_dependency_graph` records the edge that an import of one
+creates. That is why a library unit comes first without being told to. A binary `.slib`
+matches no unit and adds no edge, because it has no unit to compile.
+
+Two hand-patches retired with the order. Library units were pulled to the front of the
+collect loop, and every unit's perk DEFINITIONS were swept up ahead of the loop so that an
+implementation could meet the two rules that read the perk table -- the perk exists
+(`CE4003`), and its marker lets this unit implement it (`CE4011`). A perk declared next
+door is in the table when the implementing unit is reached, so neither patch is needed.
 
 ### Example
 
@@ -108,8 +119,8 @@ never be shown its own code measured against somebody else's declaration -- whic
 
 The rules that read it live where the use is: `passes/types/visibility.py` for a call and a
 bare constant read, the type funnel for a named type, the collect pass itself for a
-declaration that collides with a library's (CE3011) or promises something about a private
-perk (CE4011), and `passes/types/public_signatures.py` for the leak fence (CE3009,
+TYPE declaration that collides with a library's (CE3011) or a declaration that promises
+something about a private perk (CE4011), and `passes/types/public_signatures.py` for the leak fence (CE3009,
 CE3010). `docs/design/visibility.md` is normative.
 
 ### One reporter, many files
@@ -259,6 +270,54 @@ before generic enums, because an enum payload may name a struct.
 A clash between a library's export-closure helper and a local name is `CE5007`:
 local-wins would silently change what the library's monomorphized bodies call. See
 `docs/design/libraries.md`.
+
+## The `namespaces` pass: what a unit may write behind a dot
+
+**File:** `semantics/passes/namespaces.py`; the seam is `semantics/namespaces.py`.
+
+Builds one `NamespaceTable` per unit, because an alias is local to the unit that wrote
+it. A namespace is a binding from a name to a set of declarations, and four providers
+make one:
+
+| Provider | Bound by |
+|---|---|
+| `ExternalNamespace` | an `unsafe external "C" as <ns>` block |
+| `UnitNamespace` | `use "path" as N`, a library unit, a bundled source module |
+| `StdlibNamespace` | `use <math> as N` and every other registry module |
+| `GenericNamespace` | `use <collections/hashmap> as N` -- the built-in the import activates |
+
+A binding holds the PROVIDER and never the written path: `_inject_library_source`
+renames a library's units and leaves `UseStatement.path` alone, so an alias built from
+the path would break the moment a library unit imported its sibling.
+
+Three rules:
+
+- `CE3014` -- a `use` below a declaration. The span comes from the AST builder, because
+  the `libraries` step above appends a library's constants and private types to a host
+  unit's lists and each carries a span from its own file.
+- `CE3013` -- the alias is already bound in this unit: another alias, an FFI namespace,
+  or one of its own declarations. `_` is refused too, as the discard name.
+- `CW3004` -- the `as` reached no name. A warning, because a namespace is empty for
+  three reasons and only one is a mistake (`unit-namespaces.md` section 4.4).
+
+### Why it stands between `libraries` and `ffi-clash`
+
+A provider needs what `collect` and `libraries` produce and nothing later. `collect`
+fills a unit's own declarations, the FFI table and the registry modules; a BINARY
+library has no AST at all, so its declarations exist only once `libraries` has read the
+manifest. `ffi-clash` is the first step that asks whether a name is already taken, and
+the first that has to ask it of ONE unit.
+
+### Two seams, in order
+
+This pass answers WHERE a name may be written. `semantics/visibility.py` answers WHETHER
+it may be named. So a namespace holds a unit's declarations whatever their visibility,
+and a private one is refused at the use site with `CE3005` -- filtering privates out
+would turn "not yours" into "no such name".
+
+The typecheck pass reads the table through `TypeValidator.resolve_namespaced`, and the
+`scope` pass through `_is_namespace`. Both used to carry their own copy of the
+local-wins rule.
 
 ## The `entrypoint` pass: `main()`'s signature
 
@@ -739,8 +798,9 @@ if var in moved_variables:
 ```
 whole program, once:
 
-  collect → docs → externs → libraries → entrypoint → instantiate → monomorphize
-     → resolve → finite-types → derive → shadowing → effects
+  collect → docs → externs → libraries → namespaces → ffi-clash → entrypoint
+     → instantiate → monomorphize → resolve → finite-types → derive → shadowing
+     → effects
 
 then per unit, in one loop:
 
@@ -752,6 +812,9 @@ then per unit, in one loop:
   `monomorphize`, or one mistake in a generic's block is reported once per instantiation,
   and `--warn-missing-docs` demands a block on every monomorphized clone
 - `externs`, `libraries` and `entrypoint` need `collect` (the tables and the signatures)
+- `namespaces` needs `collect` (a unit's declarations, the FFI table, the registry) and
+  `libraries` (a binary library's declarations arrive from a manifest and nowhere else);
+  `scope` and `typecheck` read the table it builds
 - `instantiate` needs `libraries` (a library template must be visible to instantiate at
   the consumer)
 - `monomorphize` needs `instantiate` (the set of instantiations to generate)

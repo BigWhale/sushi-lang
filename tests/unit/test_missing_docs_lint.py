@@ -251,7 +251,6 @@ def test_a_library_unit_is_skipped(analyze_program, tmp_path):
     assert _inject_source_stdlib_units(manager, reporter) is True
 
     from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
-    manager.build_global_symbol_table()
     manager.get_compilation_order()
     analyzer = SemanticAnalyzer(reporter, filename="main", unit_manager=manager,
                                 warn_missing_docs=True)

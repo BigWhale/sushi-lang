@@ -1,0 +1,23 @@
+# A perk in a constraint takes the qualifier the same way every other written
+# name does. The implementation carries no marker and no qualifier: a method is
+# found on the receiver's type (section 8).
+# EXPECT_STDOUT_EXACT: "5\n"
+use "helpers/geo" as geo
+
+struct Horn:
+    i32 pitch
+
+extend Horn with Loud:
+    fn shout() i32:
+        return self.pitch
+
+fn noise@(T: geo.Loud)(T thing) i32:
+    return Result.Ok(thing.shout())
+
+fn run() i32:
+    let Horn h = Horn(5)
+    return Result.Ok(noise(h)??)
+
+fn main() i32:
+    println("{run().realise(0)}")
+    return Result.Ok(0)

@@ -178,13 +178,15 @@ def _evaluate(source: str, name: str = "VALUE") -> object:
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.semantics.passes.collect.constants import ConstantTable, ConstSig
     from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+    from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 
     program, _tree = parse_to_ast(source)
-    by_name = {const.name: const for const in program.constants}
+    by_name: UnitKeyedSymbols = UnitKeyedSymbols()
     table = ConstantTable()
-    for const in by_name.values():
-        table.by_name[const.name] = ConstSig(name=const.name, loc=const.loc,
-                                             const_type=const.ty)
+    for const in program.constants:
+        by_name.declare(const.name, const)
+        table.declare(const.name, ConstSig(name=const.name, loc=const.loc,
+                                           const_type=const.ty))
 
     wanted = by_name[name]
     held = ConstantEvaluator(Reporter(), table, by_name).evaluate(

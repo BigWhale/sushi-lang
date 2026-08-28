@@ -1,0 +1,12 @@
+# A match arm is a written-name position with a grammar of its own, one segment
+# short of a qualifier (section 5.2). Without it an aliased unit's enums are
+# write-only.
+# EXPECT_STDOUT_EXACT: "minus\n"
+use "helpers/geo" as geo
+
+fn main() i32:
+    let geo.Sign s = geo.Sign.Minus
+    match s:
+        geo.Sign.Plus -> println("plus")
+        geo.Sign.Minus -> println("minus")
+    return Result.Ok(0)

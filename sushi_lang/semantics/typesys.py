@@ -1,7 +1,7 @@
 from __future__ import annotations
 from enum import Enum
 from typing import Optional, Mapping, Union
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
 
@@ -40,6 +40,11 @@ class BuiltinType(Enum):
 @dataclass(frozen=True)
 class UnknownType:
     name: str
+    # The alias the name was written behind, or None for a bare one. It takes no part
+    # in identity: under phase 1 of `docs/design/unit-namespaces.md` the qualifier picks
+    # WHICH declaration is meant and the table key stays the bare name, so `geo.Vec` and
+    # `Vec` are one type. `compare=False` is what says that to the generated hash.
+    namespace: Optional[str] = field(default=None, compare=False)
 
     def __str__(self) -> str:
         return self.name
@@ -335,7 +340,10 @@ TYPE_NODE_NAMES = {
     "f32_t", "f64_t", "bool_t", "string_t", "blank_t",
     "array_t", "dynamic_array_t", "reference_t", "file_t",
     "generic_type_t",  # Generic type instantiation (e.g., Result<i32>)
-    "fn_type_t"        # First-class function type (e.g., fn(i32) -> i32)
+    "fn_type_t",       # First-class function type (e.g., fn(i32) -> i32)
+    # A name written behind an alias. Every reader of this set asks one question --
+    # "is this child a written type" -- and the answer for a qualified name is yes.
+    "qualified_name_t", "qualified_generic_type_t",
 }
 
 NODE_TO_TYPE: Mapping[str, BuiltinType] = {

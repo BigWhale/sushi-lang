@@ -77,6 +77,11 @@ def register_synthesized_function(
             target = next((u for u in units
                            if u.name == home_unit and u.ast
                            and getattr(u, "from_library", False)), None)
+        if target is None:
+            # The ENTRY unit, which is what "the first unit" meant while the compilation
+            # order put a dependent before its dependency. A position is not a home.
+            target = next((u for u in units if getattr(u, "is_entry", False) and u.ast),
+                          None)
         if target is None and units[0].ast:
             target = units[0]
         if target is not None and target.ast:

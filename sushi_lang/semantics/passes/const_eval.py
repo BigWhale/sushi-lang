@@ -10,9 +10,10 @@ from llvmlite import ir
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
-    Expr, IntLit, FloatLit, BoolLit, StringLit, ArrayLiteral,
+    ConstDef, Expr, IntLit, FloatLit, BoolLit, StringLit, ArrayLiteral,
     BinaryOp, UnaryOp, Name, CastExpr, IndexAccess
 )
+from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 from sushi_lang.semantics.integer_width import (
     fits_integer_type, integer_bit_width, wrap_to_integer_type)
 from sushi_lang.semantics.typesys import Type, BuiltinType
@@ -101,11 +102,21 @@ class ConstantValue:
 class ConstantEvaluator:
     """Compile-time constant expression evaluator."""
 
-    def __init__(self, reporter: Reporter, const_table: ConstantTable, ast_constants: dict):
-        """Initialize the evaluator."""
+    def __init__(self, reporter: Reporter, const_table: ConstantTable,
+                 ast_constants: 'UnitKeyedSymbols[ConstDef]',
+                 unit_name: Optional[str] = None, scope: object = None):
+        """Initialize the evaluator.
+
+        `unit_name` is the unit whose constant expression is being evaluated. Two units
+        may each declare a private `SCRATCH`, so a name is only an answer once the asking
+        unit is known (`docs/design/unit-namespaces.md` section 9). `scope` is the rest
+        of that answer: which OTHER units' constants this one may read at all (section 6).
+        """
         self.reporter = reporter
         self.const_table = const_table
         self.ast_constants = ast_constants
+        self.unit_name = unit_name
+        self.scope = scope
         self.evaluation_stack: List[str] = []  # For cycle detection
         # The FIRST operation that left its type, for a caller whose reporter is silent.
         self.overflow: Optional[ConstOverflow] = None
@@ -248,7 +259,9 @@ class ConstantEvaluator:
         # on a constant: `validate_constant` returns on the error, so the typecheck pass
         # never reaches the same literal twice.
         runs = array_runs.read_runs(
-            expr.elements, array_runs.const_int_reader(self.const_table, self.ast_constants),
+            expr.elements,
+            array_runs.const_int_reader(self.const_table, self.ast_constants,
+                                        self.unit_name),
             self.reporter)
         if runs is None:
             return None
@@ -286,12 +299,12 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0109, span, chain=chain)
             return None
 
-        const_sig = self.const_table.by_name.get(const_name)
+        const_sig = self.const_table.lookup(const_name, self.unit_name, self.scope)
         if const_sig is None:
             er.emit(self.reporter, er.ERR.CE1002, span, name=const_name)
             return None
 
-        const_def = self.ast_constants.get(const_name)
+        const_def = self.ast_constants.lookup(const_name, self.unit_name, self.scope)
         if const_def is None:
             er.emit(self.reporter, er.ERR.CE1002, span, name=const_name)
             return None

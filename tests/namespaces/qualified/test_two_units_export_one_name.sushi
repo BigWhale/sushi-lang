@@ -1,0 +1,10 @@
+# Two units exporting one name is not an error. It is an error only where the
+# unqualified name is written, so a program that says which one it means
+# compiles (unit-namespaces.md section 6, CE3003 retired).
+# EXPECT_STDOUT_EXACT: "2 3\n"
+use "helpers/liba" as a
+use "helpers/libb" as b
+
+fn main() i32:
+    println("{a.sine(1.0).realise(0.0)} {b.sine(1.0).realise(0.0)}")
+    return Result.Ok(0)

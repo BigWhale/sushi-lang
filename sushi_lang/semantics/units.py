@@ -44,6 +44,10 @@ class Unit:
     # provenance as well, so provenance alone cannot answer "is this a library": the two
     # are different questions, and `generics/synthesis.py` needs this one.
     from_library: bool = False
+    # The unit the compiler was pointed at. A synthesized instance goes here, which used
+    # to be spelled "the first unit of the compilation order" and was only the same thing
+    # while that order put a dependent before its dependency.
+    is_entry: bool = False
 
     def __post_init__(self):
         """Initialize computed fields after dataclass creation."""
@@ -75,7 +79,7 @@ class Unit:
         Now that one carries a marker, an unmarked constant is this unit's own and
         leaves nothing behind here: it is not an export, it does not invalidate a
         consumer's cache, and a name clash with another unit's private is an ordinary
-        duplicate (CE0105) rather than an ambiguous export (CE3003).
+        duplicate (CE0105) rather than an export nobody can name.
         """
         if self.ast is None:
             self.public_symbols = {}
@@ -119,7 +123,6 @@ class UnitManager:
         """Initialize the unit manager."""
         self.root_path = root_path or Path.cwd()
         self.units: Dict[str, Unit] = {}
-        self.global_symbols: Dict[str, Symbol] = {}
         self.reporter = reporter
         self.err = PassErrorReporter(reporter) if reporter else None
 
@@ -151,11 +154,47 @@ class UnitManager:
         return unit
 
     def build_dependency_graph(self) -> Dict[str, List[str]]:
-        """Build a dependency graph from all loaded units."""
-        return {unit.name: unit.dependencies for unit in self.units.values()}
+        """Every unit's dependencies, as the compilation order reads them.
+
+        `Unit.dependencies` holds user-unit imports alone. A SOURCE library's units and a
+        bundled Sushi-source stdlib module are injected as ordinary compilation units,
+        and a unit that imports one depends on it exactly as it depends on a unit next
+        door -- the import simply does not spell a user path. That edge is added here
+        rather than stored, because injection happens after the units are loaded.
+
+        It used to be a hand-patch in the collect loop instead: library units pulled to
+        the front, because the order could not say why they belonged there. An import a
+        binary `.slib` answers matches no unit and adds no edge, which is right -- a
+        binary library has no unit to compile.
+        """
+        graph = {unit.name: list(unit.dependencies) for unit in self.units.values()}
+        for unit in self.units.values():
+            if unit.ast is None:
+                continue
+            for use_stmt in unit.ast.uses:
+                if not (use_stmt.is_stdlib or use_stmt.is_library):
+                    continue
+                prefix = use_stmt.path + "/"
+                for name in self.units:
+                    if name == unit.name or name in graph[unit.name]:
+                        continue
+                    if name == use_stmt.path or name.startswith(prefix):
+                        graph[unit.name].append(name)
+        return graph
 
     def topological_sort(self) -> Optional[List[str]]:
-        """Perform topological sorting to determine compilation order."""
+        """Compilation order: every unit after the units it depends on.
+
+        The in-degree counted here is "how many units depend on me", and the queue starts
+        at the units nothing depends on, so the walk itself yields DEPENDENTS first. The
+        result is reversed once at the end.
+
+        The direction is a ruling, not a taste (`docs/design/unit-namespaces.md` section
+        13.2): a unit's scope is built from what its own imports declare, so a dependency
+        has to be collected before the unit that names it. Two hand-patches retired with
+        the reversal -- library units pulled to the front of the collect loop, and a
+        pre-sweep that collected every perk definition ahead of every implementation.
+        """
         dependency_graph = self.build_dependency_graph()
 
         in_degree = {unit: 0 for unit in dependency_graph}
@@ -176,6 +215,8 @@ class UnitManager:
                     in_degree[dep] -= 1
                     if in_degree[dep] == 0:
                         queue.append(dep)
+
+        result.reverse()
 
         if len(result) != len(dependency_graph):
             cycle = self._find_cycle(dependency_graph)
@@ -216,58 +257,12 @@ class UnitManager:
 
         return []  # No cycle found
 
-    def build_global_symbol_table(self) -> bool:
-        """Build the global symbol table from all loaded units."""
-        symbol_units: Dict[str, List[str]] = {}
-        success = True
-
-        for unit in self.units.values():
-            for symbol_name, symbol in unit.public_symbols.items():
-                if symbol_name not in symbol_units:
-                    symbol_units[symbol_name] = []
-                symbol_units[symbol_name].append(unit.name)
-
-                if symbol_name not in self.global_symbols:
-                    self.global_symbols[symbol_name] = symbol
-
-        for symbol_name, units in symbol_units.items():
-            if len(units) > 1:
-                if self.reporter:
-                    self._report_ambiguous_export(symbol_name, units)
-                success = False
-
-        return success
-
-    def _report_ambiguous_export(self, symbol_name: str, units: List[str]) -> None:
-        """CE3003, with a note at every declaration that claims the name.
-
-        It used to render tier 1 -- no file, no line, no caret -- for a condition that
-        has one declaration per unit to point at. Each unit's `public_symbols` carries
-        the AST node, so the span is right there.
-        """
-        diagnostic = self.err.emit_with(
-            er.ERR.CE3003, None,
-            symbol=symbol_name, units=", ".join(units))
-        for unit_name in units:
-            unit = self.units.get(unit_name)
-            if unit is None:
-                continue
-            symbol = unit.public_symbols.get(symbol_name)
-            span = getattr(getattr(symbol, "definition", None), "name_span", None)
-            if span is not None:
-                diagnostic = diagnostic.note("exported here", span, str(unit.file_path))
-        diagnostic.emit()
-
     def get_compilation_order(self) -> Optional[List[Unit]]:
         """Get units in compilation order, with dependencies compiled first."""
         sorted_names = self.topological_sort()
         if sorted_names is None:
             return None
         return [self.units[name] for name in sorted_names]
-
-    def find_symbol(self, symbol_name: str) -> Optional[Symbol]:
-        """Find a symbol in the global symbol table."""
-        return self.global_symbols.get(symbol_name)
 
 
 __all__ = [

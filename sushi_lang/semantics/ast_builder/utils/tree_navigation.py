@@ -46,6 +46,16 @@ def first_name(children: List[object]) -> Optional[Token]:
     return first(children, lambda c: isinstance(c, Token) and c.type == "NAME")  # type: ignore[return-value]
 
 
+def name_tokens(children: List[object]) -> List[Token]:
+    """Every NAME token among the children, in source order.
+
+    A qualified name is two of them and a bare one is a single one, so the reader that
+    splits `geo.Vec` into a namespace and a name asks for the list rather than for the
+    first (`docs/design/unit-namespaces.md` section 5).
+    """
+    return [c for c in children if isinstance(c, Token) and c.type == "NAME"]
+
+
 # The tokens the grammar's `method_name` admits. A keyword after a DOT is a method name
 # and never a statement, so the set grows with the grammar rule and nowhere else.
 _METHOD_NAME_TOKENS = ("NAME", "NEW", "EXTEND")

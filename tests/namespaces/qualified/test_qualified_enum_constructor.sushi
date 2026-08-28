@@ -1,0 +1,11 @@
+# An enum constructor behind a dot reads as a three-deep chain and is not one:
+# the alias folds into `Sign` and the ordinary constructor path takes over.
+# EXPECT_STDOUT_EXACT: "plus\n"
+use "helpers/geo" as geo
+
+fn main() i32:
+    let geo.Sign s = geo.Sign.Plus
+    match s:
+        Sign.Plus -> println("plus")
+        Sign.Minus -> println("minus")
+    return Result.Ok(0)

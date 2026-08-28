@@ -49,6 +49,11 @@ class InstantiationCollector:
     # the instantiate pass did not dropped an instantiation on the floor (CE2061; issues #171/#191).
     tables: object | None = field(default=None)
 
+    # What the unit being walked may write behind a dot. `alias.generic(...)` is a
+    # generic call, and a collector that cannot tell one from an ordinary method call
+    # drops the instantiation (CE2061).
+    namespaces: object | None = field(default=None)
+
     variable_types: dict[str, "Type"] = field(default_factory=dict)
 
     visited_types: Set[str] = field(default_factory=set)
@@ -75,6 +80,7 @@ class InstantiationCollector:
             function_instantiations=self.function_instantiations,
             generic_funcs=self.generic_funcs or {},
             type_validator=type_validator,
+            namespaces=self.namespaces,
         )
 
         function_collector = FunctionCollector(

@@ -2,7 +2,7 @@
 from __future__ import annotations
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from llvmlite import ir, binding as llvm
 
@@ -27,6 +27,7 @@ from sushi_lang.backend.memory.moves import MoveTracker
 from sushi_lang.backend.expressions import ExpressionEmitter
 from sushi_lang.backend.statements import StatementEmitter
 from sushi_lang.backend.functions import LLVMFunctionManager
+from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols, mangle_unit_symbol
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
@@ -91,6 +92,15 @@ class LLVMCodegen:
         self.enum_table = enum_table or EnumTable()
         from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
         self.func_table = func_table or FunctionTable()
+        # The unit whose bodies are being emitted, or None outside a multi-unit walk.
+        # A named callee is resolved through it, so a library's own body reads the
+        # library's signature where a consumer shadows the name (#487).
+        self.emitting_unit: Optional[str] = None
+        # What each unit may write with no qualifier, handed over by the semantic
+        # analyser. The back end resolves a bare callee through the SAME ladder the
+        # typecheck pass walked, or two units declaring one name would bind the call to
+        # whichever the flat view happened to hold (`unit-namespaces.md` section 6).
+        self.unit_scopes: Dict[str, Any] = {}
         self.perk_impl_table = perk_impl_table or PerkImplementationTable()
         self.const_table = const_table or ConstantTable()
         from sushi_lang.semantics.passes.collect import ExternalTable
@@ -131,9 +141,11 @@ class LLVMCodegen:
         # index bounds break/continue RAII cleanup to the loop's own scopes.
         self.loop_stack: list[tuple[ir.Block, ir.Block, int]] = []
 
-        self.funcs: Dict[str, ir.Function] = {}
+        # Two views: the unit that declared a name, and the flat one. `emitting_unit`
+        # is what turns a bare Sushi name into the right declaration.
+        self.funcs: UnitKeyedSymbols[ir.Function] = UnitKeyedSymbols()
 
-        self.constants: Dict[str, ir.GlobalVariable] = {}
+        self.constants: UnitKeyedSymbols[ir.GlobalVariable] = UnitKeyedSymbols()
 
         self._malloc_func: Optional[ir.Function] = None
         self._free_func: Optional[ir.Function] = None
@@ -171,17 +183,33 @@ class LLVMCodegen:
         # Function return type tracking (Sushi language types, not LLVM types)
         # Maps function name to its return type (pre-Result wrapping)
         # Used for inferring Result<T> types from function call expressions
-        self.function_return_types: Dict[str, 'Type'] = {}
+        self.function_return_types: UnitKeyedSymbols['Type'] = UnitKeyedSymbols()
 
         self.current_function_ast: Optional['FuncDef'] = None
 
-        self.ast_constants: Dict[str, ConstDef] = {}
+        self.ast_constants: UnitKeyedSymbols[ConstDef] = UnitKeyedSymbols()
 
         # Recursive-destructor state, declared here rather than conjured on at first use:
         # `_dtor_inprogress` is the stack of type keys being inlined, so a re-entry means
         # the type is self-referential and gets a call to its out-of-line destructor.
         self._dtor_inprogress: list[str] = []
         self._dtor_funcs: Dict[str, ir.Function] = {}
+
+    def scope_of(self, unit_name: Optional[str]):
+        """What `unit_name` may write with no qualifier, or an unrestricted scope.
+
+        A constant's initializer is folded outside the per-unit walk, with the unit
+        handed in, so the scope has to follow the unit whose expression is read and
+        not whichever unit's bodies are being emitted.
+        """
+        from sushi_lang.semantics.namespaces import UnitScope
+        found = self.unit_scopes.get(unit_name)
+        return found if found is not None else UnitScope.unrestricted()
+
+    @property
+    def scope(self):
+        """The scope of the unit being emitted, or an unrestricted one outside a unit."""
+        return self.scope_of(self.emitting_unit)
 
     @property
     def printf(self) -> ir.Function | None:
@@ -540,9 +568,9 @@ class LLVMCodegen:
         # across units, so this module must be able to declare the identified struct types
         # the cache already handed out (#257).
         self.module = ir.Module(name=f"unit_{target_unit.name}", context=self.llvm_context)
-        self.funcs = {}
-        self.constants = {}
-        self.ast_constants = {}
+        self.funcs = UnitKeyedSymbols()
+        self.constants = UnitKeyedSymbols()
+        self.ast_constants = UnitKeyedSymbols()
         self._malloc_func = None
         self._free_func = None
         self._realloc_func = None
@@ -566,18 +594,26 @@ class LLVMCodegen:
             if unit.ast is None:
                 continue
             for const in unit.ast.constants:
-                self.ast_constants[const.name] = const
+                self.ast_constants.declare(const.name, const, unit=unit.name)
 
         for unit in all_units:
             if unit.ast is None:
                 continue
             for const in unit.ast.constants:
-                self._emit_global_constant(const)
+                self._emit_global_constant(const, unit.name)
 
         # First round: declare function prototypes
         # For the target unit: declare ALL functions (public + private, they'll get bodies)
         # For other units: only declare PUBLIC functions (private ones can't be cross-referenced)
-        for unit in all_units:
+        #
+        # THE TARGET UNIT IS DECLARED FIRST. One symbol name holds one declaration in a
+        # module, so where a unit shadows a name another unit exports, whichever is
+        # declared first takes the symbol and the other reuses it. This module emits the
+        # target unit's BODIES, so the target unit's own declaration is the one that has
+        # to win -- a private one keeps internal linkage, which is what makes the
+        # consumer's call bind to its own definition (`visibility.md` decision 10). It
+        # used to be decided by the compilation order, which put the consumer first.
+        for unit in sorted(all_units, key=lambda u: u.name != target_unit.name):
             if unit.ast is None:
                 continue
             for fn in unit.ast.functions:
@@ -585,7 +621,7 @@ class LLVMCodegen:
                     continue
                 if unit.name != target_unit.name and not fn.is_public:
                     continue
-                self.functions.emit_func_decl(fn)
+                self.functions.emit_func_decl(fn, unit.name)
 
             for ext in unit.ast.extensions:
                 self.functions.emit_extension_method_decl(ext)
@@ -603,10 +639,11 @@ class LLVMCodegen:
             self._declare_library_perk_impl_methods()
 
         if target_unit.ast is not None:
+            self.emitting_unit = target_unit.name
             for fn in target_unit.ast.functions:
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
-                self.functions.emit_func_def(fn)
+                self.functions.emit_func_def(fn, target_unit.name)
 
             for ext in target_unit.ast.extensions:
                 self.functions.emit_extension_method_def(ext)
@@ -615,6 +652,7 @@ class LLVMCodegen:
                 for method in perk_impl.methods:
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_def(synthetic_ext)
+            self.emitting_unit = None
 
         # A monomorphized extension belongs to no unit, so its body is defined
         # in EVERY unit module. weak_odr lets the linker keep one, like a
@@ -729,10 +767,10 @@ class LLVMCodegen:
                 continue
 
             for const in unit.ast.constants:
-                self.ast_constants[const.name] = const
+                self.ast_constants.declare(const.name, const, unit=unit.name)
 
             for const in unit.ast.constants:
-                self._emit_global_constant(const)
+                self._emit_global_constant(const, unit.name)
 
         for unit in units:
             if unit.ast is None:
@@ -741,7 +779,7 @@ class LLVMCodegen:
             for fn in unit.ast.functions:
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
-                self.functions.emit_func_decl(fn)
+                self.functions.emit_func_decl(fn, unit.name)
 
             for ext in unit.ast.extensions:
                 self.functions.emit_extension_method_decl(ext)
@@ -762,10 +800,11 @@ class LLVMCodegen:
             if unit.ast is None:
                 continue
 
+            self.emitting_unit = unit.name
             for fn in unit.ast.functions:
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
-                self.functions.emit_func_def(fn)
+                self.functions.emit_func_def(fn, unit.name)
 
             for ext in unit.ast.extensions:
                 self.functions.emit_extension_method_def(ext)
@@ -774,6 +813,7 @@ class LLVMCodegen:
                 for method in perk_impl.methods:
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_def(synthetic_ext)
+        self.emitting_unit = None
 
         # weak_odr for the same reason as the single-unit path (#404); the
         # monolithic module defines each body once, so it is inert here, and
@@ -856,15 +896,20 @@ class LLVMCodegen:
                 ll_ret = self.types.ll_type(result_type)
 
                 fnty = ir.FunctionType(ll_ret, param_types)
-                llvm_fn = ir.Function(self.module, fnty, name=func_name)
+                # The PRODUCER named the symbol in its own bitcode. A source library
+                # recompiles here and derives its own; a binary one links, so its
+                # symbol can only be read (`docs/design/unit-namespaces.md` section 9).
+                llvm_fn = ir.Function(
+                    self.module, fnty,
+                    name=func_info.get("link_symbol") or func_name)
                 llvm_fn.linkage = 'external'
 
                 for i, p in enumerate(func_info.get("params", [])):
                     if i < len(llvm_fn.args):
                         llvm_fn.args[i].name = p["name"]
 
-                self.funcs[func_name] = llvm_fn
-                self.function_return_types[func_name] = result_type
+                self.funcs.declare(func_name, llvm_fn)
+                self.function_return_types.declare(func_name, result_type)
 
     def _declare_library_functions_from_registry(self) -> None:
         """Declare library functions using pre-parsed FuncSig from registry."""
@@ -886,15 +931,17 @@ class LLVMCodegen:
             ll_ret = self.types.ll_type(result_type)
 
             fnty = ir.FunctionType(ll_ret, param_types)
-            llvm_fn = ir.Function(self.module, fnty, name=func_name)
+            llvm_fn = ir.Function(
+                self.module, fnty,
+                name=getattr(func_sig, "link_symbol", None) or func_name)
             llvm_fn.linkage = 'external'
 
             for i, p in enumerate(func_sig.params):
                 if i < len(llvm_fn.args):
                     llvm_fn.args[i].name = p.name
 
-            self.funcs[func_name] = llvm_fn
-            self.function_return_types[func_name] = result_type
+            self.funcs.declare(func_name, llvm_fn)
+            self.function_return_types.declare(func_name, result_type)
 
     def _constant_string_value(self, text: str, data_name: str) -> ir.Constant:
         """A `{i8*, i32, i8 owned}` constant, with its backing byte array global.
@@ -919,18 +966,26 @@ class LLVMCodegen:
             [data_ptr, ir.Constant(self.i32, size), ir.Constant(self.i8, 0)])
 
     def _register_global_constant(self, name: str, llvm_type: ir.Type,
-                                  value: ir.Constant) -> None:
-        """Publish an evaluated constant as a read-only global."""
+                                  value: ir.Constant,
+                                  unit_name: str | None = None) -> None:
+        """Publish an evaluated constant as a read-only global.
+
+        The global's NAME carries the declaring unit, exactly as a function symbol does:
+        two units may each declare a private `SCRATCH`, and the monolithic path puts both
+        into one module (`docs/design/unit-namespaces.md` section 9).
+        """
         # Internal linkage: cross-unit visibility comes from sharing one LLVM module.
         # True separate compilation would need external linkage for a public constant.
-        global_const = ir.GlobalVariable(self.module, llvm_type, name=name)
+        global_const = ir.GlobalVariable(
+            self.module, llvm_type, name=mangle_unit_symbol(unit_name, name))
         global_const.linkage = 'internal'
         global_const.global_constant = True
         global_const.initializer = value
         global_const.unnamed_addr = True  # Allow merging identical constants
-        self.constants[name] = global_const
+        self.constants.declare(name, global_const, unit=unit_name)
 
-    def _emit_global_constant(self, const: ConstDef) -> None:
+    def _emit_global_constant(self, const: ConstDef,
+                              unit_name: str | None = None) -> None:
         """Emit a global constant definition.
 
         The route is the VALUE the evaluator produced, never the shape of the
@@ -944,24 +999,29 @@ class LLVMCodegen:
 
         # Materializing at the DECLARED type keeps a context-typed literal at its own
         # width: `const u8 MAX = 200` yields a u8 initializer, not an i32 one.
-        const_value = self._evaluate_constant_expression(const.value, const.ty)
+        const_value = self._evaluate_constant_expression(const.value, const.ty, unit_name)
         if const_value is None:
             return  # Skip non-constant expressions
 
-        initializer = self._materialize_constant(const_value, f".str_data.{const.name}")
+        initializer = self._materialize_constant(
+            const_value, mangle_unit_symbol(unit_name, f".str_data.{const.name}"))
         if initializer is None:
             return  # Skip unsupported types
 
-        self._register_global_constant(const.name, self.types.ll_type(const.ty), initializer)
+        self._register_global_constant(
+            const.name, self.types.ll_type(const.ty), initializer, unit_name)
 
-    def _evaluate_constant_expression(self, expr, expected_type=None) -> Optional["ConstantValue"]:
+    def _evaluate_constant_expression(self, expr, expected_type=None,
+                                      unit_name=None) -> Optional["ConstantValue"]:
         """Evaluate a constant expression at compile time, as a value not an initializer."""
         from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
         from sushi_lang.internals.report import Reporter
 
         # A silent reporter: the typecheck pass has already reported anything wrong with this.
         silent_reporter = Reporter()
-        evaluator = ConstantEvaluator(silent_reporter, self.const_table, self.ast_constants)
+        evaluating_unit = unit_name or self.emitting_unit
+        evaluator = ConstantEvaluator(silent_reporter, self.const_table, self.ast_constants,
+                                      evaluating_unit, self.scope_of(evaluating_unit))
         return evaluator.evaluate(expr, expected_type, None)
 
     def _materialize_constant(self, value, data_name: str) -> Optional[ir.Constant]:

@@ -1,0 +1,9 @@
+# The same program on the MONOLITHIC path, where both globals land in one ir.Module.
+# COMPILER_FLAGS: --no-incremental
+# EXPECT_STDOUT_EXACT: "41 82 58 116\n"
+use "helpers/const_left"
+use "helpers/const_right"
+
+fn main() i32:
+    println("{left_scratch().realise(0)} {left_double().realise(0)} {right_scratch().realise(0)} {right_double().realise(0)}")
+    return Result.Ok(0)

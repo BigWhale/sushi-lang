@@ -1,0 +1,8 @@
+# An import is not re-exported. `m.<name>` reaches what `mid` DECLARES, never
+# what `mid` imported, so the qualified form and the flat form agree.
+# EXPECT_ERROR_CODE: CE2008
+use "helpers/mid" as m
+
+fn main() i32:
+    println("{m.deep_value().realise(0)}")
+    return Result.Ok(0)

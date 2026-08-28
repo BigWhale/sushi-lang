@@ -1,0 +1,14 @@
+# CE3012: two flat imports offer `sine` and nothing says which one an
+# unqualified call means. The diagnostic stands at the USE, names every
+# candidate, and says `as` resolves it. CE3003 refused the whole program for
+# the same shape, with no location and no escape.
+# EXPECT_ERROR_CODE: CE3012
+use "helpers/liba"
+use "helpers/libb"
+
+fn run() f64:
+    return Result.Ok(sine(1.0)??)
+
+fn main() i32:
+    println("{run().realise(0.0)}")
+    return Result.Ok(0)

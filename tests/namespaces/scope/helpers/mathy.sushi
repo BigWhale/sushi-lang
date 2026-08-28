@@ -1,0 +1,6 @@
+# A unit that imports a registry stdlib module for itself. The module is not
+# re-exported to the unit that imports this one.
+use <math>
+
+public fn rooted(f64 x) f64:
+    return Result.Ok(sqrt(x))

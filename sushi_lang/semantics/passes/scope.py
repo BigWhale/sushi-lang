@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import AbstractSet, Dict, List, Optional
+from typing import TYPE_CHECKING, AbstractSet, Dict, List, Optional
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -11,6 +11,9 @@ from sushi_lang.semantics.ast import (
     DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, Param
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.namespaces import NamespaceTable
 
 
 @dataclass
@@ -23,7 +26,7 @@ class VariableInfo:
 class ScopeAnalyzer:
     """The scope pass: scope and variable usage analysis."""
 
-    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None, kept_constants: Optional[AbstractSet[str]] = None) -> None:
+    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None, kept_constants: Optional[AbstractSet[str]] = None, namespaces: Optional['NamespaceTable'] = None) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         self.constants = constants or ConstantTable()
@@ -33,6 +36,12 @@ class ScopeAnalyzer:
         from sushi_lang.semantics.passes.collect import GenericStructTable, ExternalTable
         self.generic_structs = generic_structs or GenericStructTable()
         self.external_table = external_table or ExternalTable()
+        # What this unit may write behind a dot. One seam for an FFI namespace and a
+        # `use ... as` alias alike (`docs/design/unit-namespaces.md` section 3): the
+        # local-wins rule below used to be written here a second time.
+        from sushi_lang.semantics.namespaces import externals_only
+        self.namespaces = (namespaces if namespaces is not None
+                           else externals_only(self.external_table))
         # A constant a binary library declares and keeps. It resolves to nothing here,
         # and "no such name" is the wrong word for a declaration the library has: the
         # type pass says whose it is (CE3005) once this pass lets the name through.
@@ -116,9 +125,9 @@ class ScopeAnalyzer:
         """True if `name` is currently a variable in any active scope."""
         return any(name in scope for scope in self.scopes)
 
-    def _is_external_namespace(self, name: str) -> bool:
-        """True if `name` is a registered FFI namespace and not shadowed by a local."""
-        return self.external_table.is_namespace(name) and not self._is_bound_local(name)
+    def _is_namespace(self, name: str) -> bool:
+        """True if `name` names a namespace here and is not shadowed by a local."""
+        return self.namespaces.is_namespace(name) and not self._is_bound_local(name)
 
     def _names_a_non_local(self, name: str) -> bool:
         """True if `name` resolves to something that is not a variable at all."""
@@ -134,7 +143,14 @@ class ScopeAnalyzer:
             return True
         if name in self.kept_constants:
             return True
-        return name in self.constants.by_name or name in self.function_names
+        # Section 6: a constant of a unit this one did not import is not a name here,
+        # so the same walk that would have called it a global says CE1001 instead. The
+        # function half stays flat -- an out-of-scope CALL is the typecheck pass's
+        # CE2008, which says which unit declares it.
+        if self.constants.lookup(name, self.namespaces.scope.unit,
+                                 self.namespaces.scope) is not None:
+            return True
+        return name in self.function_names
 
     def _use_variable(self, name: str, usage_span: Optional[Span] = None, is_rebind: bool = False) -> None:
         """Mark a variable as used, searching through scope stack."""
@@ -146,8 +162,43 @@ class ScopeAnalyzer:
 
         if is_rebind:
             self.err.emit(er.ERR.CE1002, usage_span, name=name)
-        else:
-            self.err.emit(er.ERR.CE1001, usage_span, name=name)
+            return
+        diagnostic = er.emit_with(self.reporter, er.ERR.CE1001, usage_span, name=name)
+        help_line = self._declared_elsewhere(name)
+        if help_line is not None:
+            diagnostic = diagnostic.help(help_line)
+        diagnostic.emit()
+
+    def _declared_elsewhere(self, name: str) -> Optional[str]:
+        """Where a name that reaches nothing here IS declared, or None (section 6).
+
+        Two producers can hold a name a unit cannot write: another unit's constant,
+        which an import would bring, and another unit's `unsafe external` block, which
+        nothing can bring -- a block binds its namespace where it is written.
+        """
+        from sushi_lang.semantics.namespaces import import_help
+        scope = self.namespaces.scope
+        owner = next(iter(scope.declaring_units(name, self.constants.by_unit)), None)
+        if owner is not None:
+            return import_help(owner)
+        elsewhere = self._namespace_bound_elsewhere(name)
+        if elsewhere is None:
+            return None
+        return (f"unit '{elsewhere}' binds the namespace '{name}'; an `unsafe external` "
+                f"block binds its namespace in the unit that writes it")
+
+    def _namespace_bound_elsewhere(self, name: str) -> Optional[str]:
+        """The unit whose `unsafe external` block binds this namespace, if another does.
+
+        The external table is program-wide and the BINDING is per unit (#503), so a
+        name that reaches nothing here can still be a namespace next door -- and saying
+        so is the difference between "undeclared" and "declared, elsewhere".
+        """
+        declared = getattr(self.external_table, "by_namespace", {}).get(name)
+        if not declared:
+            return None
+        return next((sig.unit_name for sig in declared.values()
+                     if sig.unit_name is not None), None)
 
     def _borrow_variable(self, name: str, usage_span: Optional[Span] = None) -> None:
         """A borrow needs a LOCAL. Mark it used, or say which way it is not one."""
@@ -157,7 +208,7 @@ class ScopeAnalyzer:
                 self._record_capture(name, i, usage_span)
                 return
 
-        if self._names_a_non_local(name) or self._is_external_namespace(name):
+        if self._names_a_non_local(name) or self._is_namespace(name):
             self.err.emit(er.ERR.CE2400, usage_span, name=name)
         else:
             self.err.emit(er.ERR.CE1001, usage_span, name=name)
@@ -469,7 +520,7 @@ class ScopeAnalyzer:
                     # name, so the receiver is a variable use.
                     if self._is_bound_local(receiver_name):
                         self._check_expression(expr.receiver)
-                    elif self._is_external_namespace(receiver_name):
+                    elif self._is_namespace(receiver_name):
                         pass
                     elif receiver_name in self.enums.by_name or receiver_name in self.generic_enums.by_name:
                         pass
@@ -491,7 +542,11 @@ class ScopeAnalyzer:
             case CastExpr():
                 self._check_expression(expr.expr)
             case MemberAccess():
-                self._check_expression(expr.receiver)
+                # `geo.MAX_DEPTH` reads a namespace, not a variable. A local named
+                # `geo` wins, which is what `_is_namespace` asks.
+                if not (isinstance(expr.receiver, Name)
+                        and self._is_namespace(expr.receiver.id)):
+                    self._check_expression(expr.receiver)
             case EnumConstructor():
                 # The AST builder parses both `Result.Ok(42)` and `x.realise(0)` as an
                 # EnumConstructor, so a receiver naming a VARIABLE is really a method call.

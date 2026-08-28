@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 from sushi_lang.internals.report import Origin, Reporter, Span
@@ -37,7 +38,6 @@ from sushi_lang.semantics.generics.types import (
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_origin,
-    reject_library_clash,
     reject_private_perk_constraints,
 )
 
@@ -176,6 +176,10 @@ class FuncSig:
                                          # to name its file explicitly or it renders against
                                          # whichever file the reporter happens to be pointing at.
     err_type: Optional[Type] = None      # Error type for Result<T, E> (None = StdError default)
+    link_symbol: Optional[str] = None    # The symbol a BINARY .slib's bitcode gave this
+                                         # function. Read from the manifest and never
+                                         # derived: a producer's `<unit>$<name>` is not a
+                                         # name the consumer can compute (section 9).
 
 
 @dataclass
@@ -198,12 +202,60 @@ class GenericFuncDef:
                                                  # carries one: this pass shares ONE reporter across units
 
 
+class Redeclaration(Enum):
+    """What a name already taken means for the declaration that takes it again."""
+
+    REFUSED = "refused"   # dropped; a diagnostic named why
+    REPLACE = "replace"   # this one takes the flat name from the other (CW3002)
+    COEXIST = "coexist"   # both stand: two units, two symbols
+
+
 @dataclass
 class FunctionTable:
-    """Table of function signatures collected by the collect pass."""
+    """Table of function signatures collected by the collect pass.
+
+    `by_name` is the FLAT view: one declaration per name for the whole program, and the
+    winner of a shadowed name. `by_unit` keeps every declaration under the unit that wrote
+    it, and it is what `view_for` reads. A name a consumer shadows leaves the flat view
+    (`_drop`), so without the second index a library's own body has no way back to its own
+    signature -- which is issue #487 (`docs/design/unit-namespaces.md` section 13.1).
+    """
     by_name: Dict[str, FuncSig] = field(default_factory=dict)
+    by_unit: Dict[str, Dict[str, FuncSig]] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     _stdlib_functions: Dict[Tuple[str, str], Any] = field(default_factory=dict)
+
+    def declare(self, name: str, sig: FuncSig) -> None:
+        """Register one declaration in both views. The ONE insert.
+
+        The flat view is FIRST-wins, which is what it always was: a caller that means
+        to take a name another unit holds drops it first (`_drop`). Two units that
+        merely both declare `helper` leave the flat answer alone and each read their
+        own through `by_unit`.
+        """
+        if name not in self.by_name:
+            self.order.append(name)
+            self.by_name[name] = sig
+        unit = getattr(sig, "unit_name", None)
+        if unit is not None:
+            self.by_unit.setdefault(unit, {})[name] = sig
+
+    def lookup(self, name: str, unit_name: Optional[str] = None,
+               scope: object = None) -> Optional[FuncSig]:
+        """What the name means inside `unit_name`. One name, no dict built."""
+        from sushi_lang.semantics.unit_symbols import lookup_in_unit
+        return lookup_in_unit(name, self.by_unit, self.by_name, unit_name, scope)
+
+    def view_for(self, unit_name: Optional[str],
+                 scope: object = None) -> Dict[str, FuncSig]:
+        """What the name of a function means INSIDE `unit_name`, as one mapping."""
+        if scope is not None:
+            return scope.view(self.by_unit, self.by_name)
+        if unit_name is None:
+            return dict(self.by_name)
+        view = dict(self.by_name)
+        view.update(self.by_unit.get(unit_name, {}))
+        return view
 
     def register_stdlib_function(self, module_path: str, stdlib_func: Any) -> None:
         """Register a stdlib function."""
@@ -213,6 +265,23 @@ class FunctionTable:
     def lookup_stdlib_function(self, module_path: str, function_name: str) -> Optional[Any]:
         """Lookup a stdlib function by module and name."""
         return self._stdlib_functions.get((module_path, function_name))
+
+    def lookup_stdlib_by_name(self, function_name: str,
+                              scope: object = None) -> Optional[Tuple[str, Any]]:
+        """The registry stdlib FUNCTION a bare name reaches, with its module path.
+
+        The table holds what every unit's `use` registered, so the asking unit's scope
+        is what narrows it to the modules THAT unit imported: a registry module is a
+        flat import like any other and reaches no further (section 6). Without a scope
+        the whole table answers, which is what a reader with no unit gets.
+        """
+        for (module_path, name), func in self._stdlib_functions.items():
+            if name != function_name or getattr(func, "is_constant", False):
+                continue
+            if scope is not None and not scope.holds_module(module_path):
+                continue
+            return module_path, func
+        return None
 
     def is_stdlib_function(self, module_path: str, function_name: str) -> bool:
         """Check if a function is a stdlib function."""
@@ -399,6 +468,12 @@ class FunctionCollector:
         for use_stmt in uses:
             if not use_stmt.is_stdlib:
                 continue  # Skip user modules
+            if use_stmt.alias is not None:
+                # `as` decides WHERE the names land, and an aliased import puts nothing
+                # in the flat scope (`unit-namespaces.md` Ruling 1). This table IS the
+                # flat scope for a registry module, and skipping it here is what lets a
+                # unit declare `sin` beside `use <math> as std_math` (section 1.3).
+                continue
 
             module_path = use_stmt.path
 
@@ -412,34 +487,42 @@ class FunctionCollector:
             for _const_name, stdlib_const in module.constants.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_const)
 
-    def _reject_redeclaration(self, name: str, name_span: Optional[Span],
-                              prev) -> bool:
-        """A name already taken. True when this declaration must be dropped.
+    def _redeclaration(self, name: str, name_span: Optional[Span], prev,
+                       *, may_coexist: bool) -> Redeclaration:
+        """A name already taken. What that means for the declaration taking it again.
 
-        Three answers, and who owns the previous declaration decides which. Another of
-        the program's own units is the plain duplicate. A library's PUBLIC name may be
-        replaced -- symbol priority puts the program's own declaration first, and
-        `tests/libs/test_warn_lib_override.sushi` is that contract -- so this returns
-        False, warns with CW3002, and the caller completes the replacement. A library's PRIVATE name may not be
-        replaced (CE3011): one namespace means the library's own bodies would start
-        calling the consumer's function, and the consumer cannot even see the name it
-        collides with.
+        Three answers, and who owns the previous declaration decides which. A library's
+        PUBLIC name may be replaced -- symbol priority puts the program's own
+        declaration first, and `tests/libs/test_warn_lib_override.sushi` is that
+        contract -- so this warns with CW3002 and the caller completes the replacement.
+        Any other unit's declaration COEXISTS, a library's own private one included:
+        each takes its own `<unit>$<name>` symbol and each unit's scope reads its own
+        (`docs/design/unit-namespaces.md` sections 9 and 6). The same name twice inside
+        ONE unit is the duplicate CE0101 still answers.
+
+        CE3011 was the fourth answer and it keeps the TYPE arms alone, because a type is
+        one name for the whole program until `docs/design/type-identity.md`'s phase 2.
+
+        `may_coexist` is FALSE wherever a GENERIC is one of the two. `FunctionTable`
+        carries a per-unit view and `GenericFunctionTable` does not, so a generic name is
+        still one declaration for the whole program: two of them would leave each unit's
+        call measured against the other's declaration, which is section 13.1 again. A
+        generic coexists once its table carries the same two views.
         """
         clash = library_clash_origin(
             self.visibility, "function", name,
             current_unit=self.current_unit_name, library_units=self.library_units)
-        if clash is not None:
-            if clash.is_public:
-                self._warn_shadowed_export(name, name_span, clash)
-                return False
-            reject_library_clash(self.r, clash, name_span, kind="function", name=name,
-                                 filename=self.current_unit_file)
-            return True
+        if clash is not None and clash.is_public:
+            self._warn_shadowed_export(name, name_span, clash)
+            return Redeclaration.REPLACE
+        prev_unit = getattr(prev, "unit_name", None)
+        if may_coexist and prev_unit is not None and prev_unit != self.current_unit_name:
+            return Redeclaration.COEXIST
         er.emit_with(self.r, ERR.CE0101, name_span,
                      filename=self.current_unit_file, name=name) \
             .note("first defined here", prev.name_span,
                   getattr(prev, "filename", None)).emit()
-        return True
+        return Redeclaration.REFUSED
 
     def _warn_shadowed_export(self, name: str, name_span: Optional[Span],
                               clash) -> None:
@@ -464,6 +547,9 @@ class FunctionCollector:
         The branch this replaces dropped the previous entry and returned without
         registering anything, so the consumer lost its own declaration as well and the
         library's came back through the `libraries` pass.
+
+        Only the FLAT view is dropped. A unit does not stop having declared what it
+        declared, and `view_for` is how its own body still reads it (#487).
         """
         table.order.remove(name)
         del table.by_name[name]
@@ -540,15 +626,21 @@ class FunctionCollector:
         validate_type_pack_params(self.r, getattr(fn, "type_params", None), params, name_span)
 
         if name in self.funcs.by_name:
-            if self._reject_redeclaration(name, name_span, self.funcs.by_name[name]):
+            verdict = self._redeclaration(name, name_span, self.funcs.by_name[name],
+                                          may_coexist=True)
+            if verdict is Redeclaration.REFUSED:
                 return
-            self._drop(self.funcs, name)
+            if verdict is Redeclaration.REPLACE:
+                self._drop(self.funcs, name)
 
         if name in self.generic_funcs.by_name:
-            if self._reject_redeclaration(name, name_span,
-                                          self.generic_funcs.by_name[name]):
+            verdict = self._redeclaration(name, name_span,
+                                          self.generic_funcs.by_name[name],
+                                          may_coexist=False)
+            if verdict is Redeclaration.REFUSED:
                 return
-            self._drop(self.generic_funcs, name)
+            if verdict is Redeclaration.REPLACE:
+                self._drop(self.generic_funcs, name)
 
         sig = FuncSig(
             name=name,
@@ -570,8 +662,7 @@ class FunctionCollector:
             if ret_ty not in valid_integer_types:
                 er.emit(self.r, ERR.CE0106, ret_span, type=display_type(ret_ty))
 
-        self.funcs.order.append(name)
-        self.funcs.by_name[name] = sig
+        self.funcs.declare(name, sig)
 
     def _collect_generic_function_def(
         self,
@@ -583,15 +674,21 @@ class FunctionCollector:
         name_span = getattr(fn, "name_span", None) or getattr(fn, "loc", None)
 
         if name in self.generic_funcs.by_name:
-            if self._reject_redeclaration(name, name_span,
-                                          self.generic_funcs.by_name[name]):
+            verdict = self._redeclaration(name, name_span,
+                                          self.generic_funcs.by_name[name],
+                                          may_coexist=False)
+            if verdict is Redeclaration.REFUSED:
                 return
-            self._drop(self.generic_funcs, name)
+            if verdict is Redeclaration.REPLACE:
+                self._drop(self.generic_funcs, name)
 
         if name in self.funcs.by_name:
-            if self._reject_redeclaration(name, name_span, self.funcs.by_name[name]):
+            verdict = self._redeclaration(name, name_span, self.funcs.by_name[name],
+                                          may_coexist=False)
+            if verdict is Redeclaration.REFUSED:
                 return
-            self._drop(self.funcs, name)
+            if verdict is Redeclaration.REPLACE:
+                self._drop(self.funcs, name)
 
         type_param_instances = tuple(
             tp if isinstance(tp, BoundedTypeParam)

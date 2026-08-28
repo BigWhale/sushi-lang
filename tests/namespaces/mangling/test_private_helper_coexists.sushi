@@ -1,0 +1,10 @@
+# Two units each declare a private `helper` with a different body. Every unit's
+# own call reaches its own declaration, so the two symbols must coexist.
+# This is the INCREMENTAL build path, which a multi-unit program takes by default.
+# EXPECT_STDOUT_EXACT: "12 24\n"
+use "helpers/mangle_left"
+use "helpers/mangle_right"
+
+fn main() i32:
+    println("{left_value().realise(0)} {right_value().realise(0)}")
+    return Result.Ok(0)

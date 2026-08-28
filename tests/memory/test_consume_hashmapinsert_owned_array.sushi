@@ -19,10 +19,10 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 
+use <collections/hashmap>
+
 struct Buf:
     i32[] data
-
-use <collections/hashmap>
 
 fn at_len(peek HashMap@(i32, Buf) m, i32 key) i32:
     let Buf found = m.get(key)??

@@ -21,8 +21,16 @@ from .types import TypeQueries
 from .writes import MUTATING_METHODS, READONLY_RECEIVERS
 
 
-def _build_callee_modes(tables) -> CalleeModes:
-    """Build the mode resolver from the collect pass's tables."""
+def _build_callee_modes(tables, unit_name: Optional[str] = None,
+                        scope: object = None) -> CalleeModes:
+    """Build the mode resolver from the collect pass's tables, as ONE unit reads them.
+
+    `unit_name` is the unit whose bodies are about to be checked. A name it declares
+    itself answers with its own signature, which is what stops a source library's own
+    call being measured against the consumer's declaration of the same name (#487,
+    `docs/design/unit-namespaces.md` section 13.1), and `scope` is what stops it reading
+    a declaration from a unit it never imported (section 6).
+    """
     if tables is None:
         return CalleeModes()
     funcs = getattr(tables, "funcs", None)
@@ -33,7 +41,7 @@ def _build_callee_modes(tables) -> CalleeModes:
     # A generic fn is called by its bare name in a template body but interned under a
     # mangled one, and the mode does not vary per instantiation. Concrete table first.
     sigs = dict(getattr(getattr(tables, "generic_funcs", None), "by_name", None) or {})
-    sigs.update(getattr(funcs, "by_name", None) or {})
+    sigs.update(funcs.view_for(unit_name, scope) if funcs is not None else {})
     return CalleeModes(
         func_sigs=sigs,
         struct_names=struct_names,
@@ -47,7 +55,9 @@ class BorrowChecker:
     def __init__(self, reporter: Reporter,
                  destroy_effects: Optional[Dict[str, FrozenSet[int]]] = None,
                  enum_names: Optional[Set[str]] = None,
-                 tables=None):
+                 tables=None,
+                 unit_name: Optional[str] = None,
+                 scope: object = None):
         self.reporter = reporter
         # Used only to RESOLVE a named type before classifying it: `owns_heap` answers
         # False for an UnknownType, so without this an owning struct would alias.
@@ -69,7 +79,7 @@ class BorrowChecker:
         # THE mode resolver. Which kind of callee a `Call` names, and what each of its
         # parameters declares. Built from the same tables the backend's copy reads, so
         # the two halves cannot reach different answers (docs/design/borrow-model.md S1).
-        self.callee_modes = _build_callee_modes(tables)
+        self.callee_modes = _build_callee_modes(tables, unit_name, scope)
 
     def run(self, program: Program) -> None:
         """Run borrow checking on the entire program."""

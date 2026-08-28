@@ -8,6 +8,7 @@ from lark import Token
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
+    from sushi_lang.semantics.namespaces import NamespaceRef
 
 
 @dataclass
@@ -69,6 +70,10 @@ class UseStatement(Node):
     path: str                        # Path string like "math/integer" or "core/results"
     is_stdlib: bool = False          # True for <module>, False for "module"
     is_library: bool = False         # True for <lib/module>, False otherwise
+    # The `as NAME` clause. It decides WHERE the imported names land, and nothing
+    # else (`docs/design/unit-namespaces.md` section 2).
+    alias: Optional[str] = None
+    alias_span: Optional[Span] = None
 
 @dataclass
 class Program(Node):
@@ -84,6 +89,11 @@ class Program(Node):
     externals: List["ExternalBlock"] = None
     doc: Optional["DocBlock"] = None            # the unit block: first item, attached to nothing
     orphan_docs: List["DocBlock"] = None        # every block that documents nothing
+    # Where this unit's first WRITTEN declaration stands. Read by CE3014, and recorded
+    # here because the tree is the only place source order survives: a library's
+    # constants and private types are appended to a host unit's lists later, carrying
+    # spans from their own file.
+    first_declaration_span: Optional[Span] = None
 
     def __post_init__(self):
         if self.externals is None:
@@ -115,15 +125,27 @@ class BoundedTypeParam:
     constraints: List[str] = None  # Perk names (e.g., ["Hashable", "Eq"])
     loc: Optional[Span] = None
     is_pack: bool = False          # True for a variadic type pack (...Ts)
+    # The alias each constraint was written behind, index-aligned with `constraints`
+    # and None where it was written bare. The perk name stays the table key: a
+    # qualifier picks WHICH declaration is meant and never makes a second perk.
+    constraint_namespaces: List[Optional[str]] = None
 
     def __post_init__(self):
         if self.constraints is None:
             self.constraints = []
+        if self.constraint_namespaces is None:
+            self.constraint_namespaces = [None] * len(self.constraints)
+
+    def written_constraints(self) -> List[str]:
+        """Each constraint as the user wrote it, for a diagnostic to quote."""
+        return [name if ns is None else f"{ns}.{name}"
+                for name, ns in zip(self.constraints, self.constraint_namespaces,
+                                    strict=False)]
 
     def __str__(self) -> str:
         prefix = "..." if self.is_pack else ""
         if self.constraints:
-            constraints_str = " + ".join(self.constraints)
+            constraints_str = " + ".join(self.written_constraints())
             return f"{prefix}{self.name}: {constraints_str}"
         return f"{prefix}{self.name}"
 
@@ -361,6 +383,10 @@ class Pattern(Node):
     bindings: List[Union[str, 'Pattern', 'OwnPattern', 'RefBinding']]
     enum_name_span: Optional[Span] = None
     variant_name_span: Optional[Span] = None
+    # The alias the enum was written behind: `geo.Sign.Plus ->`. The enum name stays
+    # the key, so exhaustiveness, payload binding and the literal-arm rules read
+    # exactly what they read for a bare arm (unit-namespaces.md section 5.2).
+    namespace: Optional[str] = None
 
 @dataclass
 class WildcardPattern(Node):
@@ -548,14 +574,27 @@ class DotCall(Node):
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
     resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type (populated by type checker)
     external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for FFI calls (set by type checker)
+    # `(namespace kind, origin, name)` for a call through a `use ... as` alias: which
+    # kind of producer answered, the unit or module it named, and the declared name.
+    # The back end resolves through the origin, so a shadowed name reaches the right
+    # declaration (`docs/design/unit-namespaces.md` section 5).
+    namespace_ref: Optional["NamespaceRef"] = None
     callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
                                             # `poke self` (#327); see MethodCall
+    field_names: Optional[List[str]] = None  # named construction through a namespace
+    # Explicit call-site type arguments, as `Call` carries them. A qualified call to a
+    # return-type-only generic is the reason they are here: `it.empty_list@(i32)()` is a
+    # direct call to a named free function once the alias folds away, so the rule CE6102
+    # states is unharmed and only the parse shape changed (unit-namespaces.md 5.1).
+    type_args: Optional[List["Type"]] = None
+    type_args_loc: Optional["Span"] = None
 
 @dataclass
 class MemberAccess(Node):
     """Member access expression: obj.field"""
     receiver: "Expr"    # The struct expression (p in p.x)
     member: str
+    namespace_ref: Optional["NamespaceRef"] = None  # a name read through an alias
 
 @dataclass
 class EnumConstructor(Node):

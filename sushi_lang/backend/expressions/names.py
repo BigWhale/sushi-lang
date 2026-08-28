@@ -16,7 +16,7 @@ def resolve_name_slot(codegen: 'LLVMCodegen', name: str) -> Optional[ir.Value]:
     slot = codegen.memory.try_find_local_slot(name)
     if slot is not None:
         return slot
-    return codegen.constants.get(name)
+    return codegen.constants.lookup(name, codegen.emitting_unit, codegen.scope)
 
 
 def resolve_name_semantic_type(codegen: 'LLVMCodegen', name: str) -> Optional['Type']:
@@ -27,7 +27,7 @@ def resolve_name_semantic_type(codegen: 'LLVMCodegen', name: str) -> Optional['T
     semantic_ty = codegen.variable_types.get(name)
     if semantic_ty is not None:
         return semantic_ty
-    const_sig = codegen.const_table.by_name.get(name)
+    const_sig = codegen.const_table.lookup(name, codegen.emitting_unit, codegen.scope)
     return const_sig.const_type if const_sig is not None else None
 
 
@@ -52,9 +52,31 @@ def emit_name(codegen: 'LLVMCodegen', expr: Name, to_i1: bool) -> ir.Value:
     # Neither a local nor a constant: a bare reference to a top-level function is a
     # first-class function value -> a non-capturing fat pointer {thunk, null, null}.
     # The thunk bridges the bare fn into the uniform env-passing indirect ABI.
-    llvm_fn = codegen.funcs.get(expr.id)
+    llvm_fn = codegen.funcs.lookup(expr.id, codegen.emitting_unit, codegen.scope)
     if llvm_fn is not None:
         from sushi_lang.backend.runtime import closures
         return closures.materialize_function_ref(codegen, llvm_fn)
     raise_internal_error("CE0055", name=expr.id)
 
+
+
+def emit_namespaced_value(codegen: 'LLVMCodegen', ref, to_i1: bool) -> ir.Value:
+    """Read `<namespace>.<name>` as a value. Under this epic that is a constant.
+
+    The unit or module the typecheck pass resolved answers, never the emitting one:
+    two units may each declare `SCRATCH`, and the alias says which was meant.
+    """
+    origin, name = ref.origin, ref.name
+    if ref.producer == "stdlib":
+        from sushi_lang.sushi_stdlib.src import math as math_module
+        if math_module.is_builtin_math_constant(name):
+            _, value = math_module.get_builtin_math_constant_value(name)
+            f64_value = ir.Constant(ir.DoubleType(), value)
+            return codegen.utils.as_i1(f64_value) if to_i1 else f64_value
+        raise_internal_error("CE0055", name=f"{origin}.{name}")
+
+    slot = codegen.constants.lookup(name, origin)
+    if slot is None:
+        raise_internal_error("CE0055", name=f"{origin}.{name}")
+    value = codegen.builder.load(slot, name=name)
+    return codegen.utils.as_i1(value) if to_i1 else value

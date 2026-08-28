@@ -1,0 +1,9 @@
+# A binary .slib consumer still resolves after the symbol scheme changes. The
+# library's private `secret_bump` ships as bitcode only, so the call has to use
+# the producer's own symbol and never one the consumer derives.
+# EXPECT_STDOUT_EXACT: "12\n"
+use <lib/mangle_closure_lib>
+
+fn main() i32:
+    println("{bumped@(i32)(5).realise(0)}")
+    return Result.Ok(0)

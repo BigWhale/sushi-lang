@@ -21,18 +21,26 @@ def get_effective_cwd() -> Path:
 
 
 def check_duplicate_uses(ast: Program, reporter: Reporter) -> None:
-    """Check for duplicate use statements in a single file and emit warnings."""
+    """Warn on a repeat of one import, with the same alias or none.
+
+    The key is the path AND the alias, because `use "math"` and `use "math" as m` do
+    different things: the first puts the unit's names in the flat scope and the second
+    puts them behind a dot, so neither is a duplicate of the other
+    (`docs/design/unit-namespaces.md` section 6). Two aliases for one unit are legal
+    and both work.
+    """
     from sushi_lang.internals import errors as er
 
-    seen_units: dict[str, Span | None] = {}  # unit_path -> first occurrence location
+    seen_units: dict[tuple[str, str | None], Span | None] = {}
 
     for use_stmt in ast.uses:
-        if use_stmt.path in seen_units:
-            prev_loc = seen_units[use_stmt.path]
+        key = (use_stmt.path, use_stmt.alias)
+        if key in seen_units:
+            prev_loc = seen_units[key]
             er.emit_with(reporter, er.ERR.CW3001, use_stmt.loc, unit=use_stmt.path) \
                 .note("first imported here", prev_loc).emit()
         else:
-            seen_units[use_stmt.path] = use_stmt.loc
+            seen_units[key] = use_stmt.loc
 
 
 def load_unit_recursively(unit_manager: UnitManager, unit_name: str,

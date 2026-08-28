@@ -47,18 +47,36 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if callee == "open":
         return emit_open_function(codegen, expr, to_i1)
 
-    stdlib_func = _check_stdlib_function_codegen(codegen, callee)
-    if stdlib_func is not None:
-        return _emit_stdlib_function(codegen, expr, callee, stdlib_func, to_i1)
+    # The unit being emitted answers for the name, exactly as the borrow pass's
+    # `view_for` does: a source library's own body must read the library's
+    # signature and not the consumer's declaration of the same name (#487). It is
+    # asked BEFORE the standard library, which is the same ladder the typecheck pass
+    # walks -- a declaration beats a name a flat `use` brought in (section 8).
+    func_sig = codegen.func_table.lookup(callee, codegen.emitting_unit, codegen.scope)
 
-    llvm_fn = codegen.funcs.get(callee)
+    if func_sig is None:
+        stdlib_func = _check_stdlib_function_codegen(codegen, callee)
+        if stdlib_func is not None:
+            return _emit_stdlib_function(codegen, expr, callee, stdlib_func, to_i1)
+
+    llvm_fn = codegen.funcs.lookup(callee, codegen.emitting_unit, codegen.scope)
     if llvm_fn is None:
         raise KeyError(f"unknown function: {callee}")
 
+    return emit_named_call(codegen, expr, callee, llvm_fn, func_sig, to_i1)
+
+
+def emit_named_call(codegen: 'LLVMCodegen', expr, callee: str, llvm_fn, func_sig,
+                    to_i1: bool) -> ir.Value:
+    """Emit a call to a resolved named function, from its LLVM value and signature.
+
+    Split out of `emit_function_call` because a call written through a namespace
+    arrives as a `DotCall` and resolves through the ORIGIN unit rather than the
+    emitting one. Everything after the lookup is the same call.
+    """
     # Native variadic call: collapse the trailing arguments into one synthesized,
     # owned T[] which is moved into the callee. Must happen BEFORE the arity guard
     # so the produced argument count matches the (non-variadic) LLVM signature.
-    func_sig = codegen.func_table.by_name.get(callee)
     variadic_param = (
         func_sig.params[-1]
         if func_sig is not None and func_sig.params
@@ -230,6 +248,13 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if result is not None:
         return result
 
+    # 0b. A call through a `use ... as` alias. The typecheck pass stamped which
+    #     producer answered and which unit or module it named, so nothing is looked
+    #     up by bare name here (`docs/design/unit-namespaces.md` section 5).
+    result = _try_emit_namespaced_call(codegen, expr, to_i1)
+    if result is not None:
+        return result
+
     result = intrinsics.try_emit_enum_constructor(codegen, expr)
     if result is not None:
         return result
@@ -386,6 +411,40 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     return codegen.utils.as_i1(result_value) if to_i1 else result_value
 
 
+def _try_emit_namespaced_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                              to_i1: bool) -> ir.Value | None:
+    """Emit `<namespace>.<name>(args)` if the typecheck pass resolved one."""
+    ref = getattr(expr, 'namespace_ref', None)
+    if ref is None:
+        return None
+    origin, name = ref.origin, ref.name
+
+    if ref.kind == "struct":
+        # A construction, not a call. The stamp says which kind of declaration the
+        # namespace held, so nothing here reads the shape of the node to find out.
+        from sushi_lang.backend.expressions import structs
+        stand_in = Call(callee=Name(id=name, loc=expr.loc), args=expr.args,
+                        field_names=getattr(expr, "field_names", None), loc=expr.loc)
+        stand_in.resolved_struct_type = getattr(expr, "resolved_struct_type", None)
+        return structs.emit_struct_constructor(codegen, stand_in, to_i1)
+
+    if ref.producer == "stdlib":
+        # The REGISTRY, not the flat table: an aliased import puts nothing in the flat
+        # scope, which is the whole of Ruling 1 and what makes section 1.3 expressible.
+        from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
+        module = get_stdlib_registry().get_module(origin)
+        stdlib_func = module.functions.get(name) if module is not None else None
+        if stdlib_func is None:
+            raise_internal_error("CE0055", name=f"{origin}.{name}")
+        return _emit_stdlib_function(codegen, expr, name, (origin, stdlib_func), to_i1)
+
+    llvm_fn = codegen.funcs.lookup(name, origin)
+    if llvm_fn is None:
+        raise_internal_error("CE0055", name=f"{origin}.{name}")
+    func_sig = codegen.func_table.lookup(name, origin)
+    return emit_named_call(codegen, expr, name, llvm_fn, func_sig, to_i1)
+
+
 def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]) -> ir.Value | None:
     """Emit a foreign (FFI) function call if `expr` is annotated with external_ref."""
     from sushi_lang.semantics.typesys import BuiltinType
@@ -471,17 +530,8 @@ def _promote_variadic_arg(codegen: 'LLVMCodegen', value: ir.Value, sushi_ty) -> 
 
 
 def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -> tuple | None:
-    """Check if a function is a stdlib function during code generation."""
-    func_table = codegen.func_table
-
-    possible_modules = ["time", "sys/env", "sys/process", "math", "random", "io/files"]
-
-    for module_path in possible_modules:
-        stdlib_func = func_table.lookup_stdlib_function(module_path, function_name)
-        if stdlib_func is not None:
-            return (module_path, stdlib_func)
-
-    return None
+    """The registry stdlib function a bare name reaches, from the one reader."""
+    return codegen.func_table.lookup_stdlib_by_name(function_name, codegen.scope)
 
 
 def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str,

@@ -1,0 +1,13 @@
+# Section 1.3: a unit declaring `sin` beside `use <math>` crashes the compiler
+# today, because the standard library answers first. An alias makes the two
+# expressible: the bare name is this program's own function, and the standard
+# library keeps its own behind the dot.
+# EXPECT_STDOUT_EXACT: "999 0\n"
+use "helpers/own_math"
+use <math> as std_math
+
+fn main() i32:
+    let f64 mine = sin(0.0).realise(0.0)
+    let f64 theirs = std_math.sin(0.0)
+    println("{mine} {theirs}")
+    return Result.Ok(0)

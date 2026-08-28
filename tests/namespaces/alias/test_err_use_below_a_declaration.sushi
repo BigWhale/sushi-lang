@@ -1,0 +1,9 @@
+# Every import comes first, after the unit's own doc block (section 2.1, CE3014).
+# The rule reads the `use` itself, so it holds with or without an alias.
+# EXPECT_ERROR_CODE: CE3014
+const i32 DEPTH = 4
+
+use "helpers/geo"
+
+fn main() i32:
+    return Result.Ok(DEPTH)

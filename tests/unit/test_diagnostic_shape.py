@@ -94,17 +94,22 @@ def test_tier3_two_locations(tmp_path):
 
 
 def test_tier3_secondary_location_can_live_in_another_file(tmp_path):
-    """A note carries its OWN filename, so a conflict can span two files."""
+    """A note carries its OWN filename, so a conflict can span two files.
+
+    A TYPE is the vehicle. Two units may each declare a function now, so a duplicate
+    function no longer spans two files at all (`docs/design/unit-namespaces.md`
+    section 9); a type still holds one name for the whole program.
+    """
     import os
 
     (tmp_path / "helper.sushi").write_text(
-        "public fn twice(i32 n) i32:\n    return Result.Ok(n * 2)\n", encoding="utf-8"
+        "struct Crate:\n    i32 weight\n", encoding="utf-8"
     )
     (tmp_path / "main.sushi").write_text(
         'use "helper"\n'
         "\n"
-        "fn twice(i32 n) i32:\n"
-        "    return Result.Ok(n + n)\n"
+        "struct Crate:\n"
+        "    i32 tag\n"
         "\n"
         "fn main() i32:\n"
         "    return Result.Ok(0)\n",

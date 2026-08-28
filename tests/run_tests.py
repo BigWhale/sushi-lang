@@ -91,7 +91,11 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
 # kept_private_lib backs tests/libs/kept_private, which asserts the wording the BINARY
 # path gives a private the closure never shipped (#469). A source library ships its
 # units, so the name resolves there and a different code path answers.
-BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib", "const_lib"}
+# mangle_closure_lib backs tests/namespaces/mangling/test_lib_link_symbol, which asserts
+# that a call into shipped bitcode uses the PRODUCER's symbol. A source library
+# recompiles and derives its own, so the field under test is never read.
+BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib", "const_lib",
+                       "mangle_closure_lib"}
 
 
 def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:

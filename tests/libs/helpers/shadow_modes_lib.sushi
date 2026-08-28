@@ -1,0 +1,16 @@
+# shadow_modes_lib.sushi - a library whose own body calls an export the consumer
+# shadows with a DIFFERENT parameter mode.
+#
+# `eat` borrows. A consumer that declares `fn eat(nom string s)` must not change
+# what `drive` means: the library's own call is measured against the library's
+# own declaration (#487, section 13.1 of docs/design/unit-namespaces.md).
+
+use <collections/strings>
+
+public fn eat(string s) i32:
+    return Result.Ok(s.len())
+
+public fn drive() i32:
+    let string msg = "mostly harmless"
+    let i32 n = eat(msg)??
+    return Result.Ok(n + msg.len())

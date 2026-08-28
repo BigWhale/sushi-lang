@@ -1,0 +1,10 @@
+# The constant half of the same rule. A public constant of a unit this one did
+# not import is not a name here, so the bare name declares nothing, and the help
+# line says which import would bring it.
+# EXPECT_ERROR_CODE: CE1001
+# EXPECT_STDERR_CONTAINS: add `use "helpers/deep"`
+use "helpers/mid"
+
+fn main() i32:
+    println("{DEEP_ANSWER}")
+    return Result.Ok(0)

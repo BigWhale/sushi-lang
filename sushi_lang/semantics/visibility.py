@@ -119,11 +119,17 @@ class VisibilityTable:
 
     by_key: dict[tuple[str, str], DeclOrigin] = field(default_factory=dict)
 
-    # The units that declared a name the table had already taken. The winner is in
-    # `by_key`; these are the losers, and each of them has heard why it lost (CE0101,
-    # CE0004, CE0006, CE3011). No rule may then measure a loser's own code against the
-    # winner's declaration, which is the whole of the D2 cascade family.
-    contested: dict[tuple[str, str], set[str]] = field(default_factory=dict)
+    # Every LATER declaration of a name the table had already taken, in the order the
+    # collect pass saw them. The winner is in `by_key`, and no rule may measure a loser's
+    # own code against it -- the whole of the D2 cascade family. A TYPE loser has heard
+    # why it lost (CE0004, CE0006, CE3011). A function or a constant loses only this
+    # table's answer now, not the name: each takes its own `<unit>$<name>` symbol and its
+    # own entry in `by_unit`, which is what its own code is measured against
+    # (`docs/design/unit-namespaces.md` section 9).
+    #
+    # The ORIGIN is kept and not just the unit name, because `CE3012` names every
+    # candidate a written name could mean and points at each declaration.
+    contested: dict[tuple[str, str], list[DeclOrigin]] = field(default_factory=dict)
 
     def record(self, origin: DeclOrigin) -> None:
         """Remember a declaration. The FIRST one wins, as every symbol table does.
@@ -141,24 +147,26 @@ class VisibilityTable:
             # and the merger replays it per unit -- or a duplicate inside one unit, which
             # CE0101 already answers with no other unit to name.
             if origin.unit_name is not None and origin.unit_name != kept.unit_name:
-                self.contested.setdefault(key, set()).add(origin.unit_name)
+                seen = self.contested.setdefault(key, [])
+                if not any(other.unit_name == origin.unit_name for other in seen):
+                    seen.append(origin)
             return
         self.by_key[key] = origin
 
-    def mark_contested(self, kind: str, name: str, unit: Optional[str]) -> None:
-        """Book `unit` as a loser of this name, without a declaration to read from.
-
-        The merge uses it: a consumer's declaration replaces a library's export
-        (decision 10), so the library unit is now the loser of a name it declared, and
-        every rule that would measure the library's own body against the consumer's
-        declaration has to know.
-        """
-        if unit is None:
-            return
-        self.contested.setdefault((kind, name), set()).add(unit)
-
     def origin(self, kind: str, name: str) -> Optional[DeclOrigin]:
         return self.by_key.get((kind, name))
+
+    def origins(self, kind: str, name: str) -> list[DeclOrigin]:
+        """EVERY declaration of this name the collect pass saw, the winner first.
+
+        A rule that asks "may this unit write the name at all" has to read all of
+        them: the winner belongs to whichever unit was collected first, and a name is
+        writable when ANY declaration of it is reachable.
+        """
+        winner = self.by_key.get((kind, name))
+        if winner is None:
+            return []
+        return [winner, *self.contested.get((kind, name), ())]
 
     def contested_by(self, kind: str, name: str, unit: Optional[str]) -> bool:
         """Did `unit` declare this name and LOSE it to another unit's declaration?
@@ -168,7 +176,26 @@ class VisibilityTable:
         """
         if unit is None:
             return False
-        return unit in self.contested.get((kind, name), ())
+        return any(other.unit_name == unit
+                   for other in self.contested.get((kind, name), ()))
+
+    def candidates(self, kind: str, name: str, unit: Optional[str],
+                   scope: Any = None) -> list[DeclOrigin]:
+        """Every declaration of this name that `unit` may name, its own excluded.
+
+        The answer to "what could an unqualified name mean here". Two or more is
+        `CE3012` (`docs/design/unit-namespaces.md` section 6): the asking unit's own
+        declaration wins outright, and a private one next door is not a candidate at
+        all -- it is not nameable, so it cannot be part of an ambiguity.
+
+        `scope` narrows the same predicate to the units this one imported. A name a
+        unit next door imported was a candidate while the flat scope was the whole
+        program, and stops being one when the scope stops at the import.
+        """
+        found = self.origins(kind, name)
+        return [origin for origin in found
+                if origin.unit_name != unit and _permitted(origin, unit)
+                and (scope is None or scope.holds_unit(origin.unit_name))]
 
     def is_visible_from(self, kind: str, name: str, unit: Optional[str]) -> bool:
         """May `unit` name this declaration? An unrecorded name always may."""
@@ -243,11 +270,15 @@ def library_clash_origin(
 ) -> Optional[DeclOrigin]:
     """The LIBRARY declaration a consumer's own declaration collides with, or None.
 
-    A consumer cannot win a name a source library or a bundled stdlib module already
-    declared. There used to be a shadow branch that let it try; it deleted the library's
-    entry and registered no replacement, so the consumer lost its own declaration too.
-    Completing it is not safe either, because one namespace means the library's own bodies
-    would then call the consumer's function. CE3011 refuses it instead.
+    Two callers read this, and each reads it for its own kind. A TYPE the library holds
+    is a name the consumer cannot declare again, because identity is nominal and one name
+    is one shape: CE3011 refuses it. A FUNCTION is only asked about here to see whether
+    the library EXPORTS the name, which is the CW3002 warning; a library's private
+    function coexists with the consumer's, because each carries the unit that declared it.
+
+    There used to be a shadow branch that let a consumer take a library's name; it deleted
+    the library's entry and registered no replacement, so the consumer lost its own
+    declaration too.
 
     The answer is read from this table rather than from each symbol table, because a
     struct table carries a file and not a unit. The table is filled at the END of each

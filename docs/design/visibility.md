@@ -15,9 +15,11 @@ This document is normative for four things:
 3. The rule that stops a private type escaping through a public signature.
 4. What this does *not* decide, so a later reader does not think it did.
 
-Two later rulings live in section 9, because both are about the one flat namespace rather
-than about a marker: what happens when a consumer declares a name a library already
-declares, and who owns the record of a perk implementation.
+Two later rulings live in section 9, because both are about the namespace rather than
+about a marker: what happens when a consumer declares a name a library already declares,
+and who owns the record of a perk implementation. The namespace was flat for the whole
+program when they were written; `docs/design/unit-namespaces.md` made it per unit, and
+section 9 records what that changed.
 
 Read `docs/libraries.md` for what a `.slib` exports today, and
 `docs/design/method-resolution.md` for the order a method is found in.
@@ -104,8 +106,11 @@ struct Node:            struct Node:
 error [CE0004]: duplicate struct 'Node'.
 ```
 
-The same holds for a function and for a perk, and the function case emits a second
-diagnostic that is wrong:
+The same holds for a perk. It stopped holding for a function and for a constant: each
+carries the unit that declared it, so the two coexist (`docs/design/unit-namespaces.md`
+section 9), and CE0101 and CE0105 answer the same name twice inside ONE unit.
+
+The function twin used to emit a second diagnostic that was wrong:
 
 ```
 error [CE0101]: duplicate function 'helper'.
@@ -114,13 +119,17 @@ error [CE3005]: cannot call private function 'helper' from unit 'dupb'
 ```
 
 Unit `dupb` was told it may not call the function it declared itself. That cascade was a
-defect before any of this landed, and it is fixed: the loser of a contested name is
-recorded, and no rule measures a loser's own code against the winner's declaration.
+defect before any of this landed, and it was fixed here: the loser of a contested name is
+recorded, and no rule measures a loser's own code against the winner's declaration. The
+shape itself is now legal, so neither diagnostic is emitted, and the loser record serves
+the kinds that still have one winner for the whole program.
 
-**`public` in Sushi controls callability, not namespacing.** There is one flat global
-namespace, and privacy does not give a unit its own. This is the deciding fact for every
-ruling below: privacy can only ever mean "you may not name mine", never "mine and yours
-coexist".
+**`public` in Sushi controls callability, not namespacing.** This was the deciding fact
+for every ruling below, and it **narrows to TYPES**. `docs/design/unit-namespaces.md` gave
+a `fn` and a `const` the unit that declared them, and gave every unit a scope of its own,
+so for those two kinds privacy and coexistence are now separate questions. For a `struct`,
+an `enum` and a `perk` the sentence stands, because nominal identity is what it appeals to;
+section 7 of that document holds the boundary between the two phases.
 
 ## 2. Ruling 1: four declarations carry visibility, and private is the default
 
@@ -202,6 +211,11 @@ And one thing the leak fence has to know: an extension inherits its target type'
 and a builtin target carries none. An extension on `i32` is therefore not fenced by
 section 5 -- it has no marker to promise with -- which is what keeps section 6's
 undertaking that a single-unit file never notices the flip.
+
+The marker is inherited, and a method name is still claimed for every consumer: a namespace
+cannot stand in front of a method, because a method is found on the receiver's type.
+`docs/design/unit-namespaces.md` section 8 measures that cost and proposes CW3003, a
+warning at `--lib` build time on a library that extends a type it did not declare.
 
 The alternative was to give an extension its own marker. That makes a method's availability
 depend on the calling unit, which makes method resolution unit-dependent — and method
@@ -383,9 +397,11 @@ Rust blocks the call. But Rust splits what Sushi does not:
 
 So Rust agrees with Ruling 2 for a plain extension, and differs only on the perk form. The
 mechanism it uses is `use crate::unit::Loud` — selecting one name into scope. Sushi has no
-name-level import: `use "unit"` brings a whole unit. Rust's rule is only expressible on top
-of scope-import, and adopting it would make method availability depend on the call site,
-which is the cost Ruling 2 exists to avoid.
+name-level import: `use "unit"` brings a whole unit, and `use "unit" as u` puts that whole
+unit behind a dot. `docs/design/unit-namespaces.md` is unit-level for exactly this reason,
+and its section 12 is where a selective import would be decided. Rust's rule is only
+expressible on top of scope-import, and adopting it would make method availability depend
+on the call site, which is the cost Ruling 2 exists to avoid.
 
 Sushi's method model is Java-shaped — a method is found on the receiver's type, not through
 a scoped bound. It therefore lands on Java's answer, and not as a compromise.
@@ -556,8 +572,11 @@ it as source now, beside the closure's private constants, and the consumer regis
 with a PRIVATE record -- so only the transplanted body may name it. Each private is still
 named in exactly one place: the closure, or the kept list.
 
-The manifest protocol is **2.1**. An older `.slib` is refused through the existing
-compiler-version gate (CE3503); there is no grandfather branch.
+The manifest protocol is **2.2** -- 2.1 for the public gate above, and 2.2 for the two
+keys the unit-namespaces epic added: `unit` on every record, and `link_symbol` on every
+record with a symbol in the shipped bitcode (`docs/library-format.md`,
+`docs/design/unit-namespaces.md` section 9). An older `.slib` is refused through the
+existing compiler-version gate (CE3503); there is no grandfather branch.
 
 **A single-unit file never notices the flip.** That is an undertaking, and it is what the
 leak fence's two gates protect: an extension on a builtin inherits no marker, so it is not
@@ -571,10 +590,13 @@ construction and no user-defined constructor. Rust survives this only because yo
 `Point::new()`. If an opaque type is wanted later, the cheaper route is a marker that hides
 *all* fields — the C header idiom — and not a marker per field.
 
-**Per-unit namespacing.** Nominal identity forbids it (section 1). Two units still cannot
-each declare a private `Node`. If that is ever wanted, it is a change to type identity, not
-to visibility, and it should be argued there. `docs/design/unit-namespaces.md` carries the
-design; CE3011 and CW3002 both cite it as the rule that would lift them.
+**Per-unit namespacing.** Nominal identity forbids it for a TYPE (section 1), and two
+units still cannot each declare a private `Node`. That is a change to type identity, not
+to visibility, and it is argued in `docs/design/type-identity.md`. The rest of the row has
+since been lifted by `docs/design/unit-namespaces.md`: a `fn` and a `const` coexist, an
+`as` clause binds an imported unit behind a dot, and a unit's scope is now its own
+declarations plus what its own `use` statements bring. CE3011 and CW3002 both cite that
+document, and it is section 14 there that records what this one owes it.
 
 **The CE0101 → CE3005 cascade.** Telling a unit it may not call its own function was wrong
 independent of every ruling here, and it rode this work rather than waiting: four more
@@ -585,22 +607,23 @@ that.
 name-level import, which Sushi does not have. That is a language feature, not a visibility
 rule.
 
-## 9. The flat namespace, ruled later
+## 9. The namespace, ruled later
 
 Both rulings here came out of implementing sections 2 to 7. Neither is about a marker: each
-is about what one flat namespace means when a consumer and a library reach for the same
-name.
+is about what the namespace means when a consumer and a library reach for the same name.
+The namespace was one flat table for the whole program at the time, which is what every
+"then" column below records; `docs/design/unit-namespaces.md` made it per unit.
 
 ### 9.1 A consumer may shadow a library's export, and is told that it does
 
-Four combinations, and only one of them was ever a link-level clash:
+Four combinations. One of them was a link-level clash, and none of them is one now:
 
-| consumer writes | library writes | answer | linkage |
+| consumer writes | library writes | answer | then |
 |---|---|---|---|
-| `fn f` (private) | `public fn f` | allowed, **CW3002** | the consumer's is internal, the library's external |
-| `public fn f` | `public fn f` | CE3003 — a real clash | both external |
-| `fn f` (private) | `fn f` (private) | CE3011 | both internal |
-| `public fn f` | `fn f` (private) | CE3011 | no clash at all |
+| `fn f` (private) | `public fn f` | legal, **CW3002** | unchanged |
+| `public fn f` | `public fn f` | legal, **CW3002** | CE3003 |
+| `fn f` (private) | `fn f` (private) | legal, nothing said | CE3011 |
+| `public fn f` | `fn f` (private) | legal, nothing said | CE3011 |
 
 Row 1 stays legal, and the measurement is why. A private function is emitted with INTERNAL
 linkage (`backend/functions/declarations.py:78`), so the consumer's `f` is invisible
@@ -611,27 +634,39 @@ The generic case measures the same, and it is the one that should break if any d
 library's `public fn through@(T)` is transplanted into the consumer's compile and
 monomorphized there.
 
+The other three rows joined it because a symbol now carries its unit. Row 2 was CE3003,
+which refused the whole program for a collision that might never be written;
+`docs/design/unit-namespaces.md` section 10 retired it, and CE3012 answers at the `use`
+where two candidates are really offered. Rows 3 and 4 were CE3011, which is now the TYPE
+rule alone: a `fn` carries the unit that declared it and each unit's scope reads its own,
+so a consumer may declare a function beside a library's private one. All four rows were
+measured with a source library, and in each the consumer's call reads the consumer's
+declaration while the library's own body reads its own -- `main$f` beside
+`lib$flib$flib$f`, one external and one internal exactly as the marker says.
+
 Two things were owed and are now paid. The consumer's own call had to RESOLVE to the
-consumer's declaration -- every symbol table merges first-wins and library units merge
+consumer's declaration -- every symbol table merged first-wins and library units merged
 first, so the library's signature answered the consumer's call and a replacement with a
 different signature was refused with a spurious CE2009. And shadowing an export is legal
 but rarely intended, so **CW3002** says so.
 
-The displaced declaration's unit is booked as a loser of the name, because one table holds
-one declaration and the library's own body must not then be measured against the
-consumer's.
+The machinery that displaced the library's declaration retired with the per-unit key:
+there is no single winner of a function name to displace, so nothing has to be dropped and
+nothing has to be booked as a loser. What CW3002 could not do when it was written, it can
+do now -- `use <lib/flib> as fl` puts the export behind a dot and the shadow away, which
+is what its own text promised.
 
-A library's PRIVATE name cannot be shadowed at all (**CE3011**): the consumer collides
-with a name it cannot see, so renaming is its only move. For a TYPE, even a public library
-name stays the plain duplicate (CE0004 / CE2046) -- type identity is nominal, so one name
-is one shape and the consumer cannot have its own.
+For a TYPE, even a public library name stays the plain duplicate (CE0004 / CE2046), and a
+library's PRIVATE type is **CE3011**: type identity is nominal, so one name is one shape
+and the consumer cannot have its own. A library's private CONSTANT is refused too, with
+CE0105 (#507), which is the function rule's shape with another code.
 
 ### 9.2 The perk-implementation override stays, and its record moved onto the table
 
 A consumer's `extend X with P` wins over a library's, the library's goes to
 `shadowed_impls`, and the analyzer drops it from the AST so the method symbol is not
 defined twice. This is not the same question as 9.1: a perk implementation is keyed by
-`(type, perk)` and not by a name in the flat namespace, and it is the sanctioned override
+`(type, perk)` and not by a name in a scope, and it is the sanctioned override
 that `docs/design/method-resolution.md` already names.
 
 What changed is the bookkeeping. "Which unit declared this implementation" lived in a

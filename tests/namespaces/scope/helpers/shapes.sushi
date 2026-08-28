@@ -1,0 +1,6 @@
+# A public signature that names a type the CALLER cannot name. Section 6.1 rules
+# that this is legal, and that the caller must import `geometry` to write `Vec`.
+use "helpers/geometry"
+
+public fn origin() Vec:
+    return Result.Ok(Vec(3, 4))

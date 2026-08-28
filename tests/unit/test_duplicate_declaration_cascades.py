@@ -1,9 +1,12 @@
 """One diagnostic per contested name, and never one aimed at the wrong unit (D2).
 
-A flat namespace means two units cannot declare the same name. The symbol table keeps
-the FIRST declaration, so every later one is a loss, and the unit that lost hears why:
-CE0101 for a function, CE0004 for a struct, CE2046 for an enum, and CE3011 when the winner
-is a library's PRIVATE declaration, which the consumer cannot even see. What it must NOT
+Two units cannot declare the same TYPE, because identity is nominal. The symbol table
+keeps the FIRST declaration, so every later one is a loss, and the unit that lost hears
+why: CE0004 for a struct, CE2046 for an enum, and CE3011 when the winner is a library's
+PRIVATE type, which the consumer cannot even see. A function and a constant left this
+list: each takes its own `<unit>$<name>` symbol, so the two coexist
+(`docs/design/unit-namespaces.md` section 9), and a library's private FUNCTION coexists
+too. A library's private CONSTANT is still CE0105 (#507). What a loser must NOT
 then hear is a rule measuring its own code against a declaration it did not write --
 CE3005 says "you may not call this private", CE2027 says the struct has the wrong number
 of fields, CE2045 names a variant it did write against an enum it did not, and CE2060 says
@@ -73,7 +76,12 @@ def _consume(tmp_path: Path, env: dict, program: str) -> str:
 
 
 @needs_sushic
-def test_two_units_declaring_one_function_hear_it_once(tmp_path):
+def test_two_units_may_each_declare_one_function(tmp_path):
+    """A function is no longer a contested name: each unit takes its own symbol.
+
+    There is nothing to lose, so there is no cascade to hear either. That the two
+    bodies actually run is `tests/namespaces/mangling/`; this asserts the silence.
+    """
     out = _compile_units(tmp_path, {
         "helper.sushi": """\
 fn scale(i32 n) i32:
@@ -93,9 +101,7 @@ fn main() i32:
     return Result.Ok(0)
 """,
     })
-    assert "CE0101" in out, out
-    # The loser declared `scale` itself. Telling it that `scale` is somebody else's
-    # private is the cascade, not the diagnosis.
+    assert "CE0101" not in out, out
     assert "CE3005" not in out, out
 
 
@@ -132,7 +138,14 @@ fn main() i32:
 
 
 @needs_sushic
-def test_a_source_library_private_function_clash_is_refused(tmp_path):
+def test_a_source_library_private_function_coexists(tmp_path):
+    """A library's private FUNCTION left CE3011 with the epic's decision F.
+
+    A source library's units are ordinary compilation units at the consumer, and two
+    ordinary units may each declare one function. The library's own `twice` keeps
+    calling the library's `scale`; `tests/namespaces/library/` is where the output says
+    so.
+    """
     _out, env = _build_source_lib(tmp_path, """\
 fn scale(i32 n) i32:
     return Result.Ok(n * 2)
@@ -147,11 +160,12 @@ fn scale(i32 n) i32:
     return Result.Ok(n * 3)
 
 fn main() i32:
-    println("{scale(2).realise(0)}")
+    println("{scale(2).realise(0)} {twice(2).realise(0)}")
     return Result.Ok(0)
 """)
-    assert "CE3011" in out, out
+    assert "CE3011" not in out, out
     assert "CE3005" not in out, out
+    assert "error" not in out, out
 
 
 @needs_sushic

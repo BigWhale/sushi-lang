@@ -12,7 +12,6 @@ from pathlib import Path
 
 from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.internals.report import Reporter
-from sushi_lang.semantics.generics.active_generics import reset_active_generics
 from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
 from sushi_lang.compiler.loader import load_unit_recursively
@@ -47,7 +46,6 @@ def test_two_units_get_distinct_lifted_names(tmp_path: Path):
     (tmp_path / "main.sushi").write_text(MAIN_SRC, encoding="utf-8")
 
     reporter = Reporter(source=MAIN_SRC, filename="main")
-    reset_active_generics()
     get_stdlib_registry()
 
     unit_manager = UnitManager(root_path=tmp_path, reporter=reporter)
@@ -57,7 +55,6 @@ def test_two_units_get_distinct_lifted_names(tmp_path: Path):
     loaded = {"main"}
     for dep in unit.dependencies:
         assert load_unit_recursively(unit_manager, dep, loaded, reporter)
-    unit_manager.build_global_symbol_table()
     order = unit_manager.get_compilation_order()
     assert order is not None and len(order) == 2
 

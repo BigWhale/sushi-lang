@@ -5,7 +5,6 @@ from pathlib import Path
 
 import llvmlite.binding as llvm
 
-from sushi_lang.semantics.generics.active_generics import activate_generic_unit
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -44,8 +43,6 @@ class StdlibLinker:
                 parts = use_stmt.path.split('/')
                 for i in range(1, len(parts)):
                     stdlib_units.add('/'.join(parts[:i]))
-
-                activate_generic_unit(use_stmt.path)
 
     def has_stdlib_unit(self, unit_path: str) -> bool:
         """Check if a stdlib unit has been imported."""

@@ -1,0 +1,7 @@
+# A unit that binds an FFI namespace. An `unsafe external` block is declared in
+# one unit, so the namespace it binds is that unit's (#503).
+unsafe external "C" as libc because "the platform's own strlen":
+    fn strlen(string s) i64 = "strlen"
+
+public fn measured(string s) i32:
+    return Result.Ok(libc.strlen(s) as i32)

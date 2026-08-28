@@ -188,8 +188,9 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
                     return result_enum
         else:
             func_name = receiver.callee.id
-            if func_name in codegen.function_return_types:
-                result_type = codegen.function_return_types[func_name]
+            result_type = codegen.function_return_types.lookup(
+                func_name, codegen.emitting_unit, codegen.scope)
+            if result_type is not None:
                 if isinstance(result_type, EnumType) and result_type.name.startswith(prefix):
                     return result_type
 

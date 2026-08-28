@@ -1,0 +1,14 @@
+# A consumer declares `bump`, which the library declares PRIVATELY. Two ordinary
+# units may each declare one function, and a source library's units are ordinary
+# compilation units at the consumer, so this compiles and each body calls its own
+# declaration: the consumer prints 3, and the library's own `lib_bump` prints 20.
+# CE3011 keeps the TYPE arms alone.
+# EXPECT_STDOUT_EXACT: "3 20\n"
+use <lib/private_names_lib>
+
+fn bump(i32 n) i32:
+    return Result.Ok(n + 2)
+
+fn main() i32:
+    println("{bump(1).realise(0)} {lib_bump(1).realise(0)}")
+    return Result.Ok(0)

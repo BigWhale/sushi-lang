@@ -12,6 +12,11 @@ And a unit can now keep something to itself. `public` reaches every declaration 
 a name, private is the default, and a public signature may not hand out a private type --
 so a library exports what it means to export and nothing else.
 
+A unit is also a namespace now. `use "math" as m` puts what the import brings behind a
+dot, a unit sees what it imported and no further, and two units may each declare one
+`helper` -- so a name says where it came from, and one program's names stop crowding
+another's.
+
 ### Added
 - **`public` reaches every declaration, and private is the default.** The marker used to
   reach one declaration out of six. A `const`, a `struct`, an `enum` and a `perk` carry it
@@ -132,7 +137,60 @@ so a library exports what it means to export and nothing else.
   longer `CE1001`: the manifest records the name, so "not yours" is the true sentence and
   "no such name" was not.
 
+- **`use ... as`, a qualified name, and a scope that stops at the import.** A `use` put a
+  whole unit into one flat namespace for the whole program, and nothing could say which
+  unit a name came from. An import binds a namespace now, and the unit that wrote the
+  `use` is the unit that sees it.
+
+  ```sushi
+  use "geometry" as geo
+  use <math>
+
+  fn area(geo.Vec v) i32:                  # a type, and `let geo.Vec v = ...`
+      let geo.Sign s = geo.Sign.Plus       # a constructor
+      match s:                             # and a match arm
+          geo.Sign.Plus -> return Result.Ok(v.x * v.y)
+          geo.Sign.Minus -> return Result.Ok(0)
+  ```
+
+  `as` decides WHERE the names land: an aliased import puts nothing into the flat scope,
+  so a unit may declare `sin` beside `use <math> as std_math` and call both. The dot works
+  in every position where a name is written -- a type, a constructor, a match arm, a perk
+  constraint, a value and a call. The one refusal is a fixed array's size (**CE2099**),
+  because a size is read while the unit's own AST is built.
+
+  A `fn` and a `const` carry the unit that declared them, so **two units may each declare
+  one `helper`**, and each unit's call answers itself. Two units may also export one name:
+  writing it bare with two candidates is **CE3012** at the use, with a note at each
+  candidate, and an alias is the answer. A unit's own declaration always wins, `use <math>`
+  included, so your own `sin` is the `sin` your unit calls. A TYPE is still one name for
+  the whole program.
+
+  New codes: **CE3012** (two candidates), **CE3013** (the alias is taken), **CE3014** (a
+  `use` below a declaration), **CW3004** (`as` bound an empty namespace). **CE3003**
+  retires: two libraries that both export `sine` are usable together now, and the refusal
+  stands at the ambiguous use instead of over the whole program. **CE3011** narrows to a
+  TYPE, so a consumer may declare a function beside a library's private one.
+
+  Closes #490, #487 and #503. The design is `docs/design/unit-namespaces.md`.
+
 ### Changed
+- **Scope is per unit, and it is not transitive.** This is the one change here that stops
+  a program compiling. A unit sees its own declarations, plus what its OWN `use` statements
+  bring, and nothing else. An import is not re-exported: `top` importing `mid` no longer
+  reaches what `mid` imported, and `use "geometry" as geo` reaches what `geometry`
+  DECLARES.
+
+  A registry stdlib module and the built-in generic it activates follow the same rule, so
+  `use <math>` in one unit no longer answers a `sqrt` in another, and `HashMap` needs the
+  import in the unit that names it. An `unsafe external` namespace is bound in the unit
+  that DECLARES the block.
+
+  **To name a type, import the unit that declares it.** A public signature may name a type
+  its caller cannot write, and a `let` needs a written type, so the caller adds the import
+  the name asks for. A name out of scope is refused as "no such name" -- **CE2008**,
+  **CE2001** or **CE1001** -- with a help line that names the import which would bring it.
+
 - **CE2018 retires: a repeated value may own heap memory.** `[towel; 3]` was refused
   because N copies of an owning value would need N-1 deep copies and the compiler never
   inserts one. That stopped being true when `.fill()` gained a per-slot `copy_out`, and the

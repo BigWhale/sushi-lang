@@ -49,9 +49,21 @@ def _array_size(size_node: Tree, ast_builder: 'ASTBuilder') -> int:
     from sushi_lang.semantics.ast_builder.expressions.literals import expr_from_token
     from sushi_lang.semantics.ast import IntLit, Name
 
-    token = next((child for child in size_node.children if isinstance(child, Token)), None)
-    if token is None:
+    tokens = [child for child in size_node.children if isinstance(child, Token)]
+    if not tokens:
         unhandled(size_node)
+    token = tokens[0]
+
+    # One position cannot be qualified (`docs/design/unit-namespaces.md` section 5.3).
+    # The grammar admits the form so the answer is the ruled code and not a parse error:
+    # a size is read while this unit's AST is built, and an alias is bound long after.
+    if len(tokens) > 1:
+        raise SyntaxDiagnostic(
+            "CE2099", span=span_of(size_node),
+            size=".".join(str(t.value) for t in tokens),
+            reason="a size is read while this unit is parsed, before any alias is "
+                   "bound").help(
+            "declare an integer constant in this unit and name it bare")
 
     size_expr = expr_from_token(token, ast_builder)
 

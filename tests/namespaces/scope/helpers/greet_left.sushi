@@ -1,0 +1,3 @@
+# One of two units that declare `greet`. Only this one is imported by the test.
+public fn greet() i32:
+    return Result.Ok(1)

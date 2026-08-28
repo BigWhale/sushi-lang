@@ -24,7 +24,8 @@ class FunctionDefinitions:
         begin_function_fn,
         end_function_fn,
         emit_default_return_fn,
-        main_wrapper
+        main_wrapper,
+        unit_name: str | None = None,
     ) -> ir.Function:
         """Define the body of a regular function."""
         if fn.name == 'main' and not getattr(self.codegen, 'is_library_mode', False):
@@ -45,7 +46,9 @@ class FunctionDefinitions:
                     )
                 )
 
-        llvm_fn = self.codegen.funcs.get(fn.name) or emit_func_decl_fn(fn)
+        from sushi_lang.backend.functions.declarations import declaring_unit
+        llvm_fn = (self.codegen.funcs.declared(fn.name, declaring_unit(fn, unit_name))
+                   or emit_func_decl_fn(fn, unit_name))
         begin_function_fn(llvm_fn, fn)
 
         self.codegen.current_function_ast = fn

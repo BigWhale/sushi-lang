@@ -1,0 +1,6 @@
+# The same private name, a different body. The symbol must not collide.
+fn helper() i32:
+    return Result.Ok(22)
+
+public fn right_value() i32:
+    return Result.Ok(helper()?? + 2)

@@ -1,14 +1,19 @@
 """A constant is private by default, and a contested one hears exactly one diagnostic.
 
-Ruling 1 of `docs/design/visibility.md`. Three shapes, one diagnostic each:
+Ruling 1 of `docs/design/visibility.md`. Four shapes, one outcome each:
 
-  both public   -> CE3003, the ambiguous export, now with a note at each declaration
-  both private  -> CE0105, the plain duplicate, which the collect pass already rendered
-                   relationally
-  a library's   -> CE0105 as well. D1 asked whether a private library constant deserves
+  both public   -> nothing. The unit's own declaration wins over a name an import
+                   brought in (`docs/design/unit-namespaces.md` section 8), so the
+                   program the whole-program CE3003 refused now compiles.
+  both private  -> nothing. Each declaration takes its own `<unit>$<name>` global, so the
+                   two coexist (section 9). CE0105 keeps the same name twice inside ONE
+                   unit.
+  two candidates and no own declaration -> CE3012 at the USE, with a note at each
+                   candidate. This is what replaced CE3003 (section 6).
+  a library's   -> CE0105 still. D1 asked whether a private library constant deserves
                    CE3011 like a function does; it does not, because CE0105 already names
                    the library's file in its note and is the only diagnostic for the
-                   condition.
+                   condition. A library clash is not this epic's to lift.
 """
 from __future__ import annotations
 
@@ -62,18 +67,42 @@ fn main() i32:
 
 
 @needs_sushic
-def test_two_public_constants_are_an_ambiguous_export(tmp_path):
+def test_two_public_constants_coexist_when_one_of_them_is_this_unit_s(tmp_path):
+    """The asking unit's own declaration answers, so there is nothing to refuse."""
     out = _compile_units(tmp_path, _units("public "))
-    assert "CE3003" in out, out
-    assert out.count("exported here") == 2, out
+    assert "CE3003" not in out, out
+    assert "CE3012" not in out, out
     assert "CE0105" not in out, out
 
 
 @needs_sushic
-def test_two_private_constants_are_a_plain_duplicate(tmp_path):
+def test_an_unqualified_name_with_two_candidates_is_refused(tmp_path):
+    """CE3012, at the use, naming each candidate. What replaced CE3003."""
+    out = _compile_units(tmp_path, {
+        "north.sushi": "public const i32 LIMIT = 5\n",
+        "south.sushi": "public const i32 LIMIT = 7\n",
+        "main.sushi": """\
+use "north"
+use "south"
+
+fn main() i32:
+    println("{LIMIT}")
+    return Result.Ok(0)
+""",
+    })
+    assert "CE3012" in out, out
+    assert out.count("declares it here") == 2, out
+
+
+@needs_sushic
+def test_two_private_constants_coexist(tmp_path):
+    """Each takes its own `<unit>$<name>` global, so neither has to lose.
+
+    That the two values actually read back is `tests/namespaces/mangling/`; this asserts
+    that no diagnostic is spent on them (`docs/design/unit-namespaces.md` section 9).
+    """
     out = _compile_units(tmp_path, _units(""))
-    assert "CE0105" in out, out
-    assert "first defined here" in out, out
+    assert "CE0105" not in out, out
     assert "CE3003" not in out, out
 
 

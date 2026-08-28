@@ -1,0 +1,12 @@
+# A name the namespace does not hold at all. `NamespaceTable.members` supplies
+# the "did you mean" line, which is what a bare CE2008 could never carry.
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: did you mean 'geo.twice'
+use "helpers/geo" as geo
+
+fn run() i32:
+    return Result.Ok(geo.twicee(21)??)
+
+fn main() i32:
+    println("{run().realise(0)}")
+    return Result.Ok(0)

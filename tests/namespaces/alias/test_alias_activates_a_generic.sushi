@@ -1,0 +1,12 @@
+# `<collections/hashmap>` brings a name -- the built-in generic the import activates --
+# so an alias over it is not an empty namespace and CW3004 must stay quiet. The alias is
+# the gate, so the type is written behind the dot: nothing entered the flat scope.
+# EXPECT_STDOUT_EXACT: "1\n"
+use <collections/hashmap> as hm
+
+fn main() i32:
+    let hm.HashMap@(i32, string) m = HashMap.new()
+    m.insert(1, "one")
+    println("{m.len()}")
+    m.free()
+    return Result.Ok(0)

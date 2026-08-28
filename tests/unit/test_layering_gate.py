@@ -108,7 +108,6 @@ _ISOLATION_SCRIPT = textwrap.dedent('''
 
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.internals.report import Reporter
-    from sushi_lang.semantics.generics.active_generics import reset_active_generics
     from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
     from sushi_lang.semantics.units import UnitManager
@@ -117,12 +116,10 @@ _ISOLATION_SCRIPT = textwrap.dedent('''
     program, _tree = parse_to_ast(text)
     reporter = Reporter(source=text, filename="main")
 
-    reset_active_generics()
     get_stdlib_registry()
 
     unit_manager = UnitManager(root_path=Path(src_path).parent, reporter=reporter)
     unit = unit_manager.load_unit("main", program)
-    unit_manager.build_global_symbol_table()
     unit_manager.get_compilation_order()
 
     analyzer = SemanticAnalyzer(reporter, filename="main", unit_manager=unit_manager)

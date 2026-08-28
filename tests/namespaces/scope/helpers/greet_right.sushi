@@ -1,0 +1,4 @@
+# The second `greet`. Nothing imports it directly; `bridge` pulls it into the
+# program so the flat table holds two declarations of one name.
+public fn greet() i32:
+    return Result.Ok(2)

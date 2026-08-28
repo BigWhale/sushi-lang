@@ -231,18 +231,13 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
 def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                        args, is_library: bool = False) -> int:
     """Handle multi-file compilation when use statements are present."""
-    from sushi_lang.semantics.generics.active_generics import (
-        activate_generic_unit,
-        reset_active_generics,
-    )
-    reset_active_generics()
-
     main_unit_name = src_path.stem
     unit_manager = UnitManager(root_path=src_path.parent, reporter=reporter)
 
     main_unit = unit_manager.load_unit(main_unit_name, main_ast)
     if main_unit is None:
         return 2
+    main_unit.is_entry = True
 
     loaded_units = {main_unit_name}
     for dep_name in main_unit.dependencies:
@@ -267,9 +262,6 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     if not _inject_source_stdlib_units(unit_manager, reporter):
         return 2
 
-    if not unit_manager.build_global_symbol_table():
-        return 2
-
     compilation_order = unit_manager.get_compilation_order()
     if compilation_order is None:
         return 2
@@ -280,7 +272,6 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
             for use_stmt in unit.ast.uses:
                 if use_stmt.is_stdlib:
                     stdlib_units.add(use_stmt.path)
-                    activate_generic_unit(use_stmt.path)
 
     if len(compilation_order) > 1:
         print(f"Found {len(compilation_order)} units:")
@@ -401,6 +392,10 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
     external_table = getattr(analyzer, 'externals', None)
     if external_table is not None:
         cg.external_table = external_table
+    # Section 8's ladder, as the back end has to walk it: a bare callee is resolved
+    # through the same per-unit scope the typecheck pass accepted it under.
+    cg.unit_scopes = {name: table.scope
+                      for name, table in getattr(analyzer, 'namespaces', {}).items()}
 
     effective_cwd = get_effective_cwd()
     if args.out:
@@ -437,9 +432,15 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
         # the build, the same way the pre-codegen gate above does (#436).
         if reporter.has_errors:
             return 2
-        closure_fn_names = set(
-            (templates.get("closure_summary") or {}).get("private_functions", [])
-        )
+        # The SYMBOLS, not the names: a private helper's symbol carries its unit, and
+        # the promotion below looks it up in the emitted module by symbol. The manifest
+        # record that the consumer reads and this set are the same field, so the two
+        # cannot drift.
+        closure_fn_symbols = {
+            record["link_symbol"]
+            for record in templates.get("private_functions", []) or []
+            if record.get("link_symbol")
+        }
 
         kind = args.lib_kind
         # A source library needs no bitcode at all. A hybrid still compiles it, and so
@@ -451,7 +452,7 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
                                             debug=bool(args.dump_ll), opt=args.opt,
                                             verify=not args.no_verify,
                                             monomorphized_extensions=monomorphized_extensions,
-                                            exported_private_functions=closure_fn_names)
+                                            exported_private_functions=closure_fn_symbols)
 
         source = collect_unit_source(compilation_order) if kind != "binary" else None
 
@@ -535,6 +536,10 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
     external_table = getattr(analyzer, 'externals', None)
     if external_table is not None:
         cg.external_table = external_table
+    # Section 8's ladder, as the back end has to walk it: a bare callee is resolved
+    # through the same per-unit scope the typecheck pass accepted it under.
+    cg.unit_scopes = {name: table.scope
+                      for name, table in getattr(analyzer, 'namespaces', {}).items()}
     cg.main_expects_args = analyzer.main_expects_args
     cg.monomorphized_extensions = monomorphized_extensions
     cg.library_linker = library_linker

@@ -1,0 +1,15 @@
+# A local variable wins over an alias for the rest of its scope, exactly as one
+# wins over an FFI namespace (unit-namespaces.md section 8).
+# EXPECT_STDOUT_EXACT: "3 32\n"
+use "helpers/geo" as geo
+
+struct Point:
+    i32 x
+
+fn depth() i32:
+    return Result.Ok(geo.MAX_DEPTH)
+
+fn main() i32:
+    let Point geo = Point(3)
+    println("{geo.x} {depth().realise(0)}")
+    return Result.Ok(0)

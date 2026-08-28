@@ -153,6 +153,27 @@ def settle_method_args(checker: 'BorrowChecker', expr) -> None:
         apply_mode(checker, expr, arg, i, modes, CalleeKind.METHOD)
 
 
+def settle_namespaced_args(checker: 'BorrowChecker', expr) -> None:
+    """A name written through a namespace follows the modes its KIND declares.
+
+    A function's modes are stamped on the node by the typecheck pass. A STRUCT declares
+    none: a constructor consumes by position, so the answer comes from the one resolver
+    every callee kind asks, exactly as the bare `Vec(1, 2)` gets it.
+    """
+    ref = getattr(expr, "namespace_ref", None)
+    if ref is not None and ref.kind == "struct":
+        kind, modes = checker.callee_modes.for_name(ref.name)
+        for i, arg in enumerate(expr.args):
+            apply_mode(checker, expr, arg, i, modes, kind)
+        return
+
+    modes = getattr(expr, "callee_param_modes", None)
+    if modes is None:
+        return
+    for i, arg in enumerate(expr.args):
+        apply_mode(checker, expr, arg, i, modes, CalleeKind.FUNCTION)
+
+
 def consume_indirect_args(checker: 'BorrowChecker', expr) -> None:
     """An indirect call through a fn-typed field follows the fn type's declared modes."""
     # `apply_mode`, like every other call shape: a thinner arm here skipped the implicit

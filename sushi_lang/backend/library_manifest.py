@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from sushi_lang.semantics.library_templates import (
     doc_record, signature_record, type_string, with_doc,
 )
+from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.units import Unit
@@ -124,7 +125,7 @@ class LibraryManifestGenerator:
         )
 
         manifest = {
-            "sushi_lib_version": "2.1",
+            "sushi_lib_version": "2.2",
             "library_name": library_name,
             "library_version": library_version,
             "kind": kind,
@@ -207,6 +208,8 @@ class LibraryManifestGenerator:
 
                 public_funcs.append(with_doc({
                     "name": func.name,
+                    "unit": unit.name,
+                    "link_symbol": mangle_unit_symbol(unit.name, func.name),
                     **signature_record(func),
                 }, func))
 
@@ -288,6 +291,7 @@ class LibraryManifestGenerator:
                     source = unit.file_path.read_text()
                 public_consts.append(with_doc({
                     "name": const.name,
+                    "unit": unit.name,
                     "type": self._type_to_string(const.ty),
                     "source": slice_decl_source(const, source),
                 }, const))
@@ -319,6 +323,7 @@ class LibraryManifestGenerator:
 
                 structs.append(with_doc({
                     "name": struct_def.name,
+                    "unit": unit.name,
                     "fields": [
                         with_doc({"name": field.name,
                                   "type": self._type_to_string(field.ty)}, field)
@@ -361,6 +366,7 @@ class LibraryManifestGenerator:
 
                 enums.append(with_doc({
                     "name": enum_def.name,
+                    "unit": unit.name,
                     "variants": variants,
                     "is_generic": False,
                     "type_params": [],
@@ -442,12 +448,18 @@ class LibraryManifestGenerator:
         constants: dict[str, tuple] = {}
         types_by_name: dict[str, tuple] = {}
         external_namespaces: set[str] = set()
+        # Whose declaration each name is. The BINARY path ships a body and the consumer
+        # calls it by the producer's symbol, which is `<unit>$<name>`, so the record has
+        # to say which unit (`docs/design/unit-namespaces.md` section 9). Name-keyed like
+        # every index here.
+        declaring_unit: dict[str, str] = {}
 
         for unit in units:
             if unit.ast is None:
                 continue
             source = unit.file_path.read_text()
             for fn in unit.ast.functions:
+                declaring_unit.setdefault(fn.name, unit.name)
                 if fn.type_params:
                     if not getattr(fn, "is_public", False):
                         priv_generic_fns[fn.name] = (fn, source)
@@ -547,6 +559,7 @@ class LibraryManifestGenerator:
             "private_generic_functions": list(shipped_generic_fns.values()),
             "constants": list(shipped_consts.values()),
             "private_types": list(shipped_types.values()),
+            "units": declaring_unit,
         }
 
     def _extract_templates(self, units: list['Unit']) -> dict:
@@ -563,6 +576,10 @@ class LibraryManifestGenerator:
         referenced_perks: set[str] = set()
         exported: list[tuple] = []
 
+        # Every record names the unit that declared it. A template has no `link_symbol`
+        # -- it is monomorphized at the consumer, so its instances take the consumer's
+        # mangling -- but the unit is what an alias binds to, and for a BINARY library
+        # the manifest is the only place that can say (section 3.1).
         for unit in units:
             if unit.ast is None:
                 continue
@@ -572,6 +589,7 @@ class LibraryManifestGenerator:
                     continue
                 exported.append((func, source))
                 record = serialize_generic_function(func, source)
+                record["unit"] = unit.name
                 generic_functions.append(record)
                 referenced_perks.update(record.get("free_perks", []))
             for struct in unit.ast.structs:
@@ -579,6 +597,7 @@ class LibraryManifestGenerator:
                     continue
                 exported.append((struct, source))
                 record = serialize_generic_struct(struct, source)
+                record["unit"] = unit.name
                 generic_structs.append(record)
                 referenced_perks.update(record.get("free_perks", []))
             for enum in unit.ast.enums:
@@ -586,6 +605,7 @@ class LibraryManifestGenerator:
                     continue
                 exported.append((enum, source))
                 record = serialize_generic_enum(enum, source)
+                record["unit"] = unit.name
                 generic_enums.append(record)
                 referenced_perks.update(record.get("free_perks", []))
 
@@ -595,6 +615,7 @@ class LibraryManifestGenerator:
 
         for fn, src in closure["private_generic_functions"]:
             record = serialize_generic_function(fn, src)
+            record["unit"] = closure["units"].get(fn.name)
             # A private symbol is not part of the documented API, so the record that
             # marks one drops its doc on the same line (documentation.md S8, R4).
             record["private"] = True
@@ -606,7 +627,13 @@ class LibraryManifestGenerator:
         # monomorphized template body, so the consumer needs the same answer to "who
         # frees this argument?".
         private_functions = [
-            {"name": fn.name, **signature_record(fn)}
+            {
+                "name": fn.name,
+                "unit": closure["units"].get(fn.name),
+                "link_symbol": mangle_unit_symbol(
+                    closure["units"].get(fn.name), fn.name),
+                **signature_record(fn),
+            }
             for fn, _src in closure["private_functions"]
         ]
         shipped_constants = [
@@ -640,7 +667,9 @@ class LibraryManifestGenerator:
                 if perk.name not in referenced_perks or perk.name in seen_perks:
                     continue
                 seen_perks.add(perk.name)
-                perks.append(serialize_perk(perk, source))
+                record = serialize_perk(perk, source)
+                record["unit"] = unit.name
+                perks.append(record)
 
         from sushi_lang.semantics.passes.collect.perks import _get_type_name
         from sushi_lang.semantics.generics.types import GenericTypeRef
@@ -666,7 +695,9 @@ class LibraryManifestGenerator:
                 ):
                     continue
                 seen_impls.add((type_name, impl.perk_name))
-                perk_impls.append(serialize_perk_impl(impl, source))
+                record = serialize_perk_impl(impl, source)
+                record["unit"] = unit.name
+                perk_impls.append(record)
 
         return {
             "version": 4,

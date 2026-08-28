@@ -50,6 +50,9 @@ ALLOWED = {
     # "(The old `semantics/pipeline.py` scaffold ... deleted in Tier 3 ...)" (closures.md).
     "backend/interfaces.py",
     "semantics/pipeline.py",
+    # "`generics/active_generics.py` is deleted, not converted" -- unit-namespaces.md
+    # section 4.3.1, and the note in `semantics/namespaces.py` that says what replaced it.
+    "generics/active_generics.py",
 }
 
 

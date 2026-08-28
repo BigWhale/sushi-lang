@@ -18,9 +18,11 @@ _add(ErrorMessage("CE3002", Severity.ERROR,
     "unit '{name}' not found (expected: {path})",
     Category.UNIT, "A required unit file could not be found at the expected location."))
 
-_add(ErrorMessage("CE3003", Severity.ERROR,
-    "duplicate public symbol '{symbol}' found in units: {units}",
-    Category.UNIT, "Multiple units export the same public symbol name, creating an ambiguity. Names are flat across a program, so one exported name has one owner. Rename one of them, or keep one of them private. A note points at each declaration."))
+# CE3003 (a duplicate public symbol, reported for the whole program with no location)
+# was RETIRED by `docs/design/unit-namespaces.md` section 6. It refused a program for a
+# collision that might never be written, and it had no escape: two libraries exporting
+# `sine` could not be used together at all. `CE3012` below is the answer -- at the USE,
+# naming every candidate, and lifted by writing `as`.
 
 _add(ErrorMessage("CE3004", Severity.ERROR,
     "invalid unit path '{path}': {reason}",
@@ -54,4 +56,16 @@ _add(ErrorMessage("CE3010", Severity.ERROR,
 
 _add(ErrorMessage("CE3011", Severity.ERROR,
     "cannot declare {kind} '{name}': '{owner}' declares it too",
-    Category.UNIT, "Names are flat across a program. A source library's units and a bundled stdlib module are ordinary compilation units at the consumer, so a name either of them declares is a name the consumer cannot declare again. The compiler used to let the consumer's declaration replace the library's without saying anything, which is not safe in one namespace: the library's own bodies then call the consumer's function. In practice it was worse, because the replacement was never registered -- the consumer lost its own declaration as well, and heard CE3005 about a private it wrote itself, or CE2027 about a struct shape it never spelled. Rename your declaration. `docs/design/unit-namespaces.md` carries the qualified-name design that would lift this."))
+    Category.UNIT, "A TYPE is one name for the whole program. Identity is nominal, so one name is one shape, and a source library's units and a bundled stdlib module are ordinary compilation units at the consumer: a struct or an enum that either of them declares is a name the consumer cannot declare again, even where the library keeps it private and the consumer cannot see it. The compiler used to let the consumer's declaration replace the library's without a word. The replacement was never registered, so the consumer also lost its own declaration, and then heard CE3005 about a private it wrote itself, or CE2027 about a struct shape it never spelled. This code refuses the declaration and names the unit that holds the name. The FUNCTION arm retired with unit namespaces: a function carries the unit that declared it and each unit reads its own, so a consumer may declare a function beside a library's private one. Rename your type. `docs/design/type-identity.md` phase 2 -- an interned name that carries its unit -- is what would lift this."))
+
+_add(ErrorMessage("CE3012", Severity.ERROR,
+    "'{name}' is offered by more than one import",
+    Category.UNIT, "More than one unit in scope declares this name, and nothing written here says which one is meant. A note points at each candidate. The unit's OWN declaration always wins, so this can only happen where the name comes from somewhere else entirely; a private declaration next door is not a candidate, because it is not nameable. Bind one of the units to an alias and write the name behind it -- `use \"math\" as m` makes `m.sine` the answer -- or rename one of the declarations. This replaces CE3003, which refused the whole program for a collision that might never be written, said so with no location, and left two libraries that both exported one name unusable together."))
+
+_add(ErrorMessage("CE3013", Severity.ERROR,
+    "'{alias}' is already bound in this unit",
+    Category.UNIT, "An alias binds a name in the unit that wrote it, so it collides with anything else that unit binds: another alias, an `unsafe external` namespace, or one of its own declarations. Two aliases for one import are legal and both work; one name holding two namespaces is not, because a qualified name would have two answers. The note points at what bound the name first. `_` is refused for the same reason: the language binds it as the discard name, so it cannot name a namespace. Rename the alias."))
+
+_add(ErrorMessage("CE3014", Severity.ERROR,
+    "a `use` must come before every declaration",
+    Category.UNIT, "Every import stands at the top of the unit, after the unit's own doc block if it has one, and a namespace is bound for the whole unit rather than from its `use` downwards. The two halves answer one question today's grammar leaves open in both directions: a `use` is a toplevel, so it may sit anywhere, and a declaration is already order-independent. Go and Java both make the placement mandatory; Rust leaves it to convention. Sushi follows Go and Java, so a reader sees a unit's dependencies in one block. Move the `use` above the first declaration."))

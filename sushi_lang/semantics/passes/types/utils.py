@@ -24,6 +24,22 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
     if type_obj is None:
         return
 
+    # A name written behind an alias answers to the namespace that holds it before it
+    # answers to anything else (`docs/design/unit-namespaces.md` section 5). What
+    # survives carries the bare name and every rule below reads it unchanged.
+    from .qualified import reject_qualified_type
+    if reject_qualified_type(validator, type_obj, span):
+        return
+
+    # A name this unit did not import is not a type here (section 6.1). Checked once,
+    # for the two shapes a written type name takes, and never for a QUALIFIED one: the
+    # namespace seam above has already said where that name may be written.
+    from .visibility import reject_out_of_scope_type
+    written = getattr(type_obj, "name", None) or getattr(type_obj, "base_name", None)
+    if (getattr(type_obj, "namespace", None) is None and isinstance(written, str)
+            and reject_out_of_scope_type(validator, written, span)):
+        return
+
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(type_obj, GenericTypeRef):
         # CE2419. Checked FIRST and with NO Maybe/Result exemption, unlike the `ptr` gate
@@ -221,8 +237,9 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
                     validator.variable_types[param.name] = resolved_type
                     param.ty = resolved_type  # Update AST node for backend
 
-                    if validator.current_function and validator.current_function.name in validator.func_table.by_name:
-                        func_sig = validator.func_table.by_name[validator.current_function.name]
+                    func_sig = (validator.func_sig(validator.current_function.name)
+                                if validator.current_function else None)
+                    if func_sig is not None:
                         for sig_param in func_sig.params:
                             if sig_param.name == param.name:
                                 sig_param.ty = resolved_type

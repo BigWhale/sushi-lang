@@ -1,0 +1,8 @@
+# A BINARY library has no AST at all: its declarations arrive from a manifest, which
+# names the unit of every record. That unit is what the alias binds.
+# EXPECT_STDOUT_EXACT: "100 mostly harmless 11\n"
+use <lib/const_lib> as cl
+
+fn main() i32:
+    println("{cl.LIMIT} {cl.TAG} {cl.scratch_plus(4).realise(0)}")
+    return Result.Ok(0)

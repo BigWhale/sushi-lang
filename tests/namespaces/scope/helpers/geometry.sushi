@@ -1,0 +1,4 @@
+# Section 6.1: the unit that declares the type a public signature names.
+public struct Vec:
+    i32 x
+    i32 y

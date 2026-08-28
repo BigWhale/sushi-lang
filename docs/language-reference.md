@@ -1018,6 +1018,134 @@ fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
 ```
 
+### Importing a unit
+
+`use "path"` imports another unit of the program, `use <module>` a standard-library
+module, and `use <lib/name>` a library. **Every import stands above the first
+declaration**, after the unit's own doc block if it has one; a `use` below a declaration
+is `CE3014`.
+
+An import may carry an `as NAME` clause. The clause decides WHERE the imported names
+land, and nothing else:
+
+| Form | What it binds |
+|---|---|
+| `use "math"` | every name `math` brings enters this unit's flat scope |
+| `use "math" as my_math` | every name `math` brings is reachable as `my_math.<name>`, and **nothing** enters the flat scope |
+
+<!-- docs-sweep: skip (two units) -->
+```sushi
+use "math" as my_math               # the unit next door
+use <math> as std_math              # the standard library
+
+fn main() i32:
+    let f64 mine = my_math.sin(0.0).realise(0.0)
+    let f64 theirs = std_math.sin(0.0)
+    let i32 depth = my_math.MAX_DEPTH
+    return Result.Ok(0)
+```
+
+#### Scope is per unit, and it is not transitive
+
+A unit sees its own declarations, plus what its own `use` statements bring. Nothing else.
+An import is not re-exported: if `mid` imports `deep`, a unit that imports `mid` still
+cannot name what `deep` declares, and `my_math.<name>` reaches what `math` *declares* and
+never what `math` imported.
+
+<!-- docs-sweep: skip (three units) -->
+```sushi
+# deep.sushi                    # mid.sushi              # top.sushi
+public fn deep_value() i32:     use "deep"               use "mid"
+    return Result.Ok(7)                                  fn main() i32:
+                                                             # CE2008 here
+                                                             let i32 a = deep_value()??
+```
+
+`top` adds `use "deep"`. The refusal is the ordinary "no such name" -- `CE2008` for a
+call, `CE2001` for a type, `CE1001` for a bare read -- with a help line naming the import
+that would bring it.
+
+**To name a type, import the unit that declares it.** A public signature may name a type
+its caller cannot name, and there is no way round it: a `let` needs a written type, so a
+value of an unnameable type cannot be bound. If `shapes.origin()` returns `geometry.Vec`,
+a unit that calls `origin()` and binds the result imports `geometry` as well.
+
+**A standard-library module is a flat import like any other.** `use <math>` puts `sqrt`
+in the scope of the unit that wrote the line, and of no other. So is the built-in generic
+an import activates: `HashMap` is a name in a unit that wrote `use <collections/hashmap>`.
+
+**An FFI namespace belongs to the unit that declares the block.** An `unsafe external
+"C" as libc` block binds `libc` where it is written, and nothing imports it.
+
+#### Where a qualified name may be written
+
+The qualifier folds into the name after it, so resolution then runs exactly as it does
+for the bare name -- against one unit instead of the flat scope. Every position that
+turns written text into a name takes one:
+
+| Position | Qualified form |
+|---|---|
+| a named type | `my_math.Vec` |
+| a generic named type | `my_math.Box@(i32)` |
+| a called function, generic included | `my_math.sin(0.0)` |
+| a struct constructor | `my_math.Vec(1, 2)` |
+| an enum constructor | `my_math.Sign.Plus` |
+| an enum pattern | `my_math.Sign.Plus ->` |
+| a named value | `my_math.MAX_DEPTH` |
+| a perk in a constraint | `@(T: my_math.Loud)` |
+| explicit type arguments | `my_math.empty@(i32)()` |
+
+<!-- docs-sweep: skip (two units) -->
+```sushi
+use "geometry" as geo
+
+struct Holder:
+    geo.Vec spot                            # a field
+
+fn total(geo.Vec v) i32:                    # a parameter
+    return Result.Ok(v.x + v.y)
+
+fn run() i32:
+    let geo.Vec v = geo.Vec(1, 2)           # an annotation, and a constructor
+    let geo.Sign s = geo.Sign.Plus          # an enum constructor
+    match s:
+        geo.Sign.Plus -> println("+")       # an enum pattern
+        geo.Sign.Minus -> println("-")
+    return Result.Ok(total(v)??)
+```
+
+**One position cannot be qualified.** A fixed array's size is read while the unit's own
+AST is built and an alias is bound long after that, so `i32[my_math.SIZE]` is `CE2099`.
+
+A qualifier naming no namespace, or a name the namespace does not hold, is `CE2001` in a
+type position and `CE2008` in a call, each with a help line drawn from what the namespace
+does hold.
+
+**Two units may export one name.** That is not an error by itself; it is an error only
+where the unqualified name is written and nothing says which one is meant, and then it is
+`CE3012` at the use, with a note at each candidate. The unit's OWN declaration always
+wins, so it never becomes ambiguous, and a flat `use <math>` no longer takes `sin` away
+from a unit that declares its own.
+
+**A local variable wins.** A variable named `my_math` shadows the alias for the rest of
+its scope, exactly as one shadows an FFI namespace.
+
+**An alias is local to the unit that wrote it.** Nothing about it is exported, and a unit
+that imports the aliasing unit does not see it.
+
+**One name holds one namespace.** A second binding of the name -- another alias, an
+`unsafe external` namespace, or one of the unit's own declarations -- is `CE3013`. Two
+aliases for one import are legal and both work.
+
+**An empty namespace warns.** `use <io/stdio> as io` binds nothing, because the import
+enables methods on `stdin` and brings no name: that is `CW3004`, a warning, and the
+import still does its work.
+
+A namespace holds a unit's declarations **whatever their visibility**, so naming a
+private one through the dot is `CE3005` -- "not yours", never "no such name".
+
+The full design is `docs/design/unit-namespaces.md`.
+
 ### Visibility
 
 **Private is the default.** Five declarations carry the marker -- `fn`, `const`, `struct`,

@@ -1,0 +1,10 @@
+# Two units declare `greet` and this one imports exactly one of them, so there is
+# no ambiguity to report and no qualifier to write. The output says which
+# declaration answered: the flat table holds both, and the scope decides.
+# EXPECT_STDOUT_EXACT: "1 20\n"
+use "helpers/greet_left"
+use "helpers/bridge"
+
+fn main() i32:
+    println("{greet().realise(0)} {bridged().realise(0)}")
+    return Result.Ok(0)

@@ -11,7 +11,7 @@ from sushi_lang.semantics.visitors import NodeVisitor, RecursiveVisitor
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, StructType, ForeignPtrType
 from sushi_lang.semantics.type_predicates import is_string_convertible
 from sushi_lang.semantics.passes.types.visibility import (
-    reject_private_kept, reject_private_name)
+    reject_ambiguous_name, reject_private_kept, reject_private_name)
 from sushi_lang.semantics.ast import (
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
@@ -29,7 +29,7 @@ def function_value_type_of(type_validator, name: str) -> Optional[Type]:
     """Build the FunctionType for a bare reference to a plain top-level function."""
     from sushi_lang.semantics.param_modes import declared_modes
     from sushi_lang.semantics.typesys import FunctionType, UnknownType
-    sig = type_validator.func_table.by_name.get(name)
+    sig = type_validator.func_sig(name)
     if sig is None:
         return None
     for p in sig.params:
@@ -409,11 +409,29 @@ class ExpressionValidator(RecursiveVisitor):
 
     def visit_dotcall(self, node: DotCall) -> None:
         """Validate dot-call expression - resolve to enum constructor or method call."""
-        if self.type_validator._resolve_external_call(node):
-            for arg in node.args:
-                self.type_validator.validate_expression(arg)
-            self.type_validator._validate_external_call_args(node)
+        from sushi_lang.semantics.passes.types.calls.namespaced import (
+            fold_namespaced_enum, validate_namespaced_call)
+
+        # `geo.Sign.Plus(1)`: the qualifier folds away and what is left is the bare
+        # constructor every rule below already knows (unit-namespaces.md section 5).
+        fold_namespaced_enum(self.type_validator, node)
+
+        # A namespace answers first, and it answers for every producer: an FFI block, a
+        # unit behind a `use ... as`, a registry stdlib module. Local-wins is inside
+        # `namespace_of`, so a variable of the same name never reaches here.
+        if self.type_validator.namespace_of(node.receiver) is not None:
+            validate_namespaced_call(self.type_validator, node)
             return
+
+        # CE6102 reads the RECEIVER, not the parse shape: a type-argument list rides a
+        # direct call to a named free function, and every receiver that reaches this
+        # line is a value. The rule used to live in the AST builder, which cannot know
+        # whether a receiver names a bound alias (section 5.1).
+        if node.type_args:
+            er.emit_with(self.type_validator.reporter, er.ERR.CE6102,
+                         node.type_args_loc or node.loc) \
+                .help("call the generic function directly, e.g. foo@(i32)(x)") \
+                .emit()
 
         # f64.from_bits(bits) / f32.from_bits(bits): static bit-reinterpret constructor.
         # The receiver is a primitive float type NAME, not a value, so handle it before
@@ -552,11 +570,12 @@ class ExpressionValidator(RecursiveVisitor):
         tv = self.type_validator
         if node.id in tv.variable_types:
             return
-        const_sig = tv.const_table.by_name.get(node.id)
+        const_sig = tv.const_sig(node.id)
         if const_sig is not None:
             # The one place a bare constant is validated, so the one place the fence
             # sits (D3). A local of the same name shadows it and never reaches here.
-            reject_private_name(tv, "constant", const_sig, node.loc)
+            if not reject_private_name(tv, "constant", const_sig, node.loc):
+                reject_ambiguous_name(tv, "constant", node.id, node.loc)
             return
         # A constant a binary library declares and keeps registers in no table: the
         # manifest holds the name and the kind, and that is the whole origin (#487).
@@ -681,7 +700,17 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return self.type_validator._infer_index_access_type(node)
 
     def visit_memberaccess(self, node: MemberAccess) -> Optional[Type]:
-        """Infer member access type (struct field access)."""
+        """Infer member access type (a struct field, or a constant behind an alias)."""
+        from sushi_lang.semantics.passes.types.calls.namespaced import (
+            fold_namespaced_enum, infer_namespaced_member)
+
+        # `geo.Sign.Plus` with no payload is a MemberAccess over a MemberAccess. The
+        # fold leaves `Sign.Plus`, which the arms below and the back end already read.
+        fold_namespaced_enum(self.type_validator, node)
+
+        if self.type_validator.namespace_of(node.receiver) is not None:
+            return infer_namespaced_member(self.type_validator, node)
+
         receiver_type = self.type_validator.infer_expression_type(node.receiver)
 
         if receiver_type is None:
@@ -719,8 +748,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 return var_type.referenced_type
             return var_type
 
-        if node.id in self.type_validator.const_table.by_name:
-            const_sig = self.type_validator.const_table.by_name[node.id]
+        const_sig = self.type_validator.const_sig(node.id)
+        if const_sig is not None:
             return const_sig.const_type
 
         fn_value_type = function_value_type_of(self.type_validator, node.id)
@@ -845,12 +874,21 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if function_name == "open":
             return self.type_validator.enum_table.by_name.get("FileResult")
 
+        # A declaration answers before a name a flat `use` brought in, exactly as the
+        # validating half decides it (section 8's ladder). Reading the standard library
+        # first gave this unit's own `sin` the library's return type.
+        func_sig = self.type_validator.func_sig(function_name)
+        if func_sig is not None:
+            return self.result_type_of(func_sig)
+
         # The registry is the single source of truth the backend reads too, so reading it
         # here keeps the two from drifting. The hardcoded copies this replaced had gone
         # stale: they looked up a one-arg "Result<i32>" that is never registered.
         #
         # math keeps its own branch below -- its return type depends on the arguments.
         for module_path in _REGISTRY_TYPED_STDLIB_MODULES:
+            if not self.type_validator.scope.holds_module(module_path):
+                continue
             stdlib_func = self.type_validator.func_table.lookup_stdlib_function(
                 module_path, function_name
             )
@@ -874,36 +912,42 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
             return None
 
-        if function_name in self.type_validator.func_table.by_name:
-            func_sig = self.type_validator.func_table.by_name[function_name]
-            if func_sig.ret_type is not None:
-                from sushi_lang.semantics.generics.types import GenericTypeRef
-                from sushi_lang.semantics.type_resolution import resolve_unknown_type
-
-                from sushi_lang.semantics.generics.results import is_result_enum
-
-                # Already the interned enum (the signature was resolved in place): return it.
-                # Wrapping it again would produce Result<Result<T, E>, StdError>.
-                if is_result_enum(func_sig.ret_type):
-                    return func_sig.ret_type
-
-                if isinstance(func_sig.ret_type, GenericTypeRef) and func_sig.ret_type.base_name == "Result":
-                    if len(func_sig.ret_type.type_args) == 2:
-                        return self._intern_result(func_sig.ret_type.type_args[0],
-                                                   func_sig.ret_type.type_args[1])
-                    return resolve_unknown_type(
-                        func_sig.ret_type,
-                        self.type_validator.struct_table.by_name,
-                        self.type_validator.enum_table.by_name
-                    )
-                elif func_sig.err_type is not None:
-                    return self._intern_result(func_sig.ret_type, func_sig.err_type)
-                else:
-                    err_type = self.type_validator.enum_table.by_name.get("StdError")
-                    if err_type is not None:
-                        return self._intern_result(func_sig.ret_type, err_type)
-                return func_sig.ret_type
         return None
+
+    def result_type_of(self, func_sig) -> Optional[Type]:
+        """What a call to this signature yields: its return type, wrapped in Result.
+
+        One derivation, so a call written through a namespace agrees with the bare
+        form. Every arm below is the same rule read from a different spelling of the
+        declared return.
+        """
+        if func_sig.ret_type is None:
+            return None
+
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        from sushi_lang.semantics.generics.results import is_result_enum
+
+        # Already the interned enum (the signature was resolved in place): return it.
+        # Wrapping it again would produce Result<Result<T, E>, StdError>.
+        if is_result_enum(func_sig.ret_type):
+            return func_sig.ret_type
+
+        if isinstance(func_sig.ret_type, GenericTypeRef) and func_sig.ret_type.base_name == "Result":
+            if len(func_sig.ret_type.type_args) == 2:
+                return self._intern_result(func_sig.ret_type.type_args[0],
+                                           func_sig.ret_type.type_args[1])
+            return resolve_unknown_type(
+                func_sig.ret_type,
+                self.type_validator.struct_table.by_name,
+                self.type_validator.enum_table.by_name
+            )
+        if func_sig.err_type is not None:
+            return self._intern_result(func_sig.ret_type, func_sig.err_type)
+        err_type = self.type_validator.enum_table.by_name.get("StdError")
+        if err_type is not None:
+            return self._intern_result(func_sig.ret_type, err_type)
+        return func_sig.ret_type
 
     def visit_methodcall(self, node: MethodCall) -> Optional[Type]:
         """Infer method call type and annotate node with inferred return type."""
@@ -967,10 +1011,13 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_dotcall(self, node: DotCall) -> Optional[Type]:
         """Infer dot-call type and annotate node with inferred return type."""
-        sig = self.type_validator._resolve_external_call(node)
-        if sig is not None:
-            node.inferred_return_type = sig.ret_type
-            return sig.ret_type
+        from sushi_lang.semantics.passes.types.calls.namespaced import (
+            fold_namespaced_enum, infer_namespaced_call)
+
+        fold_namespaced_enum(self.type_validator, node)
+
+        if self.type_validator.namespace_of(node.receiver) is not None:
+            return infer_namespaced_call(self.type_validator, node)
 
         if (isinstance(node.receiver, Name) and node.receiver.id in ("f64", "f32")
                 and node.method == "from_bits"):

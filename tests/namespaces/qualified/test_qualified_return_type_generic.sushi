@@ -1,0 +1,13 @@
+# A type argument is required where the type parameter appears only in the
+# return type, so without this an alias would make a unit's return-type-only
+# generics uncallable (section 5.1). CE6102 reads the RECEIVER, not the parse
+# shape, and a namespace is not a value.
+# EXPECT_STDOUT_EXACT: "empty\n"
+use "helpers/geo" as geo
+
+fn main() i32:
+    let Maybe@(i32) m = geo.nothing@(i32)().realise(Maybe.Some(0))
+    match m:
+        Maybe.Some(v) -> println("{v}")
+        Maybe.None() -> println("empty")
+    return Result.Ok(0)

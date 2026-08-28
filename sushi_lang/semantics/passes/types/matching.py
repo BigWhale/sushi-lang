@@ -157,6 +157,15 @@ def collect_and_validate_patterns(
         if not isinstance(pattern, Pattern):
             continue
 
+        # `geo.Sign.Plus ->`: the qualifier is checked here and folds away, so every
+        # rule below reads the bare enum name (unit-namespaces.md section 5.2).
+        if pattern.namespace is not None:
+            from .qualified import reject_qualified_name
+            if reject_qualified_name(validator, pattern.namespace, pattern.enum_name,
+                                     pattern.enum_name_span or pattern.loc,
+                                     kind="type"):
+                continue
+
         # Validate that the enum name matches the scrutinee's enum type
         # For generic enums, the pattern uses the base name (e.g., "Maybe")
         # but the scrutinee type includes type args (e.g., "Maybe<i32>")

@@ -1,0 +1,13 @@
+# The same two declarations, with the import behind an alias. `as` puts nothing
+# into the flat scope, so there was never anything for the consumer's `bump` to
+# collide with -- and the refusal DROPPED the consumer's own declaration, which
+# then heard CE2008 at its own call site.
+# EXPECT_STDOUT_EXACT: "3 20\n"
+use <lib/private_names_lib> as pn
+
+fn bump(i32 n) i32:
+    return Result.Ok(n + 2)
+
+fn main() i32:
+    println("{bump(1).realise(0)} {pn.lib_bump(1).realise(0)}")
+    return Result.Ok(0)

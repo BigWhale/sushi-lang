@@ -1,0 +1,12 @@
+# A struct constructor behind a dot. It parses as a DotCall and the namespace
+# seam owns it, so the answer must be a construction and not CE2008.
+# EXPECT_STDOUT_EXACT: "7\n"
+use "helpers/geo" as geo
+
+fn run() i32:
+    let geo.Vec v = geo.Vec(3, 4)
+    return Result.Ok(v.x + v.y)
+
+fn main() i32:
+    println("{run().realise(0)}")
+    return Result.Ok(0)

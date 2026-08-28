@@ -429,6 +429,21 @@ When the same symbol is defined in multiple places:
 
 This means you can override library functions in your main program.
 
+A symbol carries the unit that declared it -- `<unit>$<name>`, with every `/` in the unit
+name becoming `$` -- so two units may each declare a private `helper` without colliding
+(`docs/design/unit-namespaces.md` section 9). The priority table above is about a name two
+units both offer, not about a symbol two units both take.
+
+### Which Symbol a Binary Library's Body Calls
+
+A **source** library recompiles at the consumer, and its units are renamed to
+`lib/<library>/<unit>` on the way in, so the consumer derives every symbol itself. A
+**binary** library links: its bodies are in the shipped bitcode, and the symbols in them
+were named by the PRODUCER's compiler. The manifest records those names in `link_symbol`,
+one per record that has a symbol, and the binary path is the only reader. The manifest also
+records the declaring `unit` on every record, which is a different question and is answered
+for both kinds. `docs/library-format.md` carries the schema and the reasoning.
+
 ### Dead Code Elimination
 
 Only symbols reachable from `main()` are included in the final executable. Unused library functions are automatically removed, reducing binary size.

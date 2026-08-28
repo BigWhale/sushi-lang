@@ -1,0 +1,9 @@
+# A private constant, the same name next door, and one that reads it.
+const i32 SCRATCH = 41
+const i32 DOUBLE = SCRATCH * 2
+
+public fn left_scratch() i32:
+    return Result.Ok(SCRATCH)
+
+public fn left_double() i32:
+    return Result.Ok(DOUBLE)

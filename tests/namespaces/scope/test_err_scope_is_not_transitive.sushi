@@ -1,0 +1,10 @@
+# Section 1.2's three-unit program. `mid` imports `deep`; this unit imports
+# `mid` and never mentions `deep`. A `use` decides what THIS unit can see, so
+# `deep_value` is not a name here, and the refusal stands at the use.
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: add `use "helpers/deep"`
+use "helpers/mid"
+
+fn main() i32:
+    println("{deep_value().realise(0)}")
+    return Result.Ok(0)

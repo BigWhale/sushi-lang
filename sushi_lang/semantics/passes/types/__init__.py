@@ -3,8 +3,11 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.namespaces import Binding, NamespaceTable
     from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.passes.collect.externals import ExternalSig
+    from sushi_lang.semantics.passes.collect.functions import FuncSig
+    from sushi_lang.semantics.passes.collect.constants import ConstSig
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
@@ -13,6 +16,7 @@ from sushi_lang.semantics.ast import (
     If, Expr
 )
 from sushi_lang.semantics.typesys import Type, BuiltinType
+from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 from sushi_lang.semantics.passes.types.visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
 
 from .compatibility import types_compatible
@@ -62,7 +66,8 @@ class TypeValidator:
     def __init__(self, reporter: Reporter, tables: 'SymbolTables',
                  current_unit_name: Optional[str] = None,
                  monomorphized_functions: Optional[Dict[str, tuple]] = None,
-                 in_library_unit: bool = False) -> None:
+                 in_library_unit: bool = False,
+                 namespaces: Optional['NamespaceTable'] = None) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         self.const_table = tables.constants
@@ -79,6 +84,12 @@ class TypeValidator:
         self.perk_impl_table = tables.perk_impls
         self.library_not_exported = tables.library_not_exported
         self.visibility = tables.visibility
+        # What this unit may write behind a dot. One seam for an FFI namespace and a
+        # `use ... as` alias alike; with no unit of its own a validator still reaches
+        # every FFI namespace, which is what `externals_only` gives it.
+        from sushi_lang.semantics.namespaces import externals_only
+        self.namespaces = (namespaces if namespaces is not None
+                           else externals_only(self.external_table))
         self.current_unit_name = current_unit_name  # Track which unit is being validated (for visibility checking)
         self.monomorphized_functions = monomorphized_functions or {}
         self.known_types: Set[BuiltinType] = {
@@ -99,12 +110,16 @@ class TypeValidator:
         # `.slib` template, or a lambda lifted out of one. It calls what it called at
         # home, the export closure included (#468).
         self.in_library_body = in_library_unit
+        # A body the compiler wrote: a monomorphized instance, whose type arguments were
+        # chosen at the instantiation site and checked in the scope that wrote them. The
+        # template's own unit never imported them and never could (section 6).
+        self.in_synthesized_body = False
         self.variable_types: Dict[str, Type] = {}
         self.destroyed_arrays: List[set[str]] = []
         # `run` fills these from the program. A validator built to infer one type --
         # the monomorphizer and the instantiator both build one -- never runs, and it
         # reads no constant, so an empty map is the truth and not a fallback.
-        self.ast_constants: Dict[str, ConstDef] = {}
+        self.ast_constants: UnitKeyedSymbols[ConstDef] = UnitKeyedSymbols()
 
         self.statement_validator = StatementValidator(self)
         self.expression_validator = ExpressionValidator(self)
@@ -112,11 +127,18 @@ class TypeValidator:
 
     def run(self, program: Program) -> None:
         """Entry point for type validation."""
-        self.ast_constants = {const.name: const for const in program.constants}
+        self.ast_constants = UnitKeyedSymbols()
+        for const in program.constants:
+            self.ast_constants.declare(const.name, const, unit=self.current_unit_name)
 
         # Whole-unit, and BEFORE the per-declaration walk: it is the only way a public
         # generic is reached, since the loop below skips one.
         check_public_signatures(self, program)
+
+        # The same reason, for the same reader: a constraint rides on a declaration's
+        # type parameters, and the loop below never visits a generic function.
+        from .qualified import check_qualified_constraints
+        check_qualified_constraints(self, program)
 
         for const in program.constants:
             self._validate_constant(const)
@@ -132,6 +154,26 @@ class TypeValidator:
         for impl in program.perk_impls:
             self._validate_perk_implementation(impl)
 
+    def func_sig(self, name: str) -> Optional['FuncSig']:
+        """What the name of a function means INSIDE the unit being validated.
+
+        The unit's own declaration answers its own call, and every other name resolves
+        through the flat view. Reading `by_name` directly measured a unit's call against
+        another unit's declaration of the same name, which is section 13.1 of
+        `docs/design/unit-namespaces.md` -- #487 for a library, and an ICE (CE0026) for
+        two ordinary units once the two symbols were allowed to coexist.
+        """
+        return self.func_table.lookup(name, self.current_unit_name, self.scope)
+
+    def const_sig(self, name: str) -> Optional['ConstSig']:
+        """What the name of a constant means INSIDE the unit being validated."""
+        return self.const_table.lookup(name, self.current_unit_name, self.scope)
+
+    @property
+    def scope(self):
+        """What this unit may write with no qualifier (section 6)."""
+        return self.namespaces.scope
+
     def validate_expression(self, expr: Expr) -> Optional[Type]:
         """Validate an expression and its subexpressions using the Visitor Pattern."""
         self.expression_validator.visit(expr)
@@ -142,22 +184,31 @@ class TypeValidator:
         """Infer the type of an expression using the Visitor Pattern."""
         return self.type_inference_visitor.visit(expr)
 
-    def _resolve_external_call(self, node) -> Optional['ExternalSig']:
-        """Resolve a DotCall to a foreign function signature, if applicable."""
+    def namespace_of(self, receiver) -> Optional[str]:
+        """The namespace a receiver names, or None when it names something else.
+
+        Local-wins, and it is the whole of section 8's first row: a variable named
+        `libc` or `geo` shadows the namespace for the rest of its scope.
+        """
         from sushi_lang.semantics.ast import Name
-        receiver = node.receiver
         if not isinstance(receiver, Name):
             return None
-        ns = receiver.id
-        if ns in self.variable_types:
+        if receiver.id in self.variable_types:
             return None
-        if not self.external_table.is_namespace(ns):
+        return receiver.id if self.namespaces.is_namespace(receiver.id) else None
+
+    def resolve_namespaced(self, receiver, name: str) -> Optional['Binding']:
+        """What `<namespace>.<name>` denotes. The ONE reader, for every kind."""
+        ns = self.namespace_of(receiver)
+        return None if ns is None else self.namespaces.lookup(ns, name)
+
+    def _resolve_external_call(self, node) -> Optional['ExternalSig']:
+        """Resolve a DotCall to a foreign function signature, if applicable."""
+        binding = self.resolve_namespaced(node.receiver, node.method)
+        if binding is None or binding.kind != "extern":
             return None
-        sig = self.external_table.lookup(ns, node.method)
-        if sig is None:
-            return None
-        node.external_ref = (ns, node.method)
-        return sig
+        node.external_ref = (binding.provider.origin, node.method)
+        return binding.record
 
     def _validate_external_call_args(self, node) -> None:
         """Validate argument count and types for a resolved foreign call."""

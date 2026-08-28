@@ -5,6 +5,7 @@ from typing import List, Optional
 from lark import Tree, Token
 
 from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 from sushi_lang.semantics.generics.types import GenericTypeRef
 
 from sushi_lang.semantics.ast import (
@@ -30,7 +31,10 @@ class ASTBuilder:
         # This unit's constants, by name. A fixed array's size may name one, and a
         # type is read while the AST is built -- long before the collect pass has a
         # constant table -- so the builder keeps its own.
-        self.unit_constants: dict = {}
+        # This unit's own constants, which is all a size may name (Known Limitation
+        # 14). One unit, so no unit key: `declare` with none and the flat view is
+        # the whole answer.
+        self.unit_constants: UnitKeyedSymbols = UnitKeyedSymbols()
         # Doc blocks the builder cannot report on: it takes no Reporter, and a block
         # that documents nothing is the `docs` pass's warning to raise. Every block
         # ends up attached, lifted, or here -- see documentation.md section 5.
@@ -59,9 +63,9 @@ class ASTBuilder:
             return None
 
         table = ConstantTable()
-        for known in self.unit_constants.values():
-            table.by_name[known.name] = ConstSig(name=known.name, loc=known.loc,
-                                                 const_type=known.ty)
+        for known in self.unit_constants.by_name.values():
+            table.declare(known.name, ConstSig(name=known.name, loc=known.loc,
+                                               const_type=known.ty))
 
         evaluated = ConstantEvaluator(Reporter(), table, self.unit_constants).evaluate(
             const_def.value, const_def.ty, const_def.loc)
@@ -108,6 +112,7 @@ class ASTBuilder:
         generic_extensions: List[ExtendDef] = []
         perk_impls: List[ExtendWithDef] = []
         externals_list: List[ExternalBlock] = []
+        first_declaration_span = None
 
         # Constants come first, whatever order they were written in: a fixed array's
         # size may name one, and every other declaration can hold such a type.
@@ -120,7 +125,7 @@ class ASTBuilder:
             if const is not None:
                 const_def = constants.parse_constdef(const, self)
                 constants_list.append(const_def)
-                self.unit_constants[const_def.name] = const_def
+                self.unit_constants.declare(const_def.name, const_def)
 
         for ch in tree.children:
             if not isinstance(ch, Tree):
@@ -131,6 +136,11 @@ class ASTBuilder:
                 if use is not None:
                     uses.append(imports.parse_usestatement(use, self))
                     continue
+
+                # The first thing that is not an import. Source order lives in the tree
+                # and nowhere else, so the rule that reads it (CE3014) is served here.
+                if first_declaration_span is None:
+                    first_declaration_span = span_of(node)
 
                 const = _first_tree(node.children, "const_def") or _find_tree_recursive(node, "const_def")
                 if const is not None:
@@ -240,7 +250,8 @@ class ASTBuilder:
             self.orphan_docs.append(doc)
         self.orphan_docs.sort(key=lambda d: (d.loc.line, d.loc.col) if d.loc else (0, 0))
 
-        return Program(uses=uses, constants=constants_list, structs=structs_list, enums=enums_list, perks=perks_list, functions=funcs, extensions=extensions_list, generic_extensions=generic_extensions, perk_impls=perk_impls, externals=externals_list, loc=span_of(tree), doc=self.unit_doc, orphan_docs=self.orphan_docs)
+        return Program(uses=uses, constants=constants_list, structs=structs_list, enums=enums_list, perks=perks_list, functions=funcs, extensions=extensions_list, generic_extensions=generic_extensions, perk_impls=perk_impls, externals=externals_list, loc=span_of(tree), doc=self.unit_doc, orphan_docs=self.orphan_docs,
+                       first_declaration_span=first_declaration_span)
 
     def _parse_type(self, type_node: Tree) -> Optional[Type]:
         """Parse a type node into a Type object."""

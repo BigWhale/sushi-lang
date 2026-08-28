@@ -142,7 +142,8 @@ class CollectorPass:
         )
         # Which units came from a library, for every collector that has to know.
         for collector in (self.struct_collector, self.enum_collector,
-                          self.perk_collector, self.function_collector):
+                          self.perk_collector, self.function_collector,
+                          self.constant_collector):
             collector.library_units = set(library_units or ())
 
         # And who declared what, for the four that ask it: three refuse a library clash
@@ -155,29 +156,6 @@ class CollectorPass:
         self._register_predefined_structs()
         self._register_predefined_enums()
         self._register_predefined_generics()
-
-    def collect_perk_definitions(self, root: Program, unit_name: Optional[str] = None,
-                                 unit_file: Optional[str] = None) -> None:
-        """Collect one unit's perk DEFINITIONS, ahead of every unit's implementations.
-
-        A perk is a contract, and an implementation meets two rules that read a table:
-        the perk exists (CE4003), and its marker lets this unit implement it (CE4011).
-        Neither answer may depend on which unit the collect loop reached first, so every
-        definition is registered before any implementation is collected (#487). The
-        visibility record travels with the definition, because the second rule reads
-        that table and not the perk table.
-        """
-        previous_origin = self.r.origin
-        if unit_file is not None:
-            self.r.origin = Origin(filename=unit_file)
-        try:
-            self.perk_collector.current_unit_file = unit_file
-            self.perk_collector.current_unit_name = unit_name
-            self.perk_collector.collect_definitions(root)
-            record_declarations(self.visibility, root, unit_name=unit_name,
-                                filename=unit_file, kinds={"perk"})
-        finally:
-            self.r.origin = previous_origin
 
     def run(self, root: Program, unit_name: Optional[str] = None,
             unit_file: Optional[str] = None) -> 'SymbolTables':
@@ -291,11 +269,13 @@ class CollectorPass:
         self.generic_structs.by_name["Own"] = own_generic
         self.generic_structs.order.append("Own")
 
-        from sushi_lang.semantics.generics.active_generics import is_generic_active
+        # HashMap unconditionally: the table holds the type and the per-unit SCOPE
+        # decides who may write the name (`unit-namespaces.md` section 4.3.1). The gate
+        # that used to stand here was a process-global set, kept because there was no
+        # scope to ask.
         from sushi_lang.semantics.generics.hashmap import hashmap_generic_struct
-        if is_generic_active("HashMap"):
-            self.generic_structs.by_name["HashMap"] = hashmap_generic_struct()
-            self.generic_structs.order.append("HashMap")
+        self.generic_structs.by_name["HashMap"] = hashmap_generic_struct()
+        self.generic_structs.order.append("HashMap")
 
         # List<T>: `{i32 len, i32 capacity, T* data}`, 2x growth, lazily allocated.
         # See docs/stdlib/collections/list.md.

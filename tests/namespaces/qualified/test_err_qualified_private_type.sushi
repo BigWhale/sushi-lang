@@ -1,0 +1,13 @@
+# Two seams, in order: the namespace says where a name may be written and the
+# visibility table says whether it may be named. A private type behind the dot
+# is CE3005, never a name that does not exist.
+# EXPECT_ERROR_CODE: CE3005
+use "helpers/geo" as geo
+
+fn run() i32:
+    let geo.Hidden h = geo.origin()??
+    return Result.Ok(h.n)
+
+fn main() i32:
+    println("{run().realise(0)}")
+    return Result.Ok(0)

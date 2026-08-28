@@ -46,7 +46,6 @@ def make_unit(tmp_path):
 def _analyze_source(tmp_path, src: str, name: str,
                     warn_missing_docs: bool = False) -> "Analysis":
     """Run the production semantic flow over `src` and return everything it produced."""
-    from sushi_lang.semantics.generics.active_generics import reset_active_generics
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
 
     text = _ensure_newline(src)
@@ -58,14 +57,12 @@ def _analyze_source(tmp_path, src: str, name: str,
     reporter = Reporter(source=text, filename=name)
 
     # Match compile_multi_file's pre-analysis setup.
-    reset_active_generics()
     get_stdlib_registry()
 
     unit_manager = UnitManager(root_path=tmp_path, reporter=reporter)
     unit = unit_manager.load_unit(name, program)
     if unit is None:
         return Analysis(reporter=reporter, program=program, analyzer=None)
-    unit_manager.build_global_symbol_table()
     unit_manager.get_compilation_order()
 
     analyzer = SemanticAnalyzer(reporter, filename=name, unit_manager=unit_manager,

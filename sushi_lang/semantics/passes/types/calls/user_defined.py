@@ -6,7 +6,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, StructType
 from sushi_lang.semantics.ast import Call, Name, Spread
-from ..visibility import (name_is_contested, reject_private_call,
+from ..visibility import (name_is_contested, out_of_scope_help,
+                          reject_ambiguous_name, reject_private_call,
                           reject_private_kept_call)
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
@@ -163,12 +164,18 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         validate_open_function(validator, call)
         return
 
-    stdlib_func = check_stdlib_function(validator, call)
-    if stdlib_func is not None:
-        validate_stdlib_function(validator, call, stdlib_func)
-        return
+    func_sig = validator.func_sig(function_name)
 
-    if function_name not in validator.func_table.by_name:
+    # Section 8's ladder: a declaration wins over a name a flat `use` brought in, and a
+    # registry stdlib module is a flat import. Asking the standard library first was
+    # what made `use <math>` beside a unit's own `sin` crash the compiler (section 1.3).
+    if func_sig is None:
+        stdlib_func = check_stdlib_function(validator, call)
+        if stdlib_func is not None:
+            validate_stdlib_function(validator, call, stdlib_func)
+            return
+
+    if func_sig is None:
         call.callee_unresolved = True
         # A name a library declares and keeps. It resolves to nothing here BECAUSE the
         # library kept it, so "undefined" was the wrong word for it (#469). The callee
@@ -187,25 +194,47 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         if function_name in validator.generic_struct_table.by_name:
             diag.help("generic struct constructors require explicit type parameters "
                       "in variable declarations")
+        missing = out_of_scope_help(validator, "function", function_name)
+        if missing is not None:
+            diag.help(missing)
         diag.emit()
         return
-
-    func_sig = validator.func_table.by_name[function_name]
 
     if reject_private_call(validator, "function", func_sig, call.callee.loc):
         return
 
-    # A unit that declared this name and lost it reads somebody else's signature here.
-    # Measuring its own call against that is the D2 cascade: the arity and every
-    # argument would be reported against a declaration this unit never wrote. The
-    # arguments are still validated in their own right.
-    if name_is_contested(validator, "function", function_name):
+    # More than one unit in scope declares this name and nothing here says which is
+    # meant (CE3012). The unit's OWN declaration wins outright, so this only fires on
+    # a name that comes from somewhere else entirely.
+    if reject_ambiguous_name(validator, "function", function_name, call.callee.loc):
+        return
+
+    # A unit that declared this name and lost it may STILL be reading somebody else's
+    # signature: only the concrete table carries a per-unit view, so a displaced GENERIC
+    # declaration has none. Measuring the unit's own call against the winner's signature
+    # is the D2 cascade -- the arity and every argument reported against a declaration
+    # this unit never wrote -- so the arguments are validated in their own right and
+    # nothing else is. Where the per-unit view did answer, the unit reads its own and
+    # every ordinary rule applies.
+    if (name_is_contested(validator, "function", function_name)
+            and getattr(func_sig, "unit_name", None) != validator.current_unit_name):
         for arg in call.args:
             validator.validate_expression(arg)
         return
 
+    validate_call_arguments(validator, function_name, func_sig, call.args,
+                            call.callee.loc)
+
+
+def validate_call_arguments(validator: 'TypeValidator', function_name: str, func_sig,
+                            actual_args: list, loc) -> None:
+    """Check a named callee's arguments against its declared parameters.
+
+    Split out of `validate_function_call` so a call written through a namespace
+    (`geo.twice(42)`) is measured against exactly the same rules as the bare form. The
+    call node differs -- a `DotCall` carries no `callee` -- and nothing else does.
+    """
     expected_params = func_sig.params
-    actual_args = call.args
 
     # Native variadic call: a trailing '...T' parameter collects all remaining
     # trailing arguments into a T[]. Validate the fixed prefix as usual, then
@@ -220,7 +249,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         fixed_count = len(expected_params) - 1
 
         if len(actual_args) < fixed_count:
-            er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
+            er.emit(validator.reporter, er.ERR.CE2009, loc,
                    name=function_name, expected=fixed_count, got=len(actual_args))
 
         for i, (arg, param) in enumerate(zip(actual_args[:fixed_count], expected_params[:fixed_count], strict=False)):
@@ -248,7 +277,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         return
 
     if len(actual_args) != len(expected_params):
-        er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
+        er.emit(validator.reporter, er.ERR.CE2009, loc,
                name=function_name, expected=len(expected_params), got=len(actual_args))
 
     for i, (arg, param) in enumerate(zip(actual_args, expected_params, strict=False)):
@@ -304,24 +333,29 @@ def validate_open_function(validator: 'TypeValidator', call: Call) -> None:
 
 
 def check_stdlib_function(validator: 'TypeValidator', call: Call) -> Optional[any]:
-    """Check if a function call is to a stdlib function."""
-    function_name = call.callee.id
+    """The registry stdlib function a bare name reaches, with the module that has it."""
+    return validator.func_table.lookup_stdlib_by_name(written_callee(call)[0],
+                                                      validator.scope)
 
-    possible_modules = ["time", "sys/env", "sys/process", "math", "random", "io/files"]
 
-    for module_path in possible_modules:
-        stdlib_func = validator.func_table.lookup_stdlib_function(module_path, function_name)
-        if stdlib_func is not None:
-            return (module_path, stdlib_func)
+def written_callee(call) -> tuple:
+    """The callee's name and the span that names it, for a bare or a qualified call.
 
-    return None
+    A qualified call is a `DotCall` and carries no `callee`: the method IS the name and
+    the node IS the span. One reader, so a stdlib rule does not have to know which of
+    the two shapes reached it.
+    """
+    callee = getattr(call, "callee", None)
+    if callee is not None:
+        return callee.id, callee.loc
+    return call.method, call.loc
 
 
 def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_func: tuple) -> None:
     """Validate a stdlib function call (arg count and types)."""
     from sushi_lang.semantics.typesys import DynamicArrayType
     module_path, stdlib_func = module_and_func
-    function_name = call.callee.id
+    function_name, callee_loc = written_callee(call)
     args = call.args if hasattr(call, 'args') else []
 
     if stdlib_func.params is None:
@@ -339,7 +373,7 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
     if getattr(stdlib_func, "is_variadic", False):
         fixed_count = len(expected_params) - 1
         if len(args) < fixed_count:
-            er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
+            er.emit(validator.reporter, er.ERR.CE2009, callee_loc,
                    name=function_name, expected=fixed_count, got=len(args))
             return
         for i, (arg, expected_type) in enumerate(zip(args[:fixed_count], expected_params[:fixed_count], strict=False)):
@@ -360,7 +394,7 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
         validator.validate_expression(arg)
 
     if len(args) != len(expected_params):
-        er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
+        er.emit(validator.reporter, er.ERR.CE2009, callee_loc,
                name=function_name, expected=len(expected_params), got=len(args))
         return
 
@@ -374,6 +408,7 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
 def _validate_polymorphic_math(validator: 'TypeValidator', call: Call, function_name: str) -> None:
     """Validate polymorphic math functions (abs, min, max)."""
     args = call.args if hasattr(call, 'args') else []
+    _name, callee_loc = written_callee(call)
 
     SIGNED_INTS = {BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64}
     ALL_INTS = SIGNED_INTS | {BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64}
@@ -382,7 +417,7 @@ def _validate_polymorphic_math(validator: 'TypeValidator', call: Call, function_
 
     if function_name == "abs":
         if len(args) != 1:
-            er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
+            er.emit(validator.reporter, er.ERR.CE2009, callee_loc,
                    name="abs", expected=1, got=len(args))
             return
         arg_type = validator.infer_expression_type(args[0])
@@ -392,7 +427,7 @@ def _validate_polymorphic_math(validator: 'TypeValidator', call: Call, function_
 
     elif function_name in ("min", "max"):
         if len(args) != 2:
-            er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
+            er.emit(validator.reporter, er.ERR.CE2009, callee_loc,
                    name=function_name, expected=2, got=len(args))
             return
         type_a = validator.infer_expression_type(args[0])

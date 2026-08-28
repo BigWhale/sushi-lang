@@ -22,7 +22,9 @@ class TypeParser:
 
         if tag == "name_t":
             return user_defined.parse_unknown_type(type_node)
-        elif tag == "generic_type_t":
+        elif tag == "qualified_name_t":
+            return user_defined.parse_qualified_type(type_node)
+        elif tag in ("generic_type_t", "qualified_generic_type_t"):
             return generics.parse_generic_type(type_node, self.ast_builder)
         elif tag == "array_t":
             return arrays.parse_array_type(type_node, self.ast_builder)
