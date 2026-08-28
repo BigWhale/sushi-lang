@@ -151,7 +151,7 @@ is the authority, and the index is a cache of it.
 
 ```python
 {
-    "sushi_lib_version": "2.1",        # Protocol version
+    "sushi_lib_version": "2.2",        # Protocol version
     "library_name": str,               # Library identifier, from the output filename
     "library_version": str,            # The library's own version, "major.minor.patch"
     "kind": str,                       # "source" / "binary" / "hybrid", matching KIND
@@ -168,6 +168,13 @@ is the authority, and the index is a cache of it.
     # here would hand the consumer a signature with unresolved type parameters. An
     # unmarked declaration is not API and goes to "not_exported" instead -- protocol
     # 2.1, and the reason an older `.slib` has to be rebuilt.
+    #
+    # Protocol 2.2 adds two keys, and they answer different questions. `unit` names the
+    # unit that DECLARED the record, and every record carries it: a consumer binding
+    # `use <lib/foo/bar> as f` binds the alias to the unit `bar`, and for a binary
+    # library the manifest is the only place that can say which unit a name came from.
+    # `link_symbol` names the symbol the record HAS IN THE SHIPPED BITCODE, and only a
+    # record that has one carries it. See "The two symbol keys" below.
     # DOC is the parsed parts of one `##: ... :##` block. Every field is optional and an
     # empty one is OMITTED, so a reader cannot mistake an absent field for an empty
     # string. The whole block is deliberately not stored. A record that names a symbol
@@ -207,6 +214,8 @@ is the authority, and the index is a cache of it.
     "public_functions": [
         {
             "name": str,
+            "unit": str,               # The unit that declared it
+            "link_symbol": str,        # Its symbol in the shipped bitcode
             **SIG,
             "doc": DOC                 # If documented
         }
@@ -215,6 +224,7 @@ is the authority, and the index is a cache of it.
     "public_constants": [
         {
             "name": str,
+            "unit": str,               # The unit that declared it
             "type": str,
             "source": str,             # The whole `public const ...` declaration
             "doc": DOC                 # If documented
@@ -224,6 +234,7 @@ is the authority, and the index is a cache of it.
     "structs": [
         {
             "name": str,
+            "unit": str,               # The unit that declared it
             "fields": [{"name": str, "type": str, "doc": DOC}],
             "is_generic": False,       # Always False; a generic struct is a template
             "type_params": [],         # Always empty, for the same reason
@@ -234,6 +245,7 @@ is the authority, and the index is a cache of it.
     "enums": [
         {
             "name": str,
+            "unit": str,               # The unit that declared it
             "variants": [
                 {
                     "name": str,
@@ -271,6 +283,7 @@ is the authority, and the index is a cache of it.
         "generic_functions": [
             {
                 "name": str,
+                "unit": str,           # The unit that declared it
                 "type_params": [{"name": str, "constraints": [str], "is_pack": bool}],
                 **SIG,                 # A template's signature, so its `- Parameter`
                                        #   tags name something a report can print
@@ -289,7 +302,7 @@ is the authority, and the index is a cache of it.
         # Perk DEFINITIONS referenced by exported generics' constraints. There is no
         # methods array here, so a perk method's own block travels only inside `source`.
         "perks": [
-            {"name": str, "source": str, "doc": DOC}
+            {"name": str, "unit": str, "source": str, "doc": DOC}
         ],
 
         # Concrete perk IMPLEMENTATIONS of those perks (v3). Bodies live in
@@ -299,6 +312,7 @@ is the authority, and the index is a cache of it.
             {
                 "type": str,           # Concrete target type name
                 "perk": str,
+                "unit": str,           # The unit that declared it
                 "source": str,         # The whole `extend T with P:` block
                 "methods": [{"name": str, "symbol": str, "doc": DOC}],
                 "doc": DOC             # If documented
@@ -312,7 +326,12 @@ is the authority, and the index is a cache of it.
         # evaluation, and a type's shape to register it before a monomorphized
         # template body names it.
         "private_functions": [
-            {"name": str, **SIG}       # No doc: a private symbol is not documented API
+            {                          # No doc: a private symbol is not documented API
+                "name": str,
+                "unit": str,           # The unit that declared it
+                "link_symbol": str,    # Its symbol in the shipped bitcode
+                **SIG,
+            }
         ],
         "constants": [
             {"name": str, "source": str}
@@ -357,6 +376,43 @@ is the authority, and the index is a cache of it.
 }
 ```
 
+## The two symbol keys
+
+Protocol 2.2 gives a record two ways to name where it came from, and neither substitutes
+for the other.
+
+**`unit` says whose declaration this is.** Every record carries it. A Sushi symbol is
+`<unit>$<name>` (`docs/design/unit-namespaces.md` section 9), so two units may each
+declare `helper`, and a consumer that wants a namespace has to know which unit a name
+belongs to. A source library's units are in the source section and could be re-read for
+it; a BINARY library ships no source at all, so the manifest is the only place that can
+answer.
+
+**`link_symbol` says what the shipped bitcode calls it**, and only a record with a symbol
+in that bitcode carries one: a public function, and an export-closure private function.
+It is **written by every build and read by the BINARY path alone.**
+
+That asymmetry is the point:
+
+- A **source** library recompiles at the consumer, and its units are renamed to
+  `lib/<library>/<unit>` on the way in. The consumer's own mangling therefore produces
+  `lib$<library>$<unit>$helper` and never the producer's `<unit>$helper`. Reading the
+  producer's field there would name a symbol that does not exist in the consumer's build.
+- A **binary** library links. Its private closure helpers ship as signatures with
+  `"source": null` -- the body is in the bitcode -- so the consumer compiles a
+  re-monomorphized template body that CALLS a name it cannot derive from anything it can
+  see. `link_symbol` is that name.
+
+**A record without a symbol takes no `link_symbol`.** A public CONSTANT ships its
+`source` and is re-evaluated at the consumer. A TEMPLATE ships source and is
+monomorphized there, so its instances take the consumer's mangling. A PERK-IMPL method
+already carries `symbol`, and it needs nothing more: a method's symbol is derived from the
+receiver's TYPE, which is nominal and program-wide, so there is no unit in it to record.
+
+There is **no scheme identifier**. A manifest records what is, not the recipe, and
+`compiler_version` already says which compiler wrote it -- with `requires_compiler`
+(CE3503) refusing a `.slib` the running compiler may not consume.
+
 ## Error Codes
 
 | Code | Description |
@@ -391,7 +447,7 @@ Kind: source
 Compiler: 0.11.1
 Requires compiler: ~0.11
 Compiled: 2026-08-23T10:30:00+00:00
-Protocol: 2.1
+Protocol: 2.2
 
 Units (1):
   mylib

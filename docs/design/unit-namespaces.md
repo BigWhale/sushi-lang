@@ -835,24 +835,73 @@ belongs.
 Nothing, for the syntax. Rulings 1 to 4 are front-end resolution, and the back end is
 handed a resolved callee exactly as it is today.
 
-One thing, for coexistence. A function's LLVM symbol is its bare Sushi name
-(`backend/functions/declarations.py:40`). Two units each declaring `sine` therefore need
-mangling by unit — and for **private** functions as well as public ones, because the
-monolithic build path puts every unit into one `ir.Module`
-(`backend/codegen_llvm.py:320`), where an `internal` symbol collides just as an `external`
-one does. Only the incremental path emits a module per unit
-(`backend/codegen_llvm.py:542`).
+One thing, for coexistence. A symbol used to be its bare Sushi name. Two units each
+declaring `sine` therefore need mangling by unit — and for **private** declarations as
+well as public ones, because the monolithic build path puts every unit into one
+`ir.Module` (`backend/codegen_llvm.py:327`), where an `internal` symbol collides just as
+an `external` one does. Only the incremental path emits a module per unit
+(`backend/codegen_llvm.py:549`).
 
 The scheme: `<unit>$<name>`, with every `/` in the unit name replaced by `$`, so
-`collections/iter`'s `next` becomes `collections$iter$next`. `$` is legal in an LLVM
+`collections/iter`'s `next` becomes `collections$iter$next`. One function writes it,
+`mangle_unit_symbol` (`sushi_lang/semantics/unit_symbols.py`), read by the back end when
+it declares and by the `.slib` producer when it records. `$` is legal in an LLVM
 identifier and lies outside the alphabet of every existing symbol component, so the
 generic mangler's structural invariant (D) is untouched
-(`semantics/generics/name_mangling.py:11`). `main` is exempt: the linker needs the name.
-An FFI `link_name` is never mangled: it names a C symbol that somebody else compiled.
+(`semantics/generics/name_mangling.py:11`).
 
-A binary `.slib` then needs the link symbol recorded next to the Sushi name in its
-manifest, which is one field. `CE3503` already pins the compiler version a `.slib` may be
-consumed by, so the scheme is free to change between versions.
+Four things are exempt, and each for its own reason:
+
+- **`main`.** The linker needs the name, and the `entrypoint` pass already guarantees one
+  program declares one.
+- **An FFI `link_name`.** It names a C symbol that somebody else compiled.
+- **A synthesized body** — a monomorphized instance, a lifted lambda. It belongs to no
+  unit, whichever unit's AST carries it, and its name already carries what makes it unique
+  (the type arguments, or the lifter's counter).
+- **An extension or perk-impl method.** Its symbol is derived from the receiver's TYPE,
+  which is nominal and program-wide. This is not an oversight but Ruling 2 of
+  `visibility.md`: a method is found on the receiver's type, so there is no unit to put it
+  behind. Section 8 records the cost.
+
+**A constant is a symbol too**, and the same rule reaches it: its global is
+`<unit>$<name>`, and the value follows the name — the constant evaluator takes the asking
+unit, so `const i32 DOUBLE = SCRATCH * 2` in two units folds each unit's own `SCRATCH`.
+
+### 9.1 Reading a symbol back
+
+A bare name is no longer an answer on its own, so the tables that hold declarations carry
+two views: the unit that made each declaration, and the flat name. `UnitKeyedSymbols`
+(`sushi_lang/semantics/unit_symbols.py`) is the one implementation, and the rule that
+reads it is `FunctionTable.lookup`'s — the asking unit's own declaration answers first,
+and the flat view answers everything else. One rule, so the back end cannot disagree with
+the collect pass about what a name means inside a unit.
+
+Every reader that had no asking unit gained one: the typecheck pass
+(`TypeValidator.func_sig`, `TypeValidator.const_sig`), the borrow pass (`view_for`, since
+phase 1) and the back end (`codegen.emitting_unit`). `_replace_shadowed_functions` existed
+only to make a flat first-wins table behave, and it retires with them.
+
+### 9.2 A binary `.slib` names the symbol, and every record names its unit
+
+Manifest protocol **2.2**, two keys, and they answer different questions.
+
+**`link_symbol`** names the symbol a record has in the SHIPPED BITCODE. Written by every
+build, and read by the **binary** path alone. A source library recompiles at the consumer,
+where its units are renamed to `lib/<library>/<unit>`, so the consumer derives
+`lib$<library>$<unit>$name` and a producer-written symbol would be wrong. A binary library
+links: its private closure helpers ship as signatures with `"source": null`, and the
+consumer compiles a re-monomorphized template body that CALLS a name it cannot derive from
+anything it can see. Only a record with a symbol carries the key — a public constant ships
+its source and is re-evaluated, a template is monomorphized at the consumer, and a
+perk-impl method already carries the derived `symbol`.
+
+**`unit`** names the unit that DECLARED the record, on every record. It is what Ruling 1
+binds an alias to: `use <lib/foo/bar> as f` binds `f` to the unit `bar`, and for a binary
+library the manifest is the only place that can say.
+
+**There is no scheme identifier.** A manifest records what is, not the recipe, and
+`compiler_version` already says which compiler wrote it, with `CE3503` refusing a `.slib`
+the running compiler may not consume.
 
 ## 10. Diagnostics
 

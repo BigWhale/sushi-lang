@@ -556,8 +556,11 @@ it as source now, beside the closure's private constants, and the consumer regis
 with a PRIVATE record -- so only the transplanted body may name it. Each private is still
 named in exactly one place: the closure, or the kept list.
 
-The manifest protocol is **2.1**. An older `.slib` is refused through the existing
-compiler-version gate (CE3503); there is no grandfather branch.
+The manifest protocol is **2.2** -- 2.1 for the public gate above, and 2.2 for the two
+keys the unit-namespaces epic added: `unit` on every record, and `link_symbol` on every
+record with a symbol in the shipped bitcode (`docs/library-format.md`,
+`docs/design/unit-namespaces.md` section 9). An older `.slib` is refused through the
+existing compiler-version gate (CE3503); there is no grandfather branch.
 
 **A single-unit file never notices the flip.** That is an undertaking, and it is what the
 leak fence's two gates protect: an extension on a builtin inherits no marker, so it is not
