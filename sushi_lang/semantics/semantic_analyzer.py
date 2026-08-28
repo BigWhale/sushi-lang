@@ -154,7 +154,7 @@ class SemanticAnalyzer:
             unit_tables = collector.run(unit.ast, unit_name=unit.name,
                                         unit_file=str(unit.file_path))
 
-            symbol_merger.merge_all(unit, unit_tables, global_tables)
+            symbol_merger.merge_all(unit_tables, global_tables)
 
         # A library impl the consumer replaced must not be emitted: both bodies are
         # ordinary Sushi in ordinary units, so leaving it in place defines the method

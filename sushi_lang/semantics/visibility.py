@@ -120,9 +120,11 @@ class VisibilityTable:
     by_key: dict[tuple[str, str], DeclOrigin] = field(default_factory=dict)
 
     # The units that declared a name the table had already taken. The winner is in
-    # `by_key`; these are the losers, and each of them has heard why it lost (CE0101,
-    # CE0004, CE0006, CE3011). No rule may then measure a loser's own code against the
-    # winner's declaration, which is the whole of the D2 cascade family.
+    # `by_key`, and no rule may measure a loser's own code against it -- the whole of the
+    # D2 cascade family. A TYPE loser has heard why it lost (CE0004, CE0006, CE3011). A
+    # function or a constant loses only this table's answer now, not the name: each takes
+    # its own `<unit>$<name>` symbol and its own entry in `by_unit`, which is what its own
+    # code is measured against (`docs/design/unit-namespaces.md` section 9).
     contested: dict[tuple[str, str], set[str]] = field(default_factory=dict)
 
     def record(self, origin: DeclOrigin) -> None:
@@ -144,18 +146,6 @@ class VisibilityTable:
                 self.contested.setdefault(key, set()).add(origin.unit_name)
             return
         self.by_key[key] = origin
-
-    def mark_contested(self, kind: str, name: str, unit: Optional[str]) -> None:
-        """Book `unit` as a loser of this name, without a declaration to read from.
-
-        The merge uses it: a consumer's declaration replaces a library's export
-        (decision 10), so the library unit is now the loser of a name it declared, and
-        every rule that would measure the library's own body against the consumer's
-        declaration has to know.
-        """
-        if unit is None:
-            return
-        self.contested.setdefault((kind, name), set()).add(unit)
 
     def origin(self, kind: str, name: str) -> Optional[DeclOrigin]:
         return self.by_key.get((kind, name))

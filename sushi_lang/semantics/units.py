@@ -259,7 +259,15 @@ class UnitManager:
         return []  # No cycle found
 
     def build_global_symbol_table(self) -> bool:
-        """Build the global symbol table from all loaded units."""
+        """Build the global symbol table from all loaded units.
+
+        The table's one reader is CE3003 below. It answers a question a public name still
+        raises and a private one no longer does: two units may each declare `helper` now,
+        each taking its own `<unit>$<name>` symbol, but nothing yet says which of two
+        EXPORTED `sine`s an unqualified call means. `CE3012` is that answer
+        (`docs/design/unit-namespaces.md` section 8), and this refusal stands until it
+        exists.
+        """
         symbol_units: Dict[str, List[str]] = {}
         success = True
 
@@ -306,10 +314,6 @@ class UnitManager:
         if sorted_names is None:
             return None
         return [self.units[name] for name in sorted_names]
-
-    def find_symbol(self, symbol_name: str) -> Optional[Symbol]:
-        """Find a symbol in the global symbol table."""
-        return self.global_symbols.get(symbol_name)
 
 
 __all__ = [
