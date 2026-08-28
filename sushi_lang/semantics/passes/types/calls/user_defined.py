@@ -164,12 +164,17 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         validate_open_function(validator, call)
         return
 
-    stdlib_func = check_stdlib_function(validator, call)
-    if stdlib_func is not None:
-        validate_stdlib_function(validator, call, stdlib_func)
-        return
-
     func_sig = validator.func_sig(function_name)
+
+    # Section 8's ladder: a declaration wins over a name a flat `use` brought in, and a
+    # registry stdlib module is a flat import. Asking the standard library first was
+    # what made `use <math>` beside a unit's own `sin` crash the compiler (section 1.3).
+    if func_sig is None:
+        stdlib_func = check_stdlib_function(validator, call)
+        if stdlib_func is not None:
+            validate_stdlib_function(validator, call, stdlib_func)
+            return
+
     if func_sig is None:
         call.callee_unresolved = True
         # A name a library declares and keeps. It resolves to nothing here BECAUSE the
@@ -325,17 +330,8 @@ def validate_open_function(validator: 'TypeValidator', call: Call) -> None:
 
 
 def check_stdlib_function(validator: 'TypeValidator', call: Call) -> Optional[any]:
-    """Check if a function call is to a stdlib function."""
-    function_name = call.callee.id
-
-    possible_modules = ["time", "sys/env", "sys/process", "math", "random", "io/files"]
-
-    for module_path in possible_modules:
-        stdlib_func = validator.func_table.lookup_stdlib_function(module_path, function_name)
-        if stdlib_func is not None:
-            return (module_path, stdlib_func)
-
-    return None
+    """The registry stdlib function a bare name reaches, with the module that has it."""
+    return validator.func_table.lookup_stdlib_by_name(written_callee(call)[0])
 
 
 def written_callee(call) -> tuple:

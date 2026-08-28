@@ -47,18 +47,22 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if callee == "open":
         return emit_open_function(codegen, expr, to_i1)
 
-    stdlib_func = _check_stdlib_function_codegen(codegen, callee)
-    if stdlib_func is not None:
-        return _emit_stdlib_function(codegen, expr, callee, stdlib_func, to_i1)
+    # The unit being emitted answers for the name, exactly as the borrow pass's
+    # `view_for` does: a source library's own body must read the library's
+    # signature and not the consumer's declaration of the same name (#487). It is
+    # asked BEFORE the standard library, which is the same ladder the typecheck pass
+    # walks -- a declaration beats a name a flat `use` brought in (section 8).
+    func_sig = codegen.func_table.lookup(callee, codegen.emitting_unit)
+
+    if func_sig is None:
+        stdlib_func = _check_stdlib_function_codegen(codegen, callee)
+        if stdlib_func is not None:
+            return _emit_stdlib_function(codegen, expr, callee, stdlib_func, to_i1)
 
     llvm_fn = codegen.funcs.lookup(callee, codegen.emitting_unit)
     if llvm_fn is None:
         raise KeyError(f"unknown function: {callee}")
 
-    # The unit being emitted answers for the name, exactly as the borrow pass's
-    # `view_for` does: a source library's own body must read the library's
-    # signature and not the consumer's declaration of the same name (#487).
-    func_sig = codegen.func_table.lookup(callee, codegen.emitting_unit)
     return emit_named_call(codegen, expr, callee, llvm_fn, func_sig, to_i1)
 
 
@@ -526,17 +530,8 @@ def _promote_variadic_arg(codegen: 'LLVMCodegen', value: ir.Value, sushi_ty) -> 
 
 
 def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -> tuple | None:
-    """Check if a function is a stdlib function during code generation."""
-    func_table = codegen.func_table
-
-    possible_modules = ["time", "sys/env", "sys/process", "math", "random", "io/files"]
-
-    for module_path in possible_modules:
-        stdlib_func = func_table.lookup_stdlib_function(module_path, function_name)
-        if stdlib_func is not None:
-            return (module_path, stdlib_func)
-
-    return None
+    """The registry stdlib function a bare name reaches, from the one reader."""
+    return codegen.func_table.lookup_stdlib_by_name(function_name)
 
 
 def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str,

@@ -874,6 +874,13 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if function_name == "open":
             return self.type_validator.enum_table.by_name.get("FileResult")
 
+        # A declaration answers before a name a flat `use` brought in, exactly as the
+        # validating half decides it (section 8's ladder). Reading the standard library
+        # first gave this unit's own `sin` the library's return type.
+        func_sig = self.type_validator.func_sig(function_name)
+        if func_sig is not None:
+            return self.result_type_of(func_sig)
+
         # The registry is the single source of truth the backend reads too, so reading it
         # here keeps the two from drifting. The hardcoded copies this replaced had gone
         # stale: they looked up a one-arg "Result<i32>" that is never registered.
@@ -903,8 +910,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
             return None
 
-        func_sig = self.type_validator.func_sig(function_name)
-        return None if func_sig is None else self.result_type_of(func_sig)
+        return None
 
     def result_type_of(self, func_sig) -> Optional[Type]:
         """What a call to this signature yields: its return type, wrapped in Result.

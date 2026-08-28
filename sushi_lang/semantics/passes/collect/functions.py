@@ -271,6 +271,19 @@ class FunctionTable:
         """Lookup a stdlib function by module and name."""
         return self._stdlib_functions.get((module_path, function_name))
 
+    def lookup_stdlib_by_name(self, function_name: str) -> Optional[Tuple[str, Any]]:
+        """The registry stdlib FUNCTION a bare name reaches, with its module path.
+
+        The table holds only what a `use` registered, so asking it is what makes a flat
+        import a scope rather than a hard-coded list of module names. The list it
+        replaces ran ahead of the user table and crashed the compiler on a unit that
+        declared `sin` beside `use <math>` (`docs/design/unit-namespaces.md` 1.3).
+        """
+        for (module_path, name), func in self._stdlib_functions.items():
+            if name == function_name and not getattr(func, "is_constant", False):
+                return module_path, func
+        return None
+
     def is_stdlib_function(self, module_path: str, function_name: str) -> bool:
         """Check if a function is a stdlib function."""
         return (module_path, function_name) in self._stdlib_functions
