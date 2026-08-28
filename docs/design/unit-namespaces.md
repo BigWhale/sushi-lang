@@ -1,7 +1,14 @@
 # Unit namespaces
 
-**Status: DECIDED, not implemented.** The draft that this replaces measured a problem and
-surveyed the answers. This document rules on them.
+**Status: PHASE 1 LANDED.** The draft that this replaces measured a problem and surveyed
+the answers. This document rules on them, and phase 1 of section 11 is implemented: it
+landed in seven steps on `feat/unit-namespaces`, from `54ab5c30` to the tip of that branch,
+under issue #490. **Phase 2 -- two units may each declare one TYPE -- is not implemented**
+and belongs to `docs/design/type-identity.md`.
+
+Section 1 is kept as the record of what the epic replaced. Every ruling below is measured
+against it, and those measurements are what justify the rulings; a program in that section
+is not a program that compiles now.
 
 Sushi has one flat global namespace. `use` puts a whole unit into it and gives you no way
 to say which unit you meant. This document says what replaces that.
@@ -57,16 +64,17 @@ to keep.
 
 Privacy does not help. A private declaration still occupies the one namespace — that is
 `visibility.md` section 1's deciding fact — so making a declaration private frees no name.
-`CE3011` is the interim rule that follows from it: a consumer may not declare a name that
-a library or a bundled stdlib module already declares, because in one namespace the
-library's own bodies would then call the consumer's function. That code's `doc` string
-names this document as the design that lifts it.
+`CE3011` was the interim rule that followed from it: a consumer may not declare a name
+that a library or a bundled stdlib module already declares, because in one namespace the
+library's own bodies would then call the consumer's function. Phase 1 narrowed it to a
+TYPE, and its `doc` string now names `docs/design/type-identity.md` as the design that
+would lift the rest.
 
 ### 1.2 The namespace is not only flat, it is transitive
 
 Three units. `top` imports `mid`, `mid` imports `deep`, and `top` never mentions `deep`:
 
-<!-- docs-sweep: skip (records today's behaviour; a three-unit program) -->
+<!-- docs-sweep: skip (records what the epic replaced; the program no longer compiles) -->
 ```sushi
 # deep.sushi                      # mid.sushi              # top.sushi
 public fn deep_value() i32:       use "deep"               use "mid"
@@ -98,7 +106,7 @@ replacement.
 list of module paths and returns the first hit. It runs at line 166. The user function
 table is not consulted until line 171.
 
-<!-- docs-sweep: skip (records today's behaviour: this crashes the compiler) -->
+<!-- docs-sweep: skip (records what the epic replaced: it crashed the compiler) -->
 ```sushi
 use <math>
 
@@ -152,7 +160,7 @@ land, and nothing else.
 | `use "math"` | every name `math` brings enters this unit's flat scope — unchanged |
 | `use "math" as my_math` | every name `math` brings is reachable as `my_math.<name>`, and **nothing enters the flat scope** |
 
-<!-- docs-sweep: skip (proposed syntax, not implemented) -->
+<!-- docs-sweep: skip (two units; the sweep compiles one block) -->
 ```sushi
 use "math" as my_math
 use <math> as std_math
@@ -165,7 +173,7 @@ fn main() i32:
 
 The two forms compose, because each `use` statement contributes what it says and no more:
 
-<!-- docs-sweep: skip (proposed syntax, not implemented) -->
+<!-- docs-sweep: skip (two units; the sweep compiles one block) -->
 ```sushi
 use "math"                              # flat
 use <math> as std_math                  # behind a dot
@@ -368,6 +376,7 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 | `print`, `println` | These are grammar forms (`print_stmt`, `println_stmt`, `grammar.lark:69`), not symbols. Syntax is never namespaced |
 | `string`, `file`, `List`, `Result`, `Maybe`, `Own` | In scope with no import. Nothing brought them, so no namespace holds them |
 | A private declaration of another unit | Not a visibility carve-out — see Ruling 2's second seam. It is a member, and naming it is `CE3005` |
+| A static call on a type name — `HashMap.new()`, `List.new()`, `f64.from_bits(b)` | The receiver is a TYPE and not a namespace, and section 5's table has no row for the position. It is written bare even where the import is aliased and the annotation beside it is qualified: `let hm.HashMap@(i32, string) m = HashMap.new()`. Measured and recorded as **#506**; a built-in generic is one type per program, so nothing is ambiguous, and ruling on the position is that issue's |
 
 ### 4.3 The standard library has four shapes, and the rule reads all four
 
@@ -424,7 +433,7 @@ no marker: it is as visible as its target type (`visibility.md` Ruling 2). So a 
 consist entirely of extensions, export **nothing nameable**, and still be the reason a
 program works:
 
-<!-- docs-sweep: skip (two units; records today's behaviour) -->
+<!-- docs-sweep: skip (two units; behaviour this epic did not change) -->
 ```sushi
 # extonly.sushi -- zero public declarations     # main.sushi
 extend i32 squared() i32:                       use "extonly"
@@ -500,7 +509,7 @@ spelling out because it looks like the counter-example. A type argument is REQUI
 the type parameter appears only in the return type, because there is no argument to infer
 it from:
 
-<!-- docs-sweep: skip (proposed syntax, not implemented) -->
+<!-- docs-sweep: skip (illustrative: `iter` exports no `empty_list`) -->
 ```sushi
 use <collections/iter> as it
 
@@ -543,7 +552,7 @@ pattern_item: pattern | NAME | wildcard_pattern | own_pattern
 nested one either. Without a third segment an aliased unit's enums are **write-only**: you
 can construct one and never take it apart.
 
-<!-- docs-sweep: skip (proposed syntax, not implemented) -->
+<!-- docs-sweep: skip (two units; the sweep compiles one block) -->
 ```sushi
 use "geometry" as geo
 
@@ -571,8 +580,14 @@ Nesting needs nothing further: `pattern_item` already admits a `pattern`, so
 `Shape.Wrap(geo.Sign.Plus)` works once the production above does. The resolution rule does
 not move — section 5's folding strips the leading segment and the arm resolves against one
 unit, so exhaustiveness, payload binding and the literal-arm rules (CE2074 / CE2075 /
-CE2076) all read what they read today. A qualifier that names nothing is `CE3012`, like any
-other namespace miss; no new code is needed.
+CE2076) all read what they read today.
+
+A qualifier that names nothing is refused as **a name that does not exist**, and the code
+depends on the position. In an expression a leading `NAME .` may be a value, so an unbound
+qualifier falls through to the ordinary rules and answers `CE2008` or `CE1001`. In a type
+position it cannot be anything else, and the answer is `CE2001`, with a help line that
+names the import which would bring the name. `CE3012` is the AMBIGUITY code and answers a
+different question -- too many candidates, not none. No new code is needed either way.
 
 ### 5.3 One position cannot be qualified
 
@@ -614,7 +629,7 @@ survives for a repeat with the same alias, or none.
 Non-transitivity has one consequence that is easy to miss, so it is ruled here rather than
 discovered: **a public signature may name a type its caller cannot name.**
 
-<!-- docs-sweep: skip (proposed behaviour across three units) -->
+<!-- docs-sweep: skip (three units, and the body is elided) -->
 ```sushi
 # geometry.sushi          # shapes.sushi              # main.sushi
 public struct Vec:        use "geometry"              use "shapes"
@@ -679,7 +694,7 @@ its single-unit case and loses its cross-unit one:
 | Test | Asserts today | Under phase 1 |
 |---|---|---|
 | `tests/unit/test_duplicate_declaration_cascades.py` | cross-unit `CE0101` for a private `fn scale` | legal; each unit's call answers itself |
-| `tests/unit/test_constant_visibility.py` | cross-unit `CE0105` for two private constants, `CE3003` for two public ones | `CE0105` goes; `CE3003` is replaced by `CE3012` at the ambiguous USE |
+| `tests/unit/test_constant_visibility.py` | cross-unit `CE0105` for two private constants, `CE3003` for two public ones | `CE0105` goes. The both-public case becomes **nothing at all**, because that fixture's consumer declares the name itself and a unit's own declaration always wins; `CE3012` needs a THIRD unit that declares neither, which the file gained as a second case |
 | `tests/unit/test_collect_attribution.py` | cross-unit `CE0101` for one `libc.strlen` declared in two units | legal; an FFI namespace is bound by the unit that declares it (section 3) |
 
 Of the thirteen files that assert `CE0101`, those two are the cross-unit ones; the other
@@ -933,10 +948,10 @@ Retired or narrowed:
 | Code | Change |
 |---|---|
 | `CE3003` | retired. It refused a whole program for a collision that may never be written |
-| `CE3011` | narrowed to what phase 2 cannot lift: a TYPE name a consumer redeclares against a library it imported **flat**. An aliased import cannot collide, and a function or a constant stops colliding at phase 1. A library's private CONSTANT already answers `CE0105` rather than this code (#488, decision D1) |
+| `CE3011` | narrowed to what phase 2 has to lift: a TYPE name a consumer redeclares against a library, imported flat or behind an alias. An alias does not help a type -- identity is nominal, so one name is one shape however the name is written -- and that was measured under both import forms. The FUNCTION arm retired in phase 1. A library's private CONSTANT answers `CE0105` rather than this code, which is the function rule's shape with another code (#507) |
 | `CW3001` | narrowed to a repeat with the same alias, or none (section 6) |
-| `CE0101` | kept for a duplicate extension on a foreign type, with new TEXT: relational, naming both units, blaming neither (section 8). Retired for a cross-unit private function, which phase 1 makes legal (section 7) |
-| `CE0105` | retired cross-unit with `CE0101`, and for the same reason: two units may each declare a private constant once the table is keyed by unit (section 7). Kept whole within one unit |
+| `CE0101` | kept for a duplicate extension on a foreign type, with new TEXT: relational, naming both units, blaming neither (section 8). Retired for a cross-unit private function, which phase 1 makes legal (section 7), a library's private function included. A GENERIC function still holds one name for the whole program (#495) |
+| `CE0105` | retired cross-unit with `CE0101`, and for the same reason: two units may each declare a private constant once the table is keyed by unit (section 7). Kept whole within one unit, and kept against a LIBRARY's constant (#507) |
 
 ## 11. Delivery
 
@@ -1101,7 +1116,7 @@ retired option A with it.
 The symptom, as it read before #488: two ordinary units could not implement each other's
 perks.
 
-<!-- docs-sweep: skip (records today's behaviour; two units) -->
+<!-- docs-sweep: skip (records the symptom before #488; two units) -->
 ```sushi
 # helpers/traits.sushi           # main.sushi
 public perk Heavy:               use "helpers/traits"
@@ -1200,6 +1215,13 @@ carried a unit of origin" is the history that section 3.1's provider ruling rest
 Ruling 2 — a method is found on the receiver's type — is the reason section 8 cannot put an
 extension behind a namespace.
 
+**The edit is made.** §1 narrows its deciding fact to types and records that the
+`CE0101` → `CE3005` shape is legal now; §3 Ruling 2 points at section 8's `CW3003`; §4
+points at section 12; §7's manifest protocol went to **2.2** with the link symbol; §8's
+"Per-unit namespacing" row was rewritten when the per-unit scope landed; and §9.1 carries
+the rebuilt four-combination table, where every row is legal and each was measured with a
+source library.
+
 ### 14.2 Phase 2's edit
 
 Phase 2 finishes the sentence. §1's deciding fact, §1's "constraint that does not move" and
@@ -1223,4 +1245,8 @@ short because the reference map in `CLAUDE.md` names the owner of each:
   are the only two in the catalogue that name this document as the design that lifts them,
   so both are edited by the commit that lifts them. `CW3002`'s also says "the one
   combination that would break the link -- both declarations public -- is CE3003 already",
-  which stops being true when section 10 retires that code.
+  which stopped being true when section 10 retired that code.
+
+Every item above is done. `CE3011`'s text names `type-identity.md` now, `CW3002`'s names
+the alias, `CLAUDE.md` carries the alias and the per-unit scope, and the two language
+documents gained the `as` clause when the scope landed.
