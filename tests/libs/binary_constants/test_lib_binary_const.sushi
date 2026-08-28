@@ -1,0 +1,14 @@
+# A binary library's public constants are consumable. The manifest carries the
+# source of each one, and the consumer registers it as the export closure's
+# constants have always been registered.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "100 mostly harmless 3 107\n"
+
+use <lib/const_lib>
+
+fn main() i32:
+    let i32 limit = LIMIT
+    let i32 step = STEPS[1]
+    let i32 sum = scratch_plus(100).realise(0)
+    println("{limit} {TAG} {step} {sum}")
+    return Result.Ok(0)

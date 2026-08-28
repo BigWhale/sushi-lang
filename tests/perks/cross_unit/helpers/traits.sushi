@@ -1,0 +1,5 @@
+public perk Heavy:
+    fn weigh() i32
+
+perk Quiet:
+    fn hush() i32

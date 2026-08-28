@@ -235,6 +235,12 @@ class PerkCollector:
         if not isinstance(name, str):
             return
 
+        # The definition sweep collected this same declaration already, and the unit it
+        # belongs to is being collected now. One node twice is not two perks, so the
+        # duplicate rule below must not read it as one (#487).
+        if self.perks.get(name) is perk:
+            return
+
         name_span: Optional[Span] = getattr(perk, "name_span", None) or getattr(perk, "loc", None)
 
         # Perks cannot be generic (CE4010). The grammar parses `perk Name<T>:`

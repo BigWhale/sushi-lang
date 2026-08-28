@@ -1,0 +1,19 @@
+# The perk is declared in another ordinary unit, and this unit implements it.
+# The collection order used to decide the answer: a dependent is collected before
+# its dependency, so the perk table was empty and the implementation heard CE4003.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n"
+
+use "helpers/traits"
+
+struct Pallet:
+    i32 crates
+
+extend Pallet with Heavy:
+    fn weigh() i32:
+        return self.crates
+
+fn main() i32:
+    let Pallet p = Pallet(3)
+    println("{p.weigh()}")
+    return Result.Ok(0)

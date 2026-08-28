@@ -1,0 +1,12 @@
+# A consumer's own constant of the name a binary library publishes. The source
+# path answers CE0105 with a note at the other declaration, and the binary path
+# must answer the same way.
+# EXPECT_ERROR_CODE: CE0105
+
+use <lib/const_lib>
+
+const i32 LIMIT = 5
+
+fn main() i32:
+    println("{LIMIT}")
+    return Result.Ok(0)

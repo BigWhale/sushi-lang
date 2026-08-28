@@ -58,6 +58,16 @@ Collect global definitions before analyzing function bodies.
 4. **Symbol Table**: Build initial global scope
 5. **Visibility**: Record who declared what, and whether it says `public`
 
+### Perk definitions come first, from every unit
+
+The loop that collects the units is not the first walk. Every unit's perk DEFINITIONS are
+collected ahead of it (`CollectorPass.collect_perk_definitions`), because a perk is a
+contract and an implementation meets two rules that read a table: the perk exists
+(`CE4003`), and its marker lets this unit implement it (`CE4011`). The compilation order
+puts a dependent before its dependency, so without the sweep a perk declared next door
+arrived after the unit that implements it. Registering one declaration twice is a no-op,
+so the unit's own pass walks it again without reporting `CE4001`.
+
 ### Example
 
 ```sushi
@@ -231,8 +241,14 @@ See `docs/ffi.md`.
 **File:** `semantics/semantic_analyzer.py` (`_register_library_*`)
 
 Every symbol a linked `.slib` exports enters the same tables the consumer's own `collect`
-filled: structs, enums, functions, export-closure private helpers and constants, perk
-implementations, and generic templates.
+filled: structs, enums, functions, published constants, export-closure private helpers and
+constants, perk implementations, and generic templates.
+
+A constant is registered from SOURCE, whichever list it came from: it has no body to link,
+so the manifest carries the declaration's text and the consumer re-parses it. A clash with
+the consumer's own name is `CE0105` for a published constant -- the answer a source library
+gives for the same program -- and `CE5007` for a closure one, which may not be renamed
+because the library's own bodies call it.
 
 Placement is load-bearing at both ends. Perk DEFINITIONS are seeded BEFORE the `collect`
 loop, because perk-impl collection validates each impl against the visible definitions

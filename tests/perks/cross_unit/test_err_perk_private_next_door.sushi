@@ -1,0 +1,15 @@
+# A private perk keeps its CONTRACT, so another unit may not implement it. The
+# answer must be CE4011 and not CE4003: the perk is known, it is simply not ours.
+# EXPECT_ERROR_CODE: CE4011
+
+use "helpers/traits"
+
+struct Bale:
+    i32 straw
+
+extend Bale with Quiet:
+    fn hush() i32:
+        return self.straw
+
+fn main() i32:
+    return Result.Ok(0)

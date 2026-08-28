@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import AbstractSet, Dict, List, Optional
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -23,7 +23,7 @@ class VariableInfo:
 class ScopeAnalyzer:
     """The scope pass: scope and variable usage analysis."""
 
-    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None) -> None:
+    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None, kept_constants: Optional[AbstractSet[str]] = None) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         self.constants = constants or ConstantTable()
@@ -33,6 +33,10 @@ class ScopeAnalyzer:
         from sushi_lang.semantics.passes.collect import GenericStructTable, ExternalTable
         self.generic_structs = generic_structs or GenericStructTable()
         self.external_table = external_table or ExternalTable()
+        # A constant a binary library declares and keeps. It resolves to nothing here,
+        # and "no such name" is the wrong word for a declaration the library has: the
+        # type pass says whose it is (CE3005) once this pass lets the name through.
+        self.kept_constants: AbstractSet[str] = kept_constants or frozenset()
         self.scopes: List[Dict[str, VariableInfo]] = []
         # Loop-nesting depth for the current function. break/continue are only
         # legal when this is > 0 (CE1003); reset to 0 across nested functions.
@@ -127,6 +131,8 @@ class ScopeAnalyzer:
         if self._is_bound_local(name):
             return False
         if name in self.enums.by_name or name in self.generic_enums.by_name:
+            return True
+        if name in self.kept_constants:
             return True
         return name in self.constants.by_name or name in self.function_names
 

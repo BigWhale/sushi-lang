@@ -1,0 +1,11 @@
+# One perk name, two units. Collecting every definition before any implementation
+# must not make a duplicate legal.
+# EXPECT_ERROR_CODE: CE4001
+
+use "helpers/traits"
+
+perk Heavy:
+    fn weigh() i32
+
+fn main() i32:
+    return Result.Ok(0)

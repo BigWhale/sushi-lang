@@ -158,13 +158,19 @@ class SemanticAnalyzer:
         if self.library_linker is not None:
             self._seed_library_perks(collector.perks)
 
-        # A source library's units are collected first. The compilation order puts
-        # dependents before dependencies, which is wrong for collection: a consumer's
-        # `extend i32 with Display` is checked against the perks visible when its own
-        # unit is collected, so a perk the library defines has to be in the table
-        # already. Seeding it instead would register the same perk twice (CE4001),
-        # because unlike a binary library's manifest records, these arrive in a real
-        # unit that the loop below collects on its own.
+        # Every perk DEFINITION of every unit, before any implementation is collected.
+        # The compilation order puts a dependent before its dependency, so a perk
+        # declared next door used to arrive after the unit that implements it, and the
+        # answer was CE4003 -- an ordering accident, not a rule (#487).
+        for unit in compilation_order:
+            if unit.ast is None:
+                continue
+            collector.collect_perk_definitions(unit.ast, unit_name=unit.name,
+                                               unit_file=str(unit.file_path))
+
+        # A source library's units are collected first, for the tables that are still
+        # order-sensitive: a first-wins merge, and the function shadowing that
+        # `_replace_shadowed_functions` carries across it.
         for unit in _library_units_first(compilation_order):
             if unit.ast is None:
                 continue
@@ -451,7 +457,8 @@ class SemanticAnalyzer:
 
             unit_reporter = self._unit_reporter(unit)
 
-            scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals)
+            scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals,
+                                           kept_constants=self._kept_constant_names())
             scope_analyzer.run(unit.ast)
 
             type_validator = TypeValidator(
@@ -663,14 +670,32 @@ class SemanticAnalyzer:
         self.tables.library_not_exported.update(
             self.library_registry.get_all_not_exported())
 
+    def _kept_constant_names(self) -> frozenset[str]:
+        """The constants a library declares and does not export, by name.
+
+        The scope pass asks, so a mention reaches the type pass and hears whose the
+        declaration is instead of hearing that there is none (#487).
+        """
+        kept = getattr(self.tables, "library_not_exported", None) or {}
+        return frozenset(name for name, (_lib, kind) in kept.items()
+                         if kind == "constant")
+
     def _register_library_constants(self, compilation_order) -> None:
-        """Register export-closure constants from loaded libraries (C4b/C5)."""
+        """Register a library's constants: the export closure's, and the published ones.
+
+        Both travel as SOURCE and both are registered here, because a constant has no
+        body to link: a public one is API the consumer reads (#487), a closure one is a
+        private declaration a monomorphized template body names (C4b/C5). The record
+        carries the `public` marker in its own text, so the visibility fence at the use
+        site reads the re-parsed signature and needs nothing else.
+
+        A clash is a different sentence for each. A published constant is a duplicate of
+        the consumer's own -- the answer a source library gives for the same program
+        (CE0105). A private one may not be renamed by the consumer, because the library's
+        own bodies call it (CE5007).
+        """
         if self.constants is None or self.library_linker is None:
             return
-
-        import sushi_lang.internals.errors as er
-        from sushi_lang.internals.parser import parse_to_ast
-        from sushi_lang.semantics.passes.collect import CollectorPass
 
         host_unit = next(
             (u for u in compilation_order if u.ast is not None), None
@@ -680,33 +705,58 @@ class SemanticAnalyzer:
 
         for lib_name, manifest in self.library_linker.loaded_libraries.items():
             templates = manifest.get("templates") or {}
+            for record in manifest.get("public_constants", []) or []:
+                self._register_one_library_constant(
+                    host_unit, lib_name, record, published=True)
             for record in templates.get("constants", []) or []:
-                const_name = record.get("name")
-                source = record.get("source")
-                if not const_name or not source:
-                    continue
+                self._register_one_library_constant(
+                    host_unit, lib_name, record, published=False)
 
-                existing = self.constants.by_name.get(const_name)
-                if existing is not None:
-                    er.emit(self.reporter, er.ERR.CE5007,
-                            getattr(existing, "name_span", None),
-                            lib=lib_name, name=const_name)
-                    continue
+    def _register_one_library_constant(self, host_unit, lib_name: str, record: dict,
+                                       *, published: bool) -> None:
+        """Re-parse one constant record and register it under its own name."""
+        import sushi_lang.internals.errors as er
+        from sushi_lang.internals.parser import parse_to_ast
+        from sushi_lang.semantics.passes.collect import CollectorPass
 
-                program, _tree = parse_to_ast(source)
-                throwaway = Reporter(
-                    source=source, filename=f"<const:{lib_name}:{const_name}>")
-                collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
-                const_table = collected.constants
+        if self.constants is None:
+            return
 
-                sig = const_table.by_name.get(const_name)
-                const_defs = program.constants or []
-                if sig is None or len(const_defs) != 1:
-                    continue
+        const_name = record.get("name")
+        source = record.get("source")
+        if not const_name or not source:
+            # A manifest written before constants carried their source. The name and the
+            # type are still printed by `--lib-info`; only the value is out of reach.
+            return
 
-                self.constants.by_name[const_name] = sig
-                self.constants.order.append(const_name)
-                host_unit.ast.constants.append(const_defs[0])
+        existing = self.constants.by_name.get(const_name)
+        if existing is not None:
+            if published:
+                er.emit_with(self.reporter, er.ERR.CE0105,
+                             getattr(existing, "name_span", None),
+                             getattr(existing, "filename", None),
+                             name=const_name) \
+                    .note(f"library '{lib_name}' publishes a constant of this name") \
+                    .emit()
+            else:
+                er.emit(self.reporter, er.ERR.CE5007,
+                        getattr(existing, "name_span", None),
+                        lib=lib_name, name=const_name)
+            return
+
+        program, _tree = parse_to_ast(source)
+        throwaway = Reporter(
+            source=source, filename=f"<const:{lib_name}:{const_name}>")
+        collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
+
+        sig = collected.constants.by_name.get(const_name)
+        const_defs = program.constants or []
+        if sig is None or len(const_defs) != 1:
+            return
+
+        self.constants.by_name[const_name] = sig
+        self.constants.order.append(const_name)
+        host_unit.ast.constants.append(const_defs[0])
 
     def _register_library_private_types(self) -> None:
         """Register the private structs and enums the export closure ships.
