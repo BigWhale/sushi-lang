@@ -1,0 +1,10 @@
+# A unit that imports the built-in generic `HashMap`. The import brings the name
+# here and nowhere else (section 4.3.1).
+use <collections/hashmap>
+
+public fn counted() i32:
+    let HashMap@(i32, i32) m = HashMap.new()
+    m.insert(1, 2)
+    let i32 n = m.len()
+    m.free()
+    return Result.Ok(n)

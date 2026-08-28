@@ -1,0 +1,6 @@
+# The middle of section 1.2's chain. It imports `deep` for its own body, and an
+# import is not re-exported: nothing `deep` declares reaches the unit above.
+use "helpers/deep"
+
+public fn mid_value() i32:
+    return Result.Ok(deep_value()?? + 1)

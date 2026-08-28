@@ -1,0 +1,9 @@
+# An FFI namespace is bound by the unit that DECLARES the block (#503). The unit
+# next door binds `libc`; this one binds nothing of the sort.
+# EXPECT_ERROR_CODE: CE2008
+use "helpers/ffi_holder"
+
+fn main() i32:
+    let i64 n = libc.strlen("abc")
+    println("{n}")
+    return Result.Ok(0)

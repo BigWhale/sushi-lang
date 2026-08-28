@@ -1,0 +1,6 @@
+# The bottom of section 1.2's three-unit chain. `mid` imports this unit, and the
+# unit that imports `mid` never mentions this one.
+public const i32 DEEP_ANSWER = 7
+
+public fn deep_value() i32:
+    return Result.Ok(DEEP_ANSWER)

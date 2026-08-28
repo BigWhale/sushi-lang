@@ -1,0 +1,9 @@
+# The migration section 6.1 forces, and the whole of it: import the unit whose
+# name you write. Both units are named, both are imported, and it compiles.
+# EXPECT_STDOUT_EXACT: "8 7\n"
+use "helpers/mid"
+use "helpers/deep"
+
+fn main() i32:
+    println("{mid_value().realise(0)} {deep_value().realise(0)}")
+    return Result.Ok(0)

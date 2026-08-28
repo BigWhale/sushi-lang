@@ -1,0 +1,6 @@
+# Compiles `greet_right` into the program without putting it into anyone else's
+# scope. Its own call reads its own import.
+use "helpers/greet_right"
+
+public fn bridged() i32:
+    return Result.Ok(greet()?? * 10)

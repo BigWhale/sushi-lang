@@ -1,0 +1,14 @@
+# The other half of every refusal in this batch: what a unit imported for itself
+# still works there. One call reaches through a stdlib module, one through the
+# built-in generic, and one through an FFI namespace, each from the unit that
+# wrote the import.
+# EXPECT_STDOUT_EXACT: "4 1 3\n"
+use "helpers/mathy"
+use "helpers/mapper"
+use "helpers/ffi_holder"
+
+fn main() i32:
+    let i32 root = rooted(16.0).realise(0.0) as i32
+    let i32 size = measured("abc").realise(0)
+    println("{root} {counted().realise(0)} {size}")
+    return Result.Ok(0)

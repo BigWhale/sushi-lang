@@ -1,0 +1,10 @@
+# Section 6.1: `origin` is in scope and `Vec` is not, because `shapes` imports
+# `geometry` and this unit does not. A `let` needs a written type, so there is
+# no binding this unit can make until it adds the import.
+# EXPECT_ERROR_CODE: CE2001
+use "helpers/shapes"
+
+fn main() i32:
+    let Vec v = origin().realise(Vec(0, 0))
+    println("{v.x}")
+    return Result.Ok(0)
