@@ -1,11 +1,12 @@
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING
+from typing import Dict, Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import Program, ExtendDef, ExtendWithDef
 from sushi_lang.semantics.passes.collect import CollectorPass, ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, PerkTable, PerkImplementationTable, FunctionTable, ExtensionTable, GenericExtensionTable, GenericFunctionTable
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.namespaces import NamespaceTable
     from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
 from sushi_lang.semantics.passes.types import TypeValidator
@@ -77,6 +78,9 @@ class SemanticAnalyzer:
         self.generic_extensions: Optional['GenericExtensionTable'] = None
         self.generic_funcs: Optional[GenericFunctionTable] = None
         self.tables: Optional['SymbolTables'] = None  # Aggregate of the above, threaded to typecheck and backend
+        # What each unit may write behind a dot: one `NamespaceTable` per unit, because
+        # an alias is local to the unit that wrote it (`unit-namespaces.md` section 8).
+        self.namespaces: Dict[str, 'NamespaceTable'] = {}
         self.monomorphized_extensions: list['ExtendDef'] = []  # Concrete ExtendDef nodes for codegen
         self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
@@ -92,6 +96,7 @@ class SemanticAnalyzer:
             docs          doc blocks against their declarations  passes/docs.py
             externs       extern signatures, ptr unit gate       passes/types/externals.py
             libraries     library symbol registration            _register_library_*
+            namespaces    `use ... as`, one table per unit       passes/namespaces.py
             ffi-clash     an extern naming a defined symbol      passes/types/externals.py
             entrypoint    main()'s signature                     _check_main_function_args*
             instantiate   generic instantiation collection       generics/instantiate/
@@ -236,6 +241,21 @@ class SemanticAnalyzer:
             # before instantiate so the consumer's instantiations monomorphize locally.
             self._register_library_generic_structs()
             self._register_library_generic_enums()
+
+        # namespaces: what each unit may write behind a dot. After `libraries`, because
+        # a BINARY library's declarations exist only once that step has read the
+        # manifest, and before `ffi-clash`, which is the first step that asks whether a
+        # name is already taken (`unit-namespaces.md` section 3.2).
+        from sushi_lang.semantics.passes.namespaces import build_namespaces
+        all_units = self.unit_manager.units if self.unit_manager is not None else {}
+        for unit in compilation_order:
+            if unit.ast is None:
+                continue
+            unit_reporter = self._unit_reporter(unit)
+            self.namespaces[unit.name] = build_namespaces(
+                unit_reporter, unit, self.tables, units=all_units,
+                library_registry=self.library_registry)
+            self.reporter.items.extend(unit_reporter.items)
 
         # ffi-clash: an `unsafe external` may name a FOREIGN symbol, never one this
         # build defines (#470). It reads the whole program's symbols, the linked

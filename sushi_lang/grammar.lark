@@ -4,7 +4,7 @@ program: (_NEWLINE | DOC_BLOCK | toplevel)+
 toplevel: use_stmt | const_def | struct_def | enum_def | perk_def | function_def | extend_stmt | external_block
 
 const_def: PUBLIC? CONST type NAME "=" expr _NEWLINE
-use_stmt: USE (stdlib_import | lib_import | user_import) _NEWLINE
+use_stmt: USE (stdlib_import | lib_import | user_import) [AS NAME] _NEWLINE
 stdlib_import: LT use_path GT
 lib_import: LT "lib" "/" use_path GT
 user_import: STRING

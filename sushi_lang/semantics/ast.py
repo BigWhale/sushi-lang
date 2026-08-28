@@ -69,6 +69,10 @@ class UseStatement(Node):
     path: str                        # Path string like "math/integer" or "core/results"
     is_stdlib: bool = False          # True for <module>, False for "module"
     is_library: bool = False         # True for <lib/module>, False otherwise
+    # The `as NAME` clause. It decides WHERE the imported names land, and nothing
+    # else (`docs/design/unit-namespaces.md` section 2).
+    alias: Optional[str] = None
+    alias_span: Optional[Span] = None
 
 @dataclass
 class Program(Node):
@@ -84,6 +88,11 @@ class Program(Node):
     externals: List["ExternalBlock"] = None
     doc: Optional["DocBlock"] = None            # the unit block: first item, attached to nothing
     orphan_docs: List["DocBlock"] = None        # every block that documents nothing
+    # Where this unit's first WRITTEN declaration stands. Read by CE3014, and recorded
+    # here because the tree is the only place source order survives: a library's
+    # constants and private types are appended to a host unit's lists later, carrying
+    # spans from their own file.
+    first_declaration_span: Optional[Span] = None
 
     def __post_init__(self):
         if self.externals is None:

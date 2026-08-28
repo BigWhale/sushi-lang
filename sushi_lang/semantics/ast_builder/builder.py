@@ -112,6 +112,7 @@ class ASTBuilder:
         generic_extensions: List[ExtendDef] = []
         perk_impls: List[ExtendWithDef] = []
         externals_list: List[ExternalBlock] = []
+        first_declaration_span = None
 
         # Constants come first, whatever order they were written in: a fixed array's
         # size may name one, and every other declaration can hold such a type.
@@ -135,6 +136,11 @@ class ASTBuilder:
                 if use is not None:
                     uses.append(imports.parse_usestatement(use, self))
                     continue
+
+                # The first thing that is not an import. Source order lives in the tree
+                # and nowhere else, so the rule that reads it (CE3014) is served here.
+                if first_declaration_span is None:
+                    first_declaration_span = span_of(node)
 
                 const = _first_tree(node.children, "const_def") or _find_tree_recursive(node, "const_def")
                 if const is not None:
@@ -244,7 +250,8 @@ class ASTBuilder:
             self.orphan_docs.append(doc)
         self.orphan_docs.sort(key=lambda d: (d.loc.line, d.loc.col) if d.loc else (0, 0))
 
-        return Program(uses=uses, constants=constants_list, structs=structs_list, enums=enums_list, perks=perks_list, functions=funcs, extensions=extensions_list, generic_extensions=generic_extensions, perk_impls=perk_impls, externals=externals_list, loc=span_of(tree), doc=self.unit_doc, orphan_docs=self.orphan_docs)
+        return Program(uses=uses, constants=constants_list, structs=structs_list, enums=enums_list, perks=perks_list, functions=funcs, extensions=extensions_list, generic_extensions=generic_extensions, perk_impls=perk_impls, externals=externals_list, loc=span_of(tree), doc=self.unit_doc, orphan_docs=self.orphan_docs,
+                       first_declaration_span=first_declaration_span)
 
     def _parse_type(self, type_node: Tree) -> Optional[Type]:
         """Parse a type node into a Type object."""

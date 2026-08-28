@@ -118,3 +118,7 @@ _add(ErrorMessage("CW7006", Severity.WARNING,
 _add(ErrorMessage("CW5001", Severity.WARNING,
     "unsafe external block suspends four Sushi guarantees (add `because \"...\"` to acknowledge)",
     Category.TYPE, "An `unsafe external` block disables borrow checking, RAII, Result/Maybe error handling, and bounds/null safety for the foreign declarations it contains. Provide a `because \"<reason>\"` clause to acknowledge the contract and silence this warning."))
+
+_add(ErrorMessage("CW3004", Severity.WARNING,
+    "'{alias}' binds an empty namespace", Category.UNIT,
+    "The import brought no name that a qualified form could reach, so the `as` clause does nothing. It is a warning and not an error because a namespace is empty for three reasons and only one of them is a mistake: a method interface such as `<io/stdio>` can never bring a name; a unit that is nothing but `extend` blocks exports methods rather than names, and is load-bearing anyway; and a public surface that happens to be empty today is one declaration away from changing. Refusing the first two would refuse a good import for a redundant clause, and refusing the third would make an error appear and disappear as a library grew. The import still did its work. Drop the `as`."))
