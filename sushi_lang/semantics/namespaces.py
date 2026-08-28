@@ -202,6 +202,19 @@ class NamespaceTable:
         return None if bound is None else bound.loc
 
 
+def suggest_member(members: Iterable[str], written: str) -> Optional[str]:
+    """The member a misspelt name most likely meant, or None when none is close.
+
+    One reader for every position that can miss: a call, a value and a type all quote
+    the same list. The measure is `difflib`'s ratio at its usual 0.6 cut-off, which is
+    what a "did you mean" line is worth -- a namespace holds tens of names, not
+    thousands, so the cost of ranking them all is nothing.
+    """
+    from difflib import get_close_matches
+    matches = get_close_matches(written, tuple(members), n=1)
+    return matches[0] if matches else None
+
+
 def externals_only(external_table: Any) -> NamespaceTable:
     """The FFI namespaces alone, for a reader with no unit of its own.
 

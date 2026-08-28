@@ -124,15 +124,27 @@ class BoundedTypeParam:
     constraints: List[str] = None  # Perk names (e.g., ["Hashable", "Eq"])
     loc: Optional[Span] = None
     is_pack: bool = False          # True for a variadic type pack (...Ts)
+    # The alias each constraint was written behind, index-aligned with `constraints`
+    # and None where it was written bare. The perk name stays the table key: a
+    # qualifier picks WHICH declaration is meant and never makes a second perk.
+    constraint_namespaces: List[Optional[str]] = None
 
     def __post_init__(self):
         if self.constraints is None:
             self.constraints = []
+        if self.constraint_namespaces is None:
+            self.constraint_namespaces = [None] * len(self.constraints)
+
+    def written_constraints(self) -> List[str]:
+        """Each constraint as the user wrote it, for a diagnostic to quote."""
+        return [name if ns is None else f"{ns}.{name}"
+                for name, ns in zip(self.constraints, self.constraint_namespaces,
+                                    strict=False)]
 
     def __str__(self) -> str:
         prefix = "..." if self.is_pack else ""
         if self.constraints:
-            constraints_str = " + ".join(self.constraints)
+            constraints_str = " + ".join(self.written_constraints())
             return f"{prefix}{self.name}: {constraints_str}"
         return f"{prefix}{self.name}"
 

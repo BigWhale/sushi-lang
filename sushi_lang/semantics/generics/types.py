@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo, StructType
@@ -152,6 +152,9 @@ class GenericTypeRef:
     """Reference to a generic type with concrete type arguments."""
     base_name: str                    # Generic type name (e.g., "Result", "Option", "Pair", "Box")
     type_args: tuple[Type, ...]       # Concrete type arguments (e.g., (BuiltinType.I32,))
+    # The alias the base name was written behind. Identity ignores it, exactly as
+    # `UnknownType.namespace` is ignored: the interned name is what `__str__` spells.
+    namespace: Optional[str] = None
 
     def __str__(self) -> str:
         args = ", ".join(str(t) for t in self.type_args)

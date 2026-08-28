@@ -24,6 +24,13 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
     if type_obj is None:
         return
 
+    # A name written behind an alias answers to the namespace that holds it before it
+    # answers to anything else (`docs/design/unit-namespaces.md` section 5). What
+    # survives carries the bare name and every rule below reads it unchanged.
+    from .qualified import reject_qualified_type
+    if reject_qualified_type(validator, type_obj, span):
+        return
+
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(type_obj, GenericTypeRef):
         # CE2419. Checked FIRST and with NO Maybe/Result exemption, unlike the `ptr` gate

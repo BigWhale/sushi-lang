@@ -131,6 +131,11 @@ class TypeValidator:
         # generic is reached, since the loop below skips one.
         check_public_signatures(self, program)
 
+        # The same reason, for the same reader: a constraint rides on a declaration's
+        # type parameters, and the loop below never visits a generic function.
+        from .qualified import check_qualified_constraints
+        check_qualified_constraints(self, program)
+
         for const in program.constants:
             self._validate_constant(const)
 
