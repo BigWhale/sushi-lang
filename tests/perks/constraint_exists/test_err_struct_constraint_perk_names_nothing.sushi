@@ -1,0 +1,9 @@
+# The same constraint on a struct's type parameter (#505).
+# EXPECT_ERROR_CODE: CE4003
+
+struct Box@(T: Nope):
+    T item
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

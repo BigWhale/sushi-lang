@@ -1,0 +1,8 @@
+# A unit that declares a public perk, so a consumer can name it in a constraint
+# both bare (with a flat import) and behind an alias.
+public perk Loud:
+    fn volume() i32
+
+extend i32 with Loud:
+    fn volume() i32:
+        return self * 10

@@ -145,6 +145,10 @@ class TypeValidator:
         from .signatures import validate_declared_types
         validate_declared_types(self, program)
 
+        # And the position beside a declared type: the perk a constraint names (#505).
+        from .perks import check_constraint_perks
+        check_constraint_perks(self, program)
+
         for const in program.constants:
             self._validate_constant(const)
 
