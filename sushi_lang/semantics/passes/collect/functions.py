@@ -241,21 +241,17 @@ class FunctionTable:
         if unit is not None:
             self.by_unit.setdefault(unit, {})[name] = sig
 
-    def lookup(self, name: str, unit_name: Optional[str] = None) -> Optional[FuncSig]:
+    def lookup(self, name: str, unit_name: Optional[str] = None,
+               scope: object = None) -> Optional[FuncSig]:
         """What the name means inside `unit_name`. One name, no dict built."""
-        if unit_name is not None:
-            own = self.by_unit.get(unit_name)
-            if own is not None and name in own:
-                return own[name]
-        return self.by_name.get(name)
+        from sushi_lang.semantics.unit_symbols import lookup_in_unit
+        return lookup_in_unit(name, self.by_unit, self.by_name, unit_name, scope)
 
-    def view_for(self, unit_name: Optional[str]) -> Dict[str, FuncSig]:
-        """What the name of a function means INSIDE `unit_name`.
-
-        The flat view, with the asking unit's own declarations on top. A unit that
-        declares a name answers its own calls with it; every other name resolves as it
-        always did. With no asking unit the flat view is the answer, unchanged.
-        """
+    def view_for(self, unit_name: Optional[str],
+                 scope: object = None) -> Dict[str, FuncSig]:
+        """What the name of a function means INSIDE `unit_name`, as one mapping."""
+        if scope is not None:
+            return scope.view(self.by_unit, self.by_name)
         if unit_name is None:
             return dict(self.by_name)
         view = dict(self.by_name)
@@ -271,17 +267,21 @@ class FunctionTable:
         """Lookup a stdlib function by module and name."""
         return self._stdlib_functions.get((module_path, function_name))
 
-    def lookup_stdlib_by_name(self, function_name: str) -> Optional[Tuple[str, Any]]:
+    def lookup_stdlib_by_name(self, function_name: str,
+                              scope: object = None) -> Optional[Tuple[str, Any]]:
         """The registry stdlib FUNCTION a bare name reaches, with its module path.
 
-        The table holds only what a `use` registered, so asking it is what makes a flat
-        import a scope rather than a hard-coded list of module names. The list it
-        replaces ran ahead of the user table and crashed the compiler on a unit that
-        declared `sin` beside `use <math>` (`docs/design/unit-namespaces.md` 1.3).
+        The table holds what every unit's `use` registered, so the asking unit's scope
+        is what narrows it to the modules THAT unit imported: a registry module is a
+        flat import like any other and reaches no further (section 6). Without a scope
+        the whole table answers, which is what a reader with no unit gets.
         """
         for (module_path, name), func in self._stdlib_functions.items():
-            if name == function_name and not getattr(func, "is_constant", False):
-                return module_path, func
+            if name != function_name or getattr(func, "is_constant", False):
+                continue
+            if scope is not None and not scope.holds_module(module_path):
+                continue
+            return module_path, func
         return None
 
     def is_stdlib_function(self, module_path: str, function_name: str) -> bool:

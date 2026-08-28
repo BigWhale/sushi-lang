@@ -104,17 +104,19 @@ class ConstantEvaluator:
 
     def __init__(self, reporter: Reporter, const_table: ConstantTable,
                  ast_constants: 'UnitKeyedSymbols[ConstDef]',
-                 unit_name: Optional[str] = None):
+                 unit_name: Optional[str] = None, scope: object = None):
         """Initialize the evaluator.
 
         `unit_name` is the unit whose constant expression is being evaluated. Two units
         may each declare a private `SCRATCH`, so a name is only an answer once the asking
-        unit is known (`docs/design/unit-namespaces.md` section 9).
+        unit is known (`docs/design/unit-namespaces.md` section 9). `scope` is the rest
+        of that answer: which OTHER units' constants this one may read at all (section 6).
         """
         self.reporter = reporter
         self.const_table = const_table
         self.ast_constants = ast_constants
         self.unit_name = unit_name
+        self.scope = scope
         self.evaluation_stack: List[str] = []  # For cycle detection
         # The FIRST operation that left its type, for a caller whose reporter is silent.
         self.overflow: Optional[ConstOverflow] = None
@@ -297,12 +299,12 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0109, span, chain=chain)
             return None
 
-        const_sig = self.const_table.lookup(const_name, self.unit_name)
+        const_sig = self.const_table.lookup(const_name, self.unit_name, self.scope)
         if const_sig is None:
             er.emit(self.reporter, er.ERR.CE1002, span, name=const_name)
             return None
 
-        const_def = self.ast_constants.lookup(const_name, self.unit_name)
+        const_def = self.ast_constants.lookup(const_name, self.unit_name, self.scope)
         if const_def is None:
             er.emit(self.reporter, er.ERR.CE1002, span, name=const_name)
             return None

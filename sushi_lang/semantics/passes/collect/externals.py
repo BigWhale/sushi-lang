@@ -24,7 +24,8 @@ class ExternalSig:
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     loc: Optional[Span] = None
-    filename: Optional[str] = None  # The unit it was declared in (#473)
+    filename: Optional[str] = None  # The file it was declared in (#473)
+    unit_name: Optional[str] = None  # The unit whose block binds the namespace (#503)
 
 
 @dataclass
@@ -82,6 +83,7 @@ class ExternalCollector:
             ret_span=decl.ret_span,
             loc=decl.loc,
             filename=self.current_unit_file,
+            unit_name=self.current_unit_name,
         )
 
         existing = self.externals.lookup(block.namespace, decl.name)

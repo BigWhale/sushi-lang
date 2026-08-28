@@ -52,14 +52,14 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     # signature and not the consumer's declaration of the same name (#487). It is
     # asked BEFORE the standard library, which is the same ladder the typecheck pass
     # walks -- a declaration beats a name a flat `use` brought in (section 8).
-    func_sig = codegen.func_table.lookup(callee, codegen.emitting_unit)
+    func_sig = codegen.func_table.lookup(callee, codegen.emitting_unit, codegen.scope)
 
     if func_sig is None:
         stdlib_func = _check_stdlib_function_codegen(codegen, callee)
         if stdlib_func is not None:
             return _emit_stdlib_function(codegen, expr, callee, stdlib_func, to_i1)
 
-    llvm_fn = codegen.funcs.lookup(callee, codegen.emitting_unit)
+    llvm_fn = codegen.funcs.lookup(callee, codegen.emitting_unit, codegen.scope)
     if llvm_fn is None:
         raise KeyError(f"unknown function: {callee}")
 
@@ -531,7 +531,7 @@ def _promote_variadic_arg(codegen: 'LLVMCodegen', value: ir.Value, sushi_ty) -> 
 
 def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -> tuple | None:
     """The registry stdlib function a bare name reaches, from the one reader."""
-    return codegen.func_table.lookup_stdlib_by_name(function_name)
+    return codegen.func_table.lookup_stdlib_by_name(function_name, codegen.scope)
 
 
 def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str,

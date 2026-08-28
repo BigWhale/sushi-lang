@@ -47,13 +47,11 @@ class ConstantTable:
         if unit is not None:
             self.by_unit.setdefault(unit, {})[name] = sig
 
-    def lookup(self, name: str, unit_name: Optional[str] = None) -> Optional[ConstSig]:
+    def lookup(self, name: str, unit_name: Optional[str] = None,
+               scope: object = None) -> Optional[ConstSig]:
         """What the name means inside `unit_name`. One name, no dict built."""
-        if unit_name is not None:
-            own = self.by_unit.get(unit_name)
-            if own is not None and name in own:
-                return own[name]
-        return self.by_name.get(name)
+        from sushi_lang.semantics.unit_symbols import lookup_in_unit
+        return lookup_in_unit(name, self.by_unit, self.by_name, unit_name, scope)
 
 
 class ConstantCollector:

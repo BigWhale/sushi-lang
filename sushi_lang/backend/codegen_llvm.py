@@ -2,7 +2,7 @@
 from __future__ import annotations
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from llvmlite import ir, binding as llvm
 
@@ -96,6 +96,11 @@ class LLVMCodegen:
         # A named callee is resolved through it, so a library's own body reads the
         # library's signature where a consumer shadows the name (#487).
         self.emitting_unit: Optional[str] = None
+        # What each unit may write with no qualifier, handed over by the semantic
+        # analyser. The back end resolves a bare callee through the SAME ladder the
+        # typecheck pass walked, or two units declaring one name would bind the call to
+        # whichever the flat view happened to hold (`unit-namespaces.md` section 6).
+        self.unit_scopes: Dict[str, Any] = {}
         self.perk_impl_table = perk_impl_table or PerkImplementationTable()
         self.const_table = const_table or ConstantTable()
         from sushi_lang.semantics.passes.collect import ExternalTable
@@ -189,6 +194,22 @@ class LLVMCodegen:
         # the type is self-referential and gets a call to its out-of-line destructor.
         self._dtor_inprogress: list[str] = []
         self._dtor_funcs: Dict[str, ir.Function] = {}
+
+    def scope_of(self, unit_name: Optional[str]):
+        """What `unit_name` may write with no qualifier, or an unrestricted scope.
+
+        A constant's initializer is folded outside the per-unit walk, with the unit
+        handed in, so the scope has to follow the unit whose expression is read and
+        not whichever unit's bodies are being emitted.
+        """
+        from sushi_lang.semantics.namespaces import UnitScope
+        found = self.unit_scopes.get(unit_name)
+        return found if found is not None else UnitScope.unrestricted()
+
+    @property
+    def scope(self):
+        """The scope of the unit being emitted, or an unrestricted one outside a unit."""
+        return self.scope_of(self.emitting_unit)
 
     @property
     def printf(self) -> ir.Function | None:
@@ -998,8 +1019,9 @@ class LLVMCodegen:
 
         # A silent reporter: the typecheck pass has already reported anything wrong with this.
         silent_reporter = Reporter()
+        evaluating_unit = unit_name or self.emitting_unit
         evaluator = ConstantEvaluator(silent_reporter, self.const_table, self.ast_constants,
-                                      unit_name or self.emitting_unit)
+                                      evaluating_unit, self.scope_of(evaluating_unit))
         return evaluator.evaluate(expr, expected_type, None)
 
     def _materialize_constant(self, value, data_name: str) -> Optional[ir.Constant]:

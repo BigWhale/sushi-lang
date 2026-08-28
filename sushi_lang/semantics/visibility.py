@@ -167,21 +167,26 @@ class VisibilityTable:
         return any(other.unit_name == unit
                    for other in self.contested.get((kind, name), ()))
 
-    def candidates(self, kind: str, name: str,
-                   unit: Optional[str]) -> list[DeclOrigin]:
+    def candidates(self, kind: str, name: str, unit: Optional[str],
+                   scope: Any = None) -> list[DeclOrigin]:
         """Every declaration of this name that `unit` may name, its own excluded.
 
         The answer to "what could an unqualified name mean here". Two or more is
         `CE3012` (`docs/design/unit-namespaces.md` section 6): the asking unit's own
         declaration wins outright, and a private one next door is not a candidate at
         all -- it is not nameable, so it cannot be part of an ambiguity.
+
+        `scope` narrows the same predicate to the units this one imported. A name a
+        unit next door imported was a candidate while the flat scope was the whole
+        program, and stops being one when the scope stops at the import.
         """
         winner = self.by_key.get((kind, name))
         if winner is None:
             return []
         found = [winner, *self.contested.get((kind, name), ())]
         return [origin for origin in found
-                if origin.unit_name != unit and _permitted(origin, unit)]
+                if origin.unit_name != unit and _permitted(origin, unit)
+                and (scope is None or scope.holds_unit(origin.unit_name))]
 
     def is_visible_from(self, kind: str, name: str, unit: Optional[str]) -> bool:
         """May `unit` name this declaration? An unrecorded name always may."""

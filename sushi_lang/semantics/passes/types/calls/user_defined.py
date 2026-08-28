@@ -6,8 +6,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, StructType
 from sushi_lang.semantics.ast import Call, Name, Spread
-from ..visibility import (name_is_contested, reject_ambiguous_name,
-                          reject_private_call,
+from ..visibility import (name_is_contested, out_of_scope_help,
+                          reject_ambiguous_name, reject_private_call,
                           reject_private_kept_call)
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
@@ -194,6 +194,9 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         if function_name in validator.generic_struct_table.by_name:
             diag.help("generic struct constructors require explicit type parameters "
                       "in variable declarations")
+        missing = out_of_scope_help(validator, "function", function_name)
+        if missing is not None:
+            diag.help(missing)
         diag.emit()
         return
 
@@ -331,7 +334,8 @@ def validate_open_function(validator: 'TypeValidator', call: Call) -> None:
 
 def check_stdlib_function(validator: 'TypeValidator', call: Call) -> Optional[any]:
     """The registry stdlib function a bare name reaches, with the module that has it."""
-    return validator.func_table.lookup_stdlib_by_name(written_callee(call)[0])
+    return validator.func_table.lookup_stdlib_by_name(written_callee(call)[0],
+                                                      validator.scope)
 
 
 def written_callee(call) -> tuple:

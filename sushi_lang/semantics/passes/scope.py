@@ -143,7 +143,14 @@ class ScopeAnalyzer:
             return True
         if name in self.kept_constants:
             return True
-        return name in self.constants.by_name or name in self.function_names
+        # Section 6: a constant of a unit this one did not import is not a name here,
+        # so the same walk that would have called it a global says CE1001 instead. The
+        # function half stays flat -- an out-of-scope CALL is the typecheck pass's
+        # CE2008, which says which unit declares it.
+        if self.constants.lookup(name, self.namespaces.scope.unit,
+                                 self.namespaces.scope) is not None:
+            return True
+        return name in self.function_names
 
     def _use_variable(self, name: str, usage_span: Optional[Span] = None, is_rebind: bool = False) -> None:
         """Mark a variable as used, searching through scope stack."""
@@ -155,8 +162,43 @@ class ScopeAnalyzer:
 
         if is_rebind:
             self.err.emit(er.ERR.CE1002, usage_span, name=name)
-        else:
-            self.err.emit(er.ERR.CE1001, usage_span, name=name)
+            return
+        diagnostic = er.emit_with(self.reporter, er.ERR.CE1001, usage_span, name=name)
+        help_line = self._declared_elsewhere(name)
+        if help_line is not None:
+            diagnostic = diagnostic.help(help_line)
+        diagnostic.emit()
+
+    def _declared_elsewhere(self, name: str) -> Optional[str]:
+        """Where a name that reaches nothing here IS declared, or None (section 6).
+
+        Two producers can hold a name a unit cannot write: another unit's constant,
+        which an import would bring, and another unit's `unsafe external` block, which
+        nothing can bring -- a block binds its namespace where it is written.
+        """
+        from sushi_lang.semantics.namespaces import import_help
+        scope = self.namespaces.scope
+        owner = next(iter(scope.declaring_units(name, self.constants.by_unit)), None)
+        if owner is not None:
+            return import_help(owner)
+        elsewhere = self._namespace_bound_elsewhere(name)
+        if elsewhere is None:
+            return None
+        return (f"unit '{elsewhere}' binds the namespace '{name}'; an `unsafe external` "
+                f"block binds its namespace in the unit that writes it")
+
+    def _namespace_bound_elsewhere(self, name: str) -> Optional[str]:
+        """The unit whose `unsafe external` block binds this namespace, if another does.
+
+        The external table is program-wide and the BINDING is per unit (#503), so a
+        name that reaches nothing here can still be a namespace next door -- and saying
+        so is the difference between "undeclared" and "declared, elsewhere".
+        """
+        declared = getattr(self.external_table, "by_namespace", {}).get(name)
+        if not declared:
+            return None
+        return next((sig.unit_name for sig in declared.values()
+                     if sig.unit_name is not None), None)
 
     def _borrow_variable(self, name: str, usage_span: Optional[Span] = None) -> None:
         """A borrow needs a LOCAL. Mark it used, or say which way it is not one."""

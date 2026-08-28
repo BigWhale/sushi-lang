@@ -159,11 +159,16 @@ class TypeValidator:
         `docs/design/unit-namespaces.md` -- #487 for a library, and an ICE (CE0026) for
         two ordinary units once the two symbols were allowed to coexist.
         """
-        return self.func_table.lookup(name, self.current_unit_name)
+        return self.func_table.lookup(name, self.current_unit_name, self.scope)
 
     def const_sig(self, name: str) -> Optional['ConstSig']:
         """What the name of a constant means INSIDE the unit being validated."""
-        return self.const_table.lookup(name, self.current_unit_name)
+        return self.const_table.lookup(name, self.current_unit_name, self.scope)
+
+    @property
+    def scope(self):
+        """What this unit may write with no qualifier (section 6)."""
+        return self.namespaces.scope
 
     def validate_expression(self, expr: Expr) -> Optional[Type]:
         """Validate an expression and its subexpressions using the Visitor Pattern."""

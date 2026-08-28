@@ -887,6 +887,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         #
         # math keeps its own branch below -- its return type depends on the arguments.
         for module_path in _REGISTRY_TYPED_STDLIB_MODULES:
+            if not self.type_validator.scope.holds_module(module_path):
+                continue
             stdlib_func = self.type_validator.func_table.lookup_stdlib_function(
                 module_path, function_name
             )

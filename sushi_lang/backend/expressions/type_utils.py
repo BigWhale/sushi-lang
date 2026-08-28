@@ -81,7 +81,7 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
             return local_type
         const_table = getattr(codegen, 'const_table', None)
         if const_table is not None:
-            sig = const_table.lookup(expr.id, codegen.emitting_unit)
+            sig = const_table.lookup(expr.id, codegen.emitting_unit, codegen.scope)
             if sig is not None and sig.const_type is not None:
                 return sig.const_type
         return None

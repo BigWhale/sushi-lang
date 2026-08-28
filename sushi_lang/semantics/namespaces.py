@@ -19,9 +19,97 @@ There is no string here for packaging to get wrong.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import AbstractSet, Any, Dict, Iterable, Mapping, Optional
+from typing import (AbstractSet, Any, Dict, Iterable, Mapping, Optional, Tuple,
+                    TypeVar)
 
 from sushi_lang.internals.report import Span
+
+
+V = TypeVar("V")
+
+
+@dataclass(frozen=True)
+class UnitScope:
+    """What ONE unit may write with NO qualifier (section 6).
+
+    A unit sees its own declarations, plus what its own FLAT `use` statements bring.
+    Nothing else. An import is not re-exported, so a name a unit next door imported is
+    not a name here, and an `as` import contributes nothing at all -- the alias is the
+    gate, and `NamespaceTable` beside this is where it lands.
+
+    Two memberships, one per producer that can put a name into the flat scope: a
+    compilation unit, and a registry stdlib module. A declaration that belongs to no
+    unit -- a monomorphized instance, a lifted lambda, a binary library's record, every
+    synthesized type -- is in scope everywhere, which is the escape `visibility._permitted`
+    takes for the same reason.
+
+    `units` is a TUPLE in `use` order, so which declaration answers is decided the same
+    way twice. A name two imports offer is `CE3012` at the use, and the reader that has a
+    span to point at is the one that reports it.
+    """
+
+    unit: Optional[str] = None
+    units: Tuple[str, ...] = ()
+    modules: Tuple[str, ...] = ()
+    everything: bool = True
+
+    @classmethod
+    def unrestricted(cls) -> "UnitScope":
+        """The scope of a reader with no unit of its own: a scratch validator."""
+        return cls()
+
+    def holds_unit(self, unit_name: Optional[str]) -> bool:
+        """May a declaration of `unit_name` be written here without a qualifier?"""
+        return (self.everything or unit_name is None
+                or unit_name == self.unit or unit_name in self.units)
+
+    def holds_module(self, module_path: Optional[str]) -> bool:
+        """May a registry stdlib module's function be written here bare?"""
+        return (self.everything or module_path is None
+                or module_path in self.modules)
+
+    def resolve(self, name: str, by_unit: Mapping[str, Mapping[str, V]],
+                flat: Mapping[str, V]) -> Optional[V]:
+        """Section 8's ladder, rows 2 and 3, over any unit-keyed table.
+
+        The asking unit's own declaration answers first. Then the units a flat `use`
+        brought, in the order they were written. A name that some unit declares and no
+        import brought is not a name here at all, and only a name no unit declares
+        falls through to the flat view -- which is where everything with no unit lives.
+        """
+        if self.unit is not None:
+            own = by_unit.get(self.unit)
+            if own is not None and name in own:
+                return own[name]
+        if self.everything:
+            return flat.get(name)
+        for unit_name in self.units:
+            declared = by_unit.get(unit_name)
+            if declared is not None and name in declared:
+                return declared[name]
+        if any(name in declared for declared in by_unit.values()):
+            return None
+        return flat.get(name)
+
+    def declaring_units(self, name: str,
+                        by_unit: Mapping[str, Mapping[str, V]]) -> Tuple[str, ...]:
+        """The units that declare `name` and this one may not write it through."""
+        return tuple(unit_name for unit_name, declared in by_unit.items()
+                     if name in declared and not self.holds_unit(unit_name))
+
+    def view(self, by_unit: Mapping[str, Mapping[str, V]],
+             flat: Mapping[str, V]) -> Dict[str, V]:
+        """The same ladder as one mapping, for a reader that wants every name at once."""
+        if self.everything:
+            merged = dict(flat)
+        else:
+            owned = {name for declared in by_unit.values() for name in declared}
+            merged = {name: value for name, value in flat.items() if name not in owned}
+            for unit_name in reversed(self.units):
+                merged.update(by_unit.get(unit_name, {}))
+        if self.unit is not None:
+            merged.update(by_unit.get(self.unit, {}))
+        return merged
 
 
 @dataclass(frozen=True)
@@ -184,10 +272,17 @@ class _Bound:
 
 
 class NamespaceTable:
-    """Every namespace ONE unit binds. An alias is local to the unit that wrote it."""
+    """Every namespace ONE unit binds, and what it may write with no qualifier.
 
-    def __init__(self) -> None:
+    Both halves of "where a name may be written" for one unit: `bind` holds what is
+    reachable behind a dot, and `scope` holds what is reachable bare. They are one
+    object because every reader of the first needs the second, and because one `use`
+    statement contributes to exactly one of them -- `as` is the gate.
+    """
+
+    def __init__(self, scope: Optional[UnitScope] = None) -> None:
         self._bound: Dict[str, _Bound] = {}
+        self.scope: UnitScope = scope if scope is not None else UnitScope.unrestricted()
 
     def bind(self, alias: str, provider: Provider, loc: Optional[Span] = None) -> None:
         """Bind a namespace. The caller has already refused a collision (CE3013)."""
@@ -229,6 +324,18 @@ def suggest_member(members: Iterable[str], written: str) -> Optional[str]:
     from difflib import get_close_matches
     matches = get_close_matches(written, tuple(members), n=1)
     return matches[0] if matches else None
+
+
+def import_help(origin: str, *, stdlib: bool = False) -> str:
+    """The line that names the import an out-of-scope name needs (section 6.1).
+
+    Section 6's refusal is an ordinary "no such name", because that is what it is: the
+    name is not in this unit's scope. This line is what turns the refusal into a fix,
+    and it is one line for every position, so a call, a type and a bare read all say
+    the same thing.
+    """
+    written = f"<{origin}>" if stdlib else f'"{origin}"'
+    return f"'{origin}' declares it; add `use {written}` above to name it here"
 
 
 def externals_only(external_table: Any) -> NamespaceTable:

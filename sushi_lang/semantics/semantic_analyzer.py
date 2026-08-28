@@ -477,7 +477,8 @@ class SemanticAnalyzer:
             # -- both are DotCall here. BASE names only: the receiver is written bare.
             borrow_checker = BorrowChecker(unit_reporter, destroy_effects=destroy_effects,
                                            enum_names=enum_names, tables=self.tables,
-                                           unit_name=unit.name)
+                                           unit_name=unit.name,
+                                           scope=namespaces.scope if namespaces else None)
             borrow_checker.run(unit.ast)
 
             self.reporter.items.extend(unit_reporter.items)

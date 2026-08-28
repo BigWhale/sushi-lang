@@ -7,6 +7,11 @@ that asks whether a name is already taken -- so the pass stands between the two.
 It answers three rules per unit: every import comes first (`CE3014`), an alias binds a
 name nothing else in the unit binds (`CE3013`), and an `as` that reaches no name says so
 (`CW3004`).
+
+Every `use` statement is read here, aliased or not, because one statement contributes to
+exactly one half of the same answer: `as` puts what the import brings behind a dot, and
+its absence puts it into the unit's flat scope (section 6). One walk, one provider per
+statement, and the two halves cannot disagree about what an import brought.
 """
 from __future__ import annotations
 
@@ -16,12 +21,13 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program, UseStatement
 from sushi_lang.semantics.namespaces import (
+    ExternalNamespace,
     GenericNamespace,
     NamespaceTable,
     Provider,
     StdlibNamespace,
     UnitNamespace,
-    externals_only,
+    UnitScope,
 )
 
 # The kinds a namespace holds that a qualified form cannot reach yet. They are members
@@ -37,26 +43,64 @@ def build_namespaces(reporter: Reporter, unit: Any, tables: Any, *,
 
     _reject_use_below_declaration(reporter, unit)
 
-    # Every FFI namespace in the program first: `ExternalTable` is flat and has always
-    # answered a `libc.printf` from any unit. The alias is what this pass adds; the FFI
-    # reach is what it preserves.
-    table = externals_only(getattr(tables, "externals", None))
+    table = NamespaceTable()
+
+    # The FFI namespaces THIS unit declares. An `unsafe external` block is declared in
+    # one unit (section 3), so the namespace it binds is that unit's, exactly as a `use`
+    # is (#503). The table was program-wide until the per-unit scope existed to say what
+    # the reach should be instead.
+    external_table = getattr(tables, "externals", None)
+    for block in program.externals or ():
+        table.bind(block.namespace, ExternalNamespace(external_table, block.namespace))
 
     declared = _names_declared_by(program)
+    flat: list[Tuple[UseStatement, Provider]] = []
 
     for use_stmt in program.uses or ():
+        provider = _provider_for(use_stmt, tables, units, library_registry, unit)
         alias = use_stmt.alias
         if alias is None:
+            flat.append((use_stmt, provider))
             continue
         if _reject_alias_collision(reporter, table, declared, use_stmt, alias):
             continue
-        provider = _provider_for(use_stmt, tables, units, library_registry)
         table.bind(alias, provider, use_stmt.alias_span or use_stmt.loc)
         if not tuple(provider.members()):
             er.emit(reporter, er.ERR.CW3004,
                     use_stmt.alias_span or use_stmt.loc, alias=alias)
 
+    table.scope = _scope_of(unit, flat, units)
     return table
+
+
+def _scope_of(unit: Any, flat: Iterable[Tuple[UseStatement, Provider]],
+              units: Dict[str, Any]) -> UnitScope:
+    """What this unit may write with no qualifier, from its FLAT imports alone.
+
+    A LIBRARY import names the whole artifact: a `.slib` has no syntax for naming one
+    of its units, so scoping the import to the matched unit would leave a multi-unit
+    library's second unit unreachable with no escape. A library unit importing its own
+    sibling wrote an ordinary `use`, and gets the sibling and nothing more.
+    """
+    scoped_units: list[str] = []
+    modules: list[str] = []
+    for use_stmt, provider in flat:
+        if provider.namespace_kind == "stdlib":
+            modules.append(provider.origin)
+        elif provider.namespace_kind == "unit":
+            scoped_units.append(provider.origin)
+            if use_stmt.is_library:
+                scoped_units.extend(_library_units(provider.origin, units))
+    return UnitScope(unit=unit.name, units=tuple(dict.fromkeys(scoped_units)),
+                     modules=tuple(dict.fromkeys(modules)), everything=False)
+
+
+def _library_units(unit_name: str, units: Dict[str, Any]) -> Iterable[str]:
+    """Every unit of the source library `unit_name` belongs to, if it is one."""
+    if not unit_name.startswith("lib/"):
+        return ()
+    library = "/".join(unit_name.split("/")[:2])
+    return tuple(name for name in units if name.startswith(f"{library}/"))
 
 
 def _reject_use_below_declaration(reporter: Reporter, unit: Any) -> None:
@@ -128,13 +172,30 @@ def _reject_alias_collision(reporter: Reporter, table: NamespaceTable,
 
 
 def _provider_for(use_stmt: UseStatement, tables: Any, units: Dict[str, Any],
-                  library_registry: Any) -> Provider:
-    """What the alias binds. A provider, never a written path (section 3.1)."""
+                  library_registry: Any, host: Any = None) -> Provider:
+    """What one `use` brings. A provider, never a written path (section 3.1)."""
     if use_stmt.is_library:
         return _library_provider(use_stmt, tables, units, library_registry)
     if use_stmt.is_stdlib:
         return _stdlib_provider(use_stmt, tables, units)
-    return _unit_provider(use_stmt.path, tables)
+    return _unit_provider(_imported_unit(use_stmt.path, host, units), tables)
+
+
+def _imported_unit(path: str, host: Any, units: Dict[str, Any]) -> str:
+    """Which UNIT a `use "path"` names, from the unit that wrote it.
+
+    A path is main-relative and is the unit name for every unit the consumer wrote.
+    A source library's units were RENAMED when they were injected (`lib/<name>/<unit>`)
+    and their `use` statements were not, so a library unit importing its sibling means
+    the sibling under its own library's prefix.
+    """
+    if not getattr(host, "from_library", False):
+        return path
+    name = getattr(host, "name", "") or ""
+    if not name.startswith("lib/"):
+        return path
+    candidate = f'{"/".join(name.split("/")[:2])}/{path}'
+    return candidate if candidate in units else path
 
 
 def _unit_provider(unit_name: str, tables: Any) -> UnitNamespace:

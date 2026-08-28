@@ -399,7 +399,7 @@ def reject_overflowing_operation(validator: 'TypeValidator', expr: Expr,
 
     evaluator = ConstantEvaluator(Reporter(), validator.const_table,
                                   validator.ast_constants,
-                                  validator.current_unit_name)
+                                  validator.current_unit_name, validator.scope)
     evaluator.evaluate(expr, result_type, expr.loc)
 
     overflow = evaluator.overflow
@@ -420,7 +420,7 @@ def _provable_shift_count(validator: 'TypeValidator', count: Expr) -> Optional[i
 
     evaluator = ConstantEvaluator(Reporter(), validator.const_table,
                                   validator.ast_constants,
-                                  validator.current_unit_name)
+                                  validator.current_unit_name, validator.scope)
     value = evaluator.evaluate(count, BuiltinType.I64, None)
     if value is None or not isinstance(value.value, int) or isinstance(value.value, bool):
         return None

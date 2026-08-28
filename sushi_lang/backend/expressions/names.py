@@ -16,7 +16,7 @@ def resolve_name_slot(codegen: 'LLVMCodegen', name: str) -> Optional[ir.Value]:
     slot = codegen.memory.try_find_local_slot(name)
     if slot is not None:
         return slot
-    return codegen.constants.lookup(name, codegen.emitting_unit)
+    return codegen.constants.lookup(name, codegen.emitting_unit, codegen.scope)
 
 
 def resolve_name_semantic_type(codegen: 'LLVMCodegen', name: str) -> Optional['Type']:
@@ -27,7 +27,7 @@ def resolve_name_semantic_type(codegen: 'LLVMCodegen', name: str) -> Optional['T
     semantic_ty = codegen.variable_types.get(name)
     if semantic_ty is not None:
         return semantic_ty
-    const_sig = codegen.const_table.lookup(name, codegen.emitting_unit)
+    const_sig = codegen.const_table.lookup(name, codegen.emitting_unit, codegen.scope)
     return const_sig.const_type if const_sig is not None else None
 
 
@@ -52,7 +52,7 @@ def emit_name(codegen: 'LLVMCodegen', expr: Name, to_i1: bool) -> ir.Value:
     # Neither a local nor a constant: a bare reference to a top-level function is a
     # first-class function value -> a non-capturing fat pointer {thunk, null, null}.
     # The thunk bridges the bare fn into the uniform env-passing indirect ABI.
-    llvm_fn = codegen.funcs.lookup(expr.id, codegen.emitting_unit)
+    llvm_fn = codegen.funcs.lookup(expr.id, codegen.emitting_unit, codegen.scope)
     if llvm_fn is not None:
         from sushi_lang.backend.runtime import closures
         return closures.materialize_function_ref(codegen, llvm_fn)

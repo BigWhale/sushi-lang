@@ -1,6 +1,8 @@
 # An FFI namespace is bound by the unit that DECLARES the block (#503). The unit
-# next door binds `libc`; this one binds nothing of the sort.
-# EXPECT_ERROR_CODE: CE2008
+# next door binds `libc`; this one binds nothing of the sort, so the name reaches
+# nothing at all and the help line says where the block is.
+# EXPECT_ERROR_CODE: CE1001
+# EXPECT_STDERR_CONTAINS: binds the namespace 'libc'
 use "helpers/ffi_holder"
 
 fn main() i32:

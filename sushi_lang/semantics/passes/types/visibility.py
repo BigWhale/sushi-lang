@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, AbstractSet, Any, Optional
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.namespaces import import_help
 from sushi_lang.semantics.visibility import (
     DeclOrigin,
     origin_of,
@@ -20,10 +21,33 @@ from sushi_lang.semantics.visibility import (
 if TYPE_CHECKING:
     from . import TypeValidator
 
-__all__ = ["name_is_contested", "reject_ambiguous_name",
+__all__ = ["name_is_contested", "out_of_scope_help", "reject_ambiguous_name",
            "reject_private_call", "reject_private_kept",
            "reject_private_kept_call", "reject_private_name",
            "reject_private_type"]
+
+
+def out_of_scope_help(validator: 'TypeValidator', kind: str,
+                      name: str) -> Optional[str]:
+    """The help line for a name some unit declares and THIS unit did not import.
+
+    The scope seam's question at a use site, and the sibling of every rule below: both
+    live here because both need the validator, and neither may answer for the other. A
+    name refused for being out of scope is refused as "no such name", so this line is
+    the only thing that says where the name is.
+    """
+    table = getattr(validator, "visibility", None)
+    if table is not None:
+        for origin in table.candidates(kind, name, validator.current_unit_name):
+            if (origin.unit_name is not None
+                    and not validator.scope.holds_unit(origin.unit_name)):
+                return import_help(origin.unit_name)
+    if kind != "function":
+        return None
+    found = validator.func_table.lookup_stdlib_by_name(name)
+    if found is not None and not validator.scope.holds_module(found[0]):
+        return import_help(found[0], stdlib=True)
+    return None
 
 
 def name_is_contested(validator: 'TypeValidator', kind: str, name: str) -> bool:
@@ -51,7 +75,8 @@ def reject_ambiguous_name(validator: 'TypeValidator', kind: str, name: str,
     table = getattr(validator, "visibility", None)
     if table is None:
         return False
-    candidates = table.candidates(kind, name, validator.current_unit_name)
+    candidates = table.candidates(kind, name, validator.current_unit_name,
+                                  validator.scope)
     if len(candidates) < 2:
         return False
 

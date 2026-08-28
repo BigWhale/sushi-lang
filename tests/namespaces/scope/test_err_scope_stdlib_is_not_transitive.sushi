@@ -1,6 +1,7 @@
 # A registry stdlib module is a flat import like any other, so it is in the
 # scope of the unit that wrote the `use` and of no other.
 # EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: add `use <math>`
 use "helpers/mathy"
 
 fn main() i32:

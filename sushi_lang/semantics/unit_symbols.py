@@ -7,7 +7,7 @@ by the back end when it declares and by the `.slib` producer when it records
 """
 from __future__ import annotations
 
-from typing import Dict, Generic, Iterator, Optional, TypeVar
+from typing import Dict, Generic, Iterator, Mapping, Optional, TypeVar
 
 V = TypeVar("V")
 
@@ -31,6 +31,29 @@ def mangle_unit_symbol(unit_name: Optional[str], name: str) -> str:
     if unit_name is None or name in EXEMPT:
         return name
     return f"{unit_name.replace('/', UNIT_SEP)}{UNIT_SEP}{name}"
+
+
+def lookup_in_unit(name: str, by_unit: Mapping[str, Mapping[str, V]],
+                   flat: Mapping[str, V], unit: Optional[str] = None,
+                   scope: object = None) -> Optional[V]:
+    """What a bare name means inside one unit. The ONE ladder, over any such pair.
+
+    Three tables are keyed this way -- the collected functions, the collected constants
+    and the back end's declared symbols -- and section 8's ladder must read the same in
+    all three, or the back end binds a call to a declaration the front end refused.
+
+    With a `UnitScope` the ladder is the whole rule (`semantics/namespaces.py`). Without
+    one the reader has no unit scope to ask -- a scratch validator, a table built by
+    hand in a test -- and gets the asking unit's own declaration over the flat view,
+    which is what the pair meant before a scope existed.
+    """
+    if scope is not None:
+        return scope.resolve(name, by_unit, flat)
+    if unit is not None:
+        own = by_unit.get(unit)
+        if own is not None and name in own:
+            return own[name]
+    return flat.get(name)
 
 
 class UnitKeyedSymbols(Generic[V]):
@@ -68,13 +91,10 @@ class UnitKeyedSymbols(Generic[V]):
             return self.by_name.get(name)
         return self.by_unit.get(unit, {}).get(name)
 
-    def lookup(self, name: str, unit: Optional[str] = None) -> Optional[V]:
+    def lookup(self, name: str, unit: Optional[str] = None,
+               scope: object = None) -> Optional[V]:
         """What the name means inside `unit`."""
-        if unit is not None:
-            own = self.by_unit.get(unit)
-            if own is not None and name in own:
-                return own[name]
-        return self.by_name.get(name)
+        return lookup_in_unit(name, self.by_unit, self.by_name, unit, scope)
 
     def get(self, name: str) -> Optional[V]:
         """The flat view, for a symbol that belongs to no unit."""
