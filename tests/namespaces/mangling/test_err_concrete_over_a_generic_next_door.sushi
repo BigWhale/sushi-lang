@@ -1,0 +1,12 @@
+# The same rule from the other side: a CONCRETE declaration beside another unit's
+# generic of that name is refused too. The generic table answers a call before the
+# concrete one does, so the concrete declaration could not win its own call.
+# EXPECT_ERROR_CODE: CE0101
+use "helpers/generic_twin"
+
+fn twin(i32 x) i32:
+    return Result.Ok(x * 3)
+
+fn main() i32:
+    println("{twin(2).realise(0)} {twin_use().realise(0)}")
+    return Result.Ok(0)

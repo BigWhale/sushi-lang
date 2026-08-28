@@ -469,8 +469,8 @@ class FunctionCollector:
             for _const_name, stdlib_const in module.constants.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_const)
 
-    def _redeclaration(self, name: str, name_span: Optional[Span],
-                       prev) -> Redeclaration:
+    def _redeclaration(self, name: str, name_span: Optional[Span], prev,
+                       *, may_coexist: bool) -> Redeclaration:
         """A name already taken. What that means for the declaration taking it again.
 
         Four answers, and who owns the previous declaration decides which. A library's
@@ -483,6 +483,12 @@ class FunctionCollector:
         units COEXISTS: each declaration takes its own `<unit>$<name>` symbol, so
         neither has to lose (`docs/design/unit-namespaces.md` section 9). The same name
         twice inside ONE unit is the duplicate CE0101 still answers.
+
+        `may_coexist` is FALSE wherever a GENERIC is one of the two. `FunctionTable`
+        carries a per-unit view and `GenericFunctionTable` does not, so a generic name is
+        still one declaration for the whole program: two of them would leave each unit's
+        call measured against the other's declaration, which is section 13.1 again. A
+        generic coexists once its table carries the same two views.
         """
         clash = library_clash_origin(
             self.visibility, "function", name,
@@ -495,7 +501,7 @@ class FunctionCollector:
                                  filename=self.current_unit_file)
             return Redeclaration.REFUSED
         prev_unit = getattr(prev, "unit_name", None)
-        if prev_unit is not None and prev_unit != self.current_unit_name:
+        if may_coexist and prev_unit is not None and prev_unit != self.current_unit_name:
             return Redeclaration.COEXIST
         er.emit_with(self.r, ERR.CE0101, name_span,
                      filename=self.current_unit_file, name=name) \
@@ -605,7 +611,8 @@ class FunctionCollector:
         validate_type_pack_params(self.r, getattr(fn, "type_params", None), params, name_span)
 
         if name in self.funcs.by_name:
-            verdict = self._redeclaration(name, name_span, self.funcs.by_name[name])
+            verdict = self._redeclaration(name, name_span, self.funcs.by_name[name],
+                                          may_coexist=True)
             if verdict is Redeclaration.REFUSED:
                 return
             if verdict is Redeclaration.REPLACE:
@@ -613,7 +620,8 @@ class FunctionCollector:
 
         if name in self.generic_funcs.by_name:
             verdict = self._redeclaration(name, name_span,
-                                          self.generic_funcs.by_name[name])
+                                          self.generic_funcs.by_name[name],
+                                          may_coexist=False)
             if verdict is Redeclaration.REFUSED:
                 return
             if verdict is Redeclaration.REPLACE:
@@ -652,14 +660,16 @@ class FunctionCollector:
 
         if name in self.generic_funcs.by_name:
             verdict = self._redeclaration(name, name_span,
-                                          self.generic_funcs.by_name[name])
+                                          self.generic_funcs.by_name[name],
+                                          may_coexist=False)
             if verdict is Redeclaration.REFUSED:
                 return
             if verdict is Redeclaration.REPLACE:
                 self._drop(self.generic_funcs, name)
 
         if name in self.funcs.by_name:
-            verdict = self._redeclaration(name, name_span, self.funcs.by_name[name])
+            verdict = self._redeclaration(name, name_span, self.funcs.by_name[name],
+                                          may_coexist=False)
             if verdict is Redeclaration.REFUSED:
                 return
             if verdict is Redeclaration.REPLACE:
