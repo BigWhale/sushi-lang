@@ -37,12 +37,13 @@ class StdlibLinker:
         """
         stdlib_units = self.codegen.stdlib_units
 
+        # The path AS WRITTEN, and nothing else. Recording an import's parent directory
+        # too made every SIBLING module look imported, so `use <io/files>` walked
+        # straight through the `io/stdio` gate (#501). A directory import is served by
+        # `has_stdlib_unit`, which walks the parents of the name it is ASKED about.
         for use_stmt in program.uses:
             if use_stmt.is_stdlib:
                 stdlib_units.add(use_stmt.path)
-                parts = use_stmt.path.split('/')
-                for i in range(1, len(parts)):
-                    stdlib_units.add('/'.join(parts[:i]))
 
     def has_stdlib_unit(self, unit_path: str) -> bool:
         """Check if a stdlib unit has been imported."""

@@ -1,0 +1,10 @@
+# The same gate, reached through a different stdio method (#501).
+# EXPECT_ERROR_CODE: CE3015
+# EXPECT_STDERR_CONTAINS: "stdout.is_terminal()"
+use <io/files>
+
+fn main() i32:
+    let bool t = stdout.is_terminal()
+    if (t):
+        println("tty")
+    return Result.Ok(0)
