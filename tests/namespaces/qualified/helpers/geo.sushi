@@ -1,0 +1,33 @@
+# The unit every qualified form in this batch reaches. It declares one of each
+# kind section 5 of unit-namespaces.md names, plus one private struct so a
+# qualified private has something to point at.
+public struct Vec:
+    i32 x
+    i32 y
+
+public struct Box@(T):
+    T item
+
+public enum Sign:
+    Plus
+    Minus
+
+public perk Loud:
+    fn shout() i32
+
+public const i32 SIZE = 3
+
+public fn origin() Vec:
+    return Result.Ok(Vec(1, 2))
+
+public fn boxed(i32 item) Box@(i32):
+    return Result.Ok(Box(item))
+
+public fn nothing@(T)() Maybe@(T):
+    return Result.Ok(Maybe.None())
+
+public fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+struct Hidden:
+    i32 n

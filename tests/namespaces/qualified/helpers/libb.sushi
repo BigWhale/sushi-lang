@@ -1,0 +1,3 @@
+# The second unit that exports `sine`. See helpers/liba.sushi.
+public fn sine(f64 x) f64:
+    return Result.Ok(x + 2.0)

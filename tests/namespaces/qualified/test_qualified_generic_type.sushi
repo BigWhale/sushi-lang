@@ -1,0 +1,12 @@
+# A qualified GENERIC type: the alias folds into the base name and the type
+# arguments are read as they always were (section 5, second row).
+# EXPECT_STDOUT_EXACT: "7\n"
+use "helpers/geo" as geo
+
+fn run() i32:
+    let geo.Box@(i32) b = geo.boxed(7)??
+    return Result.Ok(b.item)
+
+fn main() i32:
+    println("{run().realise(0)}")
+    return Result.Ok(0)

@@ -1,0 +1,19 @@
+# A qualified name stands wherever a type is written: a `let` annotation, a
+# parameter, and a struct field (unit-namespaces.md section 5, first row).
+# EXPECT_STDOUT_EXACT: "3\n"
+use "helpers/geo" as geo
+
+struct Holder:
+    geo.Vec spot
+
+fn total(geo.Vec v) i32:
+    return Result.Ok(v.x + v.y)
+
+fn run() i32:
+    let geo.Vec v = geo.origin()??
+    let Holder h = Holder(v)
+    return Result.Ok(total(h.spot)??)
+
+fn main() i32:
+    println("{run().realise(0)}")
+    return Result.Ok(0)

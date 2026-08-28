@@ -1,0 +1,10 @@
+# One position cannot be qualified (section 5.3). A fixed array's size is read
+# while this unit's AST is built and an alias is bound long after, so the answer
+# is the existing CE2099 and not a parse error.
+# EXPECT_ERROR_CODE: CE2099
+use "helpers/geo" as geo
+
+fn main() i32:
+    let i32[geo.SIZE] slots = [0, 0, 0]
+    println("{slots[0]}")
+    return Result.Ok(0)

@@ -1,0 +1,16 @@
+# Section 1.3, the flat half. A unit's own declaration stands above a name a
+# flat `use` brought in, so this unit's `sin` answers and the standard library's
+# is reachable through an alias. The hard-coded module list ran before the user
+# table and crashed the compiler.
+# EXPECT_STDOUT_EXACT: "999\n"
+use <math>
+
+fn sin(f64 x) f64:
+    return Result.Ok(999.0 + x)
+
+fn run() f64:
+    return Result.Ok(sin(0.0)??)
+
+fn main() i32:
+    println("{run().realise(0.0)}")
+    return Result.Ok(0)

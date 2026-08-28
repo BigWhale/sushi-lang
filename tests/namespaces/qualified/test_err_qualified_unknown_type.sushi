@@ -1,0 +1,16 @@
+# The namespace does not hold this type. The flat scope may still hold the name
+# under phase 1, and the qualified form must not reach it: what `geo.` reaches
+# is what `geo` declares.
+# EXPECT_ERROR_CODE: CE2001
+use "helpers/geo" as geo
+
+struct Vex:
+    i32 n
+
+fn run() i32:
+    let geo.Vex v = geo.origin()??
+    return Result.Ok(v.n)
+
+fn main() i32:
+    println("{run().realise(0)}")
+    return Result.Ok(0)
