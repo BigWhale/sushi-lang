@@ -1,0 +1,9 @@
+# The unit an alias binds. It declares one public function, one public constant,
+# and one private function that a consumer may name only through CE3005.
+public const i32 MAX_DEPTH = 32
+
+public fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn hidden(i32 x) i32:
+    return Result.Ok(x + 1)

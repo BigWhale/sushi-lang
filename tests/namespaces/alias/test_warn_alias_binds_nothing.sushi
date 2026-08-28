@@ -1,0 +1,9 @@
+# `<io/stdio>` is a method interface: it enables `stdin.read_line()` and brings
+# no name at all. The `as` bound an empty namespace, and the import still did its
+# work, so this warns (section 4.4, CW3004).
+# EXPECT_STDOUT_EXACT: "42\n"
+use <io/stdio> as io
+
+fn main() i32:
+    println("42")
+    return Result.Ok(0)

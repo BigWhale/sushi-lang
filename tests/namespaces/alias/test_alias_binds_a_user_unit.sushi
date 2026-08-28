@@ -1,0 +1,9 @@
+# `use "..." as NAME` binds every name the unit brings behind a dot. A function
+# and a constant both resolve through the alias (unit-namespaces.md section 2).
+# EXPECT_STDOUT_EXACT: "84 32\n"
+use "helpers/geo" as geo
+
+fn main() i32:
+    let i32 doubled = geo.twice(42).realise(0)
+    println("{doubled} {geo.MAX_DEPTH}")
+    return Result.Ok(0)

@@ -1,0 +1,9 @@
+# An FFI block binds a namespace too, and one name holds one namespace (CE3013).
+# EXPECT_ERROR_CODE: CE3013
+use "helpers/geo" as libc
+
+unsafe external "C" as libc because "the platform's own strlen":
+    fn strlen(string s) i64 = "strlen"
+
+fn main() i32:
+    return Result.Ok(0)
