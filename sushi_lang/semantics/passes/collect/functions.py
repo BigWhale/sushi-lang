@@ -200,10 +200,47 @@ class GenericFuncDef:
 
 @dataclass
 class FunctionTable:
-    """Table of function signatures collected by the collect pass."""
+    """Table of function signatures collected by the collect pass.
+
+    `by_name` is the FLAT view: one declaration per name for the whole program, and the
+    winner of a shadowed name. `by_unit` keeps every declaration under the unit that wrote
+    it, and it is what `view_for` reads. A name a consumer shadows leaves the flat view
+    (`_drop`), so without the second index a library's own body has no way back to its own
+    signature -- which is issue #487 (`docs/design/unit-namespaces.md` section 13.1).
+    """
     by_name: Dict[str, FuncSig] = field(default_factory=dict)
+    by_unit: Dict[str, Dict[str, FuncSig]] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     _stdlib_functions: Dict[Tuple[str, str], Any] = field(default_factory=dict)
+
+    def declare(self, name: str, sig: FuncSig) -> None:
+        """Register one declaration in both views. The ONE insert."""
+        self.order.append(name)
+        self.by_name[name] = sig
+        unit = getattr(sig, "unit_name", None)
+        if unit is not None:
+            self.by_unit.setdefault(unit, {})[name] = sig
+
+    def lookup(self, name: str, unit_name: Optional[str] = None) -> Optional[FuncSig]:
+        """What the name means inside `unit_name`. One name, no dict built."""
+        if unit_name is not None:
+            own = self.by_unit.get(unit_name)
+            if own is not None and name in own:
+                return own[name]
+        return self.by_name.get(name)
+
+    def view_for(self, unit_name: Optional[str]) -> Dict[str, FuncSig]:
+        """What the name of a function means INSIDE `unit_name`.
+
+        The flat view, with the asking unit's own declarations on top. A unit that
+        declares a name answers its own calls with it; every other name resolves as it
+        always did. With no asking unit the flat view is the answer, unchanged.
+        """
+        if unit_name is None:
+            return dict(self.by_name)
+        view = dict(self.by_name)
+        view.update(self.by_unit.get(unit_name, {}))
+        return view
 
     def register_stdlib_function(self, module_path: str, stdlib_func: Any) -> None:
         """Register a stdlib function."""
@@ -464,6 +501,9 @@ class FunctionCollector:
         The branch this replaces dropped the previous entry and returned without
         registering anything, so the consumer lost its own declaration as well and the
         library's came back through the `libraries` pass.
+
+        Only the FLAT view is dropped. A unit does not stop having declared what it
+        declared, and `view_for` is how its own body still reads it (#487).
         """
         table.order.remove(name)
         del table.by_name[name]
@@ -570,8 +610,7 @@ class FunctionCollector:
             if ret_ty not in valid_integer_types:
                 er.emit(self.r, ERR.CE0106, ret_span, type=display_type(ret_ty))
 
-        self.funcs.order.append(name)
-        self.funcs.by_name[name] = sig
+        self.funcs.declare(name, sig)
 
     def _collect_generic_function_def(
         self,

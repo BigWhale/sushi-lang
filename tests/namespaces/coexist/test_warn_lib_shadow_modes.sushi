@@ -1,0 +1,22 @@
+# CW3002 and nothing else. The consumer declares `eat`, which the library
+# exports, and gives it a DIFFERENT parameter mode: the library borrows, the
+# consumer consumes. Shadowing an export is legal and warns.
+#
+# The library's own `drive` calls the library's own `eat`. That call is the
+# library author's code and the consumer cannot edit it, so it must be measured
+# against the library's declaration. Measuring it against the winner of the name
+# made the library's body hear CE2427 and CE2405 about source the consumer never
+# wrote (#487, section 13.1 of docs/design/unit-namespaces.md).
+# EXPECT_ERROR_CODE: CW3002
+
+use <collections/strings>
+use <lib/shadow_modes_lib>
+
+fn eat(nom string s) i32:
+    return Result.Ok(s.len() * 2)
+
+fn main() i32:
+    let string msg = "answer"
+    println("{eat(nom msg).realise(0)}")
+    println("{drive().realise(0)}")
+    return Result.Ok(0)

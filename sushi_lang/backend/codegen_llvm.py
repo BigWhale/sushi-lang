@@ -91,6 +91,10 @@ class LLVMCodegen:
         self.enum_table = enum_table or EnumTable()
         from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
         self.func_table = func_table or FunctionTable()
+        # The unit whose bodies are being emitted, or None outside a multi-unit walk.
+        # A named callee is resolved through it, so a library's own body reads the
+        # library's signature where a consumer shadows the name (#487).
+        self.emitting_unit: Optional[str] = None
         self.perk_impl_table = perk_impl_table or PerkImplementationTable()
         self.const_table = const_table or ConstantTable()
         from sushi_lang.semantics.passes.collect import ExternalTable
@@ -603,6 +607,7 @@ class LLVMCodegen:
             self._declare_library_perk_impl_methods()
 
         if target_unit.ast is not None:
+            self.emitting_unit = target_unit.name
             for fn in target_unit.ast.functions:
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
@@ -615,6 +620,7 @@ class LLVMCodegen:
                 for method in perk_impl.methods:
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_def(synthetic_ext)
+            self.emitting_unit = None
 
         # A monomorphized extension belongs to no unit, so its body is defined
         # in EVERY unit module. weak_odr lets the linker keep one, like a
@@ -762,6 +768,7 @@ class LLVMCodegen:
             if unit.ast is None:
                 continue
 
+            self.emitting_unit = unit.name
             for fn in unit.ast.functions:
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
@@ -774,6 +781,7 @@ class LLVMCodegen:
                 for method in perk_impl.methods:
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_def(synthetic_ext)
+        self.emitting_unit = None
 
         # weak_odr for the same reason as the single-unit path (#404); the
         # monolithic module defines each body once, so it is inert here, and

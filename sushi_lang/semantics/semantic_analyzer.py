@@ -474,7 +474,8 @@ class SemanticAnalyzer:
             # borrow. The enum names let the checker tell `Box.Full(a)` from a method call
             # -- both are DotCall here. BASE names only: the receiver is written bare.
             borrow_checker = BorrowChecker(unit_reporter, destroy_effects=destroy_effects,
-                                           enum_names=enum_names, tables=self.tables)
+                                           enum_names=enum_names, tables=self.tables,
+                                           unit_name=unit.name)
             borrow_checker.run(unit.ast)
 
             self.reporter.items.extend(unit_reporter.items)

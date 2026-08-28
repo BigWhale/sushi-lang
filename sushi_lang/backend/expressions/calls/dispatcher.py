@@ -58,7 +58,10 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     # Native variadic call: collapse the trailing arguments into one synthesized,
     # owned T[] which is moved into the callee. Must happen BEFORE the arity guard
     # so the produced argument count matches the (non-variadic) LLVM signature.
-    func_sig = codegen.func_table.by_name.get(callee)
+    # The unit being emitted answers for the name, exactly as the borrow pass's
+    # `view_for` does: a source library's own body must read the library's
+    # signature and not the consumer's declaration of the same name (#487).
+    func_sig = codegen.func_table.lookup(callee, codegen.emitting_unit)
     variadic_param = (
         func_sig.params[-1]
         if func_sig is not None and func_sig.params

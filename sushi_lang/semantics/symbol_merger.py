@@ -162,6 +162,11 @@ class SymbolTableMerger:
         """Merge functions (both public and private are tracked)."""
         self._merge_by_name(unit_funcs, global_funcs)
 
+        # The per-unit view carries across whole. It is not first-wins: a name two units
+        # declare has one entry per unit, which is the answer `view_for` gives back.
+        for unit_name, declared in unit_funcs.by_unit.items():
+            global_funcs.by_unit.setdefault(unit_name, {}).update(declared)
+
         for key, stdlib_func in unit_funcs._stdlib_functions.items():
             if key not in global_funcs._stdlib_functions:
                 global_funcs._stdlib_functions[key] = stdlib_func
