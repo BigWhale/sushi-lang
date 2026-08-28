@@ -10,8 +10,9 @@ It is normative for eight things:
 
 1. What `as` does, and what an import without `as` keeps doing.
 2. Where a `use` may stand, and how far the namespace it binds reaches.
-3. That one namespace mechanism serves the FFI block and the `use` statement together, and
-   that what it binds is a resolved provider rather than a written path.
+3. That one namespace mechanism serves the FFI block and the `use` statement together, that
+   what it binds is a resolved provider rather than a written path, and where in the pass
+   order the table that holds it is filled.
 4. Which declarations a namespace holds, and which it cannot hold.
 5. How a qualified name resolves, in every position where a name can be written.
 6. That a unit's scope is built from its own `use` statements, is not transitive, and
@@ -23,8 +24,13 @@ It is normative for eight things:
 
 Read `docs/design/visibility.md` first: it decides which declarations are even candidates
 for a namespace. Read `docs/design/type-identity.md` for the constraint that section 7
-puts a boundary around. Section 13 carries the two limits of issue #487 that wait for this
-epic, so the epic is not done until they are gone.
+puts a boundary around. Section 13 carries what issue #487 left for this epic, so the epic
+is not done until it is gone.
+
+This document **supersedes** parts of `visibility.md` as well as building on it: several of
+that document's rulings are stated against one flat namespace, and this epic is what removes
+it. **Section 14 is the obligation that follows** — each phase ends by editing
+`visibility.md` to record its own drift, and it lists exactly which passages change.
 
 ## 1. What the compiler does today, measured
 
@@ -33,13 +39,21 @@ epic, so the epic is not done until they are gone.
 | Case | Today |
 |---|---|
 | `use "math" as my_math` | `CE6001: unexpected token 'as'`. The rule is `use_stmt: USE (stdlib_import \| lib_import \| user_import)` (`sushi_lang/grammar.lark:7`) — no alias clause exists |
-| Two units, each with `public fn sine` | `CE3003: duplicate public symbol 'sine' found in units: liba, libb`, raised with no location at all (`semantics/units.py:229`). **The program cannot be compiled**, and no escape exists |
-| Two units, each with a private `fn helper` | `CE0101: duplicate function 'helper'` — a name neither unit exports, refused anyway. Section 7 retires this row in phase 1 |
+| Two units, each with `public fn sine` | `CE3003: duplicate public symbol 'sine' found in units: liba, libb`, with a note at each declaration that claims the name (`semantics/units.py:242`). **The program cannot be compiled**, and no escape exists |
+| Two units, each with a private `fn helper` | `CE0101: duplicate function 'helper'`, with a note at the other declaration — a name neither unit exports, refused anyway. Section 7 retires this row in phase 1 |
+| Two units, each with a private `const SCRATCH` | `CE0105: duplicate constant 'SCRATCH'`, the same shape. Section 7 retires this row with the one above |
 | Two units, each with `struct Node` | `CE0004: duplicate struct 'Node'` |
 
-The last two are not aliasing problems. A `StructType` compares and hashes on its name
-alone (`semantics/typesys.py:75`), so one name **is** one type for the whole program.
-There is nothing to alias: it is the identity that would have to change.
+The first two rows are aliasing problems and the last three are not. Rows three and four
+are one table holding one declaration per name, which section 7 rekeys. The last row is
+narrower than either: a `StructType` compares and hashes on its name alone
+(`semantics/typesys.py:75`), so one name **is** one type for the whole program. There is
+nothing to alias there — it is the identity that would have to change.
+
+Every duplicate in the table renders relationally today — `CE3003`, `CE0101`, `CE0105` and
+`CE0004` each carry a note at the declaration they contest. That is the visibility epic's
+work (`visibility.md` section 9), and it is the shape the replacements in section 10 have
+to keep.
 
 Privacy does not help. A private declaration still occupies the one namespace — that is
 `visibility.md` section 1's deciding fact — so making a declaration private frees no name.
@@ -60,16 +74,26 @@ public fn deep_value() i32:       use "deep"               use "mid"
                                                                let i32 a = deep_value()??
 ```
 
-It compiles, links and prints `7`. `build_global_symbol_table` (`semantics/units.py:211`)
-builds ONE table for the program, so every public name of every unit anywhere in the
-dependency graph is in scope in every unit. A `use` statement today does not decide what
+It compiles, links and prints `7`, and the reason is worth getting right because phase 1
+replaces the thing that causes it. The flat scope is `SymbolTableMerger.merge_all`
+(`semantics/symbol_merger.py:17`): the collect loop builds one `SymbolTables` per unit and
+folds every one of them into a single `global_tables`, which is what
+`validator.func_table.by_name` reads at the call site
+(`passes/types/calls/user_defined.py:171`). A `use` statement today does not decide what
 this unit can see. It decides what gets compiled.
+
+It is NOT `build_global_symbol_table` (`semantics/units.py:219`), which is easy to blame
+and does nothing of the sort. It fills `UnitManager.global_symbols`, and that dict is
+**write-only**: its one reader, `find_symbol` (`:268`), has no callers anywhere in the tree
+or the tests. The function's whole live effect is to raise `CE3003`. Section 10 retires
+that code, so the function, the dict and `find_symbol` retire with it — a deletion, not a
+replacement.
 
 ### 1.3 The standard library wins over your own function, and then crashes
 
-`check_stdlib_function` (`passes/types/calls/user_defined.py:296`) searches a hard-coded
-list of module paths and returns the first hit. It runs at line 165. The user function
-table is not consulted until line 170.
+`check_stdlib_function` (`passes/types/calls/user_defined.py:306`) searches a hard-coded
+list of module paths and returns the first hit. It runs at line 166. The user function
+table is not consulted until line 171.
 
 <!-- docs-sweep: skip (records today's behaviour: this crashes the compiler) -->
 ```sushi
@@ -102,8 +126,8 @@ shape a unit namespace needs:
 
 | Piece | Where |
 |---|---|
-| `ExternalTable.by_namespace: Dict[str, Dict[str, ExternalSig]]`, with `is_namespace(ns)` and `lookup(ns, name)` | `passes/collect/externals.py:31` |
-| `_resolve_external_call` — a `DotCall` whose receiver is a `Name` that is a registered namespace **and not a local variable** | `passes/types/__init__.py:136` |
+| `ExternalTable.by_namespace: Dict[str, Dict[str, ExternalSig]]`, with `is_namespace(ns)` and `lookup(ns, name)` | `passes/collect/externals.py:33`, `:36`, `:40` |
+| `_resolve_external_call` — a `DotCall` whose receiver is a `Name` that is a registered namespace **and not a local variable** | `passes/types/__init__.py:145` |
 | The grammar's `AS NAME` clause | `grammar.lark:29` |
 
 Two properties carry over unchanged. A local variable shadows a namespace, so `libc` as a
@@ -112,7 +136,7 @@ variable name is not stolen by the FFI block. And the namespace is bound by the
 
 The standard library is namespace-shaped too, in a second place:
 `FunctionTable._stdlib_functions` is keyed by `(module_path, name)`
-(`passes/collect/functions.py:205`). `stdlib_by_name()` is the function that throws the
+(`passes/collect/functions.py:206`). `stdlib_by_name()` is the function that throws the
 module away.
 
 ## 2. Ruling 1: `as` is the gate
@@ -184,6 +208,13 @@ before any type). Rust allows a `use` anywhere and leaves the position to conven
 follows Go and Java: a reader should see a unit's dependencies in one block without
 searching for them.
 
+`CE3014` is the one rule in this document that refuses source which compiles today, so it
+was measured: **one file** in the tree puts a `use` below a declaration
+(`tests/memory/test_consume_hashmapinsert_owned_array.sushi:25`, a
+`use <collections/hashmap>` under a `struct`), and moving the line up is the whole
+migration. Ruling 1's promise is about the `as` clause, which no program carries; this
+clause is the exception to it, and it costs one line.
+
 ## 3. Ruling 2: one namespace mechanism, two producers
 
 A namespace is a binding from a name to a set of declarations. Two things produce one:
@@ -219,11 +250,18 @@ semantics/namespaces.py
     GenericNamespace(name)                     # an activated built-in, e.g. HashMap
 ```
 
-`ExternalTable.by_namespace` becomes one provider behind the table rather than a thing the
-type pass reads directly, and `_resolve_external_call` becomes `resolve_namespaced`, which
+`ExternalTable.by_namespace` becomes one provider behind the table rather than a thing a
+pass reads directly, and `_resolve_external_call` becomes `resolve_namespaced`, which
 answers for every kind. The refactor's whole content is that `lookup` returns a
 kind-tagged `Binding` instead of an `ExternalSig`: an FFI namespace holds one kind, a unit
 namespace holds five, and the resolution rule cannot tell them apart.
+
+**Two readers move, not one.** The `typecheck` pass is the obvious one. The `scope` pass
+has its own copy — `_is_external_namespace` (`passes/scope.py:119`) asks
+`external_table.is_namespace(name) and not self._is_bound_local(name)`, which is section
+8's local-wins rule written a second time. Both become calls to the one seam, and the
+duplicated shadowing rule is the reason the seam is worth building rather than widening
+`ExternalTable` in place.
 
 ### 3.1 A binding holds a provider, and never a path
 
@@ -235,12 +273,12 @@ in a way that passes every test a first implementer would write:
 
 | What the binding could hold | Verdict |
 |---|---|
-| the **written path** — `h -> "helpers"` | Wrong always. A path is relative to the importing file, so `use "helpers"` names different files in `a/b.sushi` and in `c/d.sushi`. It is not a global key |
+| the **written path** — `h -> "helpers"` | Wrong, and not for the reason it looks. A `use` path is resolved against the MAIN file's directory (`UnitManager(root_path=src_path.parent)`, `compiler/pipeline.py:241`, and `resolve_unit_path`, `semantics/units.py:126-129`), so one written path names one file from every importing unit — `tests/basic/helpers/bar_module.sushi` writes `use "helpers/math_utils"` from inside `helpers/` and proves it. It fails on packaging instead, which the paragraph below measures |
 | the **resolved unit name** — `h -> "lib/foo/helpers"` | Correct, and only if the resolved name is the one stored. A `str` field cannot say which string it wants |
 | the **`Unit` object** | Correct, and more than the table needs: it couples a namespace to a unit's identity when all it uses is that unit's symbols |
 | the **provider** — `h -> UnitNamespace(...)` | **The ruling.** There is no string to get wrong |
 
-The failure the middle rows invite is real and it is library-shaped.
+The failure the first two rows invite is real and it is library-shaped.
 `_inject_library_source` renames a library's units to `lib/<library>/<unit>` and rewrites
 `unit.dependencies` to match (`compiler/pipeline.py:227`) — but it leaves
 `UseStatement.path` alone, because nothing resolves through the path today. So a binding
@@ -262,6 +300,43 @@ unit's declarations whatever their visibility, and the private ones are refused 
 site with `CE3005`, which points at the declaration and says it has no `public`. Filtering
 them out of the namespace instead would turn "not yours" into "no such name", which is the
 worse diagnostic and the one `CE3005` exists to avoid.
+
+### 3.2 The table is built by a new pass, and it goes after `libraries`
+
+A namespace binding needs two things that different steps produce, so the position is
+forced rather than chosen. The pass is named **`namespaces`**, and the order becomes:
+
+```
+collect -> docs -> externs -> libraries -> namespaces -> ffi-clash -> entrypoint -> ...
+```
+
+Four constraints fix it there, and each names the step that supplies something:
+
+| A provider needs | Supplied by | Where |
+|---|---|---|
+| a unit's own declarations (`UnitNamespace`) | `collect` | one `SymbolTables` per unit, `semantic_analyzer.py:178` |
+| an FFI block's foreign functions (`ExternalNamespace`) | `collect` as well — NOT the `externs` pass | `external_collector.collect(root)`, `passes/collect/__init__.py:216`. The `externs` pass validates the signatures it finds; it does not fill the table |
+| a BINARY library's declarations (`UnitNamespace` over a `.slib`) | `libraries` | the twelve `_register_library_*` methods, `semantic_analyzer.py:242-262` |
+| a registry module's functions (`StdlibNamespace`) | `collect` | `register_stdlib_functions`, `passes/collect/__init__.py:215` |
+
+The third row is the one that pushes the pass past `libraries` and is easy to miss: a
+SOURCE library's units are ordinary compilation units and `collect` sees them, but a binary
+`.slib` has no AST at all — its declarations arrive from a manifest, and only the
+`libraries` step puts them anywhere. `use <lib/foo/bar> as f` must work for both kinds, so
+the table cannot be complete before that step has run.
+
+Nothing between `collect` and `libraries` resolves a name that could be qualified. `docs`
+walks declarations and matches doc blocks to them; `externs` validates C-ABI types, which
+are a closed set with no user type in it. `ffi-clash` is the first step that asks whether a
+name is already taken, and it is the first that has to ask it of ONE unit, which is why the
+new pass goes immediately before it.
+
+**The per-unit scope is a separate deletion, and section 1.2 says why.** Phase 1 does not
+"replace `build_global_symbol_table`" — that function is write-only and retires with
+`CE3003`. What phase 1 replaces is `merge_all`: the collect loop stops folding each unit's
+`SymbolTables` into one `global_tables` and keeps them, which is the same change section
+13.1 needs and the same one that retires `_replace_shadowed_functions`. One deletion, one
+rekey, and they are not the same edit.
 
 ## 4. Ruling 3: a namespace holds exactly what its `use` brings into scope
 
@@ -296,13 +371,37 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 |---|---|---|
 | Registry free functions, already keyed by `(module, name)` | `<time>`, `<math>`, `<sys/env>`, `<sys/process>`, `<random>`, `<io/files>` | **yes** — this is the cheap half, and it fixes section 1.3 |
 | Sushi-source modules, injected as ordinary units | `<collections/iter>`, `<compression/zlib>`, `<encoding/msgpack>`, `<toolchain/slib>` | **yes** — a user unit in every respect |
-| A built-in generic that the import activates | `<collections/hashmap>` (`generics/active_generics.py:3`) | **yes** — `hm.HashMap@(i32, string)`. The import brings the name, so the namespace holds it. `active_generics` becomes per-unit, which is one dict instead of one set |
+| A built-in generic that the import activates | `<collections/hashmap>` (`generics/active_generics.py:3`) | **yes** — `hm.HashMap@(i32, string)`. The import brings the name, so the namespace holds it. `active_generics` retires whole — see 4.3.1 |
 | A method interface: the import enables methods on a type and brings **no name** | `<io/stdio>`, `<collections/strings>` | pointless, and said so — see below |
 
 `use <io/stdio>` does not bring `stdin` into scope: `stdin` is always a name
-(`passes/types/visitor.py:691`), and what the import enables is `read_line()` on it. An
+(`passes/types/visitor.py:703`), and what the import enables is `read_line()` on it. An
 alias on such an import binds an empty namespace, and every `io.<name>` after it fails one
 at a time with the cause several lines away.
+
+#### 4.3.1 `active_generics` retires, and it is one reader
+
+The third row looks like the expensive one and is the cheapest thing in this document.
+`is_generic_active` has **exactly one reader** in the whole tree:
+`_register_predefined_generics` (`passes/collect/__init__.py:296`), which puts `HashMap`
+into the program-wide `generic_structs` table only when the flag is set. Every other
+mention is a writer — `activate_generic_unit` at `compiler/pipeline.py:283` and
+`backend/stdlib_linker.py:48` — or a test calling `reset_active_generics`.
+
+That gate exists because there is no per-unit scope to ask. Once there is one, the table
+holds `HashMap` unconditionally and the SCOPE decides who may name it: `HashMap` is a
+member of the `<collections/hashmap>` namespace, a flat `use` puts it in the importing
+unit's scope, and an aliased one puts it behind the dot. The generic-struct table stays
+flat under phase 1, exactly as Ruling 6 says a `struct` does — what becomes per-unit is
+only the right to write the name.
+
+So `active_generics.py` is **deleted**, not converted: `GENERIC_UNIT_TYPES` becomes the
+membership of one `GenericNamespace`, the one reader loses its `if`, and the two writers
+and the process-global set go with it. **Five test files stop calling
+`reset_active_generics`** (`tests/unit/conftest.py`, `test_lambda_names_unique_across_units.py`,
+`test_struct_string_raii.py`, `test_layering_gate.py`, `test_ffi.py`), and that is the
+argument in miniature: a process-global that five tests must reset between compilations is
+scope kept in the wrong place.
 
 ### 4.4 An empty namespace is a warning, and never an error
 
@@ -369,7 +468,7 @@ resolver is the only thing that changes between them.
 The enum row is the one that reads as a three-deep chain, and it is not: `my_math.Sign.Plus`
 parses as `DotCall(receiver=MemberAccess(Name("my_math"), "Sign"), method="Plus")`, the
 alias folds into `Sign`, and what is left is the `EnumConstructor` path the compiler
-already takes. The `DotCall` ladder in `visit_dotcall` (`passes/types/visitor.py:408`)
+already takes. The `DotCall` ladder in `visit_dotcall` (`passes/types/visitor.py:410`)
 gains no rung: the namespace check is the rung `_resolve_external_call` already occupies.
 
 ### 5.1 The grammar
@@ -383,6 +482,10 @@ atom_type: ... | NAME "." NAME AT "(" type_list ")"  -> qualified_generic_type_t
 perk_constraint_list: perk_constraint ("+" perk_constraint)*
 perk_constraint: NAME ["." NAME]
 ```
+
+The perk rule is a split as well as a qualifier: today the list is
+`perk_constraint_list: NAME ("+" NAME)*` (`grammar.lark:21`) and there is no
+`perk_constraint` rule to hang the second segment on.
 
 Expression positions need one change, and only one. `my_math.sin(0.0)` already parses as a
 `DotCall` and `my_math.MAX_DEPTH` as a `MemberAccess`; both reach a resolver that returns
@@ -407,7 +510,8 @@ fn main() i32:
 
 `method_call` has nowhere to put `@(i32)`, so the form is a parse error — and omitting the
 argument is CE2060. **Aliasing a unit would make its return-type-only generics
-uncallable.** Nine call sites in the tree use the form.
+uncallable.** Seven call sites in the tree carry explicit type arguments, and one of them
+is the negative test that asserts CE6102.
 
 So `method_call` gains the slot, and `CE6102` narrows from "it is a method call" to "the
 receiver is a VALUE":
@@ -428,6 +532,7 @@ own production, and that production counts to exactly two:
 ```
 pattern: NAME "." NAME ["(" [pattern_list] ")"]
 pattern_item: pattern | NAME | wildcard_pattern | own_pattern
+            | BORROW_MODE NAME -> ref_binding
 ```
 
 `Sign.Plus` fits. `my_math.Sign.Plus` does not, and `pattern_item` offers no way in for a
@@ -491,8 +596,10 @@ reaches what `math` imported. The qualified form and the flat form agree on this
 what makes the rule one rule.
 
 **Section 1.2's program stops compiling.** `top.sushi` must add `use "deep"`. This is the
-one migration this document forces, and it is measured: of 1951 `.sushi` files in the tree,
-15 import a user unit, and 2 import more than one.
+one migration this document forces, and it is measured: of 2096 tracked `.sushi` files,
+28 import a user unit, and 2 import more than one. The count grew with the visibility
+epic's own test batches (`tests/visibility/**` and `tests/perks/cross_unit/**` are 10 of
+the 28), so it tracks the test suite rather than the language.
 
 `CW3001` ("duplicate use statement") narrows with the same change. `use "math"` followed by
 `use "math" as m` is not a duplicate — the two statements do different things. The warning
@@ -555,12 +662,24 @@ a name unwritable unqualified. It does not make two declarations of one name coe
 
 Coexistence for a function or a constant is a table-keying change: `FunctionTable.by_name`
 and `ConstantTable.by_name` become keyed by unit, and the flat scope becomes a resolution
-built on top. Section 1.1's third row goes with it: two units may each declare a private
-`fn helper`, and section 8's ladder answers each unit's call with its own. The front end
-gets that free; the BACK end pays for it with section 9's mangling, because the monolithic
-build path puts every unit into one module where two `internal` symbols collide as readily
-as two `external` ones. No test moves — of the eight files asserting `CE0101`, none is
-cross-unit, and nothing asserts `CE3003` at all.
+built on top. Section 1.1's third and fourth rows go with it: two units may each declare a
+private `fn helper` or a private `const SCRATCH`, and section 8's ladder answers each
+unit's call with its own. The front end gets that free; the BACK end pays for it with
+section 9's mangling, because the monolithic build path puts every unit into one module
+where two `internal` symbols collide as readily as two `external` ones.
+
+**Tests move, and the visibility epic is why.** Its batches assert the cross-unit shapes
+this ruling makes legal, so three of them are rewritten rather than deleted — each keeps
+its single-unit case and loses its cross-unit one:
+
+| Test | Asserts today | Under phase 1 |
+|---|---|---|
+| `tests/unit/test_duplicate_declaration_cascades.py` | cross-unit `CE0101` for a private `fn scale` | legal; each unit's call answers itself |
+| `tests/unit/test_constant_visibility.py` | cross-unit `CE0105` for two private constants, `CE3003` for two public ones | `CE0105` goes; `CE3003` is replaced by `CE3012` at the ambiguous USE |
+| `tests/unit/test_collect_attribution.py` | cross-unit `CE0101` for one `libc.strlen` declared in two units | legal; an FFI namespace is bound by the unit that declares it (section 3) |
+
+Of the thirteen files that assert `CE0101`, those two are the cross-unit ones; the other
+eleven are single-unit and do not move. Two files assert `CE3003` and both are cross-unit.
 
 Coexistence for a type is a change to nominal identity — the interned name becomes
 qualified — which reaches `StructType.__hash__`/`__eq__` and the enum twins, the struct and
@@ -571,19 +690,20 @@ The two are not the same size, and the tree says so:
 
 | Table | `.by_name` read sites | Files |
 |---|---|---|
-| `FunctionTable` | 49 | 11, of which 1 is the back end |
+| `FunctionTable` | 20 | 8, of which 1 is the back end |
 | `ConstantTable` | 16 | 10, of which 2 are the back end |
-| `StructTable` | 195 | — |
-| `EnumTable` | 206 | — |
+| `StructTable` | 200 | — |
+| `EnumTable` | 209 | — |
 
-65 against 401. That is why the phase line falls where it does, and phase 2 belongs in
-`docs/design/type-identity.md`, argued there.
+36 against 409. (Counted as `(func_table|function_table)\.by_name` and its three siblings
+over `sushi_lang/**.py`.) That is why the phase line falls where it does, and phase 2
+belongs in `docs/design/type-identity.md`, argued there.
 
 ## 8. Shadowing and collisions
 
 **A local variable wins.** `my_math` as a variable shadows the alias for the rest of its
 scope, exactly as a local shadows an FFI namespace today
-(`passes/types/__init__.py:143`). One rule, one seam, both producers.
+(`passes/types/__init__.py:152`). One rule, one seam, both producers.
 
 **An alias may not collide.** An alias binds a name in the unit that wrote it, so it is
 `CE3013` if that unit already binds the name: another alias, an FFI namespace, or one of
@@ -658,19 +778,28 @@ warning, and its scope is the whole of its design:
 
 **`--lib` is the scope because shipping is when the hazard becomes other people's
 problem**, and because it is the moment the author is present. Warning on the extension
-itself was measured and rejected. Of 348 extensions in the tree, 209 target the unit's own
-type, **137 target a builtin** — `i32` alone is 87 — and 2 target a foreign unit's type. A
-warning on "a target this unit did not declare" fires 139 times, `extend i32 squared()`
-among them, which is the form CLAUDE.md's own quick reference teaches. A warning that
-common is a warning people switch off.
+itself was measured and rejected. Of 325 extensions in the tree, 199 target the unit's own
+type, **125 target a builtin** — `i32` alone is 87 — and **none targets a foreign unit's
+type**. A warning on "a target this unit did not declare" fires 125 times,
+`extend i32 squared()` among them, which is the form CLAUDE.md's own quick reference
+teaches. A warning that common is a warning people switch off.
 
 Exempting builtins to quiet it is backwards: `i32` is the MOST collidable target, because
-every unit in every program can reach it. That predicate would fire twice in the whole
-tree. Neither predicate on the extension works, and the scope is what makes the rule right.
+every unit in every program can reach it. That predicate fires zero times in the whole
+tree — a warning nothing triggers teaches nobody. Neither predicate on the extension works,
+and the scope is what makes the rule right.
+
+**The predicate reads the TARGET TYPE, never the perk.** `extend Crate with Heavy` where
+`Heavy` comes from next door is not a foreign extension: the method is claimed on `Crate`,
+which this unit declares, so no consumer can be surprised by it. Every one of the twelve
+cross-unit perk implementations in the tree — `tests/libs/`, `tests/perks/cross_unit/`,
+`tests/visibility/perk/` — is that shape, eight of them on a builtin and four on a type the
+implementing unit declares itself. That is why the foreign-target count is zero.
 
 Cost today: `sushi_stdlib/src_sushi` and `toolchain/src` hold **zero** extensions between
-them, and `tests/libs` holds 11 fixtures. It fires nowhere in real library code, which is
-what a warning aimed at a future hazard should do.
+them, and `tests/libs` holds 11 — eight on a builtin, three on a type the consumer
+declares. It fires nowhere in real library code, which is what a warning aimed at a future
+hazard should do.
 
 **The consumer's half.** `--lib-info` should list the foreign types a library claims methods
 on, so the hazard is readable before it is hit. That needs one new extractor: the manifest
@@ -751,26 +880,38 @@ Retired or narrowed:
 | Code | Change |
 |---|---|
 | `CE3003` | retired. It refused a whole program for a collision that may never be written |
-| `CE3011` | narrowed to what phase 2 cannot lift: a name a consumer redeclares against a library it imported **flat**. An aliased import cannot collide |
+| `CE3011` | narrowed to what phase 2 cannot lift: a TYPE name a consumer redeclares against a library it imported **flat**. An aliased import cannot collide, and a function or a constant stops colliding at phase 1. A library's private CONSTANT already answers `CE0105` rather than this code (#488, decision D1) |
 | `CW3001` | narrowed to a repeat with the same alias, or none (section 6) |
 | `CE0101` | kept for a duplicate extension on a foreign type, with new TEXT: relational, naming both units, blaming neither (section 8). Retired for a cross-unit private function, which phase 1 makes legal (section 7) |
+| `CE0105` | retired cross-unit with `CE0101`, and for the same reason: two units may each declare a private constant once the table is keyed by unit (section 7). Kept whole within one unit |
 
 ## 11. Delivery
 
 **Phase 1 — the alias, the scope, and the tractable half.** Rulings 1 to 5, and Ruling 6's
 phase-1 row: a `struct`, an `enum` and a `perk` are reachable through a namespace, and are
-still one per program. Adds `semantics/namespaces.py`, the `as` clause, the qualified forms
-of two grammar rules, the optional `namespace` field on the nodes of section 5's table, the
-per-unit scope in place of `build_global_symbol_table`, unit keys on `FunctionTable` and
-`ConstantTable`, and the mangling of section 9.
+still one per program. Adds `semantics/namespaces.py` and the `namespaces` pass that fills
+it (section 3.2), the `as` clause, the qualified forms of two grammar rules, the optional
+`namespace` field on the nodes of section 5's table, a per-unit scope in place of
+`merge_all`'s fold, unit keys on `FunctionTable` and `ConstantTable`, the collect-order
+reversal of section 13.2, and the mangling of section 9.
+
+Five things are deletions rather than rewrites, and they are the phase's cheapest half:
+`build_global_symbol_table` with its write-only `global_symbols` and `find_symbol`
+(section 1.2), `_replace_shadowed_functions` (section 8), `_library_units_first` and the
+`collect_perk_definitions` pre-sweep (section 13.2, one each), and `active_generics.py`
+whole (section 4.3.1).
 
 What it buys: the section 1.3 crash becomes two working calls; two libraries may both
 export `sine`; a unit's scope is what its `use` statements say it is; and a name's origin is
-readable at the call. It also closes both items section 13 carries.
+readable at the call. It closes section 13.1, the last open item of #487.
+
+What it moves: the three cross-unit test batches of section 7, and the `visibility.md` edit
+of section 14, which is phase 1's last commit and not a follow-up.
 
 **Phase 2 — types coexist.** Qualified interned names, so two units may each declare
 `struct Node`. Owned by `docs/design/type-identity.md`. Phase 1's AST and resolver are
-already shaped for it: only the key the resolver produces changes.
+already shaped for it: only the key the resolver produces changes. It ends with its own
+`visibility.md` edit (section 14.2).
 
 **Not gated on either phase.** `CW3003` (section 8) needs the target type's declaring unit
 and the `--lib` flag, neither of which this document introduces. It can ship on its own, and
@@ -809,9 +950,18 @@ Whether an alias could ever be exported is the same question as re-export.
 
 ## 13. Carried over
 
-Two of the three limits that the visibility flip left behind (`LEFT.md`, issue **#487**)
-wait for this epic rather than being fixed on their own. Each is recorded here with the
-ruling that resolves it, so the epic's definition of done includes them.
+The visibility flip left three limits behind (issue **#487**; the `LEFT.md` working doc that
+enumerated them has been consumed, so the option letters below are kept for the issue's
+history). PR **#488** closed two of them and recorded the third as waiting for this epic.
+What remains here is therefore one open defect and one prerequisite:
+
+| | Was | Now |
+|---|---|---|
+| **13.1** a shadowed call reads the winner's parameter modes | waiting | **still open.** It is the one #487 item this epic must close |
+| **13.2** collection order: dependencies before dependents | waiting | its **symptom is fixed** (#488 took option A). The ordering ruling stands as a phase-1 prerequisite, and the epic retires the hand-patches |
+
+Each is recorded below with the ruling that resolves it, so the epic's definition of done
+includes them.
 
 ### 13.1 A shadowed call reads the winner's parameter modes
 
@@ -845,7 +995,7 @@ the key.
 
 **The correct answer already exists and is thrown away.** `collector.run(unit.ast, unit_name=…, unit_file=…)`
 builds one `SymbolTables` per unit, and `merge_all` folds it into the global tables and
-drops it (`semantic_analyzer.py:168-175`). `_replace_shadowed_functions`
+drops it (`semantic_analyzer.py:174-181`). `_replace_shadowed_functions`
 (`semantics/symbol_merger.py`) then lets the consumer's declaration replace the library's
 and books the library as a loser of the name. The type pass knows it is looking at a loser
 and validates the arguments alone, because the loser's signature is gone. Phase 1 keeps the
@@ -869,12 +1019,13 @@ plan.
 ### 13.2 Collection order: dependencies before dependents
 
 `LEFT.md` item 3, **option B**. Option A — one sweep for perk definitions before the
-collect loop — fixes that item's symptom now and is not this epic's work. Option B is the
-class fix, and it belongs here because **a per-unit scope cannot be built before its
-dependencies are collected**.
+collect loop — landed in **#488** as `CollectorPass.collect_perk_definitions`
+(`passes/collect/__init__.py:159`, called at `semantic_analyzer.py:168`), so the symptom
+below no longer reproduces. Option B is still the class fix, and it belongs here because
+**a per-unit scope cannot be built before its dependencies are collected**.
 
-The symptom, still reproducing on this tree: two ordinary units cannot implement each
-other's perks.
+The symptom, as it read before #488: two ordinary units could not implement each other's
+perks.
 
 <!-- docs-sweep: skip (records today's behaviour; two units) -->
 ```sushi
@@ -891,6 +1042,11 @@ public perk Heavy:               use "helpers/traits"
 error [CE4003]: unknown perk: Heavy.
 error [CE2008]: undefined function 'Pallet.weigh'.
 ```
+
+That program compiles today. What it cost is a second hand-patch: the pre-sweep answers
+the two rules that read the perk table (CE4003, and CE4011 for the marker) ahead of the
+loop, and it answers nothing else. Every other order-sensitive table still sees a dependent
+before its dependency.
 
 **The order is measured, not incidental.** `topological_sort` (`semantics/units.py:157`)
 counts in-degree as "how many units depend on me" and starts its queue at the units nothing
@@ -914,6 +1070,72 @@ table changes its winner". Under phase 1 that price is only partly paid:
 Phase 2 pays the rest by making the three kinds coexist, at which point nothing is
 first-wins and the order stops being observable at all.
 
-`_library_units_first` retires with the reversal: a library unit is a dependency of
-everything the consumer wrote, so a dependencies-first order puts it in front without being
-told to.
+**Two hand-patches retire with the reversal**, and they are the measure of what it is
+worth. `_library_units_first` goes because a library unit is a dependency of everything the
+consumer wrote, so a dependencies-first order puts it in front without being told to. The
+`collect_perk_definitions` pre-sweep goes for the same reason: a perk declared next door is
+in the table when the implementing unit is reached, without a sweep that knows about perks
+in particular. Two order-shaped patches for two declaration kinds is the argument that the
+ORDER is what is wrong.
+
+## 14. What this epic owes `visibility.md`
+
+`visibility.md` is implemented and this document builds on it. It also **supersedes** parts
+of it: several of its rulings are stated against one flat namespace, and this epic is what
+removes that. A superseded ruling that still reads as current is worse than no document, so
+the epic is not done until `visibility.md` says what the compiler does.
+
+**The rule.** `docs/design/visibility.md` is edited as the last commit of each phase, not
+before it and not in a follow-up issue. The edit records drift; it never re-argues a
+ruling. Where a ruling survives with a narrower reach, the reach changes and the reasoning
+stays. Where a ruling is retired, it says which phase retired it and points here.
+
+**`visibility.md` stays normative for the marker.** Which declarations carry `public`, what
+the default is, how a method inherits its target's visibility, and the leak fence are its
+rulings and this document does not move any of them. What changes is only ever the sentence
+that says a name is unique program-wide.
+
+### 14.1 Phase 1's edit
+
+| `visibility.md` | Today | After phase 1 |
+|---|---|---|
+| §1, "**`public` in Sushi controls callability, not namespacing**" — the deciding fact | privacy can only mean "you may not name mine" | narrows to TYPES. A `fn` and a `const` coexist; a `struct`, an `enum` and a `perk` still do not |
+| §1, "The constraint that does not move" — the `CE0004` example | stands for every kind | stands for types only; the `CE0101` twin below it goes, and `CE0105` with it |
+| §1, the `CE0101` → `CE3005` cascade example | a fixed defect, recorded | the shape stops being an error at all |
+| §8, "**Per-unit namespacing**" — "two units still cannot each declare a private `Node`" | true, and cited as a thing visibility does not decide | true for `Node`, false for a function and a constant. Point at section 7's phase table here |
+| §9.1, the four-combination table | four rows, one of them `CE3003` | rebuilt: `CE3003` retires (section 10), `CE3011` narrows to types, and the private/private row becomes legal |
+| §9.1, "the merge kept the library's signature", `_replace_shadowed_functions`, "booked as a loser of the name" | the machinery that makes shadowing work | retired (section 8). The per-unit key leaves no winner to displace |
+| §9.1, `CW3002` | warns, with no way to make the choice explicit | warns, and `as` is now the answer its `doc` string promised |
+| §7, "The manifest protocol is **2.1**" | 2.1 | bumped: section 9 adds the link symbol beside the Sushi name for a binary `.slib` |
+| §3 Ruling 2, "an extension inherits its target type's marker" | unchanged | unchanged, plus a pointer to `CW3003` (section 8): the marker is inherited, and claiming a method on a type you did not declare is still a hazard at `--lib` time |
+| §4, "Sushi has no name-level import: `use "unit"` brings a whole unit" | true | still true — this epic is unit-level. Point at section 12, which is where a selective import would be decided |
+
+Two of its rulings are load-bearing here and must NOT be softened. §1's "only functions
+carried a unit of origin" is the history that section 3.1's provider ruling rests on, and
+Ruling 2 — a method is found on the receiver's type — is the reason section 8 cannot put an
+extension behind a namespace.
+
+### 14.2 Phase 2's edit
+
+Phase 2 finishes the sentence. §1's deciding fact, §1's "constraint that does not move" and
+§8's "Per-unit namespacing" all retire together, because nominal identity is what they
+appealed to and `docs/design/type-identity.md` is where it changes. `visibility.md` keeps
+one line in place of the three: privacy is a marker, coexistence is a namespace, and the
+two are decided in different documents.
+
+### 14.3 The other documents
+
+The same last-commit rule applies to whatever else the phase falsifies, and the checklist is
+short because the reference map in `CLAUDE.md` names the owner of each:
+
+- `CLAUDE.md` — Known Limitation 15 is written entirely against the flat namespace and is
+  what phase 1 and phase 2 close between them; the visibility paragraph gains the alias.
+- `docs/language-reference.md`, `docs/language-guide.md` — `use` gains a clause.
+- `docs/design/type-identity.md` — phase 2 is its ruling to make, not this document's.
+- `docs/design/method-resolution.md` — section 12 leaves it coherence and ownership.
+- `docs/libraries.md`, `docs/library-format.md` — the manifest field of section 9.
+- `internals/errors/unit.py`, `warnings.py` — the `doc` strings of `CE3011` and `CW3002`
+  are the only two in the catalogue that name this document as the design that lifts them,
+  so both are edited by the commit that lifts them. `CW3002`'s also says "the one
+  combination that would break the link -- both declarations public -- is CE3003 already",
+  which stops being true when section 10 retires that code.

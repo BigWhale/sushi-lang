@@ -50,6 +50,9 @@ ALLOWED = {
     # "(The old `semantics/pipeline.py` scaffold ... deleted in Tier 3 ...)" (closures.md).
     "backend/interfaces.py",
     "semantics/pipeline.py",
+    # The one seam of the unit-namespaces epic (docs/design/unit-namespaces.md
+    # section 3): phase P3 creates it, and the design document names it before then.
+    "semantics/namespaces.py",
 }
 
 
