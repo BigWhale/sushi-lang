@@ -435,9 +435,8 @@ class LLVMCodegen:
             llmod = two_phase.link()
 
         else:
-            for unit in units:
-                if unit.ast is not None:
-                    self.stdlib.link_stdlib_modules(llmod, unit.ast)
+            self.stdlib.link_stdlib_modules(
+                llmod, [unit.ast for unit in units if unit.ast is not None])
 
         self.optimizer.ensure_target(llmod)
 
@@ -491,9 +490,8 @@ class LLVMCodegen:
 
         llmod = llvm.parse_assembly(str(mod_ir))
 
-        for unit in units:
-            if unit.ast is not None:
-                self.stdlib.link_stdlib_modules(llmod, unit.ast)
+        self.stdlib.link_stdlib_modules(
+            llmod, [unit.ast for unit in units if unit.ast is not None])
 
         self.optimizer.ensure_target(llmod)
 

@@ -1,0 +1,14 @@
+# Three units import one stdlib module on the monolithic path (#493).
+# COMPILER_FLAGS: --no-incremental
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n2 4\n"
+use <collections/strings>
+use "helpers/counter"
+use "helpers/ruler"
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let string b = "de"
+    println("{width(b).realise(0)} {twice_width(b).realise(0)}")
+
+    return Result.Ok(0)
