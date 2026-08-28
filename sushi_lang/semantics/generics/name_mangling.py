@@ -8,7 +8,8 @@ if TYPE_CHECKING:
 
 # Reserved pack-marker token. A ".pack{N}" segment is appended for pack
 # instantiations. The "." separator is what makes invariant (D) STRUCTURAL
-# rather than probabilistic: see the (D) note in mangle_function_name.
+# rather than probabilistic, and `tests/unit/test_pack_mangling.py` is where
+# invariant (D) is stated and gated.
 _PACK_MARKER = "pack"
 
 # The pack marker's separator. A "." is chosen because it lies OUTSIDE the alphabet of

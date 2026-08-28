@@ -17,7 +17,8 @@ order; this list mirrors it.
 | `docs` | check each doc block against its declaration (CE7001-CE7008, CW7001), and its completeness under `--warn-missing-docs` (CW7002-CW7006) | `semantics/passes/docs.py` |
 | `externs` | extern signatures (CE5003), `CW5001`, the `ptr` unit gate (CE5009) | `semantics/passes/types/externals.py` |
 | `libraries` | register every symbol a `.slib` exports | `semantics/semantic_analyzer.py` |
-| `namespaces` | bind what each unit may write behind a dot (CE3013, CE3014, CW3004) | `semantics/passes/namespaces.py` |
+| `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds (CE3013, CE3014, CW3004) | `semantics/passes/namespaces.py` |
+| `ffi-clash` | reject an `unsafe external` that names a symbol this build defines (CE5013) | `semantics/passes/types/externals.py` |
 | `entrypoint` | `main()`'s signature and its `string[] args` | `semantics/semantic_analyzer.py` |
 | `instantiate` | collect every generic instantiation the program asks for | `semantics/generics/instantiate/` |
 | `monomorphize` | generic definitions become concrete instances | `semantics/generics/monomorphize/` |
@@ -118,8 +119,8 @@ never be shown its own code measured against somebody else's declaration -- whic
 
 The rules that read it live where the use is: `passes/types/visibility.py` for a call and a
 bare constant read, the type funnel for a named type, the collect pass itself for a
-declaration that collides with a library's (CE3011) or promises something about a private
-perk (CE4011), and `passes/types/public_signatures.py` for the leak fence (CE3009,
+TYPE declaration that collides with a library's (CE3011) or a declaration that promises
+something about a private perk (CE4011), and `passes/types/public_signatures.py` for the leak fence (CE3009,
 CE3010). `docs/design/visibility.md` is normative.
 
 ### One reporter, many files
