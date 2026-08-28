@@ -15,3 +15,10 @@ public fn lib_bump(i32 n) i32:
 public fn lib_tally(i32 n) i32:
     let Tally t = Tally(n)
     return Result.Ok(t.count + 100)
+
+const i32 SCRATCH = 4096
+
+public const i32 LIB_SHOWN = 9
+
+public fn lib_scratch() i32:
+    return Result.Ok(SCRATCH + 4)

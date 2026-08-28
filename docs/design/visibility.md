@@ -658,8 +658,10 @@ is what its own text promised.
 
 For a TYPE, even a public library name stays the plain duplicate (CE0004 / CE2046), and a
 library's PRIVATE type is **CE3011**: type identity is nominal, so one name is one shape
-and the consumer cannot have its own. A library's private CONSTANT is refused too, with
-CE0105 (#507), which is the function rule's shape with another code.
+and the consumer cannot have its own. A library's private CONSTANT is not refused: it is
+the function rule's shape and it takes the function rule's answer, so the two coexist and
+each unit reads its own (#507). A library's PUBLIC constant stays a duplicate, because
+that name is one the consumer can see and read.
 
 ### 9.2 The perk-implementation override stays, and its record moved onto the table
 

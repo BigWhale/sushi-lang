@@ -1,0 +1,10 @@
+# The control. A library's PUBLIC constant is a name the consumer can see and
+# read, so taking it again is still a duplicate (#507).
+# EXPECT_ERROR_CODE: CE0105
+use <lib/private_names_lib>
+
+const i32 LIB_SHOWN = 3
+
+fn main() i32:
+    println("{LIB_SHOWN}")
+    return Result.Ok(0)

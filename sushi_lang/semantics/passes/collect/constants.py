@@ -78,6 +78,24 @@ class ConstantCollector:
                 if isinstance(const, ConstDef):
                     self._collect_constant_def(const)
 
+    def _collides_with_a_library_export(self, prev: ConstSig, sig: ConstSig) -> bool:
+        """Is either declaration a name a source library EXPORTS?
+
+        A library's PUBLIC constant is a name the consumer can see and read, so taking
+        it again is a duplicate. Its PRIVATE one is not: the consumer cannot see it, and
+        section 9 gives each declaration its own `<unit>$<name>` global exactly as it
+        does for a function -- the shape decision F made legal there and left refused
+        here (#507).
+
+        Both directions, because nothing fixes which of the two units is collected
+        first, and each direction reads the LIBRARY declaration's own marker.
+        """
+        if prev.unit_name in self.library_units:
+            return bool(prev.is_public)
+        if sig.unit_name in self.library_units:
+            return bool(sig.is_public)
+        return False
+
     def _collect_constant_def(self, const: ConstDef) -> None:
         """Collect a single constant definition."""
         name = getattr(const, "name", None)
@@ -111,8 +129,7 @@ class ConstantCollector:
             prev_unit = getattr(prev, "unit_name", None)
             if (prev_unit is None
                     or prev_unit == self.current_unit_name
-                    or prev_unit in self.library_units
-                    or self.current_unit_name in self.library_units):
+                    or self._collides_with_a_library_export(prev, sig)):
                 er.emit_with(self.r, ERR.CE0105, name_span, name=name) \
                     .note("first defined here", prev.name_span, prev.filename).emit()
                 return
