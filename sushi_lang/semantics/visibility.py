@@ -270,11 +270,15 @@ def library_clash_origin(
 ) -> Optional[DeclOrigin]:
     """The LIBRARY declaration a consumer's own declaration collides with, or None.
 
-    A consumer cannot win a name a source library or a bundled stdlib module already
-    declared. There used to be a shadow branch that let it try; it deleted the library's
-    entry and registered no replacement, so the consumer lost its own declaration too.
-    Completing it is not safe either, because one namespace means the library's own bodies
-    would then call the consumer's function. CE3011 refuses it instead.
+    Two callers read this, and each reads it for its own kind. A TYPE the library holds
+    is a name the consumer cannot declare again, because identity is nominal and one name
+    is one shape: CE3011 refuses it. A FUNCTION is only asked about here to see whether
+    the library EXPORTS the name, which is the CW3002 warning; a library's private
+    function coexists with the consumer's, because each carries the unit that declared it.
+
+    There used to be a shadow branch that let a consumer take a library's name; it deleted
+    the library's entry and registered no replacement, so the consumer lost its own
+    declaration too.
 
     The answer is read from this table rather than from each symbol table, because a
     struct table carries a file and not a unit. The table is filled at the END of each

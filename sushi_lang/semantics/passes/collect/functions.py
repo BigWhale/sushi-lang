@@ -38,7 +38,6 @@ from sushi_lang.semantics.generics.types import (
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_origin,
-    reject_library_clash,
     reject_private_perk_constraints,
 )
 
@@ -492,16 +491,17 @@ class FunctionCollector:
                        *, may_coexist: bool) -> Redeclaration:
         """A name already taken. What that means for the declaration taking it again.
 
-        Four answers, and who owns the previous declaration decides which. A library's
+        Three answers, and who owns the previous declaration decides which. A library's
         PUBLIC name may be replaced -- symbol priority puts the program's own
         declaration first, and `tests/libs/test_warn_lib_override.sushi` is that
         contract -- so this warns with CW3002 and the caller completes the replacement.
-        A library's PRIVATE name may not be replaced (CE3011): one namespace means the
-        library's own bodies would start calling the consumer's function, and the
-        consumer cannot even see the name it collides with. Another of the program's own
-        units COEXISTS: each declaration takes its own `<unit>$<name>` symbol, so
-        neither has to lose (`docs/design/unit-namespaces.md` section 9). The same name
-        twice inside ONE unit is the duplicate CE0101 still answers.
+        Any other unit's declaration COEXISTS, a library's own private one included:
+        each takes its own `<unit>$<name>` symbol and each unit's scope reads its own
+        (`docs/design/unit-namespaces.md` sections 9 and 6). The same name twice inside
+        ONE unit is the duplicate CE0101 still answers.
+
+        CE3011 was the fourth answer and it keeps the TYPE arms alone, because a type is
+        one name for the whole program until `docs/design/type-identity.md`'s phase 2.
 
         `may_coexist` is FALSE wherever a GENERIC is one of the two. `FunctionTable`
         carries a per-unit view and `GenericFunctionTable` does not, so a generic name is
@@ -512,13 +512,9 @@ class FunctionCollector:
         clash = library_clash_origin(
             self.visibility, "function", name,
             current_unit=self.current_unit_name, library_units=self.library_units)
-        if clash is not None:
-            if clash.is_public:
-                self._warn_shadowed_export(name, name_span, clash)
-                return Redeclaration.REPLACE
-            reject_library_clash(self.r, clash, name_span, kind="function", name=name,
-                                 filename=self.current_unit_file)
-            return Redeclaration.REFUSED
+        if clash is not None and clash.is_public:
+            self._warn_shadowed_export(name, name_span, clash)
+            return Redeclaration.REPLACE
         prev_unit = getattr(prev, "unit_name", None)
         if may_coexist and prev_unit is not None and prev_unit != self.current_unit_name:
             return Redeclaration.COEXIST
