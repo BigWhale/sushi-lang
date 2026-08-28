@@ -58,15 +58,24 @@ Collect global definitions before analyzing function bodies.
 4. **Symbol Table**: Build initial global scope
 5. **Visibility**: Record who declared what, and whether it says `public`
 
-### Perk definitions come first, from every unit
+### A unit is collected after the units it depends on
 
-The loop that collects the units is not the first walk. Every unit's perk DEFINITIONS are
-collected ahead of it (`CollectorPass.collect_perk_definitions`), because a perk is a
-contract and an implementation meets two rules that read a table: the perk exists
-(`CE4003`), and its marker lets this unit implement it (`CE4011`). The compilation order
-puts a dependent before its dependency, so without the sweep a perk declared next door
-arrived after the unit that implements it. Registering one declaration twice is a no-op,
-so the unit's own pass walks it again without reporting `CE4001`.
+The compilation order (`UnitManager.topological_sort`) yields every unit AFTER the units
+it depends on. The walk itself counts in-degree as "how many units depend on me" and so
+produces the opposite; the result is reversed once, and the direction is a ruling
+(`docs/design/unit-namespaces.md` section 13.2): a unit's scope is built from what its own
+imports declare, so the declaring unit has to be collected already.
+
+A source library's units and a bundled Sushi-source stdlib module are injected as ordinary
+compilation units, and `build_dependency_graph` records the edge that an import of one
+creates. That is why a library unit comes first without being told to. A binary `.slib`
+matches no unit and adds no edge, because it has no unit to compile.
+
+Two hand-patches retired with the order. Library units were pulled to the front of the
+collect loop, and every unit's perk DEFINITIONS were swept up ahead of the loop so that an
+implementation could meet the two rules that read the perk table -- the perk exists
+(`CE4003`), and its marker lets this unit implement it (`CE4011`). A perk declared next
+door is in the table when the implementing unit is reached, so neither patch is needed.
 
 ### Example
 

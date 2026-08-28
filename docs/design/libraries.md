@@ -182,12 +182,15 @@ Three rules make this sound:
 - **The registry is skipped.** For `kind = "source"`, none of the
   `_register_library_*` helpers in `semantics/semantic_analyzer.py` runs. A library
   unit is an ordinary unit, so the ordinary passes handle it.
-- **Library units are COLLECTED first.** The compilation order puts dependents before
-  dependencies, which is right for codegen and wrong for collection: a consumer's
+- **Library units are COLLECTED first, and the order says why.** A consumer's
   `extend i32 with Display` is checked against the perks visible when its own unit is
-  collected, so a perk the library declares has to be in the table already. Seeding it
-  ahead of the loop the way `_seed_library_perks` does for a binary library would
-  register the same perk twice (CE4001), because this one also arrives in a real unit.
+  collected, so a perk the library declares has to be in the table already. The
+  compilation order yields every unit after the units it depends on
+  (`docs/design/unit-namespaces.md` section 13.2), and `build_dependency_graph` records
+  the edge a `use <lib/...>` creates, so a source library's units come first without a
+  hand-patch. Seeding them ahead of the loop the way `_seed_library_perks` does for a
+  binary library would register the same perk twice (CE4001), because this one also
+  arrives in a real unit.
 - **A consumer definition SHADOWS a library one, silently.** Same rule the binary path
   documents in §7, now enforced for functions, generics and perk impls by
   `passes/collect/`. Without it, `--lib-kind` would change program semantics instead of

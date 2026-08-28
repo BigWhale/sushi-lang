@@ -961,8 +961,8 @@ What remains here is therefore one open defect and one prerequisite:
 
 | | Was | Now |
 |---|---|---|
-| **13.1** a shadowed call reads the winner's parameter modes | waiting | **still open.** It is the one #487 item this epic must close |
-| **13.2** collection order: dependencies before dependents | waiting | its **symptom is fixed** (#488 took option A). The ordering ruling stands as a phase-1 prerequisite, and the epic retires the hand-patches |
+| **13.1** a shadowed call reads the winner's parameter modes | waiting | **CLOSED.** Both readers of a callee's modes ask with a unit |
+| **13.2** collection order: dependencies before dependents | waiting | **LANDED.** The order is reversed and both hand-patches are gone |
 
 Each is recorded below with the ruling that resolves it, so the epic's definition of done
 includes them.
@@ -1032,13 +1032,22 @@ its own and stays available. It is a second answer to "which declaration does th
 mean", and this document's whole content is the first, so it is a fallback and not the
 plan.
 
+**What landed.** `FunctionTable` gained `by_unit` beside `by_name`. The flat view keeps
+one declaration per name and stays the winner of a shadowed name, so every reader with no
+asking unit answers as it did; `by_unit` keeps every declaration under the unit that wrote
+it, and `view_for`/`lookup` read it. Both readers named above now ask with a unit: the
+borrow pass builds its resolver from the unit it is about to walk, and the back end
+resolves a named callee through the unit whose bodies it is emitting. The DIAGNOSTIC is
+what this closes. Two units may still not declare one name -- that waits for the mangling
+of section 9, which is what gives two bodies two symbols.
+
 ### 13.2 Collection order: dependencies before dependents
 
-`LEFT.md` item 3, **option B**. Option A — one sweep for perk definitions before the
-collect loop — landed in **#488** as `CollectorPass.collect_perk_definitions`
-(`passes/collect/__init__.py:159`, called at `semantic_analyzer.py:168`), so the symptom
-below no longer reproduces. Option B is still the class fix, and it belongs here because
-**a per-unit scope cannot be built before its dependencies are collected**.
+`LEFT.md` item 3, **option B**, and it has LANDED. Option A — one sweep for perk
+definitions before the collect loop — landed first, in **#488**, as
+`CollectorPass.collect_perk_definitions`. Option B is the class fix, and it belongs here
+because **a per-unit scope cannot be built before its dependencies are collected**. It
+retired option A with it.
 
 The symptom, as it read before #488: two ordinary units could not implement each other's
 perks.
@@ -1086,13 +1095,24 @@ table changes its winner". Under phase 1 that price is only partly paid:
 Phase 2 pays the rest by making the three kinds coexist, at which point nothing is
 first-wins and the order stops being observable at all.
 
-**Two hand-patches retire with the reversal**, and they are the measure of what it is
-worth. `_library_units_first` goes because a library unit is a dependency of everything the
-consumer wrote, so a dependencies-first order puts it in front without being told to. The
-`collect_perk_definitions` pre-sweep goes for the same reason: a perk declared next door is
-in the table when the implementing unit is reached, without a sweep that knows about perks
-in particular. Two order-shaped patches for two declaration kinds is the argument that the
-ORDER is what is wrong.
+**Two hand-patches retired with the reversal**, and they are the measure of what it was
+worth. `_library_units_first` went because a library unit is a dependency of everything the
+consumer wrote, so a dependencies-first order puts it in front without being told to — once
+the graph carries the edge. It did not: `Unit.dependencies` holds user-unit imports alone,
+and a source library's units arrive by injection, so `build_dependency_graph` now adds the
+edge that an import of an injected unit creates. The `collect_perk_definitions` pre-sweep
+went for the same reason as the first patch: a perk declared next door is in the table when
+the implementing unit is reached, without a sweep that knows about perks in particular. Two
+order-shaped patches for two declaration kinds was the argument that the ORDER was what was
+wrong.
+
+**Two positions stopped meaning "the entry unit" by accident.** A synthesized instance goes
+to `units[0]` and a lifted body to the first unit with an AST, and both were the entry unit
+only while the order put a dependent first. `Unit.is_entry` names it instead. A third,
+in the back end, is the same shape: a unit's own module declares that unit's functions
+FIRST, so a name it shadows keeps internal linkage and its call binds to its own
+definition. One symbol name holds one declaration in a module, which is why the order could
+reach that far at all, and section 9's mangling is what ends it.
 
 ## 14. What this epic owes `visibility.md`
 
