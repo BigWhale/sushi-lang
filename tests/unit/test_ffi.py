@@ -341,7 +341,6 @@ def _emit_ir(tmp_path, src: str) -> str:
     unit_manager = UnitManager(root_path=tmp_path, reporter=reporter)
     unit = unit_manager.load_unit("main", program)
     assert unit is not None
-    unit_manager.build_global_symbol_table()
     order = unit_manager.get_compilation_order()
 
     analyzer = SemanticAnalyzer(reporter, filename="main", unit_manager=unit_manager)

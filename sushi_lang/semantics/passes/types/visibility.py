@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, AbstractSet, Any, Optional
 
+from sushi_lang.internals import errors as er
 from sushi_lang.semantics.visibility import (
     DeclOrigin,
     origin_of,
@@ -19,7 +20,8 @@ from sushi_lang.semantics.visibility import (
 if TYPE_CHECKING:
     from . import TypeValidator
 
-__all__ = ["name_is_contested", "reject_private_call", "reject_private_kept",
+__all__ = ["name_is_contested", "reject_ambiguous_name",
+           "reject_private_call", "reject_private_kept",
            "reject_private_kept_call", "reject_private_name",
            "reject_private_type"]
 
@@ -36,6 +38,33 @@ def name_is_contested(validator: 'TypeValidator', kind: str, name: str) -> bool:
     if table is None:
         return False
     return table.contested_by(kind, name, validator.current_unit_name)
+
+
+def reject_ambiguous_name(validator: 'TypeValidator', kind: str, name: str,
+                          loc: Any) -> bool:
+    """CE3012: more than one unit in scope offers this name. True when it was refused.
+
+    Section 6 of `docs/design/unit-namespaces.md`. The refusal stands at the USE, where
+    the choice was not made, and it names every candidate. CE3003 refused the whole
+    program instead, for a collision that might never be written.
+    """
+    table = getattr(validator, "visibility", None)
+    if table is None:
+        return False
+    candidates = table.candidates(kind, name, validator.current_unit_name)
+    if len(candidates) < 2:
+        return False
+
+    diagnostic = er.emit_with(validator.reporter, er.ERR.CE3012, loc, name=name)
+    for origin in candidates:
+        if origin.name_span is not None:
+            diagnostic = diagnostic.note(
+                f"unit '{origin.unit_name}' declares it here",
+                origin.name_span, origin.filename)
+    first = candidates[0].unit_name
+    diagnostic.help(f"say which one: `use \"{first}\" as u` above, then `u.{name}`") \
+        .emit()
+    return True
 
 
 def _reject(validator: 'TypeValidator', origin: DeclOrigin, loc: Any) -> bool:

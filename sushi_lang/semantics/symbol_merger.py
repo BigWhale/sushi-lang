@@ -43,8 +43,10 @@ class SymbolTableMerger:
         """
         for origin in unit_table.by_key.values():
             global_table.record(origin)
-        for key, units in unit_table.contested.items():
-            global_table.contested.setdefault(key, set()).update(units)
+        for key, origins in unit_table.contested.items():
+            merged = global_table.contested.setdefault(key, [])
+            known = {other.unit_name for other in merged}
+            merged.extend(o for o in origins if o.unit_name not in known)
 
     @staticmethod
     def _merge_by_name(unit_table, global_table) -> None:

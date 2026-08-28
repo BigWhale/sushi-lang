@@ -119,13 +119,17 @@ class VisibilityTable:
 
     by_key: dict[tuple[str, str], DeclOrigin] = field(default_factory=dict)
 
-    # The units that declared a name the table had already taken. The winner is in
-    # `by_key`, and no rule may measure a loser's own code against it -- the whole of the
-    # D2 cascade family. A TYPE loser has heard why it lost (CE0004, CE0006, CE3011). A
-    # function or a constant loses only this table's answer now, not the name: each takes
-    # its own `<unit>$<name>` symbol and its own entry in `by_unit`, which is what its own
-    # code is measured against (`docs/design/unit-namespaces.md` section 9).
-    contested: dict[tuple[str, str], set[str]] = field(default_factory=dict)
+    # Every LATER declaration of a name the table had already taken, in the order the
+    # collect pass saw them. The winner is in `by_key`, and no rule may measure a loser's
+    # own code against it -- the whole of the D2 cascade family. A TYPE loser has heard
+    # why it lost (CE0004, CE0006, CE3011). A function or a constant loses only this
+    # table's answer now, not the name: each takes its own `<unit>$<name>` symbol and its
+    # own entry in `by_unit`, which is what its own code is measured against
+    # (`docs/design/unit-namespaces.md` section 9).
+    #
+    # The ORIGIN is kept and not just the unit name, because `CE3012` names every
+    # candidate a written name could mean and points at each declaration.
+    contested: dict[tuple[str, str], list[DeclOrigin]] = field(default_factory=dict)
 
     def record(self, origin: DeclOrigin) -> None:
         """Remember a declaration. The FIRST one wins, as every symbol table does.
@@ -143,7 +147,9 @@ class VisibilityTable:
             # and the merger replays it per unit -- or a duplicate inside one unit, which
             # CE0101 already answers with no other unit to name.
             if origin.unit_name is not None and origin.unit_name != kept.unit_name:
-                self.contested.setdefault(key, set()).add(origin.unit_name)
+                seen = self.contested.setdefault(key, [])
+                if not any(other.unit_name == origin.unit_name for other in seen):
+                    seen.append(origin)
             return
         self.by_key[key] = origin
 
@@ -158,7 +164,24 @@ class VisibilityTable:
         """
         if unit is None:
             return False
-        return unit in self.contested.get((kind, name), ())
+        return any(other.unit_name == unit
+                   for other in self.contested.get((kind, name), ()))
+
+    def candidates(self, kind: str, name: str,
+                   unit: Optional[str]) -> list[DeclOrigin]:
+        """Every declaration of this name that `unit` may name, its own excluded.
+
+        The answer to "what could an unqualified name mean here". Two or more is
+        `CE3012` (`docs/design/unit-namespaces.md` section 6): the asking unit's own
+        declaration wins outright, and a private one next door is not a candidate at
+        all -- it is not nameable, so it cannot be part of an ambiguity.
+        """
+        winner = self.by_key.get((kind, name))
+        if winner is None:
+            return []
+        found = [winner, *self.contested.get((kind, name), ())]
+        return [origin for origin in found
+                if origin.unit_name != unit and _permitted(origin, unit)]
 
     def is_visible_from(self, kind: str, name: str, unit: Optional[str]) -> bool:
         """May `unit` name this declaration? An unrecorded name always may."""

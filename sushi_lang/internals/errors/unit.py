@@ -18,9 +18,11 @@ _add(ErrorMessage("CE3002", Severity.ERROR,
     "unit '{name}' not found (expected: {path})",
     Category.UNIT, "A required unit file could not be found at the expected location."))
 
-_add(ErrorMessage("CE3003", Severity.ERROR,
-    "duplicate public symbol '{symbol}' found in units: {units}",
-    Category.UNIT, "Multiple units export the same public symbol name, creating an ambiguity. Names are flat across a program, so one exported name has one owner. Rename one of them, or keep one of them private. A note points at each declaration."))
+# CE3003 (a duplicate public symbol, reported for the whole program with no location)
+# was RETIRED by `docs/design/unit-namespaces.md` section 6. It refused a program for a
+# collision that might never be written, and it had no escape: two libraries exporting
+# `sine` could not be used together at all. `CE3012` below is the answer -- at the USE,
+# naming every candidate, and lifted by writing `as`.
 
 _add(ErrorMessage("CE3004", Severity.ERROR,
     "invalid unit path '{path}': {reason}",
@@ -56,9 +58,9 @@ _add(ErrorMessage("CE3011", Severity.ERROR,
     "cannot declare {kind} '{name}': '{owner}' declares it too",
     Category.UNIT, "Names are flat across a program. A source library's units and a bundled stdlib module are ordinary compilation units at the consumer, so a name either of them declares is a name the consumer cannot declare again. The compiler used to let the consumer's declaration replace the library's without saying anything, which is not safe in one namespace: the library's own bodies then call the consumer's function. In practice it was worse, because the replacement was never registered -- the consumer lost its own declaration as well, and heard CE3005 about a private it wrote itself, or CE2027 about a struct shape it never spelled. Rename your declaration. `docs/design/unit-namespaces.md` carries the qualified-name design that would lift this."))
 
-# CE3012 (an unqualified name offered by more than one flat import) is the third code
-# `docs/design/unit-namespaces.md` section 10 reserves. It arrives with the per-unit
-# scope that creates the condition; nothing can offer two candidates until then.
+_add(ErrorMessage("CE3012", Severity.ERROR,
+    "'{name}' is offered by more than one import",
+    Category.UNIT, "More than one unit in scope declares this name, and nothing written here says which one is meant. A note points at each candidate. The unit's OWN declaration always wins, so this can only happen where the name comes from somewhere else entirely; a private declaration next door is not a candidate, because it is not nameable. Bind one of the units to an alias and write the name behind it -- `use \"math\" as m` makes `m.sine` the answer -- or rename one of the declarations. This replaces CE3003, which refused the whole program for a collision that might never be written, said so with no location, and left two libraries that both exported one name unusable together."))
 
 _add(ErrorMessage("CE3013", Severity.ERROR,
     "'{alias}' is already bound in this unit",

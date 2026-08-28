@@ -65,7 +65,6 @@ def _analyze_source(tmp_path, src: str, name: str,
     unit = unit_manager.load_unit(name, program)
     if unit is None:
         return Analysis(reporter=reporter, program=program, analyzer=None)
-    unit_manager.build_global_symbol_table()
     unit_manager.get_compilation_order()
 
     analyzer = SemanticAnalyzer(reporter, filename=name, unit_manager=unit_manager,

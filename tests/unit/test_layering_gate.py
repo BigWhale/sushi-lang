@@ -122,7 +122,6 @@ _ISOLATION_SCRIPT = textwrap.dedent('''
 
     unit_manager = UnitManager(root_path=Path(src_path).parent, reporter=reporter)
     unit = unit_manager.load_unit("main", program)
-    unit_manager.build_global_symbol_table()
     unit_manager.get_compilation_order()
 
     analyzer = SemanticAnalyzer(reporter, filename="main", unit_manager=unit_manager)

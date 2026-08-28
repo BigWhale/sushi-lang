@@ -79,7 +79,7 @@ class Unit:
         Now that one carries a marker, an unmarked constant is this unit's own and
         leaves nothing behind here: it is not an export, it does not invalidate a
         consumer's cache, and a name clash with another unit's private is an ordinary
-        duplicate (CE0105) rather than an ambiguous export (CE3003).
+        duplicate (CE0105) rather than an export nobody can name.
         """
         if self.ast is None:
             self.public_symbols = {}
@@ -123,7 +123,6 @@ class UnitManager:
         """Initialize the unit manager."""
         self.root_path = root_path or Path.cwd()
         self.units: Dict[str, Unit] = {}
-        self.global_symbols: Dict[str, Symbol] = {}
         self.reporter = reporter
         self.err = PassErrorReporter(reporter) if reporter else None
 
@@ -257,56 +256,6 @@ class UnitManager:
                     return result
 
         return []  # No cycle found
-
-    def build_global_symbol_table(self) -> bool:
-        """Build the global symbol table from all loaded units.
-
-        The table's one reader is CE3003 below. It answers a question a public name still
-        raises and a private one no longer does: two units may each declare `helper` now,
-        each taking its own `<unit>$<name>` symbol, but nothing yet says which of two
-        EXPORTED `sine`s an unqualified call means. `CE3012` is that answer
-        (`docs/design/unit-namespaces.md` section 8), and this refusal stands until it
-        exists.
-        """
-        symbol_units: Dict[str, List[str]] = {}
-        success = True
-
-        for unit in self.units.values():
-            for symbol_name, symbol in unit.public_symbols.items():
-                if symbol_name not in symbol_units:
-                    symbol_units[symbol_name] = []
-                symbol_units[symbol_name].append(unit.name)
-
-                if symbol_name not in self.global_symbols:
-                    self.global_symbols[symbol_name] = symbol
-
-        for symbol_name, units in symbol_units.items():
-            if len(units) > 1:
-                if self.reporter:
-                    self._report_ambiguous_export(symbol_name, units)
-                success = False
-
-        return success
-
-    def _report_ambiguous_export(self, symbol_name: str, units: List[str]) -> None:
-        """CE3003, with a note at every declaration that claims the name.
-
-        It used to render tier 1 -- no file, no line, no caret -- for a condition that
-        has one declaration per unit to point at. Each unit's `public_symbols` carries
-        the AST node, so the span is right there.
-        """
-        diagnostic = self.err.emit_with(
-            er.ERR.CE3003, None,
-            symbol=symbol_name, units=", ".join(units))
-        for unit_name in units:
-            unit = self.units.get(unit_name)
-            if unit is None:
-                continue
-            symbol = unit.public_symbols.get(symbol_name)
-            span = getattr(getattr(symbol, "definition", None), "name_span", None)
-            if span is not None:
-                diagnostic = diagnostic.note("exported here", span, str(unit.file_path))
-        diagnostic.emit()
 
     def get_compilation_order(self) -> Optional[List[Unit]]:
         """Get units in compilation order, with dependencies compiled first."""

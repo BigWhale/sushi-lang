@@ -57,7 +57,6 @@ def test_two_units_get_distinct_lifted_names(tmp_path: Path):
     loaded = {"main"}
     for dep in unit.dependencies:
         assert load_unit_recursively(unit_manager, dep, loaded, reporter)
-    unit_manager.build_global_symbol_table()
     order = unit_manager.get_compilation_order()
     assert order is not None and len(order) == 2
 

@@ -6,7 +6,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, StructType
 from sushi_lang.semantics.ast import Call, Name, Spread
-from ..visibility import (name_is_contested, reject_private_call,
+from ..visibility import (name_is_contested, reject_ambiguous_name,
+                          reject_private_call,
                           reject_private_kept_call)
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
@@ -192,6 +193,12 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         return
 
     if reject_private_call(validator, "function", func_sig, call.callee.loc):
+        return
+
+    # More than one unit in scope declares this name and nothing here says which is
+    # meant (CE3012). The unit's OWN declaration wins outright, so this only fires on
+    # a name that comes from somewhere else entirely.
+    if reject_ambiguous_name(validator, "function", function_name, call.callee.loc):
         return
 
     # A unit that declared this name and lost it may STILL be reading somebody else's

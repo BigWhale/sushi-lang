@@ -268,9 +268,6 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     if not _inject_source_stdlib_units(unit_manager, reporter):
         return 2
 
-    if not unit_manager.build_global_symbol_table():
-        return 2
-
     compilation_order = unit_manager.get_compilation_order()
     if compilation_order is None:
         return 2

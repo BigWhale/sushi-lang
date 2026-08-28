@@ -3,8 +3,9 @@
 Decision 10 of `docs/design/visibility.md`. A private function is emitted with internal
 linkage, so the consumer's declaration and the library's are two symbols and neither
 call site changes meaning: the consumer's call binds to the consumer's function, and the
-library's body keeps calling its own. The only combination that could break the link --
-both public -- is CE3003 already.
+library's body keeps calling its own. Both being public is no longer a clash either --
+CE3003 retired, and the consumer's own declaration wins outright
+(`docs/design/unit-namespaces.md` section 8).
 
 Two things follow, and both are asserted here. The frontend has to agree with the linker
 about which declaration answers the consumer's call, which it did not: the merge kept the
