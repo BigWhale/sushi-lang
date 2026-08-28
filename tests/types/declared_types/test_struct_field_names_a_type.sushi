@@ -1,0 +1,17 @@
+# The positive half: a field naming a real type, bare and qualified, still
+# compiles and runs (#504).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n3 4 7\n"
+use "helpers/geo" as geo
+
+struct Line:
+    geo.Vec start
+    i32 length
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let geo.Vec a = geo.Vec(3, 4)
+    let Line l = Line(a, 7)
+    println("{l.start.x} {l.start.y} {l.length}")
+
+    return Result.Ok(0)

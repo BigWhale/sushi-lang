@@ -1,0 +1,12 @@
+# A struct FIELD is a written type position and is checked like any other. It
+# used to reach no check at all, so the program compiled and the answer came
+# later as a type mismatch about a type that does not exist (#504).
+# EXPECT_ERROR_CODE: CE2001
+
+struct Spot:
+    Nope where
+    i32 x
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)
