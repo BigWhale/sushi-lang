@@ -110,6 +110,10 @@ class TypeValidator:
         # `.slib` template, or a lambda lifted out of one. It calls what it called at
         # home, the export closure included (#468).
         self.in_library_body = in_library_unit
+        # A body the compiler wrote: a monomorphized instance, whose type arguments were
+        # chosen at the instantiation site and checked in the scope that wrote them. The
+        # template's own unit never imported them and never could (section 6).
+        self.in_synthesized_body = False
         self.variable_types: Dict[str, Type] = {}
         self.destroyed_arrays: List[set[str]] = []
         # `run` fills these from the program. A validator built to infer one type --

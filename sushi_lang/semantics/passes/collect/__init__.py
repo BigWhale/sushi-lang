@@ -269,11 +269,13 @@ class CollectorPass:
         self.generic_structs.by_name["Own"] = own_generic
         self.generic_structs.order.append("Own")
 
-        from sushi_lang.semantics.generics.active_generics import is_generic_active
+        # HashMap unconditionally: the table holds the type and the per-unit SCOPE
+        # decides who may write the name (`unit-namespaces.md` section 4.3.1). The gate
+        # that used to stand here was a process-global set, kept because there was no
+        # scope to ask.
         from sushi_lang.semantics.generics.hashmap import hashmap_generic_struct
-        if is_generic_active("HashMap"):
-            self.generic_structs.by_name["HashMap"] = hashmap_generic_struct()
-            self.generic_structs.order.append("HashMap")
+        self.generic_structs.by_name["HashMap"] = hashmap_generic_struct()
+        self.generic_structs.order.append("HashMap")
 
         # List<T>: `{i32 len, i32 capacity, T* data}`, 2x growth, lazily allocated.
         # See docs/stdlib/collections/list.md.

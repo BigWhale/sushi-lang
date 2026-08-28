@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, AbstractSet, Any, Optional
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.namespaces import import_help
+from sushi_lang.semantics.namespaces import GENERIC_UNIT_TYPES, import_help
 from sushi_lang.semantics.visibility import (
     DeclOrigin,
     origin_of,
@@ -22,9 +22,56 @@ if TYPE_CHECKING:
     from . import TypeValidator
 
 __all__ = ["name_is_contested", "out_of_scope_help", "reject_ambiguous_name",
-           "reject_private_call", "reject_private_kept",
+           "reject_out_of_scope_type", "reject_private_call", "reject_private_kept",
            "reject_private_kept_call", "reject_private_name",
            "reject_private_type"]
+
+
+# Which kinds one written type name could be. `struct` and `enum` share one namespace,
+# and a perk is here because a constraint is a written name in the same sense.
+_TYPE_KINDS = ("struct", "enum", "perk")
+
+
+def reject_out_of_scope_type(validator: 'TypeValidator', name: str,
+                             loc: Any) -> bool:
+    """CE2001: a type some unit declares and THIS unit did not import (section 6.1).
+
+    A public signature may name a type its caller cannot name, and the caller must add
+    the import. The refusal is `CE2001` because that is what it is -- the name is not a
+    type here -- and the help line is what says where the type is.
+
+    A name is writable when ANY declaration of it is reachable, so every origin is read
+    and not just the winner: a unit that declares the name itself may always write it.
+    """
+    if getattr(validator, "in_synthesized_body", False):
+        return False
+    scope = validator.scope
+    if not scope.holds_generic(name):
+        module = next((path for path, generic in GENERIC_UNIT_TYPES.items()
+                       if generic == name), None)
+        _reject_unreachable(validator, name, loc,
+                            import_help(module, stdlib=True) if module else None)
+        return True
+
+    table = getattr(validator, "visibility", None)
+    if table is None:
+        return False
+    origins = [origin for kind in _TYPE_KINDS
+               for origin in table.origins(kind, name)
+               if origin.unit_name is not None]
+    if not origins or any(scope.holds_unit(o.unit_name) for o in origins):
+        return False
+    _reject_unreachable(validator, name, loc, import_help(origins[0].unit_name))
+    return True
+
+
+def _reject_unreachable(validator: 'TypeValidator', name: str, loc: Any,
+                        help_line: Optional[str]) -> None:
+    """CE2001 for a name that exists and cannot be written here."""
+    diagnostic = er.emit_with(validator.reporter, er.ERR.CE2001, loc, name=name)
+    if help_line is not None:
+        diagnostic = diagnostic.help(help_line)
+    diagnostic.emit()
 
 
 def out_of_scope_help(validator: 'TypeValidator', kind: str,

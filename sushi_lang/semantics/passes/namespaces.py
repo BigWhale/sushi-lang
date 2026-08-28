@@ -21,6 +21,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program, UseStatement
 from sushi_lang.semantics.namespaces import (
+    GENERIC_UNIT_TYPES,
     ExternalNamespace,
     GenericNamespace,
     NamespaceTable,
@@ -84,15 +85,19 @@ def _scope_of(unit: Any, flat: Iterable[Tuple[UseStatement, Provider]],
     """
     scoped_units: list[str] = []
     modules: list[str] = []
+    generics: list[str] = []
     for use_stmt, provider in flat:
         if provider.namespace_kind == "stdlib":
             modules.append(provider.origin)
+        elif provider.namespace_kind == "generic":
+            generics.extend(provider.members())
         elif provider.namespace_kind == "unit":
             scoped_units.append(provider.origin)
             if use_stmt.is_library:
                 scoped_units.extend(_library_units(provider.origin, units))
     return UnitScope(unit=unit.name, units=tuple(dict.fromkeys(scoped_units)),
-                     modules=tuple(dict.fromkeys(modules)), everything=False)
+                     modules=tuple(dict.fromkeys(modules)),
+                     generics=tuple(dict.fromkeys(generics)), everything=False)
 
 
 def _library_units(unit_name: str, units: Dict[str, Any]) -> Iterable[str]:
@@ -230,7 +235,6 @@ def _declaring_unit(tables: Any, kind: str, name: str) -> Optional[str]:
 def _stdlib_provider(use_stmt: UseStatement, tables: Any,
                      units: Dict[str, Any]) -> Provider:
     """One of the standard library's four shapes (section 4.3)."""
-    from sushi_lang.semantics.generics.active_generics import GENERIC_UNIT_TYPES
     from sushi_lang.semantics.stdlib_registry import (
         get_stdlib_registry, is_source_stdlib_module,
     )

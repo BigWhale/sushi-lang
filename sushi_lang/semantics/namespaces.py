@@ -27,6 +27,15 @@ from sushi_lang.internals.report import Span
 
 V = TypeVar("V")
 
+# The built-in generics a stdlib import ACTIVATES: the type is one per program (Ruling 6)
+# and the import is what gives a unit the right to write the name. The membership of one
+# `GenericNamespace`, and the whole of what `generics/active_generics.py` used to hold in
+# a process-global set five test files had to reset (section 4.3.1).
+GENERIC_UNIT_TYPES = {
+    "collections/hashmap": "HashMap",
+}
+GATED_GENERIC_NAMES = frozenset(GENERIC_UNIT_TYPES.values())
+
 
 @dataclass(frozen=True)
 class UnitScope:
@@ -37,11 +46,11 @@ class UnitScope:
     not a name here, and an `as` import contributes nothing at all -- the alias is the
     gate, and `NamespaceTable` beside this is where it lands.
 
-    Two memberships, one per producer that can put a name into the flat scope: a
-    compilation unit, and a registry stdlib module. A declaration that belongs to no
-    unit -- a monomorphized instance, a lifted lambda, a binary library's record, every
-    synthesized type -- is in scope everywhere, which is the escape `visibility._permitted`
-    takes for the same reason.
+    Three memberships, one per producer that can put a name into the flat scope: a
+    compilation unit, a registry stdlib module, and the built-in generic an import
+    activates. A declaration that belongs to no unit -- a monomorphized instance, a
+    lifted lambda, a binary library's record, every synthesized type -- is in scope
+    everywhere, which is the escape `visibility._permitted` takes for the same reason.
 
     `units` is a TUPLE in `use` order, so which declaration answers is decided the same
     way twice. A name two imports offer is `CE3012` at the use, and the reader that has a
@@ -51,6 +60,7 @@ class UnitScope:
     unit: Optional[str] = None
     units: Tuple[str, ...] = ()
     modules: Tuple[str, ...] = ()
+    generics: Tuple[str, ...] = ()
     everything: bool = True
 
     @classmethod
@@ -67,6 +77,11 @@ class UnitScope:
         """May a registry stdlib module's function be written here bare?"""
         return (self.everything or module_path is None
                 or module_path in self.modules)
+
+    def holds_generic(self, name: str) -> bool:
+        """May a built-in generic be written here? Only a gated one can answer False."""
+        return (self.everything or name not in GATED_GENERIC_NAMES
+                or name in self.generics)
 
     def resolve(self, name: str, by_unit: Mapping[str, Mapping[str, V]],
                 flat: Mapping[str, V]) -> Optional[V]:

@@ -231,12 +231,6 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
 def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                        args, is_library: bool = False) -> int:
     """Handle multi-file compilation when use statements are present."""
-    from sushi_lang.semantics.generics.active_generics import (
-        activate_generic_unit,
-        reset_active_generics,
-    )
-    reset_active_generics()
-
     main_unit_name = src_path.stem
     unit_manager = UnitManager(root_path=src_path.parent, reporter=reporter)
 
@@ -278,7 +272,6 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
             for use_stmt in unit.ast.uses:
                 if use_stmt.is_stdlib:
                     stdlib_units.add(use_stmt.path)
-                    activate_generic_unit(use_stmt.path)
 
     if len(compilation_order) > 1:
         print(f"Found {len(compilation_order)} units:")

@@ -31,6 +31,15 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
     if reject_qualified_type(validator, type_obj, span):
         return
 
+    # A name this unit did not import is not a type here (section 6.1). Checked once,
+    # for the two shapes a written type name takes, and never for a QUALIFIED one: the
+    # namespace seam above has already said where that name may be written.
+    from .visibility import reject_out_of_scope_type
+    written = getattr(type_obj, "name", None) or getattr(type_obj, "base_name", None)
+    if (getattr(type_obj, "namespace", None) is None and isinstance(written, str)
+            and reject_out_of_scope_type(validator, written, span)):
+        return
+
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(type_obj, GenericTypeRef):
         # CE2419. Checked FIRST and with NO Maybe/Result exemption, unlike the `ptr` gate

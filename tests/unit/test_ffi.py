@@ -323,7 +323,6 @@ def test_reserved_externs_are_declared():
 
 def _emit_ir(tmp_path, src: str) -> str:
     """Compile `src` to LLVM IR text via the production multi-file pipeline."""
-    from sushi_lang.semantics.generics.active_generics import reset_active_generics
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
     from sushi_lang.semantics.units import UnitManager
     from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
@@ -335,7 +334,6 @@ def _emit_ir(tmp_path, src: str) -> str:
     program, _tree = parse_to_ast(text)
 
     reporter = Reporter(source=text, filename="main")
-    reset_active_generics()
     get_stdlib_registry()
 
     unit_manager = UnitManager(root_path=tmp_path, reporter=reporter)

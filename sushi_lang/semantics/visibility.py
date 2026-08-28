@@ -156,6 +156,18 @@ class VisibilityTable:
     def origin(self, kind: str, name: str) -> Optional[DeclOrigin]:
         return self.by_key.get((kind, name))
 
+    def origins(self, kind: str, name: str) -> list[DeclOrigin]:
+        """EVERY declaration of this name the collect pass saw, the winner first.
+
+        A rule that asks "may this unit write the name at all" has to read all of
+        them: the winner belongs to whichever unit was collected first, and a name is
+        writable when ANY declaration of it is reachable.
+        """
+        winner = self.by_key.get((kind, name))
+        if winner is None:
+            return []
+        return [winner, *self.contested.get((kind, name), ())]
+
     def contested_by(self, kind: str, name: str, unit: Optional[str]) -> bool:
         """Did `unit` declare this name and LOSE it to another unit's declaration?
 
@@ -180,10 +192,7 @@ class VisibilityTable:
         unit next door imported was a candidate while the flat scope was the whole
         program, and stops being one when the scope stops at the import.
         """
-        winner = self.by_key.get((kind, name))
-        if winner is None:
-            return []
-        found = [winner, *self.contested.get((kind, name), ())]
+        found = self.origins(kind, name)
         return [origin for origin in found
                 if origin.unit_name != unit and _permitted(origin, unit)
                 and (scope is None or scope.holds_unit(origin.unit_name))]
