@@ -9,7 +9,7 @@ from llvmlite import ir
 from sushi_lang.backend.constants import INT8_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import ZERO_I32
 from sushi_lang.backend.runtime.constants import (
-    ERRNO_TO_FILE_ERROR,
+    errno_to_file_error_table,
     ERRNO_DEFAULT_FILE_ERROR,
 )
 from sushi_lang.internals.errors import message_for, raise_internal_error
@@ -136,7 +136,9 @@ class RuntimeErrors:
 
         result = ir.Constant(self.codegen.i32, ERRNO_DEFAULT_FILE_ERROR)
 
-        for errno_val, file_error_tag in reversed(list(ERRNO_TO_FILE_ERROR.items())):
+        from sushi_lang.backend.platform_detect import get_current_platform
+        table = errno_to_file_error_table(get_current_platform().is_linux)
+        for errno_val, file_error_tag in reversed(list(table.items())):
             errno_const = ir.Constant(self.codegen.i32, errno_val)
             file_error_const = ir.Constant(self.codegen.i32, file_error_tag)
 

@@ -20,6 +20,8 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "collections/iter": _SRC_SUSHI_ROOT / "collections" / "iter.sushi",
     "compression/zlib": _SRC_SUSHI_ROOT / "compression" / "zlib.sushi",
     "encoding/msgpack": _SRC_SUSHI_ROOT / "encoding" / "msgpack.sushi",
+    "io/fs": _SRC_SUSHI_ROOT / "io" / "fs.sushi",
+    "io/path": _SRC_SUSHI_ROOT / "io" / "path.sushi",
     "toolchain/slib": _SRC_SUSHI_ROOT / "toolchain" / "slib.sushi",
 }
 
@@ -78,6 +80,8 @@ def _get_param_specs():
     for fn in ("sleep", "msleep", "usleep"):
         specs[("time", fn)] = [I64]
     specs[("time", "nanosleep")] = [I64, I64]
+    specs[("time", "now")] = []
+    specs[("time", "monotonic_ns")] = []
 
     specs[("env", "getenv")] = [STRING]
     specs[("env", "setenv")] = [STRING, STRING]
@@ -102,7 +106,8 @@ def _get_param_specs():
     specs[("random", "rand_range")] = [I32, I32]
     specs[("random", "srand")] = [U64]
 
-    for fn in ("exists", "is_file", "is_dir", "file_size", "remove", "rmdir"):
+    for fn in ("exists", "is_file", "is_dir", "file_size", "remove", "rmdir",
+               "read_dir", "mtime", "ctime", "mode", "is_symlink"):
         specs[("files", fn)] = [STRING]
     for fn in ("rename", "copy"):
         specs[("files", fn)] = [STRING, STRING]
@@ -201,7 +206,7 @@ class StdlibRegistry:
     ) -> None:
         """Discover functions using heuristic approach."""
         common_names = {
-            "time": ["sleep", "msleep", "usleep", "nanosleep"],
+            "time": ["sleep", "msleep", "usleep", "nanosleep", "now", "monotonic_ns"],
             "env": ["getenv", "setenv"],
             "process": ["getcwd", "chdir", "exit", "getpid", "getuid", "run"],
             "math": [
@@ -214,7 +219,7 @@ class StdlibRegistry:
                 "hypot",
             ],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
-            "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir"],
+            "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir", "read_dir", "mtime", "ctime", "mode", "is_symlink"],
         }
 
         candidates = common_names.get(module_name, [])

@@ -34,7 +34,15 @@ SCAN_ROOTS = ("docs", "editor-support", "site", "sushi_lang", "tests", "toolchai
 #   tests/libs/helpers/doc_lib.sushi  -- phase 3's documented helper library. It has to
 #                                        live beside the other helpers, because
 #                                        `build_test_helpers` globs that directory.
-DOC_SOURCES = ("tests/docs", "tests/libs/helpers/doc_lib.sushi")
+#   src_sushi/io/path.sushi, io/fs.sushi -- bundled stdlib modules born after the
+#                                        feature; the missing-docs budget gate
+#                                        REQUIRES their doc blocks.
+DOC_SOURCES = (
+    "tests/docs",
+    "tests/libs/helpers/doc_lib.sushi",
+    "sushi_lang/sushi_stdlib/src_sushi/io/path.sushi",
+    "sushi_lang/sushi_stdlib/src_sushi/io/fs.sushi",
+)
 
 # `.sushi` files that do not parse, and did not before doc blocks existed. Each entry
 # carries its reason; adding one is deliberate. A `test_err_` file declaring a CE6xxx

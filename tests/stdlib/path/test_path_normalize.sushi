@@ -1,0 +1,14 @@
+# normalize collapses doubled slashes and resolves . and .. lexically.
+# EXPECT_STDOUT_EXACT: "a/b\n/a/c\na\n../x\n.\n/\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/path>
+
+fn main() i32:
+    println(normalize("a//b").realise("?"))
+    println(normalize("/a/./b/../c").realise("?"))
+    println(normalize("./a").realise("?"))
+    println(normalize("../x").realise("?"))
+    println(normalize("").realise("?"))
+    println(normalize("/..").realise("?"))
+    return Result.Ok(0)

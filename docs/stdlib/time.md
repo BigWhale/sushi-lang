@@ -12,15 +12,17 @@ use <time>
 
 ## Overview
 
-The time module provides sleep functions with various granularities. All functions use POSIX `nanosleep()` internally for precise timing across Unix-like platforms.
+The time module provides sleep functions with various granularities and two clock reads. The sleep functions use POSIX `nanosleep()` internally; the clocks use POSIX `clock_gettime()`.
 
 **Available functions:**
 - `sleep()` - Sleep for N seconds
 - `msleep()` - Sleep for N milliseconds
 - `usleep()` - Sleep for N microseconds
 - `nanosleep()` - Sleep with nanosecond precision
+- `now()` - Read the unix clock, in seconds
+- `monotonic_ns()` - Read the monotonic clock, in nanoseconds
 
-All functions return `Result@(i32)` with 0 on success, or remaining microseconds if interrupted by a signal.
+The sleep functions return `Result@(i32)` with 0 on success, or remaining microseconds if interrupted by a signal. The clock functions return `Result@(i64)`.
 
 ## Functions
 
@@ -112,6 +114,42 @@ fn main() i32:
 **Returns:** `Result@(i32)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
+
+### `now() -> Result@(i64)`
+
+Read the wall clock as unix time: whole seconds since 1970-01-01 00:00:00 UTC.
+
+```sushi
+use <time>
+
+fn main() i32:
+    let i64 t = now().realise(0)
+    println("unix time: {t}")
+    return Result.Ok(0)
+```
+
+**Notes:**
+- The wall clock can jump (NTP adjustment, manual change). Do not measure durations with it; use `monotonic_ns()`.
+- The value is UTC. Civil date conversion is a separate concern.
+
+### `monotonic_ns() -> Result@(i64)`
+
+Read the monotonic clock, in nanoseconds. The clock never goes backward and is independent of the wall clock. Only the difference between two reads has meaning; the zero point is unspecified (boot time on most systems).
+
+```sushi
+use <time>
+
+fn main() i32:
+    let i64 start = monotonic_ns().realise(0)
+    msleep(50 as i64).realise(0)
+    let i64 elapsed_ms = (monotonic_ns().realise(0) - start) / 1_000_000
+    println("slept for about {elapsed_ms} ms")
+    return Result.Ok(0)
+```
+
+**Notes:**
+- An i64 nanosecond count covers about 292 years; overflow is not a practical concern.
+- The resolution is platform dependent; expect at least microsecond granularity.
 
 ## Platform Notes
 

@@ -24,7 +24,7 @@ def generate_module_ir() -> ir.Module:
         generate_seek, generate_tell
     )
     from sushi_lang.sushi_stdlib.src.io.files.status import (
-        generate_close, generate_is_open
+        generate_close, generate_is_open, generate_flush
     )
     from sushi_lang.sushi_stdlib.src.io.files.utils import generate_ir as generate_utils_ir
 
@@ -46,6 +46,7 @@ def generate_module_ir() -> ir.Module:
 
     generate_close(module)
     generate_is_open(module)
+    generate_flush(module)
 
     generate_utils_ir(module)
 
@@ -173,6 +174,13 @@ def _validate_tell(call: MethodCall, reporter: Any) -> None:
                name="file.tell", expected=0, got=len(call.args))
 
 
+def _validate_flush(call: MethodCall, reporter: Any) -> None:
+    """Validate flush() method call on file."""
+    if len(call.args) != 0:
+        er.emit(reporter, er.ERR.CE2009, call.loc,
+               name="file.flush", expected=0, got=len(call.args))
+
+
 def _validate_close(call: MethodCall, reporter: Any) -> None:
     """Validate close() method call on file."""
     if call.args:
@@ -194,7 +202,7 @@ def is_builtin_file_method(method_name: str) -> bool:
         "write", "writeln",
         "read_bytes", "write_bytes",
         "seek", "tell",
-        "close", "is_open"
+        "close", "is_open", "flush"
     }
 
 
@@ -222,6 +230,8 @@ def validate_builtin_file_method_with_validator(call: MethodCall, reporter: Any,
         _validate_seek(call, reporter, validator)
     elif method_name == "tell":
         _validate_tell(call, reporter)
+    elif method_name == "flush":
+        _validate_flush(call, reporter)
     elif method_name == "close":
         _validate_close(call, reporter)
     elif method_name == "is_open":
@@ -243,7 +253,7 @@ def get_builtin_file_method_return_type(method_name: str) -> Type | None:
         return DynamicArrayType(BuiltinType.U8)
     elif method_name == "write_bytes":
         return BuiltinType.BLANK
-    elif method_name in {"seek", "close"}:
+    elif method_name in {"seek", "close", "flush"}:
         return BuiltinType.BLANK
     elif method_name == "tell":
         return BuiltinType.I64

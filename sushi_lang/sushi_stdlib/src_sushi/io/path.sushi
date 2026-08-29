@@ -1,0 +1,206 @@
+##:
+io/path -- lexical path algebra, pure Sushi, POSIX separators.
+
+The module ships as bundled .sushi source and is merged as a compilation unit
+when imported (`use <io/path>`). Every function works on the string alone: no
+OS call, no file system read. The rules mirror Python's posixpath, and the
+differential test in tests/unit/test_path_differential.py holds them there.
+
+Limitations: the separator is '/' only. normalize() is lexical -- it resolves
+`..` without looking at symlinks, so the result can name a different file
+than the input on a tree that uses them. There is no canonicalize().
+:##
+
+use <collections/strings>
+
+##:
+Joins two path segments with a single separator.
+
+An absolute child replaces the base, as in POSIX. An empty child keeps the
+base and marks it as a directory with a trailing separator.
+
+- Parameter base: The left segment.
+- Parameter child: The right segment.
+- Returns: The joined path.
+:##
+public fn join(string base, string child) string:
+    if (child.starts_with("/")):
+        return Result.Ok(child.clone())
+    if (base.is_empty()):
+        return Result.Ok(child.clone())
+    if (base.ends_with("/")):
+        return Result.Ok(base.concat(child))
+    return Result.Ok(base.concat("/").concat(child))
+
+##:
+Returns the part after the last separator.
+
+A path with a trailing separator has an empty basename.
+
+- Parameter path: The path to split.
+- Returns: The last component, or an empty string.
+:##
+public fn basename(string path) string:
+    match path.find_last("/"):
+        Maybe.Some(i) -> return Result.Ok(path.s(i + 1, path.len()))
+        Maybe.None -> return Result.Ok(path.clone())
+
+##:
+Returns the part before the last separator.
+
+Trailing separators are stripped from the result, unless the result is made
+of separators only. A path with no separator has an empty dirname.
+
+- Parameter path: The path to split.
+- Returns: The directory part, or an empty string.
+:##
+public fn dirname(string path) string:
+    match path.find_last("/"):
+        Maybe.Some(i) ->
+            let string head = path.s(0, i + 1)
+            if (head.replace("/", "").is_empty()):
+                return Result.Ok(head)
+            return Result.Ok(strip_trailing_separators(head)??)
+        Maybe.None -> return Result.Ok("")
+
+##:
+Returns the extension of the last component, without the leading dot.
+
+The leading dots of a hidden file do not count: `.bashrc` has no extension.
+
+- Parameter path: The path to inspect.
+- Returns: The extension, or an empty string.
+:##
+public fn extension(string path) string:
+    let string name = basename(path)??
+    match name.find_last("."):
+        Maybe.Some(d) ->
+            if (d == 0):
+                return Result.Ok("")
+            if (leading_dots_reach(name, d)??):
+                return Result.Ok("")
+            return Result.Ok(name.s(d + 1, name.len()))
+        Maybe.None -> return Result.Ok("")
+
+##:
+Normalizes a path lexically.
+
+Doubled separators collapse, `.` components vanish, and a `..` component
+removes the component before it when one exists. A rooted path keeps its
+root; an empty result becomes `.`. A root of exactly two separators is
+kept as two, the POSIX implementation-defined form; posixpath does the same.
+
+- Parameter path: The path to normalize.
+- Returns: The normalized path.
+:##
+public fn normalize(string path) string:
+    if (path.is_empty()):
+        return Result.Ok(".")
+    let bool rooted = path.starts_with("/")
+    let string root = root_prefix(path)??
+    let List@(string) kept = List.new()
+    let string[] parts = path.split("/")
+    foreach(part in parts.iter()):
+        if (part.is_empty() or part == "."):
+            ~
+        else:
+            if (part == ".."):
+                pop_or_keep_dotdot(poke kept, rooted)
+            else:
+                kept.push(part.clone())
+
+    let string body = rebuild(kept)??
+    kept.free()
+    if (rooted):
+        return Result.Ok(root.concat(body))
+    if (body.is_empty()):
+        return Result.Ok(".")
+    return Result.Ok(body)
+
+##:
+The root of a rooted path: `/`, kept as `//` when the root is exactly two
+separators (POSIX leaves that form alone; three or more collapse).
+
+- Parameter path: The path to inspect.
+- Returns: The root prefix, or an empty string for a relative path.
+:##
+fn root_prefix(string path) string:
+    if (not path.starts_with("/")):
+        return Result.Ok("")
+    if (path.starts_with("//") and not path.starts_with("///")):
+        return Result.Ok("//")
+    return Result.Ok("/")
+
+##:
+Drops the separator run at the end. The caller has already handled the
+all-separator head.
+
+- Parameter head: The directory part, with its trailing separators.
+- Returns: The part without them.
+:##
+fn strip_trailing_separators(string head) string:
+    let i32 end = head.len()
+    let i32 keep = end
+    foreach(i in 0..end):
+        let i32 back = end - 1 - i
+        if (head.char_at(back) == "/"):
+            keep := back
+        else:
+            return Result.Ok(head.s(0, keep))
+    return Result.Ok(head.s(0, keep))
+
+##:
+True when every character before index `d` is a dot, which makes `d` part of
+a hidden-file prefix and not an extension mark.
+
+- Parameter name: The last path component.
+- Parameter d: The index of the last dot.
+- Returns: Whether the dot belongs to the hidden-file prefix.
+:##
+fn leading_dots_reach(string name, i32 d) bool:
+    foreach(i in 0..d):
+        if (name.char_at(i) != "."):
+            return Result.Ok(false)
+    return Result.Ok(true)
+
+##:
+Applies one `..` to the kept components: it removes the component before it;
+at the root of a rooted path it vanishes, on a relative path it is kept.
+
+- Parameter kept: The components kept so far.
+- Parameter rooted: Whether the whole path is rooted.
+:##
+fn pop_or_keep_dotdot(poke List@(string) kept, bool rooted) ~:
+    if (kept.len() > 0):
+        match kept.get(kept.len() - 1):
+            Maybe.Some(last) ->
+                if (last == ".."):
+                    kept.push("..")
+                    return Result.Ok(~)
+            Maybe.None -> ~
+        match kept.pop():
+            Maybe.Some(_) -> ~
+            Maybe.None -> ~
+        return Result.Ok(~)
+    if (not rooted):
+        kept.push("..")
+    return Result.Ok(~)
+
+##:
+Joins the kept components with single separators.
+
+- Parameter kept: The components to join.
+- Returns: The joined body, or an empty string.
+:##
+fn rebuild(List@(string) kept) string:
+    let string out = ""
+    let i32 n = kept.len()
+    foreach(i in 0..n):
+        match kept.get(i):
+            Maybe.Some(part) ->
+                if (i > 0):
+                    out := out.concat("/").concat(part)
+                else:
+                    out := part.clone()
+            Maybe.None -> ~
+    return Result.Ok(out)

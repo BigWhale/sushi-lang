@@ -108,7 +108,7 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
 
 def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional[EnumType]:
     """The Result/Maybe enum a direct stdlib-module call returns, or None."""
-    from sushi_lang.semantics.typesys import BuiltinType
+    from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType
     from sushi_lang.backend.generics.result_builder import intern_result
 
     enums = codegen.enum_table.by_name
@@ -120,6 +120,8 @@ def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional
         'msleep': (BuiltinType.I32, 'StdError'),
         'usleep': (BuiltinType.I32, 'StdError'),
         'nanosleep': (BuiltinType.I32, 'StdError'),
+        'now': (BuiltinType.I64, 'StdError'),
+        'monotonic_ns': (BuiltinType.I64, 'StdError'),
         'setenv': (BuiltinType.I32, 'EnvError'),
         'file_size': (BuiltinType.I64, 'FileError'),
         'remove': (BuiltinType.I32, 'FileError'),
@@ -127,6 +129,11 @@ def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional
         'copy': (BuiltinType.I32, 'FileError'),
         'mkdir': (BuiltinType.I32, 'FileError'),
         'rmdir': (BuiltinType.I32, 'FileError'),
+        'read_dir': (DynamicArrayType(BuiltinType.STRING), 'FileError'),
+        'mtime': (BuiltinType.I64, 'FileError'),
+        'ctime': (BuiltinType.I64, 'FileError'),
+        'mode': (BuiltinType.I32, 'FileError'),
+        'is_symlink': (BuiltinType.BOOL, 'FileError'),
         'chdir': (BuiltinType.I32, 'ProcessError'),
         'getcwd': (BuiltinType.STRING, 'ProcessError'),
     }

@@ -1,0 +1,15 @@
+# basename is the part after the last slash; dirname is the rest, trailing
+# slashes stripped unless the head is all slashes.
+# EXPECT_STDOUT_EXACT: "b.txt\n\nfile\n/a\na\n/\n\n"
+
+use <io/path>
+
+fn main() i32:
+    println(basename("/a/b.txt").realise("?"))
+    println(basename("a/").realise("?"))
+    println(basename("file").realise("?"))
+    println(dirname("/a/b.txt").realise("?"))
+    println(dirname("a/b").realise("?"))
+    println(dirname("/").realise("?"))
+    println(dirname("file").realise("?"))
+    return Result.Ok(0)

@@ -1,0 +1,15 @@
+# mkdir on a path that exists reports AlreadyExists, not the zeroed NotFound.
+# EXPECT_STDOUT_EXACT: "already exists\n"
+
+use <io/files>
+
+fn main() i32:
+    match mkdir("/tmp", 0o755):
+        Result.Ok(_) ->
+            println("created")
+        Result.Err(e) ->
+            match e:
+                FileError.AlreadyExists -> println("already exists")
+                FileError.NotFound -> println("not found")
+                _ -> println("other")
+    return Result.Ok(0)

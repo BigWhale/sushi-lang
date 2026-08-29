@@ -1,0 +1,28 @@
+# pathcalc: the io/path differential helper. Each stdin line is
+# `op|a|b` (b only for join); the answer prints as one line.
+
+use <io/stdio>
+use <io/path>
+
+fn answer(string op, string a, string b) string:
+    if (op == "join"):
+        return Result.Ok(join(a, b)??)
+    if (op == "basename"):
+        return Result.Ok(basename(a)??)
+    if (op == "dirname"):
+        return Result.Ok(dirname(a)??)
+    if (op == "extension"):
+        return Result.Ok(extension(a)??)
+    if (op == "normalize"):
+        return Result.Ok(normalize(a)??)
+    return Result.Ok("unknown op: {op}")
+
+fn main() i32:
+    foreach(line in stdin.lines()):
+        let string[] parts = line.split("|")
+        if (parts.len() >= 3):
+            let string op = parts.get(0).realise("")
+            let string a = parts.get(1).realise("")
+            let string b = parts.get(2).realise("")
+            println(answer(op, a, b).realise("?"))
+    return Result.Ok(0)

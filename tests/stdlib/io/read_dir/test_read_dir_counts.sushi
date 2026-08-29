@@ -1,0 +1,46 @@
+# read_dir returns every entry; the order is unspecified, so only the count is asserted.
+# EXPECT_STDOUT_EXACT: "count: 3\ncleanup ok\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+
+fn write_one(string path) bool:
+    match open(path, FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("x")
+            f.close()
+            return Result.Ok(true)
+        FileResult.Err(_) ->
+            return Result.Ok(false)
+
+fn main() i32:
+    let string dir = "/tmp/sushi_read_dir_three"
+    match mkdir(dir, 0o755):
+        Result.Ok(_) -> ~
+        Result.Err(_) ->
+            println("setup mkdir failed")
+            return Result.Ok(1)
+    let string[] names = from(["a.txt", "b.txt", "c.txt"])
+    # The path binds to a local first: an interpolated temp in argument
+    # position leaks today (pre-existing, found while writing this batch).
+    foreach(n in names.iter()):
+        let string p = "/tmp/sushi_read_dir_three/{n}"
+        if (not write_one(p).realise(false)):
+            println("setup open failed")
+            return Result.Ok(1)
+
+    match read_dir(dir):
+        Result.Ok(entries) ->
+            println("count: {entries.len()}")
+        Result.Err(_) ->
+            println("read_dir failed")
+
+    foreach(n in names.iter()):
+        let string p = "/tmp/sushi_read_dir_three/{n}"
+        match remove(p):
+            Result.Ok(_) -> ~
+            Result.Err(_) -> return Result.Ok(1)
+    match rmdir(dir):
+        Result.Ok(_) -> println("cleanup ok")
+        Result.Err(_) -> println("cleanup failed")
+    return Result.Ok(0)

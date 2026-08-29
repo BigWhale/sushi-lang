@@ -120,6 +120,8 @@ nav:
       - Slib reader: stdlib/toolchain/slib.md
       - Console: stdlib/io/console.md
       - Files: stdlib/io/files.md
+      - Path algebra: stdlib/io/path.md
+      - File-system ops: stdlib/io/fs.md
       - Math: stdlib/math.md
       - Time: stdlib/time.md
       - Random: stdlib/random.md

@@ -1,0 +1,22 @@
+# mode() returns raw st_mode; the permission bits of a 0o700 directory read back.
+# EXPECT_STDOUT_EXACT: "permissions: 448\nis dir bit: true\ncleanup ok\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+
+fn main() i32:
+    let string dir = "/tmp/sushi_stat_mode_dir"
+    match mkdir(dir, 0o700):
+        Result.Ok(_) -> ~
+        Result.Err(_) ->
+            println("setup failed")
+            return Result.Ok(1)
+    match mode(dir):
+        Result.Ok(m) ->
+            println("permissions: {m & 0o777}")
+            println("is dir bit: {(m & 0o170000) == 0o040000}")
+        Result.Err(_) -> println("mode failed")
+    match rmdir(dir):
+        Result.Ok(_) -> println("cleanup ok")
+        Result.Err(_) -> println("cleanup failed")
+    return Result.Ok(0)

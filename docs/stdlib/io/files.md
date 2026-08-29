@@ -244,6 +244,30 @@ fn main() i32 | FileError:
     return Result.Ok(0)
 ```
 
+### flush
+
+Push the stream buffer to the operating system.
+
+```sushi
+fn file.flush() -> ~
+```
+
+**Example:**
+
+```sushi
+use <io/files>
+
+fn main() i32 | FileError:
+    let file f = open("progress.log", FileMode.Write())??
+    f.write("step 1 done")
+    f.flush()  # The bytes reach the file before the next step runs
+    f.close()
+
+    return Result.Ok(0)
+```
+
+**Note:** `close()` also flushes. Use `flush()` when the file stays open and the bytes must be visible now: a log line before a risky operation, or a file another process reads.
+
 ### close
 
 Close the file and release resources.
@@ -439,6 +463,111 @@ fn main() i32:
 ```
 
 **Note:** Atomically replaces destination if it exists.
+
+### mtime / ctime
+
+The modification and status-change times of a path, as unix seconds.
+
+```sushi
+fn mtime(string path) -> Result@(i64)
+fn ctime(string path) -> Result@(i64)
+```
+
+**Example:**
+```sushi
+use <io/files>
+
+fn main() i32:
+    match mtime("build/output"):
+        Result.Ok(t) -> println("last built at {t}")
+        Result.Err(_) -> println("never built")
+
+    return Result.Ok(0)
+```
+
+**Note:** ctime is the inode status-change time, not the creation time. A `chmod` moves it; a content write moves both.
+
+### mode
+
+The raw `st_mode` of a path: the file-type bits plus the permission bits.
+
+```sushi
+fn mode(string path) -> Result@(i32)
+```
+
+**Example:**
+```sushi
+use <io/files>
+
+fn main() i32:
+    match mode("script.sh"):
+        Result.Ok(m) ->
+            println("permissions: {m & 0o777}")
+        Result.Err(_) -> println("no such file")
+
+    return Result.Ok(0)
+```
+
+**Note:** mask with `0o777` for the permission bits, with `0o170000` for the file-type bits. `is_file`/`is_dir`/`is_symlink` answer the type question directly.
+
+### is_symlink
+
+Ask whether the path itself is a symbolic link. This is the one query that does
+NOT follow the link (`lstat`); `is_file` and `is_dir` answer for the target.
+
+```sushi
+fn is_symlink(string path) -> Result@(bool)
+```
+
+**Example:**
+```sushi
+use <io/files>
+
+fn main() i32:
+    match is_symlink("/usr/local/bin/tool"):
+        Result.Ok(link) ->
+            if (link):
+                println("a link")
+            else:
+                println("the real thing")
+        Result.Err(_) -> println("no such path")
+
+    return Result.Ok(0)
+```
+
+### read_dir
+
+List the entries of a directory.
+
+```sushi
+fn read_dir(string path) -> Result@(string[])
+```
+
+**Parameters:**
+- `path` - Directory path to list
+
+**Returns:**
+- `Result.Ok(string[])` - The entry names. `.` and `..` are not included.
+- `Result.Err(FileError)` - Failed (not found, permission denied, not a directory)
+
+**Example:**
+```sushi
+use <io/files>
+
+fn main() i32:
+    match read_dir("/tmp"):
+        Result.Ok(entries) ->
+            foreach(name in entries.iter()):
+                println(name)
+        Result.Err(_) -> println("Cannot list /tmp")
+
+    return Result.Ok(0)
+```
+
+**Notes:**
+- The result holds entry NAMES, not paths. Join with the directory yourself.
+- The order is the order the OS returns; it is unspecified. Do not depend on it.
+- Every kind of entry is listed: files, directories, symlinks.
 
 ### mkdir
 

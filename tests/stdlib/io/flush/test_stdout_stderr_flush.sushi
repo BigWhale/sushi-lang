@@ -1,0 +1,13 @@
+# stdout and stderr answer flush(); output stays ordered and complete.
+# EXPECT_STDOUT_EXACT: "one two\n"
+# EXPECT_STDERR_CONTAINS: "err mark"
+
+use <io/stdio>
+
+fn main() i32:
+    stdout.write("one ")
+    stdout.flush()
+    stderr.write("err mark\n")
+    stderr.flush()
+    println("two")
+    return Result.Ok(0)

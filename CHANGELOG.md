@@ -4,6 +4,42 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Standard Library
+- **A program can read the clock.** `<time>` gains `now() -> Result@(i64)` (unix
+  seconds) and `monotonic_ns() -> Result@(i64)` (nanoseconds that never go
+  backward). One `clock_gettime` read each; the clockid values live in the
+  platform modules because Darwin and Linux disagree on them.
+- **The file system around the file exists now.** `<io/files>` gains
+  `read_dir(path) -> Result@(string[])` (entry names, `.` and `..` skipped),
+  the stat fields `mtime`/`ctime` (unix seconds), `mode` (raw `st_mode`) and
+  `is_symlink` (through `lstat`, so the link itself answers), and `flush()` on
+  `file`, `stdout` and `stderr`.
+- **`use <io/path>`: lexical path algebra in pure Sushi.** `join`, `basename`,
+  `dirname`, `extension`, `normalize` — string work only, POSIX separators,
+  mirroring `posixpath` under a 110-vector differential test.
+- **`use <io/fs>`: the recursive forms, in pure Sushi.** `stat()` composes the
+  per-field reads into a `FileStat` struct, `walk()` collects the files under a
+  tree without following directory symlinks, `mkdir_all()` builds every missing
+  prefix, `remove_all()` takes a tree down and is idempotent. The first bundled
+  source module that exports a `public struct`.
+
+### Fixed
+- **An `<io/files>` failure names its reason.** Every utility function used to
+  return a zeroed Err payload, which reads as `FileError.NotFound` whatever
+  happened; errno is now read and mapped, so `mkdir` on an existing path answers
+  `AlreadyExists` and `rmdir` on a full directory stops claiming NotFound. The
+  mapping table is shared with `open()` and takes the platform value for
+  `ENAMETOOLONG`/`ELOOP`, which also corrects `open()`'s mapping on Linux.
+- **The stat offsets know the architecture.** `st_mode` sits at 16 on glibc
+  aarch64, not 24, so `is_file`/`is_dir` read `st_uid` in an arm64 Linux
+  container; the offsets are keyed on (os, arch) now and probe-verified. On
+  macOS x86_64 the bare `stat` symbol is the legacy 32-bit-inode layout, so
+  `stat`, `lstat` and `readdir` select their `$INODE64` names there.
+- **Two bundled source modules can share one program.** The compiler-emitted
+  string helpers (`llvm_strlen`, `llvm_string_is_empty`, `llvm_strcmp`) carried
+  external linkage in every unit that needed them, so the second source-stdlib
+  unit collided at link; the bodies are `linkonce_odr` now.
+
 ### Testing
 - **A release no longer waits for the cross-platform suite, and one gate decides for
   every job.** `pyproject.toml` and `uv.lock` are inside the workflow's code filter and

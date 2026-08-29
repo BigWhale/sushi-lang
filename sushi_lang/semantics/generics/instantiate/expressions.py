@@ -192,6 +192,11 @@ class ExpressionScanner:
             if std_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, std_error)))
             return
+        elif function_name in {'now', 'monotonic_ns'}:
+            std_error = self.type_inferrer.enum_table.get("StdError")
+            if std_error:
+                self.instantiations.add(("Result", (BuiltinType.I64, std_error)))
+            return
         elif function_name == 'setenv':
             env_error = self.type_inferrer.enum_table.get("EnvError")
             if env_error:
@@ -200,15 +205,32 @@ class ExpressionScanner:
         elif function_name == 'getenv':
             self.instantiations.add(("Maybe", (BuiltinType.STRING,)))
             return
-        elif function_name == 'file_size':
+        elif function_name in {'file_size', 'mtime', 'ctime'}:
             file_error = self.type_inferrer.enum_table.get("FileError")
             if file_error:
                 self.instantiations.add(("Result", (BuiltinType.I64, file_error)))
+            return
+        elif function_name == 'mode':
+            file_error = self.type_inferrer.enum_table.get("FileError")
+            if file_error:
+                self.instantiations.add(("Result", (BuiltinType.I32, file_error)))
+            return
+        elif function_name == 'is_symlink':
+            file_error = self.type_inferrer.enum_table.get("FileError")
+            if file_error:
+                self.instantiations.add(("Result", (BuiltinType.BOOL, file_error)))
             return
         elif function_name in {'remove', 'rename', 'copy', 'mkdir', 'rmdir'}:
             file_error = self.type_inferrer.enum_table.get("FileError")
             if file_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, file_error)))
+            return
+        elif function_name == 'read_dir':
+            from sushi_lang.semantics.typesys import DynamicArrayType
+            file_error = self.type_inferrer.enum_table.get("FileError")
+            if file_error:
+                self.instantiations.add(
+                    ("Result", (DynamicArrayType(BuiltinType.STRING), file_error)))
             return
 
         if generic_func is None:

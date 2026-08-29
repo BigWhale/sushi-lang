@@ -1,0 +1,14 @@
+# mkdir into a missing parent reports NotFound.
+# EXPECT_STDOUT_EXACT: "not found\n"
+
+use <io/files>
+
+fn main() i32:
+    match mkdir("/tmp/sushi_errno_no_such_parent/child", 0o755):
+        Result.Ok(_) ->
+            println("created")
+        Result.Err(e) ->
+            match e:
+                FileError.NotFound -> println("not found")
+                _ -> println("other")
+    return Result.Ok(0)
