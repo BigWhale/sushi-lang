@@ -4,7 +4,7 @@
 # matters -- writing an element at an 8-byte stride is a different instruction
 # sequence from writing one at 4, and the value proves the stride round-trips.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "dynamic: 42 43 44 4.5 1"
+# EXPECT_STDOUT_CONTAINS: "dynamic: 42 43 44 4.5 true"
 # EXPECT_STDOUT_CONTAINS: "wide: 30000 4294967303"
 # EXPECT_NO_LEAKS: true
 

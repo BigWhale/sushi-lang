@@ -114,19 +114,20 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                         from sushi_lang.backend.expressions.type_utils import (
                             infer_expr_semantic_type, is_unsigned_type,
                         )
-                        # bool-returning string methods lower to i8, not i1, so they reach
-                        # the integer path. Gated on the typecheck pass's stamp, so a plain bool keeps
-                        # its 1/0 rendering.
-                        inferred = getattr(part, 'inferred_return_type', None)
-                        if inferred == BuiltinType.BOOL:
+                        # A bool lowers to i8 in most positions, so it reaches this
+                        # width ladder. The SEMANTIC type decides the rendering: a bool
+                        # hole prints true/false whatever the expression's shape (#514).
+                        part_type = infer_expr_semantic_type(codegen, part)
+                        if (part_type == BuiltinType.BOOL
+                                or getattr(part, 'inferred_return_type', None)
+                                == BuiltinType.BOOL):
                             string_values.append(codegen.runtime.formatting.emit_bool_to_string(expr_value))
                             fresh_flags.append(True)
                             continue
 
-                        # Signedness from the part's semantic type - the same source the
-                        # print statements use; it reads the typecheck pass's stamp before falling back
-                        # to its own reconstruction.
-                        part_type = infer_expr_semantic_type(codegen, part)
+                        # Signedness from the same source the print statements use; it
+                        # reads the typecheck pass's stamp before falling back to its
+                        # own reconstruction.
                         is_signed = not is_unsigned_type(part_type)
                         string_values.append(codegen.runtime.formatting.emit_integer_to_string(expr_value, is_signed=is_signed, bit_width=width))
                         fresh_flags.append(True)

@@ -1,7 +1,7 @@
 # Every part kind formats as the program would print it: a string part
 # as itself, an integer at its declared width, a float as %g, a bool as
-# the run-time interpolation prints one (#447).
-# EXPECT_STDOUT_EXACT: "Zaphod has 2 heads, ratio 2.5, sure 1, next 3\n"
+# true/false (#447, rendering ruled by #514).
+# EXPECT_STDOUT_EXACT: "Zaphod has 2 heads, ratio 2.5, sure true, next 3\n"
 const string WHO = "Zaphod"
 const u8 HEADS = 2
 const f64 RATIO = 2.5

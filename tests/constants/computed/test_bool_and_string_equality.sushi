@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_EXACT: "0\n1\n0\n1\n1\n"
+# EXPECT_STDOUT_EXACT: "false\ntrue\nfalse\ntrue\ntrue\n"
 # '==' and '!=' work on a bool and on a string at run time, so a constant that
 # compares two known values must fold them too (#441).
 

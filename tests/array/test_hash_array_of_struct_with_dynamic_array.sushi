@@ -13,7 +13,7 @@
 #
 # Pinned by BEHAVIOUR, never by value: equal contents hash equal, different contents do
 # not. The hash algorithm is free to change.
-# EXPECT_STDOUT_EXACT: "same: 1\ndiff: 0\nelement: 1\n"
+# EXPECT_STDOUT_EXACT: "same: true\ndiff: false\nelement: true\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
 struct Row:

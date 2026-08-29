@@ -13,7 +13,7 @@
 # `.to_str()` binds to a local rather than being interpolated directly. Interpolating a
 # method result leaks the string it returns, which is a PRE-EXISTING defect and not a
 # borrow one -- it leaks identically for an owned receiver.
-# EXPECT_STDOUT_EXACT: "hash_equal=1\nstr=42\nsum=45\n"
+# EXPECT_STDOUT_EXACT: "hash_equal=true\nstr=42\nsum=45\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 

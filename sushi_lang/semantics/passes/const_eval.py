@@ -177,8 +177,7 @@ class ConstantEvaluator:
         """One hole, rendered as the run-time formatter prints it.
 
         The runtime prints an integer with printf %d/%u at its width, a float
-        with %g, and a bool through the select over "1"/"0" the integer path
-        shares (`backend/runtime/formatting.py`). The evaluator must not
+        with %g, and a bool as true/false (#514). The evaluator must not
         drift, or a constant would print differently than the same
         expression written in a body. An integer needs no truncation here:
         every constant operation is range-checked (CE2070/CE2077), so the
@@ -188,7 +187,7 @@ class ConstantEvaluator:
         if t == BuiltinType.STRING:
             return value.value
         if t == BuiltinType.BOOL:
-            return "1" if value.value else "0"
+            return "true" if value.value else "false"
         if t == BuiltinType.F32:
             import struct
             return "%g" % struct.unpack("f", struct.pack("f", value.value))[0]

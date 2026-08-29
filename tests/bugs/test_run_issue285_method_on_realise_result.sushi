@@ -9,7 +9,7 @@
 #
 # Both chained shapes, and an OWNING struct so the discarded default value has to be
 # freed exactly once.
-# EXPECT_STDOUT_EXACT: "5\n10\nstable: 1\nsize: 3\n"
+# EXPECT_STDOUT_EXACT: "5\n10\nstable: true\nsize: 3\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
 struct Point:
