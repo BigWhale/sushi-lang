@@ -23,11 +23,10 @@ class InstantiationCollector:
     # The base_name distinguishes between generic enums and generic structs.
     instantiations: Set[Tuple[str, Tuple["Type", ...]]] = field(default_factory=set)
 
-    # NEW: Set of (function_name, type_args) tuples for generic function instantiations
-    # Examples:
-    #   - ("identity", (BuiltinType.I32,)) for identity<i32>
-    #   - ("swap", (BuiltinType.I32, BuiltinType.STRING)) for swap<i32, string>
-    function_instantiations: Set[Tuple[str, Tuple["Type", ...]]] = field(default_factory=set)
+    # Set of (declaring_unit, function_name, type_args) triples for generic function
+    # instantiations (#495, D2). The unit comes from the resolved GenericFuncDef, so two
+    # units' generics of one name stay two identities.
+    function_instantiations: Set[Tuple[str | None, str, Tuple["Type", ...]]] = field(default_factory=set)
 
     struct_table: dict | None = field(default=None)
 

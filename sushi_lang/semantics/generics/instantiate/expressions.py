@@ -235,7 +235,10 @@ class ExpressionScanner:
             type_args = self._infer_type_args_from_call(call, generic_func)
 
         if type_args is not None:
-            self.function_instantiations.add((function_name, type_args))
+            # D2: identity is (declaring_unit, name, type_args). The declaring unit
+            # comes from the definition the ladder resolved for THIS unit (#495).
+            self.function_instantiations.add(
+                (getattr(generic_func, "unit_name", None), function_name, type_args))
 
             # IMPORTANT: Also detect Result<T, E> instantiation for the return type
             # All Sushi functions implicitly return Result<T, E> where T is the declared return type
@@ -375,7 +378,8 @@ class ExpressionScanner:
             )
             type_args.append(resolved)
 
-        self.function_instantiations.add((name, tuple(type_args)))
+        self.function_instantiations.add(
+            (getattr(generic_func, "unit_name", None), name, tuple(type_args)))
 
     def _collect_from_type(self, ty: "Type") -> None:
         """Collect generic instantiations from a type annotation."""

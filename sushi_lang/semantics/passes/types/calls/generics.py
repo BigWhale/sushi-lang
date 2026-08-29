@@ -90,7 +90,10 @@ def validate_generic_function_call(
     else:
         mangled_name = mangle_function_name(function_name, type_args)
 
-    if validator.func_sig(mangled_name) is None:
+    # The instance is parked in the DECLARING unit (D3), which an aliased import
+    # keeps out of the caller's flat scope -- so the lookup asks that unit directly.
+    home_unit = getattr(generic_func, "unit_name", None)
+    if validator.func_table.lookup(mangled_name, home_unit) is None:
         er.emit(
             validator.reporter,
             er.ERR.CE2061,
@@ -103,7 +106,7 @@ def validate_generic_function_call(
 
     call.callee.id = mangled_name
 
-    func_sig = validator.func_sig(mangled_name)
+    func_sig = validator.func_table.lookup(mangled_name, home_unit)
 
     validate_call_arguments(validator, call, func_sig)
 
@@ -144,7 +147,8 @@ def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected
     type_args = tuple(type_args)
 
     mangled_name = mangle_function_name(name, type_args)
-    func_sig = validator.func_sig(mangled_name)
+    func_sig = validator.func_table.lookup(
+        mangled_name, getattr(generic_func, "unit_name", None))
     if func_sig is None:
         return None
     param_types = tuple(p.ty for p in func_sig.params)

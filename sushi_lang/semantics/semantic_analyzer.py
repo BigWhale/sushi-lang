@@ -315,7 +315,7 @@ class SemanticAnalyzer:
         monomorphizer = Monomorphizer(
             reporter=self.reporter,
             constraint_validator=constraint_validator,
-            generic_funcs=self.generic_funcs.by_name,
+            generic_funcs=self.generic_funcs,
             generic_enums=self.generic_enums.by_name,
             generic_structs=self.generic_structs.by_name,
             func_table=self.funcs,

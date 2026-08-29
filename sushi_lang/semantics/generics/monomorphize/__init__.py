@@ -38,12 +38,15 @@ class Monomorphizer:
     constraint_validator: 'ConstraintValidator | None' = None
     cache: Dict[Tuple[str, Tuple[Type, ...]], EnumType] = field(default_factory=dict)
     struct_cache: Dict[Tuple[str, Tuple[Type, ...]], StructType] = field(default_factory=dict)
-    func_cache: Dict[Tuple[str, Tuple[Type, ...]], 'FuncDef'] = field(default_factory=dict)
+    # Keyed (declaring_unit, name, type_args) -- D2 of #495.
+    func_cache: Dict[Tuple[str | None, str, Tuple[Type, ...]], 'FuncDef'] = field(default_factory=dict)
     generic_enums: Dict[str, GenericEnumType] = field(default_factory=dict)
     generic_structs: Dict[str, GenericStructType] = field(default_factory=dict)
-    generic_funcs: Dict[str, 'GenericFuncDef'] = field(default_factory=dict)
+    # The collect pass's GenericFunctionTable on the compiler path (both views);
+    # a plain name-keyed dict on unit-test paths.
+    generic_funcs: object = field(default_factory=dict)
     func_table: 'FunctionTable | None' = None
-    monomorphized_functions: Dict[str, Tuple[str, Tuple[Type, ...]]] = field(default_factory=dict)
+    monomorphized_functions: Dict[str, Tuple[str | None, str, Tuple[Type, ...]]] = field(default_factory=dict)
     enum_table: 'EnumTable | None' = None
     struct_table: 'StructTable | None' = None
     # Whole-program SymbolTables. Lets the nested-call collector infer a generic call's
@@ -51,7 +54,7 @@ class Monomorphizer:
     # so a non-Name argument (a call, cast, or method result) no longer aborts inference and
     # drops the instantiation (issue #214). None on unit-test paths built from loose tables.
     tables: object | None = None
-    pending_instantiations: Set[Tuple[str, Tuple[Type, ...]]] = field(default_factory=set)
+    pending_instantiations: Set[Tuple[str | None, str, Tuple[Type, ...]]] = field(default_factory=set)
 
     _monomorphize_depth: int = field(default=0, init=False, repr=False)
 

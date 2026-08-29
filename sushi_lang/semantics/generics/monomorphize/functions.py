@@ -18,6 +18,24 @@ class FunctionMonomorphizer:
     def __init__(self, monomorphizer):
         """Initialize function monomorphizer."""
         self.monomorphizer = monomorphizer
+        # The unit whose body the nested-call walk is inside. A name in a template
+        # body binds in the DEFINITION's unit (D4's rule, at home), so the walk
+        # resolves a nested generic call against the enclosing generic's unit.
+        self._asking_unit = None
+
+    def _generic_def(self, unit_name, func_name):
+        """The generic `func_name` means inside `unit_name`: own unit, then flat.
+
+        `generic_funcs` is the collect pass's table on the compiler path and a plain
+        dict on unit-test paths; both answer, the dict with its one flat view.
+        """
+        table = self.monomorphizer.generic_funcs
+        if table is None:
+            return None
+        by_unit = getattr(table, "by_unit", None)
+        if by_unit is not None:
+            return table.lookup(func_name, unit_name)
+        return table.get(func_name)
 
     def build_substitution(
         self,
@@ -84,7 +102,7 @@ class FunctionMonomorphizer:
         type_args: Tuple[Type, ...]
     ) -> 'FuncDef':
         """Create concrete function from generic definition."""
-        cache_key = (generic.name, type_args)
+        cache_key = (getattr(generic, "unit_name", None), generic.name, type_args)
         if cache_key in self.monomorphizer.func_cache:
             return self.monomorphizer.func_cache[cache_key]
 
@@ -115,7 +133,8 @@ class FunctionMonomorphizer:
         else:
             mangled_name = mangle_function_name(generic.name, type_args)
 
-        self.monomorphizer.monomorphized_functions[mangled_name] = (generic.name, type_args)
+        self.monomorphizer.monomorphized_functions[mangled_name] = (
+            getattr(generic, "unit_name", None), generic.name, type_args)
 
         self._collect_nested_instantiations(generic.body, substitution, generic)
 
@@ -167,16 +186,15 @@ class FunctionMonomorphizer:
         self.monomorphizer.pending_instantiations = set()
 
         while worklist:
-            func_name, type_args = worklist.pop()
+            unit_name, func_name, type_args = worklist.pop()
 
-            if (func_name, type_args) in processed:
+            if (unit_name, func_name, type_args) in processed:
                 continue
-            processed.add((func_name, type_args))
+            processed.add((unit_name, func_name, type_args))
 
-            if func_name not in self.monomorphizer.generic_funcs:
+            generic_func = self._generic_def(unit_name, func_name)
+            if generic_func is None:
                 continue
-
-            generic_func = self.monomorphizer.generic_funcs[func_name]
 
             concrete_func = self.monomorphize_function(generic_func, type_args)
 
@@ -217,7 +235,13 @@ class FunctionMonomorphizer:
 
             mangled_name = concrete_func.name
 
-            if mangled_name in self.monomorphizer.func_table.by_name:
+            # Per unit, not flat: two units' instances share the mangled base name and
+            # each unit must keep its own body (#495).
+            home_unit = getattr(generic_func, "unit_name", None)
+            declared = (self.monomorphizer.func_table.by_unit.get(home_unit, {})
+                        if home_unit is not None
+                        else self.monomorphizer.func_table.by_name)
+            if mangled_name in declared:
                 continue
 
             from sushi_lang.semantics.generics.synthesis import register_synthesized_function
@@ -226,7 +250,7 @@ class FunctionMonomorphizer:
                 concrete_func,
                 program=target_program if is_single_file else None,
                 units=None if is_single_file else units,
-                home_unit=getattr(generic_func, "unit_name", None),
+                home_unit=home_unit,
                 from_library_template=getattr(
                     generic_func, "is_library_template", False),
                 origin=getattr(generic_func, "library_origin", None),
@@ -254,7 +278,10 @@ class FunctionMonomorphizer:
                 concrete_ty = self.monomorphizer.substitutor.substitute_type(param.ty, substitution)
                 var_types[param.name] = concrete_ty
 
+        saved_unit = self._asking_unit
+        self._asking_unit = getattr(generic_func, "unit_name", None)
         self._collect_block_instantiations(body, substitution, var_types)
+        self._asking_unit = saved_unit
 
     def collect_from_extension_body(self, extend_def: 'ExtendDef') -> Set[Tuple[str, Tuple[Type, ...]]]:
         """Function instantiations in one MONOMORPHIZED extension body (#392).
@@ -272,7 +299,10 @@ class FunctionMonomorphizer:
 
         saved = getattr(self.monomorphizer, 'pending_instantiations', None)
         self.monomorphizer.pending_instantiations = set()
+        saved_unit = self._asking_unit
+        self._asking_unit = None
         self._collect_block_instantiations(extend_def.body, {}, var_types)
+        self._asking_unit = saved_unit
         found = self.monomorphizer.pending_instantiations
         self.monomorphizer.pending_instantiations = saved if saved is not None else set()
         return found
@@ -330,16 +360,16 @@ class FunctionMonomorphizer:
             if isinstance(expr.callee, Name):
                 function_name = expr.callee.id
 
-                if self.monomorphizer.generic_funcs and function_name in self.monomorphizer.generic_funcs:
-                    generic_func = self.monomorphizer.generic_funcs[function_name]
-
+                generic_func = self._generic_def(self._asking_unit, function_name)
+                if generic_func is not None:
                     type_args = self._infer_type_args_with_substitution(expr, generic_func, var_types)
 
                     if type_args:
                         # Track this instantiation for later processing
                         # We don't monomorphize recursively here to avoid registration issues
                         # Instead, we add to a worklist that will be processed by monomorphize_all_functions
-                        cache_key = (function_name, type_args)
+                        cache_key = (getattr(generic_func, "unit_name", None),
+                                     function_name, type_args)
                         if cache_key not in self.monomorphizer.func_cache and hasattr(self.monomorphizer, 'pending_instantiations'):
                             self.monomorphizer.pending_instantiations.add(cache_key)
 

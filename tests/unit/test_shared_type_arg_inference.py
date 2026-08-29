@@ -67,7 +67,7 @@ fn main() i32:
     println(use_it()??)
     return Result.Ok(0)
 """
-    assert ("identity", (I32,)) in _collect(src), f"missing instantiation for {label}"
+    assert (None, "identity", (I32,)) in _collect(src), f"missing instantiation for {label}"
 
 
 # #171 -- self as a generic-call argument, in an extension and a perk impl
@@ -82,7 +82,7 @@ fn main() i32:
     println(n.doubled())
     return Result.Ok(0)
 """
-    assert ("identity", (I32,)) in _collect(src)
+    assert (None, "identity", (I32,)) in _collect(src)
 
 
 def test_self_arg_in_perk_impl_body_is_collected():
@@ -102,7 +102,7 @@ fn main() i32:
     println(b.dbl())
     return Result.Ok(0)
 """
-    assert ("identity", (I32,)) in _collect(src)
+    assert (None, "identity", (I32,)) in _collect(src)
 
 
 # Regression guard: the shapes the instantiate pass already handled must keep working
@@ -125,4 +125,4 @@ fn main() i32:
     return Result.Ok(0)
 """
     funcs = _collect(src)
-    assert ("identity", expected) in funcs
+    assert (None, "identity", expected) in funcs
