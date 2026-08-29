@@ -14,6 +14,8 @@ only checks the call is made -- which is why this gate reads the stamp off the A
 """
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from sushi_lang.semantics.ast import Call, DotCall, EnumConstructor, Name, Node
@@ -138,7 +140,9 @@ def _walk(node, seen=None):
     seen.add(id(node))
     yield node
 
-    for value in vars(node).values():
+    # A node is slotted and has no __dict__; its declared fields are the same set.
+    for f in dataclasses.fields(node):
+        value = getattr(node, f.name, None)
         if isinstance(value, (list, tuple)):
             for item in value:
                 yield from _walk(item, seen)

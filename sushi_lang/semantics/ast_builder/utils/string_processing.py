@@ -1,5 +1,6 @@
 """String processing utilities for handling escape sequences and interpolation."""
 from __future__ import annotations
+import dataclasses
 from typing import List, Optional, Tuple, Union, TYPE_CHECKING
 from pathlib import Path
 from lark import Lark, Token
@@ -162,10 +163,14 @@ def apply_location_offset(node: object, base_span: 'Span', visited: set = None) 
             end_col=old_loc.end_col + col_offset
         )
 
-    if isinstance(node, Node) and hasattr(node, '__dict__'):
-        for attr_name, attr_value in node.__dict__.items():
-            if attr_name == 'loc':
+    if isinstance(node, Node):
+        # A node is slotted, so it has no __dict__ to walk (IR.md section 5). Its
+        # declared fields are the same set the old walk reached, minus the stray
+        # attributes it could never have recursed into anyway.
+        for f in dataclasses.fields(node):
+            if f.name == 'loc':
                 continue
+            attr_value = getattr(node, f.name, None)
             if isinstance(attr_value, list):
                 for item in attr_value:
                     apply_location_offset(item, base_span, visited)

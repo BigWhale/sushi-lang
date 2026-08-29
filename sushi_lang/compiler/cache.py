@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-from llvmlite import binding as llvm
+from sushi_lang.backend.platform_detect import default_triple
 
 from sushi_lang import __version__ as compiler_version
 
@@ -37,7 +37,7 @@ class CacheManager:
         self.stdlib_path = self.cache_path / STDLIB_DIR
         self.libs_path = self.cache_path / LIBS_DIR
         self.libsrc_path = self.cache_path / LIBSRC_DIR
-        self._target_triple = llvm.get_default_triple()
+        self._target_triple = default_triple()
 
     @property
     def global_key(self) -> str:

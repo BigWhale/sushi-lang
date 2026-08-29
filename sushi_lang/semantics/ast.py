@@ -11,16 +11,26 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import NamespaceRef
 
 
-@dataclass
+@dataclass(slots=True)
 class Node:
     loc: Optional[Span]
+    # The `borrow` pass records here what it proved about this node's ownership, and
+    # `backend/ownership.py` acts on it. A DECLARED field rather than an attribute
+    # written on in passing: see IR.md section 5. kw_only, because `loc` carries no
+    # default and every subclass adds positional fields after it.
+    ownership_provenance: Optional["Provenance"] = field(default=None, kw_only=True)
+    # `f(nom x)` is a call-site MARKER, not an operator: the builder flags the argument
+    # rather than wrapping it in a node every pass would dispatch on. It can land on any
+    # expression, which is why it is declared here and not per class.
+    nom_marked: bool = field(default=False, kw_only=True)
+    nom_span: Optional[Span] = field(default=None, kw_only=True)
 
-@dataclass
+@dataclass(slots=True)
 class Stmt(Node):
     pass
 
 
-@dataclass
+@dataclass(slots=True)
 class DocTag:
     """One recognised item of a doc block's Markdown list (documentation.md S3)."""
     kind: str                    # "parameter" | "returns" | "errors" | "example" | "unknown"
@@ -30,7 +40,7 @@ class DocTag:
     word: str = ""               # the keyword AS WRITTEN; what CE7004 reports
 
 
-@dataclass
+@dataclass(slots=True)
 class DocExample:
     """One fenced code block under an `- Example:` tag (documentation.md S10, R14).
 
@@ -45,7 +55,7 @@ class DocExample:
     defect: Optional[Literal["no-fence", "unterminated"]] = None
 
 
-@dataclass
+@dataclass(slots=True)
 class DocBlock:
     """A `##: ... :##` block, dedented, parked on the node it documents."""
     summary: str                 # the first paragraph
@@ -65,7 +75,7 @@ class DocBlock:
     orphan_reason: Optional[Literal["detached", "in-body"]] = None
 
 
-@dataclass
+@dataclass(slots=True)
 class UseStatement(Node):
     path: str                        # Path string like "math/integer" or "core/results"
     is_stdlib: bool = False          # True for <module>, False for "module"
@@ -75,7 +85,7 @@ class UseStatement(Node):
     alias: Optional[str] = None
     alias_span: Optional[Span] = None
 
-@dataclass
+@dataclass(slots=True)
 class Program(Node):
     uses: List["UseStatement"]
     constants: List["ConstDef"]
@@ -101,7 +111,7 @@ class Program(Node):
         if self.orphan_docs is None:
             self.orphan_docs = []
 
-@dataclass
+@dataclass(slots=True)
 class Param:
     name: str
     ty: Optional[Type]
@@ -117,8 +127,11 @@ class Param:
                                       # mode bit the type cannot carry -- peek/poke ride on
                                       # ReferenceType. See docs/design/borrow-model.md S6.
     nom_span: Optional[Span] = None   # the `nom` marker itself, for diagnostics
+    # A lambda's captures are Params, and the `borrow` pass stamps each one.
+    ownership_provenance: Optional["Provenance"] = None
 
-@dataclass
+
+@dataclass(slots=True)
 class BoundedTypeParam:
     """Type parameter with optional perk constraints (e.g., T: Hashable)."""
     name: str
@@ -149,7 +162,7 @@ class BoundedTypeParam:
             return f"{prefix}{self.name}: {constraints_str}"
         return f"{prefix}{self.name}"
 
-@dataclass
+@dataclass(slots=True)
 class FuncDef(Node):
     name: str
     params: List[Param]
@@ -171,8 +184,15 @@ class FuncDef(Node):
     self_mode_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
     public_span: Optional[Span] = None
+    # True for a body the compiler generated (a derived clone/hash, a monomorphized
+    # instance); the library manifest and the doc lints both skip one.
+    is_synthesized: bool = False
+    # The unit that DECLARED the generic this instance came from, so two units'
+    # instances of one generic stay distinct (#495). Set by generics/synthesis.py.
+    home_unit: Optional[str] = None
 
-@dataclass
+
+@dataclass(slots=True)
 class ConstDef(Node):
     name: str
     ty: Optional[Type]           # Constant type (must be specified)
@@ -183,7 +203,7 @@ class ConstDef(Node):
     doc: Optional[DocBlock] = None
     public_span: Optional[Span] = None
 
-@dataclass
+@dataclass(slots=True)
 class StructField:
     """Single field in a struct definition."""
     ty: Optional[Type]
@@ -191,7 +211,7 @@ class StructField:
     loc: Optional[Span] = None
     doc: Optional[DocBlock] = None
 
-@dataclass
+@dataclass(slots=True)
 class StructDef(Node):
     """Struct definition with fields."""
     name: str
@@ -202,7 +222,7 @@ class StructDef(Node):
     is_public: bool = True
     public_span: Optional[Span] = None
 
-@dataclass
+@dataclass(slots=True)
 class EnumVariant:
     """Single variant in an enum definition."""
     name: str                           # Variant name (e.g., "Some", "None")
@@ -211,7 +231,7 @@ class EnumVariant:
     loc: Optional[Span] = None
     doc: Optional[DocBlock] = None
 
-@dataclass
+@dataclass(slots=True)
 class EnumDef(Node):
     """Enum definition with variants."""
     name: str                           # Enum name (e.g., "Option", "Result")
@@ -222,7 +242,7 @@ class EnumDef(Node):
     is_public: bool = True
     public_span: Optional[Span] = None
 
-@dataclass
+@dataclass(slots=True)
 class ExtendDef(Node):
     target_type: Optional[Type]  # Type being extended (int, bool, string)
     name: str
@@ -239,7 +259,7 @@ class ExtendDef(Node):
     target_shape: Optional["ExtensionTarget"] = None
     doc: Optional[DocBlock] = None
 
-@dataclass
+@dataclass(slots=True)
 class PerkMethodSignature:
     """Method signature required by a perk."""
     name: str
@@ -252,7 +272,7 @@ class PerkMethodSignature:
     self_mode_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
 
-@dataclass
+@dataclass(slots=True)
 class PerkDef(Node):
     """Perk definition (trait/interface)."""
     name: str
@@ -263,7 +283,7 @@ class PerkDef(Node):
     is_public: bool = True
     public_span: Optional[Span] = None
 
-@dataclass
+@dataclass(slots=True)
 class ExtendWithDef(Node):
     """Perk implementation (extend Type with Perk)."""
     target_type: Optional[Type]
@@ -273,13 +293,13 @@ class ExtendWithDef(Node):
     perk_name_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
 
-@dataclass
+@dataclass(slots=True)
 class TypeConstraint:
     """Perk constraint on a type parameter (T: Hashable)."""
     perk_name: str
     loc: Optional[Span] = None
 
-@dataclass
+@dataclass(slots=True)
 class ExternalDecl(Node):
     """A single foreign function declaration inside an unsafe external block."""
     name: str                    # Sushi-visible name (e.g., "strlen")
@@ -291,7 +311,7 @@ class ExternalDecl(Node):
     ret_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
 
-@dataclass
+@dataclass(slots=True)
 class ExternalBlock(Node):
     """An unsafe external block declaring foreign functions under a namespace."""
     abi: str                          # ABI string (only "C" accepted in v1)
@@ -302,13 +322,16 @@ class ExternalBlock(Node):
     namespace_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
 
-@dataclass
+@dataclass(slots=True)
 class Block(Node):
     statements: List[Stmt]
     doc: Optional[DocBlock] = None
+    # Set on a CALLABLE's body block: the locals whose every move does not dominate the
+    # scope exit, so each needs a run-time drop flag (#414).
+    conditional_move_names: Optional[frozenset] = None
 
 
-@dataclass
+@dataclass(slots=True)
 class Let(Stmt):
     name: str
     ty: Optional[Type]
@@ -316,38 +339,38 @@ class Let(Stmt):
     name_span: Optional[Span] = None
     type_span: Optional[Span] = None
 
-@dataclass
+@dataclass(slots=True)
 class Rebind(Stmt):
     target: "Expr"  # Can be Name or MemberAccess (for field rebinding)
     value: "Expr"
 
-@dataclass
+@dataclass(slots=True)
 class ExprStmt(Stmt):
     expr: "Expr"
 
-@dataclass
+@dataclass(slots=True)
 class Return(Stmt):
     value: "Expr"
 
-@dataclass
+@dataclass(slots=True)
 class Print(Stmt):
     value: "Expr"
 
-@dataclass
+@dataclass(slots=True)
 class PrintLn(Stmt):
     value: "Expr"
 
-@dataclass
+@dataclass(slots=True)
 class If(Stmt):
     arms: List[Tuple["Expr", Block]]     # [(cond, block), ...]
     else_block: Optional[Block]
 
-@dataclass
+@dataclass(slots=True)
 class While(Stmt):
     cond: "Expr"
     body: Block
 
-@dataclass
+@dataclass(slots=True)
 class Foreach(Stmt):
     """Foreach loop statement: foreach(type item in iterable):"""
     item_name: str
@@ -359,7 +382,7 @@ class Foreach(Stmt):
     item_borrow: Optional[str] = None       # None | "peek" | "poke"
     item_borrow_span: Optional[Span] = None
 
-@dataclass
+@dataclass(slots=True)
 class Expand(Stmt):
     """Compile-time pack-expansion statement: expand(a in args):"""
     var: str
@@ -367,15 +390,15 @@ class Expand(Stmt):
     body: Block                 # Body unrolled per pack element
     var_span: Optional[Span] = None
 
-@dataclass
+@dataclass(slots=True)
 class Break(Stmt):
     pass
 
-@dataclass
+@dataclass(slots=True)
 class Continue(Stmt):
     pass
 
-@dataclass
+@dataclass(slots=True)
 class Pattern(Node):
     """Pattern for match arms: EnumName.VariantName(binding1, binding2, ...)"""
     enum_name: str
@@ -388,12 +411,12 @@ class Pattern(Node):
     # exactly what they read for a bare arm (unit-namespaces.md section 5.2).
     namespace: Optional[str] = None
 
-@dataclass
+@dataclass(slots=True)
 class WildcardPattern(Node):
     """Wildcard pattern (_) for match arms - catches all remaining variants"""
     pass
 
-@dataclass
+@dataclass(slots=True)
 class LiteralPattern(Node):
     """An integer literal pattern in a match arm on an integer scrutinee (#415).
 
@@ -404,27 +427,27 @@ class LiteralPattern(Node):
     display: str
     radix: int = 10
 
-@dataclass
+@dataclass(slots=True)
 class RefBinding(Node):
     """A reference binding in a match pattern: `Shape.Poly(poke p)` (#300 phase 3)."""
     name: str
     mode: str                        # "peek" | "poke"
 
 
-@dataclass
+@dataclass(slots=True)
 class OwnPattern(Node):
     """Own(inner_pattern) - auto-unwrap Own<T> in pattern matching."""
     inner_pattern: Union[str, 'Pattern']
     inner_borrow: Optional[str] = None    # None | "peek" | "poke"
     inner_borrow_span: Optional[Span] = None
 
-@dataclass
+@dataclass(slots=True)
 class MatchArm(Node):
     """Single arm in a match statement/expression"""
     pattern: Union[Pattern, LiteralPattern, WildcardPattern]
     body: Union["Expr", "Block"]
 
-@dataclass
+@dataclass(slots=True)
 class Match(Stmt):
     """Match statement: match expr: pattern -> body"""
     scrutinee: "Expr"
@@ -435,51 +458,65 @@ class Match(Stmt):
     # (e.g. an indexed element, a fn-field call, or a user method returning
     # Maybe/Result), and a miss would otherwise silently drop pattern bindings.
     resolved_scrutinee_type: Optional[Type] = None
+    # An INTEGER scrutinee instead (#415). The backend dispatches on this; an EnumType
+    # scrutinee uses `resolved_scrutinee_type` above.
+    integer_match_type: Optional[Type] = None
 
 
-@dataclass
+@dataclass(slots=True)
 class Name(Node):
     id: str
+    # A bare name in a fn-typed position gets the expected FunctionType, so a reference
+    # to a generic function can solve its type arguments. `Lambda` carries the same
+    # field for the same reason.
+    expected_type: Optional[Type] = None
 
-@dataclass
+@dataclass(slots=True)
 class IntLit(Node):
     value: int
     radix: int = 10  # 2 (binary), 8 (octal), 10 (decimal), 16 (hexadecimal)
     resolved_type: Optional[Type] = None
+    # Set once the literal's range has been checked against its context type, so a
+    # second look does not report CE2049 twice.
+    range_checked: bool = False
+    # `x as i64` gives the literal the cast's target as its context, so its range is
+    # judged against that and not against the default i32.
+    in_cast_context: bool = False
 
-@dataclass
+@dataclass(slots=True)
 class FloatLit(Node):
     value: float
     resolved_type: Optional[Type] = None
+    range_checked: bool = False
 
-@dataclass
+@dataclass(slots=True)
 class BoolLit(Node):
     value: bool
 
-@dataclass
+@dataclass(slots=True)
 class BlankLit(Node):
     """Blank literal (~) - represents the single value of blank type"""
     pass
 
-@dataclass
+@dataclass(slots=True)
 class StringLit(Node):
     value: str
 
-@dataclass
+@dataclass(slots=True)
 class InterpolatedString(Node):
     """Represents a string with interpolated expressions like "Hello, {name}!" """
     parts: List[Union[str, "Expr"]]  # Alternating string literals and expressions
 
-@dataclass
+@dataclass(slots=True)
 class ArrayElement(Node):
     value: "Expr"
     count: Optional["Expr"] = None   # `value; count`. None is a plain element.
 
-@dataclass
+@dataclass(slots=True)
 class ArrayLiteral(Node):
     elements: List["ArrayElement"]
 
-@dataclass
+@dataclass(slots=True)
 class IndexAccess(Node):
     array: "Expr"
     index: "Expr"
@@ -491,19 +528,19 @@ class IndexAccess(Node):
                                             # `inferred_unwrapped_type`.
 
 UnOp = Literal["neg", "not", "~"]
-@dataclass
+@dataclass(slots=True)
 class UnaryOp(Node):
     op: UnOp
     expr: "Expr"
 
 BinOp = Literal["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">=", "and", "or", "xor", "&", "|", "^", "<<", ">>"]
-@dataclass
+@dataclass(slots=True)
 class BinaryOp(Node):
     op: BinOp
     left: "Expr"
     right: "Expr"
 
-@dataclass
+@dataclass(slots=True)
 class Spread(Node):
     """A bloomed call argument: `arr...` fans an existing array's elements into a variadic `...T`
     slot. Only valid as the sole, last trailing argument of a call to a variadic function; the
@@ -511,7 +548,7 @@ class Spread(Node):
     """
     value: "Expr"   # the array expression being bloomed (e.g. Name("args"))
 
-@dataclass
+@dataclass(slots=True)
 class Lambda(Node):
     """A lambda literal (closure)."""
     params: List[Param]
@@ -529,7 +566,7 @@ class Lambda(Node):
     env_struct: Optional[Type] = None
 
 
-@dataclass
+@dataclass(slots=True)
 class Call(Node):
     # Usually a Name (a direct function call), but widened to any Expr so a
     # function VALUE can be called through: env.f(x) (a captured closure, from
@@ -551,20 +588,51 @@ class Call(Node):
     # Set by the type checker when it found no callee at all (CE2008, CE2092). The passes
     # after it then know there is no signature, and say nothing about the arguments.
     callee_unresolved: bool = False
+    # What the typecheck pass resolved about the callee's parameters. The borrow pass
+    # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
+    callee_param_modes: Optional[List] = None
+    callee_param_names: Optional[List[str]] = None
+    callee_param_types: Optional[List] = None
+    # An extern variadic call's promoted argument types (CE5005 checks them).
+    variadic_arg_types: Optional[List] = None
+    # The rest of what the typecheck pass resolves about a call. Every call node
+    # carries the whole set, so a pass never has to ask which call shape it has.
+    callee_self_mode: Optional[str] = None  # "peek"/"poke"; see MethodCall
+    external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for an FFI call
+    inferred_return_type: Optional["Type"] = None  # Return type inferred by the typecheck pass
+    namespace_ref: Optional["NamespaceRef"] = None  # a call through a `use ... as` alias
+    resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type
+    resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type
 
-@dataclass
+
+@dataclass(slots=True)
 class MethodCall(Node):
     receiver: "Expr"    # The object/expression being called (x in x.add(5))
     method: str
     args: List["Expr"]
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
     resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type (populated by type checker)
+    resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
+    # A call through a `use ... as` alias; see DotCall for what the triple carries.
+    namespace_ref: Optional["NamespaceRef"] = None
     callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
                                             # `poke self` (#327); stamped by the typecheck pass, read
                                             # by the borrow pass (a poke call is a receiver WRITE)
                                             # and the backend (pass a pointer)
+    # What the typecheck pass resolved about the callee's parameters. The borrow pass
+    # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
+    callee_param_modes: Optional[List] = None
+    callee_param_names: Optional[List[str]] = None
+    callee_param_types: Optional[List] = None
+    # The rest of what the typecheck pass resolves about a call. Every call node
+    # carries the whole set, so a pass never has to ask which call shape it has.
+    callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
+    callee_unresolved: bool = False  # set when no callee was found at all (CE2008, CE2092)
+    external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for an FFI call
+    variadic_arg_types: Optional[List] = None  # an extern variadic call's promoted arg types
 
-@dataclass
+
+@dataclass(slots=True)
 class DotCall(Node):
     """Unified node for X.Y(args) - resolved during semantic analysis."""
     receiver: "Expr"    # The receiver expression (variable, type name, etc.)
@@ -581,6 +649,13 @@ class DotCall(Node):
     namespace_ref: Optional["NamespaceRef"] = None
     callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
                                             # `poke self` (#327); see MethodCall
+    # What the typecheck pass resolved about the callee's parameters. The borrow pass
+    # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
+    callee_param_modes: Optional[List] = None
+    callee_param_names: Optional[List[str]] = None
+    callee_param_types: Optional[List] = None
+    # An extern variadic call's promoted argument types (CE5005 checks them).
+    variadic_arg_types: Optional[List] = None
     field_names: Optional[List[str]] = None  # named construction through a namespace
     # Explicit call-site type arguments, as `Call` carries them. A qualified call to a
     # return-type-only generic is the reason they are here: `it.empty_list@(i32)()` is a
@@ -588,15 +663,20 @@ class DotCall(Node):
     # states is unharmed and only the parse shape changed (unit-namespaces.md 5.1).
     type_args: Optional[List["Type"]] = None
     type_args_loc: Optional["Span"] = None
+    # The rest of what the typecheck pass resolves about a call. Every call node
+    # carries the whole set, so a pass never has to ask which call shape it has.
+    callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
+    callee_unresolved: bool = False  # set when no callee was found at all (CE2008, CE2092)
 
-@dataclass
+
+@dataclass(slots=True)
 class MemberAccess(Node):
     """Member access expression: obj.field"""
     receiver: "Expr"    # The struct expression (p in p.x)
     member: str
     namespace_ref: Optional["NamespaceRef"] = None  # a name read through an alias
 
-@dataclass
+@dataclass(slots=True)
 class EnumConstructor(Node):
     """Enum variant constructor: Option.Some(42) or Color.Red"""
     enum_name: str
@@ -606,27 +686,27 @@ class EnumConstructor(Node):
     variant_name_span: Optional[Span] = None
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
 
-@dataclass
+@dataclass(slots=True)
 class DynamicArrayNew(Node):
     resolved_type: Optional["Type"] = None  # The `T[]` this empty array is (typecheck pass)
 
-@dataclass
+@dataclass(slots=True)
 class DynamicArrayFrom(Node):
     elements: ArrayLiteral  # from([1, 2, 3]) -> holds the array literal
 
-@dataclass
+@dataclass(slots=True)
 class CastExpr(Node):
     expr: "Expr"
     target_type: Type
     source_type: Optional[Type] = None  # Operand's semantic type, stamped by the typecheck pass (signedness for codegen)
 
-@dataclass
+@dataclass(slots=True)
 class Borrow(Node):
     """Borrow expression: peek expr or poke expr"""
     expr: "Expr"  # The expression being borrowed (typically a Name)
     mutability: Literal["peek", "poke"]
 
-@dataclass
+@dataclass(slots=True)
 class TryExpr(Node):
     """Try expression: expr??"""
     expr: "Expr"  # The expression being unwrapped (must be Result<T>)
@@ -638,7 +718,7 @@ class TryExpr(Node):
     inferred_error_tag: "Optional[int]" = None
     inferred_func_return_type: "Optional[Type]" = None
 
-@dataclass
+@dataclass(slots=True)
 class RangeExpr(Node):
     """Range expression: start..end or start..=end"""
     start: "Expr"           # Start expression (must evaluate to integer)
@@ -690,3 +770,11 @@ __all__ = [
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]
+
+
+# `Provenance` annotates Node.ownership_provenance. It lands at the BOTTOM because
+# `ownership` reaches back into this module (through generics.cloning) for MethodCall,
+# so the import can only run once every class above exists. The totality gates resolve
+# the annotation through this module's globals, which is why it must be a real name here
+# and not a TYPE_CHECKING-only one.
+from sushi_lang.semantics.ownership import Provenance  # noqa: E402
