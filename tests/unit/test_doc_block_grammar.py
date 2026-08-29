@@ -43,6 +43,7 @@ DOC_SOURCES = (
     "sushi_lang/sushi_stdlib/src_sushi/io/path.sushi",
     "sushi_lang/sushi_stdlib/src_sushi/io/fs.sushi",
     "sushi_lang/sushi_stdlib/src_sushi/collections/iter.sushi",
+    "sushi_lang/sushi_stdlib/src_sushi/net/",
 )
 
 # `.sushi` files that do not parse, and did not before doc blocks existed. Each entry

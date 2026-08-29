@@ -104,6 +104,7 @@ class StdlibLinker:
         "encoding/msgpack",
         "io/fs",
         "io/path",
+        "net/tcp",
         "toolchain/slib",
     }
 
