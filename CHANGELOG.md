@@ -18,6 +18,12 @@ dot, a unit sees what it imported and no further, and two units may each declare
 another's.
 
 ### Added
+- **A constant can interpolate.** A string constant takes holes, and a hole takes any
+  constant expression -- another constant, arithmetic, a cast. Each hole prints exactly
+  as the same expression prints at run time, an integer at its declared width and a
+  float as `%g`, so a constant and a body never disagree about a value's text. A call in
+  a hole is still CE0108, like a call anywhere else in a constant.
+
 - **A library that extends a type it does not declare is told so.** `CW3003`, at `--lib`
   build time only: the method name is claimed on that type for every consumer, and a
   second library claiming it makes the two unusable together. A builtin target is not
@@ -213,6 +219,18 @@ another's.
   because it still occupies one slot.
 
 ### Fixed
+- **A double-quoted string inside an interpolation hole is named for what it is.** The
+  inner quote closes the outer literal, so the parse failed on a token nobody wrote.
+  CE6001 and CE6002 now carry the shape and both escapes: single quotes inside the hole,
+  or bind the expression to a local first.
+
+- **Four diagnostics said the wrong thing, and a gate now forbids the class.** A perk
+  arity error was emitted as CE2007 with another code's kwargs, an array bulk-copy arity
+  error keyed its method name wrongly, and two missing-symbol sites raised CE0027 with
+  CE0024's shape. A static check over every emit site now demands that call-site kwargs
+  match the registered template exactly, and that no unformatted brace reaches an
+  emitter.
+
 - **Two units may each declare a generic function, and every instance knows its home**
   (#495, #494). A generic function now carries the unit that declared it, exactly as a
   concrete function does: two units' `twin@(T)` coexist, each unit's call reaches its

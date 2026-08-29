@@ -384,7 +384,7 @@ def try_emit_perk_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
 
     llvm_fn = codegen.funcs.get(func_name)
     if llvm_fn is None:
-        raise_internal_error("CE0027", method=expr.method, type=str(semantic_type))
+        raise_internal_error("CE0024", method=expr.method, type=str(semantic_type))
 
     # A `poke self` / `peek self` perk method (#327) takes the receiver by POINTER --
     # the same rule as the extension call site (dispatcher.py), read from the same

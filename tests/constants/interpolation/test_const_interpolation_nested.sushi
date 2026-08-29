@@ -1,0 +1,9 @@
+# An interpolated constant is a string constant, so another constant
+# can interpolate it in turn (#447).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+const string HEAD = "Mostly"
+const string BOOK = "{HEAD} Harmless"
+
+fn main() i32:
+    println(BOOK)
+    return Result.Ok(0)

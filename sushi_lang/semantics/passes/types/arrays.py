@@ -225,7 +225,7 @@ def _validate_bulk_copy(call: MethodCall, array_type: Any, reporter: Any, valida
     expected = index_args + (0 if name in ("s", "ss") else 1)
     if len(call.args) != expected:
         er.emit(reporter, er.ERR.CE0023, call.loc,
-                name=f"{display_type(array_type)}.{name}", expected=expected,
+                method=f"{display_type(array_type)}.{name}", expected=expected,
                 got=len(call.args))
         return
 

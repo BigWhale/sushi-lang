@@ -1,0 +1,9 @@
+# A constant can interpolate other constants (#447). The evaluator
+# formats each hole as the run-time formatter does.
+# EXPECT_STDOUT_EXACT: "the answer is 42\n"
+const i32 ANSWER = 42
+const string MESSAGE = "the answer is {ANSWER}"
+
+fn main() i32:
+    println(MESSAGE)
+    return Result.Ok(0)
