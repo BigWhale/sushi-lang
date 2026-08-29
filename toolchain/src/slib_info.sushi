@@ -640,6 +640,24 @@ fn print_perk_impls(MsgValue meta, Opts o) ~:
     println("")
     return Result.Ok(~)
 
+# print_foreign_extensions: the types this library claims methods on and does
+# not declare -- the consumer's half of CW3003. The key is absent for a library
+# that extends only what it declares, and ml_len answers 0 for Nil.
+fn print_foreign_extensions(MsgValue meta, Opts o) ~:
+    let MsgValue claims = ml_get(meta, "foreign_extensions")??
+    let i32 n = ml_len(claims)??
+    if (not section("Foreign Extensions", n, o)??):
+        return Result.Ok(~)
+    let i32 i = 0
+    while (i < n):
+        let MsgValue c = ml_at(claims, i)??
+        let string target = to_surface(ml_get_str(c, "type")??)??
+        let string method = ml_get_str(c, "method")??
+        println("  extend {target} {method}")
+        i := i + 1
+    println("")
+    return Result.Ok(~)
+
 # print_units: the unit index a v4 library carries.
 fn print_units(MsgValue meta, Opts o) ~:
     let MsgValue units = ml_get(meta, "units")??
@@ -721,6 +739,7 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     print_generic_named(meta, "generic_enums", "Generic Enums", "enum", o)??
     print_perks(meta, o)??
     print_perk_impls(meta, o)??
+    print_foreign_extensions(meta, o)??
     print_dependencies(meta, o)??
     if (kind != "binary"):
         let string src = group_thousands(sizes.source)??

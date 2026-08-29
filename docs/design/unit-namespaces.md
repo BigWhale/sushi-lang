@@ -779,10 +779,13 @@ only be declared in the package that declares the type); Rust forbids it with th
 rule; Swift allows it and diagnoses at the call; Java has no extension methods. Sushi allows
 it like Swift and refuses like Go.
 
-What must change is the TEXT. `CE0101` today names one declaration and calls the other a
-duplicate, which is right for one author and wrong for two: when the two extensions come
-from two libraries, neither author is at fault and the consumer can edit neither. It becomes
-a relational diagnostic naming both units, with no side blamed.
+What must change is the TEXT, and it has (PX). `CE0101` named one declaration and called
+the other a duplicate, which is right for one author and wrong for two: when the two
+extensions come from two libraries, neither author is at fault and the consumer can edit
+neither. When the two declarations come from two units, the diagnostic is relational: a
+note per unit, `unit '<name>' declares it here`, and no side blamed
+(`passes/collect/functions.py`, both the concrete and the generic-target site). One unit
+writing both keeps the old shape, because there the second one IS the duplicate.
 
 #### The warning belongs to `--lib`, and to nothing else
 
@@ -815,15 +818,25 @@ cross-unit perk implementations in the tree — `tests/libs/`, `tests/perks/cros
 `tests/visibility/perk/` — is that shape, eight of them on a builtin and four on a type the
 implementing unit declares itself. That is why the foreign-target count is zero.
 
+**A perk implementation never warns, whatever its target** (PX ruling). The hazard CW3003
+names is a claim with no escape: a consumer holding two colliding plain extensions can edit
+neither. A perk implementation's claim has the escape built in — the consumer's OWN
+implementation is the sanctioned override and wins over a shipped one
+(`tests/libs/test_lib_perk_impl_local_override.sushi` is the measured proof). So
+`extend i32 with Doubler` in a library stays quiet, and the two library fixtures of that
+shape keep building clean. The predicate lives in `semantics/foreign_extensions.py`, one
+function for both consumers: the CW3003 emitter in the pipeline and the manifest extractor.
+
 Cost today: `sushi_stdlib/src_sushi` and `toolchain/src` hold **zero** extensions between
 them, and `tests/libs` holds 11 — eight on a builtin, three on a type the consumer
 declares. It fires nowhere in real library code, which is what a warning aimed at a future
 hazard should do.
 
-**The consumer's half.** `--lib-info` should list the foreign types a library claims methods
-on, so the hazard is readable before it is hit. That needs one new extractor: the manifest
-carries functions, constants, structs, enums and perk implementations, and no extension
-list at all.
+**The consumer's half.** `--lib-info` lists the foreign types a library claims methods on,
+so the hazard is readable before it is hit: the manifest carries them as
+`foreign_extensions` (absent when the library extends only what it declares), and both
+report renderers print the section as `extend <type> <method>` lines
+(`docs/library-format.md`).
 
 **What the author does about it is a prefix**, and that is worth saying plainly. Section 1.3
 puts C in the row with no answer, where `png_read_info` and `SDL_Init` live, and a method

@@ -1,0 +1,12 @@
+# Two units extend one builtin with one method name. The diagnostic is
+# relational: it names the two units and it blames no side.
+# EXPECT_ERROR_CODE: CE0101
+# EXPECT_STDERR_CONTAINS: "unit 'helpers/tagger' declares it here"
+# EXPECT_STDERR_CONTAINS: "unit 'test_err_two_units_extend_one_builtin' declares it here"
+use "helpers/tagger"
+
+extend i32 tag() i32:
+    return self * 2
+
+fn main() i32:
+    return Result.Ok(0)

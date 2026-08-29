@@ -371,6 +371,14 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
             for func in unit.ast.functions:
                 if func.name == "main":
                     er.emit(reporter, er.ERR.CE3501, func.name_span)
+        # A library that extends a type it does not declare claims the method
+        # name for every consumer (CW3003). The build proceeds: a warning names
+        # the hazard and stops nothing.
+        from sushi_lang.backend.library_manifest import own_units
+        from sushi_lang.semantics.foreign_extensions import foreign_extension_claims
+        for claim in foreign_extension_claims(own_units(compilation_order)):
+            er.emit_with(reporter, er.ERR.CW3003, claim.span,
+                         filename=claim.filename, type=claim.target).emit()
     elif not any(func.name == "main"
                  for unit in compilation_order if unit.ast is not None
                  for func in unit.ast.functions):

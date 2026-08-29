@@ -52,6 +52,21 @@ _add(ErrorMessage("CW3002", Severity.WARNING,
     "'{name}' shadows the {kind} '{owner}' exports", Category.UNIT,
     "A program's own declaration takes priority over a name a source library or a bundled stdlib module exports, and that is legal: a private function is emitted with internal linkage, so the two are separate symbols. The consumer's call binds to the consumer's declaration, the library's own body keeps calling its own, and both declarations being public is no longer a clash at all -- CE3003 retired, and an unqualified name with two candidates is CE3012 at the use. It warns because shadowing an export is rarely intended, and because the reader of the call site cannot see which of the two answers it. Rename your declaration, or keep it and accept that the library's body is unaffected. A name the library declares privately is shadowed the same way and says nothing, because each declaration carries the unit that declared it; a library TYPE is still one name for the program (CE3011). Write `use <lib/name> as alias` to put the export behind a dot and take the shadow away."))
 
+_add(ErrorMessage("CW3003", Severity.WARNING,
+    "this library extends '{type}', a type it does not declare", Category.UNIT,
+    "The warning fires at `--lib` build time and nowhere else: shipping is when the "
+    "claim becomes other people's problem, and it is the moment the author is present. "
+    "A method is found on the receiver's type, so an extension puts its method name on "
+    "the type for every consumer of the library, and a second library that claims the "
+    "same name on the same type makes the two unusable together -- CE0101, at a "
+    "consumer who can edit neither. A builtin target is not exempt: `i32` is the most "
+    "collidable target of all, because every unit of every program can reach it. A perk "
+    "implementation does not warn, because the consumer's own implementation is the "
+    "sanctioned override, so that claim has an escape. An extension inside an ordinary "
+    "program stays silent, `extend i32 squared()` is idiomatic Sushi there. To ship the "
+    "method without the claim, declare your own wrapper type and extend that; to accept "
+    "the claim, publish it -- `--lib-info` lists it under 'Foreign Extensions'."))
+
 _add(ErrorMessage("CW3506", Severity.WARNING,
     "library perk implementation for '{type}' could not be loaded and was skipped",
     Category.LIBRARY, "A perk implementation shipped by a library failed to deserialize. "

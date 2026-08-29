@@ -520,6 +520,12 @@ def print_library_info(library_path: Path, show_docs: bool = False,
                 records.close(_print_doc(method, "      ", opts))
         print()
 
+    foreign = metadata.get('foreign_extensions', [])
+    if _section("Foreign Extensions", foreign, opts.p):
+        for claim in foreign:
+            print(f"  extend {_surface(claim['type'])} {claim['method']}")
+        print()
+
     deps = metadata.get('dependencies', [])
     if _section("Dependencies", deps, opts.p):
         for dep in deps:

@@ -267,6 +267,15 @@ is the authority, and the index is a cache of it.
     # in. The whole key is absent when no unit carries a block.
     "unit_docs": {str: DOC},
 
+    # The types this library claims methods on and does not declare -- the consumer's
+    # half of CW3003. One record per extension method, in declaration order; the whole
+    # key is absent when the library extends only what it declares. A perk
+    # implementation makes no record: the consumer's own implementation is the
+    # sanctioned override, so that claim has an escape.
+    "foreign_extensions": [
+        {"type": str, "method": str, "unit": str}
+    ],
+
     "dependencies": [str],             # Stdlib/library dependencies
 
     # Written for EVERY kind. A source library ships whole units, so a generic in it is

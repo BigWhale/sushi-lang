@@ -148,6 +148,13 @@ class LibraryManifestGenerator:
         if not_exported:
             manifest["not_exported"] = not_exported
 
+        # The types this library claims methods on and does not declare -- the
+        # consumer's half of CW3003. Absent when the library extends only what
+        # it declares, so most libraries grow by nothing.
+        foreign = self._extract_foreign_extensions(units)
+        if foreign:
+            manifest["foreign_extensions"] = foreign
+
         # A map beside `units`, not a change to it: `units` is an ordered list and the
         # order is load-bearing for the consumer's injection. Absent when no unit
         # carries a block, so an undocumented library grows by nothing.
@@ -261,6 +268,14 @@ class LibraryManifestGenerator:
                     kept[const.name] = "constant"
 
         return [{"name": name, "kind": kept[name]} for name in sorted(kept)]
+
+    def _extract_foreign_extensions(self, units: list['Unit']) -> list[dict]:
+        """The foreign types this library claims methods on, in declaration order."""
+        from sushi_lang.semantics.foreign_extensions import foreign_extension_claims
+
+        return [{"type": claim.target, "method": claim.method,
+                 "unit": claim.unit_name}
+                for claim in foreign_extension_claims(own_units(units))]
 
     def _extract_public_constants(self, units: list['Unit']) -> list[dict]:
         """The constants this library MARKS public.
