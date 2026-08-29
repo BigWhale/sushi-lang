@@ -199,12 +199,12 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
 
 
 def is_container_get_call(codegen: 'LLVMCodegen', expr) -> bool:
-    """Is `expr` a `.get()` that READS OUT of storage its receiver still owns?"""
+    """Is `expr` a `.get()`/`.first()`/`.last()` reading out of storage its receiver owns?"""
     from sushi_lang.semantics.ast import TryExpr
     while isinstance(expr, TryExpr):
         expr = expr.expr
 
-    if getattr(expr, "method", None) != "get":
+    if getattr(expr, "method", None) not in ("get", "first", "last"):
         return False
     receiver = getattr(expr, "receiver", None)
     if receiver is None:

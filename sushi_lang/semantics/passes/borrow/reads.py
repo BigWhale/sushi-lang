@@ -106,7 +106,7 @@ def reads_through_owner(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
     if isinstance(expr, (MemberAccess, IndexAccess)):
         return True
 
-    receiver = called_on(expr, "get")
+    receiver = called_on(expr, "get", "first", "last")
     if receiver is not None:
         if isinstance(receiver, Name):
             state = checker.borrow_state.get(receiver.id)
@@ -144,7 +144,7 @@ def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
         case IndexAccess():
             return checker.types.element_type(read_type(checker, expr.array))
 
-    receiver = called_on(expr, "get")
+    receiver = called_on(expr, "get", "first", "last")
     if receiver is None:
         return None
     # A container `.get()` returns `Maybe@(T)`, and every use of it reaches here through

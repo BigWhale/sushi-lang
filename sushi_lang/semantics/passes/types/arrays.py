@@ -266,11 +266,11 @@ def _validate_dynamic_array_reverse(call: MethodCall, array_type: DynamicArrayTy
 
 def is_builtin_array_method(method_name: str) -> bool:
     """Check if a method name is a built-in array method."""
-    # Fixed array methods: len, get, iter, hash, clone, fill, reverse, s, ss
+    # Fixed array methods: len, get, first, last, iter, hash, clone, fill, reverse, s, ss
     # Dynamic array methods: the same, plus push, pop, capacity, destroy, free, extend,
     #   extend_range
     # u8[] specific methods: to_string
-    return method_name in {"len", "get", "push", "pop", "capacity", "destroy", "free", "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse", "extend", "extend_range", "s", "ss"}
+    return method_name in {"len", "get", "first", "last", "push", "pop", "capacity", "destroy", "free", "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse", "extend", "extend_range", "s", "ss"}
 
 
 def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | DynamicArrayType, reporter: Any, validator: Any = None) -> None:
@@ -355,6 +355,14 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
             er.emit(reporter, er.ERR.CE2009, call.loc,
                    name=f"{display_type(array_type)}.hash", expected=0, got=len(call.args))
 
+    elif method_name in ("first", "last"):
+        # `get()` with the index built in, so the same shape on both array kinds: no
+        # arguments, and the answer is Maybe@(T) (interned by `ArrayMethodInferrer`).
+        if call.args:
+            er.emit(reporter, er.ERR.CE2009, call.loc,
+                   name=f"{display_type(array_type)}.{method_name}", expected=0,
+                   got=len(call.args))
+
     elif method_name == "fill":
         if isinstance(array_type, ArrayType):
             _validate_fixed_array_fill(call, array_type, reporter, validator)
@@ -387,8 +395,9 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
 def get_builtin_array_method_return_type(method_name: str, array_type: ArrayType | DynamicArrayType) -> Type | None:
     """Get the return type of a built-in array method.
 
-    `get` and `pop` are NOT here: both answer `Maybe@(T)`, and interning that type is the
-    caller's job (`ArrayMethodInferrer`), which resolves them before reaching this table.
+    `get`, `first`, `last` and `pop` are NOT here: each answers `Maybe@(T)`, and interning
+    that type is the caller's job (`ArrayMethodInferrer`), which resolves them before
+    reaching this table.
     An entry here would be a second answer to a question already answered elsewhere.
     """
     if method_name == "len":

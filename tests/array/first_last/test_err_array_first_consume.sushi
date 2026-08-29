@@ -1,0 +1,17 @@
+# `first()` reads out of storage the array still owns, exactly like `get()`.
+# Consuming the borrow is CE2411; the escape is `.clone()`.
+# EXPECT_ERROR_CODE: CE2411
+fn eat(nom string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn f(string[] words) ~:
+    eat(nom words.first()??)
+    return Result.Ok(~)
+
+fn main() i32:
+    let string[] words = from(["a", "b"])
+    let Result@(~, StdError) r = f(words)
+    if (r):
+        println("done")
+    return Result.Ok(0)

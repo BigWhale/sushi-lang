@@ -17,11 +17,11 @@ from .fixed_addressing import as_fixed_array_address
 
 def is_builtin_array_method(method_name: str) -> bool:
     """Check if a method name is a built-in array method."""
-    # Fixed array methods: len, get, iter, hash, fill, reverse
-    # Dynamic array methods: len, get, push, pop, capacity, destroy, free, iter, clone, hash, fill, reverse
+    # Fixed array methods: len, get, first, last, iter, hash, fill, reverse
+    # Dynamic array methods: len, get, first, last, push, pop, capacity, destroy, free, iter, clone, hash, fill, reverse
     # u8[] specific methods: to_string
     return method_name in {
-        "len", "get", "push", "pop", "capacity", "destroy", "free",
+        "len", "get", "first", "last", "push", "pop", "capacity", "destroy", "free",
         "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse",
         "extend", "extend_range", "s", "ss"
     }
@@ -131,6 +131,17 @@ def emit_array_method(
                 return emit_fixed_array_get_maybe(codegen, address(writable=False), fixed_ir_type,
                                                   index_value, fixed_semantic_type, to_i1)
 
+            case "first" | "last":
+                # `get()` with the index built in. A fixed array is never empty, so
+                # the bounds check folds away; the Maybe stays for one shape with the
+                # dynamic twin.
+                from .methods.safe_access import emit_fixed_array_get_maybe
+                index = 0 if method_name == "first" else fixed_ir_type.count - 1
+                return emit_fixed_array_get_maybe(codegen, address(writable=False),
+                                                  fixed_ir_type,
+                                                  ir.Constant(codegen.types.i32, index),
+                                                  fixed_semantic_type, to_i1)
+
             case "iter":
                 return iterators.emit_fixed_array_iter(codegen, expr, address(writable=False),
                                                        fixed_ir_type,
@@ -210,6 +221,22 @@ def emit_array_method(
                 is_signed = index_value.type in (codegen.types.i8, codegen.types.i16, codegen.types.i64)
                 index_value = codegen.utils.convert_int_to_i32(index_value, is_signed=is_signed)
             return emit_dynamic_array_get_maybe(codegen, receiver_value, array_struct_type, index_value, semantic_type, to_i1)
+
+        case "first" | "last":
+            # `get()` with the index built in: 0, or len - 1. An empty array gives the
+            # last index -1, which the bounds check turns into `Maybe.None()` -- the
+            # same road a `get(-1)` takes.
+            from .methods.safe_access import emit_dynamic_array_get_maybe
+            if method_name == "first":
+                index_value = ir.Constant(codegen.types.i32, 0)
+            else:
+                len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder,
+                                                                  receiver_value)
+                length = codegen.builder.load(len_ptr, name="len_for_last")
+                index_value = codegen.builder.sub(length, ir.Constant(codegen.types.i32, 1),
+                                                  name="last_index")
+            return emit_dynamic_array_get_maybe(codegen, receiver_value, array_struct_type,
+                                                index_value, semantic_type, to_i1)
 
         case "push":
             # The array stores the element shallowly and frees it, so this is a consuming

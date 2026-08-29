@@ -69,10 +69,11 @@ class ArrayMethodInferrer:
         actual_type = deref_type(self.receiver_type)
 
         if is_builtin_array_method(self.method_name):
-            # `.get()` READS and `.pop()` REMOVES, but both answer "there is no such
-            # element" the same way, so both are Maybe@(T) -- as `List@(T)` already was
-            # for both. A bare `T` had to invent a value for the empty case (#377).
-            if self.method_name in ("get", "pop"):
+            # `.get()`, `.first()` and `.last()` READ and `.pop()` REMOVES, but all four
+            # answer "there is no such element" the same way, so each is Maybe@(T) -- as
+            # `List@(T)` already was. A bare `T` had to invent a value for the empty
+            # case (#377).
+            if self.method_name in ("get", "first", "last", "pop"):
                 element_type = actual_type.base_type
                 maybe_type = ensure_maybe_type_in_table(self.validator.enum_table, element_type, struct_table=self.validator.struct_table.by_name)
                 return maybe_type
