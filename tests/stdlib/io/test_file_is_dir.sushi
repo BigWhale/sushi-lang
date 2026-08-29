@@ -7,7 +7,7 @@ fn main() i32:
         println("ERROR: Should detect directory")
         return Result.Ok(1)
 
-    if (is_dir("tests/test_file_is_dir.sushi")):
+    if (is_dir("tests/stdlib/io/test_file_is_dir.sushi")):
         println("ERROR: Should not detect file as directory")
         return Result.Ok(1)
 
