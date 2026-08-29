@@ -45,6 +45,13 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, i32, [i64, i64])
         result = codegen.builder.call(stdlib_func, [seconds_value, nanoseconds_value], name="nanosleep_result")
 
+    elif func_name in ["now", "monotonic_ns"]:
+        if len(expr.args) != 0:
+            raise_internal_error("CE0023", method=func_name, expected=0, got=len(expr.args))
+
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, i64, [])
+        result = codegen.builder.call(stdlib_func, [], name=f"{func_name}_result")
+
     else:
         raise_internal_error("CE0024", type="time", method=func_name)
 
@@ -55,7 +62,8 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     from sushi_lang.semantics.typesys import UnknownType
     from sushi_lang.semantics.generics.results import ensure_result_type_in_table
 
-    ok_type = BuiltinType.I32
+    is_i64 = func_name in ["now", "monotonic_ns"]
+    ok_type = BuiltinType.I64 if is_i64 else BuiltinType.I32
     err_type = UnknownType("StdError")
     result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type, struct_table=codegen.struct_table.by_name)
 
@@ -69,7 +77,7 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
 
         data_array_type = result_llvm_type.elements[1]
 
-        value_alloca = codegen.builder.alloca(i32, name="time_result_value")
+        value_alloca = codegen.builder.alloca(i64 if is_i64 else i32, name="time_result_value")
         codegen.builder.store(result, value_alloca)
 
         data_alloca = codegen.builder.alloca(data_array_type, name="data_array")
@@ -77,9 +85,10 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
         src_ptr = codegen.builder.bitcast(value_alloca, codegen.types.i8.as_pointer())
         dest_ptr = codegen.builder.bitcast(data_alloca, codegen.types.i8.as_pointer())
 
-        # Copy i32 value into data array (4 bytes). i64-length llvm.memcpy so the
-        # length register is never fed a value with garbage upper bits (#149/#151).
-        size_const = ir.Constant(codegen.types.i64, 4)
+        # Copy the ok value into the data array (4 or 8 bytes). i64-length
+        # llvm.memcpy so the length register is never fed a value with garbage
+        # upper bits (#149/#151).
+        size_const = ir.Constant(codegen.types.i64, 8 if is_i64 else 4)
         memcpy_fn = codegen.module.declare_intrinsic('llvm.memcpy', [
             ir.PointerType(codegen.types.i8),
             ir.PointerType(codegen.types.i8),
@@ -93,4 +102,4 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
 
         return codegen.utils.as_i1(ok_result) if to_i1 else ok_result
     else:
-        raise_internal_error("CE0091", type="Result<i32>")
+        raise_internal_error("CE0091", type="Result<i64>" if is_i64 else "Result<i32>")

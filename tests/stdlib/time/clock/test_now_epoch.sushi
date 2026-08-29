@@ -1,0 +1,14 @@
+# now() reads the unix clock in seconds; any current date is past 2023-11-14.
+# EXPECT_STDOUT_EXACT: "now is sane\n"
+
+use <time>
+
+fn main() i32:
+    match now():
+        Result.Ok(t) ->
+            if (t > 1_700_000_000):
+                println("now is sane")
+            else:
+                println("now is before 2023: {t}")
+        Result.Err(_) -> println("now failed")
+    return Result.Ok(0)

@@ -24,6 +24,17 @@ def declare_nanosleep(module: ir.Module) -> ir.Function:
     return func
 
 
+def declare_clock_gettime(module: ir.Module) -> ir.Function:
+    """Declare clock_gettime: int clock_gettime(clockid_t, struct timespec *)"""
+    if "clock_gettime" in module.globals:
+        return module.globals["clock_gettime"]
+
+    _, _, i32, _ = get_basic_types()
+    timespec_ptr = get_timespec_type().as_pointer()
+    fn_ty = ir.FunctionType(i32, [i32, timespec_ptr])
+    return ir.Function(module, fn_ty, name="clock_gettime")
+
+
 def generate_module_ir() -> ir.Module:
     """Generate LLVM IR module for platform-specific time functions."""
     module = ir.Module(name="platform_time")

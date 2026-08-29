@@ -1,0 +1,15 @@
+# monotonic_ns() never goes backward, and a sleep moves it forward.
+# EXPECT_STDOUT_EXACT: "monotonic advances\n"
+
+use <time>
+
+fn main() i32:
+    let i64 a = monotonic_ns().realise(0)
+    let i64 pause = 5
+    msleep(pause).realise(0)
+    let i64 b = monotonic_ns().realise(0)
+    if (a > 0 and b > a):
+        println("monotonic advances")
+    else:
+        println("monotonic broken: {a} {b}")
+    return Result.Ok(0)

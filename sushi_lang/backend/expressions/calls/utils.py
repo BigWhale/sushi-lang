@@ -120,6 +120,8 @@ def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional
         'msleep': (BuiltinType.I32, 'StdError'),
         'usleep': (BuiltinType.I32, 'StdError'),
         'nanosleep': (BuiltinType.I32, 'StdError'),
+        'now': (BuiltinType.I64, 'StdError'),
+        'monotonic_ns': (BuiltinType.I64, 'StdError'),
         'setenv': (BuiltinType.I32, 'EnvError'),
         'file_size': (BuiltinType.I64, 'FileError'),
         'remove': (BuiltinType.I32, 'FileError'),

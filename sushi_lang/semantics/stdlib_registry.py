@@ -78,6 +78,8 @@ def _get_param_specs():
     for fn in ("sleep", "msleep", "usleep"):
         specs[("time", fn)] = [I64]
     specs[("time", "nanosleep")] = [I64, I64]
+    specs[("time", "now")] = []
+    specs[("time", "monotonic_ns")] = []
 
     specs[("env", "getenv")] = [STRING]
     specs[("env", "setenv")] = [STRING, STRING]
@@ -201,7 +203,7 @@ class StdlibRegistry:
     ) -> None:
         """Discover functions using heuristic approach."""
         common_names = {
-            "time": ["sleep", "msleep", "usleep", "nanosleep"],
+            "time": ["sleep", "msleep", "usleep", "nanosleep", "now", "monotonic_ns"],
             "env": ["getenv", "setenv"],
             "process": ["getcwd", "chdir", "exit", "getpid", "getuid", "run"],
             "math": [

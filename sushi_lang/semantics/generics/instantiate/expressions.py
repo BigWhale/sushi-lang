@@ -192,6 +192,11 @@ class ExpressionScanner:
             if std_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, std_error)))
             return
+        elif function_name in {'now', 'monotonic_ns'}:
+            std_error = self.type_inferrer.enum_table.get("StdError")
+            if std_error:
+                self.instantiations.add(("Result", (BuiltinType.I64, std_error)))
+            return
         elif function_name == 'setenv':
             env_error = self.type_inferrer.enum_table.get("EnvError")
             if env_error:

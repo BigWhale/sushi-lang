@@ -14,6 +14,8 @@ def is_builtin_time_function(name: str) -> bool:
         'sleep',
         'msleep',
         'usleep',
+        'now',
+        'monotonic_ns',
     }
 
 
@@ -21,10 +23,14 @@ def get_builtin_time_function_return_type(name: str) -> Type:
     """Get the return type for a built-in time function."""
     from sushi_lang.semantics.typesys import BuiltinType
 
+    from sushi_lang.semantics.typesys import UnknownType
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
     if name in {'nanosleep', 'sleep', 'msleep', 'usleep'}:
-        from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
         return GenericTypeRef("Result", (BuiltinType('i32'), UnknownType("StdError")))
+
+    if name in {'now', 'monotonic_ns'}:
+        return GenericTypeRef("Result", (BuiltinType('i64'), UnknownType("StdError")))
 
     raise ValueError(f"Unknown time function: {name}")
 
@@ -53,6 +59,10 @@ def validate_time_function_call(name: str, signature: typing.Any) -> None:
         if param_type != BuiltinType('i64'):
             raise TypeError(f"{name} expects i64, got {param_type}")
 
+    elif name in {'now', 'monotonic_ns'}:
+        if len(signature.params) != 0:
+            raise TypeError(f"{name} expects no arguments, got {len(signature.params)}")
+
 
 def generate_module_ir() -> ir.Module:
     """Generate LLVM IR module for time functions."""
@@ -65,5 +75,9 @@ def generate_module_ir() -> ir.Module:
     sleep.generate_sleep(module)
     sleep.generate_msleep(module)
     sleep.generate_usleep(module)
+
+    from sushi_lang.sushi_stdlib.src.time import clock
+    clock.generate_now(module)
+    clock.generate_monotonic_ns(module)
 
     return module
