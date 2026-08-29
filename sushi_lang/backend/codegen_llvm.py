@@ -1048,7 +1048,7 @@ class LLVMCodegen:
         """An evaluated constant as an LLVM initializer.
 
         A string is finished here rather than in the evaluator: its bytes need a module
-        to live in, and the evaluator has none, which is why `to_llvm_constant` hands
+        to live in, and the evaluator has none, which is why `const_value_to_llvm` hands
         back None for one.
         """
         from sushi_lang.semantics.typesys import BuiltinType
@@ -1063,7 +1063,8 @@ class LLVMCodegen:
                 return None
             return ir.Constant(ir.ArrayType(elements[0].type, len(elements)), elements)
 
-        return value.to_llvm_constant(self.types)
+        from sushi_lang.backend.constants.llvm_values import const_value_to_llvm
+        return const_value_to_llvm(value, self.types)
 
 
 

@@ -15,16 +15,9 @@ def _ensure_utf8_stdout() -> None:
 
 def _get_versions() -> dict[str, str]:
 
-    # llvmlite + LLVM (best-effort; don’t crash if missing)
-    llvmlite_ver = "unknown"
-    llvm_lib_ver = "unknown"
-    try:
-        from llvmlite import binding as llvm
-        import llvmlite
-        llvmlite_ver = getattr(llvmlite, "__version__", "unknown")
-        llvm_lib_ver = ".".join(map(str, (getattr(llvm, "llvm_version_info", None) or ()))) or "unknown"
-    except Exception:
-        pass
+    # The backend owns the llvmlite import (IR.md Phase 0); it answers best-effort.
+    from sushi_lang.backend.toolchain import llvm_versions
+    llvmlite_ver, llvm_lib_ver = llvm_versions()
 
     return {
         "app": app_ver,

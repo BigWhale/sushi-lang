@@ -5,7 +5,6 @@ import operator
 from dataclasses import dataclass
 from typing import Callable, List, Mapping, Optional, Union
 
-from llvmlite import ir
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -61,42 +60,6 @@ class ConstantValue:
     """Compile-time constant value with type information."""
     value: Union[int, float, bool, str, List['ConstantValue']]  # Python value
     semantic_type: Type  # Sushi type (i32, f64, bool, string, etc.)
-
-    def to_llvm_constant(self, types) -> ir.Constant:
-        """Convert to LLVM constant for backend emission."""
-        if self.semantic_type == BuiltinType.BOOL:
-            return ir.Constant(types.i8, 1 if self.value else 0)
-        elif self.semantic_type == BuiltinType.I8:
-            return ir.Constant(types.i8, self.value)
-        elif self.semantic_type == BuiltinType.I16:
-            return ir.Constant(types.i16, self.value)
-        elif self.semantic_type == BuiltinType.I32:
-            return ir.Constant(types.i32, self.value)
-        elif self.semantic_type == BuiltinType.I64:
-            return ir.Constant(types.i64, self.value)
-        elif self.semantic_type == BuiltinType.U8:
-            return ir.Constant(types.u8, self.value)
-        elif self.semantic_type == BuiltinType.U16:
-            return ir.Constant(types.u16, self.value)
-        elif self.semantic_type == BuiltinType.U32:
-            return ir.Constant(types.u32, self.value)
-        elif self.semantic_type == BuiltinType.U64:
-            return ir.Constant(types.u64, self.value)
-        elif self.semantic_type == BuiltinType.F32:
-            return ir.Constant(types.f32, self.value)
-        elif self.semantic_type == BuiltinType.F64:
-            return ir.Constant(types.f64, self.value)
-        elif self.semantic_type == BuiltinType.STRING:
-            return None
-        elif isinstance(self.value, list):
-            element_constants = [elem.to_llvm_constant(types) for elem in self.value]
-            if any(c is None for c in element_constants):
-                return None
-            element_type = element_constants[0].type
-            array_type = ir.ArrayType(element_type, len(element_constants))
-            return ir.Constant(array_type, element_constants)
-        else:
-            return None
 
 
 class ConstantEvaluator:
