@@ -108,6 +108,7 @@ class StdlibLinker:
         "net/ip",
         "net/tcp",
         "net/udp",
+        "net/url",
         "toolchain/slib",
     }
 

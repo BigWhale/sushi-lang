@@ -1,0 +1,19 @@
+# url_text canonicalises: the scheme and host are already lowercase, and a port
+# equal to the scheme's default is dropped. A Url owns five strings, so this is
+# also where RAII over the struct is measured.
+# EXPECT_STDOUT_EXACT: "http://example.com/a\nhttps://example.com:8443/\nhttp://user@example.com/p?q=1#f\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/url>
+
+fn show(string text) ~:
+    match parse_url(text):
+        Result.Ok(u) -> println("{url_text(u).realise('?')}")
+        Result.Err(_) -> println("{text} refused")
+    return Result.Ok(~)
+
+fn main() i32:
+    show("HTTP://EXAMPLE.COM:80/a")
+    show("https://example.com:8443")
+    show("http://user@example.com/p?q=1#f")
+    return Result.Ok(0)

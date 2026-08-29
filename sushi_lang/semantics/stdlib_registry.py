@@ -26,6 +26,7 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "net/ip": _SRC_SUSHI_ROOT / "net" / "ip.sushi",
     "net/tcp": _SRC_SUSHI_ROOT / "net" / "tcp.sushi",
     "net/udp": _SRC_SUSHI_ROOT / "net" / "udp.sushi",
+    "net/url": _SRC_SUSHI_ROOT / "net" / "url.sushi",
     "toolchain/slib": _SRC_SUSHI_ROOT / "toolchain" / "slib.sushi",
 }
 

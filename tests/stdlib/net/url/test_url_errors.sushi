@@ -1,0 +1,21 @@
+# Why a text is not an absolute URL. Each arm is a different refusal, and a
+# relative reference is one of them: this module wants a scheme.
+# EXPECT_STDOUT_EXACT: "empty\nno scheme\nbad scheme\nno host\nbad port\nunclosed host\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/url>
+
+fn show(string text) ~:
+    match parse_url(text):
+        Result.Ok(_) -> println("wrong: {text} was accepted")
+        Result.Err(e) -> println("{url_error_text(e).realise('?')}")
+    return Result.Ok(~)
+
+fn main() i32:
+    show("")
+    show("/just/a/path")
+    show("1http://example.com")
+    show("http:///path")
+    show("http://example.com:80x/")
+    show("http://[::1/x")
+    return Result.Ok(0)

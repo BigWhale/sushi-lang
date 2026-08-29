@@ -1,0 +1,20 @@
+# An IPv6 literal is bracketed in a URL so its colons cannot be read as a port.
+# The brackets are removed from the host, and the fact that they were there is
+# a question the URL answers.
+# EXPECT_STDOUT_EXACT: "host ::1 port 8080 literal true\nhost example.com port 80 literal false\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/url>
+
+fn show(string text) ~:
+    match parse_url(text):
+        Result.Ok(u) ->
+            let bool literal = url_host_is_ipv6_literal(u).realise(false)
+            println("host {u.host} port {u.port} literal {literal}")
+        Result.Err(_) -> println("{text} refused")
+    return Result.Ok(~)
+
+fn main() i32:
+    show("http://[::1]:8080/x")
+    show("http://example.com:80/")
+    return Result.Ok(0)
