@@ -226,7 +226,8 @@ class SemanticAnalyzer:
             # Export-closure private helpers and constants (C4b/C5): clash
             # with a local name is CE5007 (local-wins would silently change
             # what the library's monomorphized bodies call).
-            self._register_library_private_functions()
+            self._register_library_private_functions(
+                {u.name for u in compilation_order})
             # And the complement: what the library declares and ships nowhere. These
             # are names, not callables, so they register in no function table (#469).
             self._register_library_not_exported()
@@ -664,22 +665,34 @@ class SemanticAnalyzer:
                 self.funcs.by_name[func_name] = func_sig
                 self.funcs.order.append(func_name)
 
-    def _register_library_private_functions(self) -> None:
-        """Register export-closure private helpers from loaded libraries (C4b/C5)."""
+    def _register_library_private_functions(self, build_units: set[str]) -> None:
+        """Register export-closure private helpers from loaded libraries (C4b/C5).
+
+        Each record registers under ITS unit, so two of the library's own units may
+        each ship a private `helper` (#494). The CE5007 clash is measured against the
+        CONSUMER's own declarations -- a record from another library unit is a
+        coexisting declaration, not a clash. Each signature also registers under its
+        LINK SYMBOL, which is the name a template body's bindings rewrite calls to
+        (D4): `$` lies outside every user name's alphabet, so the alias can collide
+        with nothing.
+        """
         if self.funcs is None or self.library_registry is None:
             return
 
         import sushi_lang.internals.errors as er
 
-        for name, (lib_name, sig) in self.library_registry.get_all_private_functions().items():
+        for (_unit, name), (lib_name, sig) in \
+                self.library_registry.get_all_private_functions().items():
             existing = self.funcs.by_name.get(name)
-            if existing is not None:
+            if existing is not None and getattr(existing, "unit_name", None) in build_units:
                 er.emit(self.reporter, er.ERR.CE5007,
                         getattr(existing, "name_span", None),
                         lib=lib_name, name=name)
                 continue
-            self.funcs.by_name[name] = sig
-            self.funcs.order.append(name)
+            self.funcs.declare(name, sig)
+            link_symbol = getattr(sig, "link_symbol", None)
+            if link_symbol:
+                self.funcs.declare(link_symbol, sig)
 
     def _register_library_not_exported(self) -> None:
         """Record what a loaded library declares and does not export (#469)."""
@@ -907,19 +920,27 @@ class SemanticAnalyzer:
 
         import sushi_lang.internals.errors as er
 
+        build_units = set(self.unit_manager.units) if self.unit_manager else set()
+
         for lib_name, manifest in self.library_linker.loaded_libraries.items():
             templates = manifest.get("templates") or {}
             for record in templates.get("generic_functions", []):
                 func_name = record["name"]
-                if func_name in self.generic_funcs.by_name:
-                    # A local definition wins silently, but an export-closure PRIVATE
-                    # template must keep its name: shadowing it would change what the
-                    # library's other bodies call (CE5007).
+                template_unit = f"lib/{lib_name}/{record.get('unit') or lib_name}"
+                existing = self.generic_funcs.by_name.get(func_name)
+                # A CONSUMER's declaration wins silently, but an export-closure
+                # PRIVATE template must keep its name: shadowing it would change what
+                # the library's other bodies call (CE5007). A declaration from
+                # ANOTHER library unit is neither: the two coexist, each under its
+                # unit (#494/#495), so the walk falls through to registration.
+                if existing is not None and \
+                        getattr(existing, "unit_name", None) in build_units:
                     if record.get("private"):
-                        existing = self.generic_funcs.by_name[func_name]
                         er.emit(self.reporter, er.ERR.CE5007,
                                 getattr(existing, "name_span", None),
                                 lib=lib_name, name=func_name)
+                    continue
+                if self.generic_funcs.by_unit.get(template_unit, {}).get(func_name):
                     continue
 
                 source = record.get("source")
@@ -928,15 +949,26 @@ class SemanticAnalyzer:
 
                 # Re-parse the self-contained template source and run a
                 # throwaway collector so any diagnostics from the library snippet
-                # never pollute the consumer's reporter.
+                # never pollute the consumer's reporter. The collector runs under the
+                # RECORD's unit, so the template and its instances carry the unit
+                # that declared it at the producer (#494).
                 program, _tree = parse_to_ast(source)
                 throwaway = Reporter(source=source, filename=f"<template:{lib_name}:{func_name}>")
-                collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
+                collected = CollectorPass(throwaway).run(program, unit_name=template_unit)
                 template_generic_funcs = collected.generic_funcs
 
                 gfd = template_generic_funcs.by_name.get(func_name)
                 if gfd is None:
                     continue
+
+                # D4: bind every free name the producer resolved to its symbol,
+                # before any instance is cut from this body.
+                bindings = record.get("bindings") or {}
+                if bindings:
+                    from sushi_lang.semantics.library_templates import (
+                        apply_template_bindings,
+                    )
+                    apply_template_bindings(gfd.body, bindings)
 
                 gfd.is_library_template = True
                 # Whose code the body is, and what text its spans index into. The
@@ -964,8 +996,7 @@ class SemanticAnalyzer:
                         if hasattr(tp, "is_pack") and "is_pack" in rec_tp:
                             tp.is_pack = bool(rec_tp["is_pack"])
 
-                self.generic_funcs.by_name[func_name] = gfd
-                self.generic_funcs.order.append(func_name)
+                self.generic_funcs.declare(func_name, gfd)
 
     def _register_library_generic_types(
         self, manifest_key: str, table, collected_attr: str

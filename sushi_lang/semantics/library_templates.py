@@ -342,3 +342,36 @@ def deserialize_perk(record: dict) -> "PerkDef":
             f"{len(perks)} perks, expected exactly 1"
         )
     return perks[0]
+
+
+def apply_template_bindings(body, bindings: dict) -> None:
+    """Rewrite a re-parsed template body's calls to the producer's symbols (D4).
+
+    A binary library has no `Unit` at the consumer, so a free name in a template
+    body cannot resolve through a scope. The producer resolved each one and wrote
+    the map down; this binds every named call the map covers to that symbol. The
+    symbol is registered as an alias key beside the record it names, and `$` lies
+    outside every user name's alphabet, so the rewritten callee can mean nothing
+    else. Only a CALL's callee is rewritten: the closure ships concrete private
+    FUNCTIONS in the map, and a bare reference to one is not expressible for a
+    library-private name.
+    """
+    import dataclasses
+    from sushi_lang.semantics import ast as A
+
+    def _walk(node) -> None:
+        if node is None:
+            return
+        if isinstance(node, (list, tuple)):
+            for item in node:
+                _walk(item)
+            return
+        if isinstance(node, A.Call) and isinstance(node.callee, A.Name):
+            symbol = bindings.get(node.callee.id)
+            if symbol is not None:
+                node.callee.id = symbol
+        if dataclasses.is_dataclass(node) and not isinstance(node, type):
+            for f in dataclasses.fields(node):
+                _walk(getattr(node, f.name, None))
+
+    _walk(body)
