@@ -870,9 +870,11 @@ Four things are exempt, and each for its own reason:
 - **`main`.** The linker needs the name, and the `entrypoint` pass already guarantees one
   program declares one.
 - **An FFI `link_name`.** It names a C symbol that somebody else compiled.
-- **A synthesized body** — a monomorphized instance, a lifted lambda. It belongs to no
-  unit, whichever unit's AST carries it, and its name already carries what makes it unique
-  (the type arguments, or the lifter's counter).
+- **A lifted lambda.** Its name already carries the per-unit lifter's counter (#402).
+  A monomorphized INSTANCE is no longer exempt: it goes home to the unit that declared
+  its generic and takes that unit's prefix (#495), so two units' instances of one
+  mangled base name are two symbols. The one instance that stays bare is a binary
+  library's template instance, whose home names no unit in the consumer's build.
 - **An extension or perk-impl method.** Its symbol is derived from the receiver's TYPE,
   which is nominal and program-wide. This is not an oversight but Ruling 2 of
   `visibility.md`: a method is found on the receiver's type, so there is no unit to put it
@@ -950,7 +952,7 @@ Retired or narrowed:
 | `CE3003` | retired. It refused a whole program for a collision that may never be written |
 | `CE3011` | narrowed to what phase 2 has to lift: a TYPE name a consumer redeclares against a library, imported flat or behind an alias. An alias does not help a type -- identity is nominal, so one name is one shape however the name is written -- and that was measured under both import forms. The FUNCTION arm retired in phase 1, and a library's private CONSTANT went with it (#507): the constant table is keyed by unit too, so each declaration takes its own global |
 | `CW3001` | narrowed to a repeat with the same alias, or none (section 6) |
-| `CE0101` | kept for a duplicate extension on a foreign type, with new TEXT: relational, naming both units, blaming neither (section 8). Retired for a cross-unit private function, which phase 1 makes legal (section 7), a library's private function included. A GENERIC function still holds one name for the whole program (#495) |
+| `CE0101` | kept for a duplicate extension on a foreign type, with new TEXT: relational, naming both units, blaming neither (section 8). Retired for a cross-unit private function, which phase 1 makes legal (section 7), a library's private function included. A GENERIC function coexists the same way (#495): its table carries the two views, and its instance takes its declaring unit's symbol prefix, so CE0101 is a one-unit duplicate for every callable kind |
 | `CE0105` | retired cross-unit with `CE0101`, and for the same reason: two units may each declare a private constant once the table is keyed by unit (section 7). Kept whole within one unit, and against a library's PUBLIC constant, which the consumer can see and read (#507) |
 
 ## 11. Delivery
@@ -1102,8 +1104,9 @@ asking unit answers as it did; `by_unit` keeps every declaration under the unit 
 it, and `view_for`/`lookup` read it. Both readers named above now ask with a unit: the
 borrow pass builds its resolver from the unit it is about to walk, and the back end
 resolves a named callee through the unit whose bodies it is emitting. The DIAGNOSTIC is
-what this closes. Two units may still not declare one name -- that waits for the mangling
-of section 9, which is what gives two bodies two symbols.
+what this closed first; the mangling of section 9 then landed for concrete functions,
+for constants, and for monomorphized generic instances (#495), so two units may now
+declare one name of any callable kind and the two bodies are two symbols.
 
 ### 13.2 Collection order: dependencies before dependents
 

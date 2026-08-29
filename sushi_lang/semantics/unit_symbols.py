@@ -24,9 +24,11 @@ EXEMPT = frozenset({"main"})
 def mangle_unit_symbol(unit_name: Optional[str], name: str) -> str:
     """`<unit>$<name>`, with every `/` in the unit name becoming `$`.
 
-    No unit means no prefix. A monomorphized instance, a lifted lambda and a generated
-    stdlib symbol are program-wide, and each already carries a name nothing else can
-    take.
+    No unit means no prefix, and only a name that is unique program-wide may arrive
+    with none: a lifted lambda (the per-unit lifter's counter, #402) and a generated
+    stdlib symbol (one program-wide generator). A monomorphized INSTANCE is not such
+    a name -- two units' generics of one name mangle to one base -- so an instance
+    arrives WITH its declaring unit and takes its prefix (#495).
     """
     if unit_name is None or name in EXEMPT:
         return name
@@ -66,9 +68,10 @@ class UnitKeyedSymbols(Generic[V]):
     with the collect pass about what a name means inside a unit.
 
     The flat view is FIRST-wins, which is what the dedup guard in `emit_func_decl` has
-    always given it. A symbol that belongs to no unit -- a monomorphized instance, a
-    lifted lambda, an extension method, a library-shipped function -- lives in the flat
-    view alone, and `get` is what reads it.
+    always given it. A symbol that belongs to no unit -- a lifted lambda, an extension
+    method, a public library-shipped function -- lives in the flat view alone, and
+    `get` is what reads it. A monomorphized instance belongs to its declaring unit
+    since #495 and lives in both.
     """
 
     def __init__(self) -> None:
