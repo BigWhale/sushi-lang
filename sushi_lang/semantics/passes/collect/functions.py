@@ -800,6 +800,15 @@ class FunctionCollector:
         if not isinstance(name, str):
             return
 
+        # TEMPORARY (UFCS epic, Phase 1): the slots parse but nothing consumes
+        # them yet. Phase 4 removes the first reject, Phase 3 the second.
+        if getattr(ext, "type_params", None):
+            raise NotImplementedError(
+                "method-level type parameters on an extension are not implemented yet")
+        if getattr(ext, "err_type", None) is not None:
+            raise NotImplementedError(
+                "the extension error channel is not implemented yet")
+
         target_type: Optional[Type] = getattr(ext, "target_type", None)
         name_span: Optional[Span] = getattr(ext, "name_span", None) or getattr(ext, "loc", None)
         target_type_span: Optional[Span] = getattr(ext, "target_type_span", None)

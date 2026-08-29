@@ -257,6 +257,9 @@ class ExtendDef(Node):
     # What a `@(...)` target's arguments mean: a constraint, parameter names, or a mix.
     # Stamped by the collect pass, which knows which names are declared types (#393).
     target_shape: Optional["ExtensionTarget"] = None
+    type_params: Optional[List[BoundedTypeParam]] = None  # method-level `@(U)`
+    err_type: Optional[Type] = None  # `| E` opts into the Result channel
+    err_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
 
 @dataclass(slots=True)

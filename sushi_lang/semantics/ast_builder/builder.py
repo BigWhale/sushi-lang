@@ -187,15 +187,6 @@ class ASTBuilder:
                     funcs.append(functions.parse_funcdef(fn, self))
                     continue
 
-                ext = _first_tree(node.children, "extend_def") or _find_tree_recursive(node, "extend_def")
-                if ext is not None:
-                    ext_def = extensions.parse_extenddef(ext, self)
-                    if ext_def.target_type is not None and isinstance(ext_def.target_type, GenericTypeRef):
-                        generic_extensions.append(ext_def)
-                    else:
-                        extensions_list.append(ext_def)
-                    continue
-
                 ext_with = _first_tree(node.children, "extend_with_def") or _find_tree_recursive(node, "extend_with_def")
                 if ext_with is not None:
                     perk_impls.append(perks.parse_extendwithdef(ext_with, self))
@@ -228,12 +219,6 @@ class ASTBuilder:
                             else:
                                 extensions_list.append(ext_def)
                             break  # Only process one suffix per extend_stmt
-            elif node.data == "extend_def":
-                ext_def = extensions.parse_extenddef(node, self)
-                if ext_def.target_type is not None and isinstance(ext_def.target_type, GenericTypeRef):
-                    generic_extensions.append(ext_def)
-                else:
-                    extensions_list.append(ext_def)
             elif node.data == "extend_with_def":
                 perk_impls.append(perks.parse_extendwithdef(node, self))
 
