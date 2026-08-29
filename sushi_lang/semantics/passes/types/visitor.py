@@ -410,11 +410,13 @@ class ExpressionValidator(RecursiveVisitor):
     def visit_dotcall(self, node: DotCall) -> None:
         """Validate dot-call expression - resolve to enum constructor or method call."""
         from sushi_lang.semantics.passes.types.calls.namespaced import (
-            fold_namespaced_enum, validate_namespaced_call)
+            fold_namespaced_enum, fold_namespaced_static, validate_namespaced_call)
 
         # `geo.Sign.Plus(1)`: the qualifier folds away and what is left is the bare
         # constructor every rule below already knows (unit-namespaces.md section 5).
+        # `hm.HashMap.new()` folds the same way (#506).
         fold_namespaced_enum(self.type_validator, node)
+        fold_namespaced_static(self.type_validator, node)
 
         # A namespace answers first, and it answers for every producer: an FFI block, a
         # unit behind a `use ... as`, a registry stdlib module. Local-wins is inside
@@ -489,8 +491,10 @@ class ExpressionValidator(RecursiveVisitor):
             loc=node.loc
         )
         # The propagation stamp travels with it: the HashMap.new() key gate reads the
-        # concrete HashMap type off the call node (#272).
+        # concrete HashMap type off the call node (#272). The namespace stamp travels
+        # too: it is what says the receiver arrived QUALIFIED (#506, A-strict).
         temp_method_call.resolved_struct_type = getattr(node, 'resolved_struct_type', None)
+        temp_method_call.namespace_ref = getattr(node, 'namespace_ref', None)
         self.type_validator._validate_method_call(temp_method_call)
 
         if hasattr(temp_method_call, 'inferred_return_type') and temp_method_call.inferred_return_type is not None:
@@ -1012,9 +1016,10 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
     def visit_dotcall(self, node: DotCall) -> Optional[Type]:
         """Infer dot-call type and annotate node with inferred return type."""
         from sushi_lang.semantics.passes.types.calls.namespaced import (
-            fold_namespaced_enum, infer_namespaced_call)
+            fold_namespaced_enum, fold_namespaced_static, infer_namespaced_call)
 
         fold_namespaced_enum(self.type_validator, node)
+        fold_namespaced_static(self.type_validator, node)
 
         if self.type_validator.namespace_of(node.receiver) is not None:
             return infer_namespaced_call(self.type_validator, node)

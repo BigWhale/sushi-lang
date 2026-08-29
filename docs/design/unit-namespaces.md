@@ -376,7 +376,7 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 | `print`, `println` | These are grammar forms (`print_stmt`, `println_stmt`, `grammar.lark:69`), not symbols. Syntax is never namespaced |
 | `string`, `file`, `List`, `Result`, `Maybe`, `Own` | In scope with no import. Nothing brought them, so no namespace holds them |
 | A private declaration of another unit | Not a visibility carve-out — see Ruling 2's second seam. It is a member, and naming it is `CE3005` |
-| A static call on a type name — `HashMap.new()`, `List.new()`, `f64.from_bits(b)` | The receiver is a TYPE and not a namespace, and section 5's table has no row for the position. It is written bare even where the import is aliased and the annotation beside it is qualified: `let hm.HashMap@(i32, string) m = HashMap.new()`. Measured and recorded as **#506**; a built-in generic is one type per program, so nothing is ambiguous, and ruling on the position is that issue's |
+| A static call on a type NOBODY imports — `List.new()`, `f64.from_bits(b)` | `List`, `f64` and `f32` are in scope with no import, so no namespace can ever hold them. `HashMap` is different: the import gates the name, so its static obeys the alias like the type does — `hm.HashMap.new()`, and the bare form behind an aliased import is refused exactly as the bare type is (#506, decision A-strict; the fold is `fold_namespaced_static`, section 5) |
 
 ### 4.3 The standard library has four shapes, and the rule reads all four
 
@@ -472,6 +472,7 @@ because each one is a place where source text becomes a table key:
 | An enum **pattern** | `pattern`, its own grammar production | `my_math.Sign.Plus ->` (section 5.2) |
 | A named value | `Name(id)` | `my_math.MAX_DEPTH` |
 | A perk in a constraint | `perk_constraint_list` | `@(T: my_math.Loud)` |
+| A static call on a gated type | `DotCall(receiver=MemberAccess)` | `hm.HashMap.new()` — the same three-segment shape as the enum row, folded by `fold_namespaced_static` when the member names the TYPE the namespace holds (#506, decision A-strict; landed after the epic) |
 
 **The AST change is one optional field.** Every node above grows `namespace: Optional[str]`,
 and the resolver maps `(namespace, name)` to a table key. In phase 1 that key is the bare

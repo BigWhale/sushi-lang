@@ -1,0 +1,13 @@
+# A flat import puts the name into the unit's scope, so the bare static
+# stays what it always was (#506).
+# EXPECT_STDOUT_EXACT: "two\n"
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, string) m = HashMap.new()
+    m.insert(2, "two")
+    match m.get(2):
+        Maybe.Some(v) -> println(v)
+        Maybe.None() -> println("missing")
+    m.free()
+    return Result.Ok(0)

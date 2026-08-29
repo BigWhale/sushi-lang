@@ -417,6 +417,10 @@ def _try_emit_namespaced_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
     ref = getattr(expr, 'namespace_ref', None)
     if ref is None:
         return None
+    if ref.kind == "type":
+        # A folded static call (#506): the stamp is scope bookkeeping, not an
+        # address. The node already carries the bare shape the ordinary path emits.
+        return None
     origin, name = ref.origin, ref.name
 
     if ref.kind == "struct":

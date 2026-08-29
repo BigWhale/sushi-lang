@@ -192,6 +192,30 @@ def fold_namespaced_enum(validator: 'TypeValidator', node) -> bool:
     return True
 
 
+def fold_namespaced_static(validator: 'TypeValidator', node) -> bool:
+    """`hm.HashMap.new()` becomes `HashMap.new()`, in place (#506, decision A-strict).
+
+    The receiver-is-a-type position, section 5's last row: a leading `NAME .` that
+    names a namespace holding the TYPE folds away, and what is left is the bare
+    static call every rule below already measures. The type is one per program
+    (Ruling 6), so the name is the whole address, exactly as the enum fold above.
+    """
+    from sushi_lang.semantics.ast import MemberAccess, Name
+
+    receiver = node.receiver
+    if not isinstance(receiver, MemberAccess):
+        return False
+    binding = validator.resolve_namespaced(receiver.receiver, receiver.member)
+    if binding is None or binding.kind != "type":
+        return False
+
+    node.receiver = Name(id=binding.name, loc=receiver.loc)
+    # The stamp is what tells the scope gate the name arrived QUALIFIED: the
+    # folded node is otherwise the bare shape the gate refuses (A-strict).
+    _stamp(node, binding)
+    return True
+
+
 def _stamp(node, binding: 'Binding', *, name: Optional[str] = None) -> None:
     """Record what the qualified name resolved to. The back end reads this."""
     from sushi_lang.semantics.namespaces import NamespaceRef
@@ -236,7 +260,9 @@ def _reject_unknown_member(validator: 'TypeValidator', receiver, name: str,
     diagnostic = er.emit_with(validator.reporter, er.ERR.CE2008, loc, name=written)
     ns = validator.namespace_of(receiver)
     closest = suggest_member(validator.namespaces.members(ns), name) if ns else None
-    if closest is not None:
+    # A suggestion equal to what the user wrote helps nobody: the member exists
+    # and is not what this position takes.
+    if closest is not None and closest != name:
         diagnostic = diagnostic.help(f"did you mean '{ns}.{closest}'?")
     diagnostic.emit()
 

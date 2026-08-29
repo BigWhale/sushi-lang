@@ -1,0 +1,14 @@
+# A static call composes through the alias: the receiver names the type
+# the namespace holds, and the call is measured by the bare form's rules
+# (#506, decision A-strict).
+# EXPECT_STDOUT_EXACT: "one\n"
+use <collections/hashmap> as hm
+
+fn main() i32:
+    let hm.HashMap@(i32, string) m = hm.HashMap.new()
+    m.insert(1, "one")
+    match m.get(1):
+        Maybe.Some(v) -> println(v)
+        Maybe.None() -> println("missing")
+    m.free()
+    return Result.Ok(0)

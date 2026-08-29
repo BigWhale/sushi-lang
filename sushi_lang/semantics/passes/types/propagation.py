@@ -192,13 +192,33 @@ def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
         _propagate_to_enum_args(validator, node, enum_type)
 
 
+def _static_receiver_type_name(validator: 'TypeValidator', node: Expr) -> Optional[str]:
+    """The type name a DotCall receiver writes: bare, or behind a namespace (#506).
+
+    Propagation runs before validation folds the qualifier away, so the qualified
+    static call (`hm.HashMap.new()`) reaches this phase with a `MemberAccess`
+    receiver. The namespaces pass ran long before, so the binding is there to ask.
+    """
+    from sushi_lang.semantics.ast import MemberAccess
+
+    if isinstance(node.receiver, Name):
+        return node.receiver.id
+    if isinstance(node.receiver, MemberAccess):
+        binding = validator.resolve_namespaced(node.receiver.receiver,
+                                               node.receiver.member)
+        if binding is not None and binding.kind == "type":
+            return binding.name
+    return None
+
+
 def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
                                    struct_type: StructType) -> None:
     """Propagate generic struct type (Own, Box, Pair, user-defined) to constructor."""
-    if isinstance(node, DotCall) and isinstance(node.receiver, Name):
-        struct_name = node.receiver.id
+    if isinstance(node, DotCall):
+        struct_name = _static_receiver_type_name(validator, node)
 
-        if (struct_name in validator.generic_struct_table.by_name and
+        if (struct_name is not None and
+            struct_name in validator.generic_struct_table.by_name and
             isinstance(struct_type, StructType)):
             node.resolved_struct_type = struct_type
 
