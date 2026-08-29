@@ -304,6 +304,16 @@ _EQUALITY_NON_NUMERIC = frozenset({BuiltinType.BOOL, BuiltinType.STRING})
 _ORDER_NON_NUMERIC = frozenset({BuiltinType.STRING})
 
 
+def has_builtin_equality(ty: 'Type') -> bool:
+    """Can two values of `ty` meet `==`? THE closed equality set, in one place.
+
+    `reject_uncomparable_operands` below reads the sets directly for the operators;
+    the array search methods (`contains`, `index_of`) ask through this predicate, so
+    the two rules cannot drift apart (CE2100 cites CE2514 for a reason).
+    """
+    return is_numeric_type(ty) or ty in _EQUALITY_NON_NUMERIC
+
+
 def _comparison_escape(ty: 'Type') -> Optional[str]:
     """The way to ask the question that a comparison of this type cannot answer."""
     if isinstance(ty, EnumType):

@@ -17,11 +17,12 @@ from .fixed_addressing import as_fixed_array_address
 
 def is_builtin_array_method(method_name: str) -> bool:
     """Check if a method name is a built-in array method."""
-    # Fixed array methods: len, get, first, last, iter, hash, fill, reverse
+    # Fixed array methods: len, get, first, last, contains, index_of, iter, hash, fill, reverse
     # Dynamic array methods: len, get, first, last, push, pop, capacity, destroy, free, iter, clone, hash, fill, reverse
     # u8[] specific methods: to_string
     return method_name in {
-        "len", "get", "first", "last", "push", "pop", "capacity", "destroy", "free",
+        "len", "get", "first", "last", "contains", "index_of", "push", "pop",
+        "capacity", "destroy", "free",
         "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse",
         "extend", "extend_range", "s", "ss"
     }
@@ -142,6 +143,22 @@ def emit_array_method(
                                                   ir.Constant(codegen.types.i32, index),
                                                   fixed_semantic_type, to_i1)
 
+            case "contains" | "index_of":
+                # The needle is a BORROW (#475), like fill's value.
+                from .methods import search
+                from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
+                zero = ir.Constant(codegen.types.i32, 0)
+                data = codegen.builder.gep(address(writable=False), [zero, zero],
+                                           name="search_data")
+                count = ir.Constant(codegen.types.i32, fixed_ir_type.count)
+                needle = emit_borrowed_arg(codegen, expr.args[0],
+                                           fixed_semantic_type.base_type)
+                if method_name == "contains":
+                    return search.emit_array_contains(codegen, data, count, needle,
+                                                      fixed_semantic_type.base_type, to_i1)
+                return search.emit_array_index_of(codegen, data, count, needle,
+                                                  fixed_semantic_type.base_type)
+
             case "iter":
                 return iterators.emit_fixed_array_iter(codegen, expr, address(writable=False),
                                                        fixed_ir_type,
@@ -237,6 +254,23 @@ def emit_array_method(
                                                   name="last_index")
             return emit_dynamic_array_get_maybe(codegen, receiver_value, array_struct_type,
                                                 index_value, semantic_type, to_i1)
+
+        case "contains" | "index_of":
+            # The needle is a BORROW (#475), like fill's value.
+            from .methods import search
+            from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
+            data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder,
+                                                                    receiver_value)
+            len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder,
+                                                              receiver_value)
+            data = codegen.builder.load(data_ptr_ptr, name="search_data")
+            count = codegen.builder.load(len_ptr, name="search_len")
+            needle = emit_borrowed_arg(codegen, expr.args[0], element_semantic_type)
+            if method_name == "contains":
+                return search.emit_array_contains(codegen, data, count, needle,
+                                                  element_semantic_type, to_i1)
+            return search.emit_array_index_of(codegen, data, count, needle,
+                                              element_semantic_type)
 
         case "push":
             # The array stores the element shallowly and frees it, so this is a consuming
