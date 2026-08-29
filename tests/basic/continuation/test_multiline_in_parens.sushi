@@ -1,0 +1,18 @@
+# An expression continues onto the next line inside parentheses, and the
+# parenthesized form computes correctly (#499's ruling, over #496's fix).
+# EXPECT_STDOUT_EXACT: "true false true\n"
+const i32 B_UPPER_A = 65
+const i32 B_UPPER_Z = 90
+const i32 B_LOWER_A = 97
+const i32 B_LOWER_Z = 122
+
+extend u8 is_alpha() bool:
+    return ((self as i32 >= B_UPPER_A and self as i32 <= B_UPPER_Z)
+        or (self as i32 >= B_LOWER_A and self as i32 <= B_LOWER_Z))
+
+fn main() i32:
+    let u8 upper = 66
+    let u8 digit = 55
+    let u8 lower = 122
+    println("{upper.is_alpha()} {digit.is_alpha()} {lower.is_alpha()}")
+    return Result.Ok(0)
