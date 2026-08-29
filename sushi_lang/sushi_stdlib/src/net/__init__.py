@@ -21,8 +21,9 @@ from sushi_lang.sushi_stdlib.src.net.socket_funcs import (  # noqa: F401
 
 def generate_module_ir() -> ir.Module:
     """Generate the standalone LLVM IR module for <net/socket>."""
-    from sushi_lang.sushi_stdlib.src.net import stream
+    from sushi_lang.sushi_stdlib.src.net import stream, tcp
 
     module = create_stdlib_module("net.socket")
     stream.generate_ir(module)
+    tcp.generate_ir(module)
     return module

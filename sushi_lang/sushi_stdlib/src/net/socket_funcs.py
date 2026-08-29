@@ -13,17 +13,23 @@ from sushi_lang.semantics.typesys import Type, BuiltinType
 
 
 SOCKET_FUNCTIONS = [
+    "sock_tcp_listen",
     "sock_close",
+    "sock_local_port",
 ]
 
 # Sushi name -> the Ok type of its Result. The Err type is always NetError.
 _OK_TYPES = {
+    "sock_tcp_listen": BuiltinType.I32,
     "sock_close": BuiltinType.I32,
+    "sock_local_port": BuiltinType.I32,
 }
 
 # Sushi name -> how many arguments it takes.
 _ARITY = {
+    "sock_tcp_listen": 3,
     "sock_close": 1,
+    "sock_local_port": 1,
 }
 
 

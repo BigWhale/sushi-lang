@@ -113,7 +113,9 @@ def _get_param_specs():
         specs[("files", fn)] = [STRING, STRING]
     specs[("files", "mkdir")] = [STRING, I32]
 
-    specs[("socket", "sock_close")] = [I32]
+    specs[("socket", "sock_tcp_listen")] = [STRING, I32, I32]
+    for fn in ("sock_close", "sock_local_port"):
+        specs[("socket", fn)] = [I32]
 
     _param_specs_cache = specs
     return _param_specs_cache
@@ -223,7 +225,7 @@ class StdlibRegistry:
             ],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
             "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir", "read_dir", "mtime", "ctime", "mode", "is_symlink"],
-            "socket": ["sock_close"],
+            "socket": ["sock_tcp_listen", "sock_close", "sock_local_port"],
         }
 
         candidates = common_names.get(module_name, [])

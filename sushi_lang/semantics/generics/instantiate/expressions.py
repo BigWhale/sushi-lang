@@ -232,7 +232,7 @@ class ExpressionScanner:
                 self.instantiations.add(
                     ("Result", (DynamicArrayType(BuiltinType.STRING), file_error)))
             return
-        elif function_name in {'sock_close'}:
+        elif function_name in {'sock_tcp_listen', 'sock_close', 'sock_local_port'}:
             net_error = self.type_inferrer.enum_table.get("NetError")
             if net_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, net_error)))
