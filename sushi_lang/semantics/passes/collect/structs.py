@@ -107,6 +107,25 @@ class StructCollector:
             self.structs.by_name["ProcessOutput"] = process_output
             self.known_types.add(process_output)
 
+        # Datagram - what one udp_recv_from answers with. It is a predefined
+        # struct rather than a <net/udp> one because the .bc layer builds it,
+        # and a .bc module cannot name a Sushi-source type. An unconnected
+        # datagram socket has no getpeername, so the sender exists only at the
+        # instant the datagram arrives and has to ride along with the bytes.
+        from sushi_lang.semantics.typesys import DynamicArrayType
+        datagram = StructType(
+            name="Datagram",
+            fields=(
+                ("data", DynamicArrayType(BuiltinType.U8)),
+                ("peer_ip", BuiltinType.STRING),
+                ("peer_port", BuiltinType.I32),
+            ),
+        )
+        if "Datagram" not in self.structs.by_name:
+            self.structs.order.append("Datagram")
+            self.structs.by_name["Datagram"] = datagram
+            self.known_types.add(datagram)
+
     def _collect_struct_def(self, struct: StructDef) -> None:
         """Collect struct definition and create StructType or GenericStructType."""
         name = getattr(struct, "name", None)

@@ -1,0 +1,42 @@
+# Two datagram sockets on loopback, each on a port the kernel chose. UDP needs
+# no handshake and no accept queue, so this exchange is structurally simpler
+# than the TCP one: bind both, learn both ports, and send each way.
+# EXPECT_STDOUT_EXACT: "b got Mostly Harmless\nfrom 127.0.0.1\na got 42\nclosed\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/udp>
+use <collections/strings>
+
+fn main() i32:
+    let UdpSocket a = udp_bind("127.0.0.1", 0).realise(UdpSocket(-1))
+    let UdpSocket b = udp_bind("127.0.0.1", 0).realise(UdpSocket(-1))
+    if (a.fd < 0 or b.fd < 0):
+        println("bind failed")
+        return Result.Ok(1)
+    udp_set_timeouts(a, 5000, 5000)
+    udp_set_timeouts(b, 5000, 5000)
+
+    let i32 port_a = udp_local_port(a).realise(-1)
+    let i32 port_b = udp_local_port(b).realise(-1)
+
+    let u8[] greeting = "Mostly Harmless".to_bytes()
+    udp_send_to(a, greeting, "127.0.0.1", port_b).realise(-1)
+    match udp_recv_from(b, 64):
+        Result.Ok(dg) ->
+            println("b got {dg.data.to_string()}")
+            println("from {dg.peer_ip}")
+        Result.Err(_) -> println("b recv_from failed")
+
+    let u8[] answer = "42".to_bytes()
+    udp_send_to(b, answer, "127.0.0.1", port_a).realise(-1)
+    match udp_recv_from(a, 64):
+        Result.Ok(dg) -> println("a got {dg.data.to_string()}")
+        Result.Err(_) -> println("a recv_from failed")
+
+    udp_close(poke a)
+    match udp_close(poke b):
+        Result.Ok(_) -> println("closed")
+        Result.Err(_) -> println("close failed")
+
+    return Result.Ok(0)

@@ -235,7 +235,8 @@ class ExpressionScanner:
         elif function_name in {'sock_tcp_connect', 'sock_tcp_listen', 'sock_tcp_accept',
                                'sock_send', 'sock_close', 'sock_local_port',
                                'sock_peer_port', 'sock_set_recv_timeout',
-                               'sock_set_send_timeout'}:
+                               'sock_set_send_timeout', 'sock_udp_bind',
+                               'sock_udp_send_to'}:
             net_error = self.type_inferrer.enum_table.get("NetError")
             if net_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, net_error)))
@@ -251,6 +252,12 @@ class ExpressionScanner:
             if net_error:
                 self.instantiations.add(
                     ("Result", (DynamicArrayType(BuiltinType.U8), net_error)))
+            return
+        elif function_name == 'sock_udp_recv_from':
+            net_error = self.type_inferrer.enum_table.get("NetError")
+            datagram = self.type_inferrer.struct_table.get("Datagram")
+            if net_error and datagram:
+                self.instantiations.add(("Result", (datagram, net_error)))
             return
         elif function_name == 'sock_dns_resolve':
             from sushi_lang.semantics.typesys import DynamicArrayType

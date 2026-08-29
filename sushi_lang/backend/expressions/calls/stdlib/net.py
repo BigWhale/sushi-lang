@@ -56,8 +56,8 @@ def emit_net_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
 
     # A host name and a port. The host is marshalled HERE and freed at scope
     # exit, like an FFI argument (#292); the callee takes i8* and frees nothing.
-    if func_name in ("sock_tcp_connect", "sock_tcp_listen"):
-        count = 2 if func_name == "sock_tcp_connect" else 3
+    if func_name in ("sock_tcp_connect", "sock_tcp_listen", "sock_udp_bind"):
+        count = 3 if func_name == "sock_tcp_listen" else 2
         _expect_args(expr, func_name, count)
         args = [emit_cstr_arg(codegen, expr.args[0])]
         args.extend(emit_borrowed_arg(codegen, a) for a in expr.args[1:])
@@ -97,6 +97,30 @@ def emit_net_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
                                               result_type, [i8_ptr])
         result = codegen.builder.call(stdlib_func, [host], name=f"{func_name}_result")
+        return codegen.utils.as_i1(result) if to_i1 else result
+
+    if func_name == "sock_udp_send_to":
+        _expect_args(expr, func_name, 4)
+        fd = emit_borrowed_arg(codegen, expr.args[0])
+        data = _as_array_value(codegen, emit_borrowed_arg(codegen, expr.args[1]))
+        host = emit_cstr_arg(codegen, expr.args[2])
+        port = emit_borrowed_arg(codegen, expr.args[3])
+        stdlib_func = declare_stdlib_function(
+            codegen.module, stdlib_func_name, result_i32,
+            [i32, _byte_array_type(), i8_ptr, i32])
+        result = codegen.builder.call(stdlib_func, [fd, data, host, port],
+                                      name=f"{func_name}_result")
+        return codegen.utils.as_i1(result) if to_i1 else result
+
+    if func_name == "sock_udp_recv_from":
+        _expect_args(expr, func_name, 2)
+        fd = emit_borrowed_arg(codegen, expr.args[0])
+        maximum = emit_borrowed_arg(codegen, expr.args[1])
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_datagram_result_type
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
+                                              get_datagram_result_type(), [i32, i32])
+        result = codegen.builder.call(stdlib_func, [fd, maximum],
+                                      name=f"{func_name}_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
     if func_name == "sock_recv":

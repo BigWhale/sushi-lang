@@ -1,0 +1,24 @@
+# A datagram socket with nothing coming answers TimedOut, exactly as a stream
+# one does: the bound is the same SO_RCVTIMEO.
+# EXPECT_STDOUT_EXACT: "recv_from timed out\nclosed\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/udp>
+
+fn main() i32:
+    let UdpSocket s = udp_bind("127.0.0.1", 0).realise(UdpSocket(-1))
+    udp_set_timeouts(s, 200, 200)
+
+    match udp_recv_from(s, 64):
+        Result.Ok(dg) -> println("wrong: {dg.data.len()} bytes arrived from nobody")
+        Result.Err(e) ->
+            match e:
+                NetError.TimedOut -> println("recv_from timed out")
+                _ -> println("wrong: some other variant")
+
+    match udp_close(poke s):
+        Result.Ok(_) -> println("closed")
+        Result.Err(_) -> println("close failed")
+
+    return Result.Ok(0)

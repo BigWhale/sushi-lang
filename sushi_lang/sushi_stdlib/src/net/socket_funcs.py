@@ -11,7 +11,12 @@ socket, udp_* a datagram one, and dns_* resolves a name.
 """
 from typing import Dict, List
 
-from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType
+from sushi_lang.semantics.typesys import (
+    BuiltinType,
+    DynamicArrayType,
+    Type,
+    UnknownType,
+)
 
 
 SOCKET_FUNCTIONS: List[str] = [
@@ -27,6 +32,9 @@ SOCKET_FUNCTIONS: List[str] = [
     "sock_set_recv_timeout",
     "sock_set_send_timeout",
     "sock_dns_resolve",
+    "sock_udp_bind",
+    "sock_udp_send_to",
+    "sock_udp_recv_from",
 ]
 
 # Sushi name -> the Ok type of its Result. The Err type is always NetError.
@@ -43,6 +51,9 @@ _OK_TYPES: Dict[str, Type] = {
     "sock_set_recv_timeout": BuiltinType.I32,
     "sock_set_send_timeout": BuiltinType.I32,
     "sock_dns_resolve": DynamicArrayType(BuiltinType.STRING),
+    "sock_udp_bind": BuiltinType.I32,
+    "sock_udp_send_to": BuiltinType.I32,
+    "sock_udp_recv_from": UnknownType("Datagram"),
 }
 
 # Sushi name -> how many arguments it takes.
@@ -59,6 +70,9 @@ _ARITY: Dict[str, int] = {
     "sock_set_recv_timeout": 2,
     "sock_set_send_timeout": 2,
     "sock_dns_resolve": 1,
+    "sock_udp_bind": 2,
+    "sock_udp_send_to": 4,
+    "sock_udp_recv_from": 2,
 }
 
 

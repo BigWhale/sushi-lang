@@ -107,6 +107,7 @@ class StdlibLinker:
         "net/dns",
         "net/ip",
         "net/tcp",
+        "net/udp",
         "toolchain/slib",
     }
 
