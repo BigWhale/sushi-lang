@@ -30,6 +30,33 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+### Lines and Continuation
+
+A statement ends at the end of its line. An expression continues onto the next line only
+inside `(` or `[`, where layout is free. Parentheses are the continuation mechanism, by
+design: there is no continuation character, and a trailing operator does not absorb the
+newline. A long expression takes one outer pair:
+
+```sushi
+const i32 B_UPPER_A = 65
+const i32 B_UPPER_Z = 90
+const i32 B_LOWER_A = 97
+const i32 B_LOWER_Z = 122
+
+extend u8 is_alpha() bool:
+    return ((self as i32 >= B_UPPER_A and self as i32 <= B_UPPER_Z)
+        or (self as i32 >= B_LOWER_A and self as i32 <= B_LOWER_Z))
+
+fn main() i32:
+    let u8 letter = 66
+    let bool a = letter.is_alpha()
+    println("{a}")
+    return Result.Ok(0)
+```
+
+Without the outer parentheses the second line starts a new statement, and the parse
+fails with CE6001.
+
 ## Types
 
 ### Primitive Types

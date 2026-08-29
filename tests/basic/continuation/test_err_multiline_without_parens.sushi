@@ -1,0 +1,8 @@
+# A statement ends at the end of its line: outside brackets there is no
+# continuation, and no continuation character exists (#499's ruling).
+# EXPECT_ERROR_CODE: CE6001
+fn main() i32:
+    let bool wide = (1 < 2)
+        or (3 < 4)
+    println("{wide}")
+    return Result.Ok(0)

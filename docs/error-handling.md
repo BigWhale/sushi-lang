@@ -497,6 +497,39 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+### An Infallible Helper Shares Its Caller's Error Channel
+
+A helper that cannot fail still declares the caller's error type, or `??` does not
+compose through it (CE2511). This is by design: the error arm is part of the signature,
+and the signature is where a reader learns which channel a call sits on. Name the
+channel, return only `Result.Ok`, and say so in a comment:
+
+```sushi
+enum LexError:
+    BadByte(i32)
+
+# It cannot fail; it shares the LexError channel so ?? composes in the caller.
+fn at(peek u8[] src, i32 i) u8 | LexError:
+    if (i < 0 or i >= src.len()):
+        return Result.Ok(0)
+    return Result.Ok(src[i])
+
+fn first_byte(u8[] src) i32 | LexError:
+    let u8 c = at(peek src, 0)??
+    return Result.Ok(c as i32)
+
+fn main() i32:
+    let u8[] bytes = from([65, 66])
+    match first_byte(bytes):
+        Result.Ok(v) -> println("{v}")
+        Result.Err(_) -> println("error")
+    return Result.Ok(0)
+```
+
+The cost is one word per signature, and `<encoding/msgpack>` pays it throughout: its
+infallible helpers carry `| MpError` so the fallible ones compose over them. A helper
+shared between two modules with different error types takes a wrapper in one of them.
+
 ## Patterns and Best Practices
 
 ### 1. Always Provide Meaningful Defaults
