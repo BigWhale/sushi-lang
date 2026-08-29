@@ -2,7 +2,7 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
-## [Unreleased]
+## [0.12.0] - 2026-08-29
 
 Two libraries written in Sushi itself, and the distribution form that carries them:
 a `.slib` is now Sushi source plus an index, so one library file works on every
@@ -16,6 +16,11 @@ A unit is also a namespace now. `use "math" as m` puts what the import brings be
 dot, a unit sees what it imported and no further, and two units may each declare one
 `helper` -- so a name says where it came from, and one program's names stop crowding
 another's.
+
+A declaration can also carry its own documentation. `##: ... :##` is part of the
+declaration, the compiler checks it against the signature it describes, and
+`--lib-info --docs` prints it -- so a library says what it does in the file that
+defines it.
 
 ### Added
 - **A static call composes through an alias.** `use <collections/hashmap> as hm` gates
@@ -206,222 +211,6 @@ another's.
 
   Closes #490, #487 and #503. The design is `docs/design/unit-namespaces.md`.
 
-### Changed
-- **Scope is per unit, and it is not transitive.** This is the one change here that stops
-  a program compiling. A unit sees its own declarations, plus what its OWN `use` statements
-  bring, and nothing else. An import is not re-exported: `top` importing `mid` no longer
-  reaches what `mid` imported, and `use "geometry" as geo` reaches what `geometry`
-  DECLARES.
-
-  A registry stdlib module and the built-in generic it activates follow the same rule, so
-  `use <math>` in one unit no longer answers a `sqrt` in another, and `HashMap` needs the
-  import in the unit that names it. An `unsafe external` namespace is bound in the unit
-  that DECLARES the block.
-
-  **To name a type, import the unit that declares it.** A public signature may name a type
-  its caller cannot write, and a `let` needs a written type, so the caller adds the import
-  the name asks for. A name out of scope is refused as "no such name" -- **CE2008**,
-  **CE2001** or **CE1001** -- with a help line that names the import which would bring it.
-
-- **CE2018 retires: a repeated value may own heap memory.** `[towel; 3]` was refused
-  because N copies of an owning value would need N-1 deep copies and the compiler never
-  inserts one. That stopped being true when `.fill()` gained a per-slot `copy_out`, and the
-  language answered one question two ways: `a.fill(towel)` was legal beside
-  `from([towel; 2])`, which was not.
-
-  A repeated value is now a **borrow**, as `.fill()`'s argument is, and every slot takes its
-  own copy. A run has one value and N slots, so it has no single position to consume into --
-  the general rule is that a bulk write borrows its source. A plain element still consumes,
-  because it still occupies one slot.
-
-### Fixed
-- **A bool in an interpolation hole prints `true`/`false`, whatever the hole holds.** A
-  variable, a literal and a logical expression printed `1` while a method-call result
-  printed `true`: the rendering followed the expression's SHAPE, because only a stamped
-  call routed to the bool formatter. The semantic type decides now, on every path, and
-  the constant evaluator renders a bool hole the same way.
-
-- **A double-quoted string inside an interpolation hole is named for what it is.** The
-  inner quote closes the outer literal, so the parse failed on a token nobody wrote.
-  CE6001 and CE6002 now carry the shape and both escapes: single quotes inside the hole,
-  or bind the expression to a local first.
-
-- **Four diagnostics said the wrong thing, and a gate now forbids the class.** A perk
-  arity error was emitted as CE2007 with another code's kwargs, an array bulk-copy arity
-  error keyed its method name wrongly, and two missing-symbol sites raised CE0027 with
-  CE0024's shape. A static check over every emit site now demands that call-site kwargs
-  match the registered template exactly, and that no unformatted brace reaches an
-  emitter.
-
-- **Two units may each declare a generic function, and every instance knows its home**
-  (#495, #494). A generic function now carries the unit that declared it, exactly as a
-  concrete function does: two units' `twin@(T)` coexist, each unit's call reaches its
-  own, and a monomorphized instance takes its declaring unit's symbol prefix
-  (`main$twin__i32` beside `helper$twin__i32`), `internal` when the generic is private.
-  Within one unit a duplicate stays CE0101. The same identity fixes a silent wrong
-  answer in a binary library: the export closure ships one record per `(unit, name)` --
-  two library units may each keep a private `helper` -- and every source-shipped
-  template carries a `bindings` map from each free name in its body to the symbol the
-  producer resolved, so a template can never call another unit's body. The templates
-  schema moves to version 5, and a binary `.slib` built with the old schema is refused
-  (CE3512) and must be rebuilt. A private generic in a helper unit, instantiated from
-  its own unit, no longer dies with CE0000.
-
-- **Two ordinary units may implement each other's perks.** A perk declared next door and
-  implemented at home was `CE4003: unknown perk`, and the same shape across a `.slib`
-  worked. Nothing about the perk was wrong: the compilation order puts a dependent before
-  its dependency, so the perk table was empty when the implementation was collected. Every
-  unit's perk DEFINITIONS are collected before any implementation now, which is the rule
-  the library path had all along.
-
-  ```sushi
-  # helpers/traits.sushi
-  public perk Heavy:
-      fn weigh() i32
-
-  # main.sushi
-  use "helpers/traits"
-
-  extend Pallet with Heavy:           # was CE4003
-      fn weigh() i32:
-          return self.crates
-  ```
-
-  A private perk next door answers **CE4011** now, which is the contract rule, and not
-  "unknown perk". Two units declaring one perk name are still **CE4001**.
-
-- **A contested name gets one diagnostic, and it is aimed at the right unit.** Two units
-  declaring one name heard the duplicate AND a second diagnostic measuring the loser's own
-  code against the winner's declaration: `CE3005` telling a unit it may not call the
-  function it wrote itself, `CE2027` about a struct shape it never spelled, `CE2045` and
-  `CE2040` about an enum it did not declare, or `CE2060` about a generic it never wrote.
-  The loser of a contested name is recorded now, and no rule speaks about a declaration
-  the unit did not write.
-
-  A consumer that declares a name a source library declares PRIVATELY is refused cleanly
-  with a new **CE3011**: one flat namespace means it collides with a name it cannot see, so
-  renaming is its only move. The branch that used to let it try deleted the library's entry
-  and registered no replacement, so the consumer lost its own declaration as well -- which
-  is why a program's own `fn map` beside `use <collections/iter>` heard CE2060 about
-  `iter`'s generic.
-
-- **A consumer's own declaration answers its own call, and says it shadows.** A program may
-  declare a name a library exports; that is the documented symbol priority. The frontend
-  did not agree with the linker: every table merges first-wins and library units merge
-  first, so the library's signature answered the consumer's call and a replacement with a
-  different signature was refused with a spurious CE2009.
-
-  It is safe because a private function has internal linkage -- the two are separate
-  symbols, the consumer's call binds to its own definition and the library's body keeps
-  calling its own -- and the one combination that could break the link, both public, is
-  CE3003 already. A new **CW3002** says the name is shadowed, because it is legal and
-  rarely intended.
-
-- **A borrow and a function type reach the type funnel.** `fn look(peek Nope x)` printed
-  `CE0020: unresolved type 'Nope' - semantic analysis should have caught this`, telling the
-  user their program was a compiler bug; `fn apply(fn(Nope) -> i32 f)` compiled clean. Four
-  spellings now give the same `CE2001: unknown type 'Nope'` with a caret. One walk over a
-  type answers for every predicate over types, with a gate on it.
-
-- **The public-signature `ptr` fence covers what it always claimed to.** CE5008 read a
-  `public fn`'s return and parameters and nothing else, so a public function's ERROR arm, a
-  public GENERIC, an extension method and a perk method each carried a foreign `ptr` across
-  a unit boundary and compiled clean. One walk over every signature closes all four, and
-  the diagnostic says which kind of declaration it refused.
-
-- **A perk implementation checks its target type once.** Two methods and one unknown target
-  printed the same CE2001 twice, because the check sat inside the per-method loop. And
-  `extend ~ shout()` was CE2032 while `extend ~ with Loud` compiled clean: two copies of
-  one validator had drifted, and only one of them refused the blank type.
-
-- **CE5013 now sees a symbol the standard library generates.** An `unsafe external "C"`
-  whose link-name is a symbol this build defines is CE5013. The rule read the function
-  table, the constant table and the library registry -- and the stdlib GENERATORS emit
-  about 146 symbols that live in none of them, so the rule was blind to every one.
-
-  ```sushi
-  use <collections/strings>
-
-  unsafe external "C" as raw because "naming a generated stdlib symbol":
-      fn slen(string s) i64 = "string_len"   # now CE5013
-  ```
-
-  The real declaration is `i32 string_len({ptr, i32, i8})`. Declared as above, three
-  things could happen: the program that also called `.len()` got a CE0000 TypeError; the
-  program that linked the symbol and never called it BUILT CLEAN and died with a bus
-  error; and the program that linked nothing got a linker error late, by symbol name.
-
-  The generators are the only authority on those names, so `--build-stdlib` now writes
-  them down beside the bitcode it produced (`dist/<platform>/symbols.json`), and the
-  manifest is part of a built platform directory -- a stale one rebuilds. A second, small
-  set in `semantics/externs_manifest.py` covers the three the backend emits INLINE into
-  the module it compiles (`llvm_strlen`, `llvm_strcmp`, `utf8_char_count`), which no
-  bitcode file holds; the backend reads that same set to give them their linkage.
-
-  A generated name is refused whether the program links that stdlib unit or not.
-  Otherwise adding a `use` line would break a build that compiled a minute ago. No libc
-  name is affected: 140 of the 146 already carry a `sushi_` prefix, and none of them is
-  a bare C name, so `= "strlen"` and friends still bind.
-
-- **`.iter()` and `.hash()` on a dynamic array now work through every receiver.** This was
-  the half of the fixed-array receiver fix below that the DYNAMIC side kept. `as_array_address`
-  already gave a `T[]` one address rule, so a field read hands over a GEP and every other
-  method worked; these two arms went looking for their ELEMENT type in the name tables
-  instead, and a receiver with no name has no entry there.
-
-  ```sushi
-  foreach(x in h.nums.iter())          # a struct field -- was CE0072
-  foreach(x in from([1, 2, 3]).iter()) # a temporary    -- was CE0072
-  foreach(x in src.ss(1, 3).iter())    # a chained call -- was CE0072
-  let u64 h = h.nums.hash()            # the same field -- was CE0056
-  ```
-
-  The dispatcher already unwraps the receiver's semantic type once for every dynamic arm,
-  which is where `pop`, `free`, `clone` and `fill` read their element type. The two arms that
-  looked it up now read it from there, and the check that it IS an array type moved beside
-  the unwrap, so no arm repeats it.
-
-  **CE0072 retires.** It only ever refused a receiver whose element type the name tables did
-  not hold, so nothing reaches it now. The number is not reused.
-
-- **`new()` is a value in every position, not only a declaration form.** `new()` spells the
-  empty dynamic array. It named no element type, so the backend had no descriptor to build
-  and emitted a scalar placeholder -- which meant `new()` worked in a `let` and in a struct
-  constructor, because both special-cased it, and was broken everywhere else. As an argument
-  and as a `.realise()` default it was CE0017; as a `Result.Ok()` payload it packed the
-  placeholder, printed a length of zero and aborted at scope exit; a rebind crashed the
-  compiler outright.
-
-  ```sushi
-  let i32[] taken = mk().realise(new())   # the natural default for an array payload
-  let i32 none    = count(new())??
-  r := new()
-  ```
-
-  The typecheck pass stamps `new()` with the `T[]` its position expects -- the same
-  propagation that gives an array literal's elements their declared type -- and one emitter
-  builds the `{0, 0, null}` descriptor an empty array is. The struct constructor's own copy of
-  that descriptor is gone with it.
-
-- **Every built-in method on a fixed array now works through every receiver.** A `T[N]`
-  reached as a struct field, a nested field or an array element had no address rule of its
-  own, so nine sites re-derived one and each fell back to a stack COPY of the receiver.
-  `b.slots.fill(9)` and `b.slots.reverse()` therefore compiled, ran, and left the field
-  unchanged -- no diagnostic was possible, because the store is legal. `.iter()` and
-  `.hash()` on a field refused instead, with CE0072 and CE0056, because they looked the
-  element type up by NAME and a field has none. Through a `peek` or `poke` parameter every
-  method was CE0000: such a receiver arrives as `[N x T]*`, which the dispatch gate did not
-  accept, so the call fell through to the user-extension lookup and mangled the type name
-  into `i32[3]_len`.
-
-  `as_fixed_array_address` is the one rule now, the fixed twin of `as_array_address`. It
-  resolves the address from the AST, and it takes one flag: a READ may spill a value that
-  names no storage, and a WRITE may not. That is what keeps a store out of `.rodata` -- a
-  constant resolves for a read and to nothing for a write, so no such binary can be built
-  even if CE2096 were bypassed. There is no fallback behind the write arm: reaching it means
-  a typecheck rejection did not fire, and that is the new CE0132.
-
-### Added
 - **`--color=always|never|auto`, and one colour decision behind it.** Everything the
   compiler prints to a terminal -- a diagnostic, the version banner and the `--lib-info`
   report -- now reads one ladder: the flag, then `NO_COLOR` (present at any value, which
@@ -756,6 +545,33 @@ another's.
   reader where the file was cut.
 
 ### Changed
+- **Scope is per unit, and it is not transitive.** This is the one change here that stops
+  a program compiling. A unit sees its own declarations, plus what its OWN `use` statements
+  bring, and nothing else. An import is not re-exported: `top` importing `mid` no longer
+  reaches what `mid` imported, and `use "geometry" as geo` reaches what `geometry`
+  DECLARES.
+
+  A registry stdlib module and the built-in generic it activates follow the same rule, so
+  `use <math>` in one unit no longer answers a `sqrt` in another, and `HashMap` needs the
+  import in the unit that names it. An `unsafe external` namespace is bound in the unit
+  that DECLARES the block.
+
+  **To name a type, import the unit that declares it.** A public signature may name a type
+  its caller cannot write, and a `let` needs a written type, so the caller adds the import
+  the name asks for. A name out of scope is refused as "no such name" -- **CE2008**,
+  **CE2001** or **CE1001** -- with a help line that names the import which would bring it.
+
+- **CE2018 retires: a repeated value may own heap memory.** `[towel; 3]` was refused
+  because N copies of an owning value would need N-1 deep copies and the compiler never
+  inserts one. That stopped being true when `.fill()` gained a per-slot `copy_out`, and the
+  language answered one question two ways: `a.fill(towel)` was legal beside
+  `from([towel; 2])`, which was not.
+
+  A repeated value is now a **borrow**, as `.fill()`'s argument is, and every slot takes its
+  own copy. A run has one value and N slots, so it has no single position to consume into --
+  the general rule is that a bulk write borrows its source. A plain element still consumes,
+  because it still occupies one slot.
+
 - **A diagnostic that spans a whole construct is rendered without a caret, and a help
   is rendered inside the box.** A caret separates one thing from the rest of its line.
   When the span covers a whole construct there is nothing to separate, and the header
@@ -873,6 +689,192 @@ another's.
   and 0.28s after.
 
 ### Fixed
+- **A bool in an interpolation hole prints `true`/`false`, whatever the hole holds.** A
+  variable, a literal and a logical expression printed `1` while a method-call result
+  printed `true`: the rendering followed the expression's SHAPE, because only a stamped
+  call routed to the bool formatter. The semantic type decides now, on every path, and
+  the constant evaluator renders a bool hole the same way.
+
+- **A double-quoted string inside an interpolation hole is named for what it is.** The
+  inner quote closes the outer literal, so the parse failed on a token nobody wrote.
+  CE6001 and CE6002 now carry the shape and both escapes: single quotes inside the hole,
+  or bind the expression to a local first.
+
+- **Four diagnostics said the wrong thing, and a gate now forbids the class.** A perk
+  arity error was emitted as CE2007 with another code's kwargs, an array bulk-copy arity
+  error keyed its method name wrongly, and two missing-symbol sites raised CE0027 with
+  CE0024's shape. A static check over every emit site now demands that call-site kwargs
+  match the registered template exactly, and that no unformatted brace reaches an
+  emitter.
+
+- **Two units may each declare a generic function, and every instance knows its home**
+  (#495, #494). A generic function now carries the unit that declared it, exactly as a
+  concrete function does: two units' `twin@(T)` coexist, each unit's call reaches its
+  own, and a monomorphized instance takes its declaring unit's symbol prefix
+  (`main$twin__i32` beside `helper$twin__i32`), `internal` when the generic is private.
+  Within one unit a duplicate stays CE0101. The same identity fixes a silent wrong
+  answer in a binary library: the export closure ships one record per `(unit, name)` --
+  two library units may each keep a private `helper` -- and every source-shipped
+  template carries a `bindings` map from each free name in its body to the symbol the
+  producer resolved, so a template can never call another unit's body. The templates
+  schema moves to version 5, and a binary `.slib` built with the old schema is refused
+  (CE3512) and must be rebuilt. A private generic in a helper unit, instantiated from
+  its own unit, no longer dies with CE0000.
+
+- **Two ordinary units may implement each other's perks.** A perk declared next door and
+  implemented at home was `CE4003: unknown perk`, and the same shape across a `.slib`
+  worked. Nothing about the perk was wrong: the compilation order puts a dependent before
+  its dependency, so the perk table was empty when the implementation was collected. Every
+  unit's perk DEFINITIONS are collected before any implementation now, which is the rule
+  the library path had all along.
+
+  ```sushi
+  # helpers/traits.sushi
+  public perk Heavy:
+      fn weigh() i32
+
+  # main.sushi
+  use "helpers/traits"
+
+  extend Pallet with Heavy:           # was CE4003
+      fn weigh() i32:
+          return self.crates
+  ```
+
+  A private perk next door answers **CE4011** now, which is the contract rule, and not
+  "unknown perk". Two units declaring one perk name are still **CE4001**.
+
+- **A contested name gets one diagnostic, and it is aimed at the right unit.** Two units
+  declaring one name heard the duplicate AND a second diagnostic measuring the loser's own
+  code against the winner's declaration: `CE3005` telling a unit it may not call the
+  function it wrote itself, `CE2027` about a struct shape it never spelled, `CE2045` and
+  `CE2040` about an enum it did not declare, or `CE2060` about a generic it never wrote.
+  The loser of a contested name is recorded now, and no rule speaks about a declaration
+  the unit did not write.
+
+  A consumer that declares a name a source library declares PRIVATELY is refused cleanly
+  with a new **CE3011**: one flat namespace means it collides with a name it cannot see, so
+  renaming is its only move. The branch that used to let it try deleted the library's entry
+  and registered no replacement, so the consumer lost its own declaration as well -- which
+  is why a program's own `fn map` beside `use <collections/iter>` heard CE2060 about
+  `iter`'s generic.
+
+- **A consumer's own declaration answers its own call, and says it shadows.** A program may
+  declare a name a library exports; that is the documented symbol priority. The frontend
+  did not agree with the linker: every table merges first-wins and library units merge
+  first, so the library's signature answered the consumer's call and a replacement with a
+  different signature was refused with a spurious CE2009.
+
+  It is safe because a private function has internal linkage -- the two are separate
+  symbols, the consumer's call binds to its own definition and the library's body keeps
+  calling its own -- and the one combination that could break the link, both public, is
+  CE3003 already. A new **CW3002** says the name is shadowed, because it is legal and
+  rarely intended.
+
+- **A borrow and a function type reach the type funnel.** `fn look(peek Nope x)` printed
+  `CE0020: unresolved type 'Nope' - semantic analysis should have caught this`, telling the
+  user their program was a compiler bug; `fn apply(fn(Nope) -> i32 f)` compiled clean. Four
+  spellings now give the same `CE2001: unknown type 'Nope'` with a caret. One walk over a
+  type answers for every predicate over types, with a gate on it.
+
+- **The public-signature `ptr` fence covers what it always claimed to.** CE5008 read a
+  `public fn`'s return and parameters and nothing else, so a public function's ERROR arm, a
+  public GENERIC, an extension method and a perk method each carried a foreign `ptr` across
+  a unit boundary and compiled clean. One walk over every signature closes all four, and
+  the diagnostic says which kind of declaration it refused.
+
+- **A perk implementation checks its target type once.** Two methods and one unknown target
+  printed the same CE2001 twice, because the check sat inside the per-method loop. And
+  `extend ~ shout()` was CE2032 while `extend ~ with Loud` compiled clean: two copies of
+  one validator had drifted, and only one of them refused the blank type.
+
+- **CE5013 now sees a symbol the standard library generates.** An `unsafe external "C"`
+  whose link-name is a symbol this build defines is CE5013. The rule read the function
+  table, the constant table and the library registry -- and the stdlib GENERATORS emit
+  about 146 symbols that live in none of them, so the rule was blind to every one.
+
+  ```sushi
+  use <collections/strings>
+
+  unsafe external "C" as raw because "naming a generated stdlib symbol":
+      fn slen(string s) i64 = "string_len"   # now CE5013
+  ```
+
+  The real declaration is `i32 string_len({ptr, i32, i8})`. Declared as above, three
+  things could happen: the program that also called `.len()` got a CE0000 TypeError; the
+  program that linked the symbol and never called it BUILT CLEAN and died with a bus
+  error; and the program that linked nothing got a linker error late, by symbol name.
+
+  The generators are the only authority on those names, so `--build-stdlib` now writes
+  them down beside the bitcode it produced (`dist/<platform>/symbols.json`), and the
+  manifest is part of a built platform directory -- a stale one rebuilds. A second, small
+  set in `semantics/externs_manifest.py` covers the three the backend emits INLINE into
+  the module it compiles (`llvm_strlen`, `llvm_strcmp`, `utf8_char_count`), which no
+  bitcode file holds; the backend reads that same set to give them their linkage.
+
+  A generated name is refused whether the program links that stdlib unit or not.
+  Otherwise adding a `use` line would break a build that compiled a minute ago. No libc
+  name is affected: 140 of the 146 already carry a `sushi_` prefix, and none of them is
+  a bare C name, so `= "strlen"` and friends still bind.
+
+- **`.iter()` and `.hash()` on a dynamic array now work through every receiver.** This was
+  the half of the fixed-array receiver fix below that the DYNAMIC side kept. `as_array_address`
+  already gave a `T[]` one address rule, so a field read hands over a GEP and every other
+  method worked; these two arms went looking for their ELEMENT type in the name tables
+  instead, and a receiver with no name has no entry there.
+
+  ```sushi
+  foreach(x in h.nums.iter())          # a struct field -- was CE0072
+  foreach(x in from([1, 2, 3]).iter()) # a temporary    -- was CE0072
+  foreach(x in src.ss(1, 3).iter())    # a chained call -- was CE0072
+  let u64 h = h.nums.hash()            # the same field -- was CE0056
+  ```
+
+  The dispatcher already unwraps the receiver's semantic type once for every dynamic arm,
+  which is where `pop`, `free`, `clone` and `fill` read their element type. The two arms that
+  looked it up now read it from there, and the check that it IS an array type moved beside
+  the unwrap, so no arm repeats it.
+
+  **CE0072 retires.** It only ever refused a receiver whose element type the name tables did
+  not hold, so nothing reaches it now. The number is not reused.
+
+- **`new()` is a value in every position, not only a declaration form.** `new()` spells the
+  empty dynamic array. It named no element type, so the backend had no descriptor to build
+  and emitted a scalar placeholder -- which meant `new()` worked in a `let` and in a struct
+  constructor, because both special-cased it, and was broken everywhere else. As an argument
+  and as a `.realise()` default it was CE0017; as a `Result.Ok()` payload it packed the
+  placeholder, printed a length of zero and aborted at scope exit; a rebind crashed the
+  compiler outright.
+
+  ```sushi
+  let i32[] taken = mk().realise(new())   # the natural default for an array payload
+  let i32 none    = count(new())??
+  r := new()
+  ```
+
+  The typecheck pass stamps `new()` with the `T[]` its position expects -- the same
+  propagation that gives an array literal's elements their declared type -- and one emitter
+  builds the `{0, 0, null}` descriptor an empty array is. The struct constructor's own copy of
+  that descriptor is gone with it.
+
+- **Every built-in method on a fixed array now works through every receiver.** A `T[N]`
+  reached as a struct field, a nested field or an array element had no address rule of its
+  own, so nine sites re-derived one and each fell back to a stack COPY of the receiver.
+  `b.slots.fill(9)` and `b.slots.reverse()` therefore compiled, ran, and left the field
+  unchanged -- no diagnostic was possible, because the store is legal. `.iter()` and
+  `.hash()` on a field refused instead, with CE0072 and CE0056, because they looked the
+  element type up by NAME and a field has none. Through a `peek` or `poke` parameter every
+  method was CE0000: such a receiver arrives as `[N x T]*`, which the dispatch gate did not
+  accept, so the call fell through to the user-extension lookup and mangled the type name
+  into `i32[3]_len`.
+
+  `as_fixed_array_address` is the one rule now, the fixed twin of `as_array_address`. It
+  resolves the address from the AST, and it takes one flag: a READ may spill a value that
+  names no storage, and a WRITE may not. That is what keeps a store out of `.rodata` -- a
+  constant resolves for a read and to nothing for a write, so no such binary can be built
+  even if CE2096 were bypassed. There is no fallback behind the write arm: reaching it means
+  a typecheck rejection did not fire, and that is the new CE0132.
+
 - **`.fill()` on an array of an owning element type double-freed and leaked.** The
   emitter stored ONE value into every slot with no copy. That is right for a plain
   element type, where a shallow store IS the value, and wrong for an owning one: two
