@@ -56,6 +56,16 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
 
     if receiver_type is None and isinstance(call.receiver, Name):
         type_name = call.receiver.id
+        # A static on a GATED generic obeys the scope like the type does: behind
+        # an aliased import the bare name is refused, and the qualified form is
+        # what folds to this shape (#506, decision A-strict).
+        from sushi_lang.semantics.namespaces import GATED_GENERIC_NAMES
+        if (type_name in GATED_GENERIC_NAMES
+                and getattr(call, "namespace_ref", None) is None):
+            from sushi_lang.semantics.passes.types.visibility import (
+                reject_out_of_scope_type)
+            if reject_out_of_scope_type(validator, type_name, call.receiver.loc):
+                return
         if type_name == "List" and call.method in ("new", "with_capacity"):
             from sushi_lang.semantics.generics.list import is_builtin_list_method
             if is_builtin_list_method(call.method):

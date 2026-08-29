@@ -18,6 +18,22 @@ dot, a unit sees what it imported and no further, and two units may each declare
 another's.
 
 ### Added
+- **A static call composes through an alias.** `use <collections/hashmap> as hm` gates
+  the name, so the static obeys it like the type does: `hm.HashMap.new()` is the
+  qualified form, and the bare `HashMap.new()` behind an aliased import is refused
+  exactly as the bare type is, with the same help line. A flat import changes nothing,
+  and `List.new()` and `f64.from_bits(b)` stay bare, because nothing imports those
+  names.
+
+  ```sushi
+  use <collections/hashmap> as hm
+
+  fn main() i32:
+      let hm.HashMap@(i32, string) m = hm.HashMap.new()
+      m.free()
+      return Result.Ok(0)
+  ```
+
 - **A constant can interpolate.** A string constant takes holes, and a hole takes any
   constant expression -- another constant, arithmetic, a cast. Each hole prints exactly
   as the same expression prints at run time, an integer at its declared width and a

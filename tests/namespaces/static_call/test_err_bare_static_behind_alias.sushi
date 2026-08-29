@@ -1,0 +1,9 @@
+# The alias gates the name everywhere: a bare static on a type the alias
+# holds is refused exactly as the bare type is (#506, decision A-strict).
+# EXPECT_ERROR_CODE: CE2001
+use <collections/hashmap> as hm
+
+fn main() i32:
+    let hm.HashMap@(i32, string) m = HashMap.new()
+    m.free()
+    return Result.Ok(0)
