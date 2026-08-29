@@ -94,8 +94,11 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
 # mangle_closure_lib backs tests/namespaces/mangling/test_lib_link_symbol, which asserts
 # that a call into shipped bitcode uses the PRODUCER's symbol. A source library
 # recompiles and derives its own, so the field under test is never read.
+# twolib_bin backs tests/libs/multi_unit, the #494 shape: two units, each with a
+# private `helper`, shipped as one binary manifest. twolib_src is its source twin
+# and takes the default.
 BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib", "const_lib",
-                       "mangle_closure_lib"}
+                       "mangle_closure_lib", "twolib_bin"}
 
 
 def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
@@ -110,6 +113,11 @@ def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
         return True
 
     helper_files = list(helpers_dir.glob("*.sushi"))
+    # A SUBDIRECTORY is one MULTI-UNIT library: its entry point is the .sushi
+    # file that carries the directory's name, and the other .sushi files beside
+    # it are the units the entry imports (PL P0).
+    helper_files += [d / f"{d.name}.sushi" for d in helpers_dir.iterdir()
+                     if d.is_dir() and (d / f"{d.name}.sushi").exists()]
     if not helper_files:
         if verbose:
             print("No test helper libraries found, skipping...")

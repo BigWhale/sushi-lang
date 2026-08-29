@@ -1,0 +1,7 @@
+# The second unit. Its private `helper` must stay its own.
+fn helper(i32 n) i32:
+    return Result.Ok(n + 200)
+
+public fn side_take@(T)(nom T x, i32 n) T:
+    println("{helper(n).realise(-1)}")
+    return Result.Ok(x)

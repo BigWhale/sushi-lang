@@ -1,0 +1,11 @@
+# A PRIVATE generic in a helper unit, instantiated from its own unit. No name
+# collides anywhere. Today the instance parks in the ENTRY unit, where the
+# private declaration is not visible, and codegen dies with CE0000. The
+# instance must go home to its declaring unit (#495, D3).
+# EXPECT_STDOUT_EXACT: "5\n"
+use "helpers/own_gen"
+
+fn main() i32:
+    let i32 a = own_use().realise(0)
+    println("{a}")
+    return Result.Ok(0)

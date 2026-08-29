@@ -1,0 +1,9 @@
+# The positive control: a public generic called from an importing unit. This
+# passes before the epic and must keep passing.
+# EXPECT_STDOUT_EXACT: "5\n"
+use "helpers/pub_twin"
+
+fn main() i32:
+    let i32 a = ptwin(nom 5).realise(0)
+    println("{a}")
+    return Result.Ok(0)

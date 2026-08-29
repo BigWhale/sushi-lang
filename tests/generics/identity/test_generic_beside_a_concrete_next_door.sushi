@@ -1,0 +1,13 @@
+# A CONCRETE declaration beside another unit's generic of that name. Each unit's
+# own call reaches its own declaration (#495).
+# EXPECT_STDOUT_EXACT: "helper twin\n6 1\n"
+use "helpers/generic_twin"
+
+fn twin(i32 x) i32:
+    return Result.Ok(x * 3)
+
+fn main() i32:
+    let i32 a = twin(2).realise(0)
+    let i32 b = twin_use().realise(0)
+    println("{a} {b}")
+    return Result.Ok(0)

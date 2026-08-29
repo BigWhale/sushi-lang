@@ -1,6 +1,0 @@
-# A GENERIC of a name the consumer also declares generically.
-fn twin@(T)(T x) i32:
-    return Result.Ok(1)
-
-public fn twin_use() i32:
-    return Result.Ok(twin(1)??)
