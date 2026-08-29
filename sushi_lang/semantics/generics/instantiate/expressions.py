@@ -215,6 +215,13 @@ class ExpressionScanner:
             if file_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, file_error)))
             return
+        elif function_name == 'read_dir':
+            from sushi_lang.semantics.typesys import DynamicArrayType
+            file_error = self.type_inferrer.enum_table.get("FileError")
+            if file_error:
+                self.instantiations.add(
+                    ("Result", (DynamicArrayType(BuiltinType.STRING), file_error)))
+            return
 
         if generic_func is None:
             generic_func = (self.generic_funcs or {}).get(function_name)

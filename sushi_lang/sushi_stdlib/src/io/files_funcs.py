@@ -4,7 +4,7 @@ from sushi_lang.semantics.typesys import Type, BuiltinType
 
 FILE_UTILITY_FUNCTIONS = [
     "exists", "is_file", "is_dir", "file_size",
-    "remove", "rename", "copy", "mkdir", "rmdir"
+    "remove", "rename", "copy", "mkdir", "rmdir", "read_dir"
 ]
 
 
@@ -30,6 +30,11 @@ def get_builtin_files_function_return_type(func_name: str) -> Type:
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.semantics.generics.types import GenericTypeRef
         return GenericTypeRef("Result", (BuiltinType.I32, UnknownType("FileError")))
+    elif func_name == "read_dir":
+        from sushi_lang.semantics.typesys import UnknownType, DynamicArrayType
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Result", (DynamicArrayType(BuiltinType.STRING),
+                                         UnknownType("FileError")))
     else:
         raise ValueError(f"Unknown files utility function: {func_name}")
 
@@ -41,7 +46,8 @@ def validate_files_function_call(func_name: str, args: list, reporter, loc) -> N
     # CE2009, the arity code. This used to emit CE0004, which is registered as
     # "duplicate struct '{name}'" and takes no `func`/`expected`/`got` -- so the
     # message was about the wrong thing and none of the parameters reached it.
-    if func_name in ["exists", "is_file", "is_dir", "file_size", "remove", "rmdir"]:
+    if func_name in ["exists", "is_file", "is_dir", "file_size", "remove", "rmdir",
+                     "read_dir"]:
         if len(args) != 1:
             er.emit(reporter, er.ERR.CE2009, loc,
                    name=func_name, expected=1, got=len(args))

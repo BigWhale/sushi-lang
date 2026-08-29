@@ -117,3 +117,37 @@ def declare_rmdir(module: ir.Module) -> ir.Function:
         return module.get_global("rmdir")
     except KeyError:
         return ir.Function(module, func_type, name="rmdir")
+
+
+def declare_opendir(module: ir.Module) -> ir.Function:
+    """Declare POSIX opendir(): DIR* is opaque, an i8* here."""
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    func_type = ir.FunctionType(i8_ptr, [i8_ptr])
+
+    try:
+        return module.get_global("opendir")
+    except KeyError:
+        return ir.Function(module, func_type, name="opendir")
+
+
+def declare_readdir(module: ir.Module, name: str = "readdir") -> ir.Function:
+    """Declare POSIX readdir(). The symbol name is a parameter because macOS
+    x86_64 exports the 64-bit-inode layout as readdir$INODE64."""
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    func_type = ir.FunctionType(i8_ptr, [i8_ptr])
+
+    try:
+        return module.get_global(name)
+    except KeyError:
+        return ir.Function(module, func_type, name=name)
+
+
+def declare_closedir(module: ir.Module) -> ir.Function:
+    """Declare POSIX closedir()."""
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    func_type = ir.FunctionType(i32, [i8_ptr])
+
+    try:
+        return module.get_global("closedir")
+    except KeyError:
+        return ir.Function(module, func_type, name="closedir")

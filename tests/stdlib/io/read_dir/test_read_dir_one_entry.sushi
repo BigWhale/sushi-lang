@@ -1,0 +1,36 @@
+# read_dir lists the one entry and skips . and .. .
+# EXPECT_STDOUT_EXACT: "count: 1\nname: only.txt\ncleanup ok\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+
+fn main() i32:
+    let string dir = "/tmp/sushi_read_dir_one"
+    match mkdir(dir, 0o755):
+        Result.Ok(_) -> ~
+        Result.Err(_) ->
+            println("setup mkdir failed")
+            return Result.Ok(1)
+    match open("/tmp/sushi_read_dir_one/only.txt", FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("x")
+            f.close()
+        FileResult.Err(_) ->
+            println("setup open failed")
+            return Result.Ok(1)
+
+    match read_dir(dir):
+        Result.Ok(entries) ->
+            println("count: {entries.len()}")
+            foreach(name in entries.iter()):
+                println("name: {name}")
+        Result.Err(_) ->
+            println("read_dir failed")
+
+    match remove("/tmp/sushi_read_dir_one/only.txt"):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> return Result.Ok(1)
+    match rmdir(dir):
+        Result.Ok(_) -> println("cleanup ok")
+        Result.Err(_) -> println("cleanup failed")
+    return Result.Ok(0)

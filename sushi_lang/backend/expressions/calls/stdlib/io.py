@@ -228,6 +228,21 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
         result = codegen.builder.call(stdlib_func, [path_cstr], name=f"{func_name}_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
+    elif func_name == "read_dir":
+        if len(expr.args) != 1:
+            raise_internal_error("CE0023", method=func_name, expected=1, got=len(expr.args))
+        path_cstr = emit_cstr_arg(codegen, expr.args[0])
+
+        # Result<string[], FileError>: the descriptor is 16 bytes, so the data
+        # array is [2 x i64] again. Shared helper keeps it byte-matched.
+        from sushi_lang.sushi_stdlib.src.type_definitions import (
+            get_result_type, get_unit_enum_type, get_dynamic_array_type, get_string_type,
+        )
+        array_type = get_dynamic_array_type(get_string_type())
+        result_type = get_result_type(array_type, get_unit_enum_type())
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_type, [i8_ptr])
+        return codegen.builder.call(stdlib_func, [path_cstr], name="read_dir_result")
+
     elif func_name == "rename" or func_name == "copy":
         if len(expr.args) != 2:
             raise_internal_error("CE0023", method=func_name, expected=2, got=len(expr.args))

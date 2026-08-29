@@ -464,6 +464,40 @@ fn main() i32:
 
 **Note:** Atomically replaces destination if it exists.
 
+### read_dir
+
+List the entries of a directory.
+
+```sushi
+fn read_dir(string path) -> Result@(string[])
+```
+
+**Parameters:**
+- `path` - Directory path to list
+
+**Returns:**
+- `Result.Ok(string[])` - The entry names. `.` and `..` are not included.
+- `Result.Err(FileError)` - Failed (not found, permission denied, not a directory)
+
+**Example:**
+```sushi
+use <io/files>
+
+fn main() i32:
+    match read_dir("/tmp"):
+        Result.Ok(entries) ->
+            foreach(name in entries.iter()):
+                println(name)
+        Result.Err(_) -> println("Cannot list /tmp")
+
+    return Result.Ok(0)
+```
+
+**Notes:**
+- The result holds entry NAMES, not paths. Join with the directory yourself.
+- The order is the order the OS returns; it is unspecified. Do not depend on it.
+- Every kind of entry is listed: files, directories, symlinks.
+
 ### mkdir
 
 Create a new directory with specified permissions.

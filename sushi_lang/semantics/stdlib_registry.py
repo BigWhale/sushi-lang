@@ -104,7 +104,8 @@ def _get_param_specs():
     specs[("random", "rand_range")] = [I32, I32]
     specs[("random", "srand")] = [U64]
 
-    for fn in ("exists", "is_file", "is_dir", "file_size", "remove", "rmdir"):
+    for fn in ("exists", "is_file", "is_dir", "file_size", "remove", "rmdir",
+               "read_dir"):
         specs[("files", fn)] = [STRING]
     for fn in ("rename", "copy"):
         specs[("files", fn)] = [STRING, STRING]
@@ -216,7 +217,7 @@ class StdlibRegistry:
                 "hypot",
             ],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
-            "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir"],
+            "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir", "read_dir"],
         }
 
         candidates = common_names.get(module_name, [])
