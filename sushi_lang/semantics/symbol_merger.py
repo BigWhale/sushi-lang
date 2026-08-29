@@ -29,7 +29,7 @@ class SymbolTableMerger:
         self._merge_functions(unit_tables.funcs, global_tables.funcs)
         self._merge_by_type(unit_tables.extensions, global_tables.extensions)
         self._merge_by_type(unit_tables.generic_extensions, global_tables.generic_extensions)
-        self._merge_by_name(unit_tables.generic_funcs, global_tables.generic_funcs)
+        self._merge_generic_functions(unit_tables.generic_funcs, global_tables.generic_funcs)
         self._merge_visibility(unit_tables.visibility, global_tables.visibility)
 
     @staticmethod
@@ -74,6 +74,17 @@ class SymbolTableMerger:
             for key, method in methods.items():
                 if key not in target:
                     target[key] = method
+
+    @staticmethod
+    def _merge_generic_functions(unit_generics, global_generics) -> None:
+        """Merge generic functions, both views. The per-unit half carries across whole.
+
+        The same shape as `_merge_functions`, and for the same reason (#495): a name
+        two units declare has one entry per unit, which is what `lookup` gives back.
+        """
+        SymbolTableMerger._merge_by_name(unit_generics, global_generics)
+        for unit_name, declared in unit_generics.by_unit.items():
+            global_generics.by_unit.setdefault(unit_name, {}).update(declared)
 
     def _merge_perk_impls(
         self,

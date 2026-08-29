@@ -287,8 +287,14 @@ class SemanticAnalyzer:
         for unit in compilation_order:
             if unit.ast is not None:
                 instantiation_collector.namespaces = self.namespaces.get(unit.name)
+                # The collector resolves a generic the way the unit's own body does:
+                # its own declaration first, then what its imports brought (#495).
+                unit_scope = getattr(instantiation_collector.namespaces, "scope", None)
+                instantiation_collector.generic_funcs = self.generic_funcs.view_for(
+                    unit.name, unit_scope)
                 instantiation_collector.run(unit.ast)
         instantiation_collector.namespaces = None
+        instantiation_collector.generic_funcs = self.generic_funcs.by_name
         # AFTER every unit: an extension on a generic target is read per instantiation of
         # that target, and the instantiation may come from another unit (#389).
         instantiation_collector.collect_from_generic_extensions(

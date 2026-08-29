@@ -210,26 +210,13 @@ def _unit_provider(unit_name: str, tables: Any) -> UnitNamespace:
         for (kind, name), origin in getattr(tables.visibility, "by_key", {}).items()
         if origin.unit_name == unit_name and kind in _MEMBER_ONLY_KINDS
     }
-    # A generic function has no per-unit view of its own (#495), so the declaring unit
-    # is read from the visibility record beside it.
-    generics = {
-        name: definition
-        for name, definition in tables.generic_funcs.by_name.items()
-        if _declaring_unit(tables, "function", name) == unit_name
-    }
     return UnitNamespace(
         unit_name,
         functions=dict(tables.funcs.by_unit.get(unit_name, {})),
         constants=dict(tables.constants.by_unit.get(unit_name, {})),
-        generics=generics,
+        generics=dict(tables.generic_funcs.by_unit.get(unit_name, {})),
         others=others,
     )
-
-
-def _declaring_unit(tables: Any, kind: str, name: str) -> Optional[str]:
-    """Which unit declared `name`, as the visibility table recorded it."""
-    origin = tables.visibility.origin(kind, name)
-    return None if origin is None else origin.unit_name
 
 
 def _stdlib_provider(use_stmt: UseStatement, tables: Any,

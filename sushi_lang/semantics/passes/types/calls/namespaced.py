@@ -98,13 +98,13 @@ def _validate_struct_construction(validator: 'TypeValidator', node: 'DotCall',
 
 def _validate_generic_call(validator: 'TypeValidator', node: 'DotCall',
                            binding: 'Binding') -> None:
-    """A generic function behind a dot. The instance it names is program-wide.
+    """A generic function behind a dot.
 
     The generic rules are read through a stand-in `Call`, the same device the enum
     arm of `visit_dotcall` uses: `validate_generic_function_call` rewrites its callee
-    to the monomorphized name, and that name is what the alias then points at. A
-    generic carries no per-unit view of its own (#495), so the instance resolves
-    flat -- which is what `lookup` falls back to.
+    to the monomorphized name, and that name is what the alias then points at. The
+    DECLARATION comes from the alias's provider, so two units' generics of one name
+    cannot cross here (#495).
     """
     from sushi_lang.semantics.ast import Call, Name
     from .generics import validate_generic_function_call
@@ -113,7 +113,8 @@ def _validate_generic_call(validator: 'TypeValidator', node: 'DotCall',
     stand_in = Call(callee=Name(id=name, loc=node.loc), args=node.args,
                     type_args=node.type_args, type_args_loc=node.type_args_loc,
                     loc=node.loc)
-    validate_generic_function_call(validator, stand_in, name)
+    validate_generic_function_call(validator, stand_in, name,
+                                   generic_func=binding.record)
     if stand_in.callee.id != name:
         _stamp(node, binding, name=stand_in.callee.id)
 

@@ -166,13 +166,18 @@ class ExpressionScanner:
         if binding.kind == "generic function":
             self._scan_call(Call(callee=Name(id=call.method, loc=call.loc),
                                  args=call.args, type_args=call.type_args,
-                                 type_args_loc=call.type_args_loc, loc=call.loc))
+                                 type_args_loc=call.type_args_loc, loc=call.loc),
+                            generic_func=binding.record)
         for arg in call.args:
             self.scan_expression(arg)
         return True
 
-    def _scan_call(self, call) -> None:
-        """Detect generic function calls and infer type arguments."""
+    def _scan_call(self, call, generic_func=None) -> None:
+        """Detect generic function calls and infer type arguments.
+
+        A qualified call resolved its declaration through the alias's provider and
+        hands it in; a bare call reads the unit's own view (#495).
+        """
         from sushi_lang.semantics.ast import Name
         from sushi_lang.semantics.typesys import BuiltinType
 
@@ -206,10 +211,10 @@ class ExpressionScanner:
                 self.instantiations.add(("Result", (BuiltinType.I32, file_error)))
             return
 
-        if not self.generic_funcs or function_name not in self.generic_funcs:
+        if generic_func is None:
+            generic_func = (self.generic_funcs or {}).get(function_name)
+        if generic_func is None:
             return
-
-        generic_func = self.generic_funcs[function_name]
 
         # Explicit `@(...)` type args (issue #137) override inference. If the arity
         # is wrong we collect nothing here and let the typecheck pass report CE2062.

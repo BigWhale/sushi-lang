@@ -581,7 +581,7 @@ class ExpressionValidator(RecursiveVisitor):
         # manifest holds the name and the kind, and that is the whole origin (#487).
         if reject_private_kept(tv, node.id, node.loc, kinds={"constant"}):
             return
-        if node.id in tv.generic_func_table.by_name:
+        if tv.generic_sig(node.id) is not None:
             # A generic-fn reference is allowed WITH an explicit expected fn type: solve
             # the type args and rewrite to the mangled name. A bare one stays CE2093.
             from sushi_lang.semantics.passes.types.calls.generics import resolve_generic_fn_reference
@@ -759,7 +759,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         # A generic-fn reference with an explicit expected fn type (T2.3): solve the type
         # args and return the concrete FunctionType (the node is rewritten to the mangled
         # name during validation).
-        if node.id in self.type_validator.generic_func_table.by_name:
+        if self.type_validator.generic_sig(node.id) is not None:
             from sushi_lang.semantics.passes.types.calls.generics import resolve_generic_fn_reference
             resolved = resolve_generic_fn_reference(
                 self.type_validator, node.id, getattr(node, "expected_type", None))

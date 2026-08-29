@@ -294,9 +294,42 @@ class FunctionTable:
 
 @dataclass
 class GenericFunctionTable:
-    """Table of generic function definitions collected by the collect pass."""
+    """Table of generic function definitions collected by the collect pass.
+
+    The same two views `FunctionTable` carries, for the same reason: two units may
+    each declare `twin@(T)` (#495). `by_name` is the FLAT view, first-wins; `by_unit`
+    keeps every declaration under the unit that wrote it, and `lookup` reads both
+    through the one ladder in `unit_symbols.lookup_in_unit`.
+    """
     by_name: Dict[str, GenericFuncDef] = field(default_factory=dict)
+    by_unit: Dict[str, Dict[str, GenericFuncDef]] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
+
+    def declare(self, name: str, definition: GenericFuncDef) -> None:
+        """Register one declaration in both views. The ONE insert."""
+        if name not in self.by_name:
+            self.order.append(name)
+            self.by_name[name] = definition
+        unit = getattr(definition, "unit_name", None)
+        if unit is not None:
+            self.by_unit.setdefault(unit, {})[name] = definition
+
+    def lookup(self, name: str, unit_name: Optional[str] = None,
+               scope: object = None) -> Optional[GenericFuncDef]:
+        """What the name means inside `unit_name`. One name, no dict built."""
+        from sushi_lang.semantics.unit_symbols import lookup_in_unit
+        return lookup_in_unit(name, self.by_unit, self.by_name, unit_name, scope)
+
+    def view_for(self, unit_name: Optional[str],
+                 scope: object = None) -> Dict[str, GenericFuncDef]:
+        """What the name of a generic means INSIDE `unit_name`, as one mapping."""
+        if scope is not None:
+            return scope.view(self.by_unit, self.by_name)
+        if unit_name is None:
+            return dict(self.by_name)
+        view = dict(self.by_name)
+        view.update(self.by_unit.get(unit_name, {}))
+        return view
 
     def has_function(self, name: str) -> bool:
         """Check if generic function exists."""
@@ -503,11 +536,11 @@ class FunctionCollector:
         CE3011 was the fourth answer and it keeps the TYPE arms alone, because a type is
         one name for the whole program until `docs/design/type-identity.md`'s phase 2.
 
-        `may_coexist` is FALSE wherever a GENERIC is one of the two. `FunctionTable`
-        carries a per-unit view and `GenericFunctionTable` does not, so a generic name is
-        still one declaration for the whole program: two of them would leave each unit's
-        call measured against the other's declaration, which is section 13.1 again. A
-        generic coexists once its table carries the same two views.
+        A GENERIC coexists exactly as a concrete function does: `GenericFunctionTable`
+        carries the same two views since #495, so each unit's call resolves against its
+        own declaration through the one ladder. Within ONE unit a generic beside a
+        generic, or beside a concrete, of the same name stays CE0101 -- the same rule
+        concrete functions follow.
         """
         clash = library_clash_origin(
             self.visibility, "function", name,
@@ -636,7 +669,7 @@ class FunctionCollector:
         if name in self.generic_funcs.by_name:
             verdict = self._redeclaration(name, name_span,
                                           self.generic_funcs.by_name[name],
-                                          may_coexist=False)
+                                          may_coexist=True)
             if verdict is Redeclaration.REFUSED:
                 return
             if verdict is Redeclaration.REPLACE:
@@ -676,7 +709,7 @@ class FunctionCollector:
         if name in self.generic_funcs.by_name:
             verdict = self._redeclaration(name, name_span,
                                           self.generic_funcs.by_name[name],
-                                          may_coexist=False)
+                                          may_coexist=True)
             if verdict is Redeclaration.REFUSED:
                 return
             if verdict is Redeclaration.REPLACE:
@@ -684,7 +717,7 @@ class FunctionCollector:
 
         if name in self.funcs.by_name:
             verdict = self._redeclaration(name, name_span, self.funcs.by_name[name],
-                                          may_coexist=False)
+                                          may_coexist=True)
             if verdict is Redeclaration.REFUSED:
                 return
             if verdict is Redeclaration.REPLACE:
@@ -759,8 +792,7 @@ class FunctionCollector:
             filename=self.current_unit_file,
         )
 
-        self.generic_funcs.order.append(name)
-        self.generic_funcs.by_name[name] = generic_func
+        self.generic_funcs.declare(name, generic_func)
 
     def _collect_extension_def(self, ext: ExtendDef) -> None:
         """Collect extension method definition (both regular and generic)."""
