@@ -1,0 +1,12 @@
+# join follows the POSIX rule set: an absolute child replaces the base.
+# EXPECT_STDOUT_EXACT: "a/b\na/b\n/b\nb\na/\n"
+
+use <io/path>
+
+fn main() i32:
+    println(join("a", "b").realise("?"))
+    println(join("a/", "b").realise("?"))
+    println(join("a", "/b").realise("?"))
+    println(join("", "b").realise("?"))
+    println(join("a", "").realise("?"))
+    return Result.Ok(0)

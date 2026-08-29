@@ -1,0 +1,12 @@
+# extension has no leading dot; a hidden file's leading dot is not an extension.
+# EXPECT_STDOUT_EXACT: "txt\ngz\n\n\n\n"
+
+use <io/path>
+
+fn main() i32:
+    println(extension("a/b.txt").realise("?"))
+    println(extension("archive.tar.gz").realise("?"))
+    println(extension(".bashrc").realise("?"))
+    println(extension("no_ext").realise("?"))
+    println(extension("dir.d/plain").realise("?"))
+    return Result.Ok(0)

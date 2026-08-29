@@ -23,6 +23,7 @@ Complete reference for Sushi's standard library modules and types.
 ### I/O Operations
 - [Console I/O](stdlib/io/console.md) - println, print, stdin/stdout/stderr
 - [File I/O](stdlib/io/files.md) - File operations with error handling
+- [Path algebra](stdlib/io/path.md) - Lexical path manipulation (join, basename, dirname, extension, normalize)
 
 ### System Modules
 - [Math](stdlib/math.md) - Mathematical operations (abs, min, max, sqrt, pow, trig)
@@ -43,9 +44,10 @@ use <compression/zlib>     # DEFLATE and the zlib container
 use <encoding/msgpack>     # MessagePack decoder
 use <io/stdio>             # Console I/O
 use <io/files>             # File operations
+use <io/path>              # Lexical path manipulation
 use <math>                 # Math functions
 use <random>               # Random number generation
-use <time>                 # Sleep functions
+use <time>                 # Sleep and clock functions
 use <sys/env>              # Environment variables
 use <sys/process>          # Process control
 ```
