@@ -129,7 +129,7 @@ def _perk_key_hash_method(codegen: Any, key_type: Type) -> Optional[Any]:
         from sushi_lang.internals.errors import raise_internal_error
         llvm_fn = codegen.funcs.get(func_name)
         if llvm_fn is None:
-            raise_internal_error("CE0027", method="hash", type=str(key_type))
+            raise_internal_error("CE0024", method="hash", type=str(key_type))
         param_type = list(llvm_fn.args)[0].type
         casted = codegen.utils.cast_for_param(receiver_value, param_type)
         return codegen.builder.call(llvm_fn, [casted])

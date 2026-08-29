@@ -168,7 +168,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         expected = len(perk_method.params)
         got = len(call.args)
         if got != expected:
-            er.emit(validator.reporter, er.ERR.CE2007, call.loc,
+            er.emit(validator.reporter, er.ERR.CE0023, call.loc,
                    method=call.method, expected=expected, got=got)
             return
 
