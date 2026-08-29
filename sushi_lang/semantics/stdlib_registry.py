@@ -113,9 +113,14 @@ def _get_param_specs():
         specs[("files", fn)] = [STRING, STRING]
     specs[("files", "mkdir")] = [STRING, I32]
 
+    BYTE_ARRAY = DynamicArrayType(BuiltinType.U8)
+    specs[("socket", "sock_tcp_connect")] = [STRING, I32]
     specs[("socket", "sock_tcp_listen")] = [STRING, I32, I32]
-    for fn in ("sock_close", "sock_local_port"):
+    specs[("socket", "sock_send")] = [I32, BYTE_ARRAY]
+    for fn in ("sock_close", "sock_local_port", "sock_tcp_accept"):
         specs[("socket", fn)] = [I32]
+    for fn in ("sock_recv", "sock_set_recv_timeout", "sock_set_send_timeout"):
+        specs[("socket", fn)] = [I32, I32]
 
     _param_specs_cache = specs
     return _param_specs_cache
@@ -225,7 +230,9 @@ class StdlibRegistry:
             ],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
             "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir", "read_dir", "mtime", "ctime", "mode", "is_symlink"],
-            "socket": ["sock_tcp_listen", "sock_close", "sock_local_port"],
+            "socket": ["sock_tcp_connect", "sock_tcp_listen", "sock_tcp_accept",
+                       "sock_send", "sock_recv", "sock_close", "sock_local_port",
+                       "sock_set_recv_timeout", "sock_set_send_timeout"],
         }
 
         candidates = common_names.get(module_name, [])

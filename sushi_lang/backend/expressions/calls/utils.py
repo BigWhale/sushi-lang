@@ -136,9 +136,15 @@ def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional
         'is_symlink': (BuiltinType.BOOL, 'FileError'),
         'chdir': (BuiltinType.I32, 'ProcessError'),
         'getcwd': (BuiltinType.STRING, 'ProcessError'),
+        'sock_tcp_connect': (BuiltinType.I32, 'NetError'),
         'sock_tcp_listen': (BuiltinType.I32, 'NetError'),
+        'sock_tcp_accept': (BuiltinType.I32, 'NetError'),
+        'sock_send': (BuiltinType.I32, 'NetError'),
+        'sock_recv': (DynamicArrayType(BuiltinType.U8), 'NetError'),
         'sock_close': (BuiltinType.I32, 'NetError'),
         'sock_local_port': (BuiltinType.I32, 'NetError'),
+        'sock_set_recv_timeout': (BuiltinType.I32, 'NetError'),
+        'sock_set_send_timeout': (BuiltinType.I32, 'NetError'),
     }
     spec = result_specs.get(func_name)
     if spec is None:

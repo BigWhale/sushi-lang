@@ -28,7 +28,9 @@ from sushi_lang.backend.runtime.constants import ERRNO_DEFAULT_NET_ERROR
 
 def generate_ir(module: ir.Module) -> None:
     """Emit every TCP symbol into the module."""
+    generate_connect(module)
     generate_listen(module)
+    generate_accept(module)
 
 
 def generate_listen(module: ir.Module) -> None:
@@ -194,3 +196,80 @@ def _emit_addrinfo_walk(builder, func, module, result_type, host, socktype,
     builder.call(freeaddrinfo_fn, [builder.load(res_slot, name="res_free_end")])
     builder.ret(emit_err_result(builder, result_type,
                                 builder.load(err_slot, name="last_error")))
+
+
+def generate_connect(module: ir.Module) -> None:
+    """Emit `Result<i32, NetError> sushi_net_sock_tcp_connect(i8*, i32)`.
+
+    getaddrinfo is asked for the host alone and the port is patched into each
+    answer, because sin_port and sin6_port share an offset and a service string
+    would mean rendering the port back into text.
+
+    There is no connect timeout: that needs a non-blocking socket and select,
+    which is a later item. A black-holed address blocks for as long as the
+    kernel takes to give up.
+    """
+    _i8, i8_ptr, i32, _i64 = get_basic_types()
+    platform_net = get_platform_module('net')
+
+    result_type = get_result_type(i32, get_unit_enum_type())
+    func = ir.Function(module, ir.FunctionType(result_type, [i8_ptr, i32]),
+                       name="sushi_net_sock_tcp_connect")
+    host, port = func.args
+    host.name, port.name = "host", "port"
+
+    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
+    one_slot = addr.alloca_one_i32(builder, "opt_on")
+    connect_fn = platform_net.declare_connect(module)
+
+    def use_candidate(b, fd, sockaddr, salen, on_success, on_failure):
+        """Patch the port in and connect."""
+        addr.emit_patch_port(b, sockaddr, port)
+        rc = b.call(connect_fn, [fd, sockaddr, salen], name="connect_rc")
+        b.cbranch(b.icmp_signed("==", rc, ir.Constant(i32, 0), name="connect_ok"),
+                  on_success, on_failure)
+
+    _emit_addrinfo_walk(builder, func, module, result_type, host,
+                        platform_net.SOCK_STREAM, passive=False,
+                        one_slot=one_slot, use_candidate=use_candidate)
+
+
+def generate_accept(module: ir.Module) -> None:
+    """Emit `Result<i32, NetError> sushi_net_sock_tcp_accept(i32 fd)`.
+
+    The peer is not returned: Sushi has no tuples, and sock_peer_ip works on
+    the accepted descriptor afterwards. The accepted descriptor does NOT
+    inherit SO_NOSIGPIPE, so it is set here too.
+
+    A listening socket carrying SO_RCVTIMEO makes accept() answer EAGAIN when
+    it expires, which the table maps to TimedOut. That is what gives a test a
+    bound rather than a hang.
+    """
+    _i8, i8_ptr, i32, _i64 = get_basic_types()
+    platform_net = get_platform_module('net')
+    accept_fn = platform_net.declare_accept(module)
+
+    result_type = get_result_type(i32, get_unit_enum_type())
+    func = ir.Function(module, ir.FunctionType(result_type, [i32]),
+                       name="sushi_net_sock_tcp_accept")
+    func.args[0].name = "fd"
+    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
+
+    one_slot = addr.alloca_one_i32(builder, "opt_on")
+    storage = addr.alloca_zeroed(builder, platform_net.SOCKADDR_STORAGE_SIZE, "ss")
+    len_slot = builder.alloca(i32, name="ss_len")
+    builder.store(ir.Constant(i32, platform_net.SOCKADDR_STORAGE_SIZE), len_slot)
+
+    fd = builder.call(accept_fn, [func.args[0], storage, len_slot], name="accepted_fd")
+    ok = builder.icmp_signed(">=", fd, ir.Constant(i32, 0), name="accept_ok")
+
+    success_bb = func.append_basic_block(name="success")
+    failure_bb = func.append_basic_block(name="failure")
+    builder.cbranch(ok, success_bb, failure_bb)
+
+    builder.position_at_end(failure_bb)
+    builder.ret(emit_errno_err_result(builder, module, result_type))
+
+    builder.position_at_end(success_bb)
+    addr.emit_nosigpipe(builder, module, fd, one_slot)
+    builder.ret(emit_ok_result(builder, result_type, fd, 4))

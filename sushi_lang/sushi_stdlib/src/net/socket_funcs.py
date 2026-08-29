@@ -9,27 +9,47 @@ Every function answers Result@(T, NetError). The prefix names the transport:
 sock_* works on any descriptor this module produced, tcp_* wants a stream
 socket, udp_* a datagram one, and dns_* resolves a name.
 """
-from sushi_lang.semantics.typesys import Type, BuiltinType
+from typing import Dict, List
+
+from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType
 
 
-SOCKET_FUNCTIONS = [
+SOCKET_FUNCTIONS: List[str] = [
+    "sock_tcp_connect",
     "sock_tcp_listen",
+    "sock_tcp_accept",
+    "sock_send",
+    "sock_recv",
     "sock_close",
     "sock_local_port",
+    "sock_set_recv_timeout",
+    "sock_set_send_timeout",
 ]
 
 # Sushi name -> the Ok type of its Result. The Err type is always NetError.
-_OK_TYPES = {
+_OK_TYPES: Dict[str, Type] = {
+    "sock_tcp_connect": BuiltinType.I32,
     "sock_tcp_listen": BuiltinType.I32,
+    "sock_tcp_accept": BuiltinType.I32,
+    "sock_send": BuiltinType.I32,
+    "sock_recv": DynamicArrayType(BuiltinType.U8),
     "sock_close": BuiltinType.I32,
     "sock_local_port": BuiltinType.I32,
+    "sock_set_recv_timeout": BuiltinType.I32,
+    "sock_set_send_timeout": BuiltinType.I32,
 }
 
 # Sushi name -> how many arguments it takes.
-_ARITY = {
+_ARITY: Dict[str, int] = {
+    "sock_tcp_connect": 2,
     "sock_tcp_listen": 3,
+    "sock_tcp_accept": 1,
+    "sock_send": 2,
+    "sock_recv": 2,
     "sock_close": 1,
     "sock_local_port": 1,
+    "sock_set_recv_timeout": 2,
+    "sock_set_send_timeout": 2,
 }
 
 

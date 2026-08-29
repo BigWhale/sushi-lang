@@ -35,7 +35,7 @@ def emit_net_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
     result_i32 = get_result_type(i32, get_unit_enum_type())
 
     # One i32 descriptor in, Result<i32, NetError> out.
-    if func_name in ("sock_close", "sock_local_port"):
+    if func_name in ("sock_close", "sock_local_port", "sock_tcp_accept"):
         _expect_args(expr, func_name, 1)
         fd = emit_borrowed_arg(codegen, expr.args[0])
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
@@ -43,20 +43,70 @@ def emit_net_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
         result = codegen.builder.call(stdlib_func, [fd], name=f"{func_name}_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
-    if func_name == "sock_tcp_listen":
-        _expect_args(expr, func_name, 3)
-        # The host is marshalled HERE and freed at scope exit, like an FFI
-        # argument (#292); the callee takes i8* and frees nothing.
-        host = emit_cstr_arg(codegen, expr.args[0])
-        port = emit_borrowed_arg(codegen, expr.args[1])
-        backlog = emit_borrowed_arg(codegen, expr.args[2])
+    # Two i32s in, Result<i32, NetError> out.
+    if func_name in ("sock_set_recv_timeout", "sock_set_send_timeout"):
+        _expect_args(expr, func_name, 2)
+        fd = emit_borrowed_arg(codegen, expr.args[0])
+        ms = emit_borrowed_arg(codegen, expr.args[1])
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
-                                              result_i32, [i8_ptr, i32, i32])
-        result = codegen.builder.call(stdlib_func, [host, port, backlog],
+                                              result_i32, [i32, i32])
+        result = codegen.builder.call(stdlib_func, [fd, ms], name=f"{func_name}_result")
+        return codegen.utils.as_i1(result) if to_i1 else result
+
+    # A host name and a port. The host is marshalled HERE and freed at scope
+    # exit, like an FFI argument (#292); the callee takes i8* and frees nothing.
+    if func_name in ("sock_tcp_connect", "sock_tcp_listen"):
+        count = 2 if func_name == "sock_tcp_connect" else 3
+        _expect_args(expr, func_name, count)
+        args = [emit_cstr_arg(codegen, expr.args[0])]
+        args.extend(emit_borrowed_arg(codegen, a) for a in expr.args[1:])
+        params = [i8_ptr] + [i32] * (count - 1)
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
+                                              result_i32, params)
+        result = codegen.builder.call(stdlib_func, args, name=f"{func_name}_result")
+        return codegen.utils.as_i1(result) if to_i1 else result
+
+    if func_name == "sock_send":
+        _expect_args(expr, func_name, 2)
+        fd = emit_borrowed_arg(codegen, expr.args[0])
+        data = _as_array_value(codegen, emit_borrowed_arg(codegen, expr.args[1]))
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
+                                              result_i32, [i32, _byte_array_type()])
+        result = codegen.builder.call(stdlib_func, [fd, data], name=f"{func_name}_result")
+        return codegen.utils.as_i1(result) if to_i1 else result
+
+    if func_name == "sock_recv":
+        _expect_args(expr, func_name, 2)
+        fd = emit_borrowed_arg(codegen, expr.args[0])
+        maximum = emit_borrowed_arg(codegen, expr.args[1])
+        result_type = get_result_type(_byte_array_type(), get_unit_enum_type())
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
+                                              result_type, [i32, i32])
+        result = codegen.builder.call(stdlib_func, [fd, maximum],
                                       name=f"{func_name}_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
     raise_internal_error("CE0055", name=f"net/socket/{func_name}")
+
+
+def _byte_array_type() -> ir.LiteralStructType:
+    """The u8[] descriptor, from the same helper the generator used."""
+    from sushi_lang.sushi_stdlib.src.type_definitions import get_byte_array_type
+    return get_byte_array_type()
+
+
+def _as_array_value(codegen: 'LLVMCodegen', value: ir.Value) -> ir.Value:
+    """A u8[] BY VALUE, whatever shape the argument arrived in.
+
+    A named local yields the descriptor already; a `peek u8[]` parameter is a
+    reference and arrives as a pointer to one. The registry emitters build
+    their calls by hand and so do not pass through cast_for_param, which is
+    where emit_named_call normalizes this.
+    """
+    array_ty = _byte_array_type()
+    if isinstance(value.type, ir.PointerType) and value.type.pointee == array_ty:
+        return codegen.builder.load(value, name="bytes_by_value")
+    return value
 
 
 def _expect_args(expr, func_name: str, expected: int) -> None:
