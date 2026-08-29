@@ -22,6 +22,7 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "encoding/msgpack": _SRC_SUSHI_ROOT / "encoding" / "msgpack.sushi",
     "io/fs": _SRC_SUSHI_ROOT / "io" / "fs.sushi",
     "io/path": _SRC_SUSHI_ROOT / "io" / "path.sushi",
+    "net/ip": _SRC_SUSHI_ROOT / "net" / "ip.sushi",
     "net/tcp": _SRC_SUSHI_ROOT / "net" / "tcp.sushi",
     "toolchain/slib": _SRC_SUSHI_ROOT / "toolchain" / "slib.sushi",
 }

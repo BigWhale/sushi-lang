@@ -1,0 +1,30 @@
+# The questions an address answers about itself, in both families.
+# EXPECT_STDOUT_EXACT: "127.0.0.1 loopback\n10.0.0.1 private\n8.8.8.8 public\n0.0.0.0 unspecified\n::1 loopback\nfc00::1 private\n:: unspecified\n::ffff:1.2.3.4 mapped\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/ip>
+
+fn describe(string text) ~:
+    let IpAddr a = parse_ip(text).realise(ip_v4_any()??)
+    if (ip_is_v4_mapped(a).realise(false)):
+        println("{text} mapped")
+    elif (ip_is_loopback(a).realise(false)):
+        println("{text} loopback")
+    elif (ip_is_unspecified(a).realise(false)):
+        println("{text} unspecified")
+    elif (ip_is_private(a).realise(false)):
+        println("{text} private")
+    else:
+        println("{text} public")
+    return Result.Ok(~)
+
+fn main() i32:
+    describe("127.0.0.1")
+    describe("10.0.0.1")
+    describe("8.8.8.8")
+    describe("0.0.0.0")
+    describe("::1")
+    describe("fc00::1")
+    describe("::")
+    describe("::ffff:1.2.3.4")
+    return Result.Ok(0)
