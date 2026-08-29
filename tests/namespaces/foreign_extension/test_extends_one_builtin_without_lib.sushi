@@ -1,0 +1,11 @@
+# One unit extends a builtin. This is legal in a program build and it
+# causes no warning: CW3003 fires at --lib build time only.
+# EXPECT_STDOUT_EXACT: "20\n"
+extend i32 doubled_up() i32:
+    return self * 2
+
+fn main() i32:
+    let i32 n = 10
+    let i32 d = n.doubled_up()
+    println("{d}")
+    return Result.Ok(0)

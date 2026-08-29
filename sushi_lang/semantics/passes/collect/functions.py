@@ -929,15 +929,38 @@ class FunctionCollector:
             if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, StructType, EnumType)):
                 existing = self.extensions.get_method(resolved_type, name)
                 if existing is not None:
-                    er.emit_with(self.r, ERR.CE0101, name_span,
-                           filename=self.current_unit_file,
-                           name=f"extension method '{name}' for '{display_type(resolved_type)}'") \
-                        .note("first defined here", existing.name_span,
-                              existing.filename).emit()
+                    self._emit_duplicate_extension(
+                        f"extension method '{name}' for '{display_type(resolved_type)}'",
+                        name_span, existing.unit_name, existing.name_span,
+                        existing.filename)
                     return
 
             if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, StructType, EnumType)):
                 self.extensions.add_method(method)
+
+    def _emit_duplicate_extension(self, name_text, name_span,
+                                  other_unit, other_span, other_filename) -> None:
+        """CE0101 for a second extension of one method name on one target.
+
+        One unit wrote both: the second is the duplicate, and the note points
+        at the first. Two units wrote them: neither author is at fault and a
+        consumer can edit neither, so the diagnostic is relational -- it names
+        both units and it blames no side (`unit-namespaces.md` section 8).
+        """
+        diag = er.emit_with(self.r, ERR.CE0101, name_span,
+                            filename=self.current_unit_file, name=name_text)
+        if (other_unit and self.current_unit_name
+                and other_unit != self.current_unit_name):
+            diag.note(f"unit '{other_unit}' declares it here",
+                      other_span, other_filename)
+            diag.note(f"unit '{self.current_unit_name}' declares it here",
+                      name_span, self.current_unit_file)
+            diag.help("a method is found on the receiver's type, so no alias "
+                      "can choose between the two; rename one of them, or put "
+                      "the method behind a perk")
+        else:
+            diag.note("first defined here", other_span, other_filename)
+        diag.emit()
 
     def _is_declared_type(self, name: str) -> bool:
         """Whether a bare name in a type position names a declared type.
@@ -969,17 +992,20 @@ class FunctionCollector:
             if not same_target and existing.target_key and method.target_key:
                 continue  # two distinct concrete targets: two types, two methods
 
+            if same_target:
+                self._emit_duplicate_extension(
+                    f"extension method '{method.name}' for '{display_type(target_type)}'",
+                    name_span, existing.unit_name, existing.name_span,
+                    existing.filename)
+                return True
             diag = er.emit_with(
                 self.r, ERR.CE0101, name_span,
                 name=f"extension method '{method.name}' for '{display_type(target_type)}'")
-            if same_target:
-                diag.note("first defined here", existing.name_span)
-            else:
-                diag.note("this declaration already covers that target",
-                          existing.name_span)
-                diag.help("Sushi has no specialization: make both targets fully concrete, "
-                          "or implement a perk on the concrete target -- a perk "
-                          "implementation outranks an extension method by design.")
+            diag.note("this declaration already covers that target",
+                      existing.name_span)
+            diag.help("Sushi has no specialization: make both targets fully concrete, "
+                      "or implement a perk on the concrete target -- a perk "
+                      "implementation outranks an extension method by design.")
             diag.emit()
             return True
 

@@ -18,6 +18,16 @@ dot, a unit sees what it imported and no further, and two units may each declare
 another's.
 
 ### Added
+- **A library that extends a type it does not declare is told so.** `CW3003`, at `--lib`
+  build time only: the method name is claimed on that type for every consumer, and a
+  second library claiming it makes the two unusable together. A builtin target is not
+  exempt -- `i32` is the most collidable type there is -- and a perk implementation never
+  warns, because the consumer's own implementation is the sanctioned override. An
+  extension inside an ordinary program stays silent. The manifest records the claims as
+  `foreign_extensions`, and `--lib-info` prints them under `Foreign Extensions`. When two
+  UNITS extend one type with one method name, `CE0101` is relational now: a note names
+  each unit, and no side is blamed.
+
 - **`public` reaches every declaration, and private is the default.** The marker used to
   reach one declaration out of six. A `const`, a `struct`, an `enum` and a `perk` carry it
   now, and each of the five is private to the unit that declares it unless it says
