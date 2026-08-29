@@ -1,0 +1,12 @@
+# A search compares elements with `==`, and equality is a closed set: the numeric
+# types, bool, and string. A struct element has no equality, so the search is refused.
+# EXPECT_ERROR_CODE: CE2100
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point[] points = from([Point(1, 2), Point(3, 4)])
+    let bool found = points.contains(Point(1, 2))
+    println("{found}")
+    return Result.Ok(0)

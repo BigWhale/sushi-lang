@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 # `let`-borrow out of the receiver. ONE set: a name missing from a copy would be a silent
 # dangling borrow, not a wrong diagnostic.
 MUTATING_METHODS = frozenset({
-    "push", "pop", "insert", "remove", "clear", "reserve", "shrink_to_fit",
+    "push", "pop", "insert", "remove", "clear", "truncate", "reserve", "shrink_to_fit",
     "rehash", "destroy", "free", "fill", "reverse",
 })
 

@@ -69,13 +69,20 @@ class ArrayMethodInferrer:
         actual_type = deref_type(self.receiver_type)
 
         if is_builtin_array_method(self.method_name):
-            # `.get()` READS and `.pop()` REMOVES, but both answer "there is no such
-            # element" the same way, so both are Maybe@(T) -- as `List@(T)` already was
-            # for both. A bare `T` had to invent a value for the empty case (#377).
-            if self.method_name in ("get", "pop"):
+            # `.get()`, `.first()` and `.last()` READ and `.pop()` REMOVES, but all four
+            # answer "there is no such element" the same way, so each is Maybe@(T) -- as
+            # `List@(T)` already was. A bare `T` had to invent a value for the empty
+            # case (#377).
+            if self.method_name in ("get", "first", "last", "pop"):
                 element_type = actual_type.base_type
                 maybe_type = ensure_maybe_type_in_table(self.validator.enum_table, element_type, struct_table=self.validator.struct_table.by_name)
                 return maybe_type
+
+            # `index_of` answers WHERE, so its Maybe carries the index and not the
+            # element -- the one array Maybe whose payload is not `base_type`.
+            if self.method_name == "index_of":
+                return ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32,
+                                                  struct_table=self.validator.struct_table.by_name)
 
             if self.method_name == "to_string_checked":
                 from sushi_lang.semantics.generics.results import ensure_result_type_in_table

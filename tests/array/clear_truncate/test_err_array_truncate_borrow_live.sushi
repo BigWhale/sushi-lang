@@ -1,0 +1,11 @@
+# `truncate()` releases element storage, so it is a mutation for CE2412: a live
+# `let`-borrow out of the array (here through `first()`) must not survive it.
+# EXPECT_ERROR_CODE: CE2412
+fn main() i32:
+    let string[] words = from(["a", "b"])
+    let Maybe@(string) view = words.first()
+    words.truncate(0)
+    match view:
+        Maybe.Some(w) -> println(w)
+        Maybe.None() -> println("none")
+    return Result.Ok(0)

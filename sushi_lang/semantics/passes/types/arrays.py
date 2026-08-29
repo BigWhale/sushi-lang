@@ -10,7 +10,7 @@ from .utils import validate_constant_array_index
 
 # Array methods that mutate their receiver in place. A constant is emitted as a
 # read-only global, so these cannot target one (CE2096).
-_MUTATING_ARRAY_METHODS = frozenset({"fill", "reverse", "extend", "extend_range"})
+_MUTATING_ARRAY_METHODS = frozenset({"fill", "reverse", "extend", "extend_range", "clear", "truncate"})
 
 
 def _validate_element_argument(call: MethodCall, element_type: Type, reporter: Any,
@@ -215,6 +215,31 @@ def _validate_dynamic_array_fill(call: MethodCall, array_type: DynamicArrayType,
     _validate_element_argument(call, array_type.base_type, reporter, validator)
 
 
+def _validate_array_search(call: MethodCall, array_type: ArrayType | DynamicArrayType,
+                           reporter: Any, validator: Any) -> None:
+    """`contains(v)` and `index_of(v)`: one needle, of an element type that meets `==`.
+
+    Equality is the CLOSED comparison set, asked through `has_builtin_equality` so this
+    rule and the `==` operator's (CE2514) cannot drift apart. The element gate comes
+    before the argument check: on a `Point[]` the useful answer is "a Point has no
+    equality", not "the argument is the wrong type".
+    """
+    from .expressions import has_builtin_equality
+
+    if len(call.args) != 1:
+        er.emit(reporter, er.ERR.CE2009, call.loc,
+                name=f"{display_type(array_type)}.{call.method}", expected=1,
+                got=len(call.args))
+        return
+
+    if not has_builtin_equality(array_type.base_type):
+        er.emit(reporter, er.ERR.CE2100, call.loc, method=call.method,
+                element=display_type(array_type.base_type))
+        return
+
+    _validate_element_argument(call, array_type.base_type, reporter, validator)
+
+
 def _validate_bulk_copy(call: MethodCall, array_type: Any, reporter: Any, validator: Any,
                         *, name: str, index_args: int) -> None:
     """`extend`, `extend_range` and `ss` share one shape: a source, and 0 or 2 indices.
@@ -266,11 +291,11 @@ def _validate_dynamic_array_reverse(call: MethodCall, array_type: DynamicArrayTy
 
 def is_builtin_array_method(method_name: str) -> bool:
     """Check if a method name is a built-in array method."""
-    # Fixed array methods: len, get, iter, hash, clone, fill, reverse, s, ss
-    # Dynamic array methods: the same, plus push, pop, capacity, destroy, free, extend,
-    #   extend_range
+    # Fixed array methods: len, get, first, last, contains, index_of, iter, hash, clone, fill, reverse, s, ss
+    # Dynamic array methods: the same, plus push, pop, clear, truncate, capacity,
+    #   destroy, free, extend, extend_range
     # u8[] specific methods: to_string
-    return method_name in {"len", "get", "push", "pop", "capacity", "destroy", "free", "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse", "extend", "extend_range", "s", "ss"}
+    return method_name in {"len", "get", "first", "last", "contains", "index_of", "push", "pop", "clear", "truncate", "capacity", "destroy", "free", "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse", "extend", "extend_range", "s", "ss"}
 
 
 def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | DynamicArrayType, reporter: Any, validator: Any = None) -> None:
@@ -355,6 +380,38 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
             er.emit(reporter, er.ERR.CE2009, call.loc,
                    name=f"{display_type(array_type)}.hash", expected=0, got=len(call.args))
 
+    elif method_name in ("clear", "truncate"):
+        # Only a buffer that can SHRINK has these; a fixed array's length is its type,
+        # the same reason `push` refuses one.
+        if not isinstance(array_type, DynamicArrayType):
+            er.emit(reporter, er.ERR.CE2023, call.loc,
+                    method=method_name, expected="dynamic array",
+                    got=display_type(array_type))
+            return
+        expected_args = 0 if method_name == "clear" else 1
+        if len(call.args) != expected_args:
+            er.emit(reporter, er.ERR.CE2009, call.loc,
+                    name=f"{display_type(array_type)}.{method_name}",
+                    expected=expected_args, got=len(call.args))
+            return
+        if method_name == "truncate" and validator:
+            validator.validate_expression(call.args[0])
+            arg_type = validator.infer_expression_type(call.args[0])
+            if arg_type is not None and not _is_integer_type(arg_type):
+                er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
+                        index=1, expected="integer type", got=display_type(arg_type))
+
+    elif method_name in ("contains", "index_of"):
+        _validate_array_search(call, array_type, reporter, validator)
+
+    elif method_name in ("first", "last"):
+        # `get()` with the index built in, so the same shape on both array kinds: no
+        # arguments, and the answer is Maybe@(T) (interned by `ArrayMethodInferrer`).
+        if call.args:
+            er.emit(reporter, er.ERR.CE2009, call.loc,
+                   name=f"{display_type(array_type)}.{method_name}", expected=0,
+                   got=len(call.args))
+
     elif method_name == "fill":
         if isinstance(array_type, ArrayType):
             _validate_fixed_array_fill(call, array_type, reporter, validator)
@@ -387,17 +444,24 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
 def get_builtin_array_method_return_type(method_name: str, array_type: ArrayType | DynamicArrayType) -> Type | None:
     """Get the return type of a built-in array method.
 
-    `get` and `pop` are NOT here: both answer `Maybe@(T)`, and interning that type is the
-    caller's job (`ArrayMethodInferrer`), which resolves them before reaching this table.
+    `get`, `first`, `last`, `pop` and `index_of` are NOT here: each answers a `Maybe`,
+    and interning that type is the caller's job (`ArrayMethodInferrer`), which resolves
+    them before reaching this table.
     An entry here would be a second answer to a question already answered elsewhere.
     """
     if method_name == "len":
         return BuiltinType.I32
+    elif method_name == "contains":
+        return BuiltinType.BOOL
     elif method_name == "capacity":
         if isinstance(array_type, DynamicArrayType):
             return BuiltinType.I32
         return None
     elif method_name == "push":
+        if isinstance(array_type, DynamicArrayType):
+            return BuiltinType.BLANK
+        return None
+    elif method_name in ("clear", "truncate"):
         if isinstance(array_type, DynamicArrayType):
             return BuiltinType.BLANK
         return None

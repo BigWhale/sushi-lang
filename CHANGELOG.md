@@ -22,6 +22,15 @@ All notable changes to Sushi Lang will be documented in this file.
   tree without following directory symlinks, `mkdir_all()` builds every missing
   prefix, `remove_all()` takes a tree down and is idempotent. The first bundled
   source module that exports a `public struct`.
+- **Six array methods, on the road to the array top 10.** `first()` and `last()` are
+  `get()` with the index built in, answer `Maybe@(T)`, and BORROW like `get()`.
+  `contains(v)` and `index_of(v)` search with the `==` the language already defines,
+  so the element type must have equality -- numeric, `bool`, or `string`; anything
+  else is the new CE2100. `index_of` answers the first match as `Maybe@(i32)`.
+  `clear()` and `truncate(n)` (dynamic only) shrink the length, destroy the dropped
+  elements, and KEEP the buffer -- a scratch array in a loop empties without a
+  realloc. Truncate never grows, and a negative count clamps to 0 the way the slice
+  family clamps.
 
 ### Fixed
 - **An `<io/files>` failure names its reason.** Every utility function used to

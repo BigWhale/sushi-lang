@@ -1,0 +1,7 @@
+# A fixed array's length is part of its TYPE, so it cannot shrink -- the same
+# reason `push()` refuses one.
+# EXPECT_ERROR_CODE: CE2023
+fn main() i32:
+    let i32[3] f = [1, 2, 3]
+    f.truncate(1)
+    return Result.Ok(0)

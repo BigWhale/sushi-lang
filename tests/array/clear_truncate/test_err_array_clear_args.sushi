@@ -1,0 +1,6 @@
+# `clear()` takes no arguments; `truncate(n)` is the one that takes a count.
+# EXPECT_ERROR_CODE: CE2009
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    a.clear(1)
+    return Result.Ok(0)
