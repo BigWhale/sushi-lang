@@ -82,6 +82,33 @@ let i32 value = arr.get(2)??
 
 **Note:** Direct indexing `arr[index]` is also available but throws RE2020 runtime error on out-of-bounds.
 
+### `.first() -> Maybe@(T)` and `.last() -> Maybe@(T)`
+
+`.get()` with the index built in: 0, and `len - 1`. An empty array answers
+`Maybe.None()`. Both are READS, like `.get()`: the array keeps the element.
+
+```sushi
+let i32[] arr = from([10, 20, 30])
+let i32 head = arr.first().realise(-1)   # 10
+let i32 tail = arr.last().realise(-1)    # 30
+
+let i32[] empty = from([])
+empty.first().is_none()                  # true
+```
+
+### `.contains(T value) -> bool` and `.index_of(T value) -> Maybe@(i32)`
+
+A linear search with the `==` the language defines, so the element type must have
+equality: the numeric types, `bool`, or `string` (a struct or enum element is CE2100).
+`.index_of()` answers the FIRST match, left to right. The needle is a borrow.
+
+```sushi
+let string[] words = from(["alpha", "beta", "gamma"])
+words.contains("beta")                    # true
+let i32 at = words.index_of("beta").realise(-1)   # 1
+words.index_of("delta").is_none()         # true
+```
+
 ### `.iter() -> Iterator@(T)`
 
 Create iterator for foreach loops.
@@ -221,6 +248,21 @@ match arr.pop():
     Maybe.None() -> println("nothing to pop")
 
 let i32 last = arr.pop().realise(-1)   # or a default
+```
+
+### `.clear() -> ~` and `.truncate(i32 n) -> ~`
+
+`.truncate(n)` keeps the first `n` elements and destroys the rest; `.clear()` is
+`truncate(0)`. Neither grows: a count past the length is a no-op, and a negative count
+clamps to 0, the way the slice family clamps. Capacity and the buffer STAY -- that is
+what separates them from `.free()`, and it is the point: a scratch array in a loop
+empties without a realloc.
+
+```sushi
+let i32[] arr = from([1, 2, 3, 4, 5])
+arr.truncate(2)     # [1, 2], capacity unchanged
+arr.clear()         # [], capacity unchanged
+arr.push(9)         # reuses the buffer
 ```
 
 ### `.extend(T[] other) -> ~`
