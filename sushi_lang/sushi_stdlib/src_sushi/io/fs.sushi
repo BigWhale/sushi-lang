@@ -1,0 +1,155 @@
+##:
+io/fs -- composed file-system operations, pure Sushi.
+
+The module ships as bundled .sushi source and is merged as a compilation unit
+when imported (`use <io/fs>`). It builds on the <io/files> primitives and the
+<io/path> algebra: stat() composes the per-field reads into one FileStat,
+walk() recurses over read_dir(), and mkdir_all()/remove_all() are the
+recursive forms of mkdir() and remove()/rmdir().
+
+Limitations: stat() costs one system call per field. walk() lists regular
+files only and does not follow a directory symlink, so a linked tree stays
+unvisited and a loop cannot form.
+:##
+
+use <io/files>
+use <io/path>
+
+##:
+The metadata of one path, as stat() composes it.
+:##
+public struct FileStat:
+    ##: The size in bytes. :##
+    i64 size
+    ##: The modification time, in unix seconds. :##
+    i64 mtime
+    ##: The inode status-change time, in unix seconds. :##
+    i64 ctime
+    ##: The raw st_mode: file-type bits plus permission bits. :##
+    i32 mode
+    ##: Whether the path itself is a symbolic link. :##
+    bool is_symlink
+
+##:
+Reads the metadata of a path into one FileStat.
+
+Each field is one <io/files> read; the cost is one system call per field.
+
+- Parameter path: The path to inspect.
+- Returns: The composed FileStat.
+- Errors: FileError, when the path cannot be read.
+:##
+public fn stat(string path) FileStat | FileError:
+    let i64 size = file_size(path)??
+    let i64 mt = mtime(path)??
+    let i64 ct = ctime(path)??
+    let i32 md = mode(path)??
+    let bool link = is_symlink(path)??
+    return Result.Ok(FileStat(size, mt, ct, md, link))
+
+##:
+Walks a directory tree and collects the regular files.
+
+The result holds full joined paths. A directory symlink is not followed, so
+a loop cannot form. The order follows read_dir() and is unspecified.
+
+- Parameter path: The directory to walk.
+- Returns: The file paths under it, at every depth.
+- Errors: FileError, when a directory cannot be listed.
+:##
+public fn walk(string path) string[] | FileError:
+    let List@(string) acc = List.new()
+    match walk_into(path, poke acc):
+        Result.Ok(_) -> ~
+        Result.Err(e) ->
+            acc.free()
+            return Result.Err(e)
+    let i32 n = acc.len()
+    let string[] out = from([""; n])
+    foreach(i in 0..n):
+        match acc.get(i):
+            Maybe.Some(p) ->
+                out[i] := p.clone()
+            Maybe.None -> ~
+    acc.free()
+    return Result.Ok(out)
+
+##:
+Creates a directory and every missing parent.
+
+An existing directory on the way is kept; losing the creation race to
+another process counts as success.
+
+- Parameter path: The directory path to build.
+- Parameter dir_mode: Permissions for each created level, in octal.
+- Errors: FileError, when a level cannot be created.
+:##
+public fn mkdir_all(string path, i32 dir_mode) ~ | FileError:
+    let bool rooted = path.starts_with("/")
+    let string[] parts = path.split("/")
+    let string prefix = ""
+    foreach(part in parts.iter()):
+        if (not part.is_empty()):
+            if (prefix.is_empty()):
+                if (rooted):
+                    prefix := "/".concat(part)
+                else:
+                    prefix := part.clone()
+            else:
+                prefix := prefix.concat("/").concat(part)
+            if (not exists(prefix)):
+                match mkdir(prefix, dir_mode):
+                    Result.Ok(_) -> ~
+                    Result.Err(e) ->
+                        match e:
+                            FileError.AlreadyExists -> ~
+                            _ -> return Result.Err(e)
+    return Result.Ok(~)
+
+##:
+Removes a path and, for a directory, everything under it.
+
+A missing path is success: the goal state already holds. A symlink is
+removed as the link; its target stays.
+
+- Parameter path: The path to remove.
+- Errors: FileError, when an entry cannot be removed.
+:##
+public fn remove_all(string path) ~ | FileError:
+    let bool link = is_symlink(path).realise(false)
+    if (not link):
+        if (not exists(path)):
+            return Result.Ok(~)
+        if (is_dir(path)):
+            let string[] names = read_dir(path)??
+            foreach(name in names.iter()):
+                let string full = join(path, name).realise("")
+                match remove_all(full):
+                    Result.Ok(_) -> ~
+                    Result.Err(e) -> return Result.Err(e)
+            match rmdir(path):
+                Result.Ok(_) -> return Result.Ok(~)
+                Result.Err(e) -> return Result.Err(e)
+    match remove(path):
+        Result.Ok(_) -> return Result.Ok(~)
+        Result.Err(e) -> return Result.Err(e)
+
+##:
+Collects the regular files under one directory into the accumulator.
+
+- Parameter dir: The directory to scan.
+- Parameter acc: The collected file paths.
+- Errors: FileError, when the directory cannot be listed.
+:##
+fn walk_into(string dir, poke List@(string) acc) ~ | FileError:
+    let string[] names = read_dir(dir)??
+    foreach(name in names.iter()):
+        let string full = join(dir, name).realise("")
+        if (is_dir(full)):
+            if (not is_symlink(full)??):
+                match walk_into(full, poke acc):
+                    Result.Ok(_) -> ~
+                    Result.Err(e) -> return Result.Err(e)
+        else:
+            acc.push(full.clone())
+    return Result.Ok(~)

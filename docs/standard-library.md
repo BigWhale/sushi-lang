@@ -24,6 +24,7 @@ Complete reference for Sushi's standard library modules and types.
 - [Console I/O](stdlib/io/console.md) - println, print, stdin/stdout/stderr
 - [File I/O](stdlib/io/files.md) - File operations with error handling
 - [Path algebra](stdlib/io/path.md) - Lexical path manipulation (join, basename, dirname, extension, normalize)
+- [File-system ops](stdlib/io/fs.md) - stat, recursive walk, mkdir_all, remove_all
 
 ### System Modules
 - [Math](stdlib/math.md) - Mathematical operations (abs, min, max, sqrt, pow, trig)
@@ -45,6 +46,7 @@ use <encoding/msgpack>     # MessagePack decoder
 use <io/stdio>             # Console I/O
 use <io/files>             # File operations
 use <io/path>              # Lexical path manipulation
+use <io/fs>                # stat, walk, mkdir_all, remove_all
 use <math>                 # Math functions
 use <random>               # Random number generation
 use <time>                 # Sleep and clock functions

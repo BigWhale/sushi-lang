@@ -1,0 +1,37 @@
+# stat() composes the per-field reads into one FileStat.
+# EXPECT_STDOUT_EXACT: "size: 3\nmtime sane: true\nregular: true\nlink: false\nmissing errs: true\ncleanup ok\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+use <io/fs>
+
+fn main() i32:
+    let string path = "/tmp/sushi_fs_stat.txt"
+    match open(path, FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("abc")
+            f.close()
+        FileResult.Err(_) ->
+            println("setup failed")
+            return Result.Ok(1)
+
+    match stat(path):
+        Result.Ok(st) ->
+            println("size: {st.size}")
+            println("mtime sane: {st.mtime > 1_700_000_000}")
+            println("regular: {(st.mode & 0o170000) == 0o100000}")
+            println("link: {st.is_symlink}")
+        Result.Err(_) ->
+            println("stat failed")
+
+    match stat("/tmp/sushi_fs_stat_missing"):
+        Result.Ok(_) -> println("missing errs: false")
+        Result.Err(e) ->
+            match e:
+                FileError.NotFound -> println("missing errs: true")
+                _ -> println("missing errs: wrong variant")
+
+    match remove(path):
+        Result.Ok(_) -> println("cleanup ok")
+        Result.Err(_) -> println("cleanup failed")
+    return Result.Ok(0)

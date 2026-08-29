@@ -1,0 +1,21 @@
+# mkdir_all on a tree that exists is Ok; remove_all on a missing path is Ok.
+# EXPECT_STDOUT_EXACT: "first: ok\nsecond: ok\nmissing: ok\ncleanup ok\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/fs>
+use <io/files>
+
+fn main() i32:
+    match mkdir_all("/tmp/sushi_fs_idem/x/y", 0o755):
+        Result.Ok(_) -> println("first: ok")
+        Result.Err(_) -> println("first: err")
+    match mkdir_all("/tmp/sushi_fs_idem/x/y", 0o755):
+        Result.Ok(_) -> println("second: ok")
+        Result.Err(_) -> println("second: err")
+    match remove_all("/tmp/sushi_fs_never_made"):
+        Result.Ok(_) -> println("missing: ok")
+        Result.Err(_) -> println("missing: err")
+    match remove_all("/tmp/sushi_fs_idem"):
+        Result.Ok(_) -> println("cleanup ok")
+        Result.Err(_) -> println("cleanup failed")
+    return Result.Ok(0)

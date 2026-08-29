@@ -17,6 +17,9 @@ def emit_strcmp_intrinsic(module: ir.Module) -> ir.Function:
 
     fn_ty = ir.FunctionType(i32, [string_type, string_type])
     func = ir.Function(module, fn_ty, name=func_name)
+    # Every unit that needs the helper emits its own body; linkonce_odr lets
+    # the linker collapse them (two source-stdlib units in one program).
+    func.linkage = "linkonce_odr"
     func.args[0].name = "str1"
     func.args[1].name = "str2"
 

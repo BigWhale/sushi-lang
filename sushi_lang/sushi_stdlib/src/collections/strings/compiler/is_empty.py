@@ -17,6 +17,9 @@ def emit_string_is_empty_intrinsic(module: ir.Module) -> ir.Function:
 
     fn_ty = ir.FunctionType(i8, [string_type])
     func = ir.Function(module, fn_ty, name=func_name)
+    # Every unit that needs the helper emits its own body; linkonce_odr lets
+    # the linker collapse them (two source-stdlib units in one program).
+    func.linkage = "linkonce_odr"
     func.args[0].name = "str"
 
     entry_block = func.append_basic_block("entry")

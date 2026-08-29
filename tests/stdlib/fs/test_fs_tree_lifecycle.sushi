@@ -1,0 +1,52 @@
+# mkdir_all builds the tree, walk finds every file in it, remove_all takes it down.
+# EXPECT_STDOUT_EXACT: "made\nfound: 2\nhas f1: true\nhas f2: true\ngone: true\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+use <io/fs>
+
+fn write_one(string path) bool:
+    match open(path, FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("x")
+            f.close()
+            return Result.Ok(true)
+        FileResult.Err(_) ->
+            return Result.Ok(false)
+
+fn has(string[] xs, string want) bool:
+    foreach(x in xs.iter()):
+        if (x == want):
+            return Result.Ok(true)
+    return Result.Ok(false)
+
+fn main() i32:
+    let string root = "/tmp/sushi_fs_tree"
+    match mkdir_all("/tmp/sushi_fs_tree/a/b", 0o755):
+        Result.Ok(_) -> println("made")
+        Result.Err(_) ->
+            println("mkdir_all failed")
+            return Result.Ok(1)
+    if (not write_one("/tmp/sushi_fs_tree/a/f1.txt").realise(false)):
+        return Result.Ok(1)
+    if (not write_one("/tmp/sushi_fs_tree/a/b/f2.txt").realise(false)):
+        return Result.Ok(1)
+
+    match walk(root):
+        Result.Ok(files) ->
+            println("found: {files.len()}")
+            let string want1 = "/tmp/sushi_fs_tree/a/f1.txt"
+            let string want2 = "/tmp/sushi_fs_tree/a/b/f2.txt"
+            let bool h1 = has(files, want1).realise(false)
+            let bool h2 = has(files, want2).realise(false)
+            println("has f1: {h1}")
+            println("has f2: {h2}")
+        Result.Err(_) ->
+            println("walk failed")
+
+    match remove_all(root):
+        Result.Ok(_) ->
+            let bool gone = not exists(root)
+            println("gone: {gone}")
+        Result.Err(_) -> println("remove_all failed")
+    return Result.Ok(0)
