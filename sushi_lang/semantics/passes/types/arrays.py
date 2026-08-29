@@ -10,7 +10,7 @@ from .utils import validate_constant_array_index
 
 # Array methods that mutate their receiver in place. A constant is emitted as a
 # read-only global, so these cannot target one (CE2096).
-_MUTATING_ARRAY_METHODS = frozenset({"fill", "reverse", "extend", "extend_range"})
+_MUTATING_ARRAY_METHODS = frozenset({"fill", "reverse", "extend", "extend_range", "clear", "truncate"})
 
 
 def _validate_element_argument(call: MethodCall, element_type: Type, reporter: Any,
@@ -292,10 +292,10 @@ def _validate_dynamic_array_reverse(call: MethodCall, array_type: DynamicArrayTy
 def is_builtin_array_method(method_name: str) -> bool:
     """Check if a method name is a built-in array method."""
     # Fixed array methods: len, get, first, last, contains, index_of, iter, hash, clone, fill, reverse, s, ss
-    # Dynamic array methods: the same, plus push, pop, capacity, destroy, free, extend,
-    #   extend_range
+    # Dynamic array methods: the same, plus push, pop, clear, truncate, capacity,
+    #   destroy, free, extend, extend_range
     # u8[] specific methods: to_string
-    return method_name in {"len", "get", "first", "last", "contains", "index_of", "push", "pop", "capacity", "destroy", "free", "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse", "extend", "extend_range", "s", "ss"}
+    return method_name in {"len", "get", "first", "last", "contains", "index_of", "push", "pop", "clear", "truncate", "capacity", "destroy", "free", "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse", "extend", "extend_range", "s", "ss"}
 
 
 def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | DynamicArrayType, reporter: Any, validator: Any = None) -> None:
@@ -380,6 +380,27 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
             er.emit(reporter, er.ERR.CE2009, call.loc,
                    name=f"{display_type(array_type)}.hash", expected=0, got=len(call.args))
 
+    elif method_name in ("clear", "truncate"):
+        # Only a buffer that can SHRINK has these; a fixed array's length is its type,
+        # the same reason `push` refuses one.
+        if not isinstance(array_type, DynamicArrayType):
+            er.emit(reporter, er.ERR.CE2023, call.loc,
+                    method=method_name, expected="dynamic array",
+                    got=display_type(array_type))
+            return
+        expected_args = 0 if method_name == "clear" else 1
+        if len(call.args) != expected_args:
+            er.emit(reporter, er.ERR.CE2009, call.loc,
+                    name=f"{display_type(array_type)}.{method_name}",
+                    expected=expected_args, got=len(call.args))
+            return
+        if method_name == "truncate" and validator:
+            validator.validate_expression(call.args[0])
+            arg_type = validator.infer_expression_type(call.args[0])
+            if arg_type is not None and not _is_integer_type(arg_type):
+                er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
+                        index=1, expected="integer type", got=display_type(arg_type))
+
     elif method_name in ("contains", "index_of"):
         _validate_array_search(call, array_type, reporter, validator)
 
@@ -437,6 +458,10 @@ def get_builtin_array_method_return_type(method_name: str, array_type: ArrayType
             return BuiltinType.I32
         return None
     elif method_name == "push":
+        if isinstance(array_type, DynamicArrayType):
+            return BuiltinType.BLANK
+        return None
+    elif method_name in ("clear", "truncate"):
         if isinstance(array_type, DynamicArrayType):
             return BuiltinType.BLANK
         return None

@@ -30,6 +30,7 @@ CASES = {
     "insert":        ("List@(i32)", "r.insert(0, 5)", ""),
     "remove":        ("List@(i32)", "r.remove(0)", ""),
     "clear":         ("List@(i32)", "r.clear()", ""),
+    "truncate":      ("i32[]", "r.truncate(1)", ""),
     "reserve":       ("List@(i32)", "r.reserve(10)", ""),
     "shrink_to_fit": ("List@(i32)", "r.shrink_to_fit()", ""),
     "rehash":        ("HashMap@(i32, string)", "r.rehash()", _HASHMAP),

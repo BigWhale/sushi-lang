@@ -22,7 +22,7 @@ def is_builtin_array_method(method_name: str) -> bool:
     # u8[] specific methods: to_string
     return method_name in {
         "len", "get", "first", "last", "contains", "index_of", "push", "pop",
-        "capacity", "destroy", "free",
+        "clear", "truncate", "capacity", "destroy", "free",
         "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse",
         "extend", "extend_range", "s", "ss"
     }
@@ -286,6 +286,13 @@ def emit_array_method(
         case "pop":
             return core.emit_dynamic_array_pop(codegen, receiver_value, array_struct_type,
                                                element_semantic_type, to_i1)
+
+        case "clear" | "truncate":
+            new_len = (ir.Constant(codegen.types.i32, 0) if method_name == "clear"
+                       else _index_arg(codegen, expr.args[0]))
+            return core.emit_dynamic_array_truncate(codegen, receiver_value,
+                                                    array_struct_type, new_len,
+                                                    element_semantic_type)
 
         case "free":
             return core.emit_dynamic_array_free(codegen, receiver_value, array_struct_type,

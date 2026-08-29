@@ -270,6 +270,44 @@ def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value, array_
     return result_phi
 
 
+def emit_dynamic_array_truncate(codegen: 'LLVMCodegen', array_value: ir.Value,
+                                array_type: ir.LiteralStructType, new_len: ir.Value,
+                                element_semantic_type: 'Type') -> ir.Value:
+    """Keep the first `new_len` elements and destroy the rest. `clear()` is truncate(0).
+
+    Truncate never grows: a count past the length is a no-op, and a negative count
+    clamps to 0 the way the slice family clamps. Capacity and the data pointer stay --
+    the buffer is kept for reuse, which is what separates this from `free()`.
+    """
+    from sushi_lang.backend.destructors import needs_cleanup, emit_value_destructor
+    from sushi_lang.backend.generics.container_walk import emit_container_walk
+
+    builder = codegen.builder
+    zero = ir.Constant(codegen.types.i32, 0)
+
+    len_ptr = codegen.types.get_dynamic_array_len_ptr(builder, array_value)
+    current_len = builder.load(len_ptr, name="current_len")
+
+    is_negative = builder.icmp_signed("<", new_len, zero, name="truncate_negative")
+    kept = builder.select(is_negative, zero, new_len, name="truncate_kept")
+
+    shrinks = builder.icmp_signed("<", kept, current_len, name="truncate_shrinks")
+    with builder.if_then(shrinks):
+        if needs_cleanup(element_semantic_type):
+            data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(builder, array_value)
+            data_ptr = builder.load(data_ptr_ptr, name="truncate_data")
+            dropped_ptr = builder.gep(data_ptr, [kept], name="truncate_dropped")
+            dropped_count = builder.sub(current_len, kept, name="truncate_drop_count")
+            emit_container_walk(
+                codegen, dropped_ptr, dropped_count,
+                lambda element_ptr, _i: emit_value_destructor(codegen, element_ptr,
+                                                              element_semantic_type),
+                null_guard=True, prefix="truncate")
+        builder.store(kept, len_ptr)
+
+    return ir.Constant(codegen.types.i32, 0)
+
+
 def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                            element_semantic_type: 'Type') -> ir.Value:
     """Emit code to free all elements of a dynamic array and reset to empty state."""
