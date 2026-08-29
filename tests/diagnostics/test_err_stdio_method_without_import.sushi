@@ -1,8 +1,12 @@
 # The message this reports used to contain the literal text `{receiver.id}.{method}()`
 # -- an f-string body passed without the `f` prefix, so the braces reached the user
 # and named no variable they wrote (#270).
-# EXPECT_ERROR_CODE: CE0096
-# EXPECT_STDERR_CONTAINS: "use stdout.write()"
+#
+# The code changed with #501: a missing import is a mistake in the PROGRAM, so the
+# refusal is CE3015, with a location and a caret, and no request to file a report.
+# What #270 pins is unchanged -- the message still names the call the user wrote.
+# EXPECT_ERROR_CODE: CE3015
+# EXPECT_STDERR_CONTAINS: "stdout.write()"
 
 fn main() i32:
     stdout.write("Mostly Harmless")

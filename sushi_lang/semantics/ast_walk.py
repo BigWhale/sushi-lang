@@ -112,6 +112,10 @@ class ConstraintSite:
     decl: Any
     perk_name: str
     span: Optional[Any]
+    # The alias the constraint was written behind, when it was written behind one.
+    # A qualified name never enters the flat scope, so a rule that measures the bare
+    # name against that scope has to know which shape it is reading.
+    namespace: Optional[str] = None
 
 
 def signature_constraints(program: 'Program') -> Iterator[ConstraintSite]:
@@ -130,10 +134,14 @@ def signature_constraints(program: 'Program') -> Iterator[ConstraintSite]:
     ):
         fallback = getattr(decl, "name_span", None) or getattr(decl, "loc", None)
         for param in getattr(decl, "type_params", None) or ():
-            for constraint in getattr(param, "constraints", None) or ():
+            constraints = getattr(param, "constraints", None) or ()
+            namespaces = getattr(param, "constraint_namespaces", None) or ()
+            for index, constraint in enumerate(constraints):
                 if isinstance(constraint, str):
-                    yield ConstraintSite(kind, decl, constraint,
-                                         getattr(param, "loc", None) or fallback)
+                    yield ConstraintSite(
+                        kind, decl, constraint,
+                        getattr(param, "loc", None) or fallback,
+                        namespaces[index] if index < len(namespaces) else None)
 
 
 def _callable_sites(kind: str, decl: Any, callable_node: Any) -> Iterator[TypeSite]:

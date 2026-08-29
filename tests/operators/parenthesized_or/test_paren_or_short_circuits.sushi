@@ -1,0 +1,28 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nright ran: 1\nright skipped: 0\n"
+# A parenthesized `or` evaluates its right operand when the left one is false,
+# and skips it when the left one is true (#496).
+
+fn no(poke i32 n) bool:
+    n := n + 1
+    return Result.Ok(false)
+
+fn yes(poke i32 n) bool:
+    n := n + 1
+    return Result.Ok(true)
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let i32 left = 0
+    let i32 right = 0
+    let bool both = (no(poke left).realise(false) or yes(poke right).realise(false))
+    if (both):
+        println("right ran: {right}")
+
+    let i32 left2 = 0
+    let i32 right2 = 0
+    let bool one = (yes(poke left2).realise(false) or yes(poke right2).realise(false))
+    if (one):
+        println("right skipped: {right2}")
+
+    return Result.Ok(0)

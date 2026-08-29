@@ -56,6 +56,15 @@ def expr_atom(atom: Tree | Token, ast_builder: 'ASTBuilder') -> Expr:
         from sushi_lang.semantics.ast_builder.expressions import lambdas
         return lambdas.parse_lambda(atom, ast_builder)
 
+    # A parenthesized expression. `?atom` inlines `"(" expr ")"` to the expression
+    # itself, so what arrives here is an ordinary expression tree and the WHOLE node
+    # goes back to the dispatcher. Taking its first Tree child dropped the operator
+    # and every operand but the first; only a top-level `or` could show it, because
+    # `or_expr` is the outermost level and every tighter one is a single-child
+    # wrapper around the level below (#496).
+    if atom.data != "atom":
+        return ast_builder._expr(atom)
+
     inner = next((c for c in atom.children if isinstance(c, Tree)), None)
     if inner is not None:
         return ast_builder._expr(inner)

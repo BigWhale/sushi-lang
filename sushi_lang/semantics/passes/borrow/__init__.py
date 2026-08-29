@@ -80,6 +80,11 @@ class BorrowChecker:
         # parameters declares. Built from the same tables the backend's copy reads, so
         # the two halves cannot reach different answers (docs/design/borrow-model.md S1).
         self.callee_modes = _build_callee_modes(tables, unit_name, scope)
+        # Which unit is being checked, and what it may write bare. A bare name that is
+        # no local is a CONSTANT, and reading its type needs the same per-unit ladder
+        # every other reader walks (`docs/design/unit-namespaces.md` section 8).
+        self.unit_name = unit_name
+        self.scope = scope
 
     def run(self, program: Program) -> None:
         """Run borrow checking on the entire program."""

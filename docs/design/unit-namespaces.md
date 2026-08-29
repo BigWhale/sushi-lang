@@ -948,10 +948,10 @@ Retired or narrowed:
 | Code | Change |
 |---|---|
 | `CE3003` | retired. It refused a whole program for a collision that may never be written |
-| `CE3011` | narrowed to what phase 2 has to lift: a TYPE name a consumer redeclares against a library, imported flat or behind an alias. An alias does not help a type -- identity is nominal, so one name is one shape however the name is written -- and that was measured under both import forms. The FUNCTION arm retired in phase 1. A library's private CONSTANT answers `CE0105` rather than this code, which is the function rule's shape with another code (#507) |
+| `CE3011` | narrowed to what phase 2 has to lift: a TYPE name a consumer redeclares against a library, imported flat or behind an alias. An alias does not help a type -- identity is nominal, so one name is one shape however the name is written -- and that was measured under both import forms. The FUNCTION arm retired in phase 1, and a library's private CONSTANT went with it (#507): the constant table is keyed by unit too, so each declaration takes its own global |
 | `CW3001` | narrowed to a repeat with the same alias, or none (section 6) |
 | `CE0101` | kept for a duplicate extension on a foreign type, with new TEXT: relational, naming both units, blaming neither (section 8). Retired for a cross-unit private function, which phase 1 makes legal (section 7), a library's private function included. A GENERIC function still holds one name for the whole program (#495) |
-| `CE0105` | retired cross-unit with `CE0101`, and for the same reason: two units may each declare a private constant once the table is keyed by unit (section 7). Kept whole within one unit, and kept against a LIBRARY's constant (#507) |
+| `CE0105` | retired cross-unit with `CE0101`, and for the same reason: two units may each declare a private constant once the table is keyed by unit (section 7). Kept whole within one unit, and against a library's PUBLIC constant, which the consumer can see and read (#507) |
 
 ## 11. Delivery
 

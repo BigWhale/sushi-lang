@@ -1,0 +1,4 @@
+# A unit an alias binds, so a field may name `geo.Vec` and try to name `geo.Nope`.
+public struct Vec:
+    i32 x
+    i32 y

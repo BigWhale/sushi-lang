@@ -1,0 +1,17 @@
+# A `const` array lives in `.rodata` and can never be moved out of, so reading an
+# owning element into an enum payload is a consume of a borrow. It used to reach
+# the backend undecided and exit on an internal error instead (#498).
+# EXPECT_ERROR_CODE: CE2411
+
+enum Token:
+    Word(string)
+    End
+
+const string[3] NAMES = ["a", "b", "c"]
+
+fn main() i32:
+    let Token t = Token.Word(NAMES[0])
+    match t:
+        Token.Word(w) -> println("{w}")
+        Token.End -> println("end")
+    return Result.Ok(0)

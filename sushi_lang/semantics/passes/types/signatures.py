@@ -13,6 +13,36 @@ from .perks import validate_perk_implementation, check_no_conflicts_with_regular
 from sushi_lang.semantics.generics.type_display import display_type
 
 
+# The positions `run()`'s per-declaration loop never reaches. A function, an
+# extension and a perk implementation are all walked for their bodies, and a struct
+# or an enum has none, so its written types were checked nowhere (#504).
+_DECLARED_TYPE_POSITIONS = frozenset({"field", "variant"})
+
+
+def validate_declared_types(self, program) -> None:
+    """Check every type a declaration WITHOUT a body writes down.
+
+    Reads `signature_types()`, the one walk over a unit's declared type positions, so a
+    position added there is policed here without a second walk. A GENERIC declaration is
+    skipped for the reason the function loop skips one: its fields name type parameters,
+    which are in no table until the instance is monomorphized -- and the instance is an
+    ordinary declaration that this walk reaches.
+    """
+    from sushi_lang.semantics.ast_walk import signature_types
+
+    # Not a LIBRARY unit, for `check_public_signatures`' reason: its declarations were
+    # checked when the library was built, and here they carry the consumer's substitutions.
+    if self.in_library_unit:
+        return
+
+    for site in signature_types(program):
+        if site.position not in _DECLARED_TYPE_POSITIONS or site.ty is None:
+            continue
+        if getattr(site.decl, "type_params", None):
+            continue
+        validate_type_name(self, site.ty, site.span)
+
+
 def validate_function(self, func: FuncDef) -> None:
     """Validate types within a function."""
     self.current_function = func

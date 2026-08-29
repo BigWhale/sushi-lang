@@ -1,4 +1,0 @@
-fn main() i32:
-    unless (1 == 2):
-        println("hi")
-    return Result.Ok(0)

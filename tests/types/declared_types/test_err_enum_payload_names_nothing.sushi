@@ -1,0 +1,10 @@
+# The same hole in the position beside it: an enum variant's PAYLOAD type (#504).
+# EXPECT_ERROR_CODE: CE2001
+
+enum Shape:
+    Round(Nope)
+    Flat
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

@@ -6,11 +6,26 @@ from llvmlite import ir
 from sushi_lang.semantics.ast import DotCall, MethodCall, Name
 from sushi_lang.semantics.typesys import EnumType, StructType, BuiltinType
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.internals.diagnostics import SushiError
 from sushi_lang.backend.utils import require_builder
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.typesys import Type
+
+
+def require_stdlib_unit(codegen: 'LLVMCodegen', module: str, call: str, span) -> None:
+    """A built-in method whose body lives in a stdlib module needs that module imported.
+
+    ONE refusal for every such gate, and a USER diagnostic: a missing `use` is a mistake
+    in the program, and CE0096 told the reader it was a bug in the compiler, with no
+    location and a request to file a report (#501).
+    """
+    if codegen.has_stdlib_unit(module):
+        return
+    raise SushiError("CE3015", span=span, name=call, module=module,
+                     filename=getattr(codegen, "emitting_unit_file", None)) \
+        .help(f"add `use <{module}>` above the first declaration of this unit")
 
 
 def try_emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]) -> Optional[ir.Value]:
@@ -97,9 +112,7 @@ def try_emit_stdio_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
     if not is_builtin_stdio_method(method):
         return None
 
-    if not codegen.has_stdlib_unit("io/stdio"):
-        raise_internal_error("CE0096", operation=f"Missing stdlib unit: io/stdio. Add 'use <io/stdio>' to use {receiver.id}.{method}()"
-        )
+    require_stdlib_unit(codegen, "io/stdio", f"{receiver.id}.{method}()", expr.loc)
 
     return emit_stdlib_stdio_call(codegen, receiver.id, method, args, to_i1)
 
@@ -125,9 +138,7 @@ def try_emit_file_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
 
     file_ptr = codegen.expressions.emit_expr(receiver)
 
-    if not codegen.has_stdlib_unit("io/files"):
-        raise_internal_error("CE0096", operation=f"Missing stdlib unit: io/files. Add 'use <io/files>' to use file.{method}()"
-        )
+    require_stdlib_unit(codegen, "io/files", f"file.{method}()", expr.loc)
 
     return emit_stdlib_file_call(codegen, file_ptr, method, args, to_i1)
 
@@ -193,9 +204,7 @@ def try_emit_string_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
     if not is_builtin_string_method(expr.method):
         return None
 
-    if not codegen.has_stdlib_unit("collections/strings"):
-        raise_internal_error("CE0096", operation=f"Missing stdlib unit: collections/strings. Add 'use <collections/strings>' to use string.{expr.method}()"
-        )
+    require_stdlib_unit(codegen, "collections/strings", f"string.{expr.method}()", expr.loc)
 
     return emit_stdlib_string_call(codegen, expr.method, receiver_value, expr.args, to_i1)
 

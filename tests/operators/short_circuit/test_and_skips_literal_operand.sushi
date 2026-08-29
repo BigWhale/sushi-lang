@@ -1,0 +1,16 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nfalse\n"
+# EXPECT_NO_LEAKS
+# The mirror of the `or` case: the left operand of an `and` is false, so the right
+# operand and its string temporary never run (#497).
+
+use <collections/strings>
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let string a = ""
+    let bool r = (a.len() > 0) and ("right".len() > 0)
+    if (not r):
+        println("false")
+
+    return Result.Ok(0)

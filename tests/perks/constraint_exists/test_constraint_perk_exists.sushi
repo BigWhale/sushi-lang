@@ -1,0 +1,16 @@
+# The positive half: a constraint naming a perk this unit imported, flat and
+# behind an alias, still compiles and runs (#505).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n30 40\n"
+use "helpers/noise"
+use "helpers/noise" as noise
+
+fn shout@(T: Loud)(T x) i32:
+    return Result.Ok(x.volume())
+
+fn yell@(T: noise.Loud)(T x) i32:
+    return Result.Ok(x.volume())
+
+fn main() i32:
+    println("Mostly Harmless")
+    println("{shout(3).realise(0)} {yell(4).realise(0)}")
+    return Result.Ok(0)

@@ -1,0 +1,18 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nbare\nparen\n"
+# A parenthesized `or` must evaluate the whole operator, not its left operand
+# alone (#496). `or` is the outermost level of the expression grammar, so it is
+# the one level whose parenthesized form carries more than one child.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let bool a = false
+    let bool b = true
+
+    if (a or b):
+        println("bare")
+    let bool paren = (a or b)
+    if (paren):
+        println("paren")
+
+    return Result.Ok(0)

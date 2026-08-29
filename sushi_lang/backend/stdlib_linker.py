@@ -1,6 +1,6 @@
 """Standard library linking utilities."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import Iterable, TYPE_CHECKING
 from pathlib import Path
 
 import llvmlite.binding as llvm
@@ -37,12 +37,13 @@ class StdlibLinker:
         """
         stdlib_units = self.codegen.stdlib_units
 
+        # The path AS WRITTEN, and nothing else. Recording an import's parent directory
+        # too made every SIBLING module look imported, so `use <io/files>` walked
+        # straight through the `io/stdio` gate (#501). A directory import is served by
+        # `has_stdlib_unit`, which walks the parents of the name it is ASKED about.
         for use_stmt in program.uses:
             if use_stmt.is_stdlib:
                 stdlib_units.add(use_stmt.path)
-                parts = use_stmt.path.split('/')
-                for i in range(1, len(parts)):
-                    stdlib_units.add('/'.join(parts[:i]))
 
     def has_stdlib_unit(self, unit_path: str) -> bool:
         """Check if a stdlib unit has been imported."""
@@ -59,15 +60,26 @@ class StdlibLinker:
 
         return False
 
-    def link_stdlib_modules(self, llmod: llvm.ModuleRef, program: Program) -> None:
-        """Link stdlib .bc files into the current LLVM IR module."""
-        stdlib_units = []
-        for use_stmt in program.uses:
-            if use_stmt.is_stdlib:
-                bc_paths = self._resolve_stdlib_unit(use_stmt.path)
-                stdlib_units.extend(bc_paths)
+    def link_stdlib_modules(self, llmod: llvm.ModuleRef,
+                            programs: Iterable[Program]) -> None:
+        """Link the stdlib .bc files that `programs` import into one LLVM IR module.
 
-        for bc_path in stdlib_units:
+        The whole build's programs arrive together and each .bc is linked ONCE. The
+        monolithic path gives every unit the SAME module, so linking per unit linked
+        one module's globals twice as soon as two units named the same import (#493).
+        """
+        seen: set[Path] = set()
+        bc_files: list[Path] = []
+        for program in programs:
+            for use_stmt in program.uses:
+                if not use_stmt.is_stdlib:
+                    continue
+                for bc_path in self._resolve_stdlib_unit(use_stmt.path):
+                    if bc_path not in seen:
+                        seen.add(bc_path)
+                        bc_files.append(bc_path)
+
+        for bc_path in bc_files:
             with open(bc_path, 'rb') as f:
                 bc_data = f.read()
                 try:

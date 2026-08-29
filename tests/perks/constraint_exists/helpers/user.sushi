@@ -1,0 +1,6 @@
+# A unit that imports the perk unit, so `Loud` is a declaration of the program
+# while the consumer below still has to import it to write the name.
+use "helpers/noise"
+
+public fn loudness@(T: Loud)(T x) i32:
+    return Result.Ok(x.volume())

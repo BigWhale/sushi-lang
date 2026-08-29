@@ -1,0 +1,6 @@
+# A second unit importing the same stdlib module, so the monolithic module sees
+# the import three times over.
+use <collections/strings>
+
+public fn twice_width(string s) i32:
+    return Result.Ok(s.len() * 2)

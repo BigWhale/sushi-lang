@@ -1,0 +1,10 @@
+# A perk named in a `@(T: P)` constraint has to exist. The name was recorded and
+# never checked, so the program compiled clean (#505).
+# EXPECT_ERROR_CODE: CE4003
+
+fn ident@(T: Nope)(nom T x) T:
+    return Result.Ok(x)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

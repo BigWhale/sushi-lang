@@ -107,7 +107,7 @@ def test_two_private_constants_coexist(tmp_path):
 
 
 @needs_sushic
-def test_a_library_private_constant_clash_is_the_same_duplicate(tmp_path):
+def test_a_library_private_constant_coexists_with_the_consumers(tmp_path):
     libs = tmp_path / "libs"
     libs.mkdir()
     lib_src = tmp_path / "climb.sushi"
@@ -138,9 +138,16 @@ fn main() i32:
         capture_output=True, text=True,
         env={**os.environ, "SUSHI_LIB_PATH": str(libs), "NO_COLOR": "1"})
     out = result.stdout + result.stderr
-    assert "CE0105" in out, out
+    # The shape decision F made legal for a function, now legal for a constant too:
+    # the consumer cannot see the library's private name, and each declaration takes
+    # its own `<unit>$<name>` global (#507).
+    assert result.returncode == 0, out
+    assert "CE0105" not in out, out
     assert "CE3011" not in out, out
     assert "CE3003" not in out, out
+
+    ran = subprocess.run([str(project / "out")], capture_output=True, text=True)
+    assert ran.stdout == "7 5\n", ran.stdout
 
 
 @needs_sushic

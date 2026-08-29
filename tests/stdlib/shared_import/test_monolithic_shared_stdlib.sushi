@@ -1,0 +1,15 @@
+# Two units import one stdlib module. The monolithic path gives every unit the
+# SAME LLVM module, so the module has to be linked in exactly once (#493).
+# COMPILER_FLAGS: --no-incremental
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n3 2\n"
+use <collections/strings>
+use "helpers/counter"
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let string a = "abc"
+    let string b = "de"
+    println("{a.len()} {width(b).realise(0)}")
+
+    return Result.Ok(0)

@@ -7,6 +7,37 @@ from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
 
 
+def check_constraint_perks(validator, program) -> None:
+    """Every bare `@(T: P)` this unit writes names a perk that exists and is reachable.
+
+    Reads `signature_constraints()`, the one walk over a unit's constraint names. The
+    name was recorded by the collect pass and measured against nothing, so a constraint
+    naming no perk at all compiled clean (#505).
+
+    A QUALIFIED constraint is skipped: `check_qualified_constraints` has already asked
+    whether the namespace holds the name, and a name behind an alias never enters the
+    flat scope that the rule below measures against.
+    """
+    from sushi_lang.semantics.ast_walk import signature_constraints
+    from .visibility import reject_out_of_scope_type
+
+    # Not a LIBRARY unit, for `check_public_signatures`' reason: its declarations were
+    # checked when the library was built.
+    if validator.in_library_unit:
+        return
+
+    for site in signature_constraints(program):
+        if site.namespace is not None:
+            continue
+        # A perk some unit declares and this one did not import is out of scope, not
+        # missing, and CE2001 is the code that says so -- `_TYPE_KINDS` already reads
+        # the perk kind. A name NO unit declares falls through to CE4003.
+        if reject_out_of_scope_type(validator, site.perk_name, site.span):
+            continue
+        if validator.perk_table.get(site.perk_name) is None:
+            er.emit(validator.reporter, er.ERR.CE4003, site.span, perk=site.perk_name)
+
+
 def validate_perk_implementation(
     impl: ExtendWithDef,
     perk_def: PerkDef,

@@ -1,0 +1,11 @@
+# A consumer declares `SCRATCH`, which the library declares PRIVATELY. The shape
+# P6 made legal for a function: each declaration takes its own `<unit>$<name>`
+# global, and each body reads its own (#507).
+# EXPECT_STDOUT_EXACT: "3 4100\n"
+use <lib/private_names_lib>
+
+const i32 SCRATCH = 3
+
+fn main() i32:
+    println("{SCRATCH} {lib_scratch().realise(0)}")
+    return Result.Ok(0)

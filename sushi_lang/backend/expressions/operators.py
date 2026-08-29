@@ -331,8 +331,13 @@ def emit_logic(codegen: 'LLVMCodegen', op: str, left_expr: Expr, right_expr: Exp
         codegen.builder.cbranch(lhs_i1, end_bb, rhs_bb)
         lhs_true_pred = lhs_branch_bb
 
+    # The right operand is evaluated on ONE path, so an owning temporary it builds gets a
+    # scope of its own and is freed inside that block. Registered in the enclosing scope,
+    # the free also ran on the short-circuit path, where the slot was never stored (#497).
     codegen.builder.position_at_end(rhs_bb)
+    codegen.memory.push_scope()
     rhs_i1 = codegen.utils.as_i1(codegen.expressions.emit_expr(right_expr, to_i1=True))
+    codegen.memory.pop_scope()
     rhs_pred = codegen.builder.block
     codegen.builder.branch(end_bb)
 

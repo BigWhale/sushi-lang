@@ -136,7 +136,9 @@ def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
     match expr:
         case Name():
             state = checker.borrow_state.get(expr.id)
-            return state.var_type if state is not None else None
+            if state is not None:
+                return state.var_type
+            return constant_type(checker, expr.id)
         case MemberAccess():
             return _field_type(checker, expr)
         case IndexAccess():
@@ -149,6 +151,22 @@ def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
     # the `??` already unwrapped, so the interesting type is the element. `Own@(T).get()`
     # hands back the bare `T`.
     return checker.types.element_type(read_type(checker, receiver))
+
+
+def constant_type(checker: 'BorrowChecker', name: str) -> Optional[Type]:
+    """The declared type of a CONSTANT, for a bare name that is no local.
+
+    A constant lives in `.rodata` and can never be moved out of, so an index into one
+    is a read through an owner like any other. Without its type the read answered "no
+    type", the class came back PLAIN, and the consuming use passed a check the backend
+    then answered with CE0129 (#498).
+    """
+    tables = getattr(checker, "tables", None)
+    constants = getattr(tables, "constants", None) if tables is not None else None
+    if constants is None:
+        return None
+    sig = constants.lookup(name, checker.unit_name, checker.scope)
+    return getattr(sig, "const_type", None)
 
 
 def _field_type(checker: 'BorrowChecker', expr: MemberAccess) -> Optional[Type]:

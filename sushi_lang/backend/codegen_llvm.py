@@ -96,6 +96,10 @@ class LLVMCodegen:
         # A named callee is resolved through it, so a library's own body reads the
         # library's signature where a consumer shadows the name (#487).
         self.emitting_unit: Optional[str] = None
+        # And its FILE, for a diagnostic the back end raises against a body. The unit
+        # name alone cannot locate a caret, and the reporter's default file is the unit
+        # the compiler was pointed at (#501).
+        self.emitting_unit_file: Optional[str] = None
         # What each unit may write with no qualifier, handed over by the semantic
         # analyser. The back end resolves a bare callee through the SAME ladder the
         # typecheck pass walked, or two units declaring one name would bind the call to
@@ -435,9 +439,8 @@ class LLVMCodegen:
             llmod = two_phase.link()
 
         else:
-            for unit in units:
-                if unit.ast is not None:
-                    self.stdlib.link_stdlib_modules(llmod, unit.ast)
+            self.stdlib.link_stdlib_modules(
+                llmod, [unit.ast for unit in units if unit.ast is not None])
 
         self.optimizer.ensure_target(llmod)
 
@@ -491,9 +494,8 @@ class LLVMCodegen:
 
         llmod = llvm.parse_assembly(str(mod_ir))
 
-        for unit in units:
-            if unit.ast is not None:
-                self.stdlib.link_stdlib_modules(llmod, unit.ast)
+        self.stdlib.link_stdlib_modules(
+            llmod, [unit.ast for unit in units if unit.ast is not None])
 
         self.optimizer.ensure_target(llmod)
 
@@ -640,6 +642,7 @@ class LLVMCodegen:
 
         if target_unit.ast is not None:
             self.emitting_unit = target_unit.name
+            self.emitting_unit_file = str(target_unit.file_path)
             for fn in target_unit.ast.functions:
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
@@ -653,6 +656,7 @@ class LLVMCodegen:
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_def(synthetic_ext)
             self.emitting_unit = None
+            self.emitting_unit_file = None
 
         # A monomorphized extension belongs to no unit, so its body is defined
         # in EVERY unit module. weak_odr lets the linker keep one, like a
@@ -801,6 +805,7 @@ class LLVMCodegen:
                 continue
 
             self.emitting_unit = unit.name
+            self.emitting_unit_file = str(unit.file_path)
             for fn in unit.ast.functions:
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
@@ -814,6 +819,7 @@ class LLVMCodegen:
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_def(synthetic_ext)
         self.emitting_unit = None
+        self.emitting_unit_file = None
 
         # weak_odr for the same reason as the single-unit path (#404); the
         # monolithic module defines each body once, so it is inert here, and

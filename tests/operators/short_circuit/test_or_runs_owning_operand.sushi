@@ -1,0 +1,17 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\ntaken\n"
+# EXPECT_NO_LEAKS
+# The right operand DOES run and its owned temporary is freed exactly once, on the
+# path that built it (#497).
+
+use <collections/strings>
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let string a = ""
+    let string b = "right"
+    let bool r = (a.len() > 0) or (b.repeat(3).len() > 0)
+    if (r):
+        println("taken")
+
+    return Result.Ok(0)

@@ -1,0 +1,12 @@
+# The perk is declared by a unit of this program and this unit did not import it,
+# so the bare name is not writable here. The per-unit scope rule answers, with its
+# own code, and the existence check never runs (#505).
+# EXPECT_ERROR_CODE: CE2001
+use "helpers/user"
+
+fn shout@(T: Loud)(T x) i32:
+    return Result.Ok(loudness(x).realise(0))
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

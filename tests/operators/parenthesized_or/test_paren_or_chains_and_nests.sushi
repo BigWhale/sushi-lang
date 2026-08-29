@@ -1,0 +1,23 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nthree\nnested\nmixed\n"
+# A chain of three operands, an `or` nested in another bracket, and an `or`
+# beside a tighter operator (#496).
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let bool f = false
+    let bool t = true
+
+    let bool three = (f or f or t)
+    if (three):
+        println("three")
+
+    let bool nested = ((f or t) or f)
+    if (nested):
+        println("nested")
+
+    let bool mixed = (f or (t and t))
+    if (mixed):
+        println("mixed")
+
+    return Result.Ok(0)

@@ -1,0 +1,12 @@
+# The qualified form of the same field. The alias is bound, and the name behind
+# the dot is not a type the imported unit declares (#504).
+# EXPECT_ERROR_CODE: CE2001
+use "helpers/geo" as geo
+
+struct Spot:
+    geo.Nope where
+    i32 x
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

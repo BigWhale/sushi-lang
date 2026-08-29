@@ -1,0 +1,10 @@
+# A missing import is a mistake in the PROGRAM. It used to render as an internal
+# error, with no line, no column, no caret, and a request to report a compiler
+# bug (#501).
+# EXPECT_ERROR_CODE: CE3015
+# EXPECT_STDERR_CONTAINS: "use <collections/strings>"
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    println("{s.len()}")
+    return Result.Ok(0)

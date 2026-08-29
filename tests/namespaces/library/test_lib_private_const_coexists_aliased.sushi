@@ -1,0 +1,10 @@
+# The same pair behind an alias. The import puts nothing into the flat scope, so
+# the consumer's own `SCRATCH` is the only bare answer (#507).
+# EXPECT_STDOUT_EXACT: "3 4100\n"
+use <lib/private_names_lib> as pn
+
+const i32 SCRATCH = 3
+
+fn main() i32:
+    println("{SCRATCH} {pn.lib_scratch().realise(0)}")
+    return Result.Ok(0)

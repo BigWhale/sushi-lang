@@ -1,0 +1,5 @@
+# A unit that imports the same stdlib module its consumer imports.
+use <collections/strings>
+
+public fn width(string s) i32:
+    return Result.Ok(s.len())

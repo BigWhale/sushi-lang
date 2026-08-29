@@ -1,0 +1,17 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\ntrue\n"
+# EXPECT_NO_LEAKS
+# The right operand of an `or` builds a string temporary. The left operand is true,
+# so the right operand never runs and its temporary is never built. The temporary
+# must not be freed on that path (#497).
+
+use <collections/strings>
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let string a = "left"
+    let bool r = (a.len() > 0) or ("right".len() > 0)
+    if (r):
+        println("true")
+
+    return Result.Ok(0)
