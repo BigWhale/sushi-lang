@@ -464,6 +464,74 @@ fn main() i32:
 
 **Note:** Atomically replaces destination if it exists.
 
+### mtime / ctime
+
+The modification and status-change times of a path, as unix seconds.
+
+```sushi
+fn mtime(string path) -> Result@(i64)
+fn ctime(string path) -> Result@(i64)
+```
+
+**Example:**
+```sushi
+use <io/files>
+
+fn main() i32:
+    match mtime("build/output"):
+        Result.Ok(t) -> println("last built at {t}")
+        Result.Err(_) -> println("never built")
+
+    return Result.Ok(0)
+```
+
+**Note:** ctime is the inode status-change time, not the creation time. A `chmod` moves it; a content write moves both.
+
+### mode
+
+The raw `st_mode` of a path: the file-type bits plus the permission bits.
+
+```sushi
+fn mode(string path) -> Result@(i32)
+```
+
+**Example:**
+```sushi
+use <io/files>
+
+fn main() i32:
+    match mode("script.sh"):
+        Result.Ok(m) ->
+            println("permissions: {m & 0o777}")
+        Result.Err(_) -> println("no such file")
+
+    return Result.Ok(0)
+```
+
+**Note:** mask with `0o777` for the permission bits, with `0o170000` for the file-type bits. `is_file`/`is_dir`/`is_symlink` answer the type question directly.
+
+### is_symlink
+
+Ask whether the path itself is a symbolic link. This is the one query that does
+NOT follow the link (`lstat`); `is_file` and `is_dir` answer for the target.
+
+```sushi
+fn is_symlink(string path) -> Result@(bool)
+```
+
+**Example:**
+```sushi
+use <io/files>
+
+fn main() i32:
+    match is_symlink("/usr/local/bin/tool"):
+        Result.Ok(true) -> println("a link")
+        Result.Ok(false) -> println("the real thing")
+        Result.Err(_) -> println("no such path")
+
+    return Result.Ok(0)
+```
+
 ### read_dir
 
 List the entries of a directory.

@@ -4,7 +4,8 @@ from sushi_lang.semantics.typesys import Type, BuiltinType
 
 FILE_UTILITY_FUNCTIONS = [
     "exists", "is_file", "is_dir", "file_size",
-    "remove", "rename", "copy", "mkdir", "rmdir", "read_dir"
+    "remove", "rename", "copy", "mkdir", "rmdir", "read_dir",
+    "mtime", "ctime", "mode", "is_symlink"
 ]
 
 
@@ -18,6 +19,18 @@ def get_builtin_files_function_return_type(func_name: str) -> Type:
 
     if func_name in ["exists", "is_file", "is_dir"]:
         return BuiltinType.BOOL
+    elif func_name in ["mtime", "ctime"]:
+        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Result", (BuiltinType.I64, UnknownType("FileError")))
+    elif func_name == "mode":
+        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Result", (BuiltinType.I32, UnknownType("FileError")))
+    elif func_name == "is_symlink":
+        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Result", (BuiltinType.BOOL, UnknownType("FileError")))
     elif func_name == "file_size":
         # Return Result<i64, FileError> - FileError enum is defined in predefined_enums
         # For now, we need to fetch FileError from the global enum table during compilation
@@ -47,7 +60,7 @@ def validate_files_function_call(func_name: str, args: list, reporter, loc) -> N
     # "duplicate struct '{name}'" and takes no `func`/`expected`/`got` -- so the
     # message was about the wrong thing and none of the parameters reached it.
     if func_name in ["exists", "is_file", "is_dir", "file_size", "remove", "rmdir",
-                     "read_dir"]:
+                     "read_dir", "mtime", "ctime", "mode", "is_symlink"]:
         if len(args) != 1:
             er.emit(reporter, er.ERR.CE2009, loc,
                    name=func_name, expected=1, got=len(args))

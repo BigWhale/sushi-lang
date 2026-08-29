@@ -21,6 +21,10 @@ def _declare_malloc(module: ir.Module, i8_ptr: ir.Type, i64: ir.Type) -> ir.Func
 def generate_ir(module: ir.Module) -> None:
     """Generate LLVM IR for file utility functions."""
     generate_read_dir(module)
+    generate_mtime(module)
+    generate_ctime(module)
+    generate_mode(module)
+    generate_is_symlink(module)
     generate_exists(module)
     generate_is_file(module)
     generate_is_dir(module)
@@ -745,3 +749,121 @@ def generate_read_dir(module: ir.Module) -> None:
     ok_result = builder.insert_value(ok_result, zero_i32, 0, name="ok_with_tag")
     ok_result = builder.insert_value(ok_result, data_value, 1, name="ok_result")
     builder.ret(ok_result)
+
+
+def _generate_stat_field(module: ir.Module, sushi_name: str, ok_type: ir.Type,
+                         ok_bytes: int, use_lstat: bool, read_field) -> None:
+    """Emit `Result<T> <sushi_name>(i8* path)`: one stat/lstat read, one field.
+
+    `read_field(builder, stat_buffer, platform_files)` loads the field and
+    returns it as `ok_type`. A failed call maps errno to the FileError.
+    """
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    platform_files = get_platform_module('files')
+    stat_func = (platform_files.declare_lstat(module) if use_lstat
+                 else platform_files.declare_stat(module))
+    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
+
+    result_type = get_result_type(ok_type, get_unit_enum_type())
+    data_array_type = result_type.elements[1]
+
+    # The path arrives already marshalled as a C string, and the CALLER frees it (#292).
+    func_type = ir.FunctionType(result_type, [i8_ptr])
+    func = ir.Function(module, func_type, name=sushi_name)
+    block = func.append_basic_block(name="entry")
+    builder = ir.IRBuilder(block)
+
+    null_term_path = func.args[0]
+
+    stat_buffer_type = ir.ArrayType(i8, 144)
+    stat_buffer = builder.alloca(stat_buffer_type, name="stat_buffer")
+    stat_buffer_ptr = builder.bitcast(stat_buffer, i8_ptr, name="stat_ptr")
+
+    result = builder.call(stat_func, [null_term_path, stat_buffer_ptr], name="stat_result")
+    success = builder.icmp_signed("==", result, ir.Constant(i32, 0), name="stat_success")
+
+    success_bb = func.append_basic_block(name="success")
+    failure_bb = func.append_basic_block(name="failure")
+    builder.cbranch(success, success_bb, failure_bb)
+
+    builder.position_at_end(failure_bb)
+    builder.ret(emit_errno_err_result(builder, module, result_type))
+
+    builder.position_at_end(success_bb)
+    value = read_field(builder, stat_buffer, platform_files)
+
+    value_alloca = builder.alloca(ok_type, name="field_value")
+    builder.store(value, value_alloca)
+    data_alloca = builder.alloca(data_array_type, name="data_array")
+    builder.store(ir.Constant(data_array_type, None), data_alloca)
+    is_volatile = ir.Constant(ir.IntType(1), 0)
+    builder.call(memcpy_fn, [
+        builder.bitcast(data_alloca, i8_ptr),
+        builder.bitcast(value_alloca, i8_ptr),
+        ir.Constant(i64, ok_bytes), is_volatile,
+    ])
+    data_value = builder.load(data_alloca, name="data_value")
+
+    ok_result = ir.Constant(result_type, ir.Undefined)
+    ok_result = builder.insert_value(ok_result, ir.Constant(i32, 0), 0, name="ok_with_tag")
+    ok_result = builder.insert_value(ok_result, data_value, 1, name="ok_result")
+    builder.ret(ok_result)
+
+
+def _read_i64_at(offset_name: str):
+    """A field reader for an i64 stat field at a platform-named offset."""
+    def read(builder, stat_buffer, platform_files):
+        i32 = ir.IntType(32)
+        i64 = ir.IntType(64)
+        buf = builder.bitcast(stat_buffer, i64.as_pointer())
+        idx = getattr(platform_files, offset_name) // 8
+        ptr = builder.gep(buf, [ir.Constant(i32, idx)], name="field_ptr")
+        return builder.load(ptr, name="field")
+    return read
+
+
+def _read_mode(builder, stat_buffer, platform_files):
+    """st_mode as i32. The field is u16 on Darwin and u32 on glibc; the value
+    fits 16 bits, so a little-endian i16 read serves both (the is_file path
+    reads it the same way)."""
+    i16 = ir.IntType(16)
+    i32 = ir.IntType(32)
+    buf = builder.bitcast(stat_buffer, i16.as_pointer())
+    idx = platform_files.ST_MODE_OFFSET // 2
+    ptr = builder.gep(buf, [ir.Constant(i32, idx)], name="mode_ptr")
+    return builder.zext(builder.load(ptr, name="mode_i16"), i32, name="mode")
+
+
+def generate_mtime(module: ir.Module) -> None:
+    """Generate sushi_io_files_mtime(string path) -> Result<i64> (unix seconds)."""
+    i64 = ir.IntType(64)
+    _generate_stat_field(module, "sushi_io_files_mtime", i64, 8, False,
+                         _read_i64_at("ST_MTIME_OFFSET"))
+
+
+def generate_ctime(module: ir.Module) -> None:
+    """Generate sushi_io_files_ctime(string path) -> Result<i64> (unix seconds)."""
+    i64 = ir.IntType(64)
+    _generate_stat_field(module, "sushi_io_files_ctime", i64, 8, False,
+                         _read_i64_at("ST_CTIME_OFFSET"))
+
+
+def generate_mode(module: ir.Module) -> None:
+    """Generate sushi_io_files_mode(string path) -> Result<i32> (raw st_mode)."""
+    i32 = ir.IntType(32)
+    _generate_stat_field(module, "sushi_io_files_mode", i32, 4, False, _read_mode)
+
+
+def generate_is_symlink(module: ir.Module) -> None:
+    """Generate sushi_io_files_is_symlink(string path) -> Result<bool>, via lstat."""
+    i8 = ir.IntType(8)
+
+    def read(builder, stat_buffer, platform_files):
+        i32 = ir.IntType(32)
+        mode = _read_mode(builder, stat_buffer, platform_files)
+        file_type = builder.and_(mode, ir.Constant(i32, 0o170000), name="file_type")
+        is_link = builder.icmp_signed("==", file_type, ir.Constant(i32, 0o120000),
+                                      name="is_link")
+        return builder.zext(is_link, i8, name="is_link_i8")
+
+    _generate_stat_field(module, "sushi_io_files_is_symlink", i8, 1, True, read)

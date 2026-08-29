@@ -1,0 +1,31 @@
+# mtime of a fresh file is a current unix time.
+# EXPECT_STDOUT_EXACT: "mtime is sane\ncleanup ok\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+
+fn main() i32:
+    let string path = "/tmp/sushi_stat_mtime.txt"
+    match open(path, FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("x")
+            f.close()
+        FileResult.Err(_) ->
+            println("setup failed")
+            return Result.Ok(1)
+    match mtime(path):
+        Result.Ok(t) ->
+            if (t > 1_700_000_000):
+                println("mtime is sane")
+            else:
+                println("mtime too small: {t}")
+        Result.Err(_) -> println("mtime failed")
+    match ctime(path):
+        Result.Ok(t) ->
+            if (t < 1_700_000_000):
+                println("ctime too small: {t}")
+        Result.Err(_) -> println("ctime failed")
+    match remove(path):
+        Result.Ok(_) -> println("cleanup ok")
+        Result.Err(_) -> println("cleanup failed")
+    return Result.Ok(0)

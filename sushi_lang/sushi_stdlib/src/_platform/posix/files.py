@@ -15,6 +15,17 @@ def declare_stat(module: ir.Module, name: str = "stat") -> ir.Function:
         return ir.Function(module, func_type, name=name)
 
 
+def declare_lstat(module: ir.Module, name: str = "lstat") -> ir.Function:
+    """Declare POSIX lstat() syscall; the name parameter mirrors declare_stat."""
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    func_type = ir.FunctionType(i32, [i8_ptr, i8_ptr])
+
+    try:
+        return module.get_global(name)
+    except KeyError:
+        return ir.Function(module, func_type, name=name)
+
+
 def declare_access(module: ir.Module) -> ir.Function:
     """Declare POSIX access() syscall."""
     i8, i8_ptr, i32, i64 = get_basic_types()

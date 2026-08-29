@@ -205,10 +205,20 @@ class ExpressionScanner:
         elif function_name == 'getenv':
             self.instantiations.add(("Maybe", (BuiltinType.STRING,)))
             return
-        elif function_name == 'file_size':
+        elif function_name in {'file_size', 'mtime', 'ctime'}:
             file_error = self.type_inferrer.enum_table.get("FileError")
             if file_error:
                 self.instantiations.add(("Result", (BuiltinType.I64, file_error)))
+            return
+        elif function_name == 'mode':
+            file_error = self.type_inferrer.enum_table.get("FileError")
+            if file_error:
+                self.instantiations.add(("Result", (BuiltinType.I32, file_error)))
+            return
+        elif function_name == 'is_symlink':
+            file_error = self.type_inferrer.enum_table.get("FileError")
+            if file_error:
+                self.instantiations.add(("Result", (BuiltinType.BOOL, file_error)))
             return
         elif function_name in {'remove', 'rename', 'copy', 'mkdir', 'rmdir'}:
             file_error = self.type_inferrer.enum_table.get("FileError")

@@ -212,17 +212,23 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
         result = codegen.builder.call(stdlib_func, [path_cstr], name=f"{func_name}_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
-    elif func_name in ["file_size", "remove", "rmdir"]:
+    elif func_name in ["file_size", "remove", "rmdir", "mtime", "ctime", "mode",
+                       "is_symlink"]:
         if len(expr.args) != 1:
             raise_internal_error("CE0023", method=func_name, expected=1, got=len(expr.args))
         path_cstr = emit_cstr_arg(codegen, expr.args[0])
 
-        # Result<i64|i32, FileError> is {i32 tag, [2 x i64] data} (#300 phase 2):
+        # Result<i64|i32|i8, FileError> is {i32 tag, [2 x i64] data} (#300 phase 2):
         # FileError is a unit enum {i32, [1 x i64]} = 16 bytes, so K = max(payload, 16)/8 = 2.
         # Shared helper keeps this byte-matched with the stdlib .bc.
         from sushi_lang.sushi_stdlib.src.type_definitions import get_result_type, get_unit_enum_type
         i64 = ir.IntType(64)
-        ok_type = i64 if func_name == "file_size" else i32
+        if func_name in ("file_size", "mtime", "ctime"):
+            ok_type = i64
+        elif func_name == "is_symlink":
+            ok_type = i8
+        else:
+            ok_type = i32
         result_type = get_result_type(ok_type, get_unit_enum_type())
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_type, [i8_ptr])
         result = codegen.builder.call(stdlib_func, [path_cstr], name=f"{func_name}_result")

@@ -1,0 +1,37 @@
+# is_symlink answers through lstat: true for the link, false for its target.
+# EXPECT_STDOUT_EXACT: "target: false\nlink: true\ncleanup ok\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+use <sys/process>
+
+fn main() i32:
+    let string target = "/tmp/sushi_stat_symlink_target.txt"
+    let string link = "/tmp/sushi_stat_symlink_link"
+    match open(target, FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("x")
+            f.close()
+        FileResult.Err(_) ->
+            println("setup failed")
+            return Result.Ok(1)
+    match run("ln", "-s", target, link):
+        Result.Ok(_) -> ~
+        Result.Err(_) ->
+            println("setup ln failed")
+            return Result.Ok(1)
+
+    match is_symlink(target):
+        Result.Ok(b) -> println("target: {b}")
+        Result.Err(_) -> println("is_symlink failed on target")
+    match is_symlink(link):
+        Result.Ok(b) -> println("link: {b}")
+        Result.Err(_) -> println("is_symlink failed on link")
+
+    match remove(link):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> return Result.Ok(1)
+    match remove(target):
+        Result.Ok(_) -> println("cleanup ok")
+        Result.Err(_) -> println("cleanup failed")
+    return Result.Ok(0)

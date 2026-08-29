@@ -1,0 +1,27 @@
+# Every stat field reports NotFound on a missing path.
+# EXPECT_STDOUT_EXACT: "mtime: not found\nmode: not found\nis_symlink: not found\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+
+fn main() i32:
+    let string missing = "/tmp/sushi_stat_missing_path"
+    match mtime(missing):
+        Result.Ok(_) -> println("mtime: found")
+        Result.Err(e) ->
+            match e:
+                FileError.NotFound -> println("mtime: not found")
+                _ -> println("mtime: other")
+    match mode(missing):
+        Result.Ok(_) -> println("mode: found")
+        Result.Err(e) ->
+            match e:
+                FileError.NotFound -> println("mode: not found")
+                _ -> println("mode: other")
+    match is_symlink(missing):
+        Result.Ok(_) -> println("is_symlink: found")
+        Result.Err(e) ->
+            match e:
+                FileError.NotFound -> println("is_symlink: not found")
+                _ -> println("is_symlink: other")
+    return Result.Ok(0)

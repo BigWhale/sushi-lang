@@ -1,6 +1,7 @@
 """Platform-specific file system declarations for Linux."""
 from sushi_lang.sushi_stdlib.src._platform.posix.files import (
     declare_stat,
+    declare_lstat,
     declare_opendir,
     declare_readdir,
     declare_closedir,
@@ -40,6 +41,7 @@ DIRENT_NAME_OFFSET = 19
 
 __all__ = [
     "declare_stat",
+    "declare_lstat",
     "declare_opendir",
     "declare_readdir",
     "declare_closedir",

@@ -4,6 +4,7 @@ from sushi_lang.backend.platform_detect import get_current_platform
 from sushi_lang.sushi_stdlib.src._platform.posix.files import (
     declare_stat as _declare_stat_posix,
     declare_readdir as _declare_readdir_posix,
+    declare_lstat as _declare_lstat_posix,
     declare_opendir,
     declare_closedir,
     declare_access,
@@ -51,8 +52,15 @@ def declare_readdir(module: ir.Module) -> ir.Function:
     name = "readdir$INODE64" if get_current_platform().arch == "x86_64" else "readdir"
     return _declare_readdir_posix(module, name)
 
+
+def declare_lstat(module: ir.Module) -> ir.Function:
+    """Declare lstat with the 64-bit-inode symbol for the arch."""
+    name = "lstat$INODE64" if get_current_platform().arch == "x86_64" else "lstat"
+    return _declare_lstat_posix(module, name)
+
 __all__ = [
     "declare_stat",
+    "declare_lstat",
     "declare_opendir",
     "declare_readdir",
     "declare_closedir",
