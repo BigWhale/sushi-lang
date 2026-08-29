@@ -1,0 +1,14 @@
+# file_size on a missing path reports NotFound (regression guard for the retrofit).
+# EXPECT_STDOUT_EXACT: "not found\n"
+
+use <io/files>
+
+fn main() i32:
+    match file_size("/tmp/sushi_errno_missing_file.txt"):
+        Result.Ok(_) ->
+            println("has a size")
+        Result.Err(e) ->
+            match e:
+                FileError.NotFound -> println("not found")
+                _ -> println("other")
+    return Result.Ok(0)

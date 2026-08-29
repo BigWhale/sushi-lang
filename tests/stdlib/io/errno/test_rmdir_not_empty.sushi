@@ -1,0 +1,39 @@
+# rmdir on a directory with content is not NotFound; the entry maps to Other.
+# EXPECT_STDOUT_EXACT: "not empty maps to Other\ncleanup ok\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+
+fn main() i32:
+    let string dir = "/tmp/sushi_errno_nonempty"
+    match mkdir(dir, 0o755):
+        Result.Ok(_) -> ~
+        Result.Err(_) ->
+            println("setup failed")
+            return Result.Ok(1)
+    match open("/tmp/sushi_errno_nonempty/entry.txt", FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("x")
+            f.close()
+        FileResult.Err(_) ->
+            println("setup open failed")
+            return Result.Ok(1)
+
+    match rmdir(dir):
+        Result.Ok(_) ->
+            println("rmdir succeeded on a full directory")
+        Result.Err(e) ->
+            match e:
+                FileError.Other -> println("not empty maps to Other")
+                FileError.NotFound -> println("wrong: NotFound")
+                _ -> println("wrong: some other variant")
+
+    match remove("/tmp/sushi_errno_nonempty/entry.txt"):
+        Result.Ok(_) -> ~
+        Result.Err(_) ->
+            println("cleanup remove failed")
+            return Result.Ok(1)
+    match rmdir(dir):
+        Result.Ok(_) -> println("cleanup ok")
+        Result.Err(_) -> println("cleanup rmdir failed")
+    return Result.Ok(0)

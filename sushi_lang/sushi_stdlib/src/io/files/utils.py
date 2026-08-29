@@ -4,7 +4,9 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types, get_result_type, get_unit_enum_type,
 )
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
-from sushi_lang.backend.platform_detect import get_current_platform
+from sushi_lang.sushi_stdlib.src.io.files.errno import (
+    emit_errno_err_result, emit_err_result, emit_file_error_tag,
+)
 
 
 def _declare_malloc(module: ir.Module, i8_ptr: ir.Type, i64: ir.Type) -> ir.Function:
@@ -93,8 +95,7 @@ def _generate_stat_mode_check(module: ir.Module, sushi_name: str, s_iftype: int)
 
     builder.position_at_end(success_bb)
 
-    platform = get_current_platform()
-    mode_offset = 4 if platform.is_darwin else 24
+    mode_offset = platform_files.ST_MODE_OFFSET
 
     i16 = ir.IntType(16)
     i16_ptr = i16.as_pointer()
@@ -163,17 +164,11 @@ def generate_file_size(module: ir.Module) -> None:
     builder.cbranch(success, success_bb, failure_bb)
 
     builder.position_at_end(failure_bb)
-    err_tag = ir.Constant(i32, 1)
-    zero_data = ir.Constant(data_array_type, None)
-    err_result = ir.Constant(result_type, ir.Undefined)
-    err_result = builder.insert_value(err_result, err_tag, 0, name="err_with_tag")
-    err_result = builder.insert_value(err_result, zero_data, 1, name="err_result")
-    builder.ret(err_result)
+    builder.ret(emit_errno_err_result(builder, module, result_type))
 
     builder.position_at_end(success_bb)
 
-    platform = get_current_platform()
-    size_offset = 96 if platform.is_darwin else 48
+    size_offset = platform_files.ST_SIZE_OFFSET
 
     i64_ptr = i64.as_pointer()
     i64_buffer_ptr = builder.bitcast(stat_buffer, i64_ptr)
@@ -236,12 +231,7 @@ def generate_remove(module: ir.Module) -> None:
     builder.cbranch(success, success_bb, failure_bb)
 
     builder.position_at_end(failure_bb)
-    err_tag = ir.Constant(i32, 1)
-    zero_data = ir.Constant(data_array_type, None)
-    err_result = ir.Constant(result_type, ir.Undefined)
-    err_result = builder.insert_value(err_result, err_tag, 0, name="err_with_tag")
-    err_result = builder.insert_value(err_result, zero_data, 1, name="err_result")
-    builder.ret(err_result)
+    builder.ret(emit_errno_err_result(builder, module, result_type))
 
     builder.position_at_end(success_bb)
 
@@ -298,12 +288,7 @@ def generate_rmdir(module: ir.Module) -> None:
     builder.cbranch(success, success_bb, failure_bb)
 
     builder.position_at_end(failure_bb)
-    err_tag = ir.Constant(i32, 1)
-    zero_data = ir.Constant(data_array_type, None)
-    err_result = ir.Constant(result_type, ir.Undefined)
-    err_result = builder.insert_value(err_result, err_tag, 0, name="err_with_tag")
-    err_result = builder.insert_value(err_result, zero_data, 1, name="err_result")
-    builder.ret(err_result)
+    builder.ret(emit_errno_err_result(builder, module, result_type))
 
     builder.position_at_end(success_bb)
 
@@ -361,12 +346,7 @@ def generate_mkdir(module: ir.Module) -> None:
     builder.cbranch(success, success_bb, failure_bb)
 
     builder.position_at_end(failure_bb)
-    err_tag = ir.Constant(i32, 1)
-    zero_data = ir.Constant(data_array_type, None)
-    err_result = ir.Constant(result_type, ir.Undefined)
-    err_result = builder.insert_value(err_result, err_tag, 0, name="err_with_tag")
-    err_result = builder.insert_value(err_result, zero_data, 1, name="err_result")
-    builder.ret(err_result)
+    builder.ret(emit_errno_err_result(builder, module, result_type))
 
     builder.position_at_end(success_bb)
 
@@ -424,12 +404,7 @@ def generate_rename(module: ir.Module) -> None:
     builder.cbranch(success, success_bb, failure_bb)
 
     builder.position_at_end(failure_bb)
-    err_tag = ir.Constant(i32, 1)
-    zero_data = ir.Constant(data_array_type, None)
-    err_result = ir.Constant(result_type, ir.Undefined)
-    err_result = builder.insert_value(err_result, err_tag, 0, name="err_with_tag")
-    err_result = builder.insert_value(err_result, zero_data, 1, name="err_result")
-    builder.ret(err_result)
+    builder.ret(emit_errno_err_result(builder, module, result_type))
 
     builder.position_at_end(success_bb)
 
@@ -463,17 +438,10 @@ def generate_copy(module: ir.Module) -> None:
     write_func = platform_files.declare_write(module)
     close_func = platform_files.declare_close(module)
 
-    platform = get_current_platform()
-    if platform.is_darwin:
-        O_RDONLY = 0
-        O_WRONLY = 1
-        O_CREAT = 0x0200
-        O_TRUNC = 0x0400
-    else:
-        O_RDONLY = 0
-        O_WRONLY = 1
-        O_CREAT = 0x40
-        O_TRUNC = 0x200
+    O_RDONLY = platform_files.O_RDONLY
+    O_WRONLY = platform_files.O_WRONLY
+    O_CREAT = platform_files.O_CREAT
+    O_TRUNC = platform_files.O_TRUNC
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
@@ -501,6 +469,10 @@ def generate_copy(module: ir.Module) -> None:
     copy_buffer = builder.alloca(ir.ArrayType(i8, COPY_BUFFER_BYTES), name="copy_buffer_local")
     copy_buffer = builder.bitcast(copy_buffer, i8_ptr, name="copy_buffer")
 
+    # errno is read on the failure edge and parked here, BEFORE any close()
+    # call can overwrite it; the shared error block loads it back.
+    err_tag_slot = builder.alloca(i32, name="err_tag_slot")
+
     src_fd = builder.call(open_func, [
         src_null_term,
         ir.Constant(i32, O_RDONLY),
@@ -512,7 +484,12 @@ def generate_copy(module: ir.Module) -> None:
 
     src_open_ok_bb = func.append_basic_block(name="src_open_ok")
     error_bb = func.append_basic_block(name="error")
-    builder.cbranch(src_open_failed, error_bb, src_open_ok_bb)
+    error_src_open_bb = func.append_basic_block(name="error_src_open")
+    builder.cbranch(src_open_failed, error_src_open_bb, src_open_ok_bb)
+
+    builder.position_at_end(error_src_open_bb)
+    builder.store(emit_file_error_tag(builder, module), err_tag_slot)
+    builder.branch(error_bb)
 
     builder.position_at_end(src_open_ok_bb)
     dst_flags = O_WRONLY | O_CREAT | O_TRUNC
@@ -584,18 +561,16 @@ def generate_copy(module: ir.Module) -> None:
     builder.ret(ok_result)
 
     builder.position_at_end(error_close_both_bb)
+    builder.store(emit_file_error_tag(builder, module), err_tag_slot)
     builder.call(close_func, [src_fd])
     builder.call(close_func, [dst_fd])
     builder.branch(error_bb)
 
     builder.position_at_end(error_close_src_bb)
+    builder.store(emit_file_error_tag(builder, module), err_tag_slot)
     builder.call(close_func, [src_fd])
     builder.branch(error_bb)
 
     builder.position_at_end(error_bb)
-    err_tag = ir.Constant(i32, 1)
-    zero_data = ir.Constant(data_array_type, None)
-    err_result = ir.Constant(result_type, ir.Undefined)
-    err_result = builder.insert_value(err_result, err_tag, 0, name="err_with_tag")
-    err_result = builder.insert_value(err_result, zero_data, 1, name="err_result")
-    builder.ret(err_result)
+    err_tag = builder.load(err_tag_slot, name="err_tag")
+    builder.ret(emit_err_result(builder, result_type, err_tag))
