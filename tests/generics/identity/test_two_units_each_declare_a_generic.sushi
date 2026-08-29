@@ -1,0 +1,15 @@
+# Two units each declare a private `twin@(T)`. Each unit's call reaches its own
+# declaration, because a generic function carries the unit that declared it (#495).
+# EXPECT_STDOUT_EXACT: "main twin\nhelper twin\n90 1\n"
+use "helpers/generic_twin"
+
+fn twin@(T)(nom T x) T:
+    println("main twin")
+    return Result.Ok(x)
+
+fn main() i32:
+    let i64 seed = 90
+    let i64 a = twin(nom seed).realise(0)
+    let i32 b = twin_use().realise(0)
+    println("{a} {b}")
+    return Result.Ok(0)

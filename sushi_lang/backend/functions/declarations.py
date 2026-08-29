@@ -13,10 +13,16 @@ if TYPE_CHECKING:
 def declaring_unit(fn: FuncDef, unit_name: str | None) -> str | None:
     """Whose symbol this declaration takes.
 
-    A synthesized body -- a monomorphized instance, a lifted lambda -- belongs to no
-    unit and keeps the bare name it was given, whichever unit's AST carries it.
+    A monomorphized instance goes home to the unit that declared its generic (#495):
+    `home_unit` is stamped by `generics/synthesis.py`, and two units' instances of
+    one mangled base name become two symbols. A lifted lambda carries no home and
+    keeps its bare name -- the per-unit lifter's counter already makes it unique
+    (#402) -- and so does a binary library's template instance, whose home names no
+    unit in the build.
     """
-    return None if getattr(fn, "is_synthesized", False) else unit_name
+    if getattr(fn, "is_synthesized", False):
+        return getattr(fn, "home_unit", None)
+    return unit_name
 
 
 class FunctionDeclarations:

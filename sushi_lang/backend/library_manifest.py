@@ -440,45 +440,60 @@ class LibraryManifestGenerator:
     def _compute_export_closure(self, units: list['Unit'], exported: list) -> dict:
         """Walk every exported generic and collect the library-private symbols its body
         (transitively) depends on - the EXPORT CLOSURE (C4b/C5).
+
+        Every index is keyed `(unit, name)`, and a reference resolves from the unit
+        whose body names it: own unit first, then the flat view (#494). A name a
+        template body resolves to a private concrete function is recorded in that
+        template's BINDINGS map, name -> link symbol, because a binary library has no
+        `Unit` at the consumer and no scope to resolve the re-parsed body against (D4).
+        `external_namespaces` stays flat on purpose: a namespace bound in another unit
+        over-rejects at worst, and CE5006 already refuses a template that names one.
         """
         import sushi_lang.internals.errors as er
+        from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
 
-        priv_concrete_fns: dict[str, tuple] = {}
-        priv_generic_fns: dict[str, tuple] = {}
-        constants: dict[str, tuple] = {}
-        types_by_name: dict[str, tuple] = {}
+        priv_concrete_fns: dict[tuple[str, str], tuple] = {}
+        priv_generic_fns: dict[tuple[str, str], tuple] = {}
+        constants: dict[tuple[str, str], tuple] = {}
+        types_by_name: dict[tuple[str, str], tuple] = {}
         external_namespaces: set[str] = set()
-        # Whose declaration each name is. The BINARY path ships a body and the consumer
-        # calls it by the producer's symbol, which is `<unit>$<name>`, so the record has
-        # to say which unit (`docs/design/unit-namespaces.md` section 9). Name-keyed like
-        # every index here.
-        declaring_unit: dict[str, str] = {}
 
         for unit in units:
             if unit.ast is None:
                 continue
             source = unit.file_path.read_text()
             for fn in unit.ast.functions:
-                declaring_unit.setdefault(fn.name, unit.name)
                 if fn.type_params:
                     if not getattr(fn, "is_public", False):
-                        priv_generic_fns[fn.name] = (fn, source)
+                        priv_generic_fns[(unit.name, fn.name)] = (fn, source)
                 elif not getattr(fn, "is_public", False):
-                    priv_concrete_fns[fn.name] = (fn, source)
+                    priv_concrete_fns[(unit.name, fn.name)] = (fn, source)
             for c in unit.ast.constants:
-                constants[c.name] = (c, source)
+                constants[(unit.name, c.name)] = (c, source)
             for s in unit.ast.structs:
-                types_by_name[s.name] = (s, source)
+                types_by_name[(unit.name, s.name)] = (s, source)
             for e in unit.ast.enums:
-                types_by_name[e.name] = (e, source)
+                types_by_name[(unit.name, e.name)] = (e, source)
             for ext in getattr(unit.ast, "externals", None) or []:
                 external_namespaces.add(ext.namespace)
 
-        shipped_fns: dict[str, tuple] = {}
-        shipped_generic_fns: dict[str, tuple] = {}
-        shipped_consts: dict[str, tuple] = {}
-        shipped_types: dict[str, tuple] = {}
-        visited: set[str] = set()
+        def _resolve(index: dict, unit: str, name: str):
+            """Own unit first, then the flat view -- first declaration wins, which is
+            insertion order, which is the compilation order."""
+            hit = index.get((unit, name))
+            if hit is not None:
+                return (unit, name), hit
+            for (u, n), payload in index.items():
+                if n == name:
+                    return (u, n), payload
+            return None, None
+
+        shipped_fns: dict[tuple[str, str], tuple] = {}
+        shipped_generic_fns: dict[tuple[str, str], tuple] = {}
+        shipped_consts: dict[tuple[str, str], tuple] = {}
+        shipped_types: dict[tuple[str, str], tuple] = {}
+        bindings: dict[tuple[str, str], dict[str, str]] = {}
+        visited: set[tuple[str, str]] = set()
 
         rejected = False
 
@@ -496,7 +511,10 @@ class LibraryManifestGenerator:
                     getattr(root, "name_span", None) or root.loc,
                     name=root.name, symbol=symbol)
 
-        def _walk(node, root) -> None:
+        def _walk(node, root, unit: str, sink: dict | None) -> None:
+            """`unit` is whose body `node` is; `sink` is the bindings map of the
+            template this body ships as SOURCE with, or None where the body ships
+            as bitcode and its references resolve at the producer's link."""
             if rejected:
                 return
 
@@ -508,14 +526,19 @@ class LibraryManifestGenerator:
             own |= {tp.name for tp in (getattr(node, "type_params", None) or [])}
             own |= {p.name for p in (getattr(node, "params", None) or [])}
 
-            for name in sorted(refs - own - visited):
+            for name in sorted(refs - own):
                 if rejected:
                     return
                 if name in external_namespaces:
                     _reject(root, name)
                     return
-                elif name in priv_concrete_fns:
-                    fn, src = priv_concrete_fns[name]
+                key, payload = _resolve(priv_concrete_fns, unit, name)
+                if payload is not None:
+                    fn, src = payload
+                    if sink is not None:
+                        sink[name] = mangle_unit_symbol(key[0], name)
+                    if key in visited:
+                        continue
                     if any(getattr(p, "is_variadic", False) for p in fn.params):
                         _reject(root, name)
                         return
@@ -524,42 +547,55 @@ class LibraryManifestGenerator:
                     ):
                         _reject(root, name)
                         return
-                    visited.add(name)
-                    shipped_fns[name] = (fn, src)
-                    _walk(fn, root)
-                elif name in priv_generic_fns:
-                    fn, src = priv_generic_fns[name]
-                    visited.add(name)
-                    shipped_generic_fns[name] = (fn, src)
-                    _walk(fn, root)
-                elif name in constants:
-                    c, src = constants[name]
-                    visited.add(name)
-                    shipped_consts[name] = (c, src)
-                    _walk(c, root)
-                elif name in types_by_name:
-                    tnode, src = types_by_name[name]
-                    visited.add(name)
+                    visited.add(key)
+                    shipped_fns[key] = (fn, src)
+                    _walk(fn, root, key[0], None)
+                    continue
+                key, payload = _resolve(priv_generic_fns, unit, name)
+                if payload is not None:
+                    if key in visited:
+                        continue
+                    fn, src = payload
+                    visited.add(key)
+                    shipped_generic_fns[key] = (fn, src)
+                    _walk(fn, root, key[0], bindings.setdefault(key, {}))
+                    continue
+                key, payload = _resolve(constants, unit, name)
+                if payload is not None:
+                    if key in visited:
+                        continue
+                    c, src = payload
+                    visited.add(key)
+                    shipped_consts[key] = (c, src)
+                    _walk(c, root, key[0], None)
+                    continue
+                key, payload = _resolve(types_by_name, unit, name)
+                if payload is not None:
+                    if key in visited:
+                        continue
+                    tnode, src = payload
+                    visited.add(key)
                     # A private type has to travel with the template that names it. The
                     # public list is gated on the marker, so before this the template
                     # arrived at the consumer with a type nothing had registered, and the
                     # transplanted body was CE2001 "unknown type" about the library's own
                     # struct.
                     if not getattr(tnode, "is_public", True):
-                        shipped_types[name] = (tnode, src)
-                    _walk(tnode, root)
+                        shipped_types[key] = (tnode, src)
+                    _walk(tnode, root, key[0], None)
 
-        for node, _source in exported:
-            _walk(node, node)
+        for node, _source, unit_name in exported:
+            _walk(node, node, unit_name,
+                  bindings.setdefault((unit_name, node.name), {}))
             if rejected:
                 break
 
         return {
-            "private_functions": list(shipped_fns.values()),
-            "private_generic_functions": list(shipped_generic_fns.values()),
-            "constants": list(shipped_consts.values()),
-            "private_types": list(shipped_types.values()),
-            "units": declaring_unit,
+            "private_functions": [(fn, src, u) for (u, _n), (fn, src) in shipped_fns.items()],
+            "private_generic_functions": [(fn, src, u) for (u, _n), (fn, src) in shipped_generic_fns.items()],
+            "constants": [(c, src, u) for (u, _n), (c, src) in shipped_consts.items()],
+            "private_types": [(t, src, u) for (u, _n), (t, src) in shipped_types.items()],
+            "bindings": bindings,
         }
 
     def _extract_templates(self, units: list['Unit']) -> dict:
@@ -587,7 +623,7 @@ class LibraryManifestGenerator:
             for func in unit.ast.functions:
                 if not (func.is_public and func.type_params):
                     continue
-                exported.append((func, source))
+                exported.append((func, source, unit.name))
                 record = serialize_generic_function(func, source)
                 record["unit"] = unit.name
                 generic_functions.append(record)
@@ -595,7 +631,7 @@ class LibraryManifestGenerator:
             for struct in unit.ast.structs:
                 if not struct.type_params:
                     continue
-                exported.append((struct, source))
+                exported.append((struct, source, unit.name))
                 record = serialize_generic_struct(struct, source)
                 record["unit"] = unit.name
                 generic_structs.append(record)
@@ -603,7 +639,7 @@ class LibraryManifestGenerator:
             for enum in unit.ast.enums:
                 if not enum.type_params:
                     continue
-                exported.append((enum, source))
+                exported.append((enum, source, unit.name))
                 record = serialize_generic_enum(enum, source)
                 record["unit"] = unit.name
                 generic_enums.append(record)
@@ -613,13 +649,25 @@ class LibraryManifestGenerator:
         # (shipping them below) and reject un-shippable references (CE5006).
         closure = self._compute_export_closure(units, exported)
 
-        for fn, src in closure["private_generic_functions"]:
+        # D4: each template that ships as SOURCE carries the map from every free
+        # name its body resolved to the symbol the producer resolved it to. Absent
+        # when the body resolved nothing, so a self-contained template grows by
+        # nothing.
+        for record in generic_functions:
+            resolved = closure["bindings"].get((record["unit"], record["name"]))
+            if resolved:
+                record["bindings"] = resolved
+
+        for fn, src, unit_name in closure["private_generic_functions"]:
             record = serialize_generic_function(fn, src)
-            record["unit"] = closure["units"].get(fn.name)
+            record["unit"] = unit_name
             # A private symbol is not part of the documented API, so the record that
             # marks one drops its doc on the same line (documentation.md S8, R4).
             record["private"] = True
             record.pop("doc", None)
+            resolved = closure["bindings"].get((unit_name, fn.name))
+            if resolved:
+                record["bindings"] = resolved
             generic_functions.append(record)
             referenced_perks.update(record.get("free_perks", []))
 
@@ -629,32 +677,31 @@ class LibraryManifestGenerator:
         private_functions = [
             {
                 "name": fn.name,
-                "unit": closure["units"].get(fn.name),
-                "link_symbol": mangle_unit_symbol(
-                    closure["units"].get(fn.name), fn.name),
+                "unit": unit_name,
+                "link_symbol": mangle_unit_symbol(unit_name, fn.name),
                 **signature_record(fn),
             }
-            for fn, _src in closure["private_functions"]
+            for fn, _src, unit_name in closure["private_functions"]
         ]
         shipped_constants = [
-            {"name": c.name, "source": slice_decl_source(c, src)}
-            for c, src in closure["constants"]
+            {"name": c.name, "unit": unit_name, "source": slice_decl_source(c, src)}
+            for c, src, unit_name in closure["constants"]
         ]
         # A private type travels as source, exactly as a private constant does, and for
         # the same reason: the consumer re-parses it and registers it so a transplanted
         # template body can name it. It is NOT in the public `structs` / `enums` index,
         # which is what the marker gates.
         shipped_types = [
-            {"name": node.name, "source": slice_decl_source(node, src)}
-            for node, src in closure["private_types"]
+            {"name": node.name, "unit": unit_name, "source": slice_decl_source(node, src)}
+            for node, src, unit_name in closure["private_types"]
         ]
         closure_summary = {
-            "private_functions": sorted(r["name"] for r in private_functions),
+            "private_functions": sorted({r["name"] for r in private_functions}),
             "private_generic_functions": sorted(
-                fn.name for fn, _ in closure["private_generic_functions"]
+                {fn.name for fn, _, _ in closure["private_generic_functions"]}
             ),
-            "constants": sorted(r["name"] for r in shipped_constants),
-            "private_types": sorted(r["name"] for r in shipped_types),
+            "constants": sorted({r["name"] for r in shipped_constants}),
+            "private_types": sorted({r["name"] for r in shipped_types}),
         }
 
         perks: list[dict] = []
@@ -700,7 +747,11 @@ class LibraryManifestGenerator:
                 perk_impls.append(record)
 
         return {
-            "version": 4,
+            # 5: every record carries its unit, and a source-shipped template carries
+            # `bindings` (D4). An older consumer resolves the flat way, so an old
+            # compiler is refused by the container's requires_compiler, and an old
+            # LIBRARY is refused by the consumer's templates gate (decision B).
+            "version": 5,
             "generic_functions": generic_functions,
             "generic_structs": generic_structs,
             "generic_enums": generic_enums,

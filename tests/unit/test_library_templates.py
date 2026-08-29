@@ -169,7 +169,7 @@ def test_closure_check_accepts_self_contained_generic(tmp_path):
 
     templates = gen._extract_templates([unit])
 
-    assert templates["version"] == 4
+    assert templates["version"] == 5
     assert templates["perks"] == []
     assert templates["perk_impls"] == []
     names = [g["name"] for g in templates["generic_functions"]]
@@ -756,7 +756,7 @@ def test_extract_templates_ships_impl_of_referenced_perk(tmp_path):
 
     templates = gen._extract_templates([unit])
 
-    assert templates["version"] == 4
+    assert templates["version"] == 5
     assert [p["name"] for p in templates["perks"]] == ["Doubler"]
     impls = templates["perk_impls"]
     assert len(impls) == 1

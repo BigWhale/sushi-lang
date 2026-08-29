@@ -135,7 +135,7 @@ def test_cache_returns_same_object_and_grows_by_one():
     assert fn_a is fn_b, "second call must return the cached FuncDef object"
     assert after_first - before == 1, "first call adds exactly one cache entry"
     assert after_second == after_first, "cache hit must not add an entry"
-    assert (generic.name, (I32, STR)) in cache
+    assert (generic.unit_name, generic.name, (I32, STR)) in cache
 
 
 def test_distinct_arities_create_two_cache_entries():
@@ -154,8 +154,8 @@ def test_distinct_arities_create_two_cache_entries():
     assert after - before == 2, "two distinct instantiations -> two cache entries"
     assert fn1 is not fn3
     assert fn1.name != fn3.name
-    assert (generic.name, (I32,)) in cache
-    assert (generic.name, (I32, STR, BOOL)) in cache
+    assert (generic.unit_name, generic.name, (I32,)) in cache
+    assert (generic.unit_name, generic.name, (I32, STR, BOOL)) in cache
 
 
 # 4. Pairwise-unique mangling collision matrix

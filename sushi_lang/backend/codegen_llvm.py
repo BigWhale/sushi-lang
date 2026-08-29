@@ -918,36 +918,50 @@ class LLVMCodegen:
                 self.function_return_types.declare(func_name, result_type)
 
     def _declare_library_functions_from_registry(self) -> None:
-        """Declare library functions using pre-parsed FuncSig from registry."""
+        """Declare library functions using pre-parsed FuncSig from registry.
 
-        all_sigs = dict(self.library_registry.get_all_functions())
-        for name, (_lib, sig) in self.library_registry.get_all_private_functions().items():
-            all_sigs.setdefault(name, sig)
+        A PUBLIC record declares under its bare name, as before. A PRIVATE record
+        declares under ITS unit -- two library units may each ship a `helper`
+        (#494) -- and also under its LINK SYMBOL, which is the callee a template
+        body's bindings rewrite produced (D4).
+        """
 
-        for func_name, func_sig in all_sigs.items():
-            if func_name in self.funcs:
-                continue
+        def _declare_one(func_sig, name: str, unit: str | None):
+            from sushi_lang.backend.generics.result_builder import intern_result
 
             param_types = [self.types.ll_type(p.ty) for p in func_sig.params]
-            ret_type = func_sig.ret_type
-
-            from sushi_lang.backend.generics.result_builder import intern_result
             std_error = self.enum_table.by_name.get("StdError") if self.enum_table else None
-            result_type = intern_result(self, ret_type, std_error if std_error else ret_type)
+            result_type = intern_result(
+                self, func_sig.ret_type,
+                std_error if std_error else func_sig.ret_type)
             ll_ret = self.types.ll_type(result_type)
 
-            fnty = ir.FunctionType(ll_ret, param_types)
-            llvm_fn = ir.Function(
-                self.module, fnty,
-                name=getattr(func_sig, "link_symbol", None) or func_name)
-            llvm_fn.linkage = 'external'
+            symbol = getattr(func_sig, "link_symbol", None) or name
+            llvm_fn = self.module.globals.get(symbol)
+            if llvm_fn is None:
+                llvm_fn = ir.Function(self.module, ir.FunctionType(ll_ret, param_types),
+                                      name=symbol)
+                llvm_fn.linkage = 'external'
+                for i, p in enumerate(func_sig.params):
+                    if i < len(llvm_fn.args):
+                        llvm_fn.args[i].name = p.name
 
-            for i, p in enumerate(func_sig.params):
-                if i < len(llvm_fn.args):
-                    llvm_fn.args[i].name = p.name
+            self.funcs.declare(name, llvm_fn, unit=unit)
+            self.function_return_types.declare(name, result_type, unit=unit)
+            if symbol != name:
+                self.funcs.declare(symbol, llvm_fn)
+                self.function_return_types.declare(symbol, result_type)
 
-            self.funcs.declare(func_name, llvm_fn)
-            self.function_return_types.declare(func_name, result_type)
+        for func_name, func_sig in self.library_registry.get_all_functions().items():
+            if func_name in self.funcs:
+                continue
+            _declare_one(func_sig, func_name, None)
+
+        for (unit, name), (_lib, sig) in \
+                self.library_registry.get_all_private_functions().items():
+            if self.funcs.declared(name, unit) is not None:
+                continue
+            _declare_one(sig, name, unit)
 
     def _constant_string_value(self, text: str, data_name: str) -> ir.Constant:
         """A `{i8*, i32, i8 owned}` constant, with its backing byte array global.

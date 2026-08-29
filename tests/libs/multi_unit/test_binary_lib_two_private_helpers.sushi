@@ -1,0 +1,11 @@
+# A BINARY library of two units, each with a private `helper` and a public
+# template that calls its own. Each template must reach its OWN body (#494);
+# today both print 210 because the manifest ships ONE bare-name record.
+# EXPECT_STDOUT_EXACT: "11\n210\n1 2\n"
+use <lib/twolib_bin>
+
+fn main() i32:
+    let i32 a = main_take(nom 1, 10).realise(0)
+    let i32 b = side_take(nom 2, 10).realise(0)
+    println("{a} {b}")
+    return Result.Ok(0)

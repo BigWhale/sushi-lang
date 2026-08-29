@@ -203,6 +203,20 @@ another's.
   because it still occupies one slot.
 
 ### Fixed
+- **Two units may each declare a generic function, and every instance knows its home**
+  (#495, #494). A generic function now carries the unit that declared it, exactly as a
+  concrete function does: two units' `twin@(T)` coexist, each unit's call reaches its
+  own, and a monomorphized instance takes its declaring unit's symbol prefix
+  (`main$twin__i32` beside `helper$twin__i32`), `internal` when the generic is private.
+  Within one unit a duplicate stays CE0101. The same identity fixes a silent wrong
+  answer in a binary library: the export closure ships one record per `(unit, name)` --
+  two library units may each keep a private `helper` -- and every source-shipped
+  template carries a `bindings` map from each free name in its body to the symbol the
+  producer resolved, so a template can never call another unit's body. The templates
+  schema moves to version 5, and a binary `.slib` built with the old schema is refused
+  (CE3512) and must be rebuilt. A private generic in a helper unit, instantiated from
+  its own unit, no longer dies with CE0000.
+
 - **Two ordinary units may implement each other's perks.** A perk declared next door and
   implemented at home was `CE4003: unknown perk`, and the same shape across a `.slib`
   worked. Nothing about the perk was wrong: the compilation order puts a dependent before

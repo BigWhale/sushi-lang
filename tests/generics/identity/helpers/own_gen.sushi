@@ -1,0 +1,6 @@
+# A PRIVATE generic, instantiated from its own unit and from nowhere else.
+fn priv_id@(T)(nom T x) T:
+    return Result.Ok(x)
+
+public fn own_use() i32:
+    return Result.Ok(priv_id(nom 5)??)

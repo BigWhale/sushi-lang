@@ -40,7 +40,10 @@ def _build_callee_modes(tables, unit_name: Optional[str] = None,
     stdlib_sigs = funcs.stdlib_by_name() if funcs is not None else {}
     # A generic fn is called by its bare name in a template body but interned under a
     # mangled one, and the mode does not vary per instantiation. Concrete table first.
-    sigs = dict(getattr(getattr(tables, "generic_funcs", None), "by_name", None) or {})
+    # Both tables answer per unit, or a call is measured against a declaration from
+    # next door (#495).
+    generics = getattr(tables, "generic_funcs", None)
+    sigs = dict(generics.view_for(unit_name, scope) if generics is not None else {})
     sigs.update(funcs.view_for(unit_name, scope) if funcs is not None else {})
     return CalleeModes(
         func_sigs=sigs,

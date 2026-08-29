@@ -192,4 +192,4 @@ def test_collector_discovers_pack_instantiation():
     )
     _type_inst, func_inst = inst.run(program)
 
-    assert ("print_all", (I32, STR)) in func_inst
+    assert (None, "print_all", (I32, STR)) in func_inst

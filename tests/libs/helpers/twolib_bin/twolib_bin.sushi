@@ -1,0 +1,9 @@
+# The entry unit. Its private `helper` differs from side's.
+use "side"
+
+fn helper(i32 n) i32:
+    return Result.Ok(n + 1)
+
+public fn main_take@(T)(nom T x, i32 n) T:
+    println("{helper(n).realise(-1)}")
+    return Result.Ok(x)

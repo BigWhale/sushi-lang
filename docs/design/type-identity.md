@@ -80,6 +80,15 @@ All three are one defect. Nominal identity removes the category.
   the exposure is small — much smaller than a silent cache miss on every
   comparison.
 
+## What this rules, and what it does not
+
+A generic FUNCTION is per unit since #495: its identity is
+`(declaring unit, name, type args)`, and its monomorphized instance takes the
+declaring unit's symbol prefix. A generic TYPE is not: a type's interned name is its
+identity program-wide, so two units still cannot each declare a `Node`. The line is
+this document's to move (phase 2 qualifies the interned name), and a function's
+per-unit identity is a step toward it, not a substitute for it.
+
 ## What this does *not* decide
 
 Whether a recursive type is well-*formed* is a separate question, answered by a

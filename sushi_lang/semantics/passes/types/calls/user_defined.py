@@ -150,7 +150,14 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         validate_indirect_call(validator, call, callee_var_ty)
         return
 
-    if function_name in validator.generic_func_table.by_name:
+    # Section 8's ladder crosses the two function tables here: the asking unit's OWN
+    # concrete declaration answers before a generic from next door does (#495), and a
+    # generic resolves through the same per-unit ladder a concrete function walks.
+    own_concrete = None
+    if validator.current_unit_name is not None:
+        own_concrete = validator.func_table.by_unit.get(
+            validator.current_unit_name, {}).get(function_name)
+    if own_concrete is None and validator.generic_sig(function_name) is not None:
         from .generics import validate_generic_function_call
         validate_generic_function_call(validator, call, function_name)
         return

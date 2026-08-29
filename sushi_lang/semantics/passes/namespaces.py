@@ -70,12 +70,12 @@ def build_namespaces(reporter: Reporter, unit: Any, tables: Any, *,
             er.emit(reporter, er.ERR.CW3004,
                     use_stmt.alias_span or use_stmt.loc, alias=alias)
 
-    table.scope = _scope_of(unit, flat, units)
+    table.scope = _scope_of(unit, flat, units, library_registry)
     return table
 
 
 def _scope_of(unit: Any, flat: Iterable[Tuple[UseStatement, Provider]],
-              units: Dict[str, Any]) -> UnitScope:
+              units: Dict[str, Any], library_registry: Any = None) -> UnitScope:
     """What this unit may write with no qualifier, from its FLAT imports alone.
 
     A LIBRARY import names the whole artifact: a `.slib` has no syntax for naming one
@@ -95,9 +95,32 @@ def _scope_of(unit: Any, flat: Iterable[Tuple[UseStatement, Provider]],
             scoped_units.append(provider.origin)
             if use_stmt.is_library:
                 scoped_units.extend(_library_units(provider.origin, units))
+                scoped_units.extend(
+                    _binary_library_units(provider.origin, library_registry))
     return UnitScope(unit=unit.name, units=tuple(dict.fromkeys(scoped_units)),
                      modules=tuple(dict.fromkeys(modules)),
                      generics=tuple(dict.fromkeys(generics)), everything=False)
+
+
+def _binary_library_units(origin: str, library_registry: Any) -> Iterable[str]:
+    """Every unit of the binary library `origin` belongs to, under its `lib/` key.
+
+    A binary library's declarations register under `lib/<library>/<unit>` and the
+    import names the whole artifact, exactly as a source library's does -- so the
+    importing unit's flat scope holds every one of its units.
+    """
+    if library_registry is None:
+        return ()
+    # The origin is `<library>/<unit>` from the manifest provider, or the written
+    # `lib/<library>` path where the library exports no concrete function and the
+    # provider fell back to an empty namespace.
+    parts = origin.split("/")
+    lib_name = parts[1] if parts[0] == "lib" and len(parts) > 1 else parts[0]
+    metadata = library_registry.get_library(lib_name)
+    if metadata is None:
+        return ()
+    manifest_units = (metadata.raw_manifest or {}).get("units") or [lib_name]
+    return tuple(f"lib/{lib_name}/{u}" for u in manifest_units)
 
 
 def _library_units(unit_name: str, units: Dict[str, Any]) -> Iterable[str]:
@@ -210,26 +233,13 @@ def _unit_provider(unit_name: str, tables: Any) -> UnitNamespace:
         for (kind, name), origin in getattr(tables.visibility, "by_key", {}).items()
         if origin.unit_name == unit_name and kind in _MEMBER_ONLY_KINDS
     }
-    # A generic function has no per-unit view of its own (#495), so the declaring unit
-    # is read from the visibility record beside it.
-    generics = {
-        name: definition
-        for name, definition in tables.generic_funcs.by_name.items()
-        if _declaring_unit(tables, "function", name) == unit_name
-    }
     return UnitNamespace(
         unit_name,
         functions=dict(tables.funcs.by_unit.get(unit_name, {})),
         constants=dict(tables.constants.by_unit.get(unit_name, {})),
-        generics=generics,
+        generics=dict(tables.generic_funcs.by_unit.get(unit_name, {})),
         others=others,
     )
-
-
-def _declaring_unit(tables: Any, kind: str, name: str) -> Optional[str]:
-    """Which unit declared `name`, as the visibility table recorded it."""
-    origin = tables.visibility.origin(kind, name)
-    return None if origin is None else origin.unit_name
 
 
 def _stdlib_provider(use_stmt: UseStatement, tables: Any,

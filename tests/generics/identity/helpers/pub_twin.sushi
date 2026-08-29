@@ -1,0 +1,3 @@
+# The positive control: a PUBLIC generic, called from the importing unit.
+public fn ptwin@(T)(nom T x) T:
+    return Result.Ok(x)

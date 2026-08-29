@@ -1,0 +1,7 @@
+# A private generic the consumer also declares, both instantiated at i32.
+fn twin@(T)(nom T x) T:
+    println("c twin")
+    return Result.Ok(x)
+
+public fn twin_c_use() i32:
+    return Result.Ok(twin(nom 5)??)

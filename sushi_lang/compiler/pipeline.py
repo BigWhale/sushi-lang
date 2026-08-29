@@ -75,6 +75,28 @@ def _check_library_compiler_version(metadata: dict, lib_path: str,
                            requires=requires, current=current)
 
 
+def _check_library_templates_version(metadata: dict, lib_path: str) -> None:
+    """Refuse a binary `.slib` whose templates schema is not the current one (CE3512).
+
+    Version 5 keys every closure record by its unit and gives a source-shipped
+    template its `bindings` map (#494, D4). A version-4 library's bare-name records
+    can bind a template to another unit's body, which is a silent wrong answer, so
+    an old library is refused and must be rebuilt -- decision B of the epic. A
+    SOURCE library recompiles from its units and reads none of this.
+    """
+    from sushi_lang.backend.library_errors import LibraryError
+
+    if metadata.get("kind") == "source":
+        return
+    templates = metadata.get("templates") or {}
+    version = templates.get("version")
+    if version != 5:
+        raise LibraryError(
+            "CE3512", path=lib_path,
+            reason=(f"templates schema version {version}; this compiler requires 5 "
+                    "(rebuild the library)"))
+
+
 def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -> bool:
     """Merge bundled Sushi-source stdlib modules (e.g. <collections/iter>) as units."""
     from sushi_lang.internals.parser import parse_to_ast
@@ -162,6 +184,7 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter, args
             _check_library_compiler_version(
                 metadata, lib_path,
                 ignore=bool(getattr(args, "ignore_compiler_version", False)))
+            _check_library_templates_version(metadata, lib_path)
 
             if metadata.get("kind") == "source":
                 _inject_library_source(unit_manager, slib_path, metadata, lib_path,

@@ -1,0 +1,10 @@
+# The same two-unit library, SOURCE kind. A source library's units are real
+# units, so the per-unit rules must answer here too (#494).
+# EXPECT_STDOUT_EXACT: "11\n210\n1 2\n"
+use <lib/twolib_src>
+
+fn main() i32:
+    let i32 a = main_take(nom 1, 10).realise(0)
+    let i32 b = side_take(nom 2, 10).realise(0)
+    println("{a} {b}")
+    return Result.Ok(0)

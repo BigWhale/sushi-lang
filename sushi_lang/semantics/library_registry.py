@@ -24,7 +24,7 @@ class LibraryMetadata:
     # definitions link from the library bitcode. Kept separate from
     # `functions` because the consumer applies clash (CE5007), not
     # local-wins, semantics to them.
-    private_functions: dict[str, 'FuncSig'] = field(default_factory=dict)
+    private_functions: dict[tuple[str, str], 'FuncSig'] = field(default_factory=dict)
     # What the library declares and does NOT export (#469): name -> kind, and nothing
     # else. No signature travels with them, so they are not callables the consumer can
     # register -- they exist so the CE3005 gate can say "private" where it used to have
@@ -79,10 +79,15 @@ class LibraryRegistry:
 
         metadata.functions = self._parse_functions(manifest.get("public_functions", []))
 
+        # Keyed (unit, name): two of the library's own units may each ship a
+        # private `helper`, and each record names its unit (#494). The key wears the
+        # `lib/<library>/<unit>` prefix a SOURCE library's injected units wear, so a
+        # consumer unit of the same name cannot collide with it in any per-unit table.
         templates = manifest.get("templates") or {}
-        metadata.private_functions = self._parse_functions(
-            templates.get("private_functions", []) or [], owner=lib_name
-        )
+        for func_info in templates.get("private_functions", []) or []:
+            unit = f"lib/{lib_name}/{func_info.get('unit') or lib_name}"
+            parsed = self._parse_functions([func_info], owner=unit)
+            metadata.private_functions[(unit, func_info["name"])] = parsed[func_info["name"]]
 
         metadata.not_exported = {
             record["name"]: record.get("kind", "function")
@@ -202,12 +207,12 @@ class LibraryRegistry:
             result.update(lib.functions)
         return result
 
-    def get_all_private_functions(self) -> dict[str, tuple[str, 'FuncSig']]:
-        """Get all export-closure private functions (name -> (lib_name, FuncSig))."""
+    def get_all_private_functions(self) -> dict[tuple[str, str], tuple[str, 'FuncSig']]:
+        """Every export-closure private function ((unit, name) -> (lib_name, FuncSig))."""
         result = {}
         for lib in self._libraries.values():
-            for name, sig in lib.private_functions.items():
-                result[name] = (lib.name, sig)
+            for key, sig in lib.private_functions.items():
+                result[key] = (lib.name, sig)
         return result
 
     def get_all_not_exported(self) -> dict[str, tuple[str, str]]:

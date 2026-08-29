@@ -274,7 +274,13 @@ is the authority, and the index is a cache of it.
     # a template's own doc block stands OUTSIDE its source slice, so the record is the
     # only place it can travel.
     "templates": {                     # Instantiable cross-library templates
-        "version": 4,                  # Templates schema version
+        "version": 5,                  # Templates schema version. 5 (#494): every
+                                       #   closure record is one per (unit, name),
+                                       #   and a source-shipped template carries
+                                       #   `bindings`. A binary .slib with an older
+                                       #   schema is refused (CE3512) and must be
+                                       #   rebuilt: its bare-name records can bind a
+                                       #   template to another unit's body silently
 
         # Generic functions (incl. variadic packs), as re-parsable source
         # slices; monomorphized at the consumer's call sites. Public ones plus
@@ -290,7 +296,15 @@ is the authority, and the index is a cache of it.
                 "source": str,         # Self-contained, re-parsable decl text
                 "free_perks": [str],   # Perk names from type-param bounds
                 "private": bool,       # Present (true) for closure-shipped helpers
-                "doc": DOC             # If documented, and never when private
+                "doc": DOC,            # If documented, and never when private
+                "bindings": {str: str} # v5 (#494, D4): every free name in `source`
+                                       #   the producer's closure resolved, mapped to
+                                       #   its link symbol. The consumer re-parses
+                                       #   the source and binds each named call to
+                                       #   that symbol -- a non-dependent name in a
+                                       #   template binds in the DEFINITION's scope,
+                                       #   never at the point of use. Absent when
+                                       #   the body resolved nothing
             }
         ],
 
@@ -324,7 +338,9 @@ is the authority, and the index is a cache of it.
         # carry external linkage in the bitcode); constants and types ship with
         # source -- the consumer needs a constant's value for compile-time
         # evaluation, and a type's shape to register it before a monomorphized
-        # template body names it.
+        # template body names it. Since v5 every record is one per (unit, name):
+        # two of the library's own units may each ship a private `helper`, and
+        # each record names its unit (#494).
         "private_functions": [
             {                          # No doc: a private symbol is not documented API
                 "name": str,
@@ -334,10 +350,10 @@ is the authority, and the index is a cache of it.
             }
         ],
         "constants": [
-            {"name": str, "source": str}
+            {"name": str, "unit": str, "source": str}
         ],
         "private_types": [             # A private struct or enum a template body names
-            {"name": str, "source": str}
+            {"name": str, "unit": str, "source": str}
         ],
         "closure_summary": {           # What shipped, by kind (sorted names)
             "private_functions": [str],

@@ -1,0 +1,10 @@
+# A generic and a concrete of one name in ONE unit stay a duplicate (#495, D5).
+# EXPECT_ERROR_CODE: CE0101
+fn twin@(T)(T x) i32:
+    return Result.Ok(1)
+
+fn twin(i32 x) i32:
+    return Result.Ok(2)
+
+fn main() i32:
+    return Result.Ok(0)

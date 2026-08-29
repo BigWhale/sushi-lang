@@ -178,6 +178,13 @@ class TypeValidator:
         """What the name of a constant means INSIDE the unit being validated."""
         return self.const_table.lookup(name, self.current_unit_name, self.scope)
 
+    def generic_sig(self, name: str):
+        """What the name of a GENERIC function means INSIDE the unit being validated.
+
+        The same ladder `func_sig` walks, over the generic table's two views (#495).
+        """
+        return self.generic_func_table.lookup(name, self.current_unit_name, self.scope)
+
     @property
     def scope(self):
         """What this unit may write with no qualifier (section 6)."""

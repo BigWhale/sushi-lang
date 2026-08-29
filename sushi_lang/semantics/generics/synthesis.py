@@ -18,26 +18,27 @@ def register_synthesized_function(
 ) -> bool:
     """Register a synthesized concrete function and queue it for backend emission.
 
-    `home_unit` names the unit that declared the generic this instance came from. It is
-    honoured only for a SOURCE-LIBRARY unit, where the body is the library's code and
-    has to be type-checked as such: a library generic calling a library-private helper
-    is then an intra-unit call, which is what lets a source library work without the
-    binary path's export closure.
+    `home_unit` names the unit that declared the generic this instance came from, and
+    the instance goes home to it (#495, D3): its `FuncSig` carries the unit, its body
+    is appended to that unit's AST, and the backend gives it that unit's symbol
+    prefix. Two units' instances of one mangled base name are then two symbols, and
+    each unit's call binds to its own. A `home_unit` that names no unit in the build
+    -- a binary library's template, whose units exist only at the producer -- lands in
+    the entry unit with no unit identity, exactly as before.
 
-    Deliberately not applied to every unit. The same reasoning would hold for an
-    ordinary multi-unit program and for the bundled source stdlib, but moving those
-    instances breaks lookup of a monomorphized `<collections/iter>` combinator, and
-    chasing that down is its own change. Everything outside a source library keeps
-    landing in the first unit, as before.
-
-    The test for "a source library" is `Unit.from_library`, and not the provenance a
-    bundled stdlib module now carries too: reading the provenance here moved every
-    `<collections/iter>` instance and hit exactly the breakage above.
+    A lifted lambda passes no `home_unit`: its name already carries the per-unit
+    lifter's counter (#402), and it keeps its bare symbol.
     """
     from sushi_lang.semantics.passes.collect import FuncSig
 
+    if home_unit is not None and units:
+        if not any(u.name == home_unit and u.ast for u in units):
+            home_unit = None
+
     name = funcdef.name
-    if name in func_table.by_name:
+    declared = (func_table.by_unit.get(home_unit, {}) if home_unit is not None
+                else func_table.by_name)
+    if name in declared:
         return False
 
     sig = FuncSig(
@@ -48,15 +49,17 @@ def register_synthesized_function(
         is_public=funcdef.is_public,
         loc=None,
         name_span=funcdef.name_span,
-        unit_name=None,
+        unit_name=home_unit,
     )
-    func_table.by_name[name] = sig
-    func_table.order.append(name)
+    func_table.declare(name, sig)
 
     # Marked so the unit fingerprint can see it: a synthesized body is NOT covered by
     # the unit's source hash, and which instances a unit carries depends on what the
     # rest of the program asked for.
     funcdef.is_synthesized = True
+    # The backend reads this for the symbol: an instance takes its home unit's
+    # prefix, a lifted lambda stays bare (`backend/functions/declarations.py`).
+    funcdef.home_unit = home_unit
 
     # Whose code this body is. An instance of a `.slib` template is the library's, wherever
     # it lands, and it keeps calling the private helpers the export closure shipped for it
@@ -74,9 +77,7 @@ def register_synthesized_function(
     elif units:
         target = None
         if home_unit is not None:
-            target = next((u for u in units
-                           if u.name == home_unit and u.ast
-                           and getattr(u, "from_library", False)), None)
+            target = next((u for u in units if u.name == home_unit and u.ast), None)
         if target is None:
             # The ENTRY unit, which is what "the first unit" meant while the compilation
             # order put a dependent before its dependency. A position is not a home.
