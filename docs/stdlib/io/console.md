@@ -430,6 +430,8 @@ Standard output is line-buffered when connected to a terminal:
 - `print()` may be buffered until newline or buffer fills
 
 ```sushi
+use <io/stdio>
+
 fn main() i32:
     # This appears immediately
     println("Immediate")

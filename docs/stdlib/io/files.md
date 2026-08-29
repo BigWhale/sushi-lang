@@ -525,8 +525,11 @@ use <io/files>
 
 fn main() i32:
     match is_symlink("/usr/local/bin/tool"):
-        Result.Ok(true) -> println("a link")
-        Result.Ok(false) -> println("the real thing")
+        Result.Ok(link) ->
+            if (link):
+                println("a link")
+            else:
+                println("the real thing")
         Result.Err(_) -> println("no such path")
 
     return Result.Ok(0)
