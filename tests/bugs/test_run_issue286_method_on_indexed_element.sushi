@@ -14,7 +14,7 @@
 # `.clone()`, and a built-in on an enum. The clone must be INDEPENDENT of the owner, and
 # nothing here may leak or double-free: the element is a read through a live owner, so it
 # is not a temporary and must not be registered for cleanup.
-# EXPECT_STDOUT_EXACT: "3 2\n7\n4 3\nstable: 1\nenum: 1\n"
+# EXPECT_STDOUT_EXACT: "3 2\n7\n4 3\nstable: true\nenum: true\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
 struct Row:

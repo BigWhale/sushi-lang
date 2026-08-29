@@ -1,7 +1,7 @@
 # Indexed assignment on a FIXED array of floats and of bools.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: "floats: 7.5 8.25"
-# EXPECT_STDOUT_CONTAINS: "bools: 1 0"
+# EXPECT_STDOUT_CONTAINS: "bools: true false"
 
 fn main() i32:
     let f32[2] small = [1.5, 2.5]

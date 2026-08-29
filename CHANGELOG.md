@@ -235,6 +235,12 @@ another's.
   because it still occupies one slot.
 
 ### Fixed
+- **A bool in an interpolation hole prints `true`/`false`, whatever the hole holds.** A
+  variable, a literal and a logical expression printed `1` while a method-call result
+  printed `true`: the rendering followed the expression's SHAPE, because only a stamped
+  call routed to the bool formatter. The semantic type decides now, on every path, and
+  the constant evaluator renders a bool hole the same way.
+
 - **A double-quoted string inside an interpolation hole is named for what it is.** The
   inner quote closes the outer literal, so the parse failed on a token nobody wrote.
   CE6001 and CE6002 now carry the shape and both escapes: single quotes inside the hole,

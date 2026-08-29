@@ -2,7 +2,7 @@
 #
 # `exists`, `is_file` and `is_dir` each leaked 1 block per call; `file_size` the same. Every
 # argument here is a literal, which owns no heap -- so the leak was never about ownership.
-# EXPECT_STDOUT_EXACT: "e=1 f=1 d=1 size=15\n"
+# EXPECT_STDOUT_EXACT: "e=true f=true d=true size=15\n"
 # EXPECT_NO_LEAKS
 use <io/files>
 

@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_EXACT: "Integer: 42\nBoolean: 1\nString: Sushi\nMix: 42 and Sushi and 1\nSum: 30\n"
+# EXPECT_STDOUT_EXACT: "Integer: 42\nBoolean: true\nString: Sushi\nMix: 42 and Sushi and true\nSum: 30\n"
 # Test valid string interpolation with all supported types
 # This test should compile and run successfully
 

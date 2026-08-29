@@ -15,7 +15,7 @@
 # borrowed, so the syntax is the same either way. Writing the bare name is CE2006, and
 # the diagnostic now carries a `help` naming the borrow to write, because the message
 # alone reads "expected peek string, got string" -- two types the user never wrote.
-# EXPECT_STDOUT_EXACT: "hi Ford\nsame=1 diff=1\ninner Ford\nfield=Ford\nhash_matches=true\n"
+# EXPECT_STDOUT_EXACT: "hi Ford\nsame=true diff=true\ninner Ford\nfield=Ford\nhash_matches=true\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 

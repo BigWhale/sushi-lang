@@ -1,0 +1,13 @@
+# A bool in an interpolation hole prints true/false, whatever the shape
+# of the expression in the hole (#514).
+# EXPECT_STDOUT_EXACT: "true false true true false\n"
+extend i32 truthy() bool:
+    return true
+
+const bool FLAG = false
+
+fn main() i32:
+    let bool a = true
+    let i32 n = 1
+    println("{a} {false} {n.truthy()} {a and true} {FLAG}")
+    return Result.Ok(0)

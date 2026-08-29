@@ -1,6 +1,6 @@
 # The marked enum crosses the boundary, variants and all.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "calm 1\n"
+# EXPECT_STDOUT_EXACT: "calm true\n"
 
 use "helpers/moods"
 

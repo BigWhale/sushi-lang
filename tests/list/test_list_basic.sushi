@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_EXACT: "Initial size: 0\nIs empty: 1\nCapacity: 0\nAll basic methods working!\n"
+# EXPECT_STDOUT_EXACT: "Initial size: 0\nIs empty: true\nCapacity: 0\nAll basic methods working!\n"
 # Test basic List@(T) methods: new(), len(), is_empty(), capacity()
 fn main() i32:
     # Create empty List

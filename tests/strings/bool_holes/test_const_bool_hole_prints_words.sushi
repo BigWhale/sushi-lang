@@ -1,0 +1,9 @@
+# The constant evaluator renders a bool hole as the runtime does (#514
+# over #447): true/false, never 1/0.
+# EXPECT_STDOUT_EXACT: "sure: true, not: false\n"
+const bool YES = true
+const string LINE = "sure: {YES}, not: {false}"
+
+fn main() i32:
+    println(LINE)
+    return Result.Ok(0)
