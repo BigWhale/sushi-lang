@@ -35,6 +35,10 @@ def emit_stdlib_stdio_call(
 
     from sushi_lang.backend.functions import declare_stdlib_function
 
+    if method == "flush":
+        stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [])
+        return codegen.builder.call(stdlib_func, [], name=f"{stream_name}_flush_result")
+
     # The one method valid on every stream, so it is resolved before the stream split.
     if method == "is_terminal":
         stdlib_func = declare_stdlib_function(codegen.module, func_name, i8, [])
@@ -170,6 +174,11 @@ def emit_stdlib_file_call(
     elif method == "close":
         stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [i8_ptr])
         result = codegen.builder.call(stdlib_func, [file_ptr], name="file_close_result")
+        return result
+
+    elif method == "flush":
+        stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [i8_ptr])
+        result = codegen.builder.call(stdlib_func, [file_ptr], name="file_flush_result")
         return result
 
     elif method == "is_open":

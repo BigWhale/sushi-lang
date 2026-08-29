@@ -244,6 +244,30 @@ fn main() i32 | FileError:
     return Result.Ok(0)
 ```
 
+### flush
+
+Push the stream buffer to the operating system.
+
+```sushi
+fn file.flush() -> ~
+```
+
+**Example:**
+
+```sushi
+use <io/files>
+
+fn main() i32 | FileError:
+    let file f = open("progress.log", FileMode.Write())??
+    f.write("step 1 done")
+    f.flush()  # The bytes reach the file before the next step runs
+    f.close()
+
+    return Result.Ok(0)
+```
+
+**Note:** `close()` also flushes. Use `flush()` when the file stays open and the bytes must be visible now: a log line before a risky operation, or a file another process reads.
+
 ### close
 
 Close the file and release resources.

@@ -31,6 +31,9 @@ def generate_module_ir() -> ir.Module:
         STANDARD_DESCRIPTORS,
         generate_is_terminal,
     )
+    from sushi_lang.sushi_stdlib.src.io.stdio.flush import (
+        generate_flush,
+    )
 
     module = create_stdlib_module("io.stdio")
 
@@ -49,6 +52,9 @@ def generate_module_ir() -> ir.Module:
     # rather than once per stream.
     for stream_name in STANDARD_DESCRIPTORS:
         generate_is_terminal(module, stream_name)
+
+    for stream_name in ("stdout", "stderr"):
+        generate_flush(module, stream_name)
 
     return module
 
@@ -132,7 +138,7 @@ def _validate_write_bytes(call: MethodCall, stream_name: str, reporter: Any, val
 def is_builtin_stdio_method(method_name: str) -> bool:
     """Check if a method name is a built-in stdio method."""
     return method_name in {"readln", "read", "lines", "write", "read_bytes",
-                           "write_bytes", "is_terminal"}
+                           "write_bytes", "is_terminal", "flush"}
 
 
 def validate_builtin_stdio_method_with_validator(call: MethodCall, stdio_type: BuiltinType,
@@ -163,6 +169,8 @@ def validate_builtin_stdio_method_with_validator(call: MethodCall, stdio_type: B
             _validate_write(call, "stdout", reporter, validator)
         elif method_name == "write_bytes":
             _validate_write_bytes(call, "stdout", reporter, validator)
+        elif method_name == "flush":
+            _validate_no_arguments(call, "stdout", reporter)
         else:
             er.emit(reporter, er.ERR.CE2008, call.loc,
                    name=f"{display_type(stdio_type)}.{method_name}")
@@ -171,6 +179,8 @@ def validate_builtin_stdio_method_with_validator(call: MethodCall, stdio_type: B
             _validate_write(call, "stderr", reporter, validator)
         elif method_name == "write_bytes":
             _validate_write_bytes(call, "stderr", reporter, validator)
+        elif method_name == "flush":
+            _validate_no_arguments(call, "stderr", reporter)
         else:
             er.emit(reporter, er.ERR.CE2008, call.loc,
                    name=f"{display_type(stdio_type)}.{method_name}")
@@ -186,7 +196,7 @@ def get_builtin_stdio_method_return_type(method_name: str, stdio_type: BuiltinTy
         return IteratorType(element_type=BuiltinType.STRING)
     elif method_name == "read_bytes":
         return DynamicArrayType(BuiltinType.U8)
-    elif method_name in {"write", "write_bytes"}:
+    elif method_name in {"write", "write_bytes", "flush"}:
         return BuiltinType.BLANK
     elif method_name == "is_terminal":
         return BuiltinType.BOOL

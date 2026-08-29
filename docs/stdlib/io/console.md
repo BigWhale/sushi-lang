@@ -344,6 +344,30 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+### flush
+
+Push the stream buffer to the operating system. The two writing streams answer it.
+
+```sushi
+fn stdout.flush() -> ~
+fn stderr.flush() -> ~
+```
+
+**Example:**
+
+```sushi
+use <io/stdio>
+
+fn main() i32:
+    stdout.write("Working... ")
+    stdout.flush()  # The prompt is visible while the work runs
+    stdout.write("done\n")
+
+    return Result.Ok(0)
+```
+
+**Note:** `println()` output usually appears immediately because a terminal line-buffers. A pipe or a file does not; `flush()` forces the bytes out in every case.
+
 ## Combining Streams
 
 ### Redirecting output
@@ -413,8 +437,8 @@ fn main() i32:
     # This may be buffered
     print("Buffered")
 
-    # Force flush with newline
-    println("")
+    # Force the buffer out without a newline
+    stdout.flush()
 
     return Result.Ok(0)
 ```

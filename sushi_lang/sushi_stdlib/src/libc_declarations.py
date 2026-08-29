@@ -148,6 +148,17 @@ def declare_isalpha(module: ir.Module) -> ir.Function:
     return ir.Function(module, fn_ty, name="isalpha")
 
 
+def declare_fflush(module: ir.Module) -> ir.Function:
+    """Declare fflush: int fflush(FILE *stream)"""
+    if "fflush" in module.globals:
+        return module.globals["fflush"]
+
+    i32 = ir.IntType(32)
+    i8_ptr = ir.IntType(8).as_pointer()
+    fn_ty = ir.FunctionType(i32, [i8_ptr])
+    return ir.Function(module, fn_ty, name="fflush")
+
+
 def declare_isatty(module: ir.Module) -> ir.Function:
     """Declare isatty: int isatty(int fd)"""
     if "isatty" in module.globals:
