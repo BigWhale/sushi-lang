@@ -1,0 +1,11 @@
+# The same mistake later in the hole fails as an unexpected character,
+# and the help must reach that shape too (#502).
+# EXPECT_ERROR_CODE: CE6002
+# EXPECT_STDERR_CONTAINS: "inside an interpolation hole"
+fn fetch(string k) string | StdError:
+    return Result.Ok(k.clone())
+
+fn main() i32:
+    let string k = "x"
+    println("{fetch(k).realise("?")}")
+    return Result.Ok(0)

@@ -1340,6 +1340,11 @@ println("{','.join(parts)}")              # Separator string
 
 Single-quote strings work naturally in nested contexts where double quotes would require escaping.
 
+A double-quoted string cannot stand inside an interpolation hole at all: the lexer knows
+nothing about holes, so the inner quote closes the outer literal and the parse fails with
+CE6001 or CE6002. The diagnostic names this shape and the two escapes -- single quotes
+inside the hole, or bind the expression to a local first.
+
 ## Constants
 
 ### Declaration

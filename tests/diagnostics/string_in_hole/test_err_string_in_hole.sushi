@@ -1,0 +1,11 @@
+# A double-quoted literal inside an interpolation hole ends the outer
+# literal, so the parser sees garbage. The diagnostic must say what
+# happened and name the escape (#502).
+# EXPECT_ERROR_CODE: CE6001
+# EXPECT_STDERR_CONTAINS: "inside an interpolation hole"
+fn pick(string k) i32:
+    return Result.Ok(k.len())
+
+fn main() i32:
+    println("n={pick("ab")??}")
+    return Result.Ok(0)

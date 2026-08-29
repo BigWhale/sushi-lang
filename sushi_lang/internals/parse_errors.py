@@ -98,8 +98,11 @@ def lark_to_diagnostic(exc: Exception, hint: Optional[str] = None) -> SushiError
         return diag
 
     if isinstance(exc, UnexpectedCharacters):
-        return SyntaxDiagnostic("CE6002", span=_span_of_exception(exc),
+        diag = SyntaxDiagnostic("CE6002", span=_span_of_exception(exc),
                                 char=getattr(exc, "char", "?"))
+        if hint:
+            diag.help(hint)
+        return diag
 
     if isinstance(exc, (LexError, UnexpectedInput)):
         return SyntaxDiagnostic("CE6005", span=_span_of_exception(exc))

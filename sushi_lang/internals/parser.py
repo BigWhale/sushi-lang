@@ -87,7 +87,36 @@ def build_parser() -> Lark:
     return Lark.open(str(GRAMMAR_PATH), **kwargs)
 
 
-def parse_error_hint(e: UnexpectedInput) -> Optional[str]:
+def _string_opens_a_hole_before(line_text: str, col: int) -> bool:
+    """Whether a STRING that opens an interpolation hole stands before this column.
+
+    That is the #502 shape: a double-quoted literal inside a hole closed the
+    OUTER literal, so the lexer handed the parser garbage and the error names a
+    token nobody wrote. The lexer's own STRING pattern finds the tokens; a hole
+    is open when the token's content holds more unescaped `{` than `}`.
+    """
+    import re
+
+    for match in re.finditer(r'"(?:[^"\\]|\\.)*"', line_text[:max(col - 1, 0)]):
+        content = match.group(0)[1:-1]
+        opens = closes = 0
+        i = 0
+        while i < len(content):
+            ch = content[i]
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == "{":
+                opens += 1
+            elif ch == "}":
+                closes += 1
+            i += 1
+        if opens > closes:
+            return True
+    return False
+
+
+def parse_error_hint(e: UnexpectedInput, src: str = "") -> Optional[str]:
     """Advice for a parse failure the grammar cannot phrase itself. None if none applies."""
     # The if/elif grammar (`IF "(" expr ")" ...`) is the only place that fails
     # with LPAR as the SOLE expected token: after the keyword the parser demands
@@ -97,6 +126,15 @@ def parse_error_hint(e: UnexpectedInput) -> Optional[str]:
     expected = getattr(e, "expected", None)
     if expected is not None and set(expected) == {"LPAR"}:
         return "use 'if (condition):' instead of 'if condition:'"
+
+    line = getattr(e, "line", None)
+    col = getattr(e, "column", None)
+    if src and line is not None and col is not None:
+        lines = src.splitlines()
+        if 1 <= line <= len(lines) and _string_opens_a_hole_before(lines[line - 1], col):
+            return ("a double-quoted string cannot stand inside an interpolation "
+                    "hole; use single quotes inside the hole, or bind the "
+                    "expression to a local first")
 
     return None
 
@@ -108,7 +146,7 @@ def parse_to_ast(src: str, dump_parse: bool = False):
     except SushiError:
         raise
     except LarkError as e:
-        hint = parse_error_hint(e) if isinstance(e, UnexpectedInput) else None
+        hint = parse_error_hint(e, src) if isinstance(e, UnexpectedInput) else None
         raise lark_to_diagnostic(e, hint) from e
 
     if dump_parse:
