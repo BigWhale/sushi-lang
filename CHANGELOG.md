@@ -2,6 +2,27 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [Unreleased]
+
+### Testing
+- **A release no longer waits for the cross-platform suite, and one gate decides for
+  every job.** `pyproject.toml` and `uv.lock` are inside the workflow's code filter and
+  have to be -- a dependency, a ruff rule, `requires-python` and the hatch packaging
+  table each decide whether the compiler still builds and still passes. A release PR
+  touches exactly those two files and changes exactly the version, which decides nothing,
+  so it was paying for the full Linux and macOS suites to re-prove the commit it was cut
+  from.
+
+  `.github/scripts/version_bump_only.py` tells the two apart. It parses both sides,
+  sets the version aside, and asks whether anything is left, so a reordered table or a
+  new comment rides along and any real edit does not. It fails closed: a file that will
+  not parse, a base blob git cannot produce, or a manifest with no version all answer
+  "run the suite". A push to main and the merge queue are never skipped, so main is still
+  proved in full and the badges still read the run that gated it.
+
+  The path filter itself was written out six times, once per job, each deciding for
+  itself; it is one `changes` job now whose output the others read.
+
 ## [0.12.0] - 2026-08-29
 
 Two libraries written in Sushi itself, and the distribution form that carries them:

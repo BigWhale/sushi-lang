@@ -11,9 +11,74 @@ on:
   workflow_dispatch:
 
 jobs:
+  # One gate, one answer. Six jobs used to run the same path filter and each decide for
+  # itself whether its steps applied; the filter lives here now, and they read this job's
+  # output. Six copies of a rule is six places for it to drift.
+  #
+  # The rule a path filter cannot state on its own is here too. `pyproject.toml` and
+  # `uv.lock` ARE code -- a dependency, a ruff rule, `requires-python` and the hatch
+  # packaging table each decide whether the compiler still builds and still passes -- but
+  # a release PR touches exactly those two files and changes exactly the version, which
+  # decides nothing. `version_bump_only.py` tells the two apart by parsing both sides, so
+  # a release stops waiting for the cross-platform suite to re-prove the commit it was cut
+  # from. It fails closed: anything it cannot read runs the suite.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.decide.outputs.code }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          # The version check diffs base against head, so both commits must be present.
+          fetch-depth: 0
+
+      - name: Classify the changed paths
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4
+        id: paths
+        with:
+          filters: |
+            code:
+              - 'sushi_lang/**'
+              - 'tests/**'
+              - '.github/**'
+              - 'sushic'
+            manifest:
+              - 'pyproject.toml'
+              - 'uv.lock'
+
+      - name: Decide whether the suite has to run
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          CODE: ${{ steps.paths.outputs.code }}
+          MANIFEST: ${{ steps.paths.outputs.manifest }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "pull_request" ]; then
+            # A push to main feeds the badges, and the merge queue is the last gate
+            # before main. Neither may be skipped on the strength of a diff.
+            answer=true
+          elif [ "$CODE" = "true" ]; then
+            answer=true
+          elif [ "$MANIFEST" != "true" ]; then
+            answer=false
+          elif [ "$(python3 .github/scripts/version_bump_only.py "$BASE" "$HEAD")" = "true" ]; then
+            answer=false
+          else
+            answer=true
+          fi
+          echo "code=$answer" >> "$GITHUB_OUTPUT"
+          echo "the suite runs: $answer"
+
   # Stage 0: lint. Cheap (seconds) and blocking - the quality gate Tier 5.1
   # installed so the F821/F841 bug class cannot regenerate.
   lint:
+    needs: changes
     runs-on: ubuntu-latest
     container:
       image: debian:trixie-slim
@@ -22,29 +87,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Check for code changes
-        if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v4
-        id: changes
-        with:
-          filters: |
-            code:
-              - 'sushi_lang/**'
-              - 'tests/**'
-              - '.github/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'sushic'
-
       - name: Set up Sushi toolchain
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         uses: ./.github/actions/setup-sushi
 
       # `tests` is linted too (#274): the harness is the gate every claim
       # rests on, and #241 was a harness bug that made 96 leak assertions
       # silently inert.
       - name: Run ruff
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv run ruff check sushi_lang tests .github/scripts docs/hooks docs/sushi-pygments
@@ -54,7 +105,7 @@ jobs:
       # holds the stronger checks (every import form, and the #239-shape
       # import-isolation discriminator).
       - name: Layering gate (semantics must not import backend)
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: |
           if grep -rn "sushi_lang\.backend" sushi_lang/semantics/; then
             echo "semantics must never import backend (Tier 4.1)"
@@ -64,20 +115,21 @@ jobs:
       # Blocking over the mypy-clean packages (the Tier 5.2 ratchet); grow this
       # list as later waves land. Keep in sync with MYPY_PKGS in .githooks/pre-push.
       - name: Run mypy (ratcheted packages, blocking)
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv run mypy sushi_lang/internals sushi_lang/compiler sushi_lang/packager sushi_lang/sushi_stdlib
 
       # Full-tree count, never blocking: makes backlog drift visible in the log.
       - name: Run mypy (full tree, informational)
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         continue-on-error: true
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv run mypy sushi_lang | tail -2 || true
 
   pytest:
+    needs: changes
     runs-on: ubuntu-latest
     container:
       image: debian:trixie-slim
@@ -86,26 +138,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Check for code changes
-        if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v4
-        id: changes
-        with:
-          filters: |
-            code:
-              - 'sushi_lang/**'
-              - 'tests/**'
-              - '.github/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'sushic'
-
       - name: Set up Sushi toolchain
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         uses: ./.github/actions/setup-sushi
 
       - name: Run unit tests (pytest)
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           # Absolute path: --junit-xml has resolved relative to cwd vs rootdir differently
@@ -134,7 +172,7 @@ jobs:
   # EXPECT_NO_LEAKS too. This stage exists to fail fast over the ~350 annotated tests
   # instead of the whole corpus.
   leaks-linux:
-    needs: pytest
+    needs: [changes, pytest]
     runs-on: ubuntu-latest
     container:
       image: debian:trixie-slim
@@ -143,67 +181,39 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Check for code changes
-        if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v4
-        id: changes
-        with:
-          filters: |
-            code:
-              - 'sushi_lang/**'
-              - 'tests/**'
-              - '.github/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'sushic'
-
       - name: Set up Sushi toolchain
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         uses: ./.github/actions/setup-sushi
 
       - name: Run leak gate
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv run python tests/run_tests.py --leaks-only
 
   leaks-macos:
-    needs: pytest
+    needs: [changes, pytest]
     runs-on: macos-15
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Check for code changes
-        if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v4
-        id: changes
-        with:
-          filters: |
-            code:
-              - 'sushi_lang/**'
-              - 'tests/**'
-              - '.github/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'sushic'
-
       - name: Set up Sushi toolchain
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         uses: ./.github/actions/setup-sushi
         with:
           python-version: '3.13'
 
       - name: Run leak gate
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv run --python 3.13 python tests/run_tests.py --leaks-only
 
   # Stage 3: the full suites, only after the leak gate passes on both platforms.
   test-linux:
-    needs: [leaks-linux, leaks-macos]
+    needs: [changes, leaks-linux, leaks-macos]
     runs-on: ubuntu-latest
     container:
       image: debian:trixie-slim
@@ -212,26 +222,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Check for code changes
-        if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v4
-        id: changes
-        with:
-          filters: |
-            code:
-              - 'sushi_lang/**'
-              - 'tests/**'
-              - '.github/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'sushic'
-
       - name: Set up Sushi toolchain
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         uses: ./.github/actions/setup-sushi
 
       - name: Run tests
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           # pipefail so a failing runner is not masked by tee's exit status. This job is
@@ -255,41 +251,27 @@ jobs:
           if-no-files-found: error
 
   test-macos:
-    needs: [leaks-linux, leaks-macos]
+    needs: [changes, leaks-linux, leaks-macos]
     runs-on: macos-15
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Check for code changes
-        if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v4
-        id: changes
-        with:
-          filters: |
-            code:
-              - 'sushi_lang/**'
-              - 'tests/**'
-              - '.github/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'sushic'
-
       - name: Set up Sushi toolchain
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         uses: ./.github/actions/setup-sushi
         with:
           python-version: '3.13'
 
       - name: Run tests
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv run --python 3.13 python tests/run_tests.py --enhanced
 
       - name: Docs-vs-code stdlib smoke check (macOS backend)
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv run --python 3.13 python -m pytest tests/unit/test_docs_stdlib_smoke.py -q
