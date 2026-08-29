@@ -1,0 +1,58 @@
+##:
+net/dns -- a host name, resolved into typed addresses.
+
+The module ships as bundled .sushi source and is merged as a compilation unit
+when imported (`use <net/dns>`). It is sock_dns_resolve() from <net/socket>
+with parse_ip() from <net/ip> over each answer, so a caller is handed IpAddr
+and never a string it has to read for itself.
+
+An answer the parser cannot read is dropped rather than failing the call, so
+one unusual family does not lose the usable answers.
+
+Limitations: the order of the answers is the resolver's and is not stable
+between calls. A numeric text answers itself and makes no network request.
+There is no reverse lookup and no SRV.
+:##
+
+use <net/socket>
+use <net/ip>
+
+##:
+Resolves a host name, or a numeric address, into typed addresses.
+
+A text that is already an address answers with exactly that address and makes
+no network request.
+
+- Parameter host: The name or numeric address to resolve.
+- Returns: One or more addresses, in the resolver's order.
+- Errors: NetError, when the name does not resolve.
+:##
+public fn resolve(string host) IpAddr[] | NetError:
+    let string[] answers = sock_dns_resolve(host)??
+    let IpAddr[] addresses = from([])
+    foreach(text in answers.iter()):
+        match parse_ip(text):
+            Result.Ok(a) ->
+                addresses.push(a)
+            Result.Err(_) ->
+                ~
+    return Result.Ok(addresses)
+
+##:
+The first address of one family that the resolver gave.
+
+- Parameter host: The name or numeric address to resolve.
+- Parameter want_v4: True for the first IPv4 answer, false for the first IPv6 one.
+- Returns: The first address of that family.
+- Errors: NetError.InvalidAddress, when no answer is of that family, or the
+  resolver's own error.
+:##
+public fn resolve_first(string host, bool want_v4) IpAddr | NetError:
+    let IpAddr[] addresses = resolve(host)??
+    foreach(a in addresses.iter()):
+        # .realise() rather than ??: ip_is_v4 answers StdError and this
+        # function answers NetError, and a propagation matches error types
+        # exactly. The question cannot fail in any case.
+        if (ip_is_v4(a).realise(false) == want_v4):
+            return Result.Ok(a)
+    return Result.Err(NetError.InvalidAddress)

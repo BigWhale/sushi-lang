@@ -252,6 +252,13 @@ class ExpressionScanner:
                 self.instantiations.add(
                     ("Result", (DynamicArrayType(BuiltinType.U8), net_error)))
             return
+        elif function_name == 'sock_dns_resolve':
+            from sushi_lang.semantics.typesys import DynamicArrayType
+            net_error = self.type_inferrer.enum_table.get("NetError")
+            if net_error:
+                self.instantiations.add(
+                    ("Result", (DynamicArrayType(BuiltinType.STRING), net_error)))
+            return
 
         if generic_func is None:
             generic_func = (self.generic_funcs or {}).get(function_name)

@@ -141,6 +141,7 @@ def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional
         'sock_tcp_accept': (BuiltinType.I32, 'NetError'),
         'sock_send': (BuiltinType.I32, 'NetError'),
         'sock_recv': (DynamicArrayType(BuiltinType.U8), 'NetError'),
+        'sock_dns_resolve': (DynamicArrayType(BuiltinType.STRING), 'NetError'),
         'sock_close': (BuiltinType.I32, 'NetError'),
         'sock_local_port': (BuiltinType.I32, 'NetError'),
         'sock_peer_ip': (BuiltinType.STRING, 'NetError'),

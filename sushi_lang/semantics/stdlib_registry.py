@@ -22,6 +22,7 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "encoding/msgpack": _SRC_SUSHI_ROOT / "encoding" / "msgpack.sushi",
     "io/fs": _SRC_SUSHI_ROOT / "io" / "fs.sushi",
     "io/path": _SRC_SUSHI_ROOT / "io" / "path.sushi",
+    "net/dns": _SRC_SUSHI_ROOT / "net" / "dns.sushi",
     "net/ip": _SRC_SUSHI_ROOT / "net" / "ip.sushi",
     "net/tcp": _SRC_SUSHI_ROOT / "net" / "tcp.sushi",
     "toolchain/slib": _SRC_SUSHI_ROOT / "toolchain" / "slib.sushi",
@@ -116,6 +117,7 @@ def _get_param_specs():
     specs[("files", "mkdir")] = [STRING, I32]
 
     BYTE_ARRAY = DynamicArrayType(BuiltinType.U8)
+    specs[("socket", "sock_dns_resolve")] = [STRING]
     specs[("socket", "sock_tcp_connect")] = [STRING, I32]
     specs[("socket", "sock_tcp_listen")] = [STRING, I32, I32]
     specs[("socket", "sock_send")] = [I32, BYTE_ARRAY]
@@ -236,7 +238,8 @@ class StdlibRegistry:
             "socket": ["sock_tcp_connect", "sock_tcp_listen", "sock_tcp_accept",
                        "sock_send", "sock_recv", "sock_close", "sock_local_port",
                        "sock_peer_ip", "sock_peer_port",
-                       "sock_set_recv_timeout", "sock_set_send_timeout"],
+                       "sock_set_recv_timeout", "sock_set_send_timeout",
+                       "sock_dns_resolve"],
         }
 
         candidates = common_names.get(module_name, [])

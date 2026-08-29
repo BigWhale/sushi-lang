@@ -86,6 +86,19 @@ def emit_net_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
         result = codegen.builder.call(stdlib_func, [fd], name=f"{func_name}_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
+    if func_name == "sock_dns_resolve":
+        _expect_args(expr, func_name, 1)
+        host = emit_cstr_arg(codegen, expr.args[0])
+        from sushi_lang.sushi_stdlib.src.type_definitions import (
+            get_dynamic_array_type, get_string_type,
+        )
+        array_type = get_dynamic_array_type(get_string_type())
+        result_type = get_result_type(array_type, get_unit_enum_type())
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
+                                              result_type, [i8_ptr])
+        result = codegen.builder.call(stdlib_func, [host], name=f"{func_name}_result")
+        return codegen.utils.as_i1(result) if to_i1 else result
+
     if func_name == "sock_recv":
         _expect_args(expr, func_name, 2)
         fd = emit_borrowed_arg(codegen, expr.args[0])

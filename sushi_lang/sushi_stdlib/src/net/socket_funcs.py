@@ -26,6 +26,7 @@ SOCKET_FUNCTIONS: List[str] = [
     "sock_peer_port",
     "sock_set_recv_timeout",
     "sock_set_send_timeout",
+    "sock_dns_resolve",
 ]
 
 # Sushi name -> the Ok type of its Result. The Err type is always NetError.
@@ -41,6 +42,7 @@ _OK_TYPES: Dict[str, Type] = {
     "sock_peer_port": BuiltinType.I32,
     "sock_set_recv_timeout": BuiltinType.I32,
     "sock_set_send_timeout": BuiltinType.I32,
+    "sock_dns_resolve": DynamicArrayType(BuiltinType.STRING),
 }
 
 # Sushi name -> how many arguments it takes.
@@ -56,6 +58,7 @@ _ARITY: Dict[str, int] = {
     "sock_peer_port": 1,
     "sock_set_recv_timeout": 2,
     "sock_set_send_timeout": 2,
+    "sock_dns_resolve": 1,
 }
 
 

@@ -1,0 +1,28 @@
+# localhost resolves from /etc/hosts with no network. Neither the COUNT nor the
+# text is asserted: a host may answer v4 only or v4 and v6, and the order is
+# the resolver's. What is always true is that every answer is a loopback.
+# EXPECT_STDOUT_EXACT: "localhost answers\nevery answer is loopback\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/dns>
+use <net/ip>
+
+fn main() i32:
+    match resolve("localhost"):
+        Result.Ok(addresses) ->
+            if (addresses.len() > 0):
+                println("localhost answers")
+            else:
+                println("wrong: no answers")
+            let bool all_loopback = true
+            foreach(a in addresses.iter()):
+                if (not ip_is_loopback(a).realise(false)):
+                    all_loopback := false
+            if (all_loopback):
+                println("every answer is loopback")
+            else:
+                println("wrong: an answer was not loopback")
+        Result.Err(_) -> println("resolve failed")
+
+    return Result.Ok(0)
