@@ -1,7 +1,13 @@
 """String Parsing Operations"""
 
 import llvmlite.ir as ir
-from sushi_lang.sushi_stdlib.src.libc_declarations import declare_strtol, declare_strtoll, declare_strtod, declare_malloc
+from sushi_lang.sushi_stdlib.src.libc_declarations import (
+    declare_free,
+    declare_malloc,
+    declare_strtod,
+    declare_strtol,
+    declare_strtoll,
+)
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types, get_maybe_type
 
 
@@ -22,6 +28,7 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
     maybe_i32_type = get_maybe_type(i32)
 
     malloc = declare_malloc(module)
+    free = declare_free(module)
     strtol = declare_strtol(module)
 
     fn_ty = ir.FunctionType(maybe_i32_type, [string_type])
@@ -114,9 +121,13 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
     builder.branch(return_block)
 
     builder.position_at_end(return_block)
+    # The NUL-terminated copy is dead once both arms have their answer: endptr
+    # points into it, and every read of endptr happened above. A phi has to come
+    # first in its block, so the free follows it.
     result_phi = builder.phi(maybe_i32_type, name="result")
     result_phi.add_incoming(some_complete, success_block)
     result_phi.add_incoming(none_complete, failure_block)
+    builder.call(free, [buffer])
     builder.ret(result_phi)
 
     return func
@@ -137,6 +148,7 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
     maybe_i64_type = get_maybe_type(i64)
 
     malloc = declare_malloc(module)
+    free = declare_free(module)
     strtoll = declare_strtoll(module)
 
     fn_ty = ir.FunctionType(maybe_i64_type, [string_type])
@@ -217,9 +229,13 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
     builder.branch(return_block)
 
     builder.position_at_end(return_block)
+    # The NUL-terminated copy is dead once both arms have their answer: endptr
+    # points into it, and every read of endptr happened above. A phi has to come
+    # first in its block, so the free follows it.
     result_phi = builder.phi(maybe_i64_type, name="result")
     result_phi.add_incoming(some_complete, success_block)
     result_phi.add_incoming(none_complete, failure_block)
+    builder.call(free, [buffer])
     builder.ret(result_phi)
 
     return func
@@ -241,6 +257,7 @@ def emit_string_to_f64(module: ir.Module) -> ir.Function:
     maybe_f64_type = get_maybe_type(f64)
 
     malloc = declare_malloc(module)
+    free = declare_free(module)
     strtod = declare_strtod(module)
 
     fn_ty = ir.FunctionType(maybe_f64_type, [string_type])
@@ -320,9 +337,13 @@ def emit_string_to_f64(module: ir.Module) -> ir.Function:
     builder.branch(return_block)
 
     builder.position_at_end(return_block)
+    # The NUL-terminated copy is dead once both arms have their answer: endptr
+    # points into it, and every read of endptr happened above. A phi has to come
+    # first in its block, so the free follows it.
     result_phi = builder.phi(maybe_f64_type, name="result")
     result_phi.add_incoming(some_complete, success_block)
     result_phi.add_incoming(none_complete, failure_block)
+    builder.call(free, [buffer])
     builder.ret(result_phi)
 
     return func
