@@ -113,6 +113,8 @@ def _get_param_specs():
         specs[("files", fn)] = [STRING, STRING]
     specs[("files", "mkdir")] = [STRING, I32]
 
+    specs[("socket", "sock_close")] = [I32]
+
     _param_specs_cache = specs
     return _param_specs_cache
 
@@ -127,6 +129,7 @@ class StdlibRegistry:
         "sys/process": "sushi_lang.sushi_stdlib.src.sys.process",
         "random": "sushi_lang.sushi_stdlib.src.random",
         "io/files": "sushi_lang.sushi_stdlib.src.io.files_funcs",
+        "net/socket": "sushi_lang.sushi_stdlib.src.net.socket_funcs",
         # io/stdio and collections/strings are NOT registry-driven and cannot
         # be listed here: they expose a METHOD interface
         # (is_builtin_stdio_method / is_builtin_string_method), while this
@@ -220,6 +223,7 @@ class StdlibRegistry:
             ],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
             "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir", "read_dir", "mtime", "ctime", "mode", "is_symlink"],
+            "socket": ["sock_close"],
         }
 
         candidates = common_names.get(module_name, [])
@@ -227,7 +231,7 @@ class StdlibRegistry:
         for name in candidates:
             if checker(name):
                 # Different modules have different type_resolver signatures.
-                if module_name in ["time", "env", "process", "random", "files"]:
+                if module_name in ["time", "env", "process", "random", "files", "socket"]:
                     def make_type_resolver(fn_name):
                         return lambda: type_resolver(fn_name)
                     get_ret_type = make_type_resolver(name)

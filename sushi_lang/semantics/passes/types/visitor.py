@@ -22,7 +22,8 @@ from sushi_lang.semantics.ast import (
 
 # Stdlib modules whose registry declares a return type outright. `math` is absent on
 # purpose: its return type depends on the argument types, so it keeps its own branch.
-_REGISTRY_TYPED_STDLIB_MODULES = ("time", "sys/env", "sys/process", "random", "io/files")
+_REGISTRY_TYPED_STDLIB_MODULES = ("time", "sys/env", "sys/process", "random", "io/files",
+                                  "net/socket")
 
 
 def function_value_type_of(type_validator, name: str) -> Optional[Type]:

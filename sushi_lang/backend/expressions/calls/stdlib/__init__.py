@@ -13,6 +13,7 @@ from sushi_lang.backend.expressions.calls.stdlib.time import emit_time_function
 from sushi_lang.backend.expressions.calls.stdlib.env import emit_env_function
 from sushi_lang.backend.expressions.calls.stdlib.random import emit_random_function
 from sushi_lang.backend.expressions.calls.stdlib.process import emit_process_function
+from sushi_lang.backend.expressions.calls.stdlib.net import emit_net_function
 
 __all__ = [
     "emit_stdlib_stdio_call",
@@ -25,4 +26,5 @@ __all__ = [
     "emit_env_function",
     "emit_random_function",
     "emit_process_function",
+    "emit_net_function",
 ]
