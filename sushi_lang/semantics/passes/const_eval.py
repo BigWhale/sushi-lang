@@ -11,7 +11,7 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
     ConstDef, Expr, IntLit, FloatLit, BoolLit, StringLit, ArrayLiteral,
-    BinaryOp, UnaryOp, Name, CastExpr, IndexAccess
+    BinaryOp, UnaryOp, Name, CastExpr, IndexAccess, InterpolatedString
 )
 from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 from sushi_lang.semantics.integer_width import (
@@ -150,6 +150,9 @@ class ConstantEvaluator:
         elif isinstance(expr, IndexAccess):
             return self._evaluate_index(expr, span)
 
+        elif isinstance(expr, InterpolatedString):
+            return self._evaluate_interpolation(expr, span)
+
         else:
             er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
             return None
@@ -168,6 +171,57 @@ class ConstantEvaluator:
             return ConstantValue(expr.value, expected_type)
         else:
             return ConstantValue(expr.value, BuiltinType.F64)
+
+    def _format_hole(self, value: ConstantValue,
+                     span: Optional[Span]) -> Optional[str]:
+        """One hole, rendered as the run-time formatter prints it.
+
+        The runtime prints an integer with printf %d/%u at its width, a float
+        with %g, and a bool through the select over "1"/"0" the integer path
+        shares (`backend/runtime/formatting.py`). The evaluator must not
+        drift, or a constant would print differently than the same
+        expression written in a body. An integer needs no truncation here:
+        every constant operation is range-checked (CE2070/CE2077), so the
+        held value is the printed value.
+        """
+        t = value.semantic_type
+        if t == BuiltinType.STRING:
+            return value.value
+        if t == BuiltinType.BOOL:
+            return "1" if value.value else "0"
+        if t == BuiltinType.F32:
+            import struct
+            return "%g" % struct.unpack("f", struct.pack("f", value.value))[0]
+        if t == BuiltinType.F64:
+            return "%g" % value.value
+        if self._is_integer_type(t):
+            return str(value.value)
+        er.emit(self.reporter, er.ERR.CE0108, span,
+                expr_type=f"interpolation of {display_type(t)}")
+        return None
+
+    def _evaluate_interpolation(self, expr: InterpolatedString,
+                                span: Optional[Span]) -> Optional[ConstantValue]:
+        """Evaluate an interpolated string constant (#447).
+
+        A hole is a constant expression like any other; it carries no declared
+        type, so a bare literal in one takes the same default it takes in a
+        body.
+        """
+        rendered: List[str] = []
+        for part in expr.parts:
+            if isinstance(part, str):
+                rendered.append(part)
+                continue
+            part_span = getattr(part, "loc", None) or span
+            value = self.evaluate(part, BuiltinType.STRING, part_span)
+            if value is None:
+                return None
+            text = self._format_hole(value, part_span)
+            if text is None:
+                return None
+            rendered.append(text)
+        return ConstantValue("".join(rendered), BuiltinType.STRING)
 
     def _evaluate_binary_op(self, expr: BinaryOp, expected_type: Type, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate binary operation."""

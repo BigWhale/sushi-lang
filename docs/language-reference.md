@@ -1382,6 +1382,22 @@ A constant always holds a value its type can hold: it is computed at the declare
 and an operation whose result leaves the type is **CE2077**. See
 [Overflow](#overflow) for the two operator groups and for the `as` escape.
 
+### Interpolation in a Constant
+
+A string constant can interpolate, and a hole takes any constant expression. Each hole
+prints exactly as the same expression prints at run time -- an integer at its declared
+width, a float as `%g` -- so a constant and a body never disagree about a value's text:
+
+```sushi
+const i32 ANSWER = 42
+const string MESSAGE = "the answer is {ANSWER}"   # "the answer is 42"
+const string BANNER = "{MESSAGE}!"                # constants nest
+
+fn main() i32:
+    println(BANNER)
+    return Result.Ok(0)
+```
+
 ### Constant References
 
 Constants can reference other constants:

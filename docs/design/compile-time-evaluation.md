@@ -423,4 +423,4 @@ and that is a larger language change than the one this document rules on.
 - #441 asked which constants cannot be computed. #451 answered it: two divergences fixed,
   four gaps closed, and one language feature split out.
 - #446 carries the language feature. This document rules on it.
-- #447 carries interpolation in a constant. Ruling 1 removes the blocker that #447 states.
+- #447 carries interpolation in a constant. Ruling 1 removes the blocker that #447 states, and the feature landed on it: the evaluator renders a hole exactly as the run-time formatter does.
