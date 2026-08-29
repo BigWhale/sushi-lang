@@ -234,10 +234,16 @@ class ExpressionScanner:
             return
         elif function_name in {'sock_tcp_connect', 'sock_tcp_listen', 'sock_tcp_accept',
                                'sock_send', 'sock_close', 'sock_local_port',
-                               'sock_set_recv_timeout', 'sock_set_send_timeout'}:
+                               'sock_peer_port', 'sock_set_recv_timeout',
+                               'sock_set_send_timeout'}:
             net_error = self.type_inferrer.enum_table.get("NetError")
             if net_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, net_error)))
+            return
+        elif function_name == 'sock_peer_ip':
+            net_error = self.type_inferrer.enum_table.get("NetError")
+            if net_error:
+                self.instantiations.add(("Result", (BuiltinType.STRING, net_error)))
             return
         elif function_name == 'sock_recv':
             from sushi_lang.semantics.typesys import DynamicArrayType

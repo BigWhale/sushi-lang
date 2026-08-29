@@ -117,7 +117,8 @@ def _get_param_specs():
     specs[("socket", "sock_tcp_connect")] = [STRING, I32]
     specs[("socket", "sock_tcp_listen")] = [STRING, I32, I32]
     specs[("socket", "sock_send")] = [I32, BYTE_ARRAY]
-    for fn in ("sock_close", "sock_local_port", "sock_tcp_accept"):
+    for fn in ("sock_close", "sock_local_port", "sock_tcp_accept",
+               "sock_peer_ip", "sock_peer_port"):
         specs[("socket", fn)] = [I32]
     for fn in ("sock_recv", "sock_set_recv_timeout", "sock_set_send_timeout"):
         specs[("socket", fn)] = [I32, I32]
@@ -232,6 +233,7 @@ class StdlibRegistry:
             "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir", "read_dir", "mtime", "ctime", "mode", "is_symlink"],
             "socket": ["sock_tcp_connect", "sock_tcp_listen", "sock_tcp_accept",
                        "sock_send", "sock_recv", "sock_close", "sock_local_port",
+                       "sock_peer_ip", "sock_peer_port",
                        "sock_set_recv_timeout", "sock_set_send_timeout"],
         }
 

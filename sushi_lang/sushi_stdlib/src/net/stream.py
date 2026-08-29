@@ -3,17 +3,24 @@ from llvmlite import ir
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.net import addr
-from sushi_lang.sushi_stdlib.src.libc_declarations import declare_free, declare_malloc
+from sushi_lang.sushi_stdlib.src.libc_declarations import (
+    declare_free,
+    declare_malloc,
+    declare_strlen,
+)
 from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
 from sushi_lang.sushi_stdlib.src.net.errno import (
+    NET_ERROR_RESOLVE_FAILED,
     emit_errno_err_result,
     emit_net_error_tag,
 )
 from sushi_lang.sushi_stdlib.src.results import emit_err_result, emit_ok_result
+from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types,
     get_byte_array_type,
     get_result_type,
+    get_string_type,
     get_unit_enum_type,
 )
 
@@ -24,6 +31,8 @@ def generate_ir(module: ir.Module) -> None:
     generate_local_port(module)
     generate_send(module)
     generate_recv(module)
+    generate_peer_ip(module)
+    generate_peer_port(module)
 
 
 def generate_close(module: ir.Module) -> None:
@@ -203,3 +212,107 @@ def generate_recv(module: ir.Module) -> None:
     descriptor = builder.insert_value(descriptor, maximum, 1, name="desc_cap")
     descriptor = builder.insert_value(descriptor, buffer, 2, name="descriptor")
     builder.ret(emit_ok_result(builder, result_type, descriptor, 16))
+
+
+def _emit_getpeername(builder: ir.IRBuilder, module: ir.Module, func: ir.Function,
+                      fd: ir.Value):
+    """Ask for the peer's address. Answers (ok_flag, storage, len_slot)."""
+    _i8, _i8_ptr, i32, _i64 = get_basic_types()
+    platform_net = get_platform_module('net')
+    getpeername_fn = platform_net.declare_getpeername(module)
+
+    storage = addr.alloca_zeroed(builder, platform_net.SOCKADDR_STORAGE_SIZE, "ss")
+    len_slot = builder.alloca(i32, name="ss_len")
+    builder.store(ir.Constant(i32, platform_net.SOCKADDR_STORAGE_SIZE), len_slot)
+
+    rc = builder.call(getpeername_fn, [fd, storage, len_slot], name="getpeername_rc")
+    ok = builder.icmp_signed("==", rc, ir.Constant(i32, 0), name="getpeername_ok")
+    return ok, storage, len_slot
+
+
+def generate_peer_port(module: ir.Module) -> None:
+    """Emit `Result<i32, NetError> sushi_net_sock_peer_port(i32 fd)`.
+
+    The peer's port is split from its address so that a test can assert the
+    address -- which is fixed -- without asserting an ephemeral port.
+    """
+    _i8, _i8_ptr, i32, _i64 = get_basic_types()
+    result_type = get_result_type(i32, get_unit_enum_type())
+    func = ir.Function(module, ir.FunctionType(result_type, [i32]),
+                       name="sushi_net_sock_peer_port")
+    func.args[0].name = "fd"
+    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
+
+    ok, storage, _len_slot = _emit_getpeername(builder, module, func, func.args[0])
+    success_bb = func.append_basic_block(name="success")
+    failure_bb = func.append_basic_block(name="failure")
+    builder.cbranch(ok, success_bb, failure_bb)
+
+    builder.position_at_end(failure_bb)
+    builder.ret(emit_errno_err_result(builder, module, result_type))
+
+    builder.position_at_end(success_bb)
+    builder.ret(emit_ok_result(builder, result_type,
+                               addr.emit_read_port(builder, storage), 4))
+
+
+def generate_peer_ip(module: ir.Module) -> None:
+    """Emit `Result<{i8*,i32,i8}, NetError> sushi_net_sock_peer_ip(i32 fd)`.
+
+    getnameinfo with NI_NUMERICHOST renders the address and never asks a
+    resolver, so this makes no network request and works for either family.
+
+    The text is copied into a fresh owned buffer rather than handed out from
+    the stack one: owned=1 puts it under Sushi RAII, which is what frees it.
+    """
+    _i8, i8_ptr, i32, i64 = get_basic_types()
+    platform_net = get_platform_module('net')
+    getnameinfo_fn = platform_net.declare_getnameinfo(module)
+    malloc_fn = declare_malloc(module)
+    strlen_fn = declare_strlen(module)
+
+    result_type = get_result_type(get_string_type(), get_unit_enum_type())
+    func = ir.Function(module, ir.FunctionType(result_type, [i32]),
+                       name="sushi_net_sock_peer_ip")
+    func.args[0].name = "fd"
+    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
+
+    host_buf = addr.alloca_zeroed(builder, platform_net.NI_MAXHOST, "host_buf")
+    ok, storage, len_slot = _emit_getpeername(builder, module, func, func.args[0])
+
+    named_bb = func.append_basic_block(name="have_peer")
+    failure_bb = func.append_basic_block(name="failure")
+    builder.cbranch(ok, named_bb, failure_bb)
+
+    builder.position_at_end(failure_bb)
+    builder.ret(emit_errno_err_result(builder, module, result_type))
+
+    builder.position_at_end(named_bb)
+    salen = builder.load(len_slot, name="ss_len_value")
+    rc = builder.call(getnameinfo_fn, [
+        storage, salen,
+        host_buf, ir.Constant(i32, platform_net.NI_MAXHOST),
+        ir.Constant(i8_ptr, None), ir.Constant(i32, 0),
+        ir.Constant(i32, platform_net.NI_NUMERICHOST),
+    ], name="getnameinfo_rc")
+
+    # getnameinfo answers an EAI_* code, not errno, and the codes do not share
+    # a sign between the platforms. NI_NUMERICHOST needs no resolver, so any
+    # failure here is ResolveFailed rather than a system error worth reading.
+    rendered_bb = func.append_basic_block(name="rendered")
+    gai_fail_bb = func.append_basic_block(name="render_failed")
+    builder.cbranch(builder.icmp_signed("==", rc, ir.Constant(i32, 0), name="render_ok"),
+                    rendered_bb, gai_fail_bb)
+
+    builder.position_at_end(gai_fail_bb)
+    builder.ret(emit_err_result(builder, result_type,
+                                ir.Constant(i32, NET_ERROR_RESOLVE_FAILED)))
+
+    builder.position_at_end(rendered_bb)
+    length = builder.call(strlen_fn, [host_buf], name="ip_len")
+    length64 = builder.zext(length, i64, name="ip_len64")
+    owned = builder.call(malloc_fn, [length64], name="ip_buf")
+    memcpy_fn = builder.module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
+    builder.call(memcpy_fn, [owned, host_buf, length64, ir.Constant(ir.IntType(1), 0)])
+    text = cstr_to_fat_pointer_with_len(builder, owned, length, owned=1)
+    builder.ret(emit_ok_result(builder, result_type, text, 16))

@@ -35,7 +35,8 @@ def emit_net_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
     result_i32 = get_result_type(i32, get_unit_enum_type())
 
     # One i32 descriptor in, Result<i32, NetError> out.
-    if func_name in ("sock_close", "sock_local_port", "sock_tcp_accept"):
+    if func_name in ("sock_close", "sock_local_port", "sock_tcp_accept",
+                     "sock_peer_port"):
         _expect_args(expr, func_name, 1)
         fd = emit_borrowed_arg(codegen, expr.args[0])
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
@@ -73,6 +74,16 @@ def emit_net_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
                                               result_i32, [i32, _byte_array_type()])
         result = codegen.builder.call(stdlib_func, [fd, data], name=f"{func_name}_result")
+        return codegen.utils.as_i1(result) if to_i1 else result
+
+    if func_name == "sock_peer_ip":
+        _expect_args(expr, func_name, 1)
+        fd = emit_borrowed_arg(codegen, expr.args[0])
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_string_type
+        result_type = get_result_type(get_string_type(), get_unit_enum_type())
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
+                                              result_type, [i32])
+        result = codegen.builder.call(stdlib_func, [fd], name=f"{func_name}_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
     if func_name == "sock_recv":
