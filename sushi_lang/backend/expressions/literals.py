@@ -66,7 +66,18 @@ def emit_string_literal(codegen: 'LLVMCodegen', expr: StringLit) -> ir.Value:
 
 def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -> ir.Value:
     """Emit LLVM IR for interpolated string by concatenating string parts and expression values.
+
+    Emitted in a string-temp frame of its OWN: every buffer built here is this
+    interpolation's, freed as the next concat copies its bytes, and the result belongs to
+    the position it lands in -- a `let`, a call argument's owner, or the print frame that
+    registers the whole value (#521).
     """
+    with codegen.string_temps_own_frame():
+        return _emit_interpolated_string(codegen, expr)
+
+
+def _emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -> ir.Value:
+    """Build the concatenation. See `emit_interpolated_string` for the ownership rule."""
     if not expr.parts:
         return codegen.runtime.strings.emit_string_literal("")
 
@@ -89,17 +100,14 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
 
             if codegen.types.is_string_type(expr_value.type):
                 # A string part with a live owner is a BORROW -- never free it here. A
-                # TEMPORARY part is owned by nobody: inside a print-arg frame the frame
-                # frees it after output, outside one the concat loop does.
+                # TEMPORARY part is owned by nobody, so the concat loop below frees it,
+                # and it is registered in THIS interpolation's frame so an early exit out
+                # of a later part frees it too (#295).
                 from sushi_lang.backend.expressions.memory import expression_is_temporary
-                if expression_is_temporary(codegen, part):
-                    if codegen._string_temp_stack:
-                        codegen.register_string_value_temp(expr_value)
-                        fresh_flags.append(False)
-                    else:
-                        fresh_flags.append(True)
-                else:
-                    fresh_flags.append(False)
+                fresh = expression_is_temporary(codegen, part)
+                if fresh:
+                    codegen.register_string_value_temp(expr_value)
+                fresh_flags.append(fresh)
                 string_values.append(expr_value)
             else:
                 llvm_type = expr_value.type
@@ -144,21 +152,19 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
         return string_values[0]
 
     # Each consumed FRESH intermediate is freed once the concat has copied its bytes
-    # (#145); a literal or borrowed part is never freed, and the result goes to its new
-    # owner unfreed. Skipped inside a print argument, where the #141 registry already
-    # frees them.
+    # (#145); a literal or borrowed part is never freed, and the RESULT goes to its new
+    # owner unfreed. Unconditional: an interpolation owns what it built wherever it is
+    # emitted, and the position the result lands in owns the result (#521).
     from sushi_lang.backend.destructors import emit_string_destructor_from_value
-    free_intermediates = not codegen._string_temp_stack
 
     result = string_values[0]
     result_fresh = fresh_flags[0]
     for string_value, sv_fresh in zip(string_values[1:], fresh_flags[1:], strict=True):
         new_result = codegen.runtime.strings.emit_string_concat(result, string_value)
-        if free_intermediates:
-            if result_fresh:
-                emit_string_destructor_from_value(codegen, result)
-            if sv_fresh:
-                emit_string_destructor_from_value(codegen, string_value)
+        if result_fresh:
+            emit_string_destructor_from_value(codegen, result)
+        if sv_fresh:
+            emit_string_destructor_from_value(codegen, string_value)
         result = new_result
         result_fresh = True  # a concat output is always a fresh heap buffer
 

@@ -9,9 +9,17 @@ if TYPE_CHECKING:
 
 
 def _register_owned_string_arg(codegen: 'LLVMCodegen', expr, val: 'ir.Value') -> None:
-    """Register an owned string TEMPORARY print argument for the frame's guarded free."""
-    from sushi_lang.semantics.ast import InterpolatedString, StringLit
-    if isinstance(expr, (InterpolatedString, StringLit)):
+    """Register an owned string TEMPORARY print argument for the frame's guarded free.
+
+    An INTERPOLATION belongs here like any other temporary. It used to be excluded
+    because the buffers it built registered with THIS frame, which also claimed the ones
+    built for a NESTED call's argument -- a second owner beside the one the call site had
+    already given them, and exit 133 (#521). An interpolation opens a frame of its own
+    now, so what registers here is the argument print actually holds. A LITERAL stays
+    out: it owns no heap.
+    """
+    from sushi_lang.semantics.ast import StringLit
+    if isinstance(expr, StringLit):
         return
     if not codegen.types.is_string_type(val.type):
         return
