@@ -26,13 +26,26 @@ public struct TcpListener:
     i32 fd
 ```
 
-## Closing, and the one rule to remember
+## Closing, and who owns a socket
 
-There is **no RAII for a socket**, exactly as there is none for a `file`. A `TcpStream` owns no heap, so it *copies*, and a copy holds the same descriptor.
+**A socket owns its descriptor.** `TcpStream` and `TcpListener` implement the `Drop` perk, so each one MOVES to exactly one owner and closes itself when that owner leaves scope. There is nothing to remember and nothing to leak.
 
-> **One binding owns a socket.** `s.close()` ends it and writes `-1` into the binding, so closing that same binding again is a success rather than an `EBADF`. A copy taken before the close keeps a number the kernel has freed and may have given to somebody else, and using it is a bug the compiler cannot catch.
+> **One binding owns a socket, and the compiler enforces it.** Handing a stream to a `nom` parameter transfers it, and reading the old binding afterwards is `CE2405`. A socket has no `.clone()` — a deep copy would copy the descriptor number and leave two values that both close it, which is `CE2431`.
 
-`close` declares `poke self`, and that is what makes this workable: the mutation is visible at the call site, a temporary cannot be closed at all, and the binding is exclusive for the duration of the call.
+```sushi
+use <net/tcp>
+
+fn serve(nom TcpStream client) ~:
+    println("serving")
+    return Result.Ok(~)          # client closes here
+
+fn main() i32:
+    let TcpListener server = tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
+    println("{server.local_port().realise(0) > 0}")
+    return Result.Ok(0)          # server closes here
+```
+
+`close()` stays, for the caller who has to **see** that the close failed: a destructor has nowhere to put a `Result`, so a failure at drop is lost. It declares `poke self` and writes `-1` into the binding, which makes the drop that follows a no-op — the descriptor is released exactly once, and the kernel is never asked to close a number it may already have given to somebody else. Calling `close()` twice on one binding is a guarded no-op, not an `EBADF`.
 
 ## Constructors
 
@@ -104,6 +117,8 @@ Who is at each end. All four carry the `| NetError` channel. `local_port` exists
 ### `s.close() ~ | NetError` and `l.close() ~ | NetError`
 
 Close, and write `-1` into the binding — the receiver is `poke self`. Both are safe to call twice on the same binding.
+
+Neither is required. A socket closes itself when its owner leaves scope; `close()` is for the caller who must see a failure the destructor would swallow.
 
 ## Limitations
 

@@ -1,0 +1,16 @@
+# A List of sockets. Each element closes exactly once when the list is destroyed,
+# which is the container half of probe P2 on a real handle.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "2\ndone\n"
+use <net/tcp>
+
+fn main() i32:
+    if (true):
+        let List@(TcpListener) servers = List.new()
+        servers.push(tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1)))
+        servers.push(tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1)))
+        println("{servers.len()}")
+    println("done")
+    return Result.Ok(0)

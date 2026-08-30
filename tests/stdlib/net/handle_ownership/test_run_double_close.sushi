@@ -1,0 +1,24 @@
+# close() writes -1 into the binding, so a second close() is a guarded no-op rather
+# than a second syscall. The kernel is never asked to close a number it may already
+# have given to somebody else, and the drop at scope exit is a no-op too.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "first ok\nsecond ok\ndone\n"
+use <net/tcp>
+
+fn shut_twice(poke TcpListener listener) ~:
+    match listener.close():
+        Result.Ok(_) -> println("first ok")
+        Result.Err(_) -> println("first failed")
+    match listener.close():
+        Result.Ok(_) -> println("second ok")
+        Result.Err(_) -> println("second failed")
+    return Result.Ok(~)
+
+fn main() i32:
+    if (true):
+        let TcpListener listener = tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
+        shut_twice(poke listener)
+    println("done")
+    return Result.Ok(0)

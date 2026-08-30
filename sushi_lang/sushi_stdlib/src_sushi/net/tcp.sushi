@@ -5,13 +5,15 @@ The module ships as bundled .sushi source and is merged as a compilation unit
 when imported (`use <net/tcp>`). It composes the <net/socket> primitives; a
 struct here is a typed name for a descriptor and carries nothing else.
 
-There is NO RAII for a socket, exactly as there is none for a file. A
-TcpStream owns no heap, so it COPIES, and a copy holds the same descriptor.
-The rule is that ONE binding owns a socket and s.close() is what ends
-it. A close writes -1 into the binding it was given, so closing that binding
-again is a success; a copy taken before the close keeps a number the kernel
-has freed and may reuse, and an operation on it is a bug this compiler cannot
-catch.
+A socket OWNS its descriptor. TcpStream and TcpListener implement the Drop
+perk, so each one moves to exactly one owner and closes itself when that owner
+leaves scope. There is nothing to remember and nothing to leak: the rule that
+one binding owns a socket is enforced by the compiler rather than written down
+here, and handing a stream to a `nom` parameter is what transfers it.
+
+close() stays, for the caller who has to SEE that the close failed -- a
+destructor cannot answer a Result. It writes -1 into the binding, so the drop
+that follows is a no-op and the descriptor is released exactly once.
 
 Limitations: blocking sockets only, so tcp_connect has no timeout of its own
 and an unreachable address waits for the kernel to give up. recv() answers
@@ -23,6 +25,9 @@ use <net/socket>
 
 ##:
 One connected TCP stream.
+
+It owns its descriptor: the stream moves to one owner and closes when that
+owner leaves scope. Call close() when the failure has to be seen.
 :##
 public struct TcpStream:
     ##: The descriptor, or -1 once close() has run. :##
@@ -30,10 +35,29 @@ public struct TcpStream:
 
 ##:
 One listening TCP socket.
+
+It owns its descriptor, on the same terms as TcpStream.
 :##
 public struct TcpListener:
     ##: The descriptor, or -1 once close() has run. :##
     i32 fd
+
+##:
+Closes the stream when its owner leaves scope.
+
+A destructor has nowhere to put a Result, so a close that fails here is lost.
+Call close() to see it.
+:##
+extend TcpStream with Drop:
+    fn drop(poke self) ~:
+        self.close()
+
+##:
+Closes the listener when its owner leaves scope. The same terms as TcpStream.
+:##
+extend TcpListener with Drop:
+    fn drop(poke self) ~:
+        self.close()
 
 ##:
 Connects to a host and port.
