@@ -1,0 +1,36 @@
+# pread and pwrite take the offset as an ARGUMENT, so neither moves the
+# descriptor's own file position. That is the whole point of the pair: nothing is
+# shared, so two readers of one descriptor cannot race over a position.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "wrote 5\nat 1: 101 108 108\nat 0: 72\nat 3: 108 111\n"
+use <io/files>
+
+fn main() i32:
+    # Intent 3 is read-write. The flags it means differ between macOS and Linux,
+    # which is why the INTENT crosses the boundary and the flags do not.
+    let i32 fd = fd_open("positional_probe.txt", 3, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return Result.Ok(1)
+
+    let u8[] payload = from([72, 101, 108, 108, 111])
+    println("wrote {fd_pwrite(fd, 0 as i64, payload).realise(-1)}")
+
+    let u8[] empty = from([0])
+    let u8[] mid = fd_pread(fd, 1 as i64, 3).realise(empty)
+    println("at 1: {mid.get(0).realise(0)} {mid.get(1).realise(0)} {mid.get(2).realise(0)}")
+
+    # Reading at 1 must not have moved anything: offset 0 still answers the first byte.
+    let u8[] empty2 = from([0])
+    let u8[] first = fd_pread(fd, 0 as i64, 1).realise(empty2)
+    println("at 0: {first.get(0).realise(0)}")
+
+    let u8[] empty3 = from([0])
+    let u8[] tail = fd_pread(fd, 3 as i64, 8).realise(empty3)
+    println("at 3: {tail.get(0).realise(0)} {tail.get(1).realise(0)}")
+
+    fd_close(fd).realise(-1)
+    return Result.Ok(0)

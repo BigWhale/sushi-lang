@@ -5,7 +5,12 @@ from sushi_lang.semantics.typesys import Type, BuiltinType
 FILE_UTILITY_FUNCTIONS = [
     "exists", "is_file", "is_dir", "file_size",
     "remove", "rename", "copy", "mkdir", "rmdir", "read_dir",
-    "mtime", "ctime", "mode", "is_symlink"
+    "mtime", "ctime", "mode", "is_symlink",
+    # The DESCRIPTOR layer (HANDLES.md, Phase 4). These take an fd rather than a path,
+    # which is what makes them the layer a `File` struct is written on top of -- the
+    # same shape `<net/socket>` gives `net/tcp.sushi`. `fd_pread`/`fd_pwrite` take the
+    # offset as an argument, so the descriptor's file position never moves.
+    "fd_open", "fd_pread", "fd_pwrite", "fd_dup", "fd_close",
 ]
 
 
@@ -39,6 +44,15 @@ def get_builtin_files_function_return_type(func_name: str) -> Type:
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.semantics.generics.types import GenericTypeRef
         return GenericTypeRef("Result", (BuiltinType.I64, UnknownType("FileError")))
+    elif func_name == "fd_pread":
+        from sushi_lang.semantics.typesys import UnknownType, DynamicArrayType
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Result", (DynamicArrayType(BuiltinType.U8),
+                                         UnknownType("FileError")))
+    elif func_name in ["fd_open", "fd_pwrite", "fd_dup", "fd_close"]:
+        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Result", (BuiltinType.I32, UnknownType("FileError")))
     elif func_name in ["remove", "rename", "copy", "mkdir", "rmdir"]:
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.semantics.generics.types import GenericTypeRef
@@ -64,6 +78,16 @@ def validate_files_function_call(func_name: str, args: list, reporter, loc) -> N
         if len(args) != 1:
             er.emit(reporter, er.ERR.CE2009, loc,
                    name=func_name, expected=1, got=len(args))
+            return
+    elif func_name in ["fd_dup", "fd_close"]:
+        if len(args) != 1:
+            er.emit(reporter, er.ERR.CE2009, loc,
+                   name=func_name, expected=1, got=len(args))
+            return
+    elif func_name in ["fd_open", "fd_pread", "fd_pwrite"]:
+        if len(args) != 3:
+            er.emit(reporter, er.ERR.CE2009, loc,
+                   name=func_name, expected=3, got=len(args))
             return
     elif func_name in ["rename", "copy", "mkdir"]:
         if len(args) != 2:

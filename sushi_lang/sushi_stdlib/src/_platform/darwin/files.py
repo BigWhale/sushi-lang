@@ -13,6 +13,9 @@ from sushi_lang.sushi_stdlib.src._platform.posix.files import (
     declare_open,
     declare_read,
     declare_write,
+    declare_pread,
+    declare_pwrite,
+    declare_dup,
     declare_close,
     declare_mkdir,
     declare_rmdir,
@@ -22,6 +25,11 @@ O_RDONLY = 0
 O_WRONLY = 1
 O_CREAT = 0x0200
 O_TRUNC = 0x0400
+# The two the descriptor layer adds (HANDLES.md, Phase 4). A portable Sushi
+# module cannot spell these -- they differ between platforms -- so the intent
+# crosses the boundary and `generate_fd_open` maps it here.
+O_RDWR = 0x0002
+O_APPEND = 0x0008
 
 # struct stat offsets, verified with an offsetof probe (2026-08-29). The layout
 # is the 64-bit-inode struct; on x86_64 that layout lives behind stat$INODE64,
@@ -70,6 +78,9 @@ __all__ = [
     "declare_open",
     "declare_read",
     "declare_write",
+    "declare_pread",
+    "declare_pwrite",
+    "declare_dup",
     "declare_close",
     "declare_mkdir",
     "declare_rmdir",

@@ -707,6 +707,56 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+## The descriptor layer
+
+Underneath the `file` handle sits a thin layer over the raw descriptor: `fd_open`,
+`fd_pread`, `fd_pwrite`, `fd_dup` and `fd_close`. It is the same shape `<net/socket>`
+gives `<net/tcp>` — the primitives a handle type is written on top of.
+
+Reach for it when you need **positional** I/O.
+
+### `fd_pread(i32 fd, i64 offset, i32 max) -> Result@(u8[], FileError)`
+### `fd_pwrite(i32 fd, i64 offset, u8[] data) -> Result@(i32, FileError)`
+
+Read or write at an offset **without moving the descriptor's file position**. That is
+what makes them the answer for concurrent reads of one file: the offset is an argument,
+so nothing is shared and nothing can race. Every language that supports concurrent file
+I/O converged on this primitive — C and POSIX have `pread(2)` and `pwrite(2)`, Go has
+`File.ReadAt`, Rust has `FileExt::read_at`, Java takes a position argument on
+`FileChannel.read` — and none of them needed a new kind of type.
+
+`fd_pread` answers what ARRIVED, which may be fewer bytes than asked for and is empty at
+end of file. `fd_pwrite` answers the count it took; looping until the whole buffer is
+gone is the caller's job.
+
+### `fd_open(string path, i32 intent, i32 mode) -> Result@(i32, FileError)`
+
+`intent` says what the caller WANTS, not what the platform calls it:
+
+| intent | means |
+|---|---|
+| `0` | read only |
+| `1` | write: create, truncate |
+| `2` | append: create, append |
+| `3` | read and write: create, keep |
+
+The `O_*` flag values differ between macOS and Linux, and Sushi has no conditional
+compilation, so a number spelled in portable source would be wrong on one of them. The
+intent crosses the boundary and the platform layer maps it. An unrecognised number opens
+read-only, which is the safe reading of a value this function does not know.
+
+`mode` is the permission bits a newly created file gets, as an integer — `420` is `0644`.
+
+### `fd_dup(i32 fd) -> Result@(i32, FileError)`
+
+A **second descriptor over the same open file description**. The offset is shared, so
+this is for the shared-listener pattern and not for concurrent reads of one file —
+`fd_pread` and `fd_pwrite` are that.
+
+### `fd_close(i32 fd) -> Result@(i32, FileError)`
+
+Close one descriptor.
+
 ## Common Patterns
 
 ### Reading entire file

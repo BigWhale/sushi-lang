@@ -117,6 +117,14 @@ def _get_param_specs():
     for fn in ("rename", "copy"):
         specs[("files", fn)] = [STRING, STRING]
     specs[("files", "mkdir")] = [STRING, I32]
+    # The descriptor layer (HANDLES.md, Phase 4). A path is a `string` and is marshalled
+    # by the call site; a descriptor is a bare i32, and an offset is i64 because `off_t`
+    # is 64-bit on both supported platforms (probe P6).
+    specs[("files", "fd_open")] = [STRING, I32, I32]
+    specs[("files", "fd_pread")] = [I32, I64, I32]
+    specs[("files", "fd_pwrite")] = [I32, I64, DynamicArrayType(BuiltinType.U8)]
+    for fn in ("fd_dup", "fd_close"):
+        specs[("files", fn)] = [I32]
 
     BYTE_ARRAY = DynamicArrayType(BuiltinType.U8)
     specs[("socket", "sock_dns_resolve")] = [STRING]
@@ -239,7 +247,10 @@ class StdlibRegistry:
                 "hypot",
             ],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
-            "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir", "read_dir", "mtime", "ctime", "mode", "is_symlink"],
+            "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename",
+                      "copy", "mkdir", "rmdir", "read_dir", "mtime", "ctime", "mode",
+                      "is_symlink",
+                      "fd_open", "fd_pread", "fd_pwrite", "fd_dup", "fd_close"],
             "socket": ["sock_tcp_connect", "sock_tcp_listen", "sock_tcp_accept",
                        "sock_send", "sock_recv", "sock_close", "sock_local_port",
                        "sock_peer_ip", "sock_peer_port",

@@ -277,5 +277,53 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
         result = codegen.builder.call(stdlib_func, [path_cstr, mode_value], name="mkdir_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
+    elif func_name in ("fd_open", "fd_pread", "fd_pwrite", "fd_dup", "fd_close"):
+        return _emit_descriptor_call(codegen, expr, func_name, stdlib_func_name)
+
     else:
         raise_internal_error("CE0024", type="io/files", method=func_name)
+
+
+def _emit_descriptor_call(codegen, expr, func_name: str, stdlib_func_name: str):
+    """The descriptor layer of <io/files> (HANDLES.md, Phase 4).
+
+    A path is marshalled through `emit_cstr_arg`, the one C-string seam; a descriptor is
+    a bare i32 and an offset a bare i64, so neither needs marshalling. `fd_pwrite` takes
+    the byte array BY VALUE -- a `T[]` is its descriptor everywhere -- and borrows it.
+    """
+    from sushi_lang.backend.functions import declare_stdlib_function
+    from sushi_lang.sushi_stdlib.src.type_definitions import (
+        get_result_type, get_unit_enum_type, get_dynamic_array_type,
+    )
+    i8_ptr = ir.PointerType(ir.IntType(8))
+    i32, i64 = ir.IntType(32), ir.IntType(64)
+
+    ARITY = {"fd_open": 3, "fd_pread": 3, "fd_pwrite": 3, "fd_dup": 1, "fd_close": 1}
+    expected = ARITY[func_name]
+    if len(expr.args) != expected:
+        raise_internal_error("CE0023", method=func_name,
+                             expected=expected, got=len(expr.args))
+
+    if func_name == "fd_pread":
+        ok_type = get_dynamic_array_type(ir.IntType(8))
+    else:
+        ok_type = i32
+    result_type = get_result_type(ok_type, get_unit_enum_type())
+
+    if func_name == "fd_open":
+        param_types = [i8_ptr, i32, i32]
+        args = [emit_cstr_arg(codegen, expr.args[0])]
+        args += [emit_borrowed_arg(codegen, a) for a in expr.args[1:]]
+    elif func_name == "fd_pread":
+        param_types = [i32, i64, i32]
+        args = [emit_borrowed_arg(codegen, a) for a in expr.args]
+    elif func_name == "fd_pwrite":
+        param_types = [i32, i64, get_dynamic_array_type(ir.IntType(8))]
+        args = [emit_borrowed_arg(codegen, a) for a in expr.args]
+    else:
+        param_types = [i32]
+        args = [emit_borrowed_arg(codegen, expr.args[0])]
+
+    stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
+                                          result_type, param_types)
+    return codegen.builder.call(stdlib_func, args, name=f"{func_name}_result")
