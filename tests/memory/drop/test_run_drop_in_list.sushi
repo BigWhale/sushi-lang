@@ -1,0 +1,19 @@
+# Probe P2: a moving handle inside a List@(T). Each element drops exactly once
+# when the list is destroyed.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\ndrop 1\ndrop 2\n"
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+fn main() i32:
+    let List@(Handle) xs = List.new()
+    xs.push(Handle(1))
+    xs.push(Handle(2))
+    println("{xs.len()}")
+    return Result.Ok(0)

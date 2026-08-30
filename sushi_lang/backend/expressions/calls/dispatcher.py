@@ -199,7 +199,7 @@ def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
         if mode.consumes:
             args[i] = consume(codegen, arg_expr, args[i], resolved,
                               ConsumingUse.CALL_ARG)
-        elif (resolved is not None and needs_cleanup(resolved)
+        elif (resolved is not None and needs_cleanup(codegen, resolved)
                 and expression_is_temporary(codegen, arg_expr)):
             _park_argument_temp(codegen, args[i], resolved)
 

@@ -9,7 +9,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.visibility import (
     VisibilityTable, reject_private_perk_contract)
-from sushi_lang.semantics.ast import PerkDef, ExtendWithDef, FuncDef, Program
+from sushi_lang.semantics.ast import (
+    PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
 
 from .utils import reject_reference_in, reject_try_in_body
@@ -171,10 +172,14 @@ class PerkCollector:
         self,
         reporter: Reporter,
         perks: PerkTable,
-        perk_impls: PerkImplementationTable
+        perk_impls: PerkImplementationTable,
+        known_types: Optional[Set[Type]] = None,
     ) -> None:
         """Initialize perk collector."""
         self.r = reporter
+        # Which bare names are declared types, for reading a generic target's arguments:
+        # `Box@(T)` and `Box@(Point)` are spelled identically and mean opposite things.
+        self.known_types: Set[Type] = known_types if known_types is not None else set()
         # The unit being collected. This pass shares one reporter across every
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
@@ -209,6 +214,31 @@ class PerkCollector:
             for impl in perk_impls:
                 if isinstance(impl, ExtendWithDef):
                     self._collect_perk_impl(impl)
+
+    # `Drop`'s contract is fixed, and both halves of it are checked: the RECEIVER must be
+    # `poke self`, because a destructor writes, and the return must be blank, because a
+    # destructor has nowhere to put a Result (CE4012).
+    DROP_PERK = "Drop"
+
+    def register_predefined_perks(self) -> None:
+        """Register `Drop`, the perk that declares a resource (HANDLES.md ruling R2).
+
+        A type that implements it owns something RAII must release, whatever its fields
+        say. It ships with the compiler, beside the synthesized enums, so it needs no
+        import -- `owns_resource` asks every program the question, so the answer has to
+        exist in every program.
+        """
+        if self.perks.get(self.DROP_PERK) is not None:
+            return
+        drop = PerkDef(
+            loc=None,
+            name=self.DROP_PERK,
+            methods=[PerkMethodSignature(
+                name="drop", params=[], ret=BuiltinType.BLANK, self_mode="poke")],
+            is_public=True,
+        )
+        self.perks.register(drop)
+        self.perks.files[self.DROP_PERK] = None
 
     def register_synthetic_impls(self) -> None:
         """Auto-register synthetic perk implementations for primitive types."""
@@ -282,6 +312,50 @@ class PerkCollector:
             diag.emit()
             return
 
+    def _is_declared_type(self, name: str) -> bool:
+        """Does this bare name in a target's argument position name a TYPE?"""
+        return (name in self.perks.by_name
+                or any(str(t) == name for t in self.known_types))
+
+    def _reject_bad_drop_target(self, impl: ExtendWithDef, target_type: Optional[Type],
+                                type_name: str, span: Optional[Span]) -> bool:
+        """The two targets `Drop` refuses. Returns True when one was reported.
+
+        A GENERIC target (CE4013) registers under a key carrying the type-parameter
+        names, which no concrete instance matches, so the implementation would never
+        fire and the resource would silently leak.
+
+        A FOREIGN target (CE4012) is ruling R2b: only the unit that declares a type may
+        say what releasing it means. A type with no declaration record yet is THIS unit's
+        own -- the record is written after the collectors run -- or is synthesized, and
+        both are allowed.
+        """
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        if isinstance(target_type, GenericTypeRef):
+            from sushi_lang.semantics.generics.extension_targets import (
+                classify_extension_target)
+            shape = classify_extension_target(
+                target_type, self._is_declared_type)
+            if shape.param_names:
+                er.emit(self.r, ERR.CE4013, span, type=str(target_type))
+                return True
+
+        if self.visibility is None:
+            return False
+        for kind in ("struct", "enum"):
+            origin = self.visibility.origin(kind, type_name)
+            if origin is None or origin.unit_name is None:
+                continue
+            if origin.unit_name != self.current_unit_name:
+                diag = er.emit_with(self.r, ERR.CE4012, span,
+                                    type=type_name, owner=origin.unit_name)
+                if origin.name_span is not None:
+                    diag.note(f"'{type_name}' is declared here",
+                              origin.name_span, origin.filename)
+                diag.emit()
+                return True
+        return False
+
     def _collect_perk_impl(self, impl: ExtendWithDef) -> None:
         """Collect perk implementation and register in implementation table."""
         perk_name = getattr(impl, "perk_name", None)
@@ -312,6 +386,10 @@ class PerkCollector:
 
         if not self.perks.get(perk_name):
             er.emit(self.r, ERR.CE4003, perk_name_span, perk=perk_name)
+            return
+
+        if perk_name == self.DROP_PERK and self._reject_bad_drop_target(
+                impl, target_type, type_name, perk_name_span):
             return
 
         # Ruling 3: a private perk keeps its CONTRACT, so another unit may not implement

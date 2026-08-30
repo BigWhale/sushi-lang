@@ -8,7 +8,7 @@ See docs/design/ownership-conventions.md sections 1 and 2.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Callable, Optional
+from typing import AbstractSet, Callable, Optional
 
 from sushi_lang.semantics.typesys import (
     ArrayType,
@@ -17,7 +17,7 @@ from sushi_lang.semantics.typesys import (
     ReferenceType,
     Type,
     UnknownType,
-    owns_heap,
+    owns_resource,
 )
 
 
@@ -95,8 +95,14 @@ def _IDENTITY(t: Type) -> Type:
     return t
 
 
-def type_class_of(ty: Optional[Type], resolve: Callable[[Type], Type] = _IDENTITY) -> TypeClass:
-    """Classify `T` as PLAIN or MOVE."""
+def type_class_of(ty: Optional[Type], drops: AbstractSet[str],
+                  resolve: Callable[[Type], Type] = _IDENTITY) -> TypeClass:
+    """Classify `T` as PLAIN or MOVE.
+
+    `drops` names the types that implement `Drop`, and it is required for the reason
+    `owns_resource` states: a missing answer classifies every handle PLAIN, and PLAIN
+    means copied, dropped twice and never moved.
+    """
     if ty is None:
         return TypeClass.PLAIN
 
@@ -117,7 +123,7 @@ def type_class_of(ty: Optional[Type], resolve: Callable[[Type], Type] = _IDENTIT
     # The resolver is threaded INTO the walk, not just applied at the top: the name that
     # is still unresolved is usually nested (a `Buffer[2]`'s element, a field), and a
     # top-level-only resolve reports such a type as owning nothing.
-    if owns_heap(resolved, resolve=resolve):
+    if owns_resource(resolved, drops, resolve=resolve):
         return TypeClass.MOVE
     return TypeClass.PLAIN
 

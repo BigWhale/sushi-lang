@@ -122,9 +122,22 @@ class TypeQueries:
         except Exception:
             return None
 
+    @property
+    def drops(self) -> frozenset:
+        """The type names that implement `Drop`, read from the perk table.
+
+        The semantics half of ruling R2a. The classifier takes the answer rather than
+        reaching for a registry, and the tables this object already holds are where the
+        answer lives.
+        """
+        impls = getattr(self.tables, "perk_impls", None)
+        if impls is None:
+            return frozenset()
+        return frozenset(impls.by_perk.get("Drop", ()))
+
     def type_class(self, ty: Optional[Type]) -> TypeClass:
         """Classify a type as PLAIN or MOVE, resolving named types first."""
-        return type_class_of(ty, self.resolve_named)
+        return type_class_of(ty, self.drops, self.resolve_named)
 
     def type_class_of_source(self, state: Optional[BorrowState],
                              ty: Optional[Type]) -> TypeClass:

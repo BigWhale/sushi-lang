@@ -27,7 +27,7 @@ def _register_discarded_owning_temp(codegen: 'LLVMCodegen', expr, value) -> None
     if ty is None and getattr(expr, 'method', None) == 'clone':
         ty = infer_expr_semantic_type(codegen, expr.receiver)
     ty = resolve_named_type(codegen, ty) if ty is not None else None
-    if ty is None or not needs_cleanup(ty):
+    if ty is None or not needs_cleanup(codegen, ty):
         return
     name = f"__expr_temp_{next(_EXPR_TEMP_SEQ)}"
     codegen.memory.create_local(name, value.type, value, ty)

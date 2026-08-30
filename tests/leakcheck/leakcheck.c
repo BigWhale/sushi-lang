@@ -6,10 +6,24 @@
  * tracks the outstanding byte balance, and at process exit prints ONE line to
  * stderr:
  *
- *     SUSHI_LEAKCHECK: leaked=<bytes> blocks=<n>
+ *     SUSHI_LEAKCHECK: leaked=<bytes> blocks=<n> ... open_fds=<delta>
  *
  * The runner parses that line (see tests/enhanced_test_runner.py::_check_leaks)
  * and fails the test if leaked > 0.
+ *
+ * `open_fds` is the DESCRIPTOR half of the same gate, and it lives here rather
+ * than in a shim of its own on purpose: two shims would mean two build steps
+ * racing to link onto one path, which is the hazard that already makes it unsafe
+ * to run pytest and the enhanced runner together. The malloc interposer counts
+ * BYTES and can never see a descriptor, so a handle test gets no coverage from
+ * `EXPECT_NO_LEAKS` at all -- that is what `EXPECT_NO_OPEN_FDS` is for.
+ *
+ * The count is a directory read, not an interposition: the per-process fd
+ * directory (/dev/fd on macOS, /proc/self/fd on Linux) is counted in the
+ * constructor and again in the destructor, and the delta is reported. Standard
+ * input, output and error are excluded, and so is the handle the count itself
+ * holds open. A platform with no such directory reports -1, which the runner
+ * treats as a loud skip and never as a pass.
  *
  * Noise-free accounting: every wrapped allocation records the immediate caller
  * (__builtin_return_address(0)). Only allocations whose caller lies in the MAIN
@@ -34,6 +48,7 @@
 #include <stdio.h>
 #include <stdatomic.h>
 #include <dlfcn.h>
+#include <dirent.h>
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
@@ -378,6 +393,40 @@ DYLD_INTERPOSE(sushi_realloc, realloc);
 DYLD_INTERPOSE(sushi_free, free);
 #endif
 
+/* The per-process descriptor directory. Both names are absolute, so no allocation
+ * and no getpid() formatting is needed on the exit path. */
+#ifdef __APPLE__
+#define SUSHI_FD_DIR "/dev/fd"
+#else
+#define SUSHI_FD_DIR "/proc/self/fd"
+#endif
+
+static long g_fds_at_start = -1;
+
+/* Count the descriptors this process holds, excluding 0, 1, 2 and the directory
+ * handle opened to do the counting. -1 means the directory could not be read, which
+ * is reported rather than guessed at. */
+static long count_open_fds(void) {
+    DIR *dir = opendir(SUSHI_FD_DIR);
+    if (dir == NULL) return -1;
+    int dir_fd = dirfd(dir);
+    long count = 0;
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] < '0' || entry->d_name[0] > '9') continue;  /* . and .. */
+        long fd = strtol(entry->d_name, NULL, 10);
+        if (fd <= 2) continue;                 /* stdin, stdout, stderr */
+        if (dir_fd >= 0 && fd == dir_fd) continue;
+        count++;
+    }
+    closedir(dir);
+    return count;
+}
+
+__attribute__((constructor)) static void note_starting_fds(void) {
+    g_fds_at_start = count_open_fds();
+}
+
 __attribute__((destructor)) static void report(void) {
     lock();
     long bytes = g_live_bytes;
@@ -392,9 +441,14 @@ __attribute__((destructor)) static void report(void) {
     long over = 0;
     if (bytes < 0) { over = -bytes; bytes = 0; }
     if (blocks < 0) blocks = 0;
-    char buf[160];
+    /* -1 when either count failed, so the runner skips loudly instead of reading a
+     * meaningless delta as a clean run. */
+    long fds_now = count_open_fds();
+    long fd_delta = (g_fds_at_start < 0 || fds_now < 0) ? -1 : fds_now - g_fds_at_start;
+    char buf[200];
     int n = snprintf(buf, sizeof(buf),
-                     "SUSHI_LEAKCHECK: leaked=%ld blocks=%ld double_frees=%ld over_freed=%ld\n",
-                     bytes, blocks, doubles, over);
+                     "SUSHI_LEAKCHECK: leaked=%ld blocks=%ld double_frees=%ld "
+                     "over_freed=%ld open_fds=%ld\n",
+                     bytes, blocks, doubles, over, fd_delta);
     if (n > 0) emit(buf, (size_t)n); /* stderr; keep stdout pristine */
 }

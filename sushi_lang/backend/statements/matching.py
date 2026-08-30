@@ -123,7 +123,7 @@ def _register_temp_scrutinee(codegen: 'LLVMCodegen', scrutinee: 'Expr', scrutine
     # `needs_cleanup` is table-free -- an unresolved UnknownType answers False, which is how a
     # Result's owning payload escaped every RAII predicate in #179. Resolve first.
     resolved = resolve_named_type(codegen, scrutinee_type) if scrutinee_type is not None else None
-    if not isinstance(resolved, EnumType) or not needs_cleanup(resolved):
+    if not isinstance(resolved, EnumType) or not needs_cleanup(codegen, resolved):
         return False
 
     codegen.memory.push_scope()

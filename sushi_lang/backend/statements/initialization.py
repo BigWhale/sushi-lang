@@ -46,7 +46,7 @@ def initialize_dynamic_array(
     alloca = codegen.dynamic_arrays.declare_dynamic_array(name, array_type)
 
     current_scope_level = codegen.memory._scope_depth
-    codegen.memory._scope_vars[current_scope_level].add(name)
+    codegen.memory._scope_vars[current_scope_level].setdefault(name)
 
     if name not in codegen.memory._locals:
         codegen.memory._locals[name] = []

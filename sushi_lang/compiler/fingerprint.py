@@ -11,7 +11,8 @@ if TYPE_CHECKING:
 
 def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None,
                              monomorphized_extensions: list | None = None,
-                             library_fingerprints: dict[str, str] | None = None) -> str:
+                             library_fingerprints: dict[str, str] | None = None,
+                             drop_types: frozenset[str] | None = None) -> str:
     """Compute a semantic fingerprint for a compilation unit."""
     hasher = hashlib.sha256()
 
@@ -70,6 +71,17 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
         hasher.update(b"LIB_TEMPLATES:")
         for lib_path in sorted(library_fingerprints):
             hasher.update(f"{lib_path}:{library_fingerprints[lib_path]}".encode())
+
+    # 7. Which types implement `Drop`, whole-program (HANDLES.md ruling R2). Nothing
+    # else here covers it: a perk implementation carries no visibility marker, so it is
+    # not a public symbol and neither `OWN_SYMBOLS` nor `DEP_SYMBOLS` sees it. Adding
+    # `extend File with Drop` changes the OWNERSHIP CLASS of `File` for every unit in
+    # the program -- a plain copy becomes a move that closes a descriptor -- while no
+    # consumer's own source moves. Without this block the consumer keeps a `.o` built
+    # while the type was plain, and the handle is copied and never closed.
+    hasher.update(b"DROP_TYPES:")
+    for name in sorted(drop_types or ()):
+        hasher.update(name.encode())
 
     return hasher.hexdigest()
 

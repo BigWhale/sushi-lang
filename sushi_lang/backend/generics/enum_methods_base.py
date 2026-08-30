@@ -92,7 +92,7 @@ def emit_enum_realise(
     # select, and mem2reg folds the alloca away.
     if isinstance(value_llvm_type, ir.Aggregate):
         owned_type = resolve_named_type(codegen, t_type)
-        if needs_cleanup(owned_type):
+        if needs_cleanup(codegen, owned_type):
             return _emit_owning_realise(
                 codegen, call, is_success, unpacked_value, default_value,
                 value_llvm_type, owned_type
@@ -151,7 +151,7 @@ def emit_enum_expect(
     codegen.builder.position_at_end(ok_block)
     payload = unpacked_value
     owned_type = resolve_named_type(codegen, t_type)
-    if needs_cleanup(owned_type) and _expression_is_borrow(codegen, call.receiver):
+    if needs_cleanup(codegen, owned_type) and _expression_is_borrow(codegen, call.receiver):
         payload = emit_value_clone(codegen, payload, owned_type)
     ok_exit_block = codegen.builder.block
     codegen.builder.branch(continue_block)

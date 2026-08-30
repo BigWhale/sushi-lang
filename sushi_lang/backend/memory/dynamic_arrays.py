@@ -1,7 +1,7 @@
 """RAII-style dynamic array and Own<T> memory management."""
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.typesys import DynamicArrayType, Type, StructType
@@ -49,7 +49,10 @@ class DynamicArrayManager:
         """Initialize the dynamic array manager."""
         self.builder = builder
         self.codegen = codegen
-        self.scope_stack: List[Set[str]] = []
+        # ORDERED sets, one per scope: a dict keeps declaration order, and every drain
+        # destroys the reverse of it. A plain `set` made the order Python's hash order,
+        # so it changed between compilations.
+        self.scope_stack: List[Dict[str, None]] = []
         # A per-name STACK of descriptors, innermost last, so a nested shadow does not
         # overwrite the outer one. A flat dict lost the outer descriptor and the outer pop
         # then double-freed the inner array.
@@ -60,7 +63,7 @@ class DynamicArrayManager:
         # slot-keyed move checks.
         self.owned_pointers: Dict[str, OwnDescriptor] = {}
         self.lists: Dict[str, List[ListDescriptor]] = {}
-        self.list_scope_stack: List[Set[str]] = []
+        self.list_scope_stack: List[Dict[str, None]] = []
 
     def _array(self, name: str) -> Optional[DynamicArrayDescriptor]:
         """Innermost live dynamic-array descriptor for `name`, or None."""
@@ -74,8 +77,8 @@ class DynamicArrayManager:
 
     def push_scope(self) -> None:
         """Enter a new scope for dynamic array and List<T> tracking."""
-        self.scope_stack.append(set())
-        self.list_scope_stack.append(set())
+        self.scope_stack.append({})
+        self.list_scope_stack.append({})
 
     def pop_scope(self) -> None:
         """Exit current scope and automatically destroy all dynamic arrays declared in this scope
@@ -86,7 +89,7 @@ class DynamicArrayManager:
             raise_internal_error("CE0016")
 
         current_scope = self.scope_stack.pop()
-        current_lists = self.list_scope_stack.pop() if self.list_scope_stack else set()
+        current_lists = self.list_scope_stack.pop() if self.list_scope_stack else {}
 
         # Popping the stacks IS the drain, and it restores any outer namesake. If the block
         # already terminated, an early exit emitted the destructors on that path, so skip
@@ -98,11 +101,11 @@ class DynamicArrayManager:
         # path, then pop each binding's top descriptor. The destructors are no-ops for moved /
         # explicitly-destroyed values. Do NOT set `destroyed` here: it denotes an explicit
         # .destroy(), a cross-path state, and each runtime exit path frees on its own block.
-        for array_name in current_scope:
+        for array_name in reversed(current_scope):
             if emit and array_name in self.arrays:
                 self._emit_array_destructor(array_name)
             self._pop_descriptor(self.arrays, array_name)
-        for list_name in current_lists:
+        for list_name in reversed(current_lists):
             if emit:
                 self._emit_list_destructor(list_name)
             self._pop_descriptor(self.lists, list_name)
@@ -157,7 +160,7 @@ class DynamicArrayManager:
         self.codegen.moves.arm_if_conditional(name, alloca)
 
         if self.scope_stack:
-            self.scope_stack[-1].add(name)
+            self.scope_stack[-1].setdefault(name)
 
         return alloca
 
@@ -181,7 +184,7 @@ class DynamicArrayManager:
         self.arrays.setdefault(name, []).append(descriptor)
         self.codegen.moves.arm_if_conditional(name, slot)
         if self.scope_stack:
-            self.scope_stack[-1].add(name)
+            self.scope_stack[-1].setdefault(name)
 
     def emit_array_constructor_new(self, name: str) -> None:
         """Emit code for new() constructor - array is already initialized to empty."""
@@ -252,7 +255,7 @@ class DynamicArrayManager:
             ListDescriptor(name=var_name, list_type=list_type, llvm_alloca=slot))
         self.codegen.moves.arm_if_conditional(var_name, slot)
         if self.list_scope_stack:
-            self.list_scope_stack[-1].add(var_name)
+            self.list_scope_stack[-1].setdefault(var_name)
 
     def mark_list_destroyed(self, var_name: str) -> None:
         """Mark a List<T> as explicitly destroyed/freed; skip redundant RAII cleanup."""
@@ -379,63 +382,6 @@ class DynamicArrayManager:
         if n <= 1:
             return 1
         return 1 << (n - 1).bit_length()
-
-    def struct_needs_cleanup(self, struct_type: StructType) -> bool:
-        """Check if a struct (or enum) type owns heap that needs scope-exit cleanup."""
-        from sushi_lang.semantics.typesys import EnumType
-        if isinstance(struct_type, EnumType):
-            return self._enum_needs_cleanup(struct_type)
-
-        for _field_name, field_type in struct_type.fields:
-            if self._payload_needs_cleanup(field_type):
-                return True
-        return False
-
-    def _payload_needs_cleanup(self, ty: Type) -> bool:
-        """Whether a single field / variant-payload type owns heap needing cleanup."""
-        from sushi_lang.semantics.typesys import (
-            ArrayType, FunctionType, BuiltinType, StructType, EnumType)
-        from sushi_lang.backend.destructors import resolve_named_type
-
-        # Resolve a named type -- UnknownType('Box') or GenericTypeRef('List', (i32,)), the
-        # latter being how the Ok payload of Result<List<i32>, E> arrives -- to its concrete
-        # struct/enum definition. An unresolved reference matches no branch below and is
-        # silently reported as owning nothing (#183).
-        ty = resolve_named_type(self.codegen, ty)
-
-        if isinstance(ty, DynamicArrayType):
-            return True
-        # A fixed array `T[N]` holds its elements inline and owns no buffer of its own, but the
-        # ELEMENTS can own heap -- a `string[3]` field makes its struct heap-owning (#185). Must
-        # agree with destructors.needs_cleanup: this predicate gates REGISTRATION and that one
-        # gates RECURSION, and the two disagreeing is exactly what #162/#183 were.
-        if isinstance(ty, ArrayType):
-            return self._payload_needs_cleanup(ty.base_type)
-        if isinstance(ty, FunctionType):
-            return True
-        # A `string` owns a heap buffer when its runtime `owned` bit is set (#147);
-        # scope-exit RAII frees it (guarded on the bit, so a literal/borrow is a no-op).
-        if ty == BuiltinType.STRING:
-            return True
-        if isinstance(ty, StructType):
-            # The containers always own heap; other structs are checked field-by-field. The
-            # prefix check short-circuits a self-referential `Own<Tree>` without recursing.
-            # Keyed on the shared CONTAINER_PREFIXES, so the set is spelled once (#181).
-            from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
-            if ty.name.startswith(CONTAINER_PREFIXES):
-                return True
-            return self.struct_needs_cleanup(ty)
-        if isinstance(ty, EnumType):
-            return self._enum_needs_cleanup(ty)
-        return False
-
-    def _enum_needs_cleanup(self, enum_type: 'StructType') -> bool:
-        """Whether any variant of an enum carries a heap-owning payload."""
-        for variant in enum_type.variants:
-            for assoc_type in variant.associated_types:
-                if self._payload_needs_cleanup(assoc_type):
-                    return True
-        return False
 
     def emit_struct_field_cleanup(self, var_name: str, struct_type: StructType, struct_alloca: ir.Value) -> None:
         """Emit scope-exit cleanup for a struct local's owning fields."""

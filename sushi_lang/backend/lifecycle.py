@@ -88,7 +88,14 @@ def _handler(value_type: Type, half: str) -> Callable:
 
 
 def inline_destroy(codegen: 'LLVMCodegen', value_ptr: ir.Value, value_type: Type) -> None:
-    """Dispatch a composite type's inline destructor through the handler table."""
+    """Dispatch a composite type's inline destructor through the handler table.
+
+    A DECLARED `drop()` runs before the handler walks the fields (ruling R2). Here and
+    not in the struct handler, because this is the one point every destruction passes
+    through exactly once -- the inline path and an out-of-line recursive body alike.
+    """
+    from sushi_lang.backend.destructors import emit_declared_drop
+    emit_declared_drop(codegen, value_ptr, value_type)
     _handler(value_type, "destroy")(codegen, value_ptr, value_type)
 
 

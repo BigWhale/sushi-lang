@@ -1,13 +1,35 @@
-"""The `owns_heap` verdict table, type by type."""
+"""The `owns_resource` verdict table, type by type.
+
+Every type here answers by STRUCTURE. The declared half -- a type that implements
+`Drop` -- has its own gate, `tests/unit/test_cleanup_predicates_agree.py`, because the
+question there is whether three layers give one answer rather than what the answer is.
+"""
 import pytest
 
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo,
-    ForeignPtrType, StructType, UnknownType, owns_heap,
+    ForeignPtrType, StructType, UnknownType, owns_resource,
 )
 from sushi_lang.backend.destructors import needs_cleanup
 
+
+@pytest.fixture
+def codegen_with_tables():
+    """A codegen whose tables hold every named type in the table below."""
+    from sushi_lang.backend.codegen_llvm import LLVMCodegen
+    codegen = LLVMCodegen("owns_resource_verdicts")
+    for t, _ in VERDICTS:
+        name = getattr(t, "name", None)
+        if not isinstance(name, str):
+            continue
+        table = (codegen.enum_table if isinstance(t, EnumType) else codegen.struct_table)
+        table.by_name[name] = t
+    return codegen
+
 I32, STR = BuiltinType.I32, BuiltinType.STRING
+
+# No type in this table declares a resource; `owns_resource` still requires the answer.
+NO_DROPS: frozenset = frozenset()
 
 
 def struct(name, *fields):
@@ -50,24 +72,30 @@ VERDICTS = [
 
 @pytest.mark.parametrize("t,expected", VERDICTS, ids=[str(t) for t, _ in VERDICTS])
 def test_verdict(t, expected):
-    assert owns_heap(t) is expected
+    assert owns_resource(t, NO_DROPS) is expected
 
 
-def test_needs_cleanup_is_an_alias_not_a_second_answer():
-    """The backend's question and the semantics question are now literally one function."""
+def test_needs_cleanup_gives_the_same_answer(codegen_with_tables):
+    """The backend's question and the semantics question are one rule.
+
+    Not an alias any more: the backend predicate takes `codegen`, because it also has to
+    RESOLVE a named type and read which types implement `Drop` (ruling R2a). The answer
+    it gives must still be this table's.
+    """
     for t, expected in VERDICTS:
-        assert needs_cleanup(t) is expected, f"{t}: needs_cleanup disagrees with owns_heap"
+        assert needs_cleanup(codegen_with_tables, t) is expected, (
+            f"{t}: the backend cleanup predicate disagrees with owns_resource")
 
 
 def test_the_deleted_tier_is_really_gone():
     """A string-only composite MOVES now. Stated on its own so the intent is greppable."""
-    assert owns_heap(STR) is True
-    assert owns_heap(STRING_ONLY) is True
-    assert owns_heap(STRING_ENUM) is True
-    assert owns_heap(ArrayType(STRING_ONLY, 2)) is True
+    assert owns_resource(STR, NO_DROPS) is True
+    assert owns_resource(STRING_ONLY, NO_DROPS) is True
+    assert owns_resource(STRING_ENUM, NO_DROPS) is True
+    assert owns_resource(ArrayType(STRING_ONLY, 2), NO_DROPS) is True
 
 
 def test_self_recursive_struct_terminates():
     # Cycle guard: a struct whose field names its own type (post-mono shells can self-refer).
     rec = struct("SelfRef", ("next", UnknownType("SelfRef")), ("n", I32))
-    assert owns_heap(rec) is False
+    assert owns_resource(rec, NO_DROPS) is False

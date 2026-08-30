@@ -1,0 +1,10 @@
+# The unit that DECLARES the type also declares its Drop. R2b: nobody else may.
+public struct Vault:
+    i32 id
+
+extend Vault with Drop:
+    fn drop(poke self) ~:
+        println("vault {self.id} closed")
+
+public fn open_vault(i32 id) Vault:
+    return Result.Ok(Vault(id))

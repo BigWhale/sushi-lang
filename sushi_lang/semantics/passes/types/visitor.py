@@ -366,7 +366,8 @@ class ExpressionValidator(RecursiveVisitor):
 
         # CE2094: capturing a peek/poke borrow is deferred to Tier 2. A captured
         # name whose enclosing type is a reference is a borrow capture.
-        from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, DynamicArrayType, owns_heap
+        from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, DynamicArrayType, owns_resource
+        drops = tv.drop_type_names
         for cap in (node.captures or []):
             if isinstance(cap.ty, ReferenceType):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
@@ -376,7 +377,7 @@ class ExpressionValidator(RecursiveVisitor):
                 # which owns it and frees it in the env destructor. The outer binding is
                 # consumed (borrow-checked use-after-move, CE2405). No diagnostic.
                 pass
-            elif owns_heap(cap.ty):
+            elif owns_resource(cap.ty, drops):
                 # Move-capture into the env: the env owns and frees it, and the outer
                 # binding is consumed (CE2405).
                 pass
@@ -386,7 +387,7 @@ class ExpressionValidator(RecursiveVisitor):
         # `owned` bit is cleared at entry, so it frees nothing, and including it would
         # silently make `|string s| ...` illegal.
         for p in node.params:
-            if p.ty != BuiltinType.STRING and owns_heap(p.ty):
+            if p.ty != BuiltinType.STRING and owns_resource(p.ty, drops):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"lambda parameter '{p.name}' has an owning type '{display_type(p.ty)}'; "
                                f"owning function-value parameters are deferred to Tier 2")

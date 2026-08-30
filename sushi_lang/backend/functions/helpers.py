@@ -195,7 +195,7 @@ class FunctionHelpers:
             # When the parameter is used (in _emit_name), we'll load through this pointer.
             slot = self.codegen.memory.entry_alloca(arg.type, pname)
             current_scope_level = self.codegen.memory._scope_depth
-            self.codegen.memory._scope_vars[current_scope_level].add(pname)
+            self.codegen.memory._scope_vars[current_scope_level].setdefault(pname)
 
             if pname not in self.codegen.memory._locals:
                 self.codegen.memory._locals[pname] = []

@@ -152,7 +152,7 @@ def _emit_dynamic_array_destructor(
     with builder.if_then(is_not_null):
         # Check if element type needs cleanup (resolving a named/generic element first --
         # an unresolved name answers False and the elements are silently leaked)
-        if field_needs_cleanup(codegen, value_type.base_type):
+        if needs_cleanup(codegen, value_type.base_type):
             len_ptr = builder.gep(value_ptr, [
                 ZERO_I32,
                 ZERO_I32  # len is first field
@@ -197,7 +197,7 @@ def _emit_fixed_array_destructor(
 ) -> None:
     """Emit destructor code for a fixed-size array `T[N]` (#185)."""
     builder = codegen.builder
-    if not field_needs_cleanup(codegen, value_type.base_type):
+    if not needs_cleanup(codegen, value_type.base_type):
         return
 
     count = ir.Constant(ZERO_I32.type, value_type.size)
@@ -269,7 +269,7 @@ def _emit_struct_destructor(
         _emit_hashmap_value_destructor(codegen, value_ptr, value_type)
     else:
         for i, (field_name, field_type) in enumerate(value_type.fields):
-            if field_needs_cleanup(codegen, field_type):
+            if needs_cleanup(codegen, field_type):
                 field_ptr = builder.gep(value_ptr, [
                     ZERO_I32,
                     make_i32_const(i)
@@ -293,7 +293,7 @@ def _emit_list_value_destructor(
 
     is_not_null = builder.icmp_unsigned("!=", data_ptr, ir.Constant(data_ptr.type, None))
     with builder.if_then(is_not_null):
-        if field_needs_cleanup(codegen, element_type):
+        if needs_cleanup(codegen, element_type):
             from sushi_lang.backend.generics.container_walk import emit_container_walk
 
             len_ptr = builder.gep(value_ptr, [ZERO_I32, ZERO_I32], name="list_len_field")
@@ -364,7 +364,7 @@ def _emit_enum_destructor(
             resolved_types = tuple(
                 resolve_named_type(codegen, assoc_type)
                 for assoc_type in variant.associated_types)
-            if any(needs_cleanup(assoc_type) for assoc_type in resolved_types):
+            if any(needs_cleanup(codegen, assoc_type) for assoc_type in resolved_types):
                 variants_needing_cleanup.append((i, variant, resolved_types))
 
     if variants_needing_cleanup:
@@ -387,7 +387,7 @@ def _emit_enum_destructor(
             # destructor reads exactly where construction wrote.
             field_offsets = codegen.types.payload_field_offsets(resolved_types)
             for j, (assoc_type, field_offset) in enumerate(zip(resolved_types, field_offsets, strict=True)):
-                if needs_cleanup(assoc_type):
+                if needs_cleanup(codegen, assoc_type):
                     data_i8_ptr = builder.bitcast(data_ptr, ir.PointerType(ir.IntType(8)), name=f"data_i8_ptr_{j}")
 
                     offset_const = make_i32_const(field_offset)
@@ -423,15 +423,49 @@ def resolve_named_type(codegen: LLVMCodegen, value_type: Type) -> Type:
             or value_type)
 
 
-def field_needs_cleanup(codegen: LLVMCodegen, value_type: Type) -> bool:
-    """`needs_cleanup`, but resolving a named/generic reference first."""
-    return needs_cleanup(resolve_named_type(codegen, value_type))
+def emit_declared_drop(codegen: LLVMCodegen, value_ptr: ir.Value,
+                       value_type: Type) -> None:
+    """Call a type's own `drop()`, if it declared one (HANDLES.md ruling R2).
+
+    The ORDER is the contract: the type's own `drop()` runs FIRST, then its owning
+    fields are destroyed. A handle is still readable while its owner closes itself
+    down, which is what a `drop()` that flushes a buffer into its inner handle needs.
+
+    The receiver is `poke self`, so it arrives by pointer and `value_ptr` is already
+    the right shape. The method was emitted through the extension path, so its symbol
+    is the extension symbol -- one authority for the name, shared with the declaration
+    and every ordinary call site.
+    """
+    name = getattr(value_type, "name", None)
+    impls = getattr(codegen, "perk_impl_table", None)
+    if name is None or impls is None or not impls.implements(name, "Drop"):
+        return
+
+    from sushi_lang.semantics.generics.name_mangling import extension_symbol
+    fn = codegen.funcs.lookup(extension_symbol(name, "drop"), codegen.emitting_unit)
+    if fn is None:
+        return
+    codegen.builder.call(fn, [value_ptr])
 
 
-def needs_cleanup(value_type: Type) -> bool:
-    """Does a value of this type own heap that RAII must free?"""
-    from sushi_lang.semantics.typesys import owns_heap
-    return owns_heap(value_type)
+def needs_cleanup(codegen: LLVMCodegen, value_type: Type) -> bool:
+    """Does a value of this type own something RAII must release?
+
+    ONE backend cleanup predicate (ruling R2a). It used to be two -- a table-free
+    `needs_cleanup` and a resolving `field_needs_cleanup` -- and a third walk in
+    `memory/dynamic_arrays.py` answered the same question a third way. One gated
+    RECURSION and another gated REGISTRATION, and the two disagreeing is exactly what
+    #162 and #183 were.
+
+    `codegen` is required and comes first, per the backend rule. It carries both
+    answers the predicate cannot work without: the tables that resolve a named type
+    (the "resolve first" obligation that #179 and #185 were paid for) and the set of
+    types that implement `Drop`.
+    """
+    from sushi_lang.semantics.typesys import owns_resource
+    from sushi_lang.backend.ownership import drops_of
+    return owns_resource(resolve_named_type(codegen, value_type), drops_of(codegen),
+                         resolve=lambda t: resolve_named_type(codegen, t))
 
 
 def destroy_old_value(codegen: LLVMCodegen, value_ptr: ir.Value, value_type: Type) -> None:
@@ -440,7 +474,7 @@ def destroy_old_value(codegen: LLVMCodegen, value_ptr: ir.Value, value_type: Typ
     A plain type owns no heap, so this is a no-op there and the caller needs no gate.
     """
     resolved = resolve_named_type(codegen, value_type)
-    if needs_cleanup(resolved):
+    if needs_cleanup(codegen, resolved):
         emit_value_destructor(codegen, value_ptr, resolved)
 
 

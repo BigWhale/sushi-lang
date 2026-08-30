@@ -1,0 +1,16 @@
+# A copy verb must not quietly mean a second handle. A derived clone would copy the
+# descriptor number, and both copies would drop.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2431
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+fn main() i32:
+    let Handle h = Handle(3)
+    let Handle t = h.clone()
+    println("{h.id} {t.id}")
+    return Result.Ok(0)

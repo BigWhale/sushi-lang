@@ -1,0 +1,23 @@
+# A program that deliberately leaks a DESCRIPTOR, used by
+# tests/unit/test_fd_gate_wiring.py.
+#
+# It is NOT named test_*.sushi on purpose, for the same reason the malloc fixture
+# beside it is not: the suite discovers tests/**/test_*.sushi, and a permanently
+# failing program under that glob would make the suite permanently red.
+#
+# The point of the fixture is that it leaks NOTHING the malloc interposer can see.
+# It opens a file and never closes it, so `leaked` is 0 and `open_fds` is 1 -- which
+# is exactly why EXPECT_NO_LEAKS gives a handle test no coverage at all, and why
+# EXPECT_NO_OPEN_FDS exists (HANDLES.md, Phase 2).
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_CONTAINS: "fd fixture ran"
+use <io/files>
+
+fn main() i32:
+    match open("fd_fixture_probe.txt", FileMode.Write()):
+        FileResult.Ok(out) ->
+            out.writeln("never closed")
+        FileResult.Err(_) ->
+            println("open failed")
+    println("fd fixture ran")
+    return Result.Ok(0)

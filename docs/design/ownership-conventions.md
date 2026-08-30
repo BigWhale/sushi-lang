@@ -140,23 +140,59 @@ Two classes, not three:
 
 | class | definition | examples |
 |---|---|---|
-| **PLAIN** | owns no heap | `i32`, `bool`, `f64`, a struct of only these |
-| **MOVE** | `owns_heap(T)` — transitively contains `T[]`, `List@(T)`, `Own@(T)`, `HashMap@(K,V)`, `string`, or a capturing closure | `i32[]`, `struct W { i32[] }`, `Maybe@(Own@(T))`, `Buffer[2]`, `string`, `struct { string name }` |
+| **PLAIN** | owns nothing | `i32`, `bool`, `f64`, a struct of only these |
+| **MOVE** | `owns_resource(T, drops)` — transitively contains `T[]`, `List@(T)`, `Own@(T)`, `HashMap@(K,V)`, `string`, or a capturing closure, **or declares a resource by implementing `Drop`** | `i32[]`, `struct W { i32[] }`, `Maybe@(Own@(T))`, `Buffer[2]`, `string`, `struct { string name }`, `File`, `TcpStream` |
+
+**Two ways to own, one predicate.** Most types own HEAP, and the answer is STRUCTURAL —
+the predicate walks the fields. A file or a socket holds one `i32` descriptor, so no field
+walk can find what it owns; such a type must be able to SAY that it owns a resource. It says
+so by implementing the compiler-known `Drop` perk (`HANDLES.md` ruling R2):
+
+```sushi
+perk Drop:
+    fn drop(poke self) ~
+```
+
+A type that implements it MOVES, and its `drop()` runs at scope exit — before its own
+owning fields are destroyed, so a handle is still readable while its owner closes itself
+down. Scope exit destroys in **reverse declaration order**: the last binding opened is the
+first closed.
+
+`drop()` is bare by construction, because a destructor has nowhere to put a `Result`; a
+channel on it is CE0133 like any other contract mismatch. Only the unit that DECLARES a
+type may implement `Drop` for it (CE4012, ruling R2b) — the orphan rule, narrowed to one
+perk, because `PerkImplementationTable.replace` would otherwise let a consumer silently
+stop a handle from closing. A generic target is CE4013: its key carries the type-parameter
+names, so the implementation would register under a name no instance matches and never
+fire.
+
+**`drops` is a required argument, with no default.** `owns_resource` and `type_class_of`
+both take the set of types that implement `Drop`, and a caller that cannot supply it does
+not compile (ruling R2a). The reason is the failure mode: a forgotten argument answers
+False for every handle in the program, and a false answer here is a leaked descriptor with
+no diagnostic. The semantics side reads it from the perk table; the backend side reads it
+through `drops_of(codegen)`, and every backend caller already holds `codegen`.
 
 **Shipped as one predicate, not two.** The design as originally written kept a `COPY` tier for
 `string` alongside a `PLAIN`/`MOVE` split, on the theory that unifying the move predicate with the
 backend's `needs_cleanup` was unsound (`docs/design/move-semantics.md` §2 argued the two questions
 must stay separate). Phase 9 did the opposite: it made `string` move, which makes "does this need
 freeing?" and "does this move?" the same question for every type, including `string`. The single
-predicate is `owns_heap` (`sushi_lang/semantics/typesys.py`); the backend's `needs_cleanup` is now a
-thin alias of it (`sushi_lang/backend/destructors.py`).
+predicate is `owns_resource` (`sushi_lang/semantics/typesys.py`); the backend's
+`needs_cleanup` (`sushi_lang/backend/destructors.py`) is the same rule with the tables
+supplied, and it is the ONLY backend cleanup predicate. It used to be two, and a third walk
+in `memory/dynamic_arrays.py` re-derived the same rule a third way: one gated destructor
+RECURSION and another gated cleanup REGISTRATION, and the two disagreeing is what #162 and
+#183 were. A `Drop` type is where they parted company — the field walk found nothing in a
+handle, so a value that moved correctly was never registered and its `drop()` never ran.
+`tests/unit/test_cleanup_predicates_agree.py` is the gate that keeps them one.
 
 **The string exception lives on the BINDING, not the type.** A `string` bound directly from a
 string literal (`let string s = "hi"`) owns nothing — it points into `.rodata` with the runtime
 `owned` bit clear — so classifying it as PLAIN for *that binding* is exact, not an approximation.
 This is "option B": the flag (`BorrowState.owns_no_heap`) is recorded on the binding by the borrow
 checker, re-derived on every rebind (never inherited — a rebound string may now own a heap buffer),
-and is invisible to `owns_heap`/`type_class_of`, which always answer MOVE for `BuiltinType.STRING`.
+and is invisible to `owns_resource`/`type_class_of`, which always answer MOVE for `BuiltinType.STRING`.
 It is a binding-level fact because `BuiltinType.STRING` is a bare enum member with nowhere to carry
 a per-value flag, unlike `FunctionType`, which is a dataclass and carries `captures` the same way.
 One consequence worth stating plainly: **a struct with a string field is a MOVE type**, full stop —
@@ -343,7 +379,7 @@ already held before this design shipped.
 
 ## 6. Collapsing the predicate
 
-Shipped as one function, `owns_heap` (`sushi_lang/semantics/typesys.py`), not two. The design as
+Shipped as one function, `owns_resource` (`sushi_lang/semantics/typesys.py`), not two. The design as
 originally written proposed keeping `is_owning_type` (narrow, base-cases-only) and
 `type_moves_by_value` (transitive) as separate predicates and auditing every `is_owning_type` call
 site to see whether it could switch to the wide one. That audit is superseded: Phase 9 merged both
@@ -355,8 +391,8 @@ backend alike.
 Two consequences that the original audit predicted correctly:
 
 - The escaping-closure use-after-free is gone by construction: the env destructor's field set and
-  the capture's move decision cannot disagree, because both read `owns_heap`.
-- `HashMap@(K, V)` no longer moves *by accident*. `owns_heap` names `HashMap` explicitly
+  the capture's move decision cannot disagree, because both read `owns_resource`.
+- `HashMap@(K, V)` no longer moves *by accident*. `owns_resource` names `HashMap` explicitly
   (`GenericTypeRef.base_name in ('Own', 'List', 'HashMap')`, and the equivalent `StructType.name`
   prefix check after monomorphization) rather than inferring it from a placeholder `buckets: i32[]`
   field — the placeholder is no longer load-bearing for this question.
@@ -405,7 +441,7 @@ whose type owns heap is **CE2411**, with `.clone()` as the escape.
 ### 8.1 What it was before this design (historical)
 
 None of the coherent answers. The borrow checker modelled it as an untyped local
-(`BorrowState(name=binding)` with no `var_type`, so `owns_heap(None)` was always False and
+(`BorrowState(name=binding)` with no `var_type`, so the predicate was always False and
 this bug class was undiagnosable *in principle*). Codegen created it as a non-owning borrow
 (`register_cleanup=False`). Eight consuming uses read "absent from every cleanup registry" as "free
 to take". It was in fact a shallow byte-copy of an owner's fat pointer — which is why mutation
@@ -414,7 +450,7 @@ it read the wrong field index (#279).
 
 **What it is now:** typed. `register_pattern_bindings` (`semantics/passes/borrow/bindings.py`) stamps each
 `match` binding's `var_type` from the variant the typecheck pass already resolved, and the `foreach` binding is
-stamped from the container's element type — `owns_heap` finally has something to answer on, and
+stamped from the container's element type — `owns_resource` finally has something to answer on, and
 the three bugs above are closed rather than patched individually: #277 and #279 by the typing
 itself, and #253 by **CE2414**, which rejects every write through a binding (the read-only rule
 above, enforced instead of asserted).

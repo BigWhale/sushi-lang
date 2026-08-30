@@ -326,7 +326,7 @@ def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     # Free what the field held, or overwriting it leaks. AFTER the value is consumed, so
     # a source aliasing the buffer about to be freed has already been read.
     from sushi_lang.backend.destructors import emit_value_destructor, needs_cleanup
-    if field_type is not None and needs_cleanup(field_type):
+    if field_type is not None and needs_cleanup(codegen, field_type):
         emit_value_destructor(codegen, field_ptr, field_type)
 
     dst_type = field_ptr.type.pointee

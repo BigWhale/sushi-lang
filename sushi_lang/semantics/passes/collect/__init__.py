@@ -121,7 +121,8 @@ class CollectorPass:
         self.perk_collector = PerkCollector(
             reporter=reporter,
             perks=self.perks,
-            perk_impls=self.perk_impls
+            perk_impls=self.perk_impls,
+            known_types=self.known_types
         )
 
         self.external_collector = ExternalCollector(
@@ -155,6 +156,7 @@ class CollectorPass:
 
         self._register_predefined_structs()
         self._register_predefined_enums()
+        self._register_predefined_perks()
         self._register_predefined_generics()
 
     def run(self, root: Program, unit_name: Optional[str] = None,
@@ -220,6 +222,10 @@ class CollectorPass:
     def _register_predefined_enums(self) -> None:
         """Register predefined enums (FileMode, FileResult, etc.)."""
         self.enum_collector.register_predefined_enums()
+
+    def _register_predefined_perks(self) -> None:
+        """Register predefined perks (Drop)."""
+        self.perk_collector.register_predefined_perks()
 
     def _register_predefined_generics(self) -> None:
         """Register predefined generic enums and structs."""

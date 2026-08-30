@@ -90,8 +90,8 @@ def emit_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement'],
     from sushi_lang.backend.ownership import ConsumingUse, consume
     from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
     from sushi_lang.backend.ranges import emit_range
+    from sushi_lang.backend.destructors import needs_cleanup
     from sushi_lang.backend.types.arrays.utils import alias_element_type
-    from sushi_lang.semantics import typesys
 
     runs = read_runs(codegen, elements)
     if runs is None:
@@ -123,7 +123,7 @@ def emit_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement'],
             # rule `.fill()` already follows (#479). `emit_borrowed_arg` is the built-in
             # borrow seam, and it gives an owning TEMPORARY an owner (#475).
             value = emit_borrowed_arg(codegen, run.value, ety)
-            owning = ety is not None and typesys.owns_heap(ety)
+            owning = ety is not None and needs_cleanup(codegen, ety)
         else:
             # One value, one slot, one position. This still CONSUMES.
             value = consume(codegen, run.value, codegen.expressions.emit_expr(run.value),

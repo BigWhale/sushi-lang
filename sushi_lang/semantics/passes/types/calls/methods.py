@@ -227,6 +227,37 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     return concrete
 
 
+def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
+                              receiver_type) -> bool:
+    """CE2431: a resource type has no deep copy (HANDLES.md ruling R3).
+
+    A derived clone copies field by field, so cloning a handle copies its descriptor
+    number and leaves two values that both drop. The refusal reaches anything HOLDING
+    one -- a struct field, an array element, a container -- because the copy happens one
+    level down there just the same.
+
+    Placed before every clone family rather than inside one: `.clone()` is registered on
+    a struct, an enum, an array and a container by different seams, and the rule is the
+    receiver's, not the seam's.
+    """
+    from sushi_lang.semantics.typesys import holds_declared_resource
+    drops = validator.drop_type_names
+    if not drops:
+        return False
+
+    def resolve(ty):
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        return resolve_unknown_type(ty, validator.struct_table.by_name,
+                                    validator.enum_table.by_name)
+
+    if not holds_declared_resource(receiver_type, drops, resolve=resolve):
+        return False
+
+    er.emit(validator.reporter, er.ERR.CE2431, call.loc,
+            type=display_type(receiver_type))
+    return True
+
+
 def extension_call_result_type(validator: 'TypeValidator', method):
     """What a resolved extension call YIELDS: the bare return, or its channel Result.
 
@@ -494,6 +525,9 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         if enum_hash_method is not None:
             enum_hash_method.semantic_validator(call, receiver_type, validator.reporter)
             return
+
+    if call.method == "clone" and _reject_clone_of_resource(validator, call, receiver_type):
+        return
 
     # Check for auto-derived struct/enum clone (#134) - AFTER perks. Own/List/HashMap
     # named structs keep their own method paths and are not registered here.

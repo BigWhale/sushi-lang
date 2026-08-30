@@ -26,6 +26,11 @@ class TestMetadata:
     # whether it is honoured.
     expect_no_leaks: bool = False
 
+    # Opt-in DESCRIPTOR assertion, the handle half of the same gate. The malloc
+    # interposer counts bytes and cannot see a file or a socket, so EXPECT_NO_LEAKS
+    # gives a handle test no coverage at all (HANDLES.md, Phase 2).
+    expect_no_open_fds: bool = False
+
     # Test behavior flags
     requires_runtime: bool = False
     timeout_seconds: int = 10
@@ -135,6 +140,14 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                 value = directive.split(':', 1)[1].strip().lower()
                 metadata.expect_stderr_empty = value in ('true', 'yes', '1')
 
+            elif directive.startswith('EXPECT_NO_OPEN_FDS'):
+                rest = directive[len('EXPECT_NO_OPEN_FDS'):].lstrip()
+                if rest.startswith(':'):
+                    value = rest[1:].strip().lower()
+                    metadata.expect_no_open_fds = value in ('true', 'yes', '1')
+                elif rest == '':
+                    metadata.expect_no_open_fds = True
+
             elif directive.startswith('EXPECT_NO_LEAKS'):
                 rest = directive[len('EXPECT_NO_LEAKS'):].lstrip()
                 if rest.startswith(':'):
@@ -237,7 +250,8 @@ def _apply_category_defaults(test_file: Path, metadata: TestMetadata) -> None:
         declares_runtime = (metadata.expect_runtime_exit is not None
                             or metadata.expect_stdout_exact is not None
                             or metadata.expect_stdout_contains is not None
-                            or metadata.expect_no_leaks)
+                            or metadata.expect_no_leaks
+                            or metadata.expect_no_open_fds)
         if not declares_runtime:
             metadata.test_type = 'compilation_only'
             metadata.requires_runtime = False
@@ -278,6 +292,6 @@ def should_run_runtime_test(test_file: Path, metadata: TestMetadata) -> bool:
         return False
 
     if category == 'warning':
-        return metadata.expect_no_leaks
+        return metadata.expect_no_leaks or metadata.expect_no_open_fds
 
     return metadata.requires_runtime

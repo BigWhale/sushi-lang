@@ -1,0 +1,19 @@
+# Scope exit destroys in reverse declaration order, which is what a nesting of
+# resources needs: the last one opened is the first one closed.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "123\ndrop 3\ndrop 2\ndrop 1\n"
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+fn main() i32:
+    let Handle a = Handle(1)
+    let Handle b = Handle(2)
+    let Handle c = Handle(3)
+    println("{a.id}{b.id}{c.id}")
+    return Result.Ok(0)

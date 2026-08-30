@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-__all__ = ["ConsumingUse", "bind", "consume", "copy_out", "relinquish",
+__all__ = ["ConsumingUse", "bind", "consume", "copy_out", "drops_of", "relinquish",
            "relinquish_temp", "resolver_for"]
 
 
@@ -52,7 +52,7 @@ def bind(codegen: 'LLVMCodegen', source, value: ir.Value,
     the binding owns nothing rather than being CE0129 (#242).
     """
     provenance = _provenance_of(source, ConsumingUse.LET)
-    decision = classify(provenance, type_class_of(target_type, resolver_for(codegen)))
+    decision = classify(provenance, type_class_of(target_type, drops_of(codegen), resolver_for(codegen)))
 
     if decision is Ownership.MOVE:
         _mark_moved(codegen, source)
@@ -70,7 +70,7 @@ def consume(codegen: 'LLVMCodegen', source, value: ir.Value,
     that guessed would be a second derivation of the rule this seam exists to centralize.
     """
     provenance = _provenance_of(source, use)
-    decision = classify(provenance, type_class_of(target_type, resolver_for(codegen)))
+    decision = classify(provenance, type_class_of(target_type, drops_of(codegen), resolver_for(codegen)))
 
     if decision is Ownership.MOVE:
         _mark_moved(codegen, source)
@@ -88,6 +88,19 @@ def copy_out(codegen: 'LLVMCodegen', value: ir.Value,
              value_type: Optional[Type]) -> ir.Value:
     """Return an independent copy of a value read out of a container it still owns."""
     return _clone(codegen, value, value_type)
+
+
+def drops_of(codegen: 'LLVMCodegen') -> frozenset:
+    """The type names that implement `Drop`, read from the backend's perk table.
+
+    The backend half of ruling R2a. `owns_resource` and `type_class_of` both take this
+    set rather than reaching for a registry, so a caller that cannot supply it does not
+    compile -- and every backend caller already holds `codegen`.
+    """
+    table = getattr(codegen, "perk_impl_table", None)
+    if table is None:
+        return frozenset()
+    return frozenset(table.by_perk.get("Drop", ()))
 
 
 def resolver_for(codegen: 'LLVMCodegen'):

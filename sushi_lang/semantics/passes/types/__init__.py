@@ -83,6 +83,9 @@ class TypeValidator:
         self.generic_func_table = tables.generic_funcs
         self.perk_table = tables.perks
         self.perk_impl_table = tables.perk_impls
+        # The types that implement `Drop`, for `owns_resource` (ruling R2a). A property
+        # rather than a snapshot: a later unit may add an implementation, and a stale
+        # set here would classify a handle PLAIN.
         self.library_not_exported = tables.library_not_exported
         self.visibility = tables.visibility
         # What this unit may write behind a dot. One seam for an FFI namespace and a
@@ -163,6 +166,11 @@ class TypeValidator:
 
         for impl in program.perk_impls:
             self._validate_perk_implementation(impl)
+
+    @property
+    def drop_type_names(self) -> frozenset:
+        """The types that implement `Drop`, the second way a type can own something."""
+        return frozenset(self.perk_impl_table.by_perk.get("Drop", ()))
 
     def func_sig(self, name: str) -> Optional['FuncSig']:
         """What the name of a function means INSIDE the unit being validated.

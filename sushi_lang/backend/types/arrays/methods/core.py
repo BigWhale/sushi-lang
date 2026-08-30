@@ -293,7 +293,7 @@ def emit_dynamic_array_truncate(codegen: 'LLVMCodegen', array_value: ir.Value,
 
     shrinks = builder.icmp_signed("<", kept, current_len, name="truncate_shrinks")
     with builder.if_then(shrinks):
-        if needs_cleanup(element_semantic_type):
+        if needs_cleanup(codegen, element_semantic_type):
             data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(builder, array_value)
             data_ptr = builder.load(data_ptr_ptr, name="truncate_data")
             dropped_ptr = builder.gep(data_ptr, [kept], name="truncate_dropped")
@@ -332,7 +332,7 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
 
     with codegen.builder.if_then(is_not_null):
         from sushi_lang.backend.destructors import needs_cleanup, emit_value_destructor
-        if needs_cleanup(element_semantic_type):
+        if needs_cleanup(codegen, element_semantic_type):
             loop_i = codegen.builder.alloca(codegen.types.i32, name="free_loop_i")
             codegen.builder.store(zero, loop_i)
 

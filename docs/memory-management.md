@@ -185,6 +185,48 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+**A type that DECLARES a resource moves, whatever its fields say.** Most types own HEAP,
+and the compiler works that out by walking the fields. A file or a socket holds one `i32`
+descriptor, and no field walk can see that it means something: the type has to SAY so, by
+implementing the built-in `Drop` perk.
+
+```sushi
+struct Ticket:
+    i32 seat
+
+extend Ticket with Drop:
+    fn drop(poke self) ~:
+        println("ticket {self.seat} returned")
+
+fn take(nom Ticket t) ~:
+    println("using ticket {t.seat}")
+    return Result.Ok(~)
+
+fn main() i32:
+    let Ticket a = Ticket(7)
+    take(nom a)          # a is handed over, and drops inside take()
+    # println(a.seat)    # ERROR CE2405: a was moved
+
+    let Ticket b = Ticket(9)
+    println("holding {b.seat}")
+    return Result.Ok(0)  # b drops here: "ticket 9 returned"
+```
+
+`Drop` needs no import. Four rules go with it:
+
+- **`drop()` runs first, then the fields.** A struct that holds a `Ticket` runs its own
+  `drop()` before the ticket is destroyed, so what it owns is still readable while it
+  closes itself down.
+- **Scope exit destroys in reverse declaration order.** The last binding opened is the
+  first closed.
+- **Only the unit that declares a type may implement `Drop` for it** (CE4012). Otherwise
+  another unit could quietly replace the implementation and stop a resource being
+  released.
+- **There is no `.clone()`** on a type that owns a resource, or on anything holding one
+  (CE2431). A deep copy would copy the descriptor number and leave two values that both
+  drop -- a double release the copy verb would hide. The operation that means "a second
+  owner" gets its own name, `.share()`.
+
 ### What Copies
 
 **Primitives, and plain-data composites of only those:**

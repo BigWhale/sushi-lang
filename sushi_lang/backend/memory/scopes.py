@@ -1,6 +1,6 @@
 """Variable scope management with O(1) lookup and RAII cleanup."""
 from __future__ import annotations
-from typing import Dict, List, Optional, Set, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.internals.errors import raise_internal_error
@@ -8,6 +8,19 @@ from sushi_lang.internals.errors import raise_internal_error
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.typesys import Type, StructType
+
+
+# The two container shapes that carry their own scope-exit registry. `DynamicArrayManager`
+# destroys a List through `lists` and an Own through `owned_pointers`, so the general
+# struct registry must leave them alone or each is destroyed twice. A `HashMap` is absent
+# on purpose: it has no registry of its own and IS destroyed through the struct registry.
+_DEDICATED_REGISTRY_PREFIXES = ("List<", "Own<")
+
+
+def _has_dedicated_registry(ty: 'Type') -> bool:
+    """Does this type already have a scope-exit registry that is not the struct one?"""
+    name = getattr(ty, "name", None)
+    return isinstance(name, str) and name.startswith(_DEDICATED_REGISTRY_PREFIXES)
 
 
 class ScopeManager:
@@ -19,7 +32,10 @@ class ScopeManager:
 
         self._scope_depth: int = -1
 
-        self._scope_vars: List[Set[str]] = []
+        # An ORDERED set of the names declared at each depth: a dict keeps insertion
+        # order, which is declaration order, and `pop_scope` destroys the reverse of it.
+        # A plain `set` here made the destruction order Python's hash order.
+        self._scope_vars: List[Dict[str, None]] = []
 
         self._locals: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
         self._types: Dict[str, List[tuple[int, 'Type']]] = {}
@@ -70,26 +86,57 @@ class ScopeManager:
             if not entries:
                 del reg[name]
 
-    def _drain_registry_at_depth(self, registry: Dict[str, List], current_vars,
-                                 emit_free) -> None:
-        """Drain each current-scope binding's top registry entry on the fall-through exit."""
-        if not registry:
-            return
+    def _drain_scope_registries(self, current_vars) -> None:
+        """Destroy this scope's owning locals in REVERSE declaration order, then drain.
+
+        One walk over the scope's names, newest first, rather than one walk per registry:
+        the order a scope destroys in is a property of the SCOPE, and draining registry
+        by registry makes it a property of which registry a type happens to land in.
+
+        Reverse declaration order is the RAII rule -- the last binding opened is the
+        first closed, so an owner is still alive while what it borrows from is torn
+        down. It matters for a resource in a way it never did for heap: closing a `File`
+        before the `BufWriter` that flushes into it loses the bytes, while freeing two
+        buffers in either order is unobservable. Before this the scope's names lived in a
+        `set`, so the order was Python's hash order and changed between compilations.
+
+        If the block already terminated, an early return emitted the frees on that path,
+        so skip emission but still drain the tracking -- emitting would append a stray
+        free after the terminator. Every exit path frees on its own mutually-exclusive
+        block (#59/#60).
+        """
         block = self.codegen.builder.block if self.codegen.builder is not None else None
         block_live = block is not None and not block.is_terminated
-        for var_name in current_vars:
-            entries = registry.get(var_name)
-            if entries and entries[-1][0] == self._scope_depth:
+        arrays = getattr(self.codegen, "dynamic_arrays", None)
+
+        # A name sits in exactly one of these, but the order is fixed rather than
+        # incidental, so two registries holding one name stay deterministic too.
+        registries = (
+            (self._struct_cleanup,
+             lambda name, entry: arrays.emit_struct_field_cleanup(name, entry[1], entry[2])),
+            (self._closure_cleanup,
+             lambda _name, entry: self._emit_closure_free(entry[-1])),
+            (self._string_cleanup,
+             lambda _name, entry: self._emit_string_free(entry[-1])),
+        )
+
+        for var_name in reversed(current_vars):
+            for registry, emit_free in registries:
+                if registry is self._struct_cleanup and arrays is None:
+                    continue
+                entries = registry.get(var_name)
+                if not entries or entries[-1][0] != self._scope_depth:
+                    continue
                 entry = entries[-1]
                 if block_live:
                     self.codegen.moves.emit_free_unless_moved(
-                        entry[-1], lambda v=var_name, e=entry: emit_free(v, e))
+                        entry[-1], lambda v=var_name, e=entry, f=emit_free: f(v, e))
                 self._stack_pop_at_depth(registry, var_name, self._scope_depth)
 
     def push_scope(self) -> None:
         """Push a new lexical scope onto the scope stack."""
         self._scope_depth += 1
-        self._scope_vars.append(set())
+        self._scope_vars.append({})
         self._cstr_cleanup.append([])
         self._closure_temp_cleanup.append([])
 
@@ -103,21 +150,7 @@ class ScopeManager:
 
         current_vars = self._scope_vars[self._scope_depth]
 
-        # Drain the three stacked registries on the fall-through exit. If the block already
-        # terminated, an early return emitted the frees on that path, so skip emission but
-        # still drain the tracking -- emitting would append a stray free after the
-        # terminator. Every exit path frees on its own mutually-exclusive block (#59/#60).
-        if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
-            self._drain_registry_at_depth(
-                self._struct_cleanup, current_vars,
-                lambda name, entry: self.codegen.dynamic_arrays.emit_struct_field_cleanup(
-                    name, entry[1], entry[2]))
-        self._drain_registry_at_depth(
-            self._closure_cleanup, current_vars,
-            lambda _name, entry: self._emit_closure_free(entry[-1]))
-        self._drain_registry_at_depth(
-            self._string_cleanup, current_vars,
-            lambda _name, entry: self._emit_string_free(entry[-1]))
+        self._drain_scope_registries(current_vars)
 
         for var_name in current_vars:
             if var_name in self._locals and self._locals[var_name]:
@@ -223,7 +256,7 @@ class ScopeManager:
         """
         slot = self.entry_alloca(ty, name)
 
-        self._scope_vars[self._scope_depth].add(name)
+        self._scope_vars[self._scope_depth].setdefault(name)
 
         if name not in self._locals:
             self._locals[name] = []
@@ -250,22 +283,27 @@ class ScopeManager:
                                slot: ir.AllocaInstr) -> None:
         """Register a local in the cleanup registry its type belongs to."""
         from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, FunctionType, BuiltinType
-        from sushi_lang.backend.destructors import resolve_named_type
+        from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
         self.codegen.moves.arm_if_conditional(name, slot)
         semantic_ty = resolve_named_type(self.codegen, semantic_ty)
         if isinstance(semantic_ty, (StructType, EnumType)):
             # An enum local whose active variant owns heap reuses the struct-cleanup
             # registry, so both exit paths free it through emit_value_destructor. Lifting
             # CE2059 without this owner leaked every such local (#139).
-            if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
-                if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
-                    self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
+            #
+            # A `List@(T)` and an `Own@(T)` are the exception, and they are why this asks
+            # two questions rather than one: each has a REGISTRY OF ITS OWN
+            # (`dynamic_arrays.lists`, `.owned_pointers`) that already destroys it at
+            # scope exit. Registering one here as well destroys it twice. A `HashMap` has
+            # no registry of its own and belongs here, which is why the test is the two
+            # names and not `CONTAINER_PREFIXES`.
+            if not _has_dedicated_registry(semantic_ty) and needs_cleanup(self.codegen, semantic_ty):
+                self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
         # A fixed array whose ELEMENTS own heap. Its storage is the alloca, so it is no
         # dynamic array and reuses the owning-value registry. ArrayType matched NO branch
         # here, so such a local was registered nowhere and never freed (#185).
         elif isinstance(semantic_ty, ArrayType):
-            from sushi_lang.backend.destructors import needs_cleanup
-            if needs_cleanup(semantic_ty):
+            if needs_cleanup(self.codegen, semantic_ty):
                 self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
         elif isinstance(semantic_ty, FunctionType):
             self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))

@@ -1,0 +1,24 @@
+# A destructor has nowhere to put a Result, so the `Drop` contract declares no error
+# channel -- and a perk implementation must match its contract's channel exactly.
+# That rule already has a code and a relational diagnostic, so this is CE0133 and not
+# a second code for one condition. The contract is synthesized, so the implementation
+# side is the only side a program can get wrong.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE0133
+# EXPECT_STDERR_CONTAINS: "perk 'Drop' requires no error channel"
+enum CloseError:
+    Refused
+
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~ | CloseError:
+        if (self.id < 0):
+            return Result.Err(CloseError.Refused)
+        return ~
+
+fn main() i32:
+    let Handle h = Handle(1)
+    println("{h.id}")
+    return Result.Ok(0)

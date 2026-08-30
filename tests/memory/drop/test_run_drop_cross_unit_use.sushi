@@ -1,0 +1,15 @@
+# Unit A declares the type and its Drop; this unit holds one. It drops once here,
+# at this scope's exit, from an implementation this unit cannot see the body of.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "holding 4\nvault 4 closed\ndone\n"
+use "helpers/vault"
+
+fn main() i32:
+    if (true):
+        match open_vault(4):
+            Result.Ok(v) -> println("holding {v.id}")
+            Result.Err(_) -> println("no vault")
+    println("done")
+    return Result.Ok(0)

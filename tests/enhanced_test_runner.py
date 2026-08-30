@@ -37,6 +37,10 @@ _NUMERIC = re.compile(r"-?\d+")
 # survive as far as the summary; these constants are what _check_leaks records and what
 # the summary groups by, so the two can never drift apart.
 SKIP_NOT_BUILT = "interposer not built"
+# The descriptor half of the gate. Both reasons are LOUD: a fd assertion that cannot be
+# evaluated is reported as a skip and never as a pass, the rule the byte half follows.
+SKIP_NO_FD_REPORT = "interposer reports no descriptor count (stale build)"
+SKIP_FD_DIR_UNREADABLE = "the per-process fd directory could not be read"
 SKIP_TIMED_OUT = "interposer run timed out"
 SKIP_NO_REPORT = "no interposer report"
 # macOS and Linux are the two platforms the interposer supports. Anything else used to be
@@ -570,9 +574,10 @@ class TestRunner:
             # Validate runtime behavior
             success, message = self._validate_runtime_result(result, metadata)
 
-            # Leak assertion: opt-in per test, enforced whenever the test runs. Runs the
-            # binary a second time under the malloc-interposer.
-            if metadata.expect_no_leaks:
+            # Leak and descriptor assertions: opt-in per test, enforced whenever the
+            # test runs. ONE re-run under the interposer answers both -- it reports the
+            # byte balance and the descriptor delta on the same line.
+            if metadata.expect_no_leaks or metadata.expect_no_open_fds:
                 leak_ok, leak_message = self._check_leaks(test_name, binary_path, metadata)
                 message += "\n" + leak_message
                 if leak_ok is False:
@@ -657,7 +662,8 @@ class TestRunner:
 
         match = re.search(
             r"SUSHI_LEAKCHECK: leaked=(\d+) blocks=(\d+)"
-            r"(?: double_frees=(\d+) over_freed=(\d+))?",
+            r"(?: double_frees=(\d+) over_freed=(\d+))?"
+            r"(?: open_fds=(-?\d+))?",
             stderr or "")
         if not match:
             # No report: the interposer failed to load or the program bypassed its
@@ -671,6 +677,21 @@ class TestRunner:
         doubles = int(match.group(3) or 0)
         over = int(match.group(4) or 0)
         self.leaks_checked.append(test_name)
+
+        # The descriptor half, asked first: a leaked descriptor is the defect
+        # EXPECT_NO_LEAKS cannot see at all, so it must not be shadowed by the byte
+        # report. A shim too old to carry the field, or one whose directory read
+        # failed, reports nothing usable -- a loud skip, never a silent pass.
+        if metadata.expect_no_open_fds:
+            raw_fds = match.group(5)
+            if raw_fds is None:
+                return self._skip_leak_check(test_name, SKIP_NO_FD_REPORT)
+            fd_delta = int(raw_fds)
+            if fd_delta < 0:
+                return self._skip_leak_check(test_name, SKIP_FD_DIR_UNREADABLE)
+            if fd_delta > 0:
+                return False, (f"✗ Descriptor check: {fd_delta} descriptor(s) still open "
+                               f"at exit")
         # Over-freeing outranks leaking: it is memory-unsafe where a leak is merely
         # wasteful, and a double free frequently shows a zero balance (the second free
         # debits nothing), so reporting leaks first would report the milder symptom.
