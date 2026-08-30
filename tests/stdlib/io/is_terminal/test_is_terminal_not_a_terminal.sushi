@@ -5,7 +5,7 @@
 # the child inherits the shell's stdin, which IS a terminal when the suite is run by
 # hand.
 # STDIN_INPUT: "x\n"
-# EXPECT_STDOUT_EXACT: "0\n0\n0\n"
+# EXPECT_STDOUT_EXACT: "false\nfalse\nfalse\n"
 # EXPECT_RUNTIME_EXIT: 0
 
 use <io/stdio>

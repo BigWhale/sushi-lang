@@ -144,7 +144,7 @@ Every unhandled-Result position has a gate:
 |---|---|
 | assignment (`let i32 x = f()`) | CE2505 |
 | chaining (`xs.map(f).filter(p)`) | CE2515 |
-| an `if` condition | #526 (filed; a `Result` in a condition compiles silently today) |
+| an `if` condition | CE2516 |
 | an argument | CE2006 |
 | a discarded statement | CW2001 |
 | `??` on a bare method | CE2507 |

@@ -2,7 +2,7 @@
 # instantiation-collection inference reads the family return-type tables, so
 # every chain link is typed -- hash/to_str included, which the old private
 # table did not know.
-# EXPECT_STDOUT_EXACT: "FORD PREFECT\n5\n1\n1\n"
+# EXPECT_STDOUT_EXACT: "FORD PREFECT\n5\ntrue\n1\n"
 # EXPECT_RUNTIME_EXIT: 0
 
 use <collections/strings>

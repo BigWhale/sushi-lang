@@ -10,7 +10,7 @@ fn main() i32:
     let Result@(Maybe@(i32), StdError) nested = Result.Ok(Maybe.Some(42))
 
     # Use built-in extension methods on nested generic
-    if (nested):
+    if (nested.is_ok()):
         let Maybe@(i32) inner = nested.realise(Maybe.None())
         if (inner.is_some()):
             let i32 value = inner.realise(0)

@@ -1,7 +1,7 @@
 # `.clone()` through a reference, over the type kinds that reach different emitters:
 # a struct, an enum, a string and a List. Each must deref the receiver first.
 # `.hash()` goes through the same auto-derived dispatch, so a struct hash pins that half.
-# EXPECT_STDOUT_EXACT: "2\n1\nhi there\n2\n1\n"
+# EXPECT_STDOUT_EXACT: "2\n1\nhi there\n2\ntrue\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
 struct Holder:

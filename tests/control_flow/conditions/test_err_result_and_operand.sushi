@@ -1,0 +1,9 @@
+# Both operands of `and` are conditions (#522).
+# EXPECT_ERROR_CODE: CE2516
+fn truthy() bool:
+    return Result.Ok(false)
+
+fn main() i32:
+    let bool both = truthy() and true
+    println("{both}")
+    return Result.Ok(0)

@@ -8,7 +8,7 @@ fn main() i32:
 
     # Use the nested variable to avoid warning
     let i32 base = 21
-    if (nested):
+    if (nested.is_ok()):
         base := 42
 
     # Verify right shift operator still works correctly

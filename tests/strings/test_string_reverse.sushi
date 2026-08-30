@@ -102,23 +102,23 @@ fn test_reverse_emoji() ~:
     return Result.Ok(~)
 
 fn main() i32:
-    if (test_reverse_ascii()):
+    if (test_reverse_ascii().is_ok()):
         println("")
-    if (test_reverse_empty()):
+    if (test_reverse_empty().is_ok()):
         println("")
-    if (test_reverse_single_char()):
+    if (test_reverse_single_char().is_ok()):
         println("")
-    if (test_reverse_utf8()):
+    if (test_reverse_utf8().is_ok()):
         println("")
-    if (test_reverse_utf8_complex()):
+    if (test_reverse_utf8_complex().is_ok()):
         println("")
-    if (test_reverse_palindrome()):
+    if (test_reverse_palindrome().is_ok()):
         println("")
-    if (test_reverse_numbers()):
+    if (test_reverse_numbers().is_ok()):
         println("")
-    if (test_reverse_special_chars()):
+    if (test_reverse_special_chars().is_ok()):
         println("")
-    if (test_reverse_emoji()):
+    if (test_reverse_emoji().is_ok()):
         println("")
 
     return Result.Ok(0)

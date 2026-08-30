@@ -30,6 +30,6 @@ fn test_nested_raii() i32:
 
 fn main() i32:
     let Result@(i32, StdError) result = test_nested_raii()
-    if (result):
+    if (result.is_ok()):
         return Result.Ok(0)
     return Result.Err(StdError.Error)

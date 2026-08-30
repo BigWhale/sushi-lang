@@ -86,7 +86,11 @@ class FormattingOperations:
         is_bool = (width == 1 or semantic_type == BuiltinType.BOOL)
         is_signed = not is_unsigned_type(semantic_type)
 
-        if is_bool or not isinstance(v.type, ir.IntType):
+        if is_bool:
+            self._emit_print_bool(v)
+            return
+
+        if not isinstance(v.type, ir.IntType):
             fmt_ptr = self._get_format_string("i32", FORMAT_STRINGS["i32"])
             builder.call(printf, [fmt_ptr, self.codegen.utils.as_i32(v)])
             return
@@ -104,6 +108,15 @@ class FormattingOperations:
 
         fmt_ptr = self._get_format_string(name, FORMAT_STRINGS[name])
         builder.call(printf, [fmt_ptr, value])
+
+    def _emit_print_bool(self, v: ir.Value) -> None:
+        """Print a bool as the word it is: true or false, never 1 or 0 (#523).
+
+        #516 moved the interpolation hole to the words and left the print statements
+        on %d, so `println(flag)` and `println("{flag}")` disagreed about one value.
+        Both spellings go through emit_bool_to_string now.
+        """
+        self.emit_print_value(self.emit_bool_to_string(v))
 
     def emit_integer_to_string(self, int_value: ir.Value, is_signed: bool, bit_width: int) -> ir.Value:
         """Generate integer to string conversion using sprintf."""

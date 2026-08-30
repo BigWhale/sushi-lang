@@ -45,12 +45,12 @@ fn test_empty_string() ~:
     return Result.Ok(~)
 
 fn main() i32:
-    if (test_pad_left()):
+    if (test_pad_left().is_ok()):
         println("")
-    if (test_find()):
+    if (test_find().is_ok()):
         println("")
-    if (test_replace()):
+    if (test_replace().is_ok()):
         println("")
-    if (test_empty_string()):
+    if (test_empty_string().is_ok()):
         println("")
     return Result.Ok(0)

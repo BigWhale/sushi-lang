@@ -39,6 +39,6 @@ fn test_nested_scopes() i32:
 fn main() i32:
     let Result@(i32, StdError) result1 = test_basic_raii()
     let Result@(i32, StdError) result2 = test_nested_scopes()
-    if (result1 and result2):
+    if (result1.is_ok() and result2.is_ok()):
         return Result.Ok(0)
     return Result.Err(StdError.Error)

@@ -21,7 +21,7 @@ fn main() i32:
     let Result@(i32, StdError) first_val = pair.first
     let Maybe@(string) second_val = pair.second
 
-    if (first_val):
+    if (first_val.is_ok()):
         if (second_val.is_some()):
             println("Success")
             return Result.Ok(0)

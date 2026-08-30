@@ -10,6 +10,6 @@ fn main() i32:
     let string x = "x-{1}"
     let string y = "y-{2}"
     let Result@(~, StdError) r = f(poke x, poke y)
-    if (r):
+    if (r.is_ok()):
         println(x)
     return Result.Ok(0)

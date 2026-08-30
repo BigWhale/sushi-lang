@@ -56,12 +56,12 @@ fn main() i32:
     greet("Zaphod")
 
     # Proper error handling: store Result and check it.
-    # Result@(T, E) can be used in boolean context:
-    # - if (result) checks for Ok
-    # - if (!result) or else checks for Err
+    # A condition is a bool, so a Result names the question it asks:
+    # - result.is_ok() answers true for Ok
+    # - result.is_err(), or the else branch, answers for Err
     let Result@(i32, StdError) result = divide_pangalactic(100, 5)
 
-    if (result):
+    if (result.is_ok()):
         # Use .realise() inside the Ok branch to extract the value
         println("Division successful: {result.realise(0)}")
     else:
@@ -71,7 +71,7 @@ fn main() i32:
     # This function call will fail due to division by zero.
     let Result@(i32, StdError) failed = divide_pangalactic(42, 0)
 
-    if (failed):
+    if (failed.is_ok()):
         println("This won't print")
     else:
         # The else branch executes when Result is Err

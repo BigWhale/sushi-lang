@@ -121,25 +121,25 @@ fn test_join_long_strings() ~:
     return Result.Ok(~)
 
 fn main() i32:
-    if (test_join_basic()):
+    if (test_join_basic().is_ok()):
         println("")
-    if (test_join_empty_array()):
+    if (test_join_empty_array().is_ok()):
         println("")
-    if (test_join_single_element()):
+    if (test_join_single_element().is_ok()):
         println("")
-    if (test_join_empty_separator()):
+    if (test_join_empty_separator().is_ok()):
         println("")
-    if (test_join_multi_char_separator()):
+    if (test_join_multi_char_separator().is_ok()):
         println("")
-    if (test_join_with_empty_parts()):
+    if (test_join_with_empty_parts().is_ok()):
         println("")
-    if (test_join_utf8()):
+    if (test_join_utf8().is_ok()):
         println("")
-    if (test_join_emoji()):
+    if (test_join_emoji().is_ok()):
         println("")
-    if (test_join_two_elements()):
+    if (test_join_two_elements().is_ok()):
         println("")
-    if (test_join_long_strings()):
+    if (test_join_long_strings().is_ok()):
         println("")
 
     return Result.Ok(0)

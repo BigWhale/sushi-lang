@@ -8,7 +8,7 @@ fn try_increment(i32 current) i32:
 fn main() i32:
     let i32 count = 0
 
-    while (try_increment(count)):
+    while (try_increment(count).is_ok()):
         count := try_increment(count).realise(count)
         println("Count: {count}")
 

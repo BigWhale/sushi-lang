@@ -18,7 +18,7 @@ fn grow(poke Shape s) ~:
 fn main() i32:
     let Shape s = Shape.Poly(from([1]))
     let Result@(~, StdError) r = grow(poke s)
-    if (r):
+    if (r.is_ok()):
         match s:
             Shape.Poly(peek q) -> println(q.len())
             Shape.Empty -> println("empty")

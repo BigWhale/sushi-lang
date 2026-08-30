@@ -9,7 +9,7 @@ fn main() i32:
     let Maybe@(string) maybe_string = Maybe.Some("Don't Panic")
 
     # Verify both compile and work
-    if (result_array):
+    if (result_array.is_ok()):
         let i32[3] arr = result_array.realise([0, 0, 0])
         if (arr[0] == 1):
             if (maybe_string.is_some()):

@@ -28,10 +28,10 @@ fn test_assignment() ~:
     return Result.Ok(~)
 
 fn main() i32:
-    if (test_literal()):
+    if (test_literal().is_ok()):
         println("")
-    if (test_equivalence()):
+    if (test_equivalence().is_ok()):
         println("")
-    if (test_assignment()):
+    if (test_assignment().is_ok()):
         println("")
     return Result.Ok(0)

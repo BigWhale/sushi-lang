@@ -11,6 +11,6 @@ fn extend_it(poke string s) ~:
 fn main() i32:
     let string a = "base-{1}"
     let Result@(~, StdError) r = extend_it(poke a)
-    if (r):
+    if (r.is_ok()):
         println(a)
     return Result.Ok(0)

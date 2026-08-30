@@ -10,20 +10,13 @@ if TYPE_CHECKING:
 
 
 def emit_condition(codegen: 'LLVMCodegen', expr) -> 'ir.Value':
-    """Emit a boolean condition, freeing an unowned Result/Maybe temporary behind it (#159)."""
-    from sushi_lang.backend.expressions.memory import destroy_enum_temp, expression_is_temporary
-    from sushi_lang.backend.expressions.calls.utils import infer_generic_enum_type
+    """Emit a boolean condition.
 
-    value = codegen.expressions.emit_expr(expr)
-    cond = codegen.utils.as_i1(value)
-
-    if expression_is_temporary(codegen, expr):
-        enum_type = (infer_generic_enum_type(codegen, expr, value, "Result<")
-                     or infer_generic_enum_type(codegen, expr, value, "Maybe<"))
-        if enum_type is not None:
-            destroy_enum_temp(codegen, expr, value, enum_type)
-
-    return cond
+    A condition is a bool since #522, so no wrapper temporary can stand here any more.
+    The Result/Maybe temporary this used to free (#159) is now behind the `.is_ok()`
+    that tests it, where the ordinary method-call temp registry owns it.
+    """
+    return codegen.utils.as_i1(codegen.expressions.emit_expr(expr))
 
 
 def emit_struct_cleanup(codegen: 'LLVMCodegen') -> None:

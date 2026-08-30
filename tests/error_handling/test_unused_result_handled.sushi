@@ -14,7 +14,7 @@ fn main() i32:
     println(x)
 
     # OK: Result is used in if condition
-    if (get_value()):
+    if (get_value().is_ok()):
         println("Success")
 
     # OK: Result is stored in a variable (not an expression statement)

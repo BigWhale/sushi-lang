@@ -1,0 +1,27 @@
+# Every handled spelling of a wrapper condition (#522).
+# EXPECT_STDOUT_EXACT: "the bool is false\nthe call is ok\nsome: 1\nmatch: false\n"
+fn truthy() bool:
+    return Result.Ok(false)
+
+fn blank() ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    if (truthy().realise(true)):
+        println("wrong")
+    else:
+        println("the bool is false")
+
+    if (blank().is_ok()):
+        println("the call is ok")
+
+    let i32[] xs = from([1, 2, 3])
+    let Maybe@(i32) first = xs.get(0)
+    if (first.is_some()):
+        println("some: {first.realise(0)}")
+
+    match truthy():
+        Result.Ok(v) -> println("match: {v}")
+        Result.Err(_) -> println("match: err")
+
+    return Result.Ok(0)

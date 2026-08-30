@@ -111,6 +111,11 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
         return BuiltinType.BOOL
 
     elif isinstance(expr, UnaryOp):
+        # A `not` answers for itself: it is a bool whatever it wraps, so reading
+        # through to the operand made `{not n}` print as an integer (#532). `neg` and
+        # `~` do keep their operand's type.
+        if expr.op == "not":
+            return BuiltinType.BOOL
         return infer_expr_semantic_type(codegen, expr.expr)
 
     elif isinstance(expr, BinaryOp):

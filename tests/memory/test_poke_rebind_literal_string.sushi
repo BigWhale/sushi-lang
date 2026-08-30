@@ -11,6 +11,6 @@ fn take_over(poke string s) ~:
 fn main() i32:
     let string a = "literal"
     let Result@(~, StdError) r = take_over(poke a)
-    if (r):
+    if (r.is_ok()):
         println(a)
     return Result.Ok(0)

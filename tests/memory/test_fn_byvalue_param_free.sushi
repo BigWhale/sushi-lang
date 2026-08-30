@@ -33,8 +33,8 @@ fn indirect() ~:
 
 fn main() i32:
     let Result@(~, StdError) a = direct()
-    if (a):
+    if (a.is_ok()):
         let Result@(~, StdError) b = indirect()
-        if (b):
+        if (b.is_ok()):
             return Result.Ok(0)
     return Result.Ok(1)

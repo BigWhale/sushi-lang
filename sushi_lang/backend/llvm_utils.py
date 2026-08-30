@@ -5,7 +5,6 @@ from typing import List, TYPE_CHECKING
 from llvmlite import ir
 from sushi_lang.internals.report import Span
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.backend import enum_utils
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -33,18 +32,11 @@ class LLVMUtils:
         if isinstance(ty, ir.PointerType):
             return self.codegen.builder.icmp_unsigned('!=', v, ir.Constant(ty, None))
 
-        # Check for Result<T> enum type: {i32 tag, [K x i64] data} (#300 phase 2)
-        # For Result, check if tag == 0 (Ok variant)
-        # LiteralStructType on purpose (#257): enums keep their anonymous
-        # {i32 tag, [K x i64]} layout -- only user STRUCTS became identified types. A user
-        # struct shaped {i32, [K x i64]} must not be read as a Result here.
-        if isinstance(ty, ir.LiteralStructType) and len(ty.elements) == 2:
-            if isinstance(ty.elements[0], ir.IntType) and ty.elements[0].width == 32:
-                if isinstance(ty.elements[1], ir.ArrayType):
-                    return enum_utils.check_enum_variant(
-                        self.codegen, v, variant_index=0, signed=True, name="is_ok"
-                    )
-
+        # An enum has no truth value. Reading the Ok tag here WAS the truthiness of a
+        # Result, and it is gone with #522: a condition is a bool, the typecheck pass
+        # refuses every wrapper with CE2516, and nothing reaches this point holding an
+        # enum. A shape that does is a hole in that refusal, so it reports rather than
+        # answers.
         raise_internal_error("CE0017", src=str(ty), dst="i1")
 
     def as_i8(self, v: ir.Value) -> ir.Value:

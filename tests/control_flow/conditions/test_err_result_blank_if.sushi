@@ -1,0 +1,10 @@
+# A Result@(~, E) in an if condition. A condition is a bool, with no exception,
+# so the success test needs .is_ok() (#522).
+# EXPECT_ERROR_CODE: CE2516
+fn blank() ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    if (blank()):
+        println("ok")
+    return Result.Ok(0)

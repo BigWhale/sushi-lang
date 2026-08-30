@@ -4,7 +4,7 @@
 # built-in never reaches it: a built-in has no declared parameters, so its emitter builds
 # its own argument list. Every family below emitted `src.s(...)` and let it fall on the
 # floor (#475). One block per owning argument, so `replace` leaked two a call.
-# EXPECT_STDOUT_EXACT: "1\nabXYij\n1\ncde\nnone\n4\n"
+# EXPECT_STDOUT_EXACT: "true\nabXYij\ntrue\ncde\nnone\n4\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 

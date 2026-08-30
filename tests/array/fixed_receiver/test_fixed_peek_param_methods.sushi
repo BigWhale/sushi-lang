@@ -1,7 +1,7 @@
 # Regression for #480: the read-only methods were CE0000 through a `peek` receiver. They
 # copy nothing, so this failed for a plain element type as much as for an owning one.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "3\n10\n30\n60\n1\n"
+# EXPECT_STDOUT_EXACT: "3\n10\n30\n60\ntrue\n"
 
 use <io/stdio>
 

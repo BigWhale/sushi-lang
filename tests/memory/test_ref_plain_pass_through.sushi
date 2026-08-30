@@ -15,6 +15,6 @@ fn f(peek i32 x) ~:
 fn main() i32:
     let i32 n = 5
     let Result@(~, StdError) r = f(peek n)
-    if (r):
+    if (r.is_ok()):
         println("after: {n}")
     return Result.Ok(0)

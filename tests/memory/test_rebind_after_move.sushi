@@ -37,6 +37,6 @@ fn go() ~:
 
 fn main() i32:
     let Result@(~, StdError) r = go()
-    if (r):
+    if (r.is_ok()):
         return Result.Ok(0)
     return Result.Ok(1)

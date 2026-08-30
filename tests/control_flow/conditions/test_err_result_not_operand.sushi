@@ -1,0 +1,9 @@
+# The operand of `not` is a condition too (#522).
+# EXPECT_ERROR_CODE: CE2516
+fn truthy() bool:
+    return Result.Ok(false)
+
+fn main() i32:
+    let bool flipped = not truthy()
+    println("{flipped}")
+    return Result.Ok(0)

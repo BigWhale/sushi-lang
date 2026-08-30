@@ -8,7 +8,7 @@ fn main() i32:
     let Result@(Maybe@(i32), StdError) outer = Result.Ok(inner)
 
     # Use the outer variable to avoid warning
-    if (outer):
+    if (outer.is_ok()):
         # Successfully compiled nested generics!
         return Result.Ok(0)
 

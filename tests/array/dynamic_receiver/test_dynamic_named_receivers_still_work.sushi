@@ -2,7 +2,7 @@
 # `peek`/`poke` parameter arrives as a reference that has to be unwrapped before the element
 # type can be read.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "6\n6\n6\n1\n"
+# EXPECT_STDOUT_EXACT: "6\n6\n6\ntrue\n"
 # EXPECT_NO_LEAKS: true
 
 use <io/stdio>

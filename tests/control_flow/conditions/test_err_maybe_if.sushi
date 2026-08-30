@@ -1,0 +1,9 @@
+# A Maybe@(T) was already refused, with the integer help text. It now answers with
+# the wrapper code and names .is_some() (#522).
+# EXPECT_ERROR_CODE: CE2516
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let Maybe@(i32) first = xs.get(0)
+    if (first):
+        println("some")
+    return Result.Ok(0)

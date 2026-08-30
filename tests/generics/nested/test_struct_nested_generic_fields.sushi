@@ -19,7 +19,7 @@ fn main() i32:
     )
 
     # Verify nested generics work
-    if (cfg.port):
+    if (cfg.port.is_ok()):
         println("Config created successfully")
     else:
         println("Error: port should be Ok")

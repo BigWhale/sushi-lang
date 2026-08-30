@@ -269,6 +269,12 @@ class ExpressionValidator(RecursiveVisitor):
             from sushi_lang.semantics.passes.types.expressions import validate_bitwise_unary
             validate_bitwise_unary(self.type_validator, node)
 
+        # The operand of `not` is a condition, so it obeys the condition rule (#532).
+        if node.op == "not":
+            from sushi_lang.semantics.passes.types.expressions import (
+                reject_non_bool_condition)
+            reject_non_bool_condition(self.type_validator, node.expr, operand_type)
+
         # Unary minus is overflow-checked: the smallest signed value has no positive
         # twin. `~` is width-defined and never reports.
         if node.op == "neg":
@@ -313,6 +319,13 @@ class ExpressionValidator(RecursiveVisitor):
 
         if node.op in ["&", "|", "^", "<<", ">>"]:
             self.type_validator._validate_bitwise_operation(node)
+
+        # Both operands of a logical operator are conditions (#532).
+        if node.op in ["and", "or", "xor"]:
+            from sushi_lang.semantics.passes.types.expressions import (
+                reject_non_bool_condition)
+            reject_non_bool_condition(self.type_validator, node.left, left_type)
+            reject_non_bool_condition(self.type_validator, node.right, right_type)
 
         # The overflow-checked operators. A width-defined one cannot leave its type,
         # so it is not asked (Ruling 1 of docs/design/compile-time-evaluation.md).
@@ -861,7 +874,20 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return ret_type
 
     def visit_call(self, node: Call) -> Optional[Type]:
-        """Infer function call type."""
+        """Infer a function call's type and stamp the node with it.
+
+        A method call and a `??` have carried the stamp since #379; a plain call
+        carried none, so every backend reader of `stamped_semantic_type` fell through
+        to reconstruction. A bool-returning stdlib call then printed 1 instead of
+        true, in a hole and under a `not` alike (#523).
+        """
+        inferred = self._call_return_type(node)
+        if inferred is not None:
+            node.inferred_return_type = inferred
+        return inferred
+
+    def _call_return_type(self, node: Call) -> Optional[Type]:
+        """What a call to this callee yields, before the stamp is parked on the node."""
         from sushi_lang.semantics.typesys import FunctionType
         # Call-through any expression yielding a function value (`env.f(x)`,
         # `obj.handler()`, `arr[0]()`). Yields Result<ok, err> like a direct call.

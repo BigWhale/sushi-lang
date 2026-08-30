@@ -139,6 +139,23 @@ fn main() i32 | MathError:
     return Result.Ok(0)
 ```
 
+**A condition is a bool, and nothing else is one.** A `Result@(T, E)` and a `Maybe@(T)`
+are both refused in an `if`, in a `while`, and in an operand of `and`, `or`, `xor` or
+`not`. The code is **CE2516**, and the escape is to name the question: `.is_ok()`,
+`.is_err()`, `.is_some()` or `.is_none()` answers with a bool, while `??`,
+`.realise(default)` and `match` take the value.
+
+<!-- docs-sweep: skip (a fragment; divide comes from an earlier block on this page) -->
+```sushi
+# if (divide(10, 2)):            # CE2516 -- which does it ask, the wrapper or the value?
+if (divide(10, 2).is_ok()):      # the success test
+    println("ok")
+```
+
+The wrapper used to answer for its Ok tag, so `if (f())` on a `Result@(bool, E)` ran the
+true branch for `Ok(false)` and never read the bool. Both readings were legal, so the
+compiler could not choose one (#522).
+
 #### Using Pattern Matching
 
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
@@ -589,7 +606,7 @@ fn main() i32:
     # Handle at top level
     let Result@(i32, StdError) result = mid_level()
 
-    if (result):
+    if (result.is_ok()):
         let i32 value = result.realise(0)
         println("Success: {value}")
     else:

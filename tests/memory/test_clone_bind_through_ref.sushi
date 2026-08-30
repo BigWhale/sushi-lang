@@ -17,6 +17,6 @@ fn f(peek i32[] a) ~:
 fn main() i32:
     let i32[] arr = from([1, 2])
     let Result@(~, StdError) r = f(peek arr)
-    if (r):
+    if (r.is_ok()):
         println("after: {arr.len()}")
     return Result.Ok(0)
