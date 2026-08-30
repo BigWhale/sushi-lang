@@ -83,8 +83,17 @@ ignore = ["E501"]
 [tool.mypy]
 # Tier 5.2 ratchet. The CLEAN packages (internals, compiler, packager, sushi_stdlib)
 # are enforced by a blocking CI step that checks exactly those paths; the remaining
-# backlog (backend ~1500, semantics ~700, mostly union-attr on stamped Optional
+# backlog (~2950 across backend and semantics, mostly union-attr on stamped Optional
 # annotations) is burned down in later waves, with a non-blocking CI step printing
 # the full count so drift stays visible. No strictness flags yet.
 python_version = "3.13"
 ignore_missing_imports = true
+# What makes the ratchet REAL (#529). Without this, mypy follows the imports out of
+# the four packages into semantics/ and backend/ and reports the backlog there, so the
+# blocking command answers with ~2900 errors that are nobody's branch -- a push from a
+# fresh clone or a worktree is stopped by them, while a warm .venv answers Success.
+# `silent` follows for TYPE INFORMATION and reports errors only in what the command
+# line names, so the blocking step gives one answer in either environment. The
+# informational step passes the whole tree, so its count is unaffected: every file is
+# named there.
+follow_imports = "silent"
