@@ -64,6 +64,42 @@ def classify_extension_target(
     )
 
 
+# The synthetic base name under which array-target templates live in the
+# GenericExtensionTable. A `$` cannot appear in a written type name, so the key
+# collides with nothing a program declares.
+ARRAY_BASE_KEY = "$array"
+
+
+def classify_array_extension_target(
+    element: Type,
+    is_declared_type: Callable[[str], bool],
+) -> Optional[ExtensionTarget]:
+    """Read a dynamic-array target's ELEMENT position (ruling 3 of the UFCS epic).
+
+    A bare undeclared name binds a type parameter (`extend T[]` applies to every
+    element type); a declared or built-in name is concrete (`extend i32[]`). Anything
+    else -- a generic instantiation, an array -- returns None, which the collect pass
+    reports as CE2101.
+    """
+    from sushi_lang.semantics.typesys import BuiltinType, StructType, EnumType
+
+    if isinstance(element, TypeParameter):
+        return ExtensionTarget(base_name=ARRAY_BASE_KEY, args=(element,),
+                               param_names=(element.name,), target_key="")
+    if isinstance(element, UnknownType):
+        if is_declared_type(element.name):
+            return ExtensionTarget(
+                base_name=ARRAY_BASE_KEY, args=(element,), param_names=(),
+                target_key=instantiation_key(ARRAY_BASE_KEY, (element,)))
+        return ExtensionTarget(base_name=ARRAY_BASE_KEY, args=(element,),
+                               param_names=(element.name,), target_key="")
+    if isinstance(element, (BuiltinType, StructType, EnumType)):
+        return ExtensionTarget(
+            base_name=ARRAY_BASE_KEY, args=(element,), param_names=(),
+            target_key=instantiation_key(ARRAY_BASE_KEY, (element,)))
+    return None
+
+
 def target_shape_of(ext) -> Optional[ExtensionTarget]:
     """The shape the collect pass stamped on a declaration, if it stamped one."""
     return getattr(ext, "target_shape", None)

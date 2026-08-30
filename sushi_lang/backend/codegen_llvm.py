@@ -139,6 +139,9 @@ class LLVMCodegen:
         self.entry_block: Optional[ir.Block] = None
         self.entry_branch: Optional[ir.Instruction] = None
         self.in_extension_method: bool = False  # Track if compiling extension method
+        # The interned Result a CHANNEL extension body ('| E') returns; None in a bare
+        # body. Set and cleared by emit_extension_method_def, read by emit_return.
+        self.current_extension_result = None
 
         # Loop context tracking for break/continue statements. Each entry is
         # (continue-target block, break-target block, loop-body scope index); the scope

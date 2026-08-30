@@ -828,10 +828,13 @@ implementation is the sanctioned override and wins over a shipped one
 shape keep building clean. The predicate lives in `semantics/foreign_extensions.py`, one
 function for both consumers: the CW3003 emitter in the pipeline and the manifest extractor.
 
-Cost today: `sushi_stdlib/src_sushi` and `toolchain/src` hold **zero** extensions between
-them, and `tests/libs` holds 11 — eight on a builtin, three on a type the consumer
-declares. It fires nowhere in real library code, which is what a warning aimed at a future
-hazard should do.
+Cost when measured: `sushi_stdlib/src_sushi` and `toolchain/src` held **zero** extensions
+between them, and `tests/libs` holds 11 — eight on a builtin, three on a type the consumer
+declares. The UFCS epic then put six method combinators in
+`src_sushi/collections/iter.sushi`, all on builtin generic targets (`List@(T)`, `T[]`) —
+the shape the measurement already covered, and a bundled stdlib module is not a `--lib`
+build, so CW3003's scope is untouched. It still fires nowhere in real library code, which
+is what a warning aimed at a future hazard should do.
 
 **The consumer's half.** `--lib-info` lists the foreign types a library claims methods on,
 so the hazard is readable before it is hit: the manifest carries them as

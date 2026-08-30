@@ -1,0 +1,20 @@
+# Extensions are program-wide and unit-blind (the stated asymmetry, ruling 2): the
+# HELPER unit imports <collections/iter>, and the methods answer in THIS unit, which
+# never wrote the import.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "6\n"
+use "helpers/iter_import"
+
+fn doubled_sum() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    let i32 total = xs.map(|i32 x| x * 2)??.fold(0, |i32 acc, i32 x| acc + x)??
+    return Result.Ok(total)
+
+fn main() i32:
+    if (ready().realise(false)):
+        println("{doubled_sum().realise(-1)}")
+    return Result.Ok(0)

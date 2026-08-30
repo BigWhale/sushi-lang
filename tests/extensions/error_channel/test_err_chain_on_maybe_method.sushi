@@ -1,0 +1,18 @@
+# Ruling 5, the Maybe half: a Maybe@(T) is also "more than the bare type", so chaining
+# a payload method onto an unhandled Maybe is the same CE2515 fallback.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2515
+extend i32[] first_big() Maybe@(i32):
+    foreach(x in self.iter()):
+        if (x > 10):
+            return Maybe.Some(x)
+    return Maybe.None()
+
+extend i32 doubled() i32:
+    return self * 2
+
+fn main() i32:
+    let i32[] xs = from([3, 14, 15])
+    let i32 r = xs.first_big().doubled()
+    println("{r}")
+    return Result.Ok(0)

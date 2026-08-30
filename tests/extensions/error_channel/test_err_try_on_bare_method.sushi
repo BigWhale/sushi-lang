@@ -1,0 +1,16 @@
+# Ruling 5, row 4 (pin): '??' on a BARE method's value is today's CE2507 -- a bool
+# carries no channel to handle.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2507
+extend bool is_false() bool:
+    return not self
+
+fn run() bool:
+    let bool b = true
+    let bool r = b.is_false()??
+    return r
+
+fn main() i32:
+    let bool r = run().realise(false)
+    println("{r}")
+    return Result.Ok(0)

@@ -109,14 +109,27 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
         # rewritten to its monomorphized name and reaches the backend as a CE0000 (#212).
         if getattr(validator, "in_extension_context", False) and stmt.value is not None:
             value = stmt.value
-            # A Result.Ok(...)/Result.Err(...) wrapper is the anti-pattern that later
-            # crashes codegen (CE0113); reject it cleanly here.
+            channel = getattr(validator, "extension_channel_result", None)
             if (isinstance(value, DotCall)
                     and isinstance(value.receiver, Name)
                     and value.receiver.id == "Result"
                     and value.method in ("Ok", "Err")):
+                if channel is not None and value.method == "Err":
+                    # Ruling 6: the error is the ONE spelled constructor in a channel
+                    # body. Propagate the interned Result into it (the stamp the
+                    # backend constructs from) and check it as a function would.
+                    from .propagation import propagate_declared_type_to_value
+                    expected = propagate_declared_type_to_value(validator, value, channel)
+                    from .compatibility import validate_return_compatibility
+                    validate_return_compatibility(validator, expected, value, value.loc)
+                    return
+                # A bare method refuses both constructors; a channel method refuses
+                # the Ok spelling -- its success returns bare (CE2091 either way).
                 method_name = getattr(validator, "extension_method_name", None) or "<method>"
-                er.emit(validator.reporter, er.ERR.CE2091, value.loc, name=method_name)
+                refused = ("Result.Ok(...)" if channel is not None
+                           else "Result.Ok(...) / Result.Err(...)")
+                er.emit(validator.reporter, er.ERR.CE2091, value.loc,
+                        name=method_name, refused=refused)
                 return
 
             # PROPAGATE the declared return type into the value, then walk it and check

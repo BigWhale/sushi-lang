@@ -93,9 +93,9 @@ class FunctionHelpers:
         else:
             target_type_name = str(ext.target_type) if ext.target_type else "unknown"
 
-        target_type_name = target_type_name.replace("<", "__").replace(">", "").replace(", ", "_")
-
-        return f"{target_type_name}_{ext.name}"
+        from sushi_lang.semantics.generics.name_mangling import extension_symbol
+        return extension_symbol(target_type_name, ext.name,
+                                getattr(ext, "method_type_args", None) or ())
 
     def emit_default_return(self, ret_type: Ty | None) -> None:
         """Emit default return value for function without explicit return."""

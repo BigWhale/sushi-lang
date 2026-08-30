@@ -1,0 +1,13 @@
+# A method-level parameter solved from a PLAIN argument -- no closure involved.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "42\n"
+extend List@(T) fallback_of@(U)(U fallback) U:
+    return fallback
+
+fn main() i32:
+    let List@(string) xs = List.new()
+    xs.push("marvin")
+    println("{xs.fallback_of(42)}")
+    return Result.Ok(0)

@@ -1,0 +1,18 @@
+# The perk-method channel is out of scope and explicitly rejected (CE0133) -- the old
+# behaviour was a silent drop of the declared '| E'.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE0133
+perk Greet:
+    fn hello() string
+
+struct Robot:
+    i32 head_count
+
+extend Robot with Greet:
+    fn hello() string | StdError:
+        return "life, do not talk to me about life"
+
+fn main() i32:
+    let Robot marvin = Robot(1)
+    println(marvin.hello())
+    return Result.Ok(0)

@@ -200,6 +200,21 @@ allow it and pay for a formal specificity ordering.
 **The escape** is a perk implementation on the concrete target, which already outranks
 extension methods in the ladder above and already scopes correctly.
 
+## The UFCS epic's additions (the ladder is untouched)
+
+Three extension capabilities joined without moving any rung. An **array target**
+resolves like any other concrete type, and `extend T[]` instantiates per element type
+at the CALL SITE (`$array` templates; ruling 3). A **method-level type parameter**
+(`name@(U)`) is solved from the arguments and never enters the ExtensionTable — the
+template answers by unification, and the copy's symbol carries the solved arguments.
+An **error channel** (`| E`) changes what a resolved call YIELDS (the interned
+`Result@(T, E)`), not how it resolves. The one new resolution-adjacent diagnostic is
+**CE2515**, a FALLBACK where CE2008 would fire: the method is missing on a
+Result/Maybe receiver and present on its payload type, which is an unhandled channel,
+not a typo. Resolution still runs first — a method found on the wrapper itself
+(`.realise`) is rung 1 as always. The decision record is
+[ufcs-combinators.md](ufcs-combinators.md).
+
 **Where the rule lives.** The classification is decided ONCE, in the collect pass
 (`semantics/generics/extension_targets.py:classify_extension_target`), because that is the
 pass whose struct and enum tables say which bare names are declared types -- `Box@(T)` and

@@ -1,0 +1,15 @@
+# A closure parameter's own Result channel is consumed with '??' INSIDE a channel
+# extension body -- the shape every combinator body has.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "6\n"
+extend i32 apply_checked(fn(i32) -> i32 f) i32 | StdError:
+    let i32 r = f(self)??
+    return r
+
+fn main() i32:
+    let i32 five = 5
+    let i32 r = five.apply_checked(|i32 x| x + 1).realise(0)
+    println("{r}")
+    return Result.Ok(0)

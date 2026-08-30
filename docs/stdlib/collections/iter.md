@@ -2,7 +2,8 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-Higher-order combinators over `List@(T)`: `map`, `filter`, `fold`, and `compose`.
+Higher-order combinators over `List@(T)` and `T[]`: `map`, `filter`, `fold` — as
+methods and as free functions — and `compose`.
 
 ## Import
 
@@ -18,17 +19,69 @@ combinators are ordinary generic free functions, so they monomorphize through th
 generic pipeline — there is no bitcode, and nothing is emitted unless your program
 actually instantiates a combinator.
 
-Because they are free functions, you call them as `map(xs, f)`, not `xs.map(f)` (the UFCS
-method form needs method-level type parameters, which is a separate feature).
+The combinators exist in TWO forms. The **method form** declares the `| StdError`
+channel, so each call yields a `Result` and chains with `??`:
 
-**Element types** are copy/primitive for now (`filter` re-pushes each kept element, `map`
-reads each one); owned-element combinators are deferred.
+<!-- docs-sweep: skip (fragment; the full program is under Methods below) -->
+```sushi
+let i32 total = xs.map(|i32 x| x * 2)??.filter(|i32 x| x > 2)??.fold(0, |i32 acc, i32 x| acc + x)??
+```
+
+The **free functions** stay, and are called as `map(xs, f)`. One unit's
+`use <collections/iter>` makes the methods callable in every unit — extensions are
+program-wide (see `docs/design/ufcs-combinators.md`).
+
+**Element types**: the method-form `filter` is fully general — it clones each kept
+element, so an owning element type works. `map` and `fold` (both forms) stay
+copy/primitive-element.
 
 **Function arguments**: pass a **typed-param lambda** (`|i32 x| ...`) or a plain
 **function reference**. A bare-param lambda (`|x| ...`) cannot be inferred against a
-generic parameter — annotate the parameter or use a function reference instead.
+generic parameter (CE2063) — annotate the parameter or use a function reference instead.
 
-## Functions
+## Methods
+
+Each method is an extension with the `| StdError` error channel. On a `T[]` receiver
+the collecting methods return a `List` — a dynamic array has no empty generic
+constructor to fill.
+
+### `xs.map@(U)(fn(T) -> U f) -> List@(U) | StdError`
+
+On `List@(T)` and on `T[]`. Applies `f` to every element, collecting the results into
+a new list. `f`'s error propagates out of the call.
+
+```sushi
+use <collections/iter>
+
+fn doubled_sum() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    let i32 total = xs.map(|i32 x| x * 2)??.fold(0, |i32 acc, i32 x| acc + x)??
+    return Result.Ok(total)
+
+fn main() i32:
+    println("{doubled_sum().realise(-1)}")
+    return Result.Ok(0)
+```
+
+### `xs.filter(fn(T) -> bool pred) -> List@(T) | StdError`
+
+On `List@(T)` and on `T[]`. Keeps the elements for which `pred` answers true, cloning
+each kept element — so an owning element type works.
+
+### `xs.fold@(U)(U init, fn(U, T) -> U f) -> U | StdError`
+
+On `List@(T)` and on `T[]`. Reduces left to right, threading the accumulator through
+`f`.
+
+### Chaining and the unhandled channel
+
+A channel method stops the chain until it is handled: `xs.map(f).filter(p)` is CE2515,
+and the diagnostic spells the fix (`xs.map(f)??.filter(p)`). Handle a link with `??`,
+with `match`, or with `.realise(default)`.
+
+## Free functions
 
 ### `map@(T, U)(List@(T) xs, fn(T) -> U f) -> List@(U)`
 

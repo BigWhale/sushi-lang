@@ -1,0 +1,10 @@
+# An array extension target's element is a bare type-parameter name or a plain concrete
+# type name, nothing else. A generic instantiation in the element position is refused
+# with its own diagnostic, not the false "unknown type" it produced before.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2101
+extend Maybe@(T)[] weird() i32:
+    return 0
+
+fn main() i32:
+    return Result.Ok(0)

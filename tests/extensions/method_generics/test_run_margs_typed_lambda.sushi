@@ -1,0 +1,22 @@
+# A TYPED-param lambda argument infers the method-level parameter from its body.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\n4\n"
+extend List@(T) mapv@(U)(fn(T) -> U f) List@(U) | StdError:
+    let List@(U) out = List.new()
+    foreach(x in self.iter()):
+        out.push(f(x)??)
+    return out
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    match xs.mapv(|i32 x| x * 2):
+        Result.Ok(ds) ->
+            foreach(d in ds.iter()):
+                println("{d}")
+        Result.Err(_) ->
+            println("err")
+    return Result.Ok(0)

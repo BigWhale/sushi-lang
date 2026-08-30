@@ -1,0 +1,26 @@
+# The risk-5 probe of the UFCS epic: a Result OF AN AGGREGATE (List@(i32)) travels
+# through the extension declaration path end to end. The body uses the bare-success
+# form (ruling 6): 'return out' wraps into Ok at the seam; only Err is spelled.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\n4\n6\n"
+extend List@(i32) doubled() List@(i32) | StdError:
+    let List@(i32) out = List.new()
+    foreach(x in self.iter()):
+        out.push(x * 2)
+    return out
+
+fn run() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    let List@(i32) ys = xs.doubled()??
+    foreach(y in ys.iter()):
+        println("{y}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 rc = run().realise(1)
+    return Result.Ok(rc)

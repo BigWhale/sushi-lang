@@ -210,7 +210,9 @@ CE6103 refuses it, with a caret on the marker.
 And one thing the leak fence has to know: an extension inherits its target type's marker,
 and a builtin target carries none. An extension on `i32` is therefore not fenced by
 section 5 -- it has no marker to promise with -- which is what keeps section 6's
-undertaking that a single-unit file never notices the flip.
+undertaking that a single-unit file never notices the flip. The UFCS record
+(`ufcs-combinators.md`) states the consequence for an API author plainly: an extension
+is as visible as its target, program-wide, so internals stay free functions.
 
 The marker is inherited, and a method name is still claimed for every consumer: a namespace
 cannot stand in front of a method, because a method is found on the receiver's type.
@@ -510,13 +512,14 @@ That is the only capability Ruling 2 removes. The current cost is zero:
 | `src_sushi/compression/zlib.sushi` | 0 |
 | `src_sushi/encoding/msgpack.sushi` | 0 |
 | `src_sushi/toolchain/slib.sushi` | 0 |
-| `src_sushi/collections/iter.sushi` | 0 |
+| `src_sushi/collections/iter.sushi` | 6 |
 | `toolchain/src/slib_info.sushi` | 0 |
 
-No multi-unit Sushi source in the tree uses an extension. Of the 18 files that import a
-user unit (out of 2095 `.sushi` files), one has an extension, and it is the syntax
-showcase. Internal helpers are already written as private free functions, and Known
-Limitation 9 pushes combinators the same way.
+When this section was measured (pre-UFCS), no multi-unit Sushi source in the tree used
+an extension. The UFCS epic then added the six `collections/iter` method combinators --
+deliberately PUBLIC surface on public types, so Ruling 2 costs them nothing. Internal
+helpers are still written as private free functions
+(`docs/design/ufcs-combinators.md`, the stated asymmetry).
 
 Encapsulation is not lost, it moves: make the **type** private and its extensions become
 unreachable for free.

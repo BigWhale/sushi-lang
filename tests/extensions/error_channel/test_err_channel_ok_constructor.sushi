@@ -1,0 +1,13 @@
+# Ruling 6: a channel body returns its success BARE. 'return Result.Ok(x)' stays
+# refused (CE2091, narrowed to the Ok constructor); 'return Result.Err(e)' is the one
+# spelled constructor and is legal.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2091
+extend i32 checked_inc() i32 | StdError:
+    return Result.Ok(self + 1)
+
+fn main() i32:
+    let i32 one = 1
+    let i32 two = one.checked_inc().realise(0)
+    println("{two}")
+    return Result.Ok(0)

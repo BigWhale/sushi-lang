@@ -321,8 +321,8 @@ _add(ErrorMessage("CE2090", Severity.ERROR,
     Category.TYPE, "Each element type bound to a perk-constrained type-pack '...Ts: Perk' must implement the required perk."))
 
 _add(ErrorMessage("CE2091", Severity.ERROR,
-    "extension/perk method '{name}' must use a bare 'return <value>', not 'return Result.Ok(...)' / 'Result.Err(...)'",
-    Category.TYPE, "Extension and perk-implementation methods return the bare value directly (their ABI is unwrapped). Write 'return value' instead of 'return Result.Ok(value)'."))
+    "method '{name}' must use a bare 'return <value>', not 'return {refused}'",
+    Category.TYPE, "A method's SUCCESS is always returned bare. A bare extension or perk-impl method has an unwrapped ABI, so both Result constructors are refused. A channel extension ('| E', ruling 6 of the UFCS epic) wraps the bare success into Ok at the emission seam, so 'return Result.Ok(x)' stays refused there and 'return Result.Err(e)' is the ONE spelled constructor -- the error is the exceptional path and earns its ink; the success stays as light as a bare method's. Free functions are unchanged: they spell Result.Ok explicitly (CE2030)."))
 
 _add(ErrorMessage("CE2092", Severity.ERROR,
     "function value type mismatch: expected '{expected}', got '{actual}'",
@@ -356,6 +356,18 @@ _add(ErrorMessage("CE2100", Severity.ERROR,
     "'{method}' needs an element type with equality: '{element}' has none",
     Category.TYPE, "contains() and index_of() compare the needle against each element with '==', and equality is a CLOSED set: the numeric types, bool, and string (CE2514 is the operator half of the same rule). A struct, an enum, an array or a closure element has no '==', so a search over it has no meaning the compiler could supply. Write the loop by hand and compare what identifies an element -- a field, or a match on the variant -- or search an array of that identifying part instead."))
 
+_add(ErrorMessage("CE2101", Severity.ERROR,
+    "invalid element '{element}' in an array extension target",
+    Category.TYPE, "An array extension target's element position takes exactly two spellings: a bare undeclared name, which binds a type parameter (`extend T[]` applies to every element type), and the name of a plain declared type (`extend i32[]`, `extend Crate[]`), which applies to that array type alone. A generic instantiation (`extend Maybe@(T)[]`) has no meaning here -- the parameter would bind through two layers -- and a nested array element is not an expressible type at all (Known Limitation 2). Before this code, the generic-element spelling fell through to the concrete path and reported a false CE2001 for a type nobody had to declare."))
+
 _add(ErrorMessage("CE2097", Severity.ERROR,
     "extension method '{name}()' conflicts with the built-in '{type}.{name}()'",
     Category.TYPE, "Method resolution always considers built-in methods before extension methods -- during type validation, during type inference, and again during code generation -- so an extension method whose name collides with one is compiled and then never called. The built-in families are: the hash() and clone() the compiler derives for every struct and enum; the primitive and string methods (to_str, hash, to_bits, len, trim, ...); the array methods; and the methods of the built-in containers Result, Maybe, Own, List and HashMap. A perk implementation is the supported way to replace a built-in: it takes precedence at every layer, by design."))
+
+_add(ErrorMessage("CE2063", Severity.ERROR,
+    "cannot infer method type parameter{plural} {names} for '{method}' from this call",
+    Category.TYPE, "A method-level type parameter (`extend List@(T) mapv@(U)(...)`) is inference-only in v1: there is no call-site `@(...)` slot on a method call, so every parameter must be solvable from the arguments. The one shape that cannot be solved is the bare-param lambda (Known Limitation 7): `xs.mapv(|x| x * 2)` gives the lambda no type of its own, so nothing unifies against `fn(T) -> U`. The escape is to annotate the lambda's parameter -- `xs.mapv(|i32 x| x * 2)` -- or to pass a named function."))
+
+_add(ErrorMessage("CE2064", Severity.ERROR,
+    "method type parameter '{name}' shadows a type parameter of the extension target",
+    Category.TYPE, "The receiver target's bare names (`extend Box@(T)`, `extend T[]`) and the method's own `@(...)` list share one namespace inside the body, so a repeated name would make `T` mean two types in one signature. Rename the method-level parameter. The rule mirrors CE2097's spirit: a declaration that could only ever mislead is refused where it is written."))

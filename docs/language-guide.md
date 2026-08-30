@@ -883,10 +883,10 @@ fn main() i32:
 3. The call `x.squared()` is transformed at compile-time into `squared(x)`
 4. This transformation is zero-cost - there's no runtime overhead
 
-**No `??` in an extension body**: an extension method returns a bare value, not a
-`Result@(T, E)` (a `Result.Ok(...)` return is CE2091). The body has no error channel, so
-`??` has nothing to propagate into and is rejected with CE0131. Handle the Result in the
-body instead -- match on it, or use `.realise(default)`:
+**No `??` in a BARE extension body**: by default an extension method returns a bare
+value, not a `Result@(T, E)` (a `Result.Ok(...)` return is CE2091). A bare body has no
+error channel, so `??` has nothing to propagate into and is rejected with CE0131.
+Handle the Result in the body instead -- match on it, or use `.realise(default)`:
 
 ```sushi
 extend i32 tagged() i32:
@@ -901,6 +901,58 @@ extend i32 fixed() i32:
     let fn(i32) -> i32 f = |i32 x| tag(x)??   # legal: propagates into the lambda's Result
     return f(self).realise(0)
 ```
+
+**The opt-in error channel `| E`**: a method that declares `| E` after its return type
+HAS a channel — the call yields `Result@(T, E)`, `??` is legal in the body, and
+`return Result.Err(e)` is the one spelled constructor. The success still returns BARE
+(`return Result.Ok(x)` stays refused): the compiler wraps it for you.
+
+```sushi
+enum OddError:
+    TooOdd
+
+extend i32 half_checked() i32 | OddError:
+    if (self % 2 == 1):
+        return Result.Err(OddError.TooOdd)
+    return self / 2                     # bare success; wraps into Ok
+
+fn use_it() i32 | OddError:
+    let i32 four = 4
+    let i32 half = four.half_checked()??   # the call yields Result@(i32, OddError)
+    return Result.Ok(half)
+
+fn main() i32:
+    println("{use_it().realise(-1)}")
+    return Result.Ok(0)
+```
+
+A channel method stops a chain until it is handled: `b.checked().other()` is CE2515,
+and `b.checked()??.other()` is the fix. Methods on the wrapper itself (`.realise`)
+stay legal.
+
+**Array extension targets**: a concrete element extends one array type
+(`extend i32[] sum()`); a bare undeclared name binds a type parameter, so
+`extend T[]` applies to every element type. Anything else in the element position is
+CE2101.
+
+**Method-level type parameters**: a method may declare its own `@(U)` after its name,
+solved from the arguments at each call:
+
+```sushi
+extend i32 pick@(U)(U a, U b) U:
+    if (self > 0):
+        return a
+    return b
+
+fn main() i32:
+    let i32 plus = 1
+    println("{plus.pick(7, 9)}")     # U = i32, from the arguments
+    return Result.Ok(0)
+```
+
+There is no call-site `@(...)` on a method, so every method-level parameter must be
+solvable from the arguments — a bare-param lambda cannot be (CE2063; annotate it:
+`|i32 x| ...`). A method-level name that repeats a receiver parameter is CE2064.
 
 **Generic Extension Methods**:
 ```sushi

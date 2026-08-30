@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, Set, TYPE_CHECKING
 
 from sushi_lang.semantics.ast import ExtendDef, Param
-from sushi_lang.semantics.typesys import EnumType, Type, StructType
+from sushi_lang.semantics.typesys import DynamicArrayType, EnumType, Type, StructType
 from sushi_lang.semantics.generics.types import substitute_type_params
 from sushi_lang.semantics.generics.extension_targets import instantiation_key
 from sushi_lang.semantics.passes.collect import GenericExtensionMethod
@@ -15,9 +15,10 @@ if TYPE_CHECKING:
 
 def monomorphize_extension_method(
     generic_method: GenericExtensionMethod,
-    concrete_target_type: StructType | EnumType,
+    concrete_target_type: StructType | EnumType | DynamicArrayType | Type,
     type_args: Tuple[Type, ...],
     substitutor: "TypeSubstitutor",
+    method_type_args: Tuple[Type, ...] = (),
 ) -> ExtendDef:
     """Monomorphize a generic extension method for a specific instantiation.
 
@@ -36,9 +37,23 @@ def monomorphize_extension_method(
         param_name = param.name if hasattr(param, 'name') else param
         substitution[param_name] = arg
 
+    # Method-level type arguments (`name@(U)`, solved at the call site) compose with
+    # the receiver substitution in this ONE pass over the original template body.
+    method_type_params = getattr(generic_method, "method_type_params", ()) or ()
+    if len(method_type_args) != len(method_type_params):
+        raise_internal_error("CE0096", operation=(
+            f"Method type argument count mismatch: expected {len(method_type_params)}, "
+            f"got {len(method_type_args)}"))
+    for param_name, arg in zip(method_type_params, method_type_args, strict=True):
+        substitution[param_name] = arg
+
     concrete_ret_type = None
     if generic_method.ret_type is not None:
         concrete_ret_type = substitute_type_params(generic_method.ret_type, substitution)
+
+    concrete_err_type = None
+    if getattr(generic_method, "err_type", None) is not None:
+        concrete_err_type = substitute_type_params(generic_method.err_type, substitution)
 
     concrete_params = []
     for param in generic_method.params:
@@ -65,7 +80,10 @@ def monomorphize_extension_method(
         loc=generic_method.loc,
         target_type_span=generic_method.target_type_span,
         name_span=generic_method.name_span,
-        ret_span=generic_method.ret_span
+        ret_span=generic_method.ret_span,
+        err_type=concrete_err_type,
+        err_span=getattr(generic_method, "err_span", None),
+        method_type_args=tuple(method_type_args),
     )
 
 
@@ -108,6 +126,12 @@ def monomorphize_all_extension_methods(
 
             for (method_name, target_key), generic_method in declarations.items():
                 if target_key and target_key != concrete_type_name:
+                    continue
+
+                # A method-generic template cannot be monomorphized from the target
+                # instantiation alone -- the CALL SITE names its method arguments, so
+                # the typecheck pass queues it instead.
+                if getattr(generic_method, "method_type_params", ()):
                     continue
 
                 # A concrete target has no type parameters, so it substitutes nothing -- its

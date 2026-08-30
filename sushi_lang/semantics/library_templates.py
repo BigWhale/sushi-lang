@@ -283,8 +283,8 @@ def deserialize_generic_enum(record: dict) -> "EnumDef":
 
 def impl_method_symbol(type_name: str, method_name: str) -> str:
     """Compute the LLVM symbol name of a perk-impl method."""
-    sanitized = type_name.replace("<", "__").replace(">", "").replace(", ", "_")
-    return f"{sanitized}_{method_name}"
+    from sushi_lang.semantics.generics.name_mangling import sanitize_extension_receiver
+    return f"{sanitize_extension_receiver(type_name)}_{method_name}"
 
 
 def serialize_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:

@@ -40,6 +40,34 @@ def mangle_function_name(
     return f"{prefix}{_PACK_SEP}{_PACK_MARKER}{pack_arity}"
 
 
+def extension_symbol(receiver_display: str, method: str,
+                     method_type_args: Tuple['Type', ...] = ()) -> str:
+    """The ONE symbol of an extension-method instance.
+
+    Three consumers agree through this helper: the declaration, the call site, and the
+    weak_odr dedup. The `__{margs}` suffix appears only when method-level type
+    arguments exist, so every pre-existing extension symbol is unchanged -- and two
+    different solved U's on one receiver are two symbols, never one colliding body.
+    """
+    base = f"{sanitize_extension_receiver(receiver_display)}_{method}"
+    if method_type_args:
+        return f"{base}__{_join_sanitized(tuple(method_type_args))}"
+    return base
+
+
+def sanitize_extension_receiver(receiver_display: str) -> str:
+    """The receiver component of an extension-method symbol.
+
+    ONE helper for the declaration, the call site and the manifest, so the three can
+    never disagree. An array receiver folds to `arr__<element>`, because `[]` is not a
+    symbol character; everything else keeps the historical sanitization of the interned
+    `<...>` form.
+    """
+    if receiver_display.endswith("[]"):
+        return "arr__" + sanitize_extension_receiver(receiver_display[:-2])
+    return receiver_display.replace("<", "__").replace(">", "").replace(", ", "_")
+
+
 def _join_sanitized(type_args: Tuple['Type', ...]) -> str:
     """Sanitize each type arg's string form and join with single underscores."""
     arg_strs = []

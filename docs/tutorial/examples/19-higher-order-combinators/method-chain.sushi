@@ -1,0 +1,14 @@
+use <collections/iter>
+
+fn tab_total() i32:
+    let List@(i32) orders = List.new()
+    orders.push(6)
+    orders.push(6)
+    orders.push(30)
+    # Double every order, keep the big ones, and sum what is left.
+    let i32 total = orders.map(|i32 x| x * 2)??.filter(|i32 x| x > 10)??.fold(0, |i32 acc, i32 x| acc + x)??
+    return Result.Ok(total)
+
+fn main() i32:
+    println("{tab_total().realise(-1)}")
+    return Result.Ok(0)

@@ -35,7 +35,7 @@ extern_params: typed_param ("," typed_param)* ["," ELLIPSIS]
 // Extension statements - unified to avoid LALR ambiguity
 extend_stmt: EXTEND type extend_suffix
 extend_suffix: WITH NAME ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | function_def)+ _DEDENT  -> extend_with_def
-             | NAME "(" [parameters] ")" type ":" block               -> extend_def
+             | NAME [type_params] "(" [parameters] ")" type ["|" type] ":" block  -> extend_def
 
 block: _NEWLINE _INDENT (_NEWLINE | DOC_BLOCK | statement)+ _DEDENT
 

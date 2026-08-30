@@ -1,0 +1,17 @@
+# Ruling 5, row 1: a channel method stops the chain until it is handled. '.is_false()'
+# is missing on the Result and present on the payload bool, so the fallback is the
+# relational CE2515 whose help spells the '??' fix -- not a bare CE2008.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2515
+# EXPECT_STDERR_CONTAINS: "is_true()??.is_false()"
+extend bool is_true() bool | StdError:
+    return self
+
+extend bool is_false() bool:
+    return not self
+
+fn main() i32:
+    let bool b = true
+    let bool r = b.is_true().is_false()
+    println("{r}")
+    return Result.Ok(0)

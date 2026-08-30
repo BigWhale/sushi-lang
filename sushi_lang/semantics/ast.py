@@ -257,6 +257,12 @@ class ExtendDef(Node):
     # What a `@(...)` target's arguments mean: a constraint, parameter names, or a mix.
     # Stamped by the collect pass, which knows which names are declared types (#393).
     target_shape: Optional["ExtensionTarget"] = None
+    type_params: Optional[List[BoundedTypeParam]] = None  # method-level `@(U)`
+    err_type: Optional[Type] = None  # `| E` opts into the Result channel
+    err_span: Optional[Span] = None
+    # The SOLVED method-level type arguments of a monomorphized copy, in declaration
+    # order; part of the emitted symbol's identity. () or None on every other node.
+    method_type_args: Optional[tuple] = None
     doc: Optional[DocBlock] = None
 
 @dataclass(slots=True)
@@ -630,6 +636,9 @@ class MethodCall(Node):
     callee_unresolved: bool = False  # set when no callee was found at all (CE2008, CE2092)
     external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for an FFI call
     variadic_arg_types: Optional[List] = None  # an extern variadic call's promoted arg types
+    # The SOLVED method-level type arguments of a method-generic extension call
+    # (`name@(U)`); the backend composes them into the callee symbol.
+    callee_method_type_args: Optional[Tuple] = None
 
 
 @dataclass(slots=True)
@@ -667,6 +676,9 @@ class DotCall(Node):
     # carries the whole set, so a pass never has to ask which call shape it has.
     callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
     callee_unresolved: bool = False  # set when no callee was found at all (CE2008, CE2092)
+    # The SOLVED method-level type arguments of a method-generic extension call; see
+    # MethodCall.
+    callee_method_type_args: Optional[Tuple] = None
 
 
 @dataclass(slots=True)

@@ -4,7 +4,35 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Language
+- **Extensions get an opt-in error channel.** `extend bool checked() bool | StdError:`
+  gives the method the Result ABI: the call yields `Result@(T, E)`, `??` works in the
+  body, `return Result.Err(e)` is the one spelled constructor, and the bare success
+  wraps into Ok at the return seam (`return Result.Ok(x)` stays refused, CE2091). A
+  bare extension is unchanged, CE0131 and CE2091 included. A perk method declaring
+  `| E` is the new CE0133 instead of a silent drop. The chain gate is the new CE2515:
+  a method missing on an unhandled Result/Maybe and present on its payload names both
+  and spells the `??` fix.
+- **Extensions get method-level type parameters.** `extend List@(T) map@(U)(fn(T) -> U f)
+  List@(U)` declares `U` on the METHOD; the call site solves it from the arguments,
+  and two different solved types on one receiver are two symbols and two bodies. An
+  unsolvable parameter is the new CE2063 (annotate the lambda); a name that repeats a
+  receiver parameter is the new CE2064.
+- **Array extension targets.** A concrete element extends one array type
+  (`extend i32[] sum()` — silently unregistered before, now works), and a bare
+  undeclared name binds a type parameter: `extend T[]` applies to every element type.
+  Any other element spelling is the new CE2101.
+- **Recorded:** `??` on a `Maybe@(T)` propagates `None` as a payload-free `Result.Err`
+  — Maybe is data, Result is the channel. The decision record for all of the above is
+  `docs/design/ufcs-combinators.md`.
+
 ### Standard Library
+- **The combinators exist in method form.** `use <collections/iter>` now also ships
+  `.map`/`.filter`/`.fold` as extension methods on `List@(T)` and `T[]`, each with the
+  `| StdError` channel, so the fluent chain works end to end:
+  `xs.map(f)??.filter(p)??.fold(0, g)??`. The free functions stay. The method-form
+  `filter` is fully general — it clones each kept element, so owning element types
+  work; `map`/`fold` stay copy-element like the free functions.
 - **A program can read the clock.** `<time>` gains `now() -> Result@(i64)` (unix
   seconds) and `monotonic_ns() -> Result@(i64)` (nanoseconds that never go
   backward). One `clock_gettime` read each; the clockid values live in the

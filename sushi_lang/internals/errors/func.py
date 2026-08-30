@@ -126,3 +126,7 @@ _add(ErrorMessage("CE0131", Severity.ERROR,
 _add(ErrorMessage("CE0130", Severity.ERROR,
     "internal error: scope checker has no arm for node '{node}'",
     Category.INTERNAL, "The AST grew a statement or expression node the scope checker does not dispatch on. This used to be a SILENT fall-through (issue #245) - an unhandled statement got no scope analysis at all, invisibly, the same hazard class CE0125 closed in the borrow checker. Notably the expand(...) statement was skipped this way. tests/unit/test_scope_dispatch_is_total.py is the CI gate; this is the runtime backstop."))
+
+_add(ErrorMessage("CE0133", Severity.ERROR,
+    "perk method '{name}' declares an error channel '| {err}': a perk method returns a bare value",
+    Category.FUNC, "The '| E' channel exists for extension methods (the UFCS epic, ruling 1); a perk-implementation method still returns a bare value, and its signature must match the perk's contract, which has no error slot. Before this code the declared '| E' was silently DROPPED, so the author believed a channel existed and the body's returns validated against a signature nobody had. The channel for perk methods is a recorded follow-up (docs/design/ufcs-combinators.md): it needs an err_type arm in the signature match and a lift through the same seam, and is required before a perk-contract API like a Reader/Writer can be fallible."))

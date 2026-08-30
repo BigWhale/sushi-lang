@@ -1,0 +1,13 @@
+# Ruling 5, row 3: bare methods chain freely -- no channel, nothing to handle.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\n"
+extend bool flipped() bool:
+    return not self
+
+fn main() i32:
+    let bool b = true
+    let bool r = b.flipped().flipped()
+    println("{r}")
+    return Result.Ok(0)

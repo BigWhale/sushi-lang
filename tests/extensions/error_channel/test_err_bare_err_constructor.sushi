@@ -1,0 +1,16 @@
+# A BARE extension keeps CE2091 for BOTH Result constructors: with no '| E' there is
+# no channel, so 'return Result.Err(e)' has nowhere to go.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2091
+enum MyError:
+    Nope
+
+extend i32 doubled() i32:
+    if (self > 100):
+        return Result.Err(MyError.Nope)
+    return self * 2
+
+fn main() i32:
+    let i32 two = 2
+    println("{two.doubled()}")
+    return Result.Ok(0)

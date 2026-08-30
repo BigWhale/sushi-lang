@@ -1,0 +1,20 @@
+# Ruling 5, row 2: '??' handles the channel and re-enables the chain.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "false\n"
+extend bool is_true() bool | StdError:
+    return self
+
+extend bool is_false() bool:
+    return not self
+
+fn run() bool:
+    let bool b = true
+    let bool r = b.is_true()??.is_false()
+    return Result.Ok(r)
+
+fn main() i32:
+    let bool r = run().realise(true)
+    println("{r}")
+    return Result.Ok(0)

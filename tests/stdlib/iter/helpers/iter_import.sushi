@@ -1,0 +1,5 @@
+# The one unit of this program that imports <collections/iter>.
+use <collections/iter>
+
+public fn ready() bool:
+    return Result.Ok(true)
