@@ -1,0 +1,18 @@
+# Ruling R11: a plain `match r:` BORROWS its scrutinee, so no arm may take the payload
+# out of it -- the local still owns it and still frees it. The escape is `match nom r:`.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2432
+# EXPECT_STDERR_CONTAINS: "match nom r:"
+fn make() i32[]:
+    return Result.Ok(from([1, 2, 3]))
+
+fn eat(nom i32[] xs) ~:
+    println("eating {xs.len()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    let Result@(i32[], StdError) r = make()
+    match r:
+        Result.Ok(nom xs) -> eat(nom xs)
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

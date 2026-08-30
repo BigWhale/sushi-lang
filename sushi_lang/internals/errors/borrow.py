@@ -64,7 +64,7 @@ _add(ErrorMessage("CE2412", Severity.ERROR,
 
 _add(ErrorMessage("CE2414", Severity.ERROR,
     "cannot mutate through binding '{name}': a match/foreach binding is a read-only view",
-    Category.BORROW, "A `match` payload binding and a `foreach` loop binding borrow a value the scrutinee or the container owns. The compiled binding is a private copy, so a write through it -- a mutating method, a field assignment, or a `poke` borrow -- never reaches the owner and is silently lost (issue #253). Take an independent value with `.clone()`, mutate that, and store it back into the owner. A rebind of the binding ITSELF (`n := 99`) stays legal: it re-initializes a local and does not claim to write through."))
+    Category.BORROW, "A BARE `match` payload binding and a BARE `foreach` loop binding borrow a value the scrutinee or the container owns. The compiled binding is a private copy, so a write through it -- a mutating method, a field assignment, or a `poke` borrow -- never reaches the owner and is silently lost (issue #253). The binding carries a MODE, and the mode is the escape (HANDLES.md ruling R11): `poke` binds a pointer into the owner's storage, so the write reaches it, and `nom` takes the value outright where the match owns its scrutinee. A copy is the third way -- `.clone()`, mutate, store back -- and a type that owns a resource has none, so for one of those the message names `.share()` instead, exactly as CE2411 does. A rebind of the binding ITSELF (`n := 99`) stays legal: it re-initializes a local and does not claim to write through."))
 
 _add(ErrorMessage("CE2411", Severity.ERROR,
     "cannot consume '{name}': another owner keeps this value",
@@ -209,3 +209,48 @@ _add(ErrorMessage("CE2430", Severity.ERROR,
 _add(ErrorMessage("CE2431", Severity.ERROR,
     "cannot clone '{type}': it owns a resource, and a copy of it would be a second handle",
     Category.BORROW, "HANDLES.md ruling R3. `.clone()` is the one deep copy, and a derived clone copies a value FIELD BY FIELD. A type that implements the `Drop` perk owns something no field walk can see -- a file or a socket holds one i32 descriptor -- so a derived clone would copy that number and leave two values holding one descriptor, both of which drop. That is a double close, and the copy verb would hide it. A copy verb must not quietly mean a second handle: Rust hit this with Arc::clone, wrote a lint for it, and then demoted the lint. Sushi gives the second-owner operation its own name instead. Use `.share()`, which is dup(2) and says what it does -- an independent descriptor over a SHARED open file description, so the offset is shared too. For concurrent reads of one file the answer is `read_at`/`write_at`, where the offset is an argument and no state is shared. The refusal reaches a struct that HOLDS a resource type, an array of them and a container of them, because cloning any of those copies the descriptor one level down; it is reported at the INSTANTIATION for a generic body that clones, because one monomorphized body serves every type argument and the argument is what makes it illegal."))
+
+# --- The pattern binding MODES (HANDLES.md ruling R11) ---------------------------------
+#
+# A pattern binding carries a mode, and the three are the ones parameters already have:
+# bare borrows, `poke` writes through, `nom` TAKES. The three codes below fence what
+# taking needs -- a scrutinee the match owns (CE2432), a whole variant rather than one
+# slot of it (CE2433), and storage that can still free itself afterwards (CE2434).
+
+_add(ErrorMessage("CE2432", Severity.ERROR,
+    "cannot take '{name}': this match only borrows its scrutinee",
+    Category.BORROW,
+    "HANDLES.md ruling R11. A `nom` payload binding takes the value out of the "
+    "scrutinee, so the match has to OWN the scrutinee to give it away. A TEMPORARY -- a "
+    "call result, a constructor, a `??` -- is owned by construction and needs no marker. "
+    "A place expression is not: `match r:` leaves `r` the owner, and `r` still frees the "
+    "payload at the end of its scope, so a second owner here would be a double free. "
+    "Write `match nom r:` to hand the value to the match; `r` is then consumed exactly "
+    "as `f(nom r)` consumes it, and a later mention of it is CE2405. Marked at both ends "
+    "or neither is the same rule CE2427 states for a call argument. To keep `r`, drop "
+    "the marker and read through the borrow, or bind `poke` to write through it."))
+
+_add(ErrorMessage("CE2433", Severity.ERROR,
+    "'{name}' is bound by value while this arm takes another payload of the same variant",
+    Category.BORROW,
+    "HANDLES.md ruling R11, the all-or-nothing rule. What suppresses the match's free is "
+    "the WHOLE scrutinee and not one payload slot, so an arm that takes any payload "
+    "leaves every other owning payload of that variant with no owner at all -- taking "
+    "one and borrowing its neighbour is a leak of the neighbour, not a dangling read. "
+    "Mark every owning binding in the arm `nom`, or none of them. A payload that owns no "
+    "heap is unaffected: an i32 beside a taken array stays a plain binding. Discarding "
+    "the neighbour with `_` does NOT help -- it is the same slot with no name. A "
+    "per-slot take needs a drop flag per payload, which is a later change; today the "
+    "variant moves whole."))
+
+_add(ErrorMessage("CE2434", Severity.ERROR,
+    "a `nom` binding is not valid inside an `Own(...)` pattern",
+    Category.BORROW,
+    "HANDLES.md ruling R11. `Own@(T)` is a heap cell that owns its pointee. Taking the "
+    "pointee out with `nom` would leave the cell itself with nothing to free it, because "
+    "the only thing that can suppress the match's free is the whole scrutinee -- so the "
+    "malloc'd box would leak while the value inside it moved on. `Own(poke x)` and "
+    "`Own(peek x)` stay legal: both bind the heap pointer and take nothing. To move the "
+    "value out, take the `Own@(T)` itself -- a `nom` binding on the payload that holds "
+    "it -- and read through it at the new owner. Freeing the box alone needs an owner "
+    "for the cell that survives the move, which is a later change."))

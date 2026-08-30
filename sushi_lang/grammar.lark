@@ -83,7 +83,7 @@ foreach_stmt: FOREACH "(" [type] NAME "in" expr ")" ":" block
             | FOREACH "(" BORROW_MODE NAME "in" expr ")" ":" block -> foreach_ref
 expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
 
-match_stmt: MATCH expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
+match_stmt: MATCH NOM? expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
 match_arm: (pattern | literal_pattern | wildcard_pattern) "->" (match_arm_inline | block)
 literal_pattern: "-" (INT | HEX_INT | BIN_INT | OCT_INT) -> neg_literal_pattern
                | (INT | HEX_INT | BIN_INT | OCT_INT)
@@ -92,6 +92,7 @@ pattern: [NAME "."] NAME "." NAME ["(" [pattern_list] ")"]
 pattern_list: pattern_item ("," pattern_item)*
 pattern_item: pattern | NAME | wildcard_pattern | own_pattern
             | BORROW_MODE NAME -> ref_binding
+            | NOM NAME -> nom_binding
 own_pattern: NAME "(" pattern_item ")"  -> own_pattern_call
 wildcard_pattern: UNDERSCORE
 

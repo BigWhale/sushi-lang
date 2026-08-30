@@ -999,6 +999,44 @@ match result:
         println("File opened")
 ```
 
+### Binding Modes
+
+A payload binding carries a MODE, and the three are the ones a parameter has. The bare
+form is the common case and is unchanged.
+
+| pattern | the binding is | write through it | may be given away |
+|---|---|---|---|
+| `Ok(x)` | a read-only view | no (CE2414) | no (CE2411) |
+| `Ok(poke x)` | a pointer into the scrutinee's payload | yes, and it reaches the owner | no |
+| `Ok(nom x)` | the value itself, now the arm's | yes | yes |
+
+`nom` TAKES the payload, so the match has to own its scrutinee. A temporary -- a call
+result, a constructor, a `??` -- is owned by construction. A place expression belongs to
+its owner until the match says `nom`, and then the local is consumed exactly as
+`f(nom r)` consumes it.
+
+| scrutinee | the match |
+|---|---|
+| `match open("out.log", FileMode.Write()):` | OWNS a temporary; `nom` bindings are legal |
+| `match r:` | BORROWS the local; a `nom` binding is CE2432 |
+| `match nom r:` | CONSUMES the local; `nom` bindings are legal, and a later `r` is CE2405 |
+
+<!-- docs-sweep: skip (a `File` handle and `BufWriter` arrive with HANDLES.md phases 5 and 7) -->
+```sushi
+match open("out.log", FileMode.Write()):
+    Result.Ok(f) -> f.writeln("Mostly Harmless")     # a borrow: no marker, unchanged
+    Result.Err(e) -> report(e)
+
+match open("out.log", FileMode.Write()):
+    Result.Ok(nom f) -> BufWriter.new(nom f, 4096)   # takes it, and says so
+    Result.Err(e) -> report(e)
+```
+
+An arm takes the variant WHOLE: if any binding in it is `nom`, every other owning payload
+of that variant must be `nom` too (CE2433). `nom` is not valid inside an `Own(...)`
+pattern (CE2434), and a `peek`/`poke` binding still needs a scrutinee with storage -- a
+read through a live owner has none (CE2404).
+
 ### Exhaustiveness
 
 The compiler enforces that all variants are matched:

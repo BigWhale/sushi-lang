@@ -1,0 +1,19 @@
+# Ruling R11, the scrutinee side: `match nom r:` hands the local to the match, so a
+# `nom` binding is legal and the value SURVIVES the statement -- the arm rebinds it into
+# an outer local, and the rebind releases what that local held.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "kept 3\n"
+fn make() i32[]:
+    return Result.Ok(from([1, 2, 3]))
+
+fn main() i32:
+    let Result@(i32[], StdError) r = make()
+    let i32[] kept = from([0])
+    match nom r:
+        Result.Ok(nom xs) ->
+            kept := xs
+        Result.Err(_) -> println("failed")
+    println("kept {kept.len()}")
+    return Result.Ok(0)

@@ -62,3 +62,6 @@ tests/leakcheck/bin/
 # Probe files a descriptor-gate test writes beside itself.
 fd_gate_probe.txt
 fd_fixture_probe.txt
+dup_probe.txt
+positional_probe.txt
+overwrite_probe.txt

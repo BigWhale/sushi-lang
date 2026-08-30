@@ -1,0 +1,19 @@
+# Ruling R11 lifted CE2404 for a scrutinee the match OWNS, and only for that. A read
+# THROUGH a live owner is still a borrow with no storage of its own here, so a pointer
+# into it would aim at the arm's copy and the write would be lost.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2404
+enum Slot:
+    Full(i32[])
+    Empty
+
+struct Holder:
+    Slot inner
+
+fn main() i32:
+    let Holder h = Holder(Slot.Full(from([1, 2, 3])))
+    match h.inner:
+        Slot.Full(poke p) ->
+            p.push(9)
+        Slot.Empty -> println("empty")
+    return Result.Ok(0)

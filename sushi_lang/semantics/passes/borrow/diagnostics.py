@@ -97,7 +97,7 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
         state.invalidated_at = None
 
 
-def _escape_help(checker: 'BorrowChecker', text: str, ty) -> str:
+def escape_help(checker: 'BorrowChecker', text: str, ty) -> str:
     """What CE2411 offers as the way out, which depends on WHAT is being consumed.
 
     `.clone()` for an ordinary owning value. A resource type has no clone (CE2431), so
@@ -129,7 +129,7 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr) -> None:
     # ONE branch, on purpose: a get-out `.clone()` still hits CE0019, and that is a real
     # defect rather than a reason to word around it. The three RED `test_own_get_*` files
     # hold the branch honest until it is fixed.
-    diag.help(_escape_help(checker, text, owner_type))
+    diag.help(escape_help(checker, text, owner_type))
     diag.emit()
 
 
@@ -142,7 +142,7 @@ def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
             mode = getattr(state.var_type, "mutability", "")
             diag.note(kind.note.format(name=name, mode=mode), kind.note_span(state))
             break
-    diag.help(_escape_help(checker, name, state.var_type))
+    diag.help(escape_help(checker, name, state.var_type))
     diag.emit()
 
 

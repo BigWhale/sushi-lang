@@ -256,10 +256,52 @@ Two more follow:
 - **The default is the safe one.** The mode a careless author gets is the one that cannot
   double-free, and the dangerous one has to be written down at both ends.
 
+## 10b. The other boundary: a pattern binding
+
+**Added 2026-08-30, HANDLES.md ruling R11.** A call is not the only place a value crosses
+into a new name. A `match` arm binds a payload, and until this ruling that binding could
+only ever borrow -- there was no route by which a `match` arm took ownership of what it
+bound, for `List@(T)` and `T[]` as much as for a handle.
+
+The pattern boundary carries the same three modes, with the same meanings, marked the same
+way:
+
+| pattern | what the binding is | who frees | write through it |
+|---|---|---|---|
+| `Ok(x)` | a private copy of the payload | the scrutinee's owner | no -- CE2414 |
+| `Ok(poke x)` | a pointer into the payload's storage | the scrutinee's owner | yes |
+| `Ok(nom x)` | the value, now the arm's | **the arm** | yes |
+
+The differences from the call boundary are two, and both come from the same fact: a match
+has no declaration side to agree with.
+
+- **The mode is written once, at the binding.** There is nothing to mark at the other end,
+  so CE2427's both-ends rule has no pattern twin.
+- **Whether the mode is legal is a property of the SCRUTINEE.** A `nom` binding needs the
+  match to own what it matches. A temporary is owned by construction; a place expression is
+  not, and `match nom r:` is how the local is handed over -- one more consuming position,
+  `ConsumingUse.MATCH_SCRUTINEE`, so `r` afterwards is CE2405 exactly as after `f(nom r)`.
+  A `nom` binding under a plain `match r:` is CE2432.
+
+An arm takes the variant WHOLE (CE2433): what suppresses the match's free is the whole
+scrutinee, not one payload slot, so a payload left borrowed beside a taken one would be
+freed by nobody. A per-slot take needs a drop flag per payload and is a later change.
+
+`peek` and `poke` are unchanged by the ruling except in one place: a binding into a
+TEMPORARY was CE2404, because a temporary had no address. It has one now -- the match parks
+what it owns in a slot for the whole statement, which `nom` needed in any case. A read
+through a live owner still has none, and is still CE2404.
+
 ## 11. Not designed
 
+- **`nom self`.** A consuming RECEIVER. It did NOT fall out of ruling R11's machinery: a
+  pattern binding is a value the arm names, while a receiver mode is part of a method's
+  declaration and belongs to `semantics/param_modes.py`. HANDLES.md Phase 7 decides it,
+  with `BufWriter.into_inner()` and a consuming `close()` as the two consumers.
+- **A `nom` binding inside `Own(...)`** (CE2434). Taking the pointee out would leave the
+  heap cell with nothing to free it.
+
 - **A consuming variadic** (`nom ...T`). Rejected today.
-- **`nom self`.** Rejected today.
 - **Lifetimes.** Nothing relates a borrow to the value it names, so a borrow still cannot
   be returned or stored (CE2415, CE2416, CE2417, CE2419).
 - **Mode inference at a call site.** The marker is written, never deduced. A deduced marker

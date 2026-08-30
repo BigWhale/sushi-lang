@@ -411,7 +411,7 @@ class Pattern(Node):
     """Pattern for match arms: EnumName.VariantName(binding1, binding2, ...)"""
     enum_name: str
     variant_name: str
-    bindings: List[Union[str, 'Pattern', 'OwnPattern', 'RefBinding']]
+    bindings: List[Union[str, 'Pattern', 'OwnPattern', 'RefBinding', 'NomBinding']]
     enum_name_span: Optional[Span] = None
     variant_name_span: Optional[Span] = None
     # The alias the enum was written behind: `geo.Sign.Plus ->`. The enum name stays
@@ -443,6 +443,19 @@ class RefBinding(Node):
 
 
 @dataclass(slots=True)
+class NomBinding(Node):
+    """A TAKING binding in a match pattern: `Result.Ok(nom f)` (HANDLES.md ruling R11).
+
+    Its own node rather than a third `RefBinding.mode`, because `nom` is not a
+    reference: a `peek`/`poke` binding is a pointer into the scrutinee's payload and
+    carries a `ReferenceType`, while this one is a VALUE the arm now owns. Parameters
+    already split the same way -- `nom` is a flag on the parameter, `peek`/`poke` are
+    a type.
+    """
+    name: str
+
+
+@dataclass(slots=True)
 class OwnPattern(Node):
     """Own(inner_pattern) - auto-unwrap Own<T> in pattern matching."""
     inner_pattern: Union[str, 'Pattern']
@@ -469,6 +482,11 @@ class Match(Stmt):
     # An INTEGER scrutinee instead (#415). The backend dispatches on this; an EnumType
     # scrutinee uses `resolved_scrutinee_type` above.
     integer_match_type: Optional[Type] = None
+    # `match nom r:` (ruling R11). The match CONSUMES a scrutinee that names storage,
+    # which is what makes a `nom` payload binding legal on it. A temporary scrutinee is
+    # owned by construction and needs no marker.
+    consumes_scrutinee: bool = False
+    consumes_span: Optional[Span] = None
 
 
 @dataclass(slots=True)
@@ -781,7 +799,7 @@ __all__ = [
     "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
-    "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding",
+    "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding", "NomBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]
 

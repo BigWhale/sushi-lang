@@ -326,9 +326,18 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
 def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', variant: 'EnumVariant') -> None:
     """Register pattern bindings in variable_types table (recursive for nested and Own patterns).
     """
-    from sushi_lang.semantics.ast import RefBinding
+    from sushi_lang.semantics.ast import NomBinding, RefBinding
     for binding, binding_type in zip(pattern.bindings, variant.associated_types, strict=False):
-        if isinstance(binding, str):
+        if isinstance(binding, NomBinding):
+            # `Variant(nom x)` (ruling R11): the arm OWNS the payload, so the binding has
+            # the payload's own type -- no reference wrapper, and every consumer that
+            # asks "may this be given away?" answers yes.
+            from sushi_lang.semantics.typesys import UnknownType
+            resolved_type = binding_type
+            if isinstance(binding_type, UnknownType):
+                resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
+            validator.variable_types[binding.name] = resolved_type
+        elif isinstance(binding, str):
             if binding != "_":  # Skip wildcards
                 from sushi_lang.semantics.typesys import UnknownType
                 resolved_type = binding_type
@@ -419,9 +428,10 @@ def get_pattern_signature(pattern: 'Pattern') -> str:
                     inner_sig = get_pattern_signature(binding.inner_pattern)
                     binding_signatures.append(f"Own({inner_sig})")
             else:
-                # A RefBinding (#300 phase 3) binds like a plain name: the marker changes
-                # how the binding is materialized, not which values the arm matches, so
-                # `Poly(p)` and `Poly(poke p)` are duplicates of each other.
+                # A RefBinding (#300 phase 3) and a NomBinding (ruling R11) bind like a
+                # plain name: the marker changes how the binding is materialized, not
+                # which values the arm matches, so `Poly(p)`, `Poly(poke p)` and
+                # `Poly(nom p)` are duplicates of each other.
                 binding_signatures.append("_")
         signature += "(" + ",".join(binding_signatures) + ")"
 

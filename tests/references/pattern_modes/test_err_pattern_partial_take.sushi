@@ -1,0 +1,21 @@
+# The all-or-nothing rule for v1: an arm that takes ONE owning payload leaves the rest
+# of the variant with no owner, because what suppresses the match's free is the whole
+# scrutinee and not one slot. So every owning binding in a taking arm must be `nom`.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2433
+enum Pair:
+    Both(i32[], i32[])
+
+fn make() Pair:
+    return Result.Ok(Pair.Both(from([1]), from([2])))
+
+fn eat(nom i32[] xs) ~:
+    println("eating {xs.len()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match make()??:
+        Pair.Both(nom a, b) ->
+            eat(nom a)
+            println(b.len())
+    return Result.Ok(0)

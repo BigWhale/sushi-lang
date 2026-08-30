@@ -1,0 +1,38 @@
+# Ruling R11, the destruction half: one arm TAKES the payload and the other does not, so
+# whether the match still owns its scrutinee at the end is a run-time fact. The arm that
+# takes drops once at the new owner; the arm that borrows drops once at the match's end.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "eating 1\ndrop 1\nend\nkept 2\ndrop 2\nend\n"
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+enum Slot:
+    Full(Handle)
+    Bare(Handle)
+
+fn make(i32 id, bool full) Slot:
+    if (full):
+        return Result.Ok(Slot.Full(Handle(id)))
+    return Result.Ok(Slot.Bare(Handle(id)))
+
+fn eat(nom Handle h) ~:
+    println("eating {h.id}")
+    return Result.Ok(~)
+
+fn run(i32 id, bool full) ~:
+    match make(id, full)??:
+        Slot.Full(nom h) -> eat(nom h)
+        Slot.Bare(h) -> println("kept {h.id}")
+    println("end")
+    return Result.Ok(~)
+
+fn main() i32:
+    run(1, true)
+    run(2, false)
+    return Result.Ok(0)

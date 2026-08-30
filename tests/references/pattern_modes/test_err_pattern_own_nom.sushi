@@ -1,0 +1,16 @@
+# `Own(nom x)` would take the pointee and leave the box with no owner, so the heap cell
+# itself would leak. The mode is refused inside an `Own(...)` pattern until the box has
+# a way to be freed on its own.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2434
+enum Holder:
+    Full(Own@(i32))
+    Nil
+
+fn main() i32:
+    let Own@(i32) o = Own.alloc(7)
+    let Holder h = Holder.Full(o)
+    match h:
+        Holder.Full(Own(nom inner)) -> println(inner)
+        Holder.Nil -> println("nil")
+    return Result.Ok(0)

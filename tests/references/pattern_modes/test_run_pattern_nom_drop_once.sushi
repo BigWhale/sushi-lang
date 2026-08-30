@@ -1,0 +1,27 @@
+# Ruling R11 against ruling R2: a `Drop` payload taken by `nom` drops exactly ONCE, at
+# its new owner. The match must not drop it a second time -- for a handle that is a
+# double close.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "eating 5\ndrop 5\nafter\n"
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+fn make(i32 id) Handle:
+    return Result.Ok(Handle(id))
+
+fn eat(nom Handle h) ~:
+    println("eating {h.id}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match make(5):
+        Result.Ok(nom h) -> eat(nom h)
+        Result.Err(_) -> println("failed")
+    println("after")
+    return Result.Ok(0)

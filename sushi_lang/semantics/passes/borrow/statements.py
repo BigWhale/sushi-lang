@@ -26,12 +26,23 @@ from sushi_lang.semantics.ast import (
     Stmt,
     While,
 )
-from sushi_lang.semantics.ownership import ConsumingUse
+from sushi_lang.semantics.ownership import ConsumingUse, Provenance
 from sushi_lang.semantics.typesys import ForeignPtrType, ReferenceType
 
-from .bindings import BindingScope, register_pattern_bindings, release_binding_borrow
+from .bindings import (
+    BindingScope,
+    register_pattern_bindings,
+    reject_partial_take,
+    release_binding_borrow,
+)
 from .borrows import clear_borrows
-from .consume import bind, binds_a_bare_literal_string, consume, reconcile_closure_bind
+from .consume import (
+    bind,
+    binds_a_bare_literal_string,
+    consume,
+    reconcile_closure_bind,
+    source_provenance,
+)
 from .expressions import check_expr
 from .flow import FlowFacts, reinitialize, restore_flow, snapshot_flow, terminates
 from .reads import root_owner
@@ -212,9 +223,26 @@ def _check_if(checker: 'BorrowChecker', stmt: If) -> None:
     restore_flow(checker, FlowFacts.join(paths))
 
 
+def _match_owns_its_scrutinee(checker: 'BorrowChecker', stmt: Match) -> bool:
+    """May an arm TAKE a payload out of this scrutinee (ruling R11)?
+
+    A TEMPORARY is owned by construction -- nothing else will ever free it, which is the
+    same predicate `own_temporary` makes in the backend. A place expression belongs to
+    its owner unless the match says `nom` and takes it.
+    """
+    if stmt.consumes_scrutinee:
+        return True
+    return source_provenance(checker, stmt.scrutinee) is Provenance.FRESH
+
+
 def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:
     """Match arms are EXCLUSIVE paths, so they take the same snapshot / restore / join."""
     check_expr(checker, stmt.scrutinee)
+    owns = _match_owns_its_scrutinee(checker, stmt)
+    if stmt.consumes_scrutinee:
+        # `match nom r:` consumes exactly as `f(nom r)` does: CE2411 when `r` is a
+        # borrow, and CE2405 at every later mention of it.
+        consume(checker, stmt.scrutinee, ConsumingUse.MATCH_SCRUTINEE)
     clear_borrows(checker)
     entry = snapshot_flow(checker)
     paths: list[FlowFacts] = []
@@ -225,9 +253,12 @@ def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:
         # outer local's facts, never the binding's.
         with BindingScope(checker) as scope, _branch(checker):
             if isinstance(arm.pattern, Pattern):
+                reject_partial_take(checker, arm.pattern,
+                                    stmt.resolved_scrutinee_type)
                 register_pattern_bindings(checker, scope, arm.pattern,
                                           stmt.resolved_scrutinee_type,
-                                          scrutinee=stmt.scrutinee)
+                                          scrutinee=stmt.scrutinee,
+                                          owns_scrutinee=owns)
             if isinstance(arm.body, Block):
                 check_block(checker, arm.body)
             else:

@@ -1,0 +1,70 @@
+# Four corners of a taking binding, each with its own failure mode:
+#   1. UNCONSUMED -- an arm that takes and never gives away still drops, at the arm's end.
+#   2. EARLY EXIT -- a `return` out of a taking arm frees through the same registry.
+#   3. NESTED -- `Outer.In(Slot.Full(nom h))`. Nothing points into the scrutinee here, so
+#      the temporary-copy wall that fences a nested `poke` (CE2424) does not apply.
+#   4. `match nom <temporary>` -- accepted, and a no-op: the match already owns a
+#      temporary, so the marker states what is true rather than asking for anything.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "held 1\ndrop 1\nend\neating 2\ndrop 2\nnested 3\ndrop 3\nmatch nom temp 4\ndrop 4\n"
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+enum Slot:
+    Full(Handle)
+    Empty
+
+enum Outer:
+    In(Slot)
+    Nil
+
+fn make(i32 id) Handle:
+    return Result.Ok(Handle(id))
+
+fn wrap(i32 id) Outer:
+    return Result.Ok(Outer.In(Slot.Full(Handle(id))))
+
+fn eat(nom Handle h) ~:
+    println("eating {h.id}")
+    return Result.Ok(~)
+
+fn unconsumed() ~:
+    match make(1):
+        Result.Ok(nom h) -> println("held {h.id}")
+        Result.Err(_) -> println("failed")
+    println("end")
+    return Result.Ok(~)
+
+fn early() ~:
+    match make(2):
+        Result.Ok(nom h) ->
+            eat(nom h)
+            return Result.Ok(~)
+        Result.Err(_) -> println("failed")
+    return Result.Ok(~)
+
+fn nested() ~:
+    match wrap(3)??:
+        Outer.In(Slot.Full(nom h)) -> println("nested {h.id}")
+        Outer.In(Slot.Empty) -> println("empty")
+        Outer.Nil -> println("nil")
+    return Result.Ok(~)
+
+fn nom_on_temporary() ~:
+    match nom make(4):
+        Result.Ok(nom h) -> println("match nom temp {h.id}")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(~)
+
+fn main() i32:
+    unconsumed()
+    early()
+    nested()
+    nom_on_temporary()
+    return Result.Ok(0)

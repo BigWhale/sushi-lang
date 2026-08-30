@@ -833,6 +833,48 @@ fn handle_file(FileResult result) ~:
 
 **Zero-cost compilation**: Pattern matching compiles to efficient jump tables or switch statements. There's no runtime overhead compared to hand-written if-else chains or switch statements in C.
 
+### Binding Modes
+
+A payload binding says what it does with the value, and it says it the way a parameter
+does. A bare binding BORROWS -- it reads, and it is the case almost every arm wants.
+
+```sushi
+enum Box:
+    Rows(i32[])
+    Empty
+
+fn take(nom i32[] xs) ~:
+    println("took {xs.len()}")
+    return Result.Ok(~)
+
+fn make() Box:
+    return Result.Ok(Box.Rows(from([1, 2, 3])))
+
+fn main() i32:
+    match make()??:
+        Box.Rows(r) -> println("read {r.len()}")     # a borrow: read only
+        Box.Empty -> println("empty")
+
+    match make()??:
+        Box.Rows(poke r) -> r.push(9)                # a pointer into the payload
+        Box.Empty -> println("empty")
+
+    match make()??:
+        Box.Rows(nom r) -> take(nom r)               # the arm owns it now
+        Box.Empty -> println("empty")
+
+    return Result.Ok(0)
+```
+
+**Taking needs a scrutinee the match owns.** `make()??` is a temporary: nothing else will
+ever free it, so the match may give it away. A local is different -- `match r:` leaves `r`
+the owner, and taking out of it would be a double free. Say `match nom r:` and the local
+is handed over, exactly as `take(nom r)` hands it over; `r` may not be read afterwards.
+
+**An arm takes the variant whole.** If one binding in an arm is `nom`, every other owning
+payload of that variant must be `nom` as well -- what stops the match freeing the value is
+the whole scrutinee, not one slot of it.
+
 ## Generics
 
 Sushi's generics system provides zero-cost abstraction through compile-time monomorphization. Generic types are instantiated automatically based on usage, generating specialized code for each concrete type combination.
