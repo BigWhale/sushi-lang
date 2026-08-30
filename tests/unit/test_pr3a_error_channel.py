@@ -4,14 +4,13 @@ from __future__ import annotations
 import io
 import os
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+from sushic_path import SUSHIC, needs_sushic
 
 REPO = Path(__file__).resolve().parents[2]
-_HAS_SUSHIC = shutil.which("sushic") is not None
 
 
 # The bare-except sweep -- an acceptance criterion, made a permanent gate
@@ -92,7 +91,7 @@ def test_library_error_renders_through_the_reporter_path():
 
 # CE3501 -- main() rejected in --lib mode (end to end)
 
-@pytest.mark.skipif(not _HAS_SUSHIC, reason="sushic not on PATH")
+@needs_sushic
 def test_lib_mode_rejects_main(tmp_path):
     src = tmp_path / "lib.sushi"
     src.write_text(
@@ -103,14 +102,14 @@ def test_lib_mode_rejects_main(tmp_path):
         encoding="utf-8",
     )
     result = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(src), "-o", str(tmp_path / "lib.slib")],
+        [SUSHIC, "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(src), "-o", str(tmp_path / "lib.slib")],
         cwd=tmp_path, capture_output=True, text=True,
     )
     assert result.returncode == 2, result.stdout + result.stderr
     assert "CE3501" in result.stderr
 
 
-@pytest.mark.skipif(not _HAS_SUSHIC, reason="sushic not on PATH")
+@needs_sushic
 def test_lib_mode_without_main_succeeds(tmp_path):
     src = tmp_path / "lib.sushi"
     src.write_text(
@@ -119,7 +118,7 @@ def test_lib_mode_without_main_succeeds(tmp_path):
         encoding="utf-8",
     )
     result = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(src), "-o", str(tmp_path / "lib.slib")],
+        [SUSHIC, "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(src), "-o", str(tmp_path / "lib.slib")],
         cwd=tmp_path, capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -127,7 +126,7 @@ def test_lib_mode_without_main_succeeds(tmp_path):
 
 # CE3507 -- a .slib whose bitcode payload is corrupt (end to end)
 
-@pytest.mark.skipif(not _HAS_SUSHIC, reason="sushic not on PATH")
+@needs_sushic
 def test_corrupt_library_bitcode_is_ce3507(tmp_path):
     libs = tmp_path / "libs"
     libs.mkdir()
@@ -139,7 +138,7 @@ def test_corrupt_library_bitcode_is_ce3507(tmp_path):
     )
     slib = libs / "mathlib.slib"
     build = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(lib_src), "-o", str(slib)],
+        [SUSHIC, "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(lib_src), "-o", str(slib)],
         cwd=tmp_path, capture_output=True, text=True,
     )
     assert build.returncode == 0, build.stderr
@@ -163,7 +162,7 @@ def test_corrupt_library_bitcode_is_ce3507(tmp_path):
     )
     env = {**os.environ, "SUSHI_LIB_PATH": str(libs)}
     result = subprocess.run(
-        ["sushic", "main.sushi", "-o", "out"],
+        [SUSHIC, "main.sushi", "-o", "out"],
         cwd=project, capture_output=True, text=True, env=env,
     )
     assert result.returncode == 2, result.stdout + result.stderr

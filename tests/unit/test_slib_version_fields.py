@@ -6,13 +6,13 @@ it), and the load path enforces the second. See `docs/design/libraries.md` secti
 """
 from __future__ import annotations
 
-import shutil
 import subprocess
 
 import pytest
 
 from sushi_lang.backend.library_errors import LibraryError
 from sushi_lang.backend.library_format import LibraryFormat
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 
 LIB_SRC = """\
@@ -29,15 +29,15 @@ version = "2.5.0"
 
 def _build_lib(tmp_path, *extra_args, nori: str | None = None):
     """Compile LIB_SRC into a .slib and return the CompletedProcess plus the path."""
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     src = tmp_path / "versionlib.sushi"
     src.write_text(LIB_SRC, encoding="utf-8")
     if nori is not None:
         (tmp_path / "nori.toml").write_text(nori, encoding="utf-8")
     out = tmp_path / "versionlib.slib"
     result = subprocess.run(
-        ["sushic", "--lib", str(src), "-o", str(out), *extra_args],
+        [SUSHIC, "--lib", str(src), "-o", str(out), *extra_args],
         cwd=tmp_path, capture_output=True, text=True)
     return result, out
 
@@ -193,7 +193,7 @@ def test_a_consumer_refuses_a_library_that_excludes_its_compiler(tmp_path):
         "    return Result.Ok(twice(2).realise(0))\n",
         encoding="utf-8")
     env_run = subprocess.run(
-        ["sushic", str(consumer)], cwd=tmp_path, capture_output=True, text=True,
+        [SUSHIC, str(consumer)], cwd=tmp_path, capture_output=True, text=True,
         env={**__import__("os").environ, "SUSHI_LIB_PATH": str(tmp_path)})
     assert env_run.returncode == 2
     assert "CE3503" in env_run.stdout + env_run.stderr

@@ -1,13 +1,13 @@
 """R0.1 / W7: docs-vs-code stdlib smoke check."""
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 from collections import namedtuple
 from pathlib import Path
 
 import pytest
+from sushic_path import SUSHIC, needs_sushic
 
 # Documented stdlib surface -- one representative program per documented module.
 # Each program is warning-free (no `??` in main, no unused bindings) so a clean
@@ -280,7 +280,6 @@ fn main() i32:
 CASE_IDS = [c.id for c in CASES]
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DOCS_ROOT = PROJECT_ROOT / "docs" / "stdlib"
-SUSHIC = shutil.which("sushic")
 
 
 @pytest.fixture(scope="session")
@@ -352,13 +351,13 @@ def test_documented_module_resolves(case, analyze):
     )
 
 
-@pytest.mark.skipif(SUSHIC is None, reason="sushic not on PATH (run under `uv run pytest`)")
+@needs_sushic
 @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
 def test_documented_module_compiles(case, tmp_path, platform_stdlib):
     """End-to-end layer: the documented program compiles and links (exit 0)."""
     (tmp_path / "main.sushi").write_text(case.source, encoding="utf-8")
     result = subprocess.run(
-        ["sushic", "main.sushi", "-o", "out"],
+        [SUSHIC, "main.sushi", "-o", "out"],
         cwd=tmp_path,
         capture_output=True,
         text=True,

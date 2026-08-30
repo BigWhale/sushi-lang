@@ -9,12 +9,10 @@ own key hashing calls the perk implementation instead of the derived inline hash
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 
-import pytest
+from sushic_path import SUSHIC, needs_sushic
 
-SUSHIC = shutil.which("sushic")
 
 PERK_KEY_PROGRAM = """use <collections/hashmap>
 
@@ -38,7 +36,7 @@ fn main() i32:
 """
 
 
-@pytest.mark.skipif(SUSHIC is None, reason="sushic not on PATH (run under `uv run pytest`)")
+@needs_sushic
 def test_hashmap_key_hashing_calls_the_perk_implementation(tmp_path):
     """The program never calls .hash() directly, so any call to Point_hash in the IR
     can only come from the map's own key hashing. The derived struct hash is emitted
@@ -46,7 +44,7 @@ def test_hashmap_key_hashing_calls_the_perk_implementation(tmp_path):
     two apart."""
     (tmp_path / "main.sushi").write_text(PERK_KEY_PROGRAM, encoding="utf-8")
     compiled = subprocess.run(
-        ["sushic", "--write-ll", "main.sushi", "-o", "out"],
+        [SUSHIC, "--write-ll", "main.sushi", "-o", "out"],
         cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr
 

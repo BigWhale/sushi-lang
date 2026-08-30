@@ -8,12 +8,12 @@ names it, skip it under SUSHI_TOOLCHAIN=off, and propagate the tool's exit code.
 from __future__ import annotations
 
 import os
-import shutil
 import struct
 import subprocess
 from pathlib import Path
 
 import pytest
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 REPO = Path(__file__).parents[2]
 TOOL_SRC = REPO / "toolchain" / "src" / "slib_info.sushi"
@@ -60,16 +60,16 @@ def _env(**overrides):
 @pytest.fixture(scope="module")
 def built(tmp_path_factory):
     """Build the demo .slib and compile the slib-info tool once."""
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     tmp = tmp_path_factory.mktemp("slibinfo")
     src = tmp / "demolib.sushi"
     src.write_text(DEMO_LIB, encoding="utf-8")
     slib = tmp / "demolib.slib"
-    r = _run(["sushic", "--lib", "--lib-version", "1.2.3", str(src), "-o", str(slib)], cwd=tmp)
+    r = _run([SUSHIC, "--lib", "--lib-version", "1.2.3", str(src), "-o", str(slib)], cwd=tmp)
     assert r.returncode == 0, r.stdout + r.stderr
     tool = tmp / "slib-info"
-    r = _run(["sushic", str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
+    r = _run([SUSHIC, str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
     assert r.returncode == 0, r.stdout + r.stderr
     return tmp, slib, tool
 
@@ -80,7 +80,7 @@ def test_python_fallback_matches_the_tool(built):
     assert tool_run.returncode == 0, tool_run.stdout + tool_run.stderr
     assert tool_run.stdout != ""
 
-    py_run = _run(["sushic", "--lib-info", str(slib)], env=_env(SUSHI_TOOLCHAIN="off"))
+    py_run = _run([SUSHIC, "--lib-info", str(slib)], env=_env(SUSHI_TOOLCHAIN="off"))
     assert py_run.returncode == 0, py_run.stdout + py_run.stderr
     # The Python path prints the banner first; the body must be identical.
     assert py_run.stdout.endswith(tool_run.stdout)
@@ -134,7 +134,7 @@ def built_binary(built, tmp_path_factory):
     src = tmp / "binlib.sushi"
     src.write_text(DEMO_LIB, encoding="utf-8")
     slib = tmp / "binlib.slib"
-    r = _run(["sushic", "--lib", "--lib-kind", "binary", "--lib-version", "1.2.3",
+    r = _run([SUSHIC, "--lib", "--lib-kind", "binary", "--lib-version", "1.2.3",
               str(src), "-o", str(slib)], cwd=tmp)
     assert r.returncode == 0, r.stdout + r.stderr
     return tmp, slib, tool
@@ -153,7 +153,7 @@ def test_the_fallback_matches_the_tool_on_a_binary_library(built_binary):
     _tmp, slib, tool = built_binary
     tool_run = _run([str(tool), str(slib)])
     assert tool_run.returncode == 0, tool_run.stdout + tool_run.stderr
-    py_run = _run(["sushic", "--lib-info", str(slib)], env=_env(SUSHI_TOOLCHAIN="off"))
+    py_run = _run([SUSHIC, "--lib-info", str(slib)], env=_env(SUSHI_TOOLCHAIN="off"))
     assert py_run.returncode == 0, py_run.stdout + py_run.stderr
     assert py_run.stdout.endswith(tool_run.stdout)
 
@@ -191,7 +191,7 @@ def stub_bin(tmp_path):
 
 def test_lib_info_delegates_to_the_toolchain_binary(built, stub_bin):
     _tmp, slib, _tool = built
-    r = _run(["sushic", "--lib-info", str(slib)],
+    r = _run([SUSHIC, "--lib-info", str(slib)],
              env=_env(SUSHI_TOOLCHAIN_BIN=str(stub_bin)))
     assert "SENTINEL-TOOL-RAN" in r.stdout
     assert r.returncode == 3
@@ -199,7 +199,7 @@ def test_lib_info_delegates_to_the_toolchain_binary(built, stub_bin):
 
 def test_sushi_toolchain_off_skips_the_binary(built, stub_bin):
     _tmp, slib, _tool = built
-    r = _run(["sushic", "--lib-info", str(slib)],
+    r = _run([SUSHIC, "--lib-info", str(slib)],
              env=_env(SUSHI_TOOLCHAIN="off", SUSHI_TOOLCHAIN_BIN=str(stub_bin)))
     assert "SENTINEL-TOOL-RAN" not in r.stdout
     assert r.returncode == 0, r.stdout + r.stderr

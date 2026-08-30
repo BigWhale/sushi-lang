@@ -14,15 +14,13 @@ and `stat`'s struct layout is platform-specific, so FFI would be the less portab
 from __future__ import annotations
 
 import os
-import shutil
 import stat
 import subprocess
 from pathlib import Path
 
-import pytest
+from sushic_path import SUSHIC, needs_sushic
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SUSHIC = shutil.which("sushic")
 
 # The mode `copy()` asks for, in `generate_copy`.
 EXPECTED_MODE = 0o644
@@ -37,7 +35,7 @@ fn main() i32:
 """
 
 
-@pytest.mark.skipif(SUSHIC is None, reason="sushic not on PATH (run under `uv run pytest`)")
+@needs_sushic
 def test_copy_gives_the_destination_the_mode_it_asks_for(tmp_path):
     src = tmp_path / "src.txt"
     dst = tmp_path / "dst.txt"
@@ -45,7 +43,7 @@ def test_copy_gives_the_destination_the_mode_it_asks_for(tmp_path):
 
     (tmp_path / "main.sushi").write_text(
         PROGRAM.format(src=src, dst=dst), encoding="utf-8")
-    compiled = subprocess.run(["sushic", "main.sushi", "-o", "out"],
+    compiled = subprocess.run([SUSHIC, "main.sushi", "-o", "out"],
                               cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr
 

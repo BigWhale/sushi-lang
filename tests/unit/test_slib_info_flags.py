@@ -10,7 +10,6 @@ exists to stop.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +19,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_slib_doc_carriage import DOC_LIB, build_library  # noqa: E402
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 REPO = Path(__file__).resolve().parents[2]
 TOOL_SRC = REPO / "toolchain" / "src" / "slib_info.sushi"
@@ -42,12 +42,12 @@ def _env():
 @pytest.fixture(scope="module")
 def built(tmp_path_factory):
     """The documented library and the compiled tool."""
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     tmp = tmp_path_factory.mktemp("slibflags")
     slib, _metadata = build_library(tmp, "doclib", DOC_LIB)
     tool = tmp / "slib-info"
-    r = _run(["sushic", str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
+    r = _run([SUSHIC, str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
     assert r.returncode == 0, r.stdout + r.stderr
     return slib, tool
 
@@ -110,11 +110,11 @@ def test_a_second_file_is_a_usage_error(built):
 def test_the_fallback_reads_the_same_switch(built):
     """`sushic --lib-info FILE --docs` spells it exactly as the tool does."""
     slib, _tool = built
-    plain = _run(["sushic", "--lib-info", str(slib)], env=_env())
+    plain = _run([SUSHIC, "--lib-info", str(slib)], env=_env())
     assert plain.returncode == 0, plain.stdout + plain.stderr
     assert A_DOC_LINE not in plain.stdout
 
-    docs = _run(["sushic", "--lib-info", str(slib), "--docs"], env=_env())
+    docs = _run([SUSHIC, "--lib-info", str(slib), "--docs"], env=_env())
     assert docs.returncode == 0, docs.stdout + docs.stderr
     assert A_DOC_LINE in docs.stdout
 
@@ -124,7 +124,7 @@ def test_the_two_implementations_agree_in_both_modes(built, extra):
     slib, tool = built
     tool_run = _run([str(tool), *extra, str(slib)])
     assert tool_run.returncode == 0, tool_run.stdout + tool_run.stderr
-    py_run = _run(["sushic", "--lib-info", str(slib), *extra], env=_env())
+    py_run = _run([SUSHIC, "--lib-info", str(slib), *extra], env=_env())
     assert py_run.returncode == 0, py_run.stdout + py_run.stderr
     assert py_run.stdout.endswith(tool_run.stdout)
 
@@ -147,8 +147,8 @@ def test_the_delegation_forwards_the_switch(built, stub_bin):
     env.pop("SUSHI_TOOLCHAIN", None)
     env["SUSHI_TOOLCHAIN_BIN"] = str(stub_bin)
 
-    r = _run(["sushic", "--lib-info", str(slib), "--docs"], env=env)
+    r = _run([SUSHIC, "--lib-info", str(slib), "--docs"], env=env)
     assert "--docs" in r.stdout
 
-    r = _run(["sushic", "--lib-info", str(slib)], env=env)
+    r = _run([SUSHIC, "--lib-info", str(slib)], env=env)
     assert "--docs" not in r.stdout

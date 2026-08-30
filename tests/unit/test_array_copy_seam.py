@@ -7,14 +7,11 @@ nine address rules and two of them were silently wrong.
 """
 from __future__ import annotations
 
-import shutil
 import subprocess
 
-import pytest
+from sushic_path import SUSHIC, needs_sushic
 
-SUSHIC = shutil.which("sushic")
-pytestmark = pytest.mark.skipif(SUSHIC is None,
-                                reason="sushic not on PATH (run under `uv run pytest`)")
+pytestmark = needs_sushic
 
 PRELUDE = """use <io/stdio>
 
@@ -23,7 +20,7 @@ PRELUDE = """use <io/stdio>
 
 def _run(tmp_path, body: str) -> str:
     (tmp_path / "main.sushi").write_text(PRELUDE + body, encoding="utf-8")
-    built = subprocess.run(["sushic", "main.sushi", "-o", "out"],
+    built = subprocess.run([SUSHIC, "main.sushi", "-o", "out"],
                            cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert built.returncode in (0, 1), built.stdout + built.stderr
     return subprocess.run([str(tmp_path / "out")], capture_output=True, text=True).stdout
@@ -31,7 +28,7 @@ def _run(tmp_path, body: str) -> str:
 
 def _ir(tmp_path, body: str) -> str:
     (tmp_path / "main.sushi").write_text(PRELUDE + body, encoding="utf-8")
-    built = subprocess.run(["sushic", "--write-ll", "--opt", "none", "main.sushi", "-o", "out"],
+    built = subprocess.run([SUSHIC, "--write-ll", "--opt", "none", "main.sushi", "-o", "out"],
                            cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert built.returncode in (0, 1), built.stdout + built.stderr
     return (tmp_path / "out.ll").read_text(encoding="utf-8")
@@ -136,7 +133,7 @@ def test_a_fixed_array_is_a_source_but_not_a_destination(tmp_path):
     fixed.extend(src)
     return Result.Ok(0)
 """, encoding="utf-8")
-    built = subprocess.run(["sushic", "bad.sushi", "-o", "bad"],
+    built = subprocess.run([SUSHIC, "bad.sushi", "-o", "bad"],
                            cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert built.returncode == 2
     assert "CE2023" in built.stdout + built.stderr

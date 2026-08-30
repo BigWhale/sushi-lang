@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from sushic_path import SUSHIC
 
 
 HEAD_RE = re.compile(r"^(?P<loc>\S*?):?\s*(?P<severity>error|warning) \[(?P<code>[A-Z]{2}\d{4})\]: (?P<message>.+)$")
@@ -17,7 +18,7 @@ def _compile(tmp_path: Path, source: str, name: str = "shape.sushi") -> str:
 
     (tmp_path / name).write_text(source, encoding="utf-8")
     result = subprocess.run(
-        ["sushic", name],
+        [SUSHIC, name],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -117,7 +118,7 @@ def test_tier3_secondary_location_can_live_in_another_file(tmp_path):
     )
 
     result = subprocess.run(
-        ["sushic", "main.sushi"],
+        [SUSHIC, "main.sushi"],
         cwd=tmp_path,
         capture_output=True,
         text=True,

@@ -18,15 +18,10 @@ Ruling 1 of `docs/design/visibility.md`. Four shapes, one outcome each:
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
-
-
-needs_sushic = pytest.mark.skipif(shutil.which("sushic") is None,
-                                  reason="sushic not on PATH")
+from sushic_path import SUSHIC, needs_sushic
 
 
 def _write(path: Path, content: str) -> None:
@@ -39,7 +34,7 @@ def _compile_units(tmp_path: Path, units: dict[str, str]) -> str:
     for name, source in units.items():
         _write(project / name, source)
     result = subprocess.run(
-        ["sushic", "main.sushi", "-o", "out"],
+        [SUSHIC, "main.sushi", "-o", "out"],
         cwd=project, capture_output=True, text=True,
         env={**os.environ, "NO_COLOR": "1"},
     )
@@ -118,7 +113,7 @@ public fn lib_limit() i32:
     return Result.Ok(LIMIT)
 """)
     built = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", "source", "--lib-version", "1.0.0",
+        [SUSHIC, "--lib", "--lib-kind", "source", "--lib-version", "1.0.0",
          str(lib_src), "-o", str(libs / "climb.slib")],
         cwd=tmp_path, capture_output=True, text=True)
     assert built.returncode == 0, built.stdout + built.stderr
@@ -134,7 +129,7 @@ fn main() i32:
     return Result.Ok(0)
 """)
     result = subprocess.run(
-        ["sushic", "main.sushi", "-o", "out"], cwd=project,
+        [SUSHIC, "main.sushi", "-o", "out"], cwd=project,
         capture_output=True, text=True,
         env={**os.environ, "SUSHI_LIB_PATH": str(libs), "NO_COLOR": "1"})
     out = result.stdout + result.stderr

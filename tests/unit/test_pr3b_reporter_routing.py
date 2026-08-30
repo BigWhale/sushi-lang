@@ -2,17 +2,15 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
+from sushic_path import SUSHIC, needs_sushic
 
 REPO = Path(__file__).resolve().parents[2]
-_HAS_SUSHIC = shutil.which("sushic") is not None
 
 
-@pytest.mark.skipif(not _HAS_SUSHIC, reason="sushic not on PATH")
+@needs_sushic
 def test_generic_struct_constructor_hint_is_a_help_line(tmp_path):
     """The CE2008 generic-struct hint is a real `help:` line, not a hand-indented print."""
     src = tmp_path / "main.sushi"
@@ -28,7 +26,7 @@ def test_generic_struct_constructor_hint_is_a_help_line(tmp_path):
         encoding="utf-8",
     )
     result = subprocess.run(
-        ["sushic", str(src), "-o", str(tmp_path / "out")],
+        [SUSHIC, str(src), "-o", str(tmp_path / "out")],
         cwd=tmp_path, capture_output=True, text=True,
     )
     assert result.returncode == 2
@@ -41,7 +39,7 @@ def test_generic_struct_constructor_hint_is_a_help_line(tmp_path):
     assert "      Generic struct constructors" not in combined
 
 
-@pytest.mark.skipif(not _HAS_SUSHIC, reason="sushic not on PATH")
+@needs_sushic
 def test_cross_platform_library_renders_ce3504_through_the_reporter(tmp_path):
     """A LibraryError now renders with its code + caret, not a bare stringified print."""
     from sushi_lang.backend.library_format import LibraryFormat
@@ -55,7 +53,7 @@ def test_cross_platform_library_renders_ce3504_through_the_reporter(tmp_path):
     )
     slib = libs / "mathlib.slib"
     build = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(lib_src), "-o", str(slib)],
+        [SUSHIC, "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(lib_src), "-o", str(slib)],
         cwd=tmp_path, capture_output=True, text=True,
     )
     assert build.returncode == 0, build.stderr
@@ -76,7 +74,7 @@ def test_cross_platform_library_renders_ce3504_through_the_reporter(tmp_path):
     )
     env = {**os.environ, "SUSHI_LIB_PATH": str(libs)}
     result = subprocess.run(
-        ["sushic", "main.sushi", "-o", "out"],
+        [SUSHIC, "main.sushi", "-o", "out"],
         cwd=project, capture_output=True, text=True, env=env,
     )
     assert result.returncode == 2, result.stdout + result.stderr

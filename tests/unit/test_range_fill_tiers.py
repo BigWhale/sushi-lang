@@ -8,14 +8,11 @@ Without this gate the tiers decay into "LLVM will fix it", which is false.
 """
 from __future__ import annotations
 
-import shutil
 import subprocess
 
-import pytest
+from sushic_path import SUSHIC, needs_sushic
 
-SUSHIC = shutil.which("sushic")
-pytestmark = pytest.mark.skipif(SUSHIC is None,
-                                reason="sushic not on PATH (run under `uv run pytest`)")
+pytestmark = needs_sushic
 
 
 def _emit(tmp_path, source: str) -> str:
@@ -26,7 +23,7 @@ def _emit(tmp_path, source: str) -> str:
     the thing being ruled out.
     """
     (tmp_path / "main.sushi").write_text(source, encoding="utf-8")
-    built = subprocess.run(["sushic", "--write-ll", "--opt", "none", "main.sushi", "-o", "out"],
+    built = subprocess.run([SUSHIC, "--write-ll", "--opt", "none", "main.sushi", "-o", "out"],
                            cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert built.returncode in (0, 1), built.stdout + built.stderr
     return (tmp_path / "out.ll").read_text(encoding="utf-8")

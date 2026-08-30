@@ -13,33 +13,27 @@ real files from the repository.
 """
 from __future__ import annotations
 
-import os
-import shutil
 import subprocess
 import zlib
 from pathlib import Path
 
 import pytest
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 REPO = Path(__file__).parents[2]
 DEFLATE_SRC = REPO / "tests" / "stdlib" / "zlib" / "helpers" / "zdeflate.sushi"
 INFLATE_SRC = REPO / "tests" / "stdlib" / "zlib" / "helpers" / "zinflate.sushi"
 
-# The compiler of THIS checkout, not whichever one is on PATH. A worktree has
-# its own stdlib registry, and a PATH lookup would compile against another.
-SUSHIC = REPO / "sushic"
-
 LEVELS = (0, 1, 6, 9)
 
 
 def _build(src: Path, tmp_path_factory, name: str) -> Path:
-    compiler = str(SUSHIC) if os.access(SUSHIC, os.X_OK) else shutil.which("sushic")
-    if compiler is None:
-        pytest.skip("no sushic available")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     tmp = tmp_path_factory.mktemp(name)
     out = tmp / name
     result = subprocess.run(
-        [compiler, str(src), "-o", str(out)],
+        [SUSHIC, str(src), "-o", str(out)],
         cwd=tmp, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     return out

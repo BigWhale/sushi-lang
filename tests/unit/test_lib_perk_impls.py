@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from sushic_path import SUSHIC, needs_sushic
 
 
 LIB_SOURCE = """\
@@ -69,7 +70,7 @@ def _build_lib(tmp_path: Path) -> dict[str, str]:
     lib_src = tmp_path / "impllib.sushi"
     _write(lib_src, LIB_SOURCE)
     build = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(lib_src), "-o", str(libs_dir / "impllib.slib")],
+        [SUSHIC, "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(lib_src), "-o", str(libs_dir / "impllib.slib")],
         cwd=tmp_path, capture_output=True, text=True,
     )
     assert build.returncode == 0, f"Library build failed:\n{build.stderr}"
@@ -82,7 +83,7 @@ def _build_consumer(tmp_path: Path, main_source: str, env: dict[str, str]) -> Pa
     _write(project / "helpers" / "util.sushi", UTIL_SOURCE)
     _write(project / "main.sushi", main_source)
     result = subprocess.run(
-        ["sushic", "main.sushi", "-o", "out"],
+        [SUSHIC, "main.sushi", "-o", "out"],
         cwd=project, capture_output=True, text=True, env=env,
     )
     assert result.returncode == 0, f"Consumer build failed:\n{result.stderr}"
@@ -98,7 +99,7 @@ def _run(project: Path) -> str:
     return out.stdout.strip()
 
 
-@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+@needs_sushic
 def test_shipped_impl_links_and_runs_multi_unit(tmp_path):
     """No consumer extend: the library's i32_doubled is registered, declared, and linked from the
     library .o across two consumer units.
@@ -108,7 +109,7 @@ def test_shipped_impl_links_and_runs_multi_unit(tmp_path):
     assert _run(project) == "5"
 
 
-@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+@needs_sushic
 def test_local_override_links_and_wins_multi_unit(tmp_path):
     """Local extend + shipped impl: must LINK (the library symbol is weak; a duplicate-symbol cc
     error here means the linkage regressed) and the local negating impl must win at runtime
@@ -143,7 +144,7 @@ def _is_weak_definition(obj: Path, symbol: str) -> bool | None:
 
 
 @pytest.mark.skipif(shutil.which("nm") is None, reason="nm not available")
-@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+@needs_sushic
 def test_shipped_impl_symbol_is_weak_in_library_object(tmp_path):
     """i32_doubled must be present in the library-derived .o and weak."""
     env = _build_lib(tmp_path)

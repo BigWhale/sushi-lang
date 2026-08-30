@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-
+from sushic_path import SUSHIC
 
 
 # Helpers
 
 def _compile(project_dir: Path, extra_args: list[str] | None = None) -> subprocess.CompletedProcess:
     """Invoke ``sushic main.sushi -o out`` in *project_dir* and return the result."""
-    cmd = ["sushic", "main.sushi", "-o", "out"]
+    cmd = [SUSHIC, "main.sushi", "-o", "out"]
     if extra_args:
         cmd.extend(extra_args)
     return subprocess.run(

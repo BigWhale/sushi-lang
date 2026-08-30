@@ -19,15 +19,10 @@ takes priority and warns (CW3002), which `tests/libs/test_warn_lib_override.sush
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
-
-
-needs_sushic = pytest.mark.skipif(shutil.which("sushic") is None,
-                                  reason="sushic not on PATH")
+from sushic_path import SUSHIC, needs_sushic
 
 
 def _write(path: Path, content: str) -> None:
@@ -41,7 +36,7 @@ def _compile_units(tmp_path: Path, units: dict[str, str]) -> str:
     for name, source in units.items():
         _write(project / name, source)
     result = subprocess.run(
-        ["sushic", "main.sushi", "-o", "out"],
+        [SUSHIC, "main.sushi", "-o", "out"],
         cwd=project, capture_output=True, text=True,
         env={**os.environ, "NO_COLOR": "1"},
     )
@@ -55,7 +50,7 @@ def _build_source_lib(tmp_path: Path, source: str, name: str) -> tuple[str, dict
     lib_src = tmp_path / f"{name}.sushi"
     _write(lib_src, source)
     result = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", "source", "--lib-version", "1.0.0",
+        [SUSHIC, "--lib", "--lib-kind", "source", "--lib-version", "1.0.0",
          str(lib_src), "-o", str(libs_dir / f"{name}.slib")],
         cwd=tmp_path, capture_output=True, text=True,
     )
@@ -67,7 +62,7 @@ def _build_source_lib(tmp_path: Path, source: str, name: str) -> tuple[str, dict
 def _consume(tmp_path: Path, env: dict, program: str) -> str:
     project = tmp_path / "prog"
     _write(project / "main.sushi", program)
-    result = subprocess.run(["sushic", "main.sushi", "-o", "out"],
+    result = subprocess.run([SUSHIC, "main.sushi", "-o", "out"],
                             cwd=project, capture_output=True, text=True, env=env)
     return result.stdout + result.stderr
 

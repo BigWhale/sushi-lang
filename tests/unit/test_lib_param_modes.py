@@ -10,6 +10,7 @@ from sushi_lang.backend.library_format import LibraryFormat
 from sushi_lang.semantics.param_modes import ParamMode, param_mode
 from sushi_lang.semantics.type_resolution import parse_type_string
 from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, ReferenceType
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 
 # The type-string parser learned peek and poke
@@ -68,15 +69,14 @@ EXPECTED_MODES = {
 def mode_manifest(tmp_path_factory):
     """Build a library declaring one function per mode, and read its manifest back."""
     import subprocess
-    import shutil
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     tmp_path = tmp_path_factory.mktemp("modelib")
     src = tmp_path / "modelib.sushi"
     src.write_text(MODE_LIB, encoding="utf-8")
     out = tmp_path / "modelib.slib"
     result = subprocess.run(
-        ["sushic", "--lib", "--lib-version", "0.0.0", str(src), "-o", str(out)],
+        [SUSHIC, "--lib", "--lib-version", "0.0.0", str(src), "-o", str(out)],
         cwd=tmp_path, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     metadata, _bitcode = LibraryFormat.read(out)

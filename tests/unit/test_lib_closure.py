@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from sushic_path import SUSHIC, needs_sushic
 
 
 CLOSURE_LIB = """\
@@ -81,7 +82,7 @@ def _build_lib(tmp_path: Path, source: str, name: str = "closurelib"):
     lib_src = tmp_path / f"{name}.sushi"
     _write(lib_src, source)
     result = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(lib_src), "-o", str(libs_dir / f"{name}.slib")],
+        [SUSHIC, "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(lib_src), "-o", str(libs_dir / f"{name}.slib")],
         cwd=tmp_path, capture_output=True, text=True,
     )
     env = {**os.environ, "SUSHI_LIB_PATH": str(libs_dir)}
@@ -123,7 +124,7 @@ def test_ptr_exposing_private_helper_still_rejected(tmp_path):
     assert any(item.code == "CE5006" for item in reporter.items)
 
 
-@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+@needs_sushic
 def test_external_namespace_reference_still_rejected(tmp_path):
     """A generic body calling an unsafe-external namespace cannot ship."""
     result, _ = _build_lib(tmp_path, EXTERN_LIB, name="externlib")
@@ -138,7 +139,7 @@ def _build_consumer(tmp_path: Path, env: dict[str, str]) -> Path:
     _write(project / "helpers" / "util.sushi", UTIL_SOURCE)
     _write(project / "main.sushi", MAIN_SOURCE)
     result = subprocess.run(
-        ["sushic", "main.sushi", "-o", "out"],
+        [SUSHIC, "main.sushi", "-o", "out"],
         cwd=project, capture_output=True, text=True, env=env,
     )
     assert result.returncode == 0, f"Consumer build failed:\n{result.stderr}"
@@ -148,7 +149,7 @@ def _build_consumer(tmp_path: Path, env: dict[str, str]) -> Path:
     return project
 
 
-@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+@needs_sushic
 def test_closure_links_and_runs_multi_unit(tmp_path):
     """Two consumer units instantiate compute@(T); the private helper, private generic, and
     constant all resolve across the incremental link.
@@ -163,7 +164,7 @@ def test_closure_links_and_runs_multi_unit(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("nm") is None, reason="nm not available")
-@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+@needs_sushic
 def test_private_helper_defined_in_lib_object_only(tmp_path):
     """scale_up must be DEFINED in the library-derived .o and at most referenced (undefined) in
     consumer unit .o files - the consumer declares and links, never re-emits.
@@ -209,11 +210,11 @@ def test_private_helper_defined_in_lib_object_only(tmp_path):
 def _consume(tmp_path: Path, env: dict, program: str, name: str = "prog") -> subprocess.CompletedProcess:
     project = tmp_path / name
     _write(project / "main.sushi", program)
-    return subprocess.run(["sushic", "main.sushi", "-o", "out"],
+    return subprocess.run([SUSHIC, "main.sushi", "-o", "out"],
                           cwd=project, capture_output=True, text=True, env=env)
 
 
-@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+@needs_sushic
 def test_a_shipped_private_generic_is_not_callable_by_the_consumer(tmp_path):
     build, env = _build_lib(tmp_path, CLOSURE_LIB)
     assert build.returncode == 0, build.stderr
@@ -231,7 +232,7 @@ fn main() i32:
     assert "pick_first" in out
 
 
-@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+@needs_sushic
 def test_a_shipped_private_concrete_helper_is_not_callable_by_the_consumer(tmp_path):
     build, env = _build_lib(tmp_path, CLOSURE_LIB)
     assert build.returncode == 0, build.stderr
@@ -249,7 +250,7 @@ fn main() i32:
     assert "scale_up" in out
 
 
-@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+@needs_sushic
 def test_a_consumer_generic_reaches_no_further_than_consumer_code(tmp_path):
     # The gate reads the call site, so it has to tell a transplanted library body from a
     # body the user wrote -- including one the user wrote as a generic, whose instance is
@@ -272,7 +273,7 @@ fn main() i32:
     assert "CE3005" in out
 
 
-@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+@needs_sushic
 def test_a_lambda_in_a_transplanted_body_still_calls_the_library_helper(tmp_path):
     # The lambda lifts out of the monomorphized template body into a function of its own,
     # which is validated on its own. It is still the library's code and still calls the

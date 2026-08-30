@@ -11,10 +11,10 @@ success line. The reproductions are the ones recorded in the issue.
 """
 from __future__ import annotations
 
-import shutil
 import subprocess
 
 import pytest
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 
 # A public native `...T` variadic cannot ship: it collects into one concrete function,
@@ -59,12 +59,12 @@ KINDS = ["source", "binary"]
 
 def _build(tmp_path, src: str, kind: str):
     """Compile `src` as a library of `kind`, and return (CompletedProcess, out_path)."""
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     (tmp_path / "rejlib.sushi").write_text(src, encoding="utf-8")
     out = tmp_path / "rejlib.slib"
     result = subprocess.run(
-        ["sushic", "--lib", "--lib-version", "1.0.0", "--lib-kind", kind,
+        [SUSHIC, "--lib", "--lib-version", "1.0.0", "--lib-kind", kind,
          str(tmp_path / "rejlib.sushi"), "-o", str(out)],
         cwd=tmp_path, capture_output=True, text=True)
     return result, out

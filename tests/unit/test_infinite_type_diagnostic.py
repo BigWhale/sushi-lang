@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from sushic_path import SUSHIC
 
 LOCATED_HEAD_RE = re.compile(
     r"^(?P<file>\S+):(?P<line>\d+):(?P<col>\d+): error \[CE2095\]: ", re.MULTILINE
@@ -36,7 +37,7 @@ fn main() i32:
 def _compile(tmp_path: Path, source: str, name: str = "infinite.sushi") -> str:
     (tmp_path / name).write_text(source, encoding="utf-8")
     result = subprocess.run(
-        ["sushic", name],
+        [SUSHIC, name],
         cwd=tmp_path,
         capture_output=True,
         text=True,

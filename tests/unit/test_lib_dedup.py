@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
+from sushic_path import SUSHIC, needs_sushic
 
 
 LIB_SOURCE = """\
@@ -60,7 +61,7 @@ def _build_project(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     _write(lib_src, LIB_SOURCE)
 
     build = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(lib_src), "-o", str(libs_dir / "mathlib.slib")],
+        [SUSHIC, "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(lib_src), "-o", str(libs_dir / "mathlib.slib")],
         cwd=tmp_path, capture_output=True, text=True,
     )
     assert build.returncode == 0, f"Library build failed:\n{build.stderr}"
@@ -71,7 +72,7 @@ def _build_project(tmp_path: Path) -> tuple[Path, dict[str, str]]:
 
     env = {**os.environ, "SUSHI_LIB_PATH": str(libs_dir)}
     compile_result = subprocess.run(
-        ["sushic", "main.sushi", "-o", "out"],
+        [SUSHIC, "main.sushi", "-o", "out"],
         cwd=project, capture_output=True, text=True, env=env,
     )
     assert compile_result.returncode == 0, f"Consumer build failed:\n{compile_result.stderr}"
@@ -104,7 +105,7 @@ def _defined_symbol_count(obj_path: Path, symbol: str) -> int:
 
 
 @pytest.mark.skipif(shutil.which("nm") is None, reason="nm not available")
-@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+@needs_sushic
 def test_single_monomorphized_definition_across_units(tmp_path):
     """Both consumer units call max_of at i32; exactly one max_of__i32 is defined."""
     project, _ = _build_project(tmp_path)
@@ -125,7 +126,7 @@ def test_single_monomorphized_definition_across_units(tmp_path):
     )
 
 
-@pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
+@needs_sushic
 def test_two_unit_consumer_runs_correctly(tmp_path):
     """Anchor for the dedup assertion: the two-unit build links and runs."""
     project, _ = _build_project(tmp_path)
