@@ -567,7 +567,15 @@ multi-file compile.) The `lift` pass (`passes/lift.py`) is inserted in
 
 # Part II — Deferred
 
-## 1. UFCS method form `xs.map(f)` — Gap B
+## 1. UFCS method form `xs.map(f)` — Gap B — SUPERSEDED
+
+Gap B SHIPPED with the UFCS epic: `extend List@(T) map@(U)(fn(T) -> U f) List@(U)` is
+expressible, inferred at the call site, and monomorphized per (receiver, method,
+margs). The decision record is [ufcs-combinators.md](ufcs-combinators.md); the
+analysis that follows is kept for history and no longer describes the tree.
+
+<details>
+<summary>The original Gap B analysis (historical)</summary>
 
 `extend List@(T) map@(U)(fn(T)->U f) List@(U)` cannot be expressed today. A *same-type* combinator
 (`extend List@(T) map(fn(T)->T f) List@(T)`) already works (Gap D closed this half); only a
@@ -622,14 +630,15 @@ concrete consumer wants the fluent method form.
   header to reconcile (safe because extension bodies never register `self` for cleanup, so the
   shared buffer is not double-freed).
 
-## 2. Owned-element combinators — deferred
+</details>
 
-`collections/iter`'s `map`/`filter`/`fold` assume copy/primitive element types: `filter` re-pushes
-each kept element by copy, `map` reads each element by copy before applying `f`. A `List@(T)` where
-`T` is an owned type (dynamic array, `List@(U)`, `Own@(U)`, or a struct containing one) is not
-supported yet — re-pushing/reading would need move-aware element handling the current combinator
-bodies don't do. No diagnostic gate exists specifically for this; it is a correctness gap to close
-before advertising owned-element support, not a capability that was evaluated and rejected.
+## 2. Owned-element combinators — partly closed
+
+The METHOD-form `filter` is fully general since the UFCS epic: it clones each kept
+element, so an owning element type works. The free functions, and the method-form
+`map`/`fold`, stay copy/primitive-element: reading an element into `f`, and threading
+an owning accumulator, still need move-aware handling the bodies do not do. See
+[ufcs-combinators.md](ufcs-combinators.md) for the v1 scope.
 
 ## 3. Remaining Tier 2
 

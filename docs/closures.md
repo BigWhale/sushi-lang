@@ -168,9 +168,10 @@ Tier 1 is complete, plus two Tier 2 items (T2.3/T2.4) have landed. Known gaps th
 - **`List@(T)`/`Own@(T)`/dynamic-array-typed lambda *parameters* have no deep-copy** in the
   indirect-call path, so they're rejected (CE2094) — this is distinct from *capture*, which does
   move owned values (see [Capture](#capture)).
-- **No UFCS method form** (`xs.map(f)`) for the stdlib combinators — `use
-  <collections/iter>` ships `map`/`filter`/`fold`/`compose` as free generic functions
-  (`map(xs, f)`, not `xs.map(f)`); owned-element combinators are not authored yet.
+- **The UFCS method form exists** (the UFCS epic): `use <collections/iter>` ships
+  `.map`/`.filter`/`.fold` as extension methods on `List@(T)` and `T[]` beside the free
+  functions, chained with `??` (`xs.map(f)??.filter(p)??`). The method-form `filter` is
+  fully general (it clones each kept element); `map`/`fold` stay copy/primitive-element.
 - **Nested lambdas** (a lambda written inside another lambda's body) are lifted best-effort; deep
   nested capture chains are not guaranteed to work.
 - **Deferred to Tier 2**: `peek`/`poke` borrow capture, bound method values (`obj.method` as a

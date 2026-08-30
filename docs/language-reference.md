@@ -1210,6 +1210,13 @@ visible as the type it is attached to, so `extend Point doubled()` is public bec
 `Point` is, and `extend Cursor step()` is unreachable elsewhere because `Cursor` is not.
 Writing `public` on an implementation method is `CE6103`.
 
+An extension may declare method-level type parameters and an error channel —
+`extend List@(T) map@(U)(fn(T) -> U f) List@(U) | StdError:` — solved and handled at
+the call site (`xs.map(f)??`). The success returns bare; `Result.Err(e)` is the one
+spelled constructor. Array targets take a concrete element (`extend i32[]`) or a bare
+name that binds a type parameter (`extend T[]`). The design record is
+`docs/design/ufcs-combinators.md`.
+
 A **private perk** hides the CONTRACT, not the method. Another unit may not implement it
 (`extend X with Loud`) and may not constrain a type parameter with it (`@(T: Loud)`) --
 both are `CE4011` -- but a method it provides stays callable on any type you publish,

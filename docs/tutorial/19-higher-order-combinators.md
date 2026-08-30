@@ -30,8 +30,9 @@ Output:
 ```
 
 The lambda `|i32 a| a + crew` captures the outer local `crew` (Chapter 18) — combinators and
-closures work together with no special ceremony. Note the call is `map(ages, ...)`, not
-`ages.map(...)`: these are free functions, so the list is the first argument.
+closures work together with no special ceremony. Here the call is the free-function form,
+`map(ages, ...)`, so the list is the first argument; the method form `ages.map(...)` exists
+too, and gets its own section below.
 
 ## filter — keep the ones that match
 
@@ -104,12 +105,33 @@ The two `nom` markers are why: the closure captures both functions, so it become
 and `compose` declares that. `map`, `filter` and `fold` only *call* their function argument, so
 they borrow it and take no marker.
 
+## The method form — chain with `??`
+
+Each combinator also exists as an **extension method** on `List@(T)` and on `T[]`. A
+method declares the error channel `| StdError`, so a call yields a `Result` — handle
+each link with `??` and the chain reads left to right:
+
+```sushi
+--8<-- "docs/tutorial/examples/19-higher-order-combinators/method-chain.sushi"
+```
+
+Output:
+
+```
+84
+```
+
+Leave a `??` out and the compiler stops you with CE2515, spelling the fix: an unhandled
+`Result` has no `.filter()`, its payload does. On a `T[]` receiver the collecting
+methods return a `List` — a dynamic array has no empty generic constructor to fill.
+
 ## Two things to know
 
-!!! note "Element types are copy-only for now"
-    The combinators work on copyable element types — integers, floats, `bool`, strings, and
-    copyable structs. Owned element types (a `List` of dynamic arrays, for instance) are not
-    supported yet, because `filter` re-inserts each kept element and `map` reads each one.
+!!! note "Element ownership"
+    `map` and `fold` work on copyable element types — integers, floats, `bool`, strings,
+    and copyable structs. The **method-form `filter` is fully general**: it clones each
+    kept element, so an owning element type works there. The free-function `filter`
+    stays copy-only.
 
 !!! warning "Annotate bare-parameter lambdas passed to a combinator"
     A bare-parameter lambda (`|x| ...`) cannot infer its type *against a generic parameter*, since
@@ -124,12 +146,15 @@ they borrow it and take no marker.
 
 ## What you learned
 
-- `use <collections/iter>` brings in `map`, `filter`, `fold`, and `compose` — free generic
-  functions, called as `map(xs, f)` rather than `xs.map(f)`.
+- `use <collections/iter>` brings in `map`, `filter`, `fold` — as methods on `List@(T)`
+  and `T[]` AND as free functions — plus `compose`.
+- The method form declares the `| StdError` channel: chain with `??`
+  (`xs.map(f)??.filter(p)??.fold(0, g)??`), and CE2515 catches a link you forgot to handle.
 - `collections/iter` is the first Sushi-source standard-library module; the combinators
   monomorphize like any generic and cost nothing when unused.
 - Each combinator takes a `fn(...)` value: a lambda (capturing or not) or a plain function
   reference.
 - `compose` returns a closure that captures and calls the two functions you give it.
-- Element types are copy-only for now; annotate bare-parameter lambdas, or bind a generic function
-  to a typed local, when passing them to a combinator.
+- `map` and `fold` are copy-element; the method-form `filter` clones and is fully general.
+  Annotate bare-parameter lambdas, or bind a generic function to a typed local, when
+  passing them to a combinator.

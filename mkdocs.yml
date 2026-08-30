@@ -145,4 +145,5 @@ nav:
       - "Borrowing (design)": design/borrowing.md
       - "Visibility (design)": design/visibility.md
       - "Unit Namespaces (design)": design/unit-namespaces.md
+      - "UFCS Combinators (design)": design/ufcs-combinators.md
   - Examples: examples/README.md
