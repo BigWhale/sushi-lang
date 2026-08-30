@@ -1,0 +1,30 @@
+# The free functions stay: map/filter/fold as free calls beside the method twins,
+# in one program.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "10\n10\n"
+use <collections/iter>
+
+fn run_free() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    let List@(i32) ds = map(xs, |i32 x| x * 2)??
+    let List@(i32) big = filter(ds, |i32 x| x > 2)??
+    let i32 total = fold(big, 0, |i32 acc, i32 x| acc + x)??
+    return Result.Ok(total)
+
+fn run_method() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    let i32 total = xs.map(|i32 x| x * 2)??.filter(|i32 x| x > 2)??.fold(0, |i32 acc, i32 x| acc + x)??
+    return Result.Ok(total)
+
+fn main() i32:
+    println("{run_free().realise(-1)}")
+    println("{run_method().realise(-1)}")
+    return Result.Ok(0)

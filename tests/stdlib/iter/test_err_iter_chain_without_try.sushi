@@ -1,0 +1,15 @@
+# The chain WITHOUT '??' stops at the first channel (ruling 5): .filter is missing on
+# the Result and present on the payload List, so CE2515 spells the fix.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2515
+use <collections/iter>
+
+fn run() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    let List@(i32) ys = xs.map(|i32 x| x * 2).filter(|i32 x| x > 2)??
+    return Result.Ok(ys.len())
+
+fn main() i32:
+    println("{run().realise(-1)}")
+    return Result.Ok(0)

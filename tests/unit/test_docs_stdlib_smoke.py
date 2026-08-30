@@ -154,6 +154,19 @@ fn main() i32:
 """,
     ),
     Case(
+        "collections/iter-methods",
+        "collections/iter.md",
+        """use <collections/iter>
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    let List@(i32) ys = xs.map(|i32 x| x + 1).realise(List.new())
+    println("iter methods {ys.len()}")
+    return Result.Ok(0)
+""",
+    ),
+    Case(
         "maybe",
         "maybe.md",
         """fn main() i32:
@@ -206,7 +219,8 @@ def platform_stdlib():
 # Sushi-source module that compiler/pipeline.py injects as a compilation unit (its
 # combinators are not otherwise in scope). Both are still fully covered by the
 # authoritative subprocess compile layer below.
-SEMANTIC_LAYER_SKIP = {"collections/hashmap", "collections/iter"}
+SEMANTIC_LAYER_SKIP = {"collections/hashmap", "collections/iter",
+                       "collections/iter-methods"}
 
 
 def test_docs_present():

@@ -1,0 +1,25 @@
+# The method-form filter ships fully general: the body clones each kept element, so
+# an OWNING element type works where the free function stays copy-only.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1\n"
+use <collections/iter>
+
+struct Crate:
+    i32 weight
+    string label
+
+fn is_heavy(Crate c) bool:
+    return Result.Ok(c.weight > 5)
+
+fn run() i32:
+    let List@(Crate) xs = List.new()
+    xs.push(Crate(2, "light"))
+    xs.push(Crate(9, "heavy"))
+    let List@(Crate) heavy = xs.filter(is_heavy)??
+    return Result.Ok(heavy.len())
+
+fn main() i32:
+    println("{run().realise(-1)}")
+    return Result.Ok(0)

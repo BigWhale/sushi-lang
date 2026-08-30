@@ -1,0 +1,20 @@
+# collections/iter on a dynamic array: the T[] twins collect into a List@(U), and
+# fold reduces in place.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "10\n6\n"
+use <collections/iter>
+
+fn run() i32:
+    let i32[] xs = from([1, 2, 3])
+    let List@(i32) ds = xs.map(|i32 x| x * 2)??
+    let List@(i32) big = ds.filter(|i32 x| x > 2)??
+    let i32 total = big.fold(0, |i32 acc, i32 x| acc + x)??
+    println("{total}")
+    let i32 plain_sum = xs.fold(0, |i32 acc, i32 x| acc + x)??
+    return Result.Ok(plain_sum)
+
+fn main() i32:
+    println("{run().realise(-1)}")
+    return Result.Ok(0)

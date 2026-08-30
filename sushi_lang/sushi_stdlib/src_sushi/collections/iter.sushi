@@ -37,3 +37,95 @@ public fn fold@(T, U)(List@(T) xs, U init, fn(U, T) -> U f) U:
 # lambda captures `f` and `g` and calls them -- the capture-and-call case.
 public fn compose@(T, U, V)(nom fn(T) -> U g, nom fn(U) -> V f) fn(T) -> V:
     return Result.Ok(|x| f(g(x)??)??)
+
+# -- the method form (the UFCS epic) ------------------------------------------------
+#
+# The extension twins of the free functions above. Each declares the '| StdError'
+# channel, so a call yields Result and chains with '??':
+# xs.map(f)??.filter(p)??.fold(0, g)??. The T[] twins collect into a List@(U) -- a
+# dynamic array has no empty generic constructor to fill. Element ownership: map and
+# fold stay copy/primitive-element like the free functions; filter is fully general,
+# because it clones each kept element. A bare-param lambda cannot be inferred
+# (CE2063): pass a typed-param lambda ('|i32 x| ...') or a named function.
+
+##:
+Applies `f` to every element of the list, collecting the results into a new list.
+
+- Parameter f: The transform to apply.
+- Returns: A new list of the transformed elements, in order.
+- Errors: Whatever `f` returns as Err, unchanged.
+:##
+extend List@(T) map@(U)(fn(T) -> U f) List@(U) | StdError:
+    let List@(U) out = List.new()
+    foreach(x in self.iter()):
+        out.push(f(x)??)
+    return out
+
+##:
+Keeps the elements of the list for which `pred` answers true.
+
+- Parameter pred: The predicate.
+- Returns: A new list of clones of the kept elements, in order.
+- Errors: Whatever `pred` returns as Err, unchanged.
+:##
+extend List@(T) filter(fn(T) -> bool pred) List@(T) | StdError:
+    let List@(T) out = List.new()
+    foreach(x in self.iter()):
+        if (pred(x)??):
+            out.push(x.clone())
+    return out
+
+##:
+Reduces the list left to right, threading the accumulator through `f`.
+
+- Parameter init: The starting accumulator value.
+- Parameter f: The step.
+- Returns: The final accumulator value.
+- Errors: Whatever `f` returns as Err, unchanged.
+:##
+extend List@(T) fold@(U)(U init, fn(U, T) -> U f) U | StdError:
+    let U acc = init
+    foreach(x in self.iter()):
+        acc := f(acc, x)??
+    return acc
+
+##:
+Applies `f` to every element of the array, collecting the results into a new list.
+
+- Parameter f: The transform to apply.
+- Returns: A new list of the transformed elements, in order.
+- Errors: Whatever `f` returns as Err, unchanged.
+:##
+extend T[] map@(U)(fn(T) -> U f) List@(U) | StdError:
+    let List@(U) out = List.new()
+    foreach(x in self.iter()):
+        out.push(f(x)??)
+    return out
+
+##:
+Keeps the elements of the array for which `pred` answers true.
+
+- Parameter pred: The predicate.
+- Returns: A new list of clones of the kept elements, in order.
+- Errors: Whatever `pred` returns as Err, unchanged.
+:##
+extend T[] filter(fn(T) -> bool pred) List@(T) | StdError:
+    let List@(T) out = List.new()
+    foreach(x in self.iter()):
+        if (pred(x)??):
+            out.push(x.clone())
+    return out
+
+##:
+Reduces the array left to right, threading the accumulator through `f`.
+
+- Parameter init: The starting accumulator value.
+- Parameter f: The step.
+- Returns: The final accumulator value.
+- Errors: Whatever `f` returns as Err, unchanged.
+:##
+extend T[] fold@(U)(U init, fn(U, T) -> U f) U | StdError:
+    let U acc = init
+    foreach(x in self.iter()):
+        acc := f(acc, x)??
+    return acc
