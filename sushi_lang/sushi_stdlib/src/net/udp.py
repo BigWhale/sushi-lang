@@ -3,7 +3,7 @@
 The datagram half needs one thing the stream half does not. A connected socket
 answers getpeername at any time, so sock_peer_ip is a separate call; an
 UNCONNECTED datagram socket has no peer at all, and the sender exists only at
-the instant its datagram arrives. So udp_recv_from answers with a Datagram --
+the instant its datagram arrives. So recv_from() answers with a Datagram --
 the bytes and the sender together -- rather than with bytes alone.
 """
 from llvmlite import ir

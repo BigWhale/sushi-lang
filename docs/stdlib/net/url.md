@@ -45,8 +45,8 @@ use <net/url>
 fn main() i32:
     match parse_url("https://omakase.lubica.net/api/v1/packages?q=json"):
         Result.Ok(u) ->
-            println("{u.scheme} {u.host} {url_port_or_default(u).realise(-1)} {u.path}")
-        Result.Err(e) -> println("{url_error_text(e).realise('?')}")
+            println("{u.scheme} {u.host} {u.port_or_default()} {u.path}")
+        Result.Err(e) -> println("{e.text()}")
 
     return Result.Ok(0)
 ```
@@ -58,21 +58,23 @@ Two decisions worth knowing:
 
 The query is the **raw** text after `?`, not a list of pairs: whether `&` or `;` separates them and what a repeated key means is the caller's policy, not this module's.
 
-### `url_port_or_default(Url u) -> Result@(i32, StdError)`
+`parse_url` is the one free function. The questions a parsed URL answers are **bare** extension methods — none of them can fail, so none carries a wrapper.
+
+### `u.port_or_default() i32`
 
 The written port, or the scheme's default. The known schemes are `http` 80, `https` 443, `ws` 80, `wss` 443, `ftp` 21 and `ssh` 22; anything else with no port answers `-1`.
 
-### `url_host_is_ipv6_literal(Url u) -> Result@(bool, StdError)`
+### `u.host_is_ipv6_literal() bool`
 
 Whether the host was written bracketed, as `http://[::1]:8080/`. The brackets are not kept in `host`, so this is the only way to tell a literal from a name after parsing.
 
-### `url_text(Url u) -> Result@(string, StdError)`
+### `u.text() string`
 
 Rebuild the URL as canonical text. A port equal to the scheme's default is dropped, an IPv6 host is bracketed again, and an empty userinfo, query or fragment writes no delimiter.
 
-### `url_error_text(UrlError e) -> Result@(string, StdError)`
+### `e.text() string`
 
-One stable line per refusal.
+One stable line per `UrlError` refusal.
 
 ## Limitations
 
@@ -81,4 +83,4 @@ An absolute URL only: a relative reference is refused, because there is no base 
 ## See also
 
 - [IP addresses](ip.md) — reading `u.host` when it is a literal
-- [TCP](tcp.md) — connecting to `u.host` and `url_port_or_default(u)`
+- [TCP](tcp.md) — connecting to `u.host` and `u.port_or_default()`

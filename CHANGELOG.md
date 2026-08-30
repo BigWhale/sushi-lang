@@ -50,11 +50,16 @@ All notable changes to Sushi Lang will be documented in this file.
   no way to yield a pointer, and a `ptr` is opaque, so `sockaddr` could neither
   be built nor read from Sushi. `<net/tcp>`, `<net/udp>`, `<net/dns>`,
   `<net/ip>` and `<net/url>` are bundled Sushi source on top.
-  - `<net/tcp>`: `TcpStream` and `TcpListener`, with `tcp_send_all` and
-    `tcp_recv_exact` for the loops a byte count needs. There is no RAII for a
-    socket, exactly as there is none for a `file`, so `tcp_close(poke s)` writes
-    `-1` into the binding: one binding owns a socket, and closing that binding
-    again is a success.
+  - `<net/tcp>`: `TcpStream` and `TcpListener`, with `.send_all()` and
+    `.recv_exact()` for the loops a byte count needs. There is no RAII for a
+    socket, exactly as there is none for a `file`, so `s.close()` (a
+    `poke self` receiver) writes `-1` into the binding: one binding owns a
+    socket, and closing that binding again is a success.
+  - The API is method form. The two constructors per module and the parsers
+    are free functions; everything with a receiver is an extension method,
+    with the `| NetError` channel where the operation can fail. The
+    infallible `<net/ip>` and `<net/url>` questions are BARE methods, so a
+    predicate goes straight into a condition: `if (a.is_loopback()):`.
   - `<net/udp>`: `UdpSocket`, answering a `Datagram` that carries its sender,
     because an unconnected datagram socket has no `getpeername` and the sender
     exists only at the instant its datagram arrives.

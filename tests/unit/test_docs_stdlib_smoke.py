@@ -185,11 +185,17 @@ fn main() i32:
         "net/tcp.md",
         """use <net/tcp>
 
+fn run() ~ | NetError:
+    let TcpListener l = tcp_listen("127.0.0.1", 0, 8)??
+    let i32 port = l.local_port()??
+    println("port {port}")
+    l.close()??
+    return Result.Ok(~)
+
 fn main() i32:
-    let TcpListener l = tcp_listen("127.0.0.1", 0, 8).realise(TcpListener(-1))
-    println("port {tcp_local_port(l).realise(-1)}")
-    tcp_listener_close(poke l)
-    return Result.Ok(0)
+    match run():
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
 """,
     ),
     Case(
@@ -197,11 +203,17 @@ fn main() i32:
         "net/udp.md",
         """use <net/udp>
 
+fn run() ~ | NetError:
+    let UdpSocket s = udp_bind("127.0.0.1", 0)??
+    let i32 port = s.local_port()??
+    println("port {port}")
+    s.close()??
+    return Result.Ok(~)
+
 fn main() i32:
-    let UdpSocket s = udp_bind("127.0.0.1", 0).realise(UdpSocket(-1))
-    println("port {udp_local_port(s).realise(-1)}")
-    udp_close(poke s)
-    return Result.Ok(0)
+    match run():
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
 """,
     ),
     Case(
@@ -214,7 +226,7 @@ fn main() i32:
     match resolve("127.0.0.1"):
         Result.Ok(addresses) ->
             foreach(a in addresses.iter()):
-                println("{ip_text(a).realise('?')}")
+                println("{a.text()}")
         Result.Err(_) -> println("no answer")
     return Result.Ok(0)
 """,
@@ -226,7 +238,7 @@ fn main() i32:
 
 fn main() i32:
     match parse_ip("2001:db8::1"):
-        Result.Ok(a) -> println("{ip_text(a).realise('?')}")
+        Result.Ok(a) -> println("{a.text()}")
         Result.Err(_) -> println("not an address")
     return Result.Ok(0)
 """,
@@ -239,7 +251,7 @@ fn main() i32:
 fn main() i32:
     match parse_url("https://omakase.lubica.net/api?q=1"):
         Result.Ok(u) -> println("{u.scheme} {u.host} {u.path}")
-        Result.Err(e) -> println("{url_error_text(e).realise('?')}")
+        Result.Err(e) -> println("{e.text()}")
     return Result.Ok(0)
 """,
     ),

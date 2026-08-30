@@ -16,7 +16,9 @@ use <net/udp>
 
 A datagram socket has no peer of its own, so every send names its destination and every receive answers with a `Datagram`: the bytes, and who sent them. That is not a convenience — an unconnected socket cannot be asked afterwards, because the sender exists only at the instant its datagram arrives.
 
-The close rule is `<net/tcp>`'s: **one binding owns a socket**, `udp_close(poke s)` ends it and writes `-1` back, and a copy taken before the close holds a descriptor the kernel may have given to somebody else.
+The close rule is `<net/tcp>`'s: **one binding owns a socket**, `s.close()` ends it and writes `-1` back (the receiver is `poke self`), and a copy taken before the close holds a descriptor the kernel may have given to somebody else.
+
+`udp_bind` is the one free function; everything with a receiver is an extension method with the `| NetError` channel.
 
 ## Types
 
@@ -34,17 +36,19 @@ public struct Datagram:
     i32 peer_port
 ```
 
-## Functions
+## Constructor
 
 ### `udp_bind(string host, i32 port) -> Result@(UdpSocket, NetError)`
 
-Bind a datagram socket. Port 0 asks the kernel to choose; `udp_local_port` reads it back.
+Bind a datagram socket. Port 0 asks the kernel to choose; `s.local_port()` reads it back.
 
-### `udp_send_to(UdpSocket s, u8[] data, string host, i32 port) -> Result@(i32, NetError)`
+## Methods
+
+### `s.send_to(u8[] data, string host, i32 port) i32 | NetError`
 
 Send one datagram. The destination is resolved on every call, so a tight loop to one peer resolves that peer each time round.
 
-### `udp_recv_from(UdpSocket s, i32 max) -> Result@(Datagram, NetError)`
+### `s.recv_from(i32 max) Datagram | NetError`
 
 Wait for one datagram. A datagram longer than `max` is truncated and the rest is lost, which is how the protocol works. A sender whose address cannot be rendered leaves `peer_ip` empty rather than failing the receive: the bytes did arrive.
 
@@ -52,28 +56,32 @@ Wait for one datagram. A datagram longer than `max` is truncated and the rest is
 use <net/udp>
 use <collections/strings>
 
-fn main() i32:
-    let UdpSocket a = udp_bind("127.0.0.1", 0).realise(UdpSocket(-1))
-    let UdpSocket b = udp_bind("127.0.0.1", 0).realise(UdpSocket(-1))
-    udp_set_timeouts(b, 5000, 5000)
+fn exchange() ~ | NetError:
+    let UdpSocket a = udp_bind("127.0.0.1", 0)??
+    let UdpSocket b = udp_bind("127.0.0.1", 0)??
+    b.set_timeouts(5000, 5000)??
 
-    let i32 port_b = udp_local_port(b).realise(-1)
+    let i32 port_b = b.local_port()??
     let u8[] greeting = "Mostly Harmless".to_bytes()
-    udp_send_to(a, greeting, "127.0.0.1", port_b)
+    a.send_to(greeting, "127.0.0.1", port_b)??
 
-    match udp_recv_from(b, 64):
+    match b.recv_from(64):
         Result.Ok(dg) -> println("{dg.peer_ip} said {dg.data.to_string()}")
         Result.Err(_) -> println("nothing arrived")
 
-    udp_close(poke a)
-    udp_close(poke b)
+    a.close()??
+    b.close()??
+    return Result.Ok(~)
 
-    return Result.Ok(0)
+fn main() i32:
+    match exchange():
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
 ```
 
-### `udp_local_port(UdpSocket s)`, `udp_set_timeouts(UdpSocket s, i32 recv_ms, i32 send_ms)`, `udp_close(poke UdpSocket s)`
+### `s.local_port() i32 | NetError`, `s.set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError`, `s.close() ~ | NetError`
 
-The port that was bound, the bounds on a wait, and the close. All three answer a `Result`.
+The port that was bound, the bounds on a wait, and the close. The close takes `poke self` and writes `-1` into the binding.
 
 ## Limitations
 

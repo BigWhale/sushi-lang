@@ -12,7 +12,9 @@ use <net/ip>
 
 ## Overview
 
-`net/ip` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it. Every function works on the text alone — no system call, no name lookup, no network. RFC 4291 decides which forms are read and RFC 5952 decides the text that comes back.
+`net/ip` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it. Everything works on the text alone — no system call, no name lookup, no network. RFC 4291 decides which forms are read and RFC 5952 decides the text that comes back.
+
+The parsers and the named constants are free functions. Everything an address answers about itself is a **bare** extension method — no wrapper, so a predicate goes straight into a condition: `if (a.is_loopback()):`.
 
 ## Types
 
@@ -35,7 +37,7 @@ use <net/ip>
 
 fn main() i32:
     match parse_ip("192.168.0.1"):
-        Result.Ok(a) -> println("{ip_text(a).realise('?')} is private: {ip_is_private(a).realise(false)}")
+        Result.Ok(a) -> println("{a.text()} is private: {a.is_private()}")
         Result.Err(_) -> println("not an address")
 
     return Result.Ok(0)
@@ -47,9 +49,9 @@ fn main() i32:
 
 The same, family by family, when you already know which one you want. Both answer `Result@(IpAddr, NetError)`.
 
-### `ip_text(IpAddr a) -> Result@(string, StdError)`
+### `a.text() string`
 
-The canonical text. IPv4 prints as a dotted quad. IPv6 follows RFC 5952, which is stricter than it looks:
+The canonical text, as a plain string — rendering cannot fail. IPv4 prints as a dotted quad. IPv6 follows RFC 5952, which is stricter than it looks:
 
 - lowercase hex, and no leading zero inside a group;
 - `::` covers the **longest** run of zero groups;
@@ -57,11 +59,11 @@ The canonical text. IPv4 prints as a dotted quad. IPv6 follows RFC 5952, which i
 - a run of **one** zero group is never compressed, because `::` there is no shorter;
 - an IPv4-mapped address prints in the mixed form, `::ffff:192.168.0.1`.
 
-### `ip_is_loopback`, `ip_is_unspecified`, `ip_is_private`, `ip_is_v4`, `ip_is_v6`, `ip_is_v4_mapped`
+### `a.is_loopback()`, `a.is_unspecified()`, `a.is_private()`, `a.is_v4()`, `a.is_v6()`, `a.is_v4_mapped()`
 
-The questions an address answers about itself. Each takes an `IpAddr` and answers `Result@(bool, StdError)`.
+The questions an address answers about itself. Each answers a plain `bool`.
 
-`ip_is_private` covers 10/8, 172.16/12 and 192.168/16 for IPv4, and fc00::/7 for IPv6.
+`is_private` covers 10/8, 172.16/12 and 192.168/16 for IPv4, and fc00::/7 for IPv6.
 
 ### `ip_v4_loopback()`, `ip_v4_any()`, `ip_v6_loopback()`, `ip_v6_any()`
 

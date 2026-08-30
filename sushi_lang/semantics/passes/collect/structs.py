@@ -107,7 +107,7 @@ class StructCollector:
             self.structs.by_name["ProcessOutput"] = process_output
             self.known_types.add(process_output)
 
-        # Datagram - what one udp_recv_from answers with. It is a predefined
+        # Datagram - what one recv_from() answers with. It is a predefined
         # struct rather than a <net/udp> one because the .bc layer builds it,
         # and a .bc module cannot name a Sushi-source type. An unconnected
         # datagram socket has no getpeername, so the sender exists only at the

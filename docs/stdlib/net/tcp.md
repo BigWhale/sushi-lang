@@ -14,7 +14,7 @@ use <net/tcp>
 
 `net/tcp` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it. It composes the `<net/socket>` primitives, and a struct here is a typed name for a descriptor and carries nothing else.
 
-Every function is fallible and therefore a free function. An extension method returns a bare value and has no error channel, which a socket operation needs.
+The two constructors are free functions; everything with a receiver is an extension method with the `| NetError` channel, so a call site handles each one with `??`, `.realise(default)`, `match` or `.is_ok()`.
 
 ## Types
 
@@ -30,29 +30,31 @@ public struct TcpListener:
 
 There is **no RAII for a socket**, exactly as there is none for a `file`. A `TcpStream` owns no heap, so it *copies*, and a copy holds the same descriptor.
 
-> **One binding owns a socket.** `tcp_close(poke s)` ends it and writes `-1` into the binding, so closing that same binding again is a success rather than an `EBADF`. A copy taken before the close keeps a number the kernel has freed and may have given to somebody else, and using it is a bug the compiler cannot catch.
+> **One binding owns a socket.** `s.close()` ends it and writes `-1` into the binding, so closing that same binding again is a success rather than an `EBADF`. A copy taken before the close keeps a number the kernel has freed and may have given to somebody else, and using it is a bug the compiler cannot catch.
 
-`poke` is what makes this workable: the mutation is visible at the call site, a temporary cannot be closed at all, and the binding is exclusive for the duration of the call.
+`close` declares `poke self`, and that is what makes this workable: the mutation is visible at the call site, a temporary cannot be closed at all, and the binding is exclusive for the duration of the call.
 
-## Functions
+## Constructors
 
 ### `tcp_listen(string host, i32 port, i32 backlog) -> Result@(TcpListener, NetError)`
 
-Bind a listening socket. Port 0 asks the kernel to choose; `tcp_local_port` reads it back.
+Bind a listening socket. Port 0 asks the kernel to choose; `l.local_port()` reads it back.
 
 ### `tcp_connect(string host, i32 port) -> Result@(TcpStream, NetError)`
 
 Connect to a host and port. There is no connect timeout — an unreachable address waits for the kernel.
 
-### `tcp_accept(TcpListener l) -> Result@(TcpStream, NetError)`
+## Methods
 
-Take the next connection. With `tcp_listener_set_timeout` set, this answers `TimedOut` rather than waiting.
+### `l.accept() TcpStream | NetError`
 
-### `tcp_send_all(TcpStream s, u8[] data) -> Result@(~, NetError)` and `tcp_recv_exact(TcpStream s, i32 count) -> Result@(u8[], NetError)`
+Take the next connection. With `l.set_timeout(ms)` set, this answers `TimedOut` rather than waiting.
 
-The two loops every caller would otherwise write. One send may take fewer bytes than it was offered and one receive answers whatever arrived, so anything that depends on a byte count wants these rather than `tcp_send` and `tcp_recv`.
+### `s.send_all(u8[] data) ~ | NetError` and `s.recv_exact(i32 count) u8[] | NetError`
 
-`tcp_recv_exact` treats a peer that closes early as an error: a caller asking for an exact count has no use for a partial answer.
+The two loops every caller would otherwise write. One send may take fewer bytes than it was offered and one receive answers whatever arrived, so anything that depends on a byte count wants these rather than `send` and `recv`.
+
+`recv_exact` treats a peer that closes early as an error: a caller asking for an exact count has no use for a partial answer.
 
 A whole exchange, in one process. A blocking `connect()` to a listening socket completes inside the kernel, so `accept()` finds the connection already waiting — listen, then connect, then accept, and one thread is enough:
 
@@ -60,44 +62,48 @@ A whole exchange, in one process. A blocking `connect()` to a listening socket c
 use <net/tcp>
 use <collections/strings>
 
-fn main() i32:
-    let TcpListener listener = tcp_listen("127.0.0.1", 0, 8).realise(TcpListener(-1))
-    tcp_listener_set_timeout(listener, 5000)
+fn exchange() ~ | NetError:
+    let TcpListener listener = tcp_listen("127.0.0.1", 0, 8)??
+    listener.set_timeout(5000)??
 
-    let i32 port = tcp_local_port(listener).realise(-1)
-    let TcpStream client = tcp_connect("127.0.0.1", port).realise(TcpStream(-1))
-    let TcpStream served = tcp_accept(listener).realise(TcpStream(-1))
-    tcp_set_timeouts(client, 5000, 5000)
-    tcp_set_timeouts(served, 5000, 5000)
+    let i32 port = listener.local_port()??
+    let TcpStream client = tcp_connect("127.0.0.1", port)??
+    let TcpStream served = listener.accept()??
+    client.set_timeouts(5000, 5000)??
+    served.set_timeouts(5000, 5000)??
 
     let u8[] greeting = "Mostly Harmless".to_bytes()
-    tcp_send_all(client, greeting)
-    match tcp_recv_exact(served, 15):
+    client.send_all(greeting)??
+    match served.recv_exact(15):
         Result.Ok(heard) -> println("the server heard {heard.to_string()}")
         Result.Err(_) -> println("the server heard nothing")
 
-    tcp_close(poke client)
-    tcp_close(poke served)
-    tcp_listener_close(poke listener)
+    client.close()??
+    served.close()??
+    listener.close()??
+    return Result.Ok(~)
 
-    return Result.Ok(0)
+fn main() i32:
+    match exchange():
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
 ```
 
-### `tcp_send(TcpStream s, u8[] data) -> Result@(i32, NetError)` and `tcp_recv(TcpStream s, i32 max) -> Result@(u8[], NetError)`
+### `s.send(u8[] data) i32 | NetError` and `s.recv(i32 max) u8[] | NetError`
 
-One write and one read. `tcp_recv` answers an empty array when the peer closed cleanly; a timeout is an error instead, so the two never read alike.
+One write and one read. `recv` answers an empty array when the peer closed cleanly; a timeout is an error instead, so the two never read alike.
 
-### `tcp_set_timeouts(TcpStream s, i32 recv_ms, i32 send_ms)` and `tcp_listener_set_timeout(TcpListener l, i32 accept_ms)`
+### `s.set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError` and `l.set_timeout(i32 accept_ms) ~ | NetError`
 
-Bound how long a call may wait; both answer `Result@(~, NetError)`. **Set these before anything blocks.** Without them a read waits for as long as the peer stays silent.
+Bound how long a call may wait. **Set these before anything blocks.** Without them a read waits for as long as the peer stays silent.
 
-### `tcp_peer_ip(TcpStream s)`, `tcp_peer_port(TcpStream s)`, `tcp_local_port(TcpListener l)`, `tcp_stream_local_port(TcpStream s)`
+### `s.peer_ip()`, `s.peer_port()`, `s.local_port()`, `l.local_port()`
 
-Who is at each end. All four answer a `Result`.
+Who is at each end. All four carry the `| NetError` channel. `local_port` exists on both types: the listener's is the one that reads back a port the kernel chose, and the stream's is this end of a connection.
 
-### `tcp_close(poke TcpStream s)` and `tcp_listener_close(poke TcpListener l)`
+### `s.close() ~ | NetError` and `l.close() ~ | NetError`
 
-Close, and write `-1` into the binding. Both answer `Result@(~, NetError)`, and both are safe to call twice on the same binding.
+Close, and write `-1` into the binding — the receiver is `poke self`. Both are safe to call twice on the same binding.
 
 ## Limitations
 

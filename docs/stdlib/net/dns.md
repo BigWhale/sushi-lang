@@ -30,7 +30,7 @@ fn main() i32:
     match resolve("localhost"):
         Result.Ok(addresses) ->
             foreach(a in addresses.iter()):
-                println("{ip_text(a).realise('?')}")
+                println("{a.text()}")
         Result.Err(_) -> println("no answer")
 
     return Result.Ok(0)

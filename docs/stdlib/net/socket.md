@@ -72,7 +72,7 @@ Take the next connection waiting on a listener. Give the listener a timeout firs
 
 ### `sock_send(i32 fd, u8[] data) -> Result@(i32, NetError)`
 
-Write bytes, and answer how many went. **One write may take fewer bytes than it was offered**; `tcp_send_all` in `<net/tcp>` is the loop. The buffer stays the caller's: this borrows it and never frees it.
+Write bytes, and answer how many went. **One write may take fewer bytes than it was offered**; `send_all()` in `<net/tcp>` is the loop. The buffer stays the caller's: this borrows it and never frees it.
 
 ### `sock_recv(i32 fd, i32 max) -> Result@(u8[], NetError)`
 
