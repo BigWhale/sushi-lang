@@ -70,6 +70,7 @@ class TypeValidator:
                  namespaces: Optional['NamespaceTable'] = None) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
+        self.tables = tables
         self.const_table = tables.constants
         self.struct_table = tables.structs
         self.enum_table = tables.enums

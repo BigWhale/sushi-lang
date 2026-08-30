@@ -15,6 +15,50 @@ if TYPE_CHECKING:
     from .. import TypeValidator
 
 
+def instantiate_array_extension(validator: 'TypeValidator',
+                                receiver_type: DynamicArrayType,
+                                method_name: str):
+    """Resolve a method miss on a `T[]` receiver against the array templates (ruling 3).
+
+    A dynamic-array receiver has no instantiation the monomorphize pass could have
+    collected -- the CALL SITE is what names the element type -- so a miss consults the
+    `$array` templates here. The substituted signature enters the extension table (the
+    next call site hits it directly, in this pass and in the backend), and the
+    instantiation is queued for the analyzer's fixpoint round, which monomorphizes and
+    checks the body copy after the per-unit loop.
+    """
+    from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+    from sushi_lang.semantics.generics.types import substitute_type_params
+    from sushi_lang.semantics.passes.collect.functions import ExtensionMethod, Param
+
+    templates = validator.generic_extension_table.declarations(ARRAY_BASE_KEY, method_name)
+    template = next((t for t in templates if not t.target_key), None)
+    if template is None:
+        return None
+
+    element = receiver_type.base_type
+    substitution = {template.type_params[0]: element}
+    ret = (substitute_type_params(template.ret_type, substitution)
+           if template.ret_type is not None else None)
+    params = [Param(
+        name=p.name,
+        ty=substitute_type_params(p.ty, substitution) if p.ty is not None else None,
+        name_span=p.name_span, type_span=p.type_span, index=p.index,
+        is_variadic=getattr(p, "is_variadic", False),
+        is_nom=getattr(p, "is_nom", False),
+    ) for p in template.params]
+
+    concrete = ExtensionMethod(
+        target_type=receiver_type, name=method_name, params=params, ret_type=ret,
+        loc=template.loc, target_type_span=template.target_type_span,
+        name_span=template.name_span, ret_span=template.ret_span,
+        self_mode=template.self_mode, filename=template.filename,
+        unit_name=template.unit_name)
+    validator.extension_table.add_method(concrete)
+    validator.tables.pending_array_extensions.append((template, element))
+    return concrete
+
+
 def _reject_immutable_poke_receiver(validator: 'TypeValidator', call: MethodCall) -> None:
     """A `poke self` method call writes through its receiver's ADDRESS (#327)."""
     from sushi_lang.semantics.ast import DotCall, MemberAccess
@@ -257,6 +301,9 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     # None again, and under #393 asking by base name is the wrong question anyway: a concrete
     # target answers its own instantiation and no other.
     method = validator.extension_table.get_method(receiver_type, call.method)
+
+    if method is None and isinstance(receiver_type, DynamicArrayType):
+        method = instantiate_array_extension(validator, receiver_type, call.method)
 
     if method is None:
         er.emit(validator.reporter, er.ERR.CE2008, call.loc, name=f"{display_type(receiver_type)}.{call.method}")

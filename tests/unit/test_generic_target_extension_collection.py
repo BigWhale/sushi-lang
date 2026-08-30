@@ -141,3 +141,70 @@ def test_a_template_target_interns_one_signature_per_instantiation(
         f"{case_id}: semantic analysis reported an error:\n"
         + "\n".join(str(d) for d in analysis.reporter.diagnostics)
     )
+
+
+# -- the array-target classifier (ruling 3 of the UFCS epic) ----------------------------
+#
+# `extend T[]` and `extend Crate[]` are spelled the same way -- a bare name in the
+# element position -- and the collect pass tells them apart with the same declared-name
+# question the `@(...)` classifier answers. A template files under the synthetic
+# `$array` base key; a declared name stays a concrete extension.
+
+def test_array_element_naming_nothing_binds_a_type_parameter():
+    from sushi_lang.semantics.generics.extension_targets import (
+        ARRAY_BASE_KEY, classify_array_extension_target)
+    from sushi_lang.semantics.typesys import UnknownType
+
+    shape = classify_array_extension_target(UnknownType(name="T"), lambda name: False)
+    assert shape is not None
+    assert shape.base_name == ARRAY_BASE_KEY
+    assert shape.param_names == ("T",)
+    assert not shape.is_concrete
+
+
+def test_array_element_naming_a_declared_type_is_concrete():
+    from sushi_lang.semantics.generics.extension_targets import (
+        classify_array_extension_target)
+    from sushi_lang.semantics.typesys import BuiltinType, UnknownType
+
+    declared = classify_array_extension_target(UnknownType(name="Crate"),
+                                               lambda name: name == "Crate")
+    assert declared is not None and declared.is_concrete
+
+    builtin = classify_array_extension_target(BuiltinType.I32, lambda name: False)
+    assert builtin is not None and builtin.is_concrete
+
+
+def test_array_element_of_any_other_shape_is_invalid():
+    from sushi_lang.semantics.generics.extension_targets import (
+        classify_array_extension_target)
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.typesys import DynamicArrayType, UnknownType
+
+    generic = GenericTypeRef(base_name="Maybe", type_args=(UnknownType(name="T"),))
+    assert classify_array_extension_target(generic, lambda name: True) is None
+
+    nested = DynamicArrayType(base_type=UnknownType(name="T"))
+    assert classify_array_extension_target(nested, lambda name: False) is None
+
+
+def test_an_array_template_files_under_the_synthetic_base_key(analyze_program):
+    from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+
+    analysis = analyze_program(
+        "extend T[] count_plus_one() i32:\n"
+        "    return self.len() + 1\n"
+        "\n"
+        "fn main() i32:\n"
+        "    let i32[] xs = from([1, 2, 3])\n"
+        "    println(\"{xs.count_plus_one()}\")\n"
+        "    return Result.Ok(0)\n",
+        name="array_template_key")
+
+    assert not analysis.reporter.has_errors, (
+        "semantic analysis reported an error:\n"
+        + "\n".join(str(d) for d in analysis.reporter.diagnostics))
+    declarations = analysis.analyzer.generic_extensions.declarations(
+        ARRAY_BASE_KEY, "count_plus_one")
+    assert len(declarations) == 1
+    assert declarations[0].type_params == ("T",)

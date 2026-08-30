@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, Set, TYPE_CHECKING
 
 from sushi_lang.semantics.ast import ExtendDef, Param
-from sushi_lang.semantics.typesys import EnumType, Type, StructType
+from sushi_lang.semantics.typesys import DynamicArrayType, EnumType, Type, StructType
 from sushi_lang.semantics.generics.types import substitute_type_params
 from sushi_lang.semantics.generics.extension_targets import instantiation_key
 from sushi_lang.semantics.passes.collect import GenericExtensionMethod
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 def monomorphize_extension_method(
     generic_method: GenericExtensionMethod,
-    concrete_target_type: StructType | EnumType,
+    concrete_target_type: StructType | EnumType | DynamicArrayType,
     type_args: Tuple[Type, ...],
     substitutor: "TypeSubstitutor",
 ) -> ExtendDef:

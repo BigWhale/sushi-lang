@@ -476,17 +476,31 @@ class FunctionCollector:
 
     def collect_extensions(self, root: Program) -> None:
         """Collect all extension method definitions from program AST."""
+        generic_extensions = getattr(root, "generic_extensions", None)
+        if isinstance(generic_extensions, list):
+            for ext in list(generic_extensions):
+                if isinstance(ext, ExtendDef):
+                    self._collect_extension_def(ext)
+
         extensions = getattr(root, "extensions", None)
         if isinstance(extensions, list):
             for ext in extensions:
                 if isinstance(ext, ExtendDef):
                     self._collect_extension_def(ext)
 
-        generic_extensions = getattr(root, "generic_extensions", None)
-        if isinstance(generic_extensions, list):
-            for ext in generic_extensions:
-                if isinstance(ext, ExtendDef):
-                    self._collect_extension_def(ext)
+            # Re-file what classification found to be no concrete extension after all.
+            # The AST builder cannot tell `extend T[]` from `extend Crate[]` -- the
+            # element is a bare name either way -- so both land in `extensions` and the
+            # template (or a CE2101-rejected target) moves over here, out of the walks
+            # that assume a concrete `self`.
+            moved = [e for e in extensions
+                     if isinstance(e, ExtendDef)
+                     and isinstance(getattr(e, "target_type", None), DynamicArrayType)
+                     and (e.target_shape is None or e.target_shape.param_names)]
+            if moved:
+                moved_ids = {id(e) for e in moved}
+                root.extensions[:] = [e for e in extensions if id(e) not in moved_ids]
+                root.generic_extensions.extend(moved)
 
     def register_stdlib_functions(self, root: Program) -> None:
         """Register stdlib functions from imported modules into the function table."""
@@ -851,6 +865,13 @@ class FunctionCollector:
         # A `??` has no error channel in an extension body (CE0131, #398).
         reject_try_in_body(self.r, body, "an extension method")
 
+        if target_type is not None and isinstance(target_type, DynamicArrayType):
+            target_type = self._collect_array_extension(
+                ext, target_type, name, params, ret_ty, body,
+                name_span, target_type_span, ret_span)
+            if target_type is None:
+                return
+
         if target_type is not None and isinstance(target_type, GenericTypeRef):
             base_type_name = target_type.base_name
 
@@ -935,7 +956,7 @@ class FunctionCollector:
                 unit_name=self.current_unit_name,
             )
 
-            if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, StructType, EnumType)):
+            if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
                 existing = self.extensions.get_method(resolved_type, name)
                 if existing is not None:
                     self._emit_duplicate_extension(
@@ -944,8 +965,80 @@ class FunctionCollector:
                         existing.filename)
                     return
 
-            if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, StructType, EnumType)):
+            if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
                 self.extensions.add_method(method)
+
+    def _collect_array_extension(self, ext: ExtendDef, target_type: DynamicArrayType,
+                                 name: str, params: List[Param],
+                                 ret_ty: Optional[Type], body,
+                                 name_span: Optional[Span],
+                                 target_type_span: Optional[Span],
+                                 ret_span: Optional[Span]) -> Optional[Type]:
+        """Classify a dynamic-array target (ruling 3): template, concrete, or CE2101.
+
+        Returns the (possibly element-resolved) concrete target type, or None when the
+        declaration is fully handled here -- registered as a template, or rejected.
+        """
+        from sushi_lang.semantics.generics.extension_targets import (
+            ARRAY_BASE_KEY, classify_array_extension_target)
+
+        element = target_type.base_type
+        shape = classify_array_extension_target(element, self._is_declared_type)
+        ext.target_shape = shape
+        if shape is None:
+            er.emit_with(self.r, ERR.CE2101, target_type_span or name_span,
+                         element=display_type(element)) \
+                .help("write a bare type-parameter name ('extend T[]') or a plain "
+                      "declared type ('extend i32[]')").emit()
+            return None
+
+        if not shape.param_names:
+            if isinstance(element, UnknownType):
+                resolved = (self.structs.by_name.get(element.name)
+                            or self.enums.by_name.get(element.name))
+                if resolved is not None:
+                    target_type = DynamicArrayType(base_type=resolved)
+                    ext.target_type = target_type
+            return target_type
+
+        param_name = shape.param_names[0]
+
+        def convert(ty: Optional[Type]) -> Optional[Type]:
+            if isinstance(ty, UnknownType) and ty.name == param_name:
+                return TypeParameter(name=param_name)
+            return ty
+
+        converted_params = [Param(
+            name=p.name, ty=convert(p.ty), name_span=p.name_span,
+            type_span=p.type_span, index=p.index,
+            is_variadic=getattr(p, "is_variadic", False),
+            is_nom=getattr(p, "is_nom", False),
+        ) for p in params]
+
+        for existing in self.generic_extensions.declarations(ARRAY_BASE_KEY, name):
+            self._emit_duplicate_extension(
+                f"extension method '{name}' for an array target",
+                name_span, existing.unit_name, existing.name_span,
+                existing.filename)
+            return None
+
+        self.generic_extensions.add_method(GenericExtensionMethod(
+            base_type_name=ARRAY_BASE_KEY,
+            type_params=(param_name,),
+            target_key="",
+            name=name,
+            loc=getattr(ext, "loc", None),
+            target_type_span=target_type_span,
+            name_span=name_span,
+            ret_type=convert(ret_ty),
+            ret_span=ret_span,
+            params=converted_params,
+            body=body,
+            self_mode=getattr(ext, "self_mode", None),
+            filename=self.current_unit_file,
+            unit_name=self.current_unit_name,
+        ))
+        return None
 
     def _emit_duplicate_extension(self, name_text, name_span,
                                   other_unit, other_span, other_filename) -> None:

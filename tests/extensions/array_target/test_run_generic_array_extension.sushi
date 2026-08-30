@@ -1,0 +1,15 @@
+# A bare undeclared name in the element position of an array target binds a type
+# parameter: `extend T[]` applies to every element type, a plain one and an owning one.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "5\n3\n"
+extend T[] count_plus_one() i32:
+    return self.len() + 1
+
+fn main() i32:
+    let i32[] nums = from([1, 2, 3, 4])
+    println("{nums.count_plus_one()}")
+    let string[] names = from(["arthur", "ford"])
+    println("{names.count_plus_one()}")
+    return Result.Ok(0)

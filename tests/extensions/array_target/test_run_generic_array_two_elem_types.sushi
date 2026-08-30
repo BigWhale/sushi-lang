@@ -1,0 +1,21 @@
+# Two element types instantiate one `extend T[]` template in one program, and each
+# instantiation validates and runs with its own substituted parameter type.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\ntrue\nfalse\n"
+extend T[] holds(T probe) bool:
+    foreach(x in self.iter()):
+        if (x == probe):
+            return true
+    return false
+
+fn main() i32:
+    let i32[] nums = from([1, 2, 3])
+    println("{nums.holds(3)}")
+    let string[] names = from(["arthur", "zaphod"])
+    let bool has_zaphod = names.holds("zaphod")
+    println("{has_zaphod}")
+    let bool has_ford = names.holds("ford")
+    println("{has_ford}")
+    return Result.Ok(0)

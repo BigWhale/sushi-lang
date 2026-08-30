@@ -43,3 +43,7 @@ class SymbolTables:
     # table of callables -- no signature travels with a kept name, so it holds what the
     # CE3005 gate needs and nothing more.
     library_not_exported: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # Array-template instantiations the typecheck pass requested: (template, element).
+    # The call site is what names a `T[]` element type, so these queue during the
+    # per-unit loop and the analyzer monomorphizes and checks them to a fixpoint after.
+    pending_array_extensions: list = field(default_factory=list)

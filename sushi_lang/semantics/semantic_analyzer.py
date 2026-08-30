@@ -490,21 +490,64 @@ class SemanticAnalyzer:
 
             self.reporter.items.extend(unit_reporter.items)
 
-        if self.monomorphized_extensions:
-            # The ENTRY unit, for the same reason `generics/synthesis.py` names it: a
-            # lifted body belongs to the unit the compiler was pointed at, not to
-            # whichever unit the compilation order happens to put first.
+        # The ENTRY unit, for the same reason `generics/synthesis.py` names it: a
+        # lifted body belongs to the unit the compiler was pointed at, not to
+        # whichever unit the compilation order happens to put first.
+        lift_target = next(
+            (u.ast for u in compilation_order
+             if u.ast is not None and getattr(u, "is_entry", False)),
+            None)
+        if lift_target is None:
             lift_target = next(
-                (u.ast for u in compilation_order
-                 if u.ast is not None and getattr(u, "is_entry", False)),
-                None)
-            if lift_target is None:
-                lift_target = next(
-                    (u.ast for u in compilation_order if u.ast is not None), None)
-            self._check_monomorphized_extensions(destroy_effects, enum_names, lift_target)
+                (u.ast for u in compilation_order if u.ast is not None), None)
+
+        # Fixpoint: an array-target template instantiates at the CALL SITE (the
+        # typecheck pass queued it), and checking one monomorphized body can resolve a
+        # call that queues another. The bound mirrors MAX_EXPANSION_ROUNDS in the
+        # instantiate pass: reaching it drops an instantiation, which surfaces as the
+        # ordinary CE2008, never as a hang.
+        checked = 0
+        for _round in range(self.MAX_ARRAY_EXPANSION_ROUNDS):
+            self._drain_pending_array_extensions(monomorphizer, compilation_order)
+            batch = self.monomorphized_extensions[checked:]
+            if not batch:
+                break
+            checked = len(self.monomorphized_extensions)
+            self._check_monomorphized_extensions(destroy_effects, enum_names,
+                                                 lift_target, only=batch)
+
+    # Rounds the call-site-driven fixpoint may take before it drops the rest. The
+    # same shape and reasoning as InstantiationCollector.MAX_EXPANSION_ROUNDS.
+    MAX_ARRAY_EXPANSION_ROUNDS = 8
+
+    def _drain_pending_array_extensions(self, monomorphizer, compilation_order) -> None:
+        """Monomorphize every queued array-template instantiation (ruling 3).
+
+        The typecheck pass queued (template, element) pairs while it resolved calls;
+        each becomes a concrete ExtendDef with its own body, joins
+        `monomorphized_extensions` for the backend's weak_odr emission, and has its
+        body's function instantiations collected exactly as the struct-target round
+        above does (#392).
+        """
+        pending = self.tables.pending_array_extensions
+        if not pending:
+            return
+        from sushi_lang.semantics.typesys import DynamicArrayType
+        from sushi_lang.semantics.generics.extensions import monomorphize_extension_method
+
+        self.tables.pending_array_extensions = []
+        fn_instantiations = set()
+        for template, element in pending:
+            extend_def = monomorphize_extension_method(
+                template, DynamicArrayType(base_type=element), (element,),
+                substitutor=monomorphizer.substitutor)
+            self.monomorphized_extensions.append(extend_def)
+            fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
+        if fn_instantiations:
+            monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
 
     def _check_monomorphized_extensions(self, destroy_effects, enum_names,
-                                        lift_target=None) -> None:
+                                        lift_target=None, only=None) -> None:
         """Type- and borrow-check every instantiation of a generic-target extension.
 
         This is where a generic extension's per-instantiation truth is decided: `self` is
@@ -540,7 +583,7 @@ class SemanticAnalyzer:
             lifter = LambdaLifter(self.structs, self.funcs, lift_target,
                                   annotate=type_validator._validate_function)
 
-        for extend_def in self.monomorphized_extensions:
+        for extend_def in (only if only is not None else self.monomorphized_extensions):
             capture_scope._check_extension_method(extend_def)
             type_validator._validate_extension_method(extend_def)
             lifted = lifter.lift_body(extend_def.body) if lifter is not None else []

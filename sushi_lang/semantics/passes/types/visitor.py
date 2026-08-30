@@ -1004,6 +1004,13 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
             if inferred_type is None:
                 method = self.type_validator.extension_table.get_method(actual_type, node.method)
+                if method is None and isinstance(actual_type, DynamicArrayType):
+                    # A `T[]` template instantiates at the call site, and inference may
+                    # be that first call site -- same lazy path the validation half uses.
+                    from sushi_lang.semantics.passes.types.calls.methods import (
+                        instantiate_array_extension)
+                    method = instantiate_array_extension(
+                        self.type_validator, actual_type, node.method)
                 if method is not None:
                     inferred_type = resolve_declared_type(self.type_validator, method.ret_type)
 

@@ -356,6 +356,10 @@ _add(ErrorMessage("CE2100", Severity.ERROR,
     "'{method}' needs an element type with equality: '{element}' has none",
     Category.TYPE, "contains() and index_of() compare the needle against each element with '==', and equality is a CLOSED set: the numeric types, bool, and string (CE2514 is the operator half of the same rule). A struct, an enum, an array or a closure element has no '==', so a search over it has no meaning the compiler could supply. Write the loop by hand and compare what identifies an element -- a field, or a match on the variant -- or search an array of that identifying part instead."))
 
+_add(ErrorMessage("CE2101", Severity.ERROR,
+    "invalid element '{element}' in an array extension target",
+    Category.TYPE, "An array extension target's element position takes exactly two spellings: a bare undeclared name, which binds a type parameter (`extend T[]` applies to every element type), and the name of a plain declared type (`extend i32[]`, `extend Crate[]`), which applies to that array type alone. A generic instantiation (`extend Maybe@(T)[]`) has no meaning here -- the parameter would bind through two layers -- and a nested array element is not an expressible type at all (Known Limitation 2). Before this code, the generic-element spelling fell through to the concrete path and reported a false CE2001 for a type nobody had to declare."))
+
 _add(ErrorMessage("CE2097", Severity.ERROR,
     "extension method '{name}()' conflicts with the built-in '{type}.{name}()'",
     Category.TYPE, "Method resolution always considers built-in methods before extension methods -- during type validation, during type inference, and again during code generation -- so an extension method whose name collides with one is compiled and then never called. The built-in families are: the hash() and clone() the compiler derives for every struct and enum; the primitive and string methods (to_str, hash, to_bits, len, trim, ...); the array methods; and the methods of the built-in containers Result, Maybe, Own, List and HashMap. A perk implementation is the supported way to replace a built-in: it takes precedence at every layer, by design."))
