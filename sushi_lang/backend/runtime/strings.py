@@ -167,7 +167,9 @@ class StringOperations:
         total_size_i64 = self.codegen.builder.zext(total_size, ir.IntType(INT64_BIT_WIDTH))
         new_data = emit_malloc(self.codegen, self.codegen.builder, total_size_i64)
         # If emitted inside a print/println argument, this concat buffer is a temporary
-        # to free after output (#141). No-op elsewhere.
+        # to free after output (#141). No-op elsewhere. The innermost frame is what
+        # answers, and an INTERPOLATION opens one of its own, so a buffer it builds is
+        # never an enclosing print's to free (#521).
         self.codegen.register_string_temp(new_data)
 
         # Copy first string using llvm.memcpy intrinsic. Use the i64-length form and

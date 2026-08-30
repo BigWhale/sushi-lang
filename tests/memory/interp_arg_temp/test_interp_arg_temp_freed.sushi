@@ -1,0 +1,48 @@
+# An INTERPOLATED string handed to a callee's borrow parameter is freed exactly once
+#
+# An interpolation always builds a fresh buffer, and in argument position no binding
+# names it. `own_temporary` is what gives such a value an owner, but it reads the
+# argument's type through `infer_expr_semantic_type`, which had no answer for an
+# InterpolatedString -- so the temp was typeless, got no owner, and leaked one block a
+# call (#521). The stdlib arm leaked while the marshalled C-string copy beside it was
+# freed, which is what made the shape hard to see.
+# EXPECT_STDOUT_EXACT: "true\ntrue\n3\n3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+use <collections/strings>
+use <collections/hashmap>
+
+fn look(string s) i32:
+    return Result.Ok(s.len())
+
+fn eat(nom string s) i32:
+    return Result.Ok(s.len())
+
+fn main() i32:
+    let string tail = "cd"
+    let string src = "abcdefghij"
+
+    # A stdlib callee that marshals its argument into a C string. The copy was
+    # registered for the scope-exit free; the interpolation it copied FROM was not.
+    let string[] names = from(["a.txt", "b.txt"])
+    foreach(n in names.iter()):
+        match remove("/tmp/sushi_never_there_{n}"):
+            Result.Ok(_) -> ~
+            Result.Err(_) -> ~
+
+    # A built-in method's borrow parameter, the #475 shape with an interpolation.
+    println(src.contains("{tail}e"))
+
+    # A HashMap key lookup borrows its key.
+    let HashMap@(string, i32) map = HashMap.new()
+    map.insert("cde", 1)
+    println(map.contains_key("{tail}e"))
+    map.free()
+
+    # A declared callee: the borrow, and the `nom` twin that must NOT be freed twice.
+    println(look("{tail}!").realise(-1))
+    println(eat(nom "{tail}!").realise(-1))
+
+    return Result.Ok(0)

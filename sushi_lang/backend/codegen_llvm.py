@@ -2,6 +2,7 @@
 from __future__ import annotations
 import subprocess
 from pathlib import Path
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from llvmlite import ir, binding as llvm
@@ -288,6 +289,31 @@ class LLVMCodegen:
         """Open a print-argument string-temp frame (#141). See `_string_temp_stack`."""
         self._string_temp_stack.append([])
         self._string_value_temp_stack.append([])
+
+    @contextmanager
+    def string_temps_own_frame(self):
+        """Give an interpolation its OWN frame, discarded unfreed when it completes.
+
+        An interpolation builds concat and to-string buffers and OWNS them: it frees each
+        intermediate as the next concat copies its bytes, and hands the RESULT to whatever
+        position it lands in. While an enclosing `println(...)` frame was the innermost
+        one, the #141 registry claimed those buffers too -- a second owner for an
+        interpolation that was a nested call's argument, and exit 133 (#521).
+
+        A frame of its own rather than no frame at all, because the registry is also what
+        an EARLY EXIT walks (#295): a `??` that propagates out of a part leaves through
+        `emit_string_temp_frame_cleanup_all`, which frees what the parts had built so far.
+        That path is safe because every part is emitted BEFORE the first concat, so on an
+        early exit no intermediate has been freed yet. On the straight-line path the
+        concat loop has freed them, so the frame is dropped WITHOUT freeing.
+        """
+        self._string_temp_stack.append([])
+        self._string_value_temp_stack.append([])
+        try:
+            yield
+        finally:
+            self._string_temp_stack.pop()
+            self._string_value_temp_stack.pop()
 
     def register_string_temp(self, data_ptr: ir.Value) -> None:
         """Register a freshly heap-allocated string buffer if a print-arg frame is open."""

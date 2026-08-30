@@ -112,6 +112,20 @@ All notable changes to Sushi Lang will be documented in this file.
   family clamps.
 
 ### Fixed
+- **An interpolated string in an argument position has exactly one owner.** An
+  interpolation always builds a fresh buffer, and in argument position no binding names
+  it, so who frees it is the compiler's decision. Two seams were each making that
+  decision alone, and which one fired depended on whether an enclosing `println(...)`
+  had a temp frame open: inside one, the #141 registry claimed every buffer the
+  interpolation built, including a buffer built for a NESTED call's argument that the
+  call site had already given an owner — two frees, and `println(look("{tail}!"))`
+  aborted with exit 133 on a HashMap key, a declared borrow parameter and a `nom`
+  parameter alike. Outside one, nothing claimed it: `own_temporary` reads the argument's
+  type and `infer_expr_semantic_type` had no answer for an interpolation, so a stdlib
+  call marshalling a C string freed the marshalled copy and leaked the string it copied
+  from. An interpolation now emits inside a frame of its OWN — it frees each intermediate
+  as the next concat copies its bytes, an early exit out of a later part still frees what
+  the earlier ones built (#295), and the RESULT belongs to the position it lands in.
 - **A bool prints as a word wherever it is printed.** #514 moved the interpolation hole
   to `true`/`false` and left `println(flag)` on `%d`, so the two spellings disagreed
   about one value; both go through the bool formatter now. A hole holding a plain

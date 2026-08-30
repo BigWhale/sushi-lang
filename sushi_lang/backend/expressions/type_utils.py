@@ -64,7 +64,8 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
     `u8 255` printed `-1` through an index, a field or a `get()` (#379).
     """
     from sushi_lang.semantics.ast import (Name, IntLit, FloatLit, BinaryOp, StringLit, BoolLit,
-                                          UnaryOp, CastExpr, MemberAccess, DynamicArrayFrom)
+                                          UnaryOp, CastExpr, MemberAccess, DynamicArrayFrom,
+                                          InterpolatedString)
     from sushi_lang.backend.expressions.calls.utils import stamped_semantic_type
     from sushi_lang.semantics.typesys import BuiltinType
 
@@ -104,7 +105,10 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
     elif isinstance(expr, DynamicArrayFrom):
         return _dynamic_array_from_type(codegen, expr)
 
-    elif isinstance(expr, StringLit):
+    elif isinstance(expr, (StringLit, InterpolatedString)):
+        # An interpolation is a string like any other, and answering None for one left
+        # `own_temporary` unable to give it an owner in a borrowed-argument position, so
+        # it leaked one block a call (#521).
         return BuiltinType.STRING
 
     elif isinstance(expr, BoolLit):
