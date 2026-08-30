@@ -58,3 +58,7 @@ _add(ErrorMessage("CE2513", Severity.ERROR,
 _add(ErrorMessage("CE2514", Severity.ERROR,
     "operator '{op}' cannot compare two values of type '{type_name}'",
     Category.TYPE, "Equality is defined for the numeric types, bool and string. An order (< > <= >=) is defined for the numeric types and string, where it reads the bytes. Nothing else carries a comparison. Use match to ask which variant an enum holds, and compare the fields of a struct one at a time. A bool is deliberately excluded from the order: false < true is almost always a typo for != or a missing 'and', and Rust and Go both accept it where Sushi does not. This code arrived with #449, where a struct, an enum and an array comparison each reached the backend and became a CE0017 internal error."))
+
+_add(ErrorMessage("CE2515", Severity.ERROR,
+    "'{method}' is not a method of '{wrapper}' -- the call before it returns a channel that is still unhandled",
+    Category.TYPE, "A method that declares '| E' returns Result@(T, E), and a Maybe@(T) is likewise more than the bare T, so the chain stops until the wrapper is handled (ruling 5 of the UFCS epic). This is a RESOLUTION FALLBACK, not a receiver-kind ban: resolution runs first, a method found on the Result/Maybe enum itself (.realise, .hash) is legal, and this code fires only when the method is missing there but present on the payload type -- which is what tells a typo from an unhandled channel. Append '??' to the call that returns the wrapper to propagate its Err/None, or handle it in place with match or .realise(default)."))

@@ -1,0 +1,17 @@
+# Ruling 5, row 5: a method ON the wrapper stays legal -- '.realise(false)' answers
+# from the Result itself, and the chain continues on the unwrapped bool.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "false\n"
+extend bool is_true() bool | StdError:
+    return self
+
+extend bool is_false() bool:
+    return not self
+
+fn main() i32:
+    let bool b = true
+    let bool r = b.is_true().realise(false).is_false()
+    println("{r}")
+    return Result.Ok(0)

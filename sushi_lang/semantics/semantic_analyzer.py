@@ -424,6 +424,8 @@ class SemanticAnalyzer:
                 ret_type=extend_def.ret,
                 loc=getattr(extend_def, "loc", None),
                 name_span=getattr(extend_def, "name_span", None),
+                err_type=getattr(extend_def, "err_type", None),
+                err_span=getattr(extend_def, "err_span", None),
             )
             self.extensions.add_method(extension_method)
 

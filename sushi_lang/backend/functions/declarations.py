@@ -138,7 +138,13 @@ class FunctionDeclarations:
                 param_types.append(self.codegen.types.ll_type(param.ty))
                 param_names.append(param.name)
 
-        if ext.ret:
+        # A channel extension ('| E', ruling 1) has the Result ABI; a bare one keeps
+        # the unwrapped return.
+        from sushi_lang.backend.generics.result_builder import extension_result_of
+        channel = extension_result_of(self.codegen, ext)
+        if channel is not None:
+            ret_type = self.codegen.types.ll_type(channel)
+        elif ext.ret:
             ret_type = self.codegen.types.ll_type(ext.ret)
         else:
             ret_type = ir.VoidType()

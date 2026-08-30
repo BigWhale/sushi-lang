@@ -354,6 +354,8 @@ class ExtensionMethod:
     self_mode: Optional[str] = None  # "peek"/"poke" for a `poke self` receiver (#327);
     filename: Optional[str] = None   # The file it was declared in; #473 missed this record
     unit_name: Optional[str] = None  # The unit that declared it
+    err_type: Optional[Type] = None  # `| E`: the method returns Result@(ret, E) (ruling 1)
+    err_span: Optional[Span] = None
 
 
 @dataclass
@@ -391,6 +393,8 @@ class GenericExtensionMethod:
     self_mode: Optional[str] = None  # "peek"/"poke" for a `poke self` receiver (#327)
     filename: Optional[str] = None   # The file it was declared in; #473 missed this record
     unit_name: Optional[str] = None  # The unit that declared it
+    err_type: Optional[Type] = None  # `| E`: instances return Result@(ret, E) (ruling 1)
+    err_span: Optional[Span] = None
 
 
 @dataclass
@@ -814,14 +818,11 @@ class FunctionCollector:
         if not isinstance(name, str):
             return
 
-        # TEMPORARY (UFCS epic, Phase 1): the slots parse but nothing consumes
-        # them yet. Phase 4 removes the first reject, Phase 3 the second.
+        # TEMPORARY (UFCS epic, Phase 1): the slot parses but nothing consumes
+        # it yet. Phase 4 removes this reject.
         if getattr(ext, "type_params", None):
             raise NotImplementedError(
                 "method-level type parameters on an extension are not implemented yet")
-        if getattr(ext, "err_type", None) is not None:
-            raise NotImplementedError(
-                "the extension error channel is not implemented yet")
 
         target_type: Optional[Type] = getattr(ext, "target_type", None)
         name_span: Optional[Span] = getattr(ext, "name_span", None) or getattr(ext, "loc", None)
@@ -862,13 +863,17 @@ class FunctionCollector:
                 er.emit(self.r, ERR.CE0115, p.name_span, context="an extension method")
                 break
 
-        # A `??` has no error channel in an extension body (CE0131, #398).
-        reject_try_in_body(self.r, body, "an extension method")
+        # A `??` has no error channel in a BARE extension body (CE0131, #398). A
+        # declared `| E` IS the channel (ruling 1), so the reject does not apply there.
+        err_ty: Optional[Type] = getattr(ext, "err_type", None)
+        err_span: Optional[Span] = getattr(ext, "err_span", None)
+        if err_ty is None:
+            reject_try_in_body(self.r, body, "an extension method")
 
         if target_type is not None and isinstance(target_type, DynamicArrayType):
             target_type = self._collect_array_extension(
                 ext, target_type, name, params, ret_ty, body,
-                name_span, target_type_span, ret_span)
+                name_span, target_type_span, ret_span, err_ty, err_span)
             if target_type is None:
                 return
 
@@ -927,6 +932,8 @@ class FunctionCollector:
                 self_mode=getattr(ext, "self_mode", None),
                 filename=self.current_unit_file,
                 unit_name=self.current_unit_name,
+                err_type=convert_unknown_to_typeparam(err_ty),
+                err_span=err_span,
             )
 
             if self._reject_overlapping_target(generic_method, target_type, name_span):
@@ -954,6 +961,8 @@ class FunctionCollector:
                 self_mode=getattr(ext, "self_mode", None),
                 filename=self.current_unit_file,
                 unit_name=self.current_unit_name,
+                err_type=err_ty,
+                err_span=err_span,
             )
 
             if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
@@ -973,7 +982,9 @@ class FunctionCollector:
                                  ret_ty: Optional[Type], body,
                                  name_span: Optional[Span],
                                  target_type_span: Optional[Span],
-                                 ret_span: Optional[Span]) -> Optional[Type]:
+                                 ret_span: Optional[Span],
+                                 err_ty: Optional[Type] = None,
+                                 err_span: Optional[Span] = None) -> Optional[Type]:
         """Classify a dynamic-array target (ruling 3): template, concrete, or CE2101.
 
         Returns the (possibly element-resolved) concrete target type, or None when the
@@ -1037,6 +1048,8 @@ class FunctionCollector:
             self_mode=getattr(ext, "self_mode", None),
             filename=self.current_unit_file,
             unit_name=self.current_unit_name,
+            err_type=convert(err_ty),
+            err_span=err_span,
         ))
         return None
 

@@ -48,15 +48,83 @@ def instantiate_array_extension(validator: 'TypeValidator',
         is_nom=getattr(p, "is_nom", False),
     ) for p in template.params]
 
+    err = (substitute_type_params(template.err_type, substitution)
+           if getattr(template, "err_type", None) is not None else None)
     concrete = ExtensionMethod(
         target_type=receiver_type, name=method_name, params=params, ret_type=ret,
         loc=template.loc, target_type_span=template.target_type_span,
         name_span=template.name_span, ret_span=template.ret_span,
         self_mode=template.self_mode, filename=template.filename,
-        unit_name=template.unit_name)
+        unit_name=template.unit_name,
+        err_type=err, err_span=getattr(template, "err_span", None))
     validator.extension_table.add_method(concrete)
     validator.tables.pending_array_extensions.append((template, element))
     return concrete
+
+
+def extension_call_result_type(validator: 'TypeValidator', method):
+    """What a resolved extension call YIELDS: the bare return, or its channel Result.
+
+    A `| E` method (ruling 1) returns the interned Result@(ret, E) at every call site;
+    `??` and the chain gate (CE2515) both read that answer.
+    """
+    from ..utils import resolve_declared_type
+
+    ret = resolve_declared_type(validator, method.ret_type)
+    err = getattr(method, "err_type", None)
+    if err is None:
+        return ret
+    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    resolved_err = resolve_unknown_type(
+        err, validator.struct_table.by_name, validator.enum_table.by_name)
+    return ensure_result_type_in_table(
+        validator.enum_table, ret, resolved_err,
+        struct_table=validator.struct_table.by_name)
+
+
+def _unhandled_channel_payload(receiver_type):
+    """The Ok/Some payload when the receiver is result-like or maybe-like, else None."""
+    if not isinstance(receiver_type, EnumType):
+        return None
+    ok_variant = receiver_type.get_variant("Ok")
+    err_variant = receiver_type.get_variant("Err")
+    if ok_variant and err_variant and len(ok_variant.associated_types) == 1:
+        return ok_variant.associated_types[0]
+    some_variant = receiver_type.get_variant("Some")
+    none_variant = receiver_type.get_variant("None")
+    if (some_variant and none_variant and len(some_variant.associated_types) == 1
+            and len(none_variant.associated_types) == 0):
+        return some_variant.associated_types[0]
+    return None
+
+
+def _reject_unhandled_channel_chain(validator: 'TypeValidator', call: MethodCall,
+                                    receiver_type) -> bool:
+    """CE2515, the resolution FALLBACK of ruling 5.
+
+    Fires only when resolution missed on a Result/Maybe receiver AND the method exists
+    on the payload type -- which is what tells an unhandled channel from a typo. The
+    diagnostic is relational: the primary names the missing method, the note points at
+    the call that returned the wrapper, and the help spells the `??` fix.
+    """
+    from sushi_lang.semantics.ast import DotCall
+
+    payload = _unhandled_channel_payload(receiver_type)
+    if payload is None or not _method_exists_on(validator, payload, call.method):
+        return False
+
+    diag = er.emit_with(validator.reporter, er.ERR.CE2515, call.loc,
+                        method=call.method, wrapper=display_type(receiver_type))
+    receiver = call.receiver
+    if getattr(receiver, "loc", None) is not None:
+        diag.note("the unhandled channel comes from this call", receiver.loc)
+    fix = ""
+    if isinstance(receiver, (MethodCall, DotCall)):
+        fix = f" -- e.g. '{receiver.method}()??.{call.method}()'"
+    diag.help("handle the channel first: match on it, '.realise(default)', or "
+              f"propagate with '??'{fix}").emit()
+    return True
 
 
 def _reject_immutable_poke_receiver(validator: 'TypeValidator', call: MethodCall) -> None:
@@ -306,6 +374,8 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         method = instantiate_array_extension(validator, receiver_type, call.method)
 
     if method is None:
+        if _reject_unhandled_channel_chain(validator, call, receiver_type):
+            return
         er.emit(validator.reporter, er.ERR.CE2008, call.loc, name=f"{display_type(receiver_type)}.{call.method}")
         return
 
@@ -353,3 +423,26 @@ def _stamp_param_modes(call, method) -> None:
     call.callee_param_modes = modes_for(params, CalleeKind.METHOD)
     call.callee_param_names = tuple(p.name for p in params)
     call.callee_param_types = tuple(p.ty for p in params)
+
+
+def _method_exists_on(validator: 'TypeValidator', payload, method_name: str) -> bool:
+    """Whether a method of this name would resolve on the payload type."""
+    from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
+    from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+
+    if builtin_method_exists(payload, method_name):
+        return True
+    if validator.extension_table.get_method(payload, method_name) is not None:
+        return True
+    if validator.perk_impl_table.get_method(payload, method_name) is not None:
+        return True
+    if isinstance(payload, DynamicArrayType):
+        if validator.generic_extension_table.declarations(ARRAY_BASE_KEY, method_name):
+            return True
+    name = getattr(payload, "name", None)
+    if isinstance(name, str) and "<" in name:
+        base_name = name.split("<")[0]
+        if validator.generic_extension_table.find_applicable(
+                base_name, method_name, name) is not None:
+            return True
+    return False

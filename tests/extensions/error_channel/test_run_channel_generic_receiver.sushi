@@ -1,0 +1,20 @@
+# A channel on a generic-target extension: '| StdError' substitutes through per
+# instantiation, and each instantiation returns its own interned Result.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\n1\n"
+extend List@(T) counted() i32 | StdError:
+    return self.len()
+
+fn main() i32:
+    let List@(i32) nums = List.new()
+    nums.push(4)
+    nums.push(5)
+    let i32 a = nums.counted().realise(0)
+    println("{a}")
+    let List@(string) names = List.new()
+    names.push("marvin")
+    let i32 b = names.counted().realise(0)
+    println("{b}")
+    return Result.Ok(0)

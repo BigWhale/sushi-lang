@@ -33,6 +33,15 @@ def emit_return(codegen: 'LLVMCodegen', stmt: 'Return') -> None:
     value = codegen.expressions.emit_expr(stmt.value)
     value = _consume_returned_value(codegen, stmt, value)
 
+    # A CHANNEL extension body ('| E', ruling 6): the bare success wraps into Ok HERE,
+    # so the body never spells the constructor. A spelled `Result.Err(e)` already
+    # emitted as the enum value and passes through.
+    channel = getattr(codegen, "current_extension_result", None)
+    if (channel is not None and getattr(codegen, "in_extension_method", False)
+            and not _is_spelled_result_err(stmt.value)):
+        from sushi_lang.backend.generics.result_builder import build_ok_variant
+        value = build_ok_variant(codegen, channel, value)
+
     # ORDERING is the whole reason RETURN is its own position: the value is emitted and
     # consumed BEFORE cleanup, so a MOVE has already flagged the source. Cleaning up first
     # hands the caller a freed buffer (#256).
@@ -40,6 +49,16 @@ def emit_return(codegen: 'LLVMCodegen', stmt: 'Return') -> None:
     utils.emit_scope_cleanup(codegen, cleanup_type='all')
 
     codegen.builder.ret(value)
+
+
+def _is_spelled_result_err(expr: 'Expr') -> bool:
+    """Whether the returned expression is the spelled `Result.Err(...)` constructor."""
+    from sushi_lang.semantics.ast import DotCall, Name
+
+    return (isinstance(expr, DotCall)
+            and isinstance(expr.receiver, Name)
+            and expr.receiver.id == "Result"
+            and expr.method == "Err")
 
 
 def _consume_returned_value(codegen: 'LLVMCodegen', stmt: 'Return',

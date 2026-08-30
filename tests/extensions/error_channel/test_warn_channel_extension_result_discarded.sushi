@@ -1,0 +1,11 @@
+# A channel extension call in statement position with its value unread is an unhandled
+# Result, and the existing CW2001 covers the new call kind.
+# TEST_TYPE: warning
+# EXPECT_ERROR_CODE: CW2001
+extend i32 checked_inc() i32 | StdError:
+    return self + 1
+
+fn main() i32:
+    let i32 one = 1
+    one.checked_inc()
+    return Result.Ok(0)

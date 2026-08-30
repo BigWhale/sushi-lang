@@ -35,6 +35,34 @@ def implicit_result_of(codegen: 'LLVMCodegen', fn) -> Optional[EnumType]:
     return intern_result(codegen, fn.ret, err_type)
 
 
+def extension_result_of(codegen: 'LLVMCodegen', ext) -> Optional[EnumType]:
+    """The interned Result a CHANNEL extension ('| E', ruling 1) returns.
+
+    None for a bare extension -- the one reader for "does this ExtendDef have the
+    Result ABI", used by the declaration, the body emission and the default return.
+    """
+    err_type = getattr(ext, 'err_type', None)
+    if err_type is None:
+        return None
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    err_resolved = resolve_unknown_type(
+        err_type, codegen.struct_table.by_name, codegen.enum_table.by_name)
+    return intern_result(codegen, ext.ret, err_resolved)
+
+
+def build_ok_variant(
+    codegen: 'LLVMCodegen',
+    result_type: EnumType,
+    ok_value: Optional[ir.Value] = None
+) -> ir.Value:
+    """Construct a Result.Ok(value) LLVM value for a concrete Result enum.
+
+    This is the emission seam of ruling 6: a channel extension's bare success return
+    wraps here, so the body never spells the constructor.
+    """
+    return _build_payload_variant(codegen, result_type, "Ok", ok_value)
+
+
 def build_err_from_return_type(
     codegen: 'LLVMCodegen',
     return_type: Type,
@@ -71,35 +99,46 @@ def _build_err_variant(
     error_value: Optional[ir.Value] = None
 ) -> ir.Value:
     """Construct a Result.Err(error) LLVM value for a concrete Result enum."""
+    return _build_payload_variant(codegen, result_type, "Err", error_value)
+
+
+def _build_payload_variant(
+    codegen: 'LLVMCodegen',
+    result_type: EnumType,
+    variant: str,
+    payload_value: Optional[ir.Value] = None
+) -> ir.Value:
+    """Construct one variant of a concrete Result enum, with an optional payload."""
     from sushi_lang.backend import enum_utils
 
-    err_tag = result_type.get_variant_index("Err")
-    if err_tag is None:
-        raise_internal_error("CE0035", variant="Err", enum=result_type.name)
+    tag = result_type.get_variant_index(variant)
+    if tag is None:
+        raise_internal_error("CE0035", variant=variant, enum=result_type.name)
 
     enum_llvm_type = codegen.types.ll_type(result_type)
 
     enum_value = enum_utils.construct_enum_variant(
-        codegen, enum_llvm_type, err_tag,
-        data=None, name_prefix=f"{result_type.name}_Err"
+        codegen, enum_llvm_type, tag,
+        data=None, name_prefix=f"{result_type.name}_{variant}"
     )
 
-    if error_value is not None:
+    if payload_value is not None:
         data_array_type = enum_llvm_type.elements[1]
-        # ENTRY block: an Err built inside a loop must not grow the frame (BUGS.md B1).
-        temp_alloca = codegen.memory.entry_alloca(data_array_type, "err_data_temp")
-        data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="err_data_ptr")
+        # ENTRY block: a variant built inside a loop must not grow the frame (BUGS.md B1).
+        temp_alloca = codegen.memory.entry_alloca(data_array_type, f"{variant.lower()}_data_temp")
+        data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr,
+                                           name=f"{variant.lower()}_data_ptr")
 
-        error_ptr_typed = codegen.builder.bitcast(
-            data_ptr, ir.PointerType(error_value.type), name="err_ptr_typed"
+        payload_ptr_typed = codegen.builder.bitcast(
+            data_ptr, ir.PointerType(payload_value.type), name=f"{variant.lower()}_ptr_typed"
         )
         # Natural alignment: the data member is a [K x i64] array (#300 phase 2).
-        codegen.builder.store(error_value, error_ptr_typed)
+        codegen.builder.store(payload_value, payload_ptr_typed)
 
-        packed_data = codegen.builder.load(temp_alloca, name="packed_err_data")
+        packed_data = codegen.builder.load(temp_alloca, name=f"packed_{variant.lower()}_data")
         enum_value = enum_utils.set_enum_data(
             codegen, enum_value, packed_data,
-            name=f"{result_type.name}_Err_data"
+            name=f"{result_type.name}_{variant}_data"
         )
 
     return enum_value

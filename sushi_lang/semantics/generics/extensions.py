@@ -40,6 +40,10 @@ def monomorphize_extension_method(
     if generic_method.ret_type is not None:
         concrete_ret_type = substitute_type_params(generic_method.ret_type, substitution)
 
+    concrete_err_type = None
+    if getattr(generic_method, "err_type", None) is not None:
+        concrete_err_type = substitute_type_params(generic_method.err_type, substitution)
+
     concrete_params = []
     for param in generic_method.params:
         concrete_param_type = None
@@ -65,7 +69,9 @@ def monomorphize_extension_method(
         loc=generic_method.loc,
         target_type_span=generic_method.target_type_span,
         name_span=generic_method.name_span,
-        ret_span=generic_method.ret_span
+        ret_span=generic_method.ret_span,
+        err_type=concrete_err_type,
+        err_span=getattr(generic_method, "err_span", None),
     )
 
 

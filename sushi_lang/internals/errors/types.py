@@ -321,8 +321,8 @@ _add(ErrorMessage("CE2090", Severity.ERROR,
     Category.TYPE, "Each element type bound to a perk-constrained type-pack '...Ts: Perk' must implement the required perk."))
 
 _add(ErrorMessage("CE2091", Severity.ERROR,
-    "extension/perk method '{name}' must use a bare 'return <value>', not 'return Result.Ok(...)' / 'Result.Err(...)'",
-    Category.TYPE, "Extension and perk-implementation methods return the bare value directly (their ABI is unwrapped). Write 'return value' instead of 'return Result.Ok(value)'."))
+    "method '{name}' must use a bare 'return <value>', not 'return {refused}'",
+    Category.TYPE, "A method's SUCCESS is always returned bare. A bare extension or perk-impl method has an unwrapped ABI, so both Result constructors are refused. A channel extension ('| E', ruling 6 of the UFCS epic) wraps the bare success into Ok at the emission seam, so 'return Result.Ok(x)' stays refused there and 'return Result.Err(e)' is the ONE spelled constructor -- the error is the exceptional path and earns its ink; the success stays as light as a bare method's. Free functions are unchanged: they spell Result.Ok explicitly (CE2030)."))
 
 _add(ErrorMessage("CE2092", Severity.ERROR,
     "function value type mismatch: expected '{expected}', got '{actual}'",

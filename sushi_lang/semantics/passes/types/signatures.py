@@ -47,6 +47,7 @@ def validate_function(self, func: FuncDef) -> None:
     """Validate types within a function."""
     self.current_function = func
     self.in_extension_context = False  # Normal functions are never extension/perk bodies
+    self.extension_channel_result = None
     self.in_library_body = (self.in_library_unit
                             or bool(getattr(func, "is_library_template", False)))
     self.in_synthesized_body = bool(getattr(func, "is_synthesized", False))
@@ -146,6 +147,21 @@ def _validate_method_body(self, target_type, method) -> None:
     self.variable_types = {}
     self.destroyed_arrays = [set()]
 
+    # A `| E` extension (ruling 1) validates under its CHANNEL: the interned
+    # Result@(ret, E) that `??` propagates into and that `Result.Err(e)` constructs.
+    # The success still returns bare against `extension_return_type` (ruling 6).
+    self.extension_channel_result = None
+    err_ty = getattr(method, "err_type", None)
+    if err_ty is not None:
+        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        validate_type_name(self, err_ty, getattr(method, "err_span", None))
+        resolved_err = resolve_unknown_type(
+            err_ty, self.struct_table.by_name, self.enum_table.by_name)
+        self.extension_channel_result = ensure_result_type_in_table(
+            self.enum_table, method.ret, resolved_err,
+            struct_table=self.struct_table.by_name)
+
     _register_self(self, target_type, getattr(method, "self_mode", None))
 
     validate_and_register_parameters(self, method.params)
@@ -159,6 +175,7 @@ def _validate_method_body(self, target_type, method) -> None:
 
     self.in_extension_context = False
     self.extension_method_name = None
+    self.extension_channel_result = None
 
 
 def validate_extension_method(self, ext: ExtendDef) -> None:

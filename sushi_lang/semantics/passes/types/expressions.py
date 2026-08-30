@@ -173,26 +173,30 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
             return
 
     if validator.current_function is None:
-        # An extension/perk body has no error channel; the collect pass already
-        # rejected every `??` in it with CE0131 (#398), so emitting the
-        # accidental CE2508 here would only duplicate and mislead. Any
-        # other None context keeps the CE2508 backstop.
-        if not getattr(validator, "in_extension_context", False):
+        # A CHANNEL extension body (`| E`, ruling 1) propagates into its own interned
+        # Result -- validated below exactly as a function's. A BARE extension body has
+        # no channel; the collect pass already rejected every `??` in it with CE0131
+        # (#398), so emitting the accidental CE2508 here would only duplicate and
+        # mislead. Any other None context keeps the CE2508 backstop.
+        channel = getattr(validator, "extension_channel_result", None)
+        if channel is None:
+            if not getattr(validator, "in_extension_context", False):
+                er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
+            return
+        func_return_type = channel
+    else:
+        # CW2511: Warn about ?? operator in main function
+        # While it works, explicit error handling is clearer at the program entry point
+        if validator.current_function.name == "main":
+            er.emit(validator.reporter, er.ERR.CW2511, expr.loc)
+            # Continue validation - this is just a warning
+
+        func_return_type = validator.current_function.ret
+
+        if func_return_type is None:
+            # Function has no return type
             er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-        return
-
-    # CW2511: Warn about ?? operator in main function
-    # While it works, explicit error handling is clearer at the program entry point
-    if validator.current_function.name == "main":
-        er.emit(validator.reporter, er.ERR.CW2511, expr.loc)
-        # Continue validation - this is just a warning
-
-    func_return_type = validator.current_function.ret
-
-    if func_return_type is None:
-        # Function has no return type
-        er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-        return
+            return
 
     # Normalize the enclosing function's return type to the interned Result<T, E> enum, whichever
     # way it was spelled: an implicit `fn foo() T` / `fn foo() T | E`, an explicit
@@ -214,7 +218,8 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
             return
         func_return_type = intern(func_return_type.type_args[0], func_return_type.type_args[1])
     elif not is_result_enum(func_return_type):
-        if validator.current_function.err_type is not None:
+        if (validator.current_function is not None
+                and validator.current_function.err_type is not None):
             resolver = TypeResolver(structs, enums)
             err_type_resolved = resolver.resolve(validator.current_function.err_type)
         else:

@@ -1,0 +1,17 @@
+# Error types under '??' must match exactly (CE2511) -- in a channel extension body
+# exactly as in a function body: the closure's channel is StdError, the extension
+# declared '| MyError'.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2511
+enum MyError:
+    Nope
+
+extend i32 apply_checked(fn(i32) -> i32 f) i32 | MyError:
+    let i32 r = f(self)??
+    return r
+
+fn main() i32:
+    let i32 five = 5
+    let i32 r = five.apply_checked(|i32 x| x + 1).realise(0)
+    println("{r}")
+    return Result.Ok(0)

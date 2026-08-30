@@ -89,6 +89,10 @@ class FunctionDefinitions:
         begin_function_fn(llvm_fn, ext)
 
         self.codegen.in_extension_method = True
+        # A channel body ('| E', ruling 6): every bare success return wraps into Ok at
+        # the return seam, Result.Err(e) passes through, and the default return is Err.
+        from sushi_lang.backend.generics.result_builder import extension_result_of
+        self.codegen.current_extension_result = extension_result_of(self.codegen, ext)
 
         # Track 'self' and parameter types in variable_types for struct member access
         # resolution. A moded receiver (#327) registers its full ReferenceType -- the
@@ -120,8 +124,17 @@ class FunctionDefinitions:
         self.codegen.statements.emit_block(ext.body)
 
         if self.codegen.builder.block.terminator is None:
-            emit_default_return_for_extension_fn(ext.ret)
+            channel = self.codegen.current_extension_result
+            if channel is not None:
+                from sushi_lang.backend.generics.result_builder import build_err_from_return_type
+                from sushi_lang.backend.statements import utils
+                utils.emit_scope_cleanup(self.codegen, cleanup_type='all')
+                self.codegen.builder.ret(
+                    build_err_from_return_type(self.codegen, channel, None))
+            else:
+                emit_default_return_for_extension_fn(ext.ret)
 
         self.codegen.in_extension_method = False
+        self.codegen.current_extension_result = None
         end_function_fn()
         return llvm_fn

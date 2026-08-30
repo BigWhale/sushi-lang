@@ -1012,7 +1012,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                     method = instantiate_array_extension(
                         self.type_validator, actual_type, node.method)
                 if method is not None:
-                    inferred_type = resolve_declared_type(self.type_validator, method.ret_type)
+                    # A channel method (`| E`) yields its interned Result at every
+                    # call site -- one reader for what an extension call yields.
+                    from sushi_lang.semantics.passes.types.calls.methods import (
+                        extension_call_result_type)
+                    inferred_type = extension_call_result_type(self.type_validator, method)
 
             if inferred_type is not None:
                 node.inferred_return_type = inferred_type
