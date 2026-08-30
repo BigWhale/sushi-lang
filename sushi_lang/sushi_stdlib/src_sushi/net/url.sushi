@@ -60,17 +60,16 @@ public enum UrlError:
 ##:
 The one-line text of a URL error.
 
-- Parameter e: The error to describe.
 - Returns: One line, with no trailing newline.
 :##
-public fn url_error_text(UrlError e) string:
-    match e:
-        UrlError.Empty -> return Result.Ok("empty")
-        UrlError.NoScheme -> return Result.Ok("no scheme")
-        UrlError.BadScheme -> return Result.Ok("bad scheme")
-        UrlError.NoHost -> return Result.Ok("no host")
-        UrlError.BadPort -> return Result.Ok("bad port")
-        UrlError.UnclosedHost -> return Result.Ok("unclosed host")
+extend UrlError text() string:
+    match self:
+        UrlError.Empty -> return "empty"
+        UrlError.NoScheme -> return "no scheme"
+        UrlError.BadScheme -> return "bad scheme"
+        UrlError.NoHost -> return "no host"
+        UrlError.BadPort -> return "bad port"
+        UrlError.UnclosedHost -> return "unclosed host"
 
 ##:
 Parses an absolute URL into its parts.
@@ -154,13 +153,12 @@ The port to connect to: the one written, or the scheme's default.
 
 The known schemes are http 80, https 443, ws 80, wss 443, ftp 21 and ssh 22.
 
-- Parameter u: The URL to ask.
 - Returns: The written port, the scheme's default, or -1 when no default is known.
 :##
-public fn url_port_or_default(Url u) i32:
-    if (u.port != 0):
-        return Result.Ok(u.port)
-    return Result.Ok(default_port(u.scheme)??)
+extend Url port_or_default() i32:
+    if (self.port != 0):
+        return self.port
+    return default_port(self.scheme).realise(-1)
 
 ##:
 Whether the host was written as a bracketed IPv6 literal.
@@ -168,11 +166,10 @@ Whether the host was written as a bracketed IPv6 literal.
 The brackets are not kept, so this is the only way to tell an IPv6 literal
 from a name after parsing.
 
-- Parameter u: The URL to ask.
 - Returns: True when the host was bracketed.
 :##
-public fn url_host_is_ipv6_literal(Url u) bool:
-    return Result.Ok(u.host.contains(":"))
+extend Url host_is_ipv6_literal() bool:
+    return self.host.contains(":")
 
 ##:
 The URL rebuilt as canonical text.
@@ -181,28 +178,27 @@ The scheme and host are already lowercase. A port equal to the scheme's
 default is dropped. An empty userinfo, query or fragment writes no delimiter,
 and an IPv6 host is bracketed again.
 
-- Parameter u: The URL to render.
 - Returns: The URL as text.
 :##
-public fn url_text(Url u) string:
+extend Url text() string:
     # Every piece is an interpolated COPY. A field read is a borrow and push
-    # consumes by position, so pushing u.scheme itself is CE2411.
+    # consumes by position, so pushing self.scheme itself is CE2411.
     let string[] pieces = from([])
-    pieces.push("{u.scheme}://")
-    if (u.userinfo.len() > 0):
-        pieces.push("{u.userinfo}@")
-    if (url_host_is_ipv6_literal(u)??):
-        pieces.push("[{u.host}]")
+    pieces.push("{self.scheme}://")
+    if (self.userinfo.len() > 0):
+        pieces.push("{self.userinfo}@")
+    if (self.host_is_ipv6_literal()):
+        pieces.push("[{self.host}]")
     else:
-        pieces.push("{u.host}")
-    if (u.port != 0 and u.port != default_port(u.scheme)??):
-        pieces.push(":{u.port}")
-    pieces.push("{u.path}")
-    if (u.query.len() > 0):
-        pieces.push("?{u.query}")
-    if (u.fragment.len() > 0):
-        pieces.push("#{u.fragment}")
-    return Result.Ok("".join(pieces))
+        pieces.push("{self.host}")
+    if (self.port != 0 and self.port != default_port(self.scheme).realise(-1)):
+        pieces.push(":{self.port}")
+    pieces.push("{self.path}")
+    if (self.query.len() > 0):
+        pieces.push("?{self.query}")
+    if (self.fragment.len() > 0):
+        pieces.push("#{self.fragment}")
+    return "".join(pieces)
 
 ##:
 The default port of a scheme.

@@ -9,7 +9,7 @@ use <net/url>
 fn show(string text) ~:
     match parse_url(text):
         Result.Ok(u) ->
-            let bool literal = url_host_is_ipv6_literal(u).realise(false)
+            let bool literal = u.host_is_ipv6_literal()
             println("host {u.host} port {u.port} literal {literal}")
         Result.Err(_) -> println("{text} refused")
     return Result.Ok(~)

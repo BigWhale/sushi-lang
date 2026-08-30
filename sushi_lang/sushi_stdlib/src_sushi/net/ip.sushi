@@ -117,58 +117,52 @@ leading zero in a group, and `::` over the longest run of zero groups, the
 leftmost run when two tie, never over a run of one. An IPv4-mapped address
 prints as `::ffff:a.b.c.d`.
 
-- Parameter a: The address to render.
 - Returns: The address as text.
 :##
-public fn ip_text(IpAddr a) string:
-    match a:
-        IpAddr.V4(bits) -> return Result.Ok(v4_text(bits)??)
-        IpAddr.V6(high, low) -> return Result.Ok(v6_text(high, low)??)
+extend IpAddr text() string:
+    match self:
+        IpAddr.V4(bits) -> return v4_text(bits).realise("")
+        IpAddr.V6(high, low) -> return v6_text(high, low).realise("")
 
 ##:
 Whether the address is of the IPv4 family.
 
-- Parameter a: The address to test.
 - Returns: True for a V4 address.
 :##
-public fn ip_is_v4(IpAddr a) bool:
-    match a:
-        IpAddr.V4(_) -> return Result.Ok(true)
-        IpAddr.V6(_, _) -> return Result.Ok(false)
+extend IpAddr is_v4() bool:
+    match self:
+        IpAddr.V4(_) -> return true
+        IpAddr.V6(_, _) -> return false
 
 ##:
 Whether the address is of the IPv6 family.
 
-- Parameter a: The address to test.
 - Returns: True for a V6 address.
 :##
-public fn ip_is_v6(IpAddr a) bool:
-    let bool v4 = ip_is_v4(a)??
-    return Result.Ok(not v4)
+extend IpAddr is_v6() bool:
+    return not self.is_v4()
 
 ##:
 Whether the address is a loopback: 127.0.0.0/8, or ::1.
 
-- Parameter a: The address to test.
 - Returns: True when the address is a loopback.
 :##
-public fn ip_is_loopback(IpAddr a) bool:
-    match a:
-        IpAddr.V4(bits) -> return Result.Ok((bits >> (24 as u32)) == (127 as u32))
+extend IpAddr is_loopback() bool:
+    match self:
+        IpAddr.V4(bits) -> return (bits >> (24 as u32)) == (127 as u32)
         IpAddr.V6(high, low) ->
-            return Result.Ok(high == (0 as u64) and low == (1 as u64))
+            return high == (0 as u64) and low == (1 as u64)
 
 ##:
 Whether the address is the unspecified one: 0.0.0.0, or ::.
 
-- Parameter a: The address to test.
 - Returns: True when the address is unspecified.
 :##
-public fn ip_is_unspecified(IpAddr a) bool:
-    match a:
-        IpAddr.V4(bits) -> return Result.Ok(bits == (0 as u32))
+extend IpAddr is_unspecified() bool:
+    match self:
+        IpAddr.V4(bits) -> return bits == (0 as u32)
         IpAddr.V6(high, low) ->
-            return Result.Ok(high == (0 as u64) and low == (0 as u64))
+            return high == (0 as u64) and low == (0 as u64)
 
 ##:
 Whether the address is in a private range.
@@ -176,36 +170,33 @@ Whether the address is in a private range.
 The ranges are 10/8, 172.16/12 and 192.168/16 for IPv4, and fc00::/7 for
 IPv6.
 
-- Parameter a: The address to test.
 - Returns: True when the address is private.
 :##
-public fn ip_is_private(IpAddr a) bool:
-    match a:
+extend IpAddr is_private() bool:
+    match self:
         IpAddr.V4(bits) ->
             let u32 top = bits >> (24 as u32)
             if (top == (10 as u32)):
-                return Result.Ok(true)
+                return true
             if (top == (192 as u32) and ((bits >> (16 as u32)) & (255 as u32)) == (168 as u32)):
-                return Result.Ok(true)
+                return true
             if (top == (172 as u32)):
                 let u32 second = (bits >> (16 as u32)) & (255 as u32)
-                return Result.Ok(second >= (16 as u32) and second <= (31 as u32))
-            return Result.Ok(false)
+                return second >= (16 as u32) and second <= (31 as u32)
+            return false
         IpAddr.V6(high, _) ->
-            return Result.Ok((high >> (57 as u64)) == (126 as u64))
+            return (high >> (57 as u64)) == (126 as u64)
 
 ##:
 Whether an IPv6 address carries an IPv4 one, as ::ffff:a.b.c.d.
 
-- Parameter a: The address to test.
 - Returns: True for a v4-mapped IPv6 address, false for anything else.
 :##
-public fn ip_is_v4_mapped(IpAddr a) bool:
-    match a:
-        IpAddr.V4(_) -> return Result.Ok(false)
+extend IpAddr is_v4_mapped() bool:
+    match self:
+        IpAddr.V4(_) -> return false
         IpAddr.V6(high, low) ->
-            return Result.Ok(high == (0 as u64)
-                             and (low >> (32 as u64)) == (65535 as u64))
+            return high == (0 as u64) and (low >> (32 as u64)) == (65535 as u64)
 
 ##:
 The IPv4 half of a v4-mapped address, as an address of its own.
@@ -416,10 +407,10 @@ accumulator, which keeps every owned string with one owner.
 - Returns: The canonical text.
 :##
 fn v6_text(u64 high, u64 low) string:
-    let bool mapped = ip_is_v4_mapped(IpAddr.V6(high, low))??
-    if (mapped):
+    let IpAddr whole = IpAddr.V6(high, low)
+    if (whole.is_v4_mapped()):
         let IpAddr inner = mapped_v4(low)??
-        let string quad = ip_text(inner)??
+        let string quad = inner.text()
         return Result.Ok("::ffff:{quad}")
 
     let u16[] groups = v6_groups(high, low)??

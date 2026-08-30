@@ -50,9 +50,6 @@ The first address of one family that the resolver gave.
 public fn resolve_first(string host, bool want_v4) IpAddr | NetError:
     let IpAddr[] addresses = resolve(host)??
     foreach(a in addresses.iter()):
-        # .realise() rather than ??: ip_is_v4 answers StdError and this
-        # function answers NetError, and a propagation matches error types
-        # exactly. The question cannot fail in any case.
-        if (ip_is_v4(a).realise(false) == want_v4):
+        if (a.is_v4() == want_v4):
             return Result.Ok(a)
     return Result.Err(NetError.InvalidAddress)

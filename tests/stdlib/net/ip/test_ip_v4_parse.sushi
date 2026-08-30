@@ -9,7 +9,7 @@ use <net/ip>
 
 fn show(string text) ~:
     match parse_ip(text):
-        Result.Ok(a) -> println("{ip_text(a).realise('?')} ok")
+        Result.Ok(a) -> println("{a.text()} ok")
         Result.Err(_) -> println("{text} refused")
     return Result.Ok(~)
 

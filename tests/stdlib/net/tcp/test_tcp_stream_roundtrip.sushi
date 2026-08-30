@@ -1,7 +1,7 @@
 # The same loopback exchange as the <net/socket> one, through the typed API: a
 # TcpListener and two TcpStreams instead of four bare descriptors.
 #
-# tcp_send_all and tcp_recv_exact are what make the byte counts deterministic.
+# send_all() and recv_exact() are what make the byte counts deterministic.
 # One send may take fewer bytes than it was offered and one recv answers
 # whatever arrived, so a test that asserts a length has to loop.
 # EXPECT_STDOUT_EXACT: "accepted\nserver got Mostly Harmless\nclient got 42\nclosed\n"
@@ -16,37 +16,47 @@ fn main() i32:
     if (listener.fd < 0):
         println("listen failed")
         return Result.Ok(1)
-    tcp_listener_set_timeout(listener, 5000)
+    if (not listener.set_timeout(5000).is_ok()):
+        println("listener set_timeout failed")
+        return Result.Ok(1)
 
-    let i32 port = tcp_local_port(listener).realise(-1)
+    let i32 port = listener.local_port().realise(-1)
     let TcpStream client = tcp_connect("127.0.0.1", port).realise(TcpStream(-1))
     if (client.fd < 0):
         println("connect failed")
         return Result.Ok(1)
-    tcp_set_timeouts(client, 5000, 5000)
+    if (not client.set_timeouts(5000, 5000).is_ok()):
+        println("client set_timeouts failed")
+        return Result.Ok(1)
 
-    let TcpStream served = tcp_accept(listener).realise(TcpStream(-1))
+    let TcpStream served = listener.accept().realise(TcpStream(-1))
     if (served.fd < 0):
         println("accept failed")
         return Result.Ok(1)
-    tcp_set_timeouts(served, 5000, 5000)
+    if (not served.set_timeouts(5000, 5000).is_ok()):
+        println("served set_timeouts failed")
+        return Result.Ok(1)
     println("accepted")
 
     let u8[] greeting = "Mostly Harmless".to_bytes()
-    tcp_send_all(client, greeting)
-    match tcp_recv_exact(served, 15):
+    if (not client.send_all(greeting).is_ok()):
+        println("client send_all failed")
+    match served.recv_exact(15):
         Result.Ok(heard) -> println("server got {heard.to_string()}")
         Result.Err(_) -> println("server recv_exact failed")
 
     let u8[] answer = "42".to_bytes()
-    tcp_send_all(served, answer)
-    match tcp_recv_exact(client, 2):
+    if (not served.send_all(answer).is_ok()):
+        println("served send_all failed")
+    match client.recv_exact(2):
         Result.Ok(back) -> println("client got {back.to_string()}")
         Result.Err(_) -> println("client recv_exact failed")
 
-    tcp_close(poke client)
-    tcp_close(poke served)
-    match tcp_listener_close(poke listener):
+    if (not client.close().is_ok()):
+        println("client close failed")
+    if (not served.close().is_ok()):
+        println("served close failed")
+    match listener.close():
         Result.Ok(_) -> println("closed")
         Result.Err(_) -> println("close failed")
 

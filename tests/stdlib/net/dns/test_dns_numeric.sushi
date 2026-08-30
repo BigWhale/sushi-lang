@@ -17,7 +17,7 @@ fn main() i32:
             else:
                 println("wrong: {addresses.len()} answers")
             foreach(a in addresses.iter()):
-                println("{ip_text(a).realise('?')}")
+                println("{a.text()}")
         Result.Err(_) -> println("resolve failed")
 
     return Result.Ok(0)

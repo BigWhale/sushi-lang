@@ -6,13 +6,13 @@ use <net/ip>
 
 fn describe(string text) ~:
     let IpAddr a = parse_ip(text).realise(ip_v4_any()??)
-    if (ip_is_v4_mapped(a).realise(false)):
+    if (a.is_v4_mapped()):
         println("{text} mapped")
-    elif (ip_is_loopback(a).realise(false)):
+    elif (a.is_loopback()):
         println("{text} loopback")
-    elif (ip_is_unspecified(a).realise(false)):
+    elif (a.is_unspecified()):
         println("{text} unspecified")
-    elif (ip_is_private(a).realise(false)):
+    elif (a.is_private()):
         println("{text} private")
     else:
         println("{text} public")

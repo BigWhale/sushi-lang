@@ -10,7 +10,7 @@ and every receive answers with a Datagram: the bytes, and who sent them. That
 is not an ergonomic choice -- an unconnected socket cannot be asked afterwards,
 because the sender exists only at the instant its datagram arrives.
 
-The close rule is <net/tcp>'s: one binding owns a socket, udp_close(poke s)
+The close rule is <net/tcp>'s: one binding owns a socket, s.close()
 ends it and writes -1 back, and a copy taken before the close holds a
 descriptor the kernel may have given to somebody else.
 
@@ -24,14 +24,14 @@ use <net/socket>
 
 ##: One bound UDP socket. :##
 public struct UdpSocket:
-    ##: The descriptor, or -1 once udp_close has run. :##
+    ##: The descriptor, or -1 once close() has run. :##
     i32 fd
 
 ##:
 Binds a datagram socket to an address and port.
 
 An empty host means the wildcard address. Port 0 asks the kernel to choose,
-and udp_local_port reads back what it chose.
+and .local_port() reads back what it chose.
 
 - Parameter host: The address to bind, or an empty string for the wildcard.
 - Parameter port: The port to bind, or 0 to let the kernel choose.
@@ -48,16 +48,14 @@ Sends one datagram to a named destination.
 The destination is resolved on every call, so a loop that sends to one peer
 resolves that peer each time round.
 
-- Parameter s: The socket to send from.
 - Parameter data: The bytes to send. The buffer stays the caller's.
 - Parameter host: The destination host, as a name or an address.
 - Parameter port: The destination port.
 - Returns: How many bytes were sent.
 - Errors: NetError, when the destination is unknown or the send failed.
 :##
-public fn udp_send_to(UdpSocket s, u8[] data, string host, i32 port) i32 | NetError:
-    let i32 sent = sock_udp_send_to(s.fd, data, host, port)??
-    return Result.Ok(sent)
+extend UdpSocket send_to(u8[] data, string host, i32 port) i32 | NetError:
+    return sock_udp_send_to(self.fd, data, host, port)??
 
 ##:
 Waits for one datagram, and answers it with its sender.
@@ -66,43 +64,38 @@ A datagram longer than `max` is truncated and the rest is lost. A sender whose
 address cannot be rendered leaves peer_ip empty rather than failing the
 receive: the bytes did arrive.
 
-- Parameter s: The socket to receive on.
 - Parameter max: The most bytes to take from one datagram.
 - Returns: The bytes, and the address and port they came from.
 - Errors: NetError, when the receive failed or its bound expired.
 :##
-public fn udp_recv_from(UdpSocket s, i32 max) Datagram | NetError:
-    let Datagram dg = sock_udp_recv_from(s.fd, max)??
-    return Result.Ok(dg)
+extend UdpSocket recv_from(i32 max) Datagram | NetError:
+    return sock_udp_recv_from(self.fd, max)??
 
 ##:
 The port a socket actually bound.
 
 This is the only way to learn the port after binding port 0.
 
-- Parameter s: The bound socket.
 - Returns: The bound port.
 - Errors: NetError, when the socket is not bound.
 :##
-public fn udp_local_port(UdpSocket s) i32 | NetError:
-    let i32 port = sock_local_port(s.fd)??
-    return Result.Ok(port)
+extend UdpSocket local_port() i32 | NetError:
+    return sock_local_port(self.fd)??
 
 ##:
 Bounds how long a receive and a send on a socket may wait.
 
 A bound that expires answers NetError.TimedOut.
 
-- Parameter s: The socket to bound.
 - Parameter recv_ms: The receive bound, in milliseconds.
 - Parameter send_ms: The send bound, in milliseconds.
 - Returns: Nothing.
 - Errors: NetError, when the option could not be set.
 :##
-public fn udp_set_timeouts(UdpSocket s, i32 recv_ms, i32 send_ms) ~ | NetError:
-    sock_set_recv_timeout(s.fd, recv_ms)??
-    sock_set_send_timeout(s.fd, send_ms)??
-    return Result.Ok(~)
+extend UdpSocket set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError:
+    sock_set_recv_timeout(self.fd, recv_ms)??
+    sock_set_send_timeout(self.fd, send_ms)??
+    return ~
 
 ##:
 Closes a socket and writes -1 into the binding.
@@ -111,14 +104,13 @@ The binding is marked so that closing it again is a success. A COPY of the
 socket taken before this call still holds the old descriptor; one binding owns
 a socket.
 
-- Parameter s: The socket to close. It reads -1 afterwards.
-- Returns: Nothing.
+- Returns: Nothing. The binding reads -1 afterwards.
 - Errors: NetError, when the descriptor could not be closed.
 :##
-public fn udp_close(poke UdpSocket s) ~ | NetError:
-    if (s.fd < 0):
-        return Result.Ok(~)
-    let i32 fd = s.fd
-    s.fd := -1
+extend UdpSocket close(poke self) ~ | NetError:
+    if (self.fd < 0):
+        return ~
+    let i32 fd = self.fd
+    self.fd := -1
     sock_close(fd)??
-    return Result.Ok(~)
+    return ~

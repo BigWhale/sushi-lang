@@ -10,7 +10,7 @@ use <net/url>
 fn show(string text) ~:
     match parse_url(text):
         Result.Ok(u) ->
-            println("path {u.path} port {u.port} default {url_port_or_default(u).realise(-2)}")
+            println("path {u.path} port {u.port} default {u.port_or_default()}")
         Result.Err(_) -> println("{text} refused")
     return Result.Ok(~)
 

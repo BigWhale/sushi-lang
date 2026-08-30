@@ -14,28 +14,30 @@ fn main() i32:
     if (a.fd < 0 or b.fd < 0):
         println("bind failed")
         return Result.Ok(1)
-    udp_set_timeouts(a, 5000, 5000)
-    udp_set_timeouts(b, 5000, 5000)
+    if (not a.set_timeouts(5000, 5000).is_ok() or not b.set_timeouts(5000, 5000).is_ok()):
+        println("set_timeouts failed")
+        return Result.Ok(1)
 
-    let i32 port_a = udp_local_port(a).realise(-1)
-    let i32 port_b = udp_local_port(b).realise(-1)
+    let i32 port_a = a.local_port().realise(-1)
+    let i32 port_b = b.local_port().realise(-1)
 
     let u8[] greeting = "Mostly Harmless".to_bytes()
-    udp_send_to(a, greeting, "127.0.0.1", port_b).realise(-1)
-    match udp_recv_from(b, 64):
+    a.send_to(greeting, "127.0.0.1", port_b).realise(-1)
+    match b.recv_from(64):
         Result.Ok(dg) ->
             println("b got {dg.data.to_string()}")
             println("from {dg.peer_ip}")
         Result.Err(_) -> println("b recv_from failed")
 
     let u8[] answer = "42".to_bytes()
-    udp_send_to(b, answer, "127.0.0.1", port_a).realise(-1)
-    match udp_recv_from(a, 64):
+    b.send_to(answer, "127.0.0.1", port_a).realise(-1)
+    match a.recv_from(64):
         Result.Ok(dg) -> println("a got {dg.data.to_string()}")
         Result.Err(_) -> println("a recv_from failed")
 
-    udp_close(poke a)
-    match udp_close(poke b):
+    if (not a.close().is_ok()):
+        println("a close failed")
+    match b.close():
         Result.Ok(_) -> println("closed")
         Result.Err(_) -> println("close failed")
 

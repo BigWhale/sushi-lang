@@ -17,7 +17,7 @@ fn main() i32:
                 println("wrong: no answers")
             let bool all_loopback = true
             foreach(a in addresses.iter()):
-                if (not ip_is_loopback(a).realise(false)):
+                if (not a.is_loopback()):
                     all_loopback := false
             if (all_loopback):
                 println("every answer is loopback")

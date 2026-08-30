@@ -10,7 +10,7 @@ use <net/ip>
 
 fn main() i32:
     match resolve_first("127.0.0.1", true):
-        Result.Ok(a) -> println("{ip_text(a).realise('?')}")
+        Result.Ok(a) -> println("{a.text()}")
         Result.Err(_) -> println("resolve_first failed")
 
     match resolve_first("127.0.0.1", false):

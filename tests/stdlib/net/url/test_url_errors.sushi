@@ -8,7 +8,7 @@ use <net/url>
 fn show(string text) ~:
     match parse_url(text):
         Result.Ok(_) -> println("wrong: {text} was accepted")
-        Result.Err(e) -> println("{url_error_text(e).realise('?')}")
+        Result.Err(e) -> println("{e.text()}")
     return Result.Ok(~)
 
 fn main() i32:
