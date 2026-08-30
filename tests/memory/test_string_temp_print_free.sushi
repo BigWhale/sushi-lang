@@ -27,7 +27,7 @@ fn show() ~:
 fn main() i32:
     println(go().realise("err"))
     let Result@(~, StdError) r = show()
-    if (r):
+    if (r.is_ok()):
         let string s = "hello"
         let string name = "Ford"
         let string b = "hi-{base_word().realise('eh')}"

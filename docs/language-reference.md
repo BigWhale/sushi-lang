@@ -579,7 +579,10 @@ let string combined = "{a}{b}"   # "foobar"
 
 ### If-Elif-Else
 
-Parentheses required around conditions:
+Parentheses required around conditions. A condition is a `bool` and nothing else: an
+integer is CE2005, and a `Result@(T, E)` or a `Maybe@(T)` is CE2516 (test one with
+`.is_ok()` / `.is_some()`). The same rule covers a `while` condition and every operand
+of `and`, `or`, `xor` and `not`.
 
 ```sushi
 if (condition):

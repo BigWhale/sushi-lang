@@ -15,7 +15,7 @@ fn main() i32:
     match s:
         Shape.Poly(p) ->
             let Result@(~, StdError) r = grow(poke p)
-            if (r):
+            if (r.is_ok()):
                 println("grown")
         Shape.Empty -> println("empty")
     return Result.Ok(0)

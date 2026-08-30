@@ -4,7 +4,7 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
-# EXPECT_STDOUT_EXACT: "1\n3\n0\n9\nmarvin\n"
+# EXPECT_STDOUT_EXACT: "true\n3\nfalse\n9\nmarvin\n"
 enum Wrap@(T):
     Full(T)
     Empty

@@ -40,7 +40,7 @@ Drive online. Anything is now infinitely probable.
     We unwrap with `.realise(default)` rather than `??`. The `??` operator is wonderful
     inside ordinary functions, but using it in `main` triggers a CW2511 warning — and a
     warning means a non-zero compile exit, which we treat as failure. In `main`, prefer
-    `match`, `if (result)`, or `.realise(default)`.
+    `match`, `if (result.is_ok())`, or `.realise(default)`.
 
 ### Math
 

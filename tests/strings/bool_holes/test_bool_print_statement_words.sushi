@@ -1,0 +1,16 @@
+# print and println render a bool as the hole does: true and false, never 1 and 0
+# (#523). #516 moved the hole alone, so the two spellings disagreed.
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\nfalse\ntrue false\n"
+use <io/files>
+
+fn main() i32:
+    let bool flag = true
+    let string gone = "/no/such/sushi/path"
+    println(flag)
+    println(not flag)
+    println(not exists(gone))
+    println(exists(gone))
+    print(flag)
+    print(" ")
+    println(not flag)
+    return Result.Ok(0)

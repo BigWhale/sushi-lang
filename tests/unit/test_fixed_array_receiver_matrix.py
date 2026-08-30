@@ -84,7 +84,7 @@ fn main() i32:
     return Result.Ok(0)
 """
     result = _run(tmp_path, source)
-    assert result.stdout.split() == ["3", "2", "6", "1"], f"{label}: {result.stdout!r}"
+    assert result.stdout.split() == ["3", "2", "6", "true"], f"{label}: {result.stdout!r}"
 
 
 def test_write_to_a_constant_is_rejected(tmp_path):

@@ -20,7 +20,7 @@ ceremony. **Every** function in Sushi returns a `Result@(T, E)` — a value that
 - `Result.Err(error)` — failure, carrying an `E`.
 
 Here's a function that can fail, and two ways to handle the outcome at the call site:
-`if (result):` (Ok runs the `if`, Err runs the `else`) and `.realise(default)` (covered
+`if (result.is_ok()):` (Ok runs the `if`, Err runs the `else`) and `.realise(default)` (covered
 later).
 
 ```sushi
@@ -174,7 +174,7 @@ The fix is to consume results explicitly. There are three main-safe patterns:
 
 - **`match`** — when you want to handle Ok and Err differently.
 - **`.realise(default)`** — when a fallback value is enough.
-- **`if (result):`** — for a quick Ok/else split.
+- **`if (result.is_ok()):`** — for a quick Ok/else split.
 
 ```sushi
 --8<-- "docs/tutorial/examples/06-error-handling/main-safe.sushi"
@@ -204,10 +204,10 @@ None of those use `??`, so the program builds cleanly. Save `??` for the helpers
   you supply a custom error enum.
 - `??` unwraps `Ok` or propagates `Err` from the enclosing function — RAII-safe, zero-cost,
   and meant for helper functions (not `main`).
-- `.realise(default)` unwraps with a fallback; `if (result):` splits Ok from Err.
+- `.realise(default)` unwraps with a fallback; `if (result.is_ok()):` splits Ok from Err.
 - `Maybe@(T)` (`Maybe.Some` / `Maybe.None`) models presence vs. absence — Sushi's `null`
   replacement — with `.is_some()`, `.is_none()`, `.realise()`, and `.expect()`.
 - Using `??` in `main` warns with **CW2511**; handle errors there with `match`,
-  `.realise()`, or `if (result):` instead.
+  `.realise()`, or `if (result.is_ok()):` instead.
 
 Next we put values in bulk. On to [Arrays](07-arrays.md).

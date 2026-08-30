@@ -2,7 +2,7 @@
 # `.hash()` on one were CE0072 and CE0056. The element type comes from the receiver's own
 # semantic type now, which every receiver has.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "6\n1\n"
+# EXPECT_STDOUT_EXACT: "6\ntrue\n"
 # EXPECT_NO_LEAKS: true
 
 use <io/stdio>

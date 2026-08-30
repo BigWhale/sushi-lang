@@ -143,7 +143,7 @@ fn main() i32:
     let i32[] values1 = from([10, 20, 30])
     let Result@(List@(Node), StdError) list1 = build_list(values1)
 
-    if (list1):
+    if (list1.is_ok()):
         let List@(Node) empty_list = List.new()
         let List@(Node) list_final = list1.realise(empty_list)
         println("Nodes stored: {list_final.len()}")
@@ -169,7 +169,7 @@ fn main() i32:
     let i32[] values2 = from([5, 15, 25, 35, 45, 55])
     let Result@(List@(Node), StdError) list2 = build_list(values2)
 
-    if (list2):
+    if (list2.is_ok()):
         let List@(Node) empty_list2 = List.new()
         let List@(Node) second_final = list2.realise(empty_list2)
 

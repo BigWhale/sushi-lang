@@ -3,7 +3,7 @@
 # address that arrives. These two read their element type out of the name tables instead,
 # and a field has no name there.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "60\n1\n"
+# EXPECT_STDOUT_EXACT: "60\ntrue\n"
 # EXPECT_NO_LEAKS: true
 
 use <io/stdio>

@@ -1,0 +1,10 @@
+# A Result@(bool, E) in an if condition (#522). The branch used to read the Ok tag,
+# so Ok(false) took the true branch and the bool was never read.
+# EXPECT_ERROR_CODE: CE2516
+fn truthy() bool:
+    return Result.Ok(false)
+
+fn main() i32:
+    if (truthy()):
+        println("took the branch of Ok(false)")
+    return Result.Ok(0)

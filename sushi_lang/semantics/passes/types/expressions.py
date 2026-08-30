@@ -1,6 +1,6 @@
 """Expression validation for type validation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Tuple
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics import array_runs
@@ -476,24 +476,60 @@ def validate_bitwise_unary(validator: 'TypeValidator', expr: UnaryOp) -> None:
         er.emit(validator.reporter, er.ERR.CE2004, expr.expr.loc, op=expr.op)
 
 
+# The predicate that turns each wrapper into the bool a condition wants.
+_WRAPPER_PREDICATES = {"Result": "is_ok", "Maybe": "is_some"}
+
+
+def _wrapper_of(ty: Optional['Type']) -> Optional[Tuple[str, str]]:
+    """(wrapper name, predicate) when this type is a Result or a Maybe, else None.
+
+    Both spellings answer: the interned enum a resolved signature carries, and the
+    GenericTypeRef a declared one keeps.
+    """
+    for name, predicate in _WRAPPER_PREDICATES.items():
+        if isinstance(ty, EnumType) and ty.name.startswith(f"{name}<"):
+            return name, predicate
+        if isinstance(ty, GenericTypeRef) and ty.base_name == name:
+            return name, predicate
+    return None
+
+
+def reject_wrapper_condition(validator: 'TypeValidator', expr: Expr,
+                             expr_type: Optional['Type'] = None) -> bool:
+    """Refuse a Result or a Maybe where a condition belongs, and say how to handle it.
+
+    The ONE seam for every condition position (#522): an `if`, a `while`, and the
+    operands of `and`, `or`, `xor` and `not`. Answers True when it reported, so a
+    caller does not go on to report CE2005 about the same expression.
+    """
+    if expr_type is None:
+        expr_type = validator.infer_expression_type(expr)
+
+    wrapper = _wrapper_of(expr_type)
+    if wrapper is None:
+        return False
+
+    name, predicate = wrapper
+    er.emit_with(validator.reporter, er.ERR.CE2516, expr.loc,
+                 ty=display_type(expr_type), wrapper=name) \
+        .help(f"use '.{predicate}()' to test it, or take the value with "
+              f"'??', '.realise(default)' or match").emit()
+    return True
+
+
 def validate_boolean_condition(validator: 'TypeValidator', expr: Expr, context: str) -> None:
-    """Validate that an expression is boolean or Result<T, E> for control flow."""
+    """Validate that a control-flow condition is a bool. Nothing else is one (#522)."""
     validator.validate_expression(expr)
 
     expr_type = validator.infer_expression_type(expr)
-    if expr_type is not None:
-        if expr_type == BuiltinType.BOOL:
-            return
+    if expr_type is None or expr_type == BuiltinType.BOOL:
+        return
 
-        if isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
-            return
+    if reject_wrapper_condition(validator, expr, expr_type):
+        return
 
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        if isinstance(expr_type, GenericTypeRef) and expr_type.base_name == "Result":
-            return
-
-        er.emit_with(validator.reporter, er.ERR.CE2005, expr.loc) \
-            .help("use '== 0' or '!= 0' for integer conditions").emit()
+    er.emit_with(validator.reporter, er.ERR.CE2005, expr.loc) \
+        .help("use '== 0' or '!= 0' for integer conditions").emit()
 
 
 def check_propagation_in_expression(expr: Expr) -> bool:

@@ -1,0 +1,11 @@
+# A bool hole holding a free-function call, and a `not` over one, print the words
+# (#523). The call carried no type stamp, so both fell back to the integer path.
+# EXPECT_STDOUT_EXACT: "true false\nfalse true\n"
+use <io/files>
+
+fn main() i32:
+    let string root = "/"
+    let string gone = "/no/such/sushi/path"
+    println("{exists(root)} {exists(gone)}")
+    println("{not exists(root)} {not exists(gone)}")
+    return Result.Ok(0)

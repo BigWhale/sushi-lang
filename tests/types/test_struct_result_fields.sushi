@@ -17,7 +17,7 @@ fn main() i32:
     )
 
     # Check if status_code is Ok
-    if (resp.status_code):
+    if (resp.status_code.is_ok()):
         println("Status: success")
     else:
         println("Status: error")

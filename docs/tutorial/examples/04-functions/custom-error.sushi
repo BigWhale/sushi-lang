@@ -11,13 +11,13 @@ fn jump(string destination, i32 fuel) string | NavError:
 
 fn main() i32:
     let Result@(string, NavError) trip = jump("Magrathea", 100)
-    if (trip):
+    if (trip.is_ok()):
         println(trip.realise("nowhere"))
     else:
         println("The jump failed.")
 
     let Result@(string, NavError) stranded = jump("Magrathea", 0)
-    if (stranded):
+    if (stranded.is_ok()):
         println(stranded.realise("nowhere"))
     else:
         println("The jump failed: out of fuel.")

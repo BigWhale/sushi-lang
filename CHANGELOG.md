@@ -5,6 +5,15 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **A condition is a bool, and nothing else is one.** A `Result@(T, E)` used to answer
+  for its Ok tag, so `if (f())` meant "did the call succeed". A `Result@(bool, E)` then
+  had two readings and the compiler took one in silence: `Ok(false)` ran the true branch
+  and the bool was never read — the defect that made `<io/path>`'s `extension()` answer
+  an empty extension for every path. The exception is removed, so `Result` now agrees
+  with `Maybe@(T)`, which was refused from the start. The new **CE2516** covers every
+  condition position — an `if`, a `while`, and the operands of `and`, `or`, `xor` and
+  `not` — and names the escape: `.is_ok()` / `.is_err()` / `.is_some()` / `.is_none()`
+  answer with a bool, while `??`, `.realise(default)` and `match` take the value.
 - **Extensions get an opt-in error channel.** `extend bool checked() bool | StdError:`
   gives the method the Result ABI: the call yields `Result@(T, E)`, `??` works in the
   body, `return Result.Err(e)` is the one spelled constructor, and the bare success
@@ -61,6 +70,14 @@ All notable changes to Sushi Lang will be documented in this file.
   family clamps.
 
 ### Fixed
+- **A bool prints as a word wherever it is printed.** #514 moved the interpolation hole
+  to `true`/`false` and left `println(flag)` on `%d`, so the two spellings disagreed
+  about one value; both go through the bool formatter now. A hole holding a plain
+  function call was a second half of the same defect: the typecheck pass stamped its
+  return type on a method call but not on a plain one, so `{exists(p)}` and
+  `{not exists(p)}` fell back to the integer rendering and printed `1` and `0`. Every
+  call carries the stamp now, which also gives the backend a truthful answer for the
+  signedness of a call result.
 - **An `<io/files>` failure names its reason.** Every utility function used to
   return a zeroed Err payload, which reads as `FileError.NotFound` whatever
   happened; errno is now read and mapped, so `mkdir` on an existing path answers

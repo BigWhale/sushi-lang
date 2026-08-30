@@ -3,7 +3,7 @@
 # Demonstrates:
 # - Result@(T, E) as the foundation of error handling in Sushi
 # - Multiple error conditions with explicit Result.Err(error_value) returns
-# - Boolean context checking (if (result) for Ok, else for Err)
+# - Explicit success checking (if (result.is_ok()) for Ok, else for Err)
 # - Safe unwrapping with .realise(default_value)
 # - Difference between storing Result@(T, E) vs unwrapping immediately
 # - Chaining result checks and handling
@@ -45,12 +45,12 @@ fn calculate_hyperspace_jump(i32 distance, i32 fuel) i32:
 fn main() i32:
     # Pattern 1: Store Result@(T, E) and check it explicitly.
     # This is the most explicit approach, allowing separate handling
-    # of Ok and Err cases. Result@(T, E) can be used in boolean context.
+    # of Ok and Err cases.
     let Result@(i32, StdError) jump1 = calculate_hyperspace_jump(1000, 50)
 
-    # Result@(T, E) in boolean context: if (result) checks for Ok.
+    # .is_ok() answers true for the Ok arm; a Result is not a condition itself.
     # Inside the Ok branch, use .realise() to extract the value safely.
-    if (jump1):
+    if (jump1.is_ok()):
         let i32 result = jump1.realise(0)
         println("Hyperspace jump successful: {result} parsecs")
     else:
@@ -74,7 +74,7 @@ fn main() i32:
     # This call will fail due to insufficient fuel (5 < required 50).
     let Result@(i32, StdError) jump3 = calculate_hyperspace_jump(5000, 5)
 
-    if (jump3):
+    if (jump3.is_ok()):
         println("This won't print")
     else:
         # Error case: else branch executes for Result.Err(error_value)

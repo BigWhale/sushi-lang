@@ -40,13 +40,13 @@ fn main() i32:
     let Result@(i32, StdError) pt_result = test_parameter_type(Either.Right(123))
 
     # Use the variables to avoid warnings
-    if (ret):
+    if (ret.is_ok()):
         println("Return type test passed")
 
-    if (vt_result):
+    if (vt_result.is_ok()):
         println("Variable type test passed")
 
-    if (pt_result):
+    if (pt_result.is_ok()):
         println("Parameter type test passed")
 
     return Result.Ok(0)

@@ -1,7 +1,7 @@
 # Regression for #480: the read-only methods on a fixed-array FIELD work today, and the
 # address seam must keep them working. A read may spill a temporary; a write may not.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "3\n10\n30\n60\n1\n"
+# EXPECT_STDOUT_EXACT: "3\n10\n30\n60\ntrue\n"
 
 use <io/stdio>
 

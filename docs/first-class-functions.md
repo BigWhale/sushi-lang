@@ -85,7 +85,7 @@ functions are deferred (see [error codes](#error-codes)).
 
 Call a function value exactly like a named function — `f(args)`. Because every Sushi function
 returns `Result@(T, E)`, an indirect call yields the same `Result` a direct call would, so `??`,
-`if (result)`, and pattern matching all work unchanged:
+`if (result.is_ok())`, and pattern matching all work unchanged:
 
 ```sushi
 fn run_twice(fn(i32) -> i32 f, i32 v) i32:

@@ -64,9 +64,10 @@ fine in *other* functions, as you'll see in the next chapter.)
 
 Two everyday techniques work well in `main`:
 
-- `if (result):` treats the `Result` as a condition — the `if` branch runs on success, the
-  `else` branch on failure. Inside the success branch, `result.realise(default)` pulls out
-  the value.
+- `if (result.is_ok()):` asks whether the call succeeded — the `if` branch runs on
+  success, the `else` branch on failure. Inside the success branch,
+  `result.realise(default)` pulls out the value. A condition is a bool, so the bare
+  `if (result):` is refused with **CE2516**.
 - `.realise(default)` unwraps a success directly, substituting `default` if it was an
   error.
 
@@ -106,7 +107,7 @@ The jump failed: out of fuel.
 ```
 
 Here `jump` returns `string | NavError`, i.e. `Result@(string, NavError)`, and can fail in
-two named ways. We consume it in `main` with the same `if (result):` pattern as before.
+two named ways. We consume it in `main` with the same `if (result.is_ok()):` pattern as before.
 This is only a taste — designing error types, propagating them with `??`, and pattern
 matching on the specific failure is the subject of
 [Chapter 6](06-error-handling.md).
@@ -143,7 +144,7 @@ refuses the signature — a caller in another unit would receive a type it canno
 - Declare functions with `fn name(Type param, ...) ReturnType:` and call them by name.
 - **Every** function returns a `Result`. A bare return type like `i32` is shorthand for
   `Result@(i32, StdError)`, so every path must end in `Result.Ok(...)` or `Result.Err(...)`.
-- In `main`, consume a `Result` without `??`: use `if (result):` / `else:` and
+- In `main`, consume a `Result` without `??`: use `if (result.is_ok()):` / `else:` and
   `.realise(default)`.
 - Declare a custom error type with `fn foo() T | ErrorType` — explored fully in
   [Chapter 6](06-error-handling.md).

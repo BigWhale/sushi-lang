@@ -291,14 +291,14 @@ fn main() i32:
     let Result@(i32, StdError) result2 = divide(42, 0)
 
     # Check result1
-    if (result1):
+    if (result1.is_ok()):
         let i32 value = result1.realise(0)
         println("42 / 6 = {value}")
     else:
         println("First division failed")
 
     # Check result2
-    if (result2):
+    if (result2.is_ok()):
         let i32 value = result2.realise(0)
         println("42 / 0 = {value}")
     else:

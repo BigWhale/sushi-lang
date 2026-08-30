@@ -386,7 +386,7 @@ fn main() i32:
     let Result@(i32, StdError) result = divide(42, 6)
 
     # Check if successful
-    if (result):
+    if (result.is_ok()):
         let i32 value = result.realise(0)
         println("Result: {value}")
     else:
@@ -399,7 +399,8 @@ fn main() i32:
 - When you declare a function returning `i32`, it actually returns `Result@(i32)`
 - Success values must be wrapped: `return Result.Ok(value)`
 - Failures are signaled with: `return Result.Err(StdError.Error)`
-- You can use `Result` values directly in conditionals: `if (result)` checks for success
+- A condition is a bool and nothing else, so a `Result` is tested with `.is_ok()` or
+  `.is_err()`; `if (result)` on its own is CE2516
 - The `.realise(default)` method extracts the value, using the default if the result is an error
 
 This approach eliminates null pointer exceptions and ensures that error cases are always visible in the code. The compiler enforces that you handle or propagate errors - you cannot accidentally ignore them.

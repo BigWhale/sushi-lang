@@ -6,15 +6,15 @@ fn halve(i32 n) i32:
     return Result.Ok(n / 2)
 
 fn main() i32:
-    # if (result): runs the Ok branch; else runs the Err branch.
+    # if (result.is_ok()): runs the Ok branch; else runs the Err branch.
     let Result@(i32, StdError) even = halve(84)
-    if (even):
+    if (even.is_ok()):
         println("84 halved is {even.realise(0)}")
     else:
         println("84 was odd?!")
 
     let Result@(i32, StdError) odd = halve(7)
-    if (odd):
+    if (odd.is_ok()):
         println("7 halved is {odd.realise(0)}")
     else:
         println("7 is odd, cannot halve cleanly")

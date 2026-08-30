@@ -56,14 +56,14 @@ fn test_count() ~:
     return Result.Ok(~)
 
 fn main() i32:
-    if (test_chained_methods()):
+    if (test_chained_methods().is_ok()):
         println("")
-    if (test_contains()):
+    if (test_contains().is_ok()):
         println("")
-    if (test_starts_with()):
+    if (test_starts_with().is_ok()):
         println("")
-    if (test_ends_with()):
+    if (test_ends_with().is_ok()):
         println("")
-    if (test_count()):
+    if (test_count().is_ok()):
         println("")
     return Result.Ok(0)

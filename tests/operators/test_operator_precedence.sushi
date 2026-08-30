@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_EXACT: "2\n4\n1\n0\n1\n-3\n1\n"
+# EXPECT_STDOUT_EXACT: "2\n4\ntrue\nfalse\ntrue\n-3\ntrue\n"
 fn main() i32:
     # Test operator precedence with new operators
 

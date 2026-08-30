@@ -12,6 +12,6 @@ fn f(string[] words) ~:
 fn main() i32:
     let string[] words = from(["a", "b"])
     let Result@(~, StdError) r = f(words)
-    if (r):
+    if (r.is_ok()):
         println("done")
     return Result.Ok(0)

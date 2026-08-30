@@ -10,6 +10,6 @@ fn f(poke string s) ~:
 fn main() i32:
     let string a = "aa-{1}"
     let Result@(~, StdError) r = f(poke a)
-    if (r):
+    if (r.is_ok()):
         println("after")
     return Result.Ok(0)

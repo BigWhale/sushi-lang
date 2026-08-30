@@ -1,0 +1,17 @@
+# The migration shape must not leak: a temporary Result carrying an owning payload,
+# tested with .is_ok() in a condition. emit_condition used to free that temporary
+# itself (#159); the method-call temp registry owns it now (#522).
+# EXPECT_STDOUT_EXACT: "ok\nsome\n"
+# EXPECT_NO_LEAKS
+fn make() string:
+    return Result.Ok("Mostly Harmless".clone())
+
+fn main() i32:
+    if (make().is_ok()):
+        println("ok")
+
+    let i32[] xs = from([1, 2, 3])
+    if (xs.get(1).is_some()):
+        println("some")
+
+    return Result.Ok(0)

@@ -135,29 +135,29 @@ fn test_count_case_sensitive() ~:
     return Result.Ok(~)
 
 fn main() i32:
-    if (test_count_single_char()):
+    if (test_count_single_char().is_ok()):
         println("")
-    if (test_count_substring()):
+    if (test_count_substring().is_ok()):
         println("")
-    if (test_count_non_overlapping()):
+    if (test_count_non_overlapping().is_ok()):
         println("")
-    if (test_count_not_found()):
+    if (test_count_not_found().is_ok()):
         println("")
-    if (test_count_empty_needle()):
+    if (test_count_empty_needle().is_ok()):
         println("")
-    if (test_count_empty_string()):
+    if (test_count_empty_string().is_ok()):
         println("")
-    if (test_count_full_match()):
+    if (test_count_full_match().is_ok()):
         println("")
-    if (test_count_word()):
+    if (test_count_word().is_ok()):
         println("")
-    if (test_count_repeated()):
+    if (test_count_repeated().is_ok()):
         println("")
-    if (test_count_utf8()):
+    if (test_count_utf8().is_ok()):
         println("")
-    if (test_count_emoji()):
+    if (test_count_emoji().is_ok()):
         println("")
-    if (test_count_case_sensitive()):
+    if (test_count_case_sensitive().is_ok()):
         println("")
 
     return Result.Ok(0)

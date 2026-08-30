@@ -35,6 +35,6 @@ fn test_rebind() i32:
 
 fn main() i32:
     let Result@(i32, StdError) result = test_rebind()
-    if (result):
+    if (result.is_ok()):
         return Result.Ok(0)
     return Result.Err(StdError.Error)

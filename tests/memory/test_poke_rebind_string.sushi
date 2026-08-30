@@ -12,6 +12,6 @@ fn swap_in(poke string s) ~:
 fn main() i32:
     let string a = "aa-{1}"
     let Result@(~, StdError) r = swap_in(poke a)
-    if (r):
+    if (r.is_ok()):
         println(a)
     return Result.Ok(0)

@@ -18,21 +18,21 @@ fn find_both(string text) i32:
 fn main() i32:
     # Test with both present
     let Result@(i32, StdError) result1 = find_both("x hello y world")
-    if (result1):
+    if (result1.is_ok()):
         println("Both found")
     else:
         println("One or both not found")
 
     # Test with first missing (should propagate)
     let Result@(i32, StdError) result2 = find_both("hello y world")
-    if (result2):
+    if (result2.is_ok()):
         println("Both found")
     else:
         println("First not found")
 
     # Test with second missing (should propagate)
     let Result@(i32, StdError) result3 = find_both("x hello world")
-    if (result3):
+    if (result3.is_ok()):
         println("Both found")
     else:
         println("Second not found")

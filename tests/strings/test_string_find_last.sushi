@@ -162,27 +162,27 @@ fn test_find_last_vs_find() ~:
     return Result.Ok(~)
 
 fn main() i32:
-    if (test_find_last_basic()):
+    if (test_find_last_basic().is_ok()):
         println("")
-    if (test_find_last_not_found()):
+    if (test_find_last_not_found().is_ok()):
         println("")
-    if (test_find_last_first_char()):
+    if (test_find_last_first_char().is_ok()):
         println("")
-    if (test_find_last_substring()):
+    if (test_find_last_substring().is_ok()):
         println("")
-    if (test_find_last_single_occurrence()):
+    if (test_find_last_single_occurrence().is_ok()):
         println("")
-    if (test_find_last_empty_needle()):
+    if (test_find_last_empty_needle().is_ok()):
         println("")
-    if (test_find_last_empty_string()):
+    if (test_find_last_empty_string().is_ok()):
         println("")
-    if (test_find_last_full_match()):
+    if (test_find_last_full_match().is_ok()):
         println("")
-    if (test_find_last_utf8()):
+    if (test_find_last_utf8().is_ok()):
         println("")
-    if (test_find_last_emoji()):
+    if (test_find_last_emoji().is_ok()):
         println("")
-    if (test_find_last_vs_find()):
+    if (test_find_last_vs_find().is_ok()):
         println("")
 
     return Result.Ok(0)

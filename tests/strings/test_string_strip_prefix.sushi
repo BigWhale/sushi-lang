@@ -75,20 +75,20 @@ fn test_single_char() ~:
     return Result.Ok(~)
 
 fn main() i32:
-    if (test_basic_strip()):
+    if (test_basic_strip().is_ok()):
         println("")
-    if (test_no_match()):
+    if (test_no_match().is_ok()):
         println("")
-    if (test_empty_prefix()):
+    if (test_empty_prefix().is_ok()):
         println("")
-    if (test_empty_string()):
+    if (test_empty_string().is_ok()):
         println("")
-    if (test_full_match()):
+    if (test_full_match().is_ok()):
         println("")
-    if (test_prefix_longer()):
+    if (test_prefix_longer().is_ok()):
         println("")
-    if (test_utf8()):
+    if (test_utf8().is_ok()):
         println("")
-    if (test_single_char()):
+    if (test_single_char().is_ok()):
         println("")
     return Result.Ok(0)

@@ -43,7 +43,7 @@ fn main() i32:
 
     # Test 3: Mix user generic with built-in generic
     let Result@(Pair@(i32, i32), StdError) p3 = Result.Ok(Pair.Both(200, 300))
-    if (p3):
+    if (p3.is_ok()):
         let Pair@(i32, i32) inner = p3.realise(Pair.Both(0, 0))
         match inner:
             Pair.Both(a, b) ->

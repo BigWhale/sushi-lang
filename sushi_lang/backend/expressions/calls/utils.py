@@ -26,7 +26,7 @@ def stamped_semantic_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional['Type'
 
     if isinstance(expr, TryExpr):
         stamped = getattr(expr, 'inferred_unwrapped_type', None)
-    elif isinstance(expr, (MethodCall, DotCall)):
+    elif isinstance(expr, (Call, MethodCall, DotCall)):
         stamped = getattr(expr, 'inferred_return_type', None)
     elif isinstance(expr, IndexAccess):
         stamped = getattr(expr, 'inferred_element_type', None)

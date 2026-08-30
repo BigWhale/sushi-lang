@@ -10,7 +10,7 @@ fn main() i32:
     # Test with Some variant
     let Maybe@(i32) some_value = Maybe.Some(42)
     let Result@(i32, StdError) result1 = process_maybe(some_value)
-    if (result1):
+    if (result1.is_ok()):
         println("Some variant processed successfully")
     else:
         println("Error: None propagated")
@@ -18,7 +18,7 @@ fn main() i32:
     # Test with None variant
     let Maybe@(i32) none_value = Maybe.None()
     let Result@(i32, StdError) result2 = process_maybe(none_value)
-    if (result2):
+    if (result2.is_ok()):
         println("Unexpected success")
     else:
         println("None propagated as expected")

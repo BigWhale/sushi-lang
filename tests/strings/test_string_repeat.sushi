@@ -113,25 +113,25 @@ fn test_repeat_word() ~:
     return Result.Ok(~)
 
 fn main() i32:
-    if (test_repeat_basic()):
+    if (test_repeat_basic().is_ok()):
         println("")
-    if (test_repeat_single_char()):
+    if (test_repeat_single_char().is_ok()):
         println("")
-    if (test_repeat_zero()):
+    if (test_repeat_zero().is_ok()):
         println("")
-    if (test_repeat_negative()):
+    if (test_repeat_negative().is_ok()):
         println("")
-    if (test_repeat_one()):
+    if (test_repeat_one().is_ok()):
         println("")
-    if (test_repeat_empty_string()):
+    if (test_repeat_empty_string().is_ok()):
         println("")
-    if (test_repeat_utf8()):
+    if (test_repeat_utf8().is_ok()):
         println("")
-    if (test_repeat_multibyte()):
+    if (test_repeat_multibyte().is_ok()):
         println("")
-    if (test_repeat_large()):
+    if (test_repeat_large().is_ok()):
         println("")
-    if (test_repeat_word()):
+    if (test_repeat_word().is_ok()):
         println("")
 
     return Result.Ok(0)

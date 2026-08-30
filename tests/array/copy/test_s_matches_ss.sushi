@@ -2,7 +2,7 @@
 # disagree, one of them grew a copy of its own.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
-# EXPECT_STDOUT_EXACT: "1\n1\n1\n"
+# EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\n"
 
 use <io/stdio>
 
