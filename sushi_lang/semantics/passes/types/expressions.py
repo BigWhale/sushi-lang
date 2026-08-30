@@ -494,42 +494,42 @@ def _wrapper_of(ty: Optional['Type']) -> Optional[Tuple[str, str]]:
     return None
 
 
-def reject_wrapper_condition(validator: 'TypeValidator', expr: Expr,
-                             expr_type: Optional['Type'] = None) -> bool:
-    """Refuse a Result or a Maybe where a condition belongs, and say how to handle it.
+def reject_non_bool_condition(validator: 'TypeValidator', expr: Expr,
+                              expr_type: Optional['Type'] = None) -> bool:
+    """Refuse an expression that stands where a condition belongs and is not a bool.
 
-    The ONE seam for every condition position (#522): an `if`, a `while`, and the
-    operands of `and`, `or`, `xor` and `not`. Answers True when it reported, so a
-    caller does not go on to report CE2005 about the same expression.
+    The ONE seam for every condition position: an `if`, a `while` (#522), and the
+    operands of `and`, `or`, `xor` and `not` (#532). A wrapper is told which predicate
+    answers for it (CE2516); everything else is CE2005, which offers the `== 0` escape
+    only to an integer -- a string or a struct has no such spelling. Answers True when
+    it reported.
     """
     if expr_type is None:
         expr_type = validator.infer_expression_type(expr)
 
-    wrapper = _wrapper_of(expr_type)
-    if wrapper is None:
+    if expr_type is None or expr_type == BuiltinType.BOOL:
         return False
 
-    name, predicate = wrapper
-    er.emit_with(validator.reporter, er.ERR.CE2516, expr.loc,
-                 ty=display_type(expr_type), wrapper=name) \
-        .help(f"use '.{predicate}()' to test it, or take the value with "
-              f"'??', '.realise(default)' or match").emit()
+    wrapper = _wrapper_of(expr_type)
+    if wrapper is not None:
+        name, predicate = wrapper
+        er.emit_with(validator.reporter, er.ERR.CE2516, expr.loc,
+                     ty=display_type(expr_type), wrapper=name) \
+            .help(f"use '.{predicate}()' to test it, or take the value with "
+                  f"'??', '.realise(default)' or match").emit()
+        return True
+
+    report = er.emit_with(validator.reporter, er.ERR.CE2005, expr.loc)
+    if is_integer_type(expr_type):
+        report = report.help("use '== 0' or '!= 0' for integer conditions")
+    report.emit()
     return True
 
 
 def validate_boolean_condition(validator: 'TypeValidator', expr: Expr, context: str) -> None:
     """Validate that a control-flow condition is a bool. Nothing else is one (#522)."""
     validator.validate_expression(expr)
-
-    expr_type = validator.infer_expression_type(expr)
-    if expr_type is None or expr_type == BuiltinType.BOOL:
-        return
-
-    if reject_wrapper_condition(validator, expr, expr_type):
-        return
-
-    er.emit_with(validator.reporter, er.ERR.CE2005, expr.loc) \
-        .help("use '== 0' or '!= 0' for integer conditions").emit()
+    reject_non_bool_condition(validator, expr)
 
 
 def check_propagation_in_expression(expr: Expr) -> bool:

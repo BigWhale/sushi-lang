@@ -1,0 +1,7 @@
+# A float operand: the same CE0017 (#532).
+# EXPECT_ERROR_CODE: CE2005
+fn main() i32:
+    let f64 f = 0.5
+    let bool b = f or false
+    println("{b}")
+    return Result.Ok(0)

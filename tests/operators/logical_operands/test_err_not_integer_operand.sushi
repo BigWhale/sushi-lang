@@ -1,0 +1,8 @@
+# `not` never checked its operand, so an integer got C truthiness: `not 5` answered 0
+# and `not 0` answered 1, in a language where `if (n)` is CE2005 (#532).
+# EXPECT_ERROR_CODE: CE2005
+fn main() i32:
+    let i32 n = 5
+    let bool flipped = not n
+    println("{flipped}")
+    return Result.Ok(0)

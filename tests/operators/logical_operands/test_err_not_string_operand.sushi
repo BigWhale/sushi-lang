@@ -1,0 +1,8 @@
+# A string operand reached the backend and became a CE0017 internal error, which is
+# the shape #449 removed for the comparisons (#532).
+# EXPECT_ERROR_CODE: CE2005
+fn main() i32:
+    let string s = "x"
+    let bool b = not s
+    println("{b}")
+    return Result.Ok(0)

@@ -516,6 +516,12 @@ does not provide yet.
 **Alternative syntax:** Sushi supports both keyword (`and`, `or`, `xor`, `not`) and symbolic (`&&`, `||`, `^^`, `!`) 
 forms for all logical operators.
 
+Every operand of every one of them is a **bool**, because an operand is a condition and
+a condition takes nothing else. An integer, a string, a float, a struct, an enum or an
+array there is CE2005, and a `Result@(T, E)` or a `Maybe@(T)` is CE2516. `not 5` does
+not answer `0`: there is no truthiness to read, so write the question — `not (n == 0)`,
+or `n == 0`.
+
 ### Bitwise
 
 - `&` - Bitwise AND
@@ -579,10 +585,12 @@ let string combined = "{a}{b}"   # "foobar"
 
 ### If-Elif-Else
 
-Parentheses required around conditions. A condition is a `bool` and nothing else: an
-integer is CE2005, and a `Result@(T, E)` or a `Maybe@(T)` is CE2516 (test one with
-`.is_ok()` / `.is_some()`). The same rule covers a `while` condition and every operand
-of `and`, `or`, `xor` and `not`.
+Parentheses required around conditions. A condition is a `bool` and nothing else: a
+`Result@(T, E)` or a `Maybe@(T)` is CE2516 (test one with `.is_ok()` / `.is_some()`),
+and every other type is CE2005 — an integer carries no truth value, so write the
+question (`n != 0`). The same rule covers a `while` condition and both operands of
+`and`, `or` and `xor` and the operand of `not`, so `not 5` is refused exactly as
+`if (5)` is.
 
 ```sushi
 if (condition):

@@ -14,6 +14,14 @@ All notable changes to Sushi Lang will be documented in this file.
   condition position — an `if`, a `while`, and the operands of `and`, `or`, `xor` and
   `not` — and names the escape: `.is_ok()` / `.is_err()` / `.is_some()` / `.is_none()`
   answer with a bool, while `??`, `.realise(default)` and `match` take the value.
+- **A logical operand is a bool too.** `and`, `or`, `xor` and `not` checked no operand
+  at all, so the hole sat *around* CE2005 rather than under it: `if (n)` reported and
+  `if (n and true)` did not. An integer operand got C truthiness (`not 5` answered `0`),
+  and a string, a float, a struct, an enum or an array reached the backend and became a
+  CE0017 internal error — the shape #449 removed from the comparisons. All nine
+  condition positions go through one rule now, and CE2005 offers the `== 0` escape only
+  to an integer, where it spells something. A `not` also reports its own type: it is a
+  bool whatever it wraps, so `{not n}` no longer renders through its operand.
 - **Extensions get an opt-in error channel.** `extend bool checked() bool | StdError:`
   gives the method the Result ABI: the call yields `Result@(T, E)`, `??` works in the
   body, `return Result.Err(e)` is the one spelled constructor, and the bare success

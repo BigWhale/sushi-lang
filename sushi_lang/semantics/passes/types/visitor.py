@@ -269,11 +269,11 @@ class ExpressionValidator(RecursiveVisitor):
             from sushi_lang.semantics.passes.types.expressions import validate_bitwise_unary
             validate_bitwise_unary(self.type_validator, node)
 
-        # The operand of `not` is a condition, so it obeys the condition rule (#522).
+        # The operand of `not` is a condition, so it obeys the condition rule (#532).
         if node.op == "not":
             from sushi_lang.semantics.passes.types.expressions import (
-                reject_wrapper_condition)
-            reject_wrapper_condition(self.type_validator, node.expr, operand_type)
+                reject_non_bool_condition)
+            reject_non_bool_condition(self.type_validator, node.expr, operand_type)
 
         # Unary minus is overflow-checked: the smallest signed value has no positive
         # twin. `~` is width-defined and never reports.
@@ -320,12 +320,12 @@ class ExpressionValidator(RecursiveVisitor):
         if node.op in ["&", "|", "^", "<<", ">>"]:
             self.type_validator._validate_bitwise_operation(node)
 
-        # Both operands of a logical operator are conditions (#522).
+        # Both operands of a logical operator are conditions (#532).
         if node.op in ["and", "or", "xor"]:
             from sushi_lang.semantics.passes.types.expressions import (
-                reject_wrapper_condition)
-            reject_wrapper_condition(self.type_validator, node.left, left_type)
-            reject_wrapper_condition(self.type_validator, node.right, right_type)
+                reject_non_bool_condition)
+            reject_non_bool_condition(self.type_validator, node.left, left_type)
+            reject_non_bool_condition(self.type_validator, node.right, right_type)
 
         # The overflow-checked operators. A width-defined one cannot leave its type,
         # so it is not asked (Ruling 1 of docs/design/compile-time-evaluation.md).

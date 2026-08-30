@@ -28,7 +28,7 @@ _add(ErrorMessage("CE2004", Severity.ERROR,
 
 _add(ErrorMessage("CE2005", Severity.ERROR,
     "condition must be bool",
-    Category.TYPE, "If/elif/while conditions require a 'bool' expression; implicit int→bool coercions are not allowed."))
+    Category.TYPE, "A condition takes a 'bool' and nothing else. Sushi converts no type to a truth value: an integer is not true when it is not zero, and a string is not true when it holds bytes. Write the question instead -- 'n != 0', 's.len() > 0'. This covers every condition position: an if, an elif, a while, and the operands of the logical operators and, or, xor and not. The operators were the hole until #532. They checked no operand at all, so 'not 5' answered 0 with C truthiness while 'if (5)' was refused, and a string, a float, a struct, an enum or an array operand reached the backend and became a CE0017 internal error -- the same shape #449 removed from the comparisons. A Result@(T, E) or a Maybe@(T) in one of these positions is CE2516 instead, which names the predicate that answers for it."))
 
 _add(ErrorMessage("CE2006", Severity.ERROR,
     "argument type mismatch at position {index}: expected {expected}, got {got}",

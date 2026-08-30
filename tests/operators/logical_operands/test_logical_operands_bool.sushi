@@ -1,0 +1,14 @@
+# Every logical operand is a bool, and a `not` is a bool whatever it wraps (#532).
+# The `not` over a call used to render as an integer, because the semantic type was
+# read through to the operand instead of being the operator's own answer.
+# EXPECT_STDOUT_EXACT: "false true false true\nfalse true\n"
+use <io/files>
+
+fn main() i32:
+    let bool yes = true
+    let i32 n = 5
+    let string gone = "/no/such/sushi/path"
+
+    println("{not yes} {yes and true} {yes xor true} {yes or false}")
+    println("{not (n == 5)} {not exists(gone)}")
+    return Result.Ok(0)

@@ -1,0 +1,10 @@
+# A struct operand: the same CE0017 (#532).
+# EXPECT_ERROR_CODE: CE2005
+struct Point:
+    i32 x
+
+fn main() i32:
+    let Point p = Point(1)
+    let bool b = p xor true
+    println("{b}")
+    return Result.Ok(0)

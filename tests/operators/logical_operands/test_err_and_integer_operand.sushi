@@ -1,0 +1,8 @@
+# The same hole through a binary operator. `if (n)` reported and `if (n and true)`
+# did not, so the operators sat around CE2005 instead of under it (#532).
+# EXPECT_ERROR_CODE: CE2005
+fn main() i32:
+    let i32 n = 5
+    if (n and true):
+        println("took it")
+    return Result.Ok(0)
