@@ -7,12 +7,12 @@ there. See `docs/design/libraries.md` section 4.2.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 
 import pytest
 
 from sushi_lang.backend.library_format import LibraryFormat
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 
 LIB_MAIN = """\
@@ -58,13 +58,13 @@ def _sushic(args, cwd, extra_env=None):
     env = {**os.environ}
     if extra_env:
         env.update(extra_env)
-    return subprocess.run(["sushic", *args], cwd=cwd, capture_output=True,
+    return subprocess.run([SUSHIC, *args], cwd=cwd, capture_output=True,
                           text=True, env=env)
 
 
 def _build_lib(tmp_path, sources, main, kind="source", version="1.2.0"):
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     for name, text in sources.items():
         path = tmp_path / f"{name}.sushi"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -264,8 +264,8 @@ fn main() i32:
 # --- The default ---------------------------------------------------------------
 
 def test_source_is_now_the_default_kind(tmp_path):
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     (tmp_path / "plain.sushi").write_text(GENERIC_LIB, encoding="utf-8")
     out = tmp_path / "plain.slib"
     r = _sushic(["--lib", "--lib-version", "1.0.0",

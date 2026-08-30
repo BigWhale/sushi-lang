@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from sushic_path import SUSHIC
 
 
 REPO = Path(__file__).parents[2]
-SUSHIC = REPO / "sushic"
 
 FOREIGN_LIB = """\
 public fn keep() i32:
@@ -68,7 +68,7 @@ def _build_lib(tmp: Path, name: str, source: str, *companions: tuple[str, str]):
         (tmp / f"{cname}.sushi").write_text(csource, encoding="utf-8")
     out = tmp / f"{name}.slib"
     r = subprocess.run(
-        [str(SUSHIC), "--lib", "--lib-version", "0.0.1", str(src), "-o", str(out)],
+        [SUSHIC, "--lib", "--lib-version", "0.0.1", str(src), "-o", str(out)],
         capture_output=True, text=True, cwd=tmp)
     return r, out
 
@@ -104,7 +104,7 @@ def test_a_program_build_is_quiet(tmp_path):
     src = tmp_path / "prog.sushi"
     src.write_text(PROGRAM, encoding="utf-8")
     out = tmp_path / "prog"
-    r = subprocess.run([str(SUSHIC), str(src), "-o", str(out)],
+    r = subprocess.run([SUSHIC, str(src), "-o", str(out)],
                        capture_output=True, text=True, cwd=tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "CW3003" not in r.stderr

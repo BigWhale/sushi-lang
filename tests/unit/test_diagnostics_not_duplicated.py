@@ -5,12 +5,13 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from sushic_path import SUSHIC
 
 
 def _compile(tmp_path: Path, source: str, name: str = "dup.sushi") -> str:
     (tmp_path / name).write_text(source, encoding="utf-8")
     result = subprocess.run(
-        ["sushic", name],
+        [SUSHIC, name],
         cwd=tmp_path,
         capture_output=True,
         text=True,

@@ -8,15 +8,10 @@ of the name, the same program was an internal error instead of a diagnostic.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
-
-
-needs_sushic = pytest.mark.skipif(shutil.which("sushic") is None,
-                                  reason="sushic not on PATH")
+from sushic_path import SUSHIC, needs_sushic
 
 
 def _write(path: Path, content: str) -> None:
@@ -28,7 +23,7 @@ def _build_lib(tmp_path: Path, source: str, name: str, kind: str = "binary"):
     libs = tmp_path / "libs"
     libs.mkdir(exist_ok=True)
     _write(tmp_path / f"{name}.sushi", source)
-    r = subprocess.run(["sushic", "--lib", "--lib-kind", kind, "--lib-version", "0.1.0",
+    r = subprocess.run([SUSHIC, "--lib", "--lib-kind", kind, "--lib-version", "0.1.0",
                         str(tmp_path / f"{name}.sushi"), "-o", str(libs / f"{name}.slib")],
                        cwd=tmp_path, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -40,7 +35,7 @@ def _compile(tmp_path: Path, files: dict[str, str], env: dict | None = None,
     project = tmp_path / name
     for path, text in files.items():
         _write(project / path, text)
-    r = subprocess.run(["sushic", entry, "-o", "out"], cwd=project,
+    r = subprocess.run([SUSHIC, entry, "-o", "out"], cwd=project,
                        capture_output=True, text=True, env=env or {**os.environ})
     return r, r.stdout + r.stderr
 

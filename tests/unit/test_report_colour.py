@@ -21,7 +21,6 @@ from __future__ import annotations
 import io
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -33,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_slib_doc_carriage import DOC_LIB, build_library  # noqa: E402
 
 from sushi_lang.internals.styling import should_colour  # noqa: E402
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 REPO = Path(__file__).resolve().parents[2]
 TOOL_SRC = REPO / "toolchain" / "src" / "slib_info.sushi"
@@ -127,12 +127,12 @@ def test_auto_falls_through_to_the_variables(monkeypatch):
 
 @pytest.fixture(scope="module")
 def built(tmp_path_factory):
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     tmp = tmp_path_factory.mktemp("slibcolour")
     slib, _metadata = build_library(tmp, "doclib", DOC_LIB)
     tool = tmp / "slib-info"
-    r = _run(["sushic", str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
+    r = _run([SUSHIC, str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
     assert r.returncode == 0, r.stdout + r.stderr
     return slib, tool
 
@@ -140,7 +140,7 @@ def built(tmp_path_factory):
 def test_a_piped_report_carries_no_escape(built):
     slib, tool = built
     assert "\x1b" not in _run([str(tool), "--docs", str(slib)], env=_env()).stdout
-    py = _run(["sushic", "--lib-info", str(slib), "--docs"], env=_env())
+    py = _run([SUSHIC, "--lib-info", str(slib), "--docs"], env=_env())
     assert "\x1b" not in py.stdout
 
 
@@ -149,7 +149,7 @@ def test_forcing_colour_paints_the_report(built, how):
     slib, tool = built
     env = _env() if how else _env(CLICOLOR_FORCE="1")
     assert "\x1b[" in _run([str(tool), *how, "--docs", str(slib)], env=env).stdout
-    py = _run(["sushic", "--lib-info", str(slib), "--docs", *how], env=env)
+    py = _run([SUSHIC, "--lib-info", str(slib), "--docs", *how], env=env)
     assert "\x1b[" in py.stdout
 
 
@@ -157,7 +157,7 @@ def test_never_beats_a_forcing_variable(built):
     slib, tool = built
     env = _env(CLICOLOR_FORCE="1")
     assert "\x1b" not in _run([str(tool), "--color=never", str(slib)], env=env).stdout
-    py = _run(["sushic", "--lib-info", str(slib), "--color=never"], env=env)
+    py = _run([SUSHIC, "--lib-info", str(slib), "--color=never"], env=env)
     assert "\x1b" not in py.stdout
 
 
@@ -180,7 +180,7 @@ def test_the_two_implementations_agree_in_colour(built, extra):
     slib, tool = built
     tool_run = _run([str(tool), "--color=always", *extra, str(slib)], env=_env())
     assert tool_run.returncode == 0, tool_run.stdout + tool_run.stderr
-    py_run = _run(["sushic", "--lib-info", str(slib), "--color=always", *extra],
+    py_run = _run([SUSHIC, "--lib-info", str(slib), "--color=always", *extra],
                   env=_env())
     assert py_run.returncode == 0, py_run.stdout + py_run.stderr
     assert py_run.stdout.endswith(tool_run.stdout)
@@ -205,10 +205,10 @@ def test_a_tag_keyword_is_blue_and_a_parameter_name_is_cyan(built):
 def test_the_banner_obeys_no_color(built):
     """It used to decide on `isatty` alone, so NO_COLOR silenced everything but it."""
     slib, _tool = built
-    forced = _run(["sushic", "--lib-info", str(slib)], env=_env(CLICOLOR_FORCE="1"))
+    forced = _run([SUSHIC, "--lib-info", str(slib)], env=_env(CLICOLOR_FORCE="1"))
     assert "\x1b[" in forced.stdout.splitlines()[0]
 
-    quiet = _run(["sushic", "--lib-info", str(slib)],
+    quiet = _run([SUSHIC, "--lib-info", str(slib)],
                  env=_env(CLICOLOR_FORCE="1", NO_COLOR="1"))
     assert "\x1b" not in quiet.stdout
 
@@ -229,6 +229,6 @@ def test_the_delegation_forwards_the_switch(built, stub_bin):
     env.pop("SUSHI_TOOLCHAIN")
     env["SUSHI_TOOLCHAIN_BIN"] = str(stub_bin)
     assert "--color=never" in _run(
-        ["sushic", "--lib-info", str(slib), "--color=never"], env=env).stdout
+        [SUSHIC, "--lib-info", str(slib), "--color=never"], env=env).stdout
     # `auto` is the default and says nothing, so it is not worth a word on the line.
-    assert "--color" not in _run(["sushic", "--lib-info", str(slib)], env=env).stdout
+    assert "--color" not in _run([SUSHIC, "--lib-info", str(slib)], env=env).stdout

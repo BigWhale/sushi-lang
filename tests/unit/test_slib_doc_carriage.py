@@ -8,12 +8,12 @@ names our own units only).
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 
 import pytest
 
 from sushi_lang.backend.library_format import LibraryFormat
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 # Every position section 2 allows, in one library: the unit block, a constant, a struct
 # and its fields, an enum and its variants, a concrete function with all four tags, a
@@ -172,13 +172,13 @@ def strip_doc_blocks(source: str) -> str:
 
 def build_library(tmp_path, name: str, source: str, kind: str = "source"):
     """Build one `.slib` and read its manifest back."""
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     src = tmp_path / f"{name}.sushi"
     src.write_text(source, encoding="utf-8")
     out = tmp_path / f"{name}.slib"
     result = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", kind, "--lib-version", "1.2.3",
+        [SUSHIC, "--lib", "--lib-kind", kind, "--lib-version", "1.2.3",
          str(src), "-o", str(out)],
         cwd=tmp_path, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr

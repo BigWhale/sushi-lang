@@ -6,13 +6,13 @@ the tool's stdout against a Python mirror of mp_show.
 """
 from __future__ import annotations
 
-import shutil
 import struct
 import subprocess
 from pathlib import Path
 
 import msgpack
 import pytest
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 REPO = Path(__file__).parents[2]
 DUMP_SRC = REPO / "tests" / "stdlib" / "msgpack" / "helpers" / "dump.sushi"
@@ -47,12 +47,12 @@ def mp_show(v) -> str:
 @pytest.fixture(scope="module")
 def dump_tool(tmp_path_factory):
     """Compile the dump helper once for the module."""
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     tmp = tmp_path_factory.mktemp("mpdump")
     out = tmp / "dump"
     result = subprocess.run(
-        ["sushic", str(DUMP_SRC), "-o", str(out)],
+        [SUSHIC, str(DUMP_SRC), "-o", str(out)],
         cwd=tmp, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     return out

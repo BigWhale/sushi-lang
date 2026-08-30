@@ -11,15 +11,11 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
+from sushic_path import SUSHIC, needs_sushic
 
-
-needs_sushic = pytest.mark.skipif(shutil.which("sushic") is None,
-                                  reason="sushic not on PATH")
 
 MAIN = """\
 use "helper"
@@ -39,7 +35,7 @@ def _compile(tmp_path: Path, helper: str, main: str = MAIN):
     project.mkdir(parents=True, exist_ok=True)
     (project / "helper.sushi").write_text(helper, encoding="utf-8")
     (project / "main.sushi").write_text(main, encoding="utf-8")
-    r = subprocess.run(["sushic", "main.sushi", "-o", "out"], cwd=project,
+    r = subprocess.run([SUSHIC, "main.sushi", "-o", "out"], cwd=project,
                        capture_output=True, text=True, env={**os.environ})
     return project, r, r.stdout + r.stderr
 
@@ -290,7 +286,7 @@ struct Dup:
 fn main() i32:
     return Result.Ok(0)
 """, encoding="utf-8")
-    r = subprocess.run(["sushic", "main.sushi", "-o", "out"], cwd=project,
+    r = subprocess.run([SUSHIC, "main.sushi", "-o", "out"], cwd=project,
                        capture_output=True, text=True, env={**os.environ})
     out = r.stdout + r.stderr
     assert r.returncode == 2, out

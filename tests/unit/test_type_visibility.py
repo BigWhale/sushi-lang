@@ -11,15 +11,11 @@ name it DOES export stays the plain duplicate, because one name is one shape.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
+from sushic_path import SUSHIC, needs_sushic
 
-
-needs_sushic = pytest.mark.skipif(shutil.which("sushic") is None,
-                                  reason="sushic not on PATH")
 
 LIBRARY = """\
 struct Point:
@@ -46,7 +42,7 @@ def _build_source_lib(tmp_path: Path, source: str, name: str) -> dict:
     src = tmp_path / f"{name}.sushi"
     _write(src, source)
     built = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", "source", "--lib-version", "1.0.0",
+        [SUSHIC, "--lib", "--lib-kind", "source", "--lib-version", "1.0.0",
          str(src), "-o", str(libs / f"{name}.slib")],
         cwd=tmp_path, capture_output=True, text=True)
     assert built.returncode == 0, built.stdout + built.stderr
@@ -57,7 +53,7 @@ def _consume(tmp_path: Path, env: dict, program: str) -> tuple[str, Path]:
     project = tmp_path / "prog"
     _write(project / "main.sushi", program)
     binary = project / "out"
-    result = subprocess.run(["sushic", "main.sushi", "-o", str(binary)],
+    result = subprocess.run([SUSHIC, "main.sushi", "-o", str(binary)],
                             cwd=project, capture_output=True, text=True, env=env)
     return result.stdout + result.stderr, binary
 

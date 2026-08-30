@@ -7,14 +7,13 @@ library extends only what it declares.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 REPO = Path(__file__).parents[2]
-SUSHIC = REPO / "sushic"
 TOOL_SRC = REPO / "toolchain" / "src" / "slib_info.sushi"
 
 CLAIMING_LIB = """\
@@ -56,7 +55,7 @@ def _build_lib(tmp: Path, name: str, source: str) -> Path:
     src = tmp / f"{name}.sushi"
     src.write_text(source, encoding="utf-8")
     out = tmp / f"{name}.slib"
-    r = _run([str(SUSHIC), "--lib", "--lib-version", "0.0.1",
+    r = _run([SUSHIC, "--lib", "--lib-version", "0.0.1",
               str(src), "-o", str(out)], cwd=tmp)
     assert r.returncode in (0, 1), r.stdout + r.stderr
     assert out.exists(), r.stdout + r.stderr
@@ -92,7 +91,7 @@ def test_an_own_type_claim_stays_out_of_the_manifest(built):
 
 def test_lib_info_prints_the_section(built):
     _tmp, claiming, _quiet = built
-    r = _run([str(SUSHIC), "--lib-info", str(claiming)],
+    r = _run([SUSHIC, "--lib-info", str(claiming)],
              env=_env(SUSHI_TOOLCHAIN="off"))
     assert r.returncode == 0, r.stdout + r.stderr
     assert "Foreign Extensions (2):" in r.stdout
@@ -102,7 +101,7 @@ def test_lib_info_prints_the_section(built):
 
 def test_lib_info_hides_an_empty_section(built):
     _tmp, _claiming, quiet = built
-    r = _run([str(SUSHIC), "--lib-info", str(quiet)],
+    r = _run([SUSHIC, "--lib-info", str(quiet)],
              env=_env(SUSHI_TOOLCHAIN="off"))
     assert r.returncode == 0, r.stdout + r.stderr
     assert "Foreign Extensions" not in r.stdout
@@ -110,14 +109,14 @@ def test_lib_info_hides_an_empty_section(built):
 
 def test_the_tool_matches_the_python_fallback(built):
     tmp, claiming, _quiet = built
-    if shutil.which("sushic") is None and not SUSHIC.exists():
-        pytest.skip("sushic not available")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     tool = tmp / "slib-info"
-    r = _run([str(SUSHIC), str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
+    r = _run([SUSHIC, str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
     assert r.returncode == 0, r.stdout + r.stderr
     tool_run = _run([str(tool), str(claiming)])
     assert tool_run.returncode == 0, tool_run.stdout + tool_run.stderr
     assert "Foreign Extensions (2):" in tool_run.stdout
-    py_run = _run([str(SUSHIC), "--lib-info", str(claiming)],
+    py_run = _run([SUSHIC, "--lib-info", str(claiming)],
                   env=_env(SUSHI_TOOLCHAIN="off"))
     assert py_run.stdout.endswith(tool_run.stdout)

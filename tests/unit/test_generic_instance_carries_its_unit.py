@@ -10,14 +10,11 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
+from sushic_path import SUSHIC, needs_sushic
 
-needs_sushic = pytest.mark.skipif(shutil.which("sushic") is None,
-                                  reason="sushic not on PATH")
 
 HELPER_SRC = (
     "fn twin@(T)(nom T x) T:\n"
@@ -49,7 +46,7 @@ def test_every_instance_symbol_starts_with_its_unit(tmp_path: Path):
     (tmp_path / "main.sushi").write_text(MAIN_SRC, encoding="utf-8")
 
     result = subprocess.run(
-        ["sushic", "main.sushi", "--no-incremental", "--write-ll", "-o", "out"],
+        [SUSHIC, "main.sushi", "--no-incremental", "--write-ll", "-o", "out"],
         cwd=tmp_path, capture_output=True, text=True,
         env={**os.environ, "NO_COLOR": "1"},
     )

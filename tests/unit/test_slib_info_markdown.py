@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -29,6 +28,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_slib_doc_carriage import DOC_LIB, build_library  # noqa: E402
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 REPO = Path(__file__).resolve().parents[2]
 TOOL_SRC = REPO / "toolchain" / "src" / "slib_info.sushi"
@@ -50,12 +50,12 @@ def _env():
 
 @pytest.fixture(scope="module")
 def built(tmp_path_factory):
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     tmp = tmp_path_factory.mktemp("slibmd")
     slib, metadata = build_library(tmp, "doclib", DOC_LIB)
     tool = tmp / "slib-info"
-    r = _run(["sushic", str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
+    r = _run([SUSHIC, str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
     assert r.returncode == 0, r.stdout + r.stderr
     return slib, tool, metadata
 
@@ -64,7 +64,7 @@ def _both(built, *extra):
     slib, tool, _metadata = built
     tool_run = _run([str(tool), "--docs", *extra, str(slib)], env=_env())
     assert tool_run.returncode == 0, tool_run.stdout + tool_run.stderr
-    py_run = _run(["sushic", "--lib-info", str(slib), "--docs", *extra], env=_env())
+    py_run = _run([SUSHIC, "--lib-info", str(slib), "--docs", *extra], env=_env())
     assert py_run.returncode == 0, py_run.stdout + py_run.stderr
     return py_run.stdout, tool_run.stdout
 

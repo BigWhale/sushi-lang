@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from sushic_path import SUSHIC
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -20,7 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 def _compile(tmp_path: Path, source: str) -> str:
     (tmp_path / "widths.sushi").write_text(source, encoding="utf-8")
     result = subprocess.run(
-        ["sushic", "widths.sushi"],
+        [SUSHIC, "widths.sushi"],
         cwd=tmp_path,
         capture_output=True,
         text=True,

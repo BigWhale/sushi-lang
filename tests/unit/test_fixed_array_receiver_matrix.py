@@ -5,14 +5,12 @@ the field unchanged, so each row here asserts the OBSERVED result and not the ex
 """
 from __future__ import annotations
 
-import shutil
 import subprocess
 
 import pytest
+from sushic_path import SUSHIC, needs_sushic
 
-SUSHIC = shutil.which("sushic")
-pytestmark = pytest.mark.skipif(SUSHIC is None,
-                                reason="sushic not on PATH (run under `uv run pytest`)")
+pytestmark = needs_sushic
 
 # (label, receiver setup, the call, what the owner must read back afterwards)
 WRITE_ROWS = [
@@ -45,7 +43,7 @@ struct Outer:
 
 def _run(tmp_path, source: str) -> subprocess.CompletedProcess:
     (tmp_path / "case.sushi").write_text(source, encoding="utf-8")
-    built = subprocess.run(["sushic", "case.sushi", "-o", "case"],
+    built = subprocess.run([SUSHIC, "case.sushi", "-o", "case"],
                            cwd=tmp_path, capture_output=True, text=True, timeout=300)
     if built.returncode != 0:
         pytest.fail(f"compilation failed:\n{built.stdout}\n{built.stderr}")
@@ -94,7 +92,7 @@ fn main() i32:
     TRIPLE.fill(9)
     return Result.Ok(0)
 """, encoding="utf-8")
-    built = subprocess.run(["sushic", "case.sushi", "-o", "case"],
+    built = subprocess.run([SUSHIC, "case.sushi", "-o", "case"],
                            cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert built.returncode == 2
     assert "CE2096" in built.stdout + built.stderr

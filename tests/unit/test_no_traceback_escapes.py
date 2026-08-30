@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import pytest
+from sushic_path import SUSHIC
 
 
 TRACEBACK_MARKER = "Traceback (most recent call last)"
@@ -17,7 +18,7 @@ def _compile(tmp_path: Path, source: str, *extra: str) -> subprocess.CompletedPr
     src = tmp_path / "crash.sushi"
     src.write_text(source, encoding="utf-8")
     return subprocess.run(
-        ["sushic", "crash.sushi", *extra],
+        [SUSHIC, "crash.sushi", *extra],
         cwd=tmp_path,
         capture_output=True,
         text=True,

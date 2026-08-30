@@ -12,17 +12,13 @@ CE2001 "unknown type" about a type the library does define.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
 
 from sushi_lang.backend.library_format import LibraryFormat
+from sushic_path import SUSHIC, needs_sushic
 
-
-needs_sushic = pytest.mark.skipif(shutil.which("sushic") is None,
-                                  reason="sushic not on PATH")
 
 MIXED_LIB = """\
 public struct Line:
@@ -68,7 +64,7 @@ def _build_lib(tmp_path: Path, source: str, name: str, kind: str = "source"):
     _write(lib_src, source)
     slib = libs_dir / f"{name}.slib"
     result = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", kind, "--lib-version", "1.2.0",
+        [SUSHIC, "--lib", "--lib-kind", kind, "--lib-version", "1.2.0",
          str(lib_src), "-o", str(slib)],
         cwd=tmp_path, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -79,7 +75,7 @@ def _build_lib(tmp_path: Path, source: str, name: str, kind: str = "source"):
 def _consume(tmp_path: Path, env: dict, program: str, name: str = "prog") -> str:
     project = tmp_path / name
     _write(project / "main.sushi", program)
-    result = subprocess.run(["sushic", "main.sushi", "-o", "out"],
+    result = subprocess.run([SUSHIC, "main.sushi", "-o", "out"],
                             cwd=project, capture_output=True, text=True, env=env)
     return result.stdout + result.stderr
 
@@ -241,7 +237,7 @@ fn main() i32:
 def test_lib_info_does_not_hand_out_a_private_field_layout(tmp_path):
     """D8: the report listed a private struct as API, with every field."""
     _env, slib = _build_lib(tmp_path, MIXED_LIB, "infolib")
-    result = subprocess.run(["sushic", "--lib-info", str(slib)],
+    result = subprocess.run([SUSHIC, "--lib-info", str(slib)],
                             capture_output=True, text=True,
                             env={**os.environ, "NO_COLOR": "1"})
     assert result.returncode == 0, result.stdout + result.stderr

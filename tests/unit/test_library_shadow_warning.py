@@ -15,15 +15,11 @@ CE2009. And shadowing an export is legal but rarely intended, so it warns with C
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
+from sushic_path import SUSHIC, needs_sushic
 
-
-needs_sushic = pytest.mark.skipif(shutil.which("sushic") is None,
-                                  reason="sushic not on PATH")
 
 LIBRARY = """\
 public fn get_value() i32:
@@ -49,7 +45,7 @@ def _build_source_lib(tmp_path: Path, source: str, name: str) -> dict:
     lib_src = tmp_path / f"{name}.sushi"
     _write(lib_src, source)
     result = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", "source", "--lib-version", "1.0.0",
+        [SUSHIC, "--lib", "--lib-kind", "source", "--lib-version", "1.0.0",
          str(lib_src), "-o", str(libs_dir / f"{name}.slib")],
         cwd=tmp_path, capture_output=True, text=True,
     )
@@ -62,7 +58,7 @@ def _consume(tmp_path: Path, env: dict, program: str) -> tuple[str, Path]:
     project = tmp_path / "prog"
     _write(project / "main.sushi", program)
     binary = project / "out"
-    result = subprocess.run(["sushic", "main.sushi", "-o", str(binary)],
+    result = subprocess.run([SUSHIC, "main.sushi", "-o", str(binary)],
                             cwd=project, capture_output=True, text=True, env=env)
     return result.stdout + result.stderr, binary
 

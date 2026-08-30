@@ -7,7 +7,6 @@ one does. The symbol therefore carries the declaring unit
 """
 from __future__ import annotations
 
-import shutil
 import subprocess
 
 import pytest
@@ -15,10 +14,7 @@ import pytest
 from sushi_lang.semantics.unit_symbols import (
     UNIT_SEP, UnitKeyedSymbols, mangle_unit_symbol,
 )
-
-
-needs_sushic = pytest.mark.skipif(shutil.which("sushic") is None,
-                                  reason="sushic not on PATH")
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 
 # --- the scheme ------------------------------------------------------------------
@@ -120,13 +116,13 @@ public fn through@(T)(i32 n) i32:
 def manifest(tmp_path_factory) -> dict:
     from sushi_lang.backend.library_format import LibraryFormat
 
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     tmp_path = tmp_path_factory.mktemp("symlib")
     (tmp_path / "symlib.sushi").write_text(LIB, encoding="utf-8")
     out = tmp_path / "symlib.slib"
     result = subprocess.run(
-        ["sushic", "--lib", "--lib-version", "1.0.0", "--lib-kind", "binary",
+        [SUSHIC, "--lib", "--lib-version", "1.0.0", "--lib-kind", "binary",
          "symlib.sushi", "-o", str(out)],
         cwd=tmp_path, capture_output=True, text=True,
     )

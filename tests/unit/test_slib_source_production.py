@@ -6,13 +6,13 @@ See `docs/design/libraries.md` section 4.1.
 """
 from __future__ import annotations
 
-import shutil
 import subprocess
 
 import pytest
 
 from sushi_lang.backend.library_errors import LibraryError
 from sushi_lang.backend.library_format import LibraryFormat
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 
 LIB_MAIN = """\
@@ -40,15 +40,15 @@ public fn one() i32:
 
 def _build(tmp_path, *extra_args, sources: dict[str, str] | None = None):
     """Compile a library and return (CompletedProcess, output path)."""
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     files = sources if sources is not None else {"srclib": LIB_MAIN, "helper": LIB_HELPER}
     for name, text in files.items():
         (tmp_path / f"{name}.sushi").write_text(text, encoding="utf-8")
     main = next(iter(files))
     out = tmp_path / f"{main}.slib"
     result = subprocess.run(
-        ["sushic", "--lib", "--lib-version", "1.0.0",
+        [SUSHIC, "--lib", "--lib-version", "1.0.0",
          str(tmp_path / f"{main}.sushi"), "-o", str(out), *extra_args],
         cwd=tmp_path, capture_output=True, text=True)
     return result, out

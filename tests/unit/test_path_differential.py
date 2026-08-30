@@ -6,11 +6,11 @@ tool (one op per stdin line) and compares against the posixpath mirror.
 from __future__ import annotations
 
 import posixpath
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 REPO = Path(__file__).parents[2]
 CALC_SRC = REPO / "tests" / "stdlib" / "path" / "helpers" / "pathcalc.sushi"
@@ -49,12 +49,12 @@ def _cases() -> list[tuple[str, str, str, str]]:
 @pytest.fixture(scope="module")
 def calc_tool(tmp_path_factory):
     """Compile the pathcalc helper once for the module."""
-    if shutil.which("sushic") is None:
-        pytest.skip("sushic not on PATH")
+    if not SUSHIC_AVAILABLE:
+        pytest.skip("no compiler driver in this checkout")
     tmp = tmp_path_factory.mktemp("pathcalc")
     out = tmp / "pathcalc"
     result = subprocess.run(
-        ["sushic", str(CALC_SRC), "-o", str(out)],
+        [SUSHIC, str(CALC_SRC), "-o", str(out)],
         cwd=tmp, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     return out

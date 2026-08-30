@@ -9,13 +9,12 @@ library kinds agree about the wording as well as the legality.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
 
 from sushi_lang.backend.library_format import LibraryFormat
+from sushic_path import SUSHIC, needs_sushic
 
 
 KEPT_LIB = """\
@@ -83,7 +82,7 @@ def _build_lib(tmp_path: Path, source: str, name: str = "keptlib",
     _write(lib_src, source)
     slib = libs_dir / f"{name}.slib"
     result = subprocess.run(
-        ["sushic", "--lib", "--lib-kind", kind, "--lib-version", "1.2.0",
+        [SUSHIC, "--lib", "--lib-kind", kind, "--lib-version", "1.2.0",
          str(lib_src), "-o", str(slib)],
         cwd=tmp_path, capture_output=True, text=True,
     )
@@ -94,7 +93,7 @@ def _build_lib(tmp_path: Path, source: str, name: str = "keptlib",
 def _consume(tmp_path: Path, env: dict, program: str, name: str = "prog"):
     project = tmp_path / name
     _write(project / "main.sushi", program)
-    return subprocess.run(["sushic", "main.sushi", "-o", "out"],
+    return subprocess.run([SUSHIC, "main.sushi", "-o", "out"],
                           cwd=project, capture_output=True, text=True, env=env)
 
 
@@ -102,10 +101,6 @@ def _kept(slib: Path) -> dict[str, str]:
     """The `not_exported` key as a name -> kind map."""
     metadata = LibraryFormat.read_metadata_only(slib)
     return {r["name"]: r["kind"] for r in metadata.get("not_exported", [])}
-
-
-needs_sushic = pytest.mark.skipif(shutil.which("sushic") is None,
-                                  reason="sushic not on PATH")
 
 
 # --- The manifest key --------------------------------------------------------------

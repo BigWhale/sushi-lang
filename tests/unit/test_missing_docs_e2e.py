@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+from sushic_path import SUSHIC
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -36,7 +37,7 @@ def _compile(tmp_path: Path, *flags: str) -> subprocess.CompletedProcess:
     source = tmp_path / "ship.sushi"
     source.write_text(SOURCE, encoding="utf-8")
     return subprocess.run(
-        ["./sushic", str(source), "-o", str(tmp_path / "ship"), *flags],
+        [SUSHIC, str(source), "-o", str(tmp_path / "ship"), *flags],
         capture_output=True, text=True, cwd=REPO, timeout=120,
         env={**os.environ, "NO_COLOR": "1"})
 
