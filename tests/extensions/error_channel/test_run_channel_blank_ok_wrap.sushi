@@ -1,0 +1,24 @@
+# A blank return in a channel body wraps into Ok(~) at the return seam, and
+# the spelled Err reaches the call site untouched.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "even ok\nodd err\n"
+enum ParityError:
+    Odd
+
+extend i32 must_be_even() ~ | ParityError:
+    if (self % 2 == 1):
+        return Result.Err(ParityError.Odd)
+    return ~
+
+fn main() i32:
+    let i32 two = 2
+    match two.must_be_even():
+        Result.Ok(_) -> println("even ok")
+        Result.Err(_) -> println("even err")
+    let i32 three = 3
+    match three.must_be_even():
+        Result.Ok(_) -> println("odd ok")
+        Result.Err(_) -> println("odd err")
+    return Result.Ok(0)
