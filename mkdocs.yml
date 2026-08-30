@@ -122,6 +122,12 @@ nav:
       - Files: stdlib/io/files.md
       - Path algebra: stdlib/io/path.md
       - File-system ops: stdlib/io/fs.md
+      - Socket primitives: stdlib/net/socket.md
+      - TCP: stdlib/net/tcp.md
+      - UDP: stdlib/net/udp.md
+      - DNS: stdlib/net/dns.md
+      - IP addresses: stdlib/net/ip.md
+      - URLs: stdlib/net/url.md
       - Math: stdlib/math.md
       - Time: stdlib/time.md
       - Random: stdlib/random.md

@@ -26,6 +26,15 @@ Complete reference for Sushi's standard library modules and types.
 - [Path algebra](stdlib/io/path.md) - Lexical path manipulation (join, basename, dirname, extension, normalize)
 - [File-system ops](stdlib/io/fs.md) - stat, recursive walk, mkdir_all, remove_all
 
+### Networking
+
+- [Socket primitives](stdlib/net/socket.md) - the raw BSD calls, and `NetError`
+- [TCP](stdlib/net/tcp.md) - `TcpStream` and `TcpListener`
+- [UDP](stdlib/net/udp.md) - `UdpSocket`, send_to and recv_from
+- [DNS](stdlib/net/dns.md) - a host name resolved into typed addresses
+- [IP addresses](stdlib/net/ip.md) - `IpAddr`, parse and format, both families
+- [URLs](stdlib/net/url.md) - lexical URL splitting
+
 ### System Modules
 - [Math](stdlib/math.md) - Mathematical operations (abs, min, max, sqrt, pow, trig)
 - [Random](stdlib/random.md) - Pseudo-random number generation (rand, rand_range, rand_f64, srand)
@@ -47,6 +56,12 @@ use <io/stdio>             # Console I/O
 use <io/files>             # File operations
 use <io/path>              # Lexical path manipulation
 use <io/fs>                # stat, walk, mkdir_all, remove_all
+use <net/socket>           # the raw socket calls, and NetError
+use <net/tcp>              # TcpStream, TcpListener
+use <net/udp>              # UdpSocket
+use <net/dns>              # resolve a host name
+use <net/ip>               # IpAddr, parse and format
+use <net/url>              # split a URL
 use <math>                 # Math functions
 use <random>               # Random number generation
 use <time>                 # Sleep and clock functions

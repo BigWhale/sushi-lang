@@ -44,6 +44,35 @@ All notable changes to Sushi Lang will be documented in this file.
   `docs/design/ufcs-combinators.md`.
 
 ### Standard Library
+- **Sushi can talk to the network.** Six new modules cover the first seven rows
+  of the net gap list: `<net/socket>` is the low-level half, a Python IR
+  generator, because an array or a struct may not cross the C ABI, a `u8[]` has
+  no way to yield a pointer, and a `ptr` is opaque, so `sockaddr` could neither
+  be built nor read from Sushi. `<net/tcp>`, `<net/udp>`, `<net/dns>`,
+  `<net/ip>` and `<net/url>` are bundled Sushi source on top.
+  - `<net/tcp>`: `TcpStream` and `TcpListener`, with `tcp_send_all` and
+    `tcp_recv_exact` for the loops a byte count needs. There is no RAII for a
+    socket, exactly as there is none for a `file`, so `tcp_close(poke s)` writes
+    `-1` into the binding: one binding owns a socket, and closing that binding
+    again is a success.
+  - `<net/udp>`: `UdpSocket`, answering a `Datagram` that carries its sender,
+    because an unconnected datagram socket has no `getpeername` and the sender
+    exists only at the instant its datagram arrives.
+  - `<net/ip>`: `IpAddr` with a numeric payload -- `V4(u32)` and `V6(u64, u64)`,
+    so it owns no heap and copies. Reading follows RFC 4291 and writing follows
+    RFC 5952, `::` over the longest zero run, leftmost on a tie, never over a
+    run of one.
+  - `<net/dns>`: `resolve()` into `IpAddr[]`. A numeric text answers itself with
+    no network request.
+  - `<net/url>`: a lexical RFC 3986 split. A port of 0 means the text carried
+    none, and the scheme's default is a separate question.
+  - `NetError` is a predefined enum. `EAGAIN` maps to `TimedOut`, because every
+    socket here is blocking and that is the only thing it can mean; `EBADF` maps
+    to `Closed`. `getaddrinfo` gets no errno table at all: its `EAI_*` codes are
+    not errno and do not share a sign between the platforms.
+- **`to_i32`, `to_i64` and `to_f64` free the buffer they parse from.** Each copies
+  its receiver into a NUL-terminated buffer for `strtol` and none of them freed
+  it, so every parse leaked the length of the text it read.
 - **The combinators exist in method form.** `use <collections/iter>` now also ships
   `.map`/`.filter`/`.fold` as extension methods on `List@(T)` and `T[]`, each with the
   `| StdError` channel, so the fluent chain works end to end:
