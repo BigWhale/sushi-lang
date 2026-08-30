@@ -1,0 +1,19 @@
+# Ruling 5, the '??' row: a BARE perk method has no channel to propagate, so '??'
+# at the CALL SITE is CE2507 -- the bare-body gate (CE0131) is a different rule.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2507
+perk Bare:
+    fn plain() i32
+
+struct Counter:
+    i32 value
+
+extend Counter with Bare:
+    fn plain() i32:
+        return self.value
+
+fn main() i32:
+    let Counter c = Counter(1)
+    let i32 x = c.plain()??
+    println("{x}")
+    return Result.Ok(0)

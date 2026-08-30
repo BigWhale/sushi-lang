@@ -1,0 +1,31 @@
+# '~ | E' on a perk method: the shape Writer.flush() needs. A blank success wraps
+# into Ok(~), and the spelled Err reaches the caller untouched.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "flushed\nfailed\n"
+enum SinkError:
+    Broken
+
+perk Sink:
+    fn flush() ~ | SinkError
+
+struct Pipe:
+    bool broken
+
+extend Pipe with Sink:
+    fn flush() ~ | SinkError:
+        if (self.broken):
+            return Result.Err(SinkError.Broken)
+        return ~
+
+fn main() i32:
+    let Pipe good = Pipe(false)
+    match good.flush():
+        Result.Ok(_) -> println("flushed")
+        Result.Err(_) -> println("failed")
+    let Pipe bad = Pipe(true)
+    match bad.flush():
+        Result.Ok(_) -> println("flushed")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

@@ -276,6 +276,8 @@ class PerkMethodSignature:
     ret_span: Optional[Span] = None
     self_mode: Optional[str] = None  # "peek"/"poke" when the perk declares `(poke self, ...)` (#327)
     self_mode_span: Optional[Span] = None
+    err_type: Optional[Type] = None  # `| E` opts the CONTRACT into the Result channel
+    err_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
 
 @dataclass(slots=True)

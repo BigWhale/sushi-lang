@@ -215,6 +215,40 @@ not a typo. Resolution still runs first — a method found on the wrapper itself
 (`.realise`) is rung 1 as always. The decision record is
 [ufcs-combinators.md](ufcs-combinators.md).
 
+## A perk method and an extension method differ in one thing
+
+> **The target type comes from a different place. Nothing else separates them.**
+
+An extension method names its target in its own declaration (`extend i32 squared()`); a
+perk-implementation method takes it from the `extend X with P` header. Every other
+property is shared, and the compiler shares the code that reads it: one body validator
+(`passes/types/signatures.py:_validate_method_body`), one `CalleeKind.METHOD` for
+parameter modes, and one backend path -- a perk method is wrapped as a synthetic
+`ExtendDef` and emitted through the extension emitter.
+
+The **error channel** was the last exception, and `HANDLES.md` ruling R1 removed it. A
+perk method declares `| E` in the same shape an extension method does, on the CONTRACT
+and on every implementation alike:
+
+```sushi
+perk Source:
+    fn read_one() i32 | SourceError
+
+extend Counter with Source:
+    fn read_one() i32 | SourceError:
+        return self.value          # the success returns BARE; the seam wraps it
+```
+
+The channel is part of the signature, so the contract and the implementation must
+agree: a contract that declares one and an implementation that omits it, an
+implementation that invents one the contract has not got, and two channels over
+different error types are all the same mismatch. **CE0133** is the relational
+diagnostic -- the primary at the implementation, a note at the contract method.
+
+A perk method has no `Self` type, so a contract cannot say "returns another one of me".
+That is the one thing a perk still cannot express, and it is why `.share()` is written
+on each handle rather than on a contract.
+
 **Where the rule lives.** The classification is decided ONCE, in the collect pass
 (`semantics/generics/extension_targets.py:classify_extension_target`), because that is the
 pass whose struct and enum tables say which bare names are declared types -- `Box@(T)` and

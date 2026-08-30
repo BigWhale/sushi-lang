@@ -1,0 +1,24 @@
+# A perk method may declare the error channel '| E' (ruling R1). The bare success
+# return wraps into Ok at the return seam, exactly as an extension method's does.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "42\n"
+enum SourceError:
+    Closed
+
+perk Source:
+    fn read_one() i32 | SourceError
+
+struct Counter:
+    i32 value
+
+extend Counter with Source:
+    fn read_one() i32 | SourceError:
+        return self.value
+
+fn main() i32:
+    let Counter c = Counter(42)
+    let i32 v = c.read_one().realise(0)
+    println("{v}")
+    return Result.Ok(0)

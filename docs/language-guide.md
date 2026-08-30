@@ -931,6 +931,37 @@ A channel method stops a chain until it is handled: `b.checked().other()` is CE2
 and `b.checked()??.other()` is the fix. Methods on the wrapper itself (`.realise`)
 stay legal.
 
+A **perk method** takes the channel the same way, and the perk states it in the
+CONTRACT so every implementation answers the same error type:
+
+```sushi
+enum SourceError:
+    Closed
+
+perk Source:
+    fn read_one() i32 | SourceError
+
+struct Counter:
+    i32 value
+    bool closed
+
+extend Counter with Source:
+    fn read_one() i32 | SourceError:
+        if (self.closed):
+            return Result.Err(SourceError.Closed)
+        return self.value           # bare success; wraps into Ok
+
+fn main() i32:
+    let Counter c = Counter(42, false)
+    println("{c.read_one().realise(0)}")
+    return Result.Ok(0)
+```
+
+The contract and the implementation must agree. A contract that declares a channel and
+an implementation that omits it, an implementation that declares one the contract has
+not got, and two channels over different error types are all CE0133, which points at
+both ends.
+
 **Array extension targets**: a concrete element extends one array type
 (`extend i32[] sum()`); a bare undeclared name binds a type parameter, so
 `extend T[]` applies to every element type. Anything else in the element position is

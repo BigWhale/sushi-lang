@@ -231,11 +231,14 @@ def extension_call_result_type(validator: 'TypeValidator', method):
     """What a resolved extension call YIELDS: the bare return, or its channel Result.
 
     A `| E` method (ruling 1) returns the interned Result@(ret, E) at every call site;
-    `??` and the chain gate (CE2515) both read that answer.
+    `??` and the chain gate (CE2515) both read that answer. One reader for both method
+    kinds: a perk-implementation method spells its bare return `ret` and an
+    ExtensionMethod spells it `ret_type`, and they yield by the same rule.
     """
-    from ..utils import resolve_declared_type
-
-    ret = resolve_declared_type(validator, method.ret_type)
+    declared = getattr(method, "ret_type", None)
+    if declared is None:
+        declared = getattr(method, "ret", None)
+    ret = resolve_declared_type(validator, declared)
     err = getattr(method, "err_type", None)
     if err is None:
         return ret
@@ -471,7 +474,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
                            method=call.method, expected=display_type(expected_ty), got=display_type(arg_type))
 
         if perk_method.ret is not None:
-            call.inferred_return_type = resolve_declared_type(validator, perk_method.ret)
+            call.inferred_return_type = extension_call_result_type(validator, perk_method)
         return
 
     # The family order from here on matches the codegen dispatcher exactly --

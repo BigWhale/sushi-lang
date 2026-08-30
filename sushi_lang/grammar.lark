@@ -24,7 +24,7 @@ enum_variant: NAME ["(" [enum_variant_fields] ")"] _NEWLINE
 enum_variant_fields: type ("," type)*
 
 perk_def: PUBLIC? PERK NAME [type_params] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | perk_method)+ _DEDENT
-perk_method: FN NAME "(" [parameters] ")" type _NEWLINE
+perk_method: FN NAME "(" [parameters] ")" type ["|" type] _NEWLINE
 
 // Foreign Function Interface (FFI) - unsafe external blocks
 external_block: UNSAFE EXTERNAL STRING AS NAME [BECAUSE STRING] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | extern_decl)+ _DEDENT

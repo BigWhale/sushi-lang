@@ -1,0 +1,36 @@
+# A spelled Result.Err in a perk channel body propagates through '??' and reaches
+# the match at the outermost call.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ok 7\nerr\n"
+enum SourceError:
+    Closed
+
+perk Source:
+    fn read_one() i32 | SourceError
+
+struct Counter:
+    i32 value
+    bool closed
+
+extend Counter with Source:
+    fn read_one() i32 | SourceError:
+        if (self.closed):
+            return Result.Err(SourceError.Closed)
+        return self.value
+
+fn take(Counter c) i32 | SourceError:
+    let i32 v = c.read_one()??
+    return Result.Ok(v)
+
+fn main() i32:
+    let Counter live = Counter(7, false)
+    match take(live):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(_) -> println("err")
+    let Counter dead = Counter(7, true)
+    match take(dead):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

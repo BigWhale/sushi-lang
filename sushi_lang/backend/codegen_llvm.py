@@ -75,6 +75,11 @@ def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
         # lost write of #326, reintroduced through the perk door.
         self_mode=getattr(method, "self_mode", None),
         self_mode_span=getattr(method, "self_mode_span", None),
+        # And so must the error channel (ruling R1): `extension_result_of` reads it
+        # for the declaration ABI, the Ok wrap at the return seam and the Err default,
+        # and a dropped one would compile a channel body against a bare signature.
+        err_type=getattr(method, "err_type", None),
+        err_span=getattr(method, "err_span", None),
     )
 
 

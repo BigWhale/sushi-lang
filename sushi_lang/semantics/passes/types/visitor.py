@@ -1027,12 +1027,15 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             # no EnumType, so every consumer reading the stamp fell through -- the backend
             # to a layout heuristic that answered `Maybe<i32>` and then mis-typed the
             # payload (#387).
-            from .utils import resolve_declared_type
-
             if inferred_type is None:
                 perk_method = self.type_validator.perk_impl_table.get_method(actual_type, node.method)
                 if perk_method is not None and perk_method.ret is not None:
-                    inferred_type = resolve_declared_type(self.type_validator, perk_method.ret)
+                    # A channel perk method (`| E`, ruling R1) yields its interned
+                    # Result here too -- one reader for what a method call yields.
+                    from sushi_lang.semantics.passes.types.calls.methods import (
+                        extension_call_result_type)
+                    inferred_type = extension_call_result_type(
+                        self.type_validator, perk_method)
 
             if inferred_type is None:
                 method = self.type_validator.extension_table.get_method(actual_type, node.method)

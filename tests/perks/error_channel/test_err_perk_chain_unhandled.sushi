@@ -1,0 +1,26 @@
+# Ruling 5, row 1, through the perk door: a channel method stops the chain until
+# it is handled. The chain gate is receiver-kind blind, so CE2515 answers here too.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2515
+# EXPECT_STDERR_CONTAINS: "read_one()??.doubled()"
+enum SourceError:
+    Closed
+
+perk Source:
+    fn read_one() i32 | SourceError
+
+struct Counter:
+    i32 value
+
+extend Counter with Source:
+    fn read_one() i32 | SourceError:
+        return self.value
+
+extend i32 doubled() i32:
+    return self * 2
+
+fn main() i32:
+    let Counter c = Counter(21)
+    let i32 v = c.read_one().doubled()
+    println("{v}")
+    return Result.Ok(0)

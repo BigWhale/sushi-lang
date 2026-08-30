@@ -1228,6 +1228,14 @@ spelled constructor. Array targets take a concrete element (`extend i32[]`) or a
 name that binds a type parameter (`extend T[]`). The design record is
 `docs/design/ufcs-combinators.md`.
 
+A **perk method** takes the same error channel, and the perk states it in the contract:
+`fn read(poke u8[] into) i32 | IoError`. Every implementation repeats the channel
+exactly; a channel one side declares and the other does not, and two channels over
+different error types, are both `CE0133`, which points at the contract and the
+implementation together. A perk method has no method-level type parameters (`CE4010`
+covers the perk itself) and no `Self` type, so a contract cannot promise to return
+another one of the implementing type.
+
 A **private perk** hides the CONTRACT, not the method. Another unit may not implement it
 (`extend X with Loud`) and may not constrain a type parameter with it (`@(T: Loud)`) --
 both are `CE4011` -- but a method it provides stays callable on any type you publish,

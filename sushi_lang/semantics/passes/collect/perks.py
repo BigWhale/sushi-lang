@@ -288,19 +288,12 @@ class PerkCollector:
         if not isinstance(perk_name, str):
             return
 
-        # A `??` has no error channel in a perk-impl body (CE0131, #398). A declared
-        # `| E` is the extension channel and does not exist for perk methods: rejecting
-        # it here (CE0133) replaces the silent drop the shared function_def rule allowed.
+        # A `??` has no error channel in a BARE perk-impl body (CE0131, #398). A
+        # declared `| E` IS the channel (ruling R1), so the reject does not apply
+        # there -- the same three lines the extension arm runs.
         for method in getattr(impl, "methods", []) or []:
-            err_ty = getattr(method, "err_type", None)
-            if err_ty is not None:
-                from sushi_lang.semantics.generics.type_display import display_type
-                er.emit(self.r, ERR.CE0133,
-                        getattr(method, "name_span", None) or getattr(method, "loc", None),
-                        name=getattr(method, "name", "<method>"),
-                        err=display_type(err_ty))
-                continue
-            reject_try_in_body(self.r, getattr(method, "body", None), "a perk method")
+            if getattr(method, "err_type", None) is None:
+                reject_try_in_body(self.r, getattr(method, "body", None), "a perk method")
 
         perk_name_span: Optional[Span] = getattr(impl, "perk_name_span", None) or getattr(impl, "loc", None)
         target_type: Optional[Type] = getattr(impl, "target_type", None)
