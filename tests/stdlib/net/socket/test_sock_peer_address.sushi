@@ -1,0 +1,35 @@
+# The accepted descriptor knows who connected. The IP is asserted because it is
+# fixed -- the test connects to loopback -- while the peer PORT is only checked
+# for being a real port: it is the client's ephemeral one, which the kernel
+# chose.
+# EXPECT_STDOUT_EXACT: "peer is 127.0.0.1\npeer has a real port\nclosed\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/socket>
+
+fn main() i32:
+    let i32 lfd = sock_tcp_listen("127.0.0.1", 0, 8).realise(-1)
+    let i32 port = sock_local_port(lfd).realise(-1)
+    let i32 cfd = sock_tcp_connect("127.0.0.1", port).realise(-1)
+    let i32 afd = sock_tcp_accept(lfd).realise(-1)
+
+    match sock_peer_ip(afd):
+        Result.Ok(ip) -> println("peer is {ip}")
+        Result.Err(_) -> println("peer_ip failed")
+
+    match sock_peer_port(afd):
+        Result.Ok(p) ->
+            if (p > 0):
+                println("peer has a real port")
+            else:
+                println("wrong: the peer port is {p}")
+        Result.Err(_) -> println("peer_port failed")
+
+    sock_close(cfd).realise(-1)
+    sock_close(afd).realise(-1)
+    match sock_close(lfd):
+        Result.Ok(_) -> println("closed")
+        Result.Err(_) -> println("close failed")
+
+    return Result.Ok(0)

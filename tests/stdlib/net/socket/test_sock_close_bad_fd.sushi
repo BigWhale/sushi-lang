@@ -1,0 +1,15 @@
+# sock_close on a descriptor that was never open answers Closed, through errno.
+# EXPECT_STDOUT_EXACT: "bad descriptor is Closed\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/socket>
+
+fn main() i32:
+    match sock_close(-1):
+        Result.Ok(_) -> println("wrong: closing -1 succeeded")
+        Result.Err(e) ->
+            match e:
+                NetError.Closed -> println("bad descriptor is Closed")
+                _ -> println("wrong: some other variant")
+
+    return Result.Ok(0)

@@ -22,6 +22,11 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "encoding/msgpack": _SRC_SUSHI_ROOT / "encoding" / "msgpack.sushi",
     "io/fs": _SRC_SUSHI_ROOT / "io" / "fs.sushi",
     "io/path": _SRC_SUSHI_ROOT / "io" / "path.sushi",
+    "net/dns": _SRC_SUSHI_ROOT / "net" / "dns.sushi",
+    "net/ip": _SRC_SUSHI_ROOT / "net" / "ip.sushi",
+    "net/tcp": _SRC_SUSHI_ROOT / "net" / "tcp.sushi",
+    "net/udp": _SRC_SUSHI_ROOT / "net" / "udp.sushi",
+    "net/url": _SRC_SUSHI_ROOT / "net" / "url.sushi",
     "toolchain/slib": _SRC_SUSHI_ROOT / "toolchain" / "slib.sushi",
 }
 
@@ -113,6 +118,20 @@ def _get_param_specs():
         specs[("files", fn)] = [STRING, STRING]
     specs[("files", "mkdir")] = [STRING, I32]
 
+    BYTE_ARRAY = DynamicArrayType(BuiltinType.U8)
+    specs[("socket", "sock_dns_resolve")] = [STRING]
+    specs[("socket", "sock_udp_bind")] = [STRING, I32]
+    specs[("socket", "sock_udp_send_to")] = [I32, BYTE_ARRAY, STRING, I32]
+    specs[("socket", "sock_udp_recv_from")] = [I32, I32]
+    specs[("socket", "sock_tcp_connect")] = [STRING, I32]
+    specs[("socket", "sock_tcp_listen")] = [STRING, I32, I32]
+    specs[("socket", "sock_send")] = [I32, BYTE_ARRAY]
+    for fn in ("sock_close", "sock_local_port", "sock_tcp_accept",
+               "sock_peer_ip", "sock_peer_port"):
+        specs[("socket", fn)] = [I32]
+    for fn in ("sock_recv", "sock_set_recv_timeout", "sock_set_send_timeout"):
+        specs[("socket", fn)] = [I32, I32]
+
     _param_specs_cache = specs
     return _param_specs_cache
 
@@ -127,6 +146,7 @@ class StdlibRegistry:
         "sys/process": "sushi_lang.sushi_stdlib.src.sys.process",
         "random": "sushi_lang.sushi_stdlib.src.random",
         "io/files": "sushi_lang.sushi_stdlib.src.io.files_funcs",
+        "net/socket": "sushi_lang.sushi_stdlib.src.net.socket_funcs",
         # io/stdio and collections/strings are NOT registry-driven and cannot
         # be listed here: they expose a METHOD interface
         # (is_builtin_stdio_method / is_builtin_string_method), while this
@@ -220,6 +240,12 @@ class StdlibRegistry:
             ],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
             "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir", "read_dir", "mtime", "ctime", "mode", "is_symlink"],
+            "socket": ["sock_tcp_connect", "sock_tcp_listen", "sock_tcp_accept",
+                       "sock_send", "sock_recv", "sock_close", "sock_local_port",
+                       "sock_peer_ip", "sock_peer_port",
+                       "sock_set_recv_timeout", "sock_set_send_timeout",
+                       "sock_dns_resolve", "sock_udp_bind", "sock_udp_send_to",
+                       "sock_udp_recv_from"],
         }
 
         candidates = common_names.get(module_name, [])
@@ -227,7 +253,7 @@ class StdlibRegistry:
         for name in candidates:
             if checker(name):
                 # Different modules have different type_resolver signatures.
-                if module_name in ["time", "env", "process", "random", "files"]:
+                if module_name in ["time", "env", "process", "random", "files", "socket"]:
                     def make_type_resolver(fn_name):
                         return lambda: type_resolver(fn_name)
                     get_ret_type = make_type_resolver(name)

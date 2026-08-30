@@ -322,3 +322,16 @@ def declare_exit(module: ir.Module) -> ir.Function:
     i32 = ir.IntType(32)
     fn_ty = ir.FunctionType(void, [i32])
     return ir.Function(module, fn_ty, name="exit")
+
+
+def declare_errno_location(module: ir.Module) -> ir.Function:
+    """Declare the errno accessor: int* __error() (macOS) / __errno_location() (Linux)."""
+    from sushi_lang.backend.platform_detect import get_current_platform
+
+    name = "__errno_location" if get_current_platform().is_linux else "__error"
+    if name in module.globals:
+        return module.globals[name]
+
+    i32 = ir.IntType(32)
+    fn_ty = ir.FunctionType(i32.as_pointer(), [])
+    return ir.Function(module, fn_ty, name=name)

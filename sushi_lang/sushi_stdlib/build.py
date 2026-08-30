@@ -126,6 +126,18 @@ def build_sys_env(platform_dir: Path, quiet: bool = False) -> list[str]:
     return compile_module_to_bc(module, output, quiet=quiet)
 
 
+def build_net(platform_dir: Path, quiet: bool = False) -> list[str]:
+    """Build the net/socket unit (platform-specific socket constants)."""
+    if not quiet:
+        print("Building net/socket...")
+
+    from sushi_lang.sushi_stdlib.src import net
+    module = net.generate_module_ir()
+
+    output = platform_dir / "net" / "socket.bc"
+    return compile_module_to_bc(module, output, quiet=quiet)
+
+
 def build_random(platform_dir: Path, quiet: bool = False) -> list[str]:
     """Build random unit (includes platform-specific random declarations)."""
     if not quiet:
@@ -173,6 +185,7 @@ def build_all(platform_name: str, quiet: bool = False) -> None:
     defined.update(build_sys_env(platform_dir, quiet=quiet))
     defined.update(build_sys_process(platform_dir, quiet=quiet))
     defined.update(build_random(platform_dir, quiet=quiet))
+    defined.update(build_net(platform_dir, quiet=quiet))
 
     defined.update(build_io_stdio(platform_dir, platform, quiet=quiet))
 

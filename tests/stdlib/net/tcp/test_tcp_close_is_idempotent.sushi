@@ -1,0 +1,27 @@
+# There is no RAII for a socket, exactly as there is none for a file, so
+# close() writes -1 back into the binding it was given. That is what makes a
+# second close on the same binding a success rather than an EBADF, and it is
+# why the close takes `poke self`: the mutation is visible at the call site.
+# EXPECT_STDOUT_EXACT: "first close ok\nthe binding reads -1\nsecond close ok\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/tcp>
+
+fn main() i32:
+    let TcpListener listener = tcp_listen("127.0.0.1", 0, 8).realise(TcpListener(-1))
+
+    match listener.close():
+        Result.Ok(_) -> println("first close ok")
+        Result.Err(_) -> println("first close failed")
+
+    if (listener.fd == -1):
+        println("the binding reads -1")
+    else:
+        println("wrong: the binding reads {listener.fd}")
+
+    match listener.close():
+        Result.Ok(_) -> println("second close ok")
+        Result.Err(_) -> println("wrong: closing twice failed")
+
+    return Result.Ok(0)

@@ -559,5 +559,8 @@ def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str
     elif module_path == "io/files":
         from sushi_lang.backend.expressions.calls.stdlib import emit_files_function
         return emit_files_function(codegen, expr, function_name, to_i1)
+    elif module_path == "net/socket":
+        from sushi_lang.backend.expressions.calls.stdlib import emit_net_function
+        return emit_net_function(codegen, expr, function_name, to_i1)
     else:
         raise_internal_error("CE0055", name=f"{module_path}/{function_name}")

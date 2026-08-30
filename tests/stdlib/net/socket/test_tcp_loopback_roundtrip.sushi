@@ -1,0 +1,72 @@
+# A whole TCP exchange in one process. A blocking connect() to a listening
+# socket completes inside the kernel -- the backlog is the queue of COMPLETED
+# connections -- so accept() finds this one already waiting and one thread is
+# enough. The order is the whole guarantee: listen, then connect, then accept.
+#
+# Every descriptor gets a timeout before it is used, so a mistake anywhere
+# above is a wrong sentence rather than a hang. The port is never printed: the
+# kernel chooses it, and the suite runs in parallel.
+# EXPECT_STDOUT_EXACT: "accepted\nserver got Mostly Harmless\nclient got 42\npeer closed\nclosed\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/socket>
+use <collections/strings>
+
+fn main() i32:
+    let i32 lfd = sock_tcp_listen("127.0.0.1", 0, 8).realise(-1)
+    if (lfd < 0):
+        println("listen failed")
+        return Result.Ok(1)
+    sock_set_recv_timeout(lfd, 5000).realise(-1)
+
+    let i32 port = sock_local_port(lfd).realise(-1)
+    if (port <= 0):
+        println("local_port failed")
+        return Result.Ok(1)
+
+    let i32 cfd = sock_tcp_connect("127.0.0.1", port).realise(-1)
+    if (cfd < 0):
+        println("connect failed")
+        return Result.Ok(1)
+    sock_set_recv_timeout(cfd, 5000).realise(-1)
+    sock_set_send_timeout(cfd, 5000).realise(-1)
+
+    let i32 afd = sock_tcp_accept(lfd).realise(-1)
+    if (afd < 0):
+        println("accept failed")
+        return Result.Ok(1)
+    sock_set_recv_timeout(afd, 5000).realise(-1)
+    sock_set_send_timeout(afd, 5000).realise(-1)
+    println("accepted")
+
+    let u8[] greeting = "Mostly Harmless".to_bytes()
+    sock_send(cfd, greeting).realise(-1)
+    match sock_recv(afd, 64):
+        Result.Ok(heard) -> println("server got {heard.to_string()}")
+        Result.Err(_) -> println("server recv failed")
+
+    let u8[] answer = "42".to_bytes()
+    sock_send(afd, answer).realise(-1)
+    match sock_recv(cfd, 64):
+        Result.Ok(back) -> println("client got {back.to_string()}")
+        Result.Err(_) -> println("client recv failed")
+
+    # A clean close reads as Ok with an empty array, never as an error: recv
+    # sets no errno for an end of stream, so an Err there would report a stale
+    # one. A timeout is the -1 case and answers Err(TimedOut) instead.
+    sock_close(cfd).realise(-1)
+    match sock_recv(afd, 64):
+        Result.Ok(eof) ->
+            if (eof.len() == 0):
+                println("peer closed")
+            else:
+                println("wrong: {eof.len()} bytes after the peer closed")
+        Result.Err(_) -> println("wrong: the end of the stream is an error")
+
+    sock_close(afd).realise(-1)
+    match sock_close(lfd):
+        Result.Ok(_) -> println("closed")
+        Result.Err(_) -> println("close failed")
+
+    return Result.Ok(0)

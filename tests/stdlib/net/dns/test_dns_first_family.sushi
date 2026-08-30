@@ -1,0 +1,23 @@
+# resolve_first picks the first answer of the family asked for. A numeric text
+# is its own answer, so the v4 case is deterministic; asking for the family the
+# text is not gives InvalidAddress rather than an empty answer.
+# EXPECT_STDOUT_EXACT: "127.0.0.1\nno v6 in a v4 literal\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/dns>
+use <net/ip>
+
+fn main() i32:
+    match resolve_first("127.0.0.1", true):
+        Result.Ok(a) -> println("{a.text()}")
+        Result.Err(_) -> println("resolve_first failed")
+
+    match resolve_first("127.0.0.1", false):
+        Result.Ok(_) -> println("wrong: a v4 literal answered a v6 address")
+        Result.Err(e) ->
+            match e:
+                NetError.InvalidAddress -> println("no v6 in a v4 literal")
+                _ -> println("wrong: some other variant")
+
+    return Result.Ok(0)

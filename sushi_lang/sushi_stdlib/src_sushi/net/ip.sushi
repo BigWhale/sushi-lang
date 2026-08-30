@@ -1,0 +1,472 @@
+##:
+net/ip -- IpAddr, the typed internet address, pure Sushi.
+
+The module ships as bundled .sushi source and is merged as a compilation unit
+when imported (`use <net/ip>`). Every function works on the text alone: no
+system call, no name lookup, no network. RFC 4291 decides which forms are
+read and RFC 5952 decides the text that comes back.
+
+The payload is numeric on purpose. A V4 carries one u32 and a V6 carries the
+address as two u64, so an IpAddr owns no heap: it copies, it needs no clone,
+and a match arm binds a number rather than a buffer.
+
+Limitations: a zone identifier (`fe80::1%eth0`) is refused. A leading zero in
+a dotted quad is refused, as inet_pton refuses it, so `010.0.0.1` is not an
+address here and can never be read as octal. Surrounding space is not trimmed.
+Only the IPv4-mapped form prints in the mixed `::ffff:a.b.c.d` notation; the
+deprecated IPv4-compatible form prints as hex.
+:##
+
+use <collections/strings>
+
+##:
+One internet address, of either family.
+:##
+public enum IpAddr:
+    ##: An IPv4 address, as one 32-bit value, most significant octet first. :##
+    V4(u32)
+    ##: An IPv6 address, as the high 64 bits and then the low 64 bits. :##
+    V6(u64, u64)
+
+##:
+The IPv4 loopback, 127.0.0.1.
+
+- Returns: The address 127.0.0.1.
+:##
+public fn ip_v4_loopback() IpAddr:
+    return Result.Ok(IpAddr.V4(2130706433 as u32))
+
+##:
+The IPv4 unspecified address, 0.0.0.0.
+
+- Returns: The address 0.0.0.0.
+:##
+public fn ip_v4_any() IpAddr:
+    return Result.Ok(IpAddr.V4(0 as u32))
+
+##:
+The IPv6 loopback, ::1.
+
+- Returns: The address ::1.
+:##
+public fn ip_v6_loopback() IpAddr:
+    return Result.Ok(IpAddr.V6(0 as u64, 1 as u64))
+
+##:
+The IPv6 unspecified address, ::.
+
+- Returns: The address ::.
+:##
+public fn ip_v6_any() IpAddr:
+    return Result.Ok(IpAddr.V6(0 as u64, 0 as u64))
+
+##:
+Parses an address from its text, in either family.
+
+A text holding a dot and no colon is read as IPv4; anything else is read as
+IPv6. A trailing character is a refusal rather than an ignored suffix.
+
+- Parameter text: The address to read.
+- Returns: The parsed address.
+- Errors: NetError.InvalidAddress, when the text is not an address.
+:##
+public fn parse_ip(string text) IpAddr | NetError:
+    if (text.contains(":")):
+        return Result.Ok(parse_ip_v6(text)??)
+    return Result.Ok(parse_ip_v4(text)??)
+
+##:
+Parses a dotted-quad IPv4 address.
+
+Exactly four octets, each one to three digits with no leading zero, and
+nothing else in the text.
+
+- Parameter text: The address to read.
+- Returns: The parsed address.
+- Errors: NetError.InvalidAddress, when the text is not a dotted quad.
+:##
+public fn parse_ip_v4(string text) IpAddr | NetError:
+    let u32 value = parse_v4_bits(text)??
+    return Result.Ok(IpAddr.V4(value))
+
+##:
+Parses an IPv6 address, with or without a `::` run.
+
+The mixed `::ffff:a.b.c.d` form is read, and the trailing quad follows the
+IPv4 rules.
+
+- Parameter text: The address to read.
+- Returns: The parsed address.
+- Errors: NetError.InvalidAddress, when the text is not an IPv6 address.
+:##
+public fn parse_ip_v6(string text) IpAddr | NetError:
+    let u16[] groups = parse_v6_groups(text)??
+    let u64 high = 0 as u64
+    let u64 low = 0 as u64
+    foreach(i in 0..4):
+        high := (high << (16 as u64)) | (groups[i] as u64)
+    foreach(i in 4..8):
+        low := (low << (16 as u64)) | (groups[i] as u64)
+    return Result.Ok(IpAddr.V6(high, low))
+
+##:
+The canonical text of an address.
+
+An IPv4 prints as a dotted quad. An IPv6 follows RFC 5952: lowercase hex, no
+leading zero in a group, and `::` over the longest run of zero groups, the
+leftmost run when two tie, never over a run of one. An IPv4-mapped address
+prints as `::ffff:a.b.c.d`.
+
+- Returns: The address as text.
+:##
+extend IpAddr text() string:
+    match self:
+        IpAddr.V4(bits) -> return v4_text(bits).realise("")
+        IpAddr.V6(high, low) -> return v6_text(high, low).realise("")
+
+##:
+Whether the address is of the IPv4 family.
+
+- Returns: True for a V4 address.
+:##
+extend IpAddr is_v4() bool:
+    match self:
+        IpAddr.V4(_) -> return true
+        IpAddr.V6(_, _) -> return false
+
+##:
+Whether the address is of the IPv6 family.
+
+- Returns: True for a V6 address.
+:##
+extend IpAddr is_v6() bool:
+    return not self.is_v4()
+
+##:
+Whether the address is a loopback: 127.0.0.0/8, or ::1.
+
+- Returns: True when the address is a loopback.
+:##
+extend IpAddr is_loopback() bool:
+    match self:
+        IpAddr.V4(bits) -> return (bits >> (24 as u32)) == (127 as u32)
+        IpAddr.V6(high, low) ->
+            return high == (0 as u64) and low == (1 as u64)
+
+##:
+Whether the address is the unspecified one: 0.0.0.0, or ::.
+
+- Returns: True when the address is unspecified.
+:##
+extend IpAddr is_unspecified() bool:
+    match self:
+        IpAddr.V4(bits) -> return bits == (0 as u32)
+        IpAddr.V6(high, low) ->
+            return high == (0 as u64) and low == (0 as u64)
+
+##:
+Whether the address is in a private range.
+
+The ranges are 10/8, 172.16/12 and 192.168/16 for IPv4, and fc00::/7 for
+IPv6.
+
+- Returns: True when the address is private.
+:##
+extend IpAddr is_private() bool:
+    match self:
+        IpAddr.V4(bits) ->
+            let u32 top = bits >> (24 as u32)
+            if (top == (10 as u32)):
+                return true
+            if (top == (192 as u32) and ((bits >> (16 as u32)) & (255 as u32)) == (168 as u32)):
+                return true
+            if (top == (172 as u32)):
+                let u32 second = (bits >> (16 as u32)) & (255 as u32)
+                return second >= (16 as u32) and second <= (31 as u32)
+            return false
+        IpAddr.V6(high, _) ->
+            return (high >> (57 as u64)) == (126 as u64)
+
+##:
+Whether an IPv6 address carries an IPv4 one, as ::ffff:a.b.c.d.
+
+- Returns: True for a v4-mapped IPv6 address, false for anything else.
+:##
+extend IpAddr is_v4_mapped() bool:
+    match self:
+        IpAddr.V4(_) -> return false
+        IpAddr.V6(high, low) ->
+            return high == (0 as u64) and (low >> (32 as u64)) == (65535 as u64)
+
+##:
+The IPv4 half of a v4-mapped address, as an address of its own.
+
+- Parameter low: The low 64 bits of the V6 payload.
+- Returns: The IPv4 address the low 32 bits spell.
+:##
+fn mapped_v4(u64 low) IpAddr:
+    return Result.Ok(IpAddr.V4((low & (4294967295 as u64)) as u32))
+
+##:
+Reads one octet of a dotted quad.
+
+One to three digits, no leading zero, and a value of 255 at most.
+
+- Parameter piece: The octet's text.
+- Returns: The octet's value.
+- Errors: NetError.InvalidAddress, when the text is not an octet.
+:##
+fn parse_octet(string piece) u32 | NetError:
+    let i32 width = piece.len()
+    if (width == 0 or width > 3):
+        return Result.Err(NetError.InvalidAddress)
+    # Every owning temporary here is bound before it is read. An unbound one in
+    # an operand position is not freed, so a parser that runs over every
+    # character of every address would leak one string per character.
+    let string leading = piece.char_at(0)
+    if (width > 1 and leading == "0"):
+        return Result.Err(NetError.InvalidAddress)
+    let u32 value = 0 as u32
+    foreach(i in 0..width):
+        let string digit = piece.char_at(i)
+        if (digit < "0" or digit > "9"):
+            return Result.Err(NetError.InvalidAddress)
+        value := value * (10 as u32) + ((digit.to_i32().realise(0)) as u32)
+    if (value > (255 as u32)):
+        return Result.Err(NetError.InvalidAddress)
+    return Result.Ok(value)
+
+##:
+Packs a dotted quad into one u32, most significant octet first.
+
+- Parameter text: The four octets, separated by dots.
+- Returns: The packed address.
+- Errors: NetError.InvalidAddress, when the text is not four octets.
+:##
+fn parse_v4_bits(string text) u32 | NetError:
+    let string[] parts = text.split(".")
+    if (parts.len() != 4):
+        return Result.Err(NetError.InvalidAddress)
+    let u32 value = 0 as u32
+    foreach(part in parts.iter()):
+        let u32 octet = parse_octet(part)??
+        value := (value << (8 as u32)) | octet
+    return Result.Ok(value)
+
+##:
+Reads one hexadecimal group of an IPv6 address.
+
+- Parameter piece: The group's text, one to four digits.
+- Returns: The group's value.
+- Errors: NetError.InvalidAddress, when the text is not a group.
+:##
+fn parse_group(string piece) u16 | NetError:
+    let i32 width = piece.len()
+    if (width == 0 or width > 4):
+        return Result.Err(NetError.InvalidAddress)
+    let u32 value = 0 as u32
+    foreach(i in 0..width):
+        let string digit = piece.char_at(i)
+        let u32 nibble = hex_value(digit)??
+        value := value * (16 as u32) + nibble
+    return Result.Ok(value as u16)
+
+##:
+Reads one hexadecimal digit, in either case.
+
+The table doubles as the value: the index of a digit in it IS the nibble it
+stands for.
+
+- Parameter digit: The one-character text to read.
+- Returns: The digit's value, 0 to 15.
+- Errors: NetError.InvalidAddress, when the character is not hexadecimal.
+:##
+fn hex_value(string digit) u32 | NetError:
+    let string lower = digit.lower()
+    let i32 nibble = "0123456789abcdef".find(lower).realise(-1)
+    if (nibble < 0):
+        return Result.Err(NetError.InvalidAddress)
+    return Result.Ok(nibble as u32)
+
+##:
+The eight groups of an IPv6 address, with any `::` run expanded.
+
+A binding is never rebound from a borrow to an owned string here: the two
+shapes take their own branch and their own bindings, so every owned piece has
+one owner from the start.
+
+- Parameter text: The address to read.
+- Returns: Exactly eight groups, most significant first.
+- Errors: NetError.InvalidAddress, when the text is not an IPv6 address.
+:##
+fn parse_v6_groups(string text) u16[] | NetError:
+    if (text.contains(":::")):
+        return Result.Err(NetError.InvalidAddress)
+
+    if (not text.contains("::")):
+        let u16[] whole = parse_group_run(text)??
+        if (whole.len() != 8):
+            return Result.Err(NetError.InvalidAddress)
+        return Result.Ok(whole)
+
+    let i32 cut = text.find("::").realise(-1)
+    let string head = text.s(0, cut)
+    let string tail = text.s(cut + 2, text.len())
+    if (tail.contains("::")):
+        return Result.Err(NetError.InvalidAddress)
+
+    let u16[] left = parse_group_run(head)??
+    let u16[] right = parse_group_run(tail)??
+
+    # `::` has to stand for at least one group, so a compressed address that
+    # already spells eight of them is not an address.
+    let i32 total = left.len() + right.len()
+    if (total >= 8):
+        return Result.Err(NetError.InvalidAddress)
+
+    let u16[] groups = from([])
+    groups.extend(left)
+    let i32 filled = total
+    while (filled < 8):
+        groups.push(0 as u16)
+        filled := filled + 1
+    groups.extend(right)
+    return Result.Ok(groups)
+
+##:
+The groups on one side of a `::`.
+
+A trailing dotted quad is expanded into the two groups it stands for, which is
+the mixed ::ffff:a.b.c.d form.
+
+- Parameter run: The text on one side, which may be empty.
+- Returns: The groups that side spells.
+- Errors: NetError.InvalidAddress, when a piece is not a group.
+:##
+fn parse_group_run(string run) u16[] | NetError:
+    let u16[] groups = from([])
+    if (run.len() == 0):
+        return Result.Ok(groups)
+    if (run.starts_with(":") or run.ends_with(":")):
+        return Result.Err(NetError.InvalidAddress)
+
+    let string[] pieces = run.split(":")
+    let i32 count = pieces.len()
+    foreach(i in 0..count):
+        let string piece = pieces[i]
+        if (piece.contains(".")):
+            # A dotted quad is only ever the LAST piece, and it fills two
+            # groups: this is the mixed ::ffff:a.b.c.d form.
+            if (i != count - 1):
+                return Result.Err(NetError.InvalidAddress)
+            let u32 quad = parse_v4_bits(piece)??
+            groups.push((quad >> (16 as u32)) as u16)
+            groups.push((quad & (65535 as u32)) as u16)
+        else:
+            groups.push(parse_group(piece)??)
+    return Result.Ok(groups)
+
+##:
+Renders a packed u32 as a dotted quad.
+
+- Parameter bits: The packed address.
+- Returns: The dotted-quad text.
+:##
+fn v4_text(u32 bits) string:
+    let u32 a = (bits >> (24 as u32)) & (255 as u32)
+    let u32 b = (bits >> (16 as u32)) & (255 as u32)
+    let u32 c = (bits >> (8 as u32)) & (255 as u32)
+    let u32 d = bits & (255 as u32)
+    return Result.Ok("{a}.{b}.{c}.{d}")
+
+##:
+Unpacks a V6 payload into its eight groups.
+
+- Parameter high: The high 64 bits.
+- Parameter low: The low 64 bits.
+- Returns: The eight groups, most significant first.
+:##
+fn v6_groups(u64 high, u64 low) u16[]:
+    let u16[] groups = from([])
+    foreach(i in 0..4):
+        let u64 shift = ((3 - i) * 16) as u64
+        groups.push(((high >> shift) & (65535 as u64)) as u16)
+    foreach(i in 0..4):
+        let u64 shift = ((3 - i) * 16) as u64
+        groups.push(((low >> shift) & (65535 as u64)) as u16)
+    return Result.Ok(groups)
+
+##:
+Renders a V6 payload as RFC 5952 text.
+
+The pieces are collected and joined rather than concatenated onto an
+accumulator, which keeps every owned string with one owner.
+
+- Parameter high: The high 64 bits.
+- Parameter low: The low 64 bits.
+- Returns: The canonical text.
+:##
+fn v6_text(u64 high, u64 low) string:
+    let IpAddr whole = IpAddr.V6(high, low)
+    if (whole.is_v4_mapped()):
+        let IpAddr inner = mapped_v4(low)??
+        let string quad = inner.text()
+        return Result.Ok("::ffff:{quad}")
+
+    let u16[] groups = v6_groups(high, low)??
+
+    # The longest run of zero groups, leftmost on a tie. A run of one is left
+    # alone: RFC 5952 forbids compressing it, because `::` there is no shorter.
+    let i32 best_start = -1
+    let i32 best_len = 0
+    let i32 run_start = -1
+    let i32 run_len = 0
+    foreach(i in 0..8):
+        if (groups[i] == (0 as u16)):
+            if (run_len == 0):
+                run_start := i
+            run_len := run_len + 1
+            if (run_len > best_len):
+                best_len := run_len
+                best_start := run_start
+        else:
+            run_len := 0
+    if (best_len < 2):
+        best_start := -1
+
+    if (best_start < 0):
+        let string[] all = from([])
+        foreach(i in 0..8):
+            all.push(hex_text(groups[i])??)
+        return Result.Ok(":".join(all))
+
+    let string[] before = from([])
+    foreach(i in 0..best_start):
+        before.push(hex_text(groups[i])??)
+    let string[] after = from([])
+    foreach(i in (best_start + best_len)..8):
+        after.push(hex_text(groups[i])??)
+
+    let string head = ":".join(before)
+    let string tail = ":".join(after)
+    return Result.Ok("{head}::{tail}")
+
+##:
+Renders one group in lowercase hex, with no leading zero.
+
+- Parameter group: The group to render.
+- Returns: One to four hexadecimal digits.
+:##
+fn hex_text(u16 group) string:
+    if (group == (0 as u16)):
+        return Result.Ok("0")
+    let string digits = "0123456789abcdef"
+    let string[] out = from([])
+    let bool started = false
+    foreach(i in 0..4):
+        let u32 shift = ((3 - i) * 4) as u32
+        let i32 nibble = (((group as u32) >> shift) & (15 as u32)) as i32
+        if (nibble != 0 or started):
+            started := true
+            out.push(digits.char_at(nibble))
+    return Result.Ok("".join(out))

@@ -90,6 +90,43 @@ def _process_output_size_bytes() -> int:
     return offset
 
 
+def get_datagram_type() -> ir.LiteralStructType:
+    """The Datagram struct VALUE type: { u8[] data, string peer_ip, i32 peer_port }.
+
+    Must stay in lockstep with the predefined struct in
+    semantics/passes/collect/structs.py: the field ORDER is the layout.
+    """
+    i32 = ir.IntType(32)
+    return ir.LiteralStructType([get_byte_array_type(), get_string_type(), i32])
+
+
+def _datagram_size_bytes() -> int:
+    """Aligned size of Datagram, mirroring backend sizing.py `_calculate_struct_size`."""
+    array_size = 16   # {i32 len, i32 cap, T* data}, aligned
+    string_size = 16  # fat pointer {i8*, i32, i8 owned}, aligned
+    fields = [(array_size, 8), (string_size, 8), (4, 4)]
+    offset = 0
+    max_align = 1
+    for size, align in fields:
+        max_align = max(max_align, align)
+        if offset % align:
+            offset += align - (offset % align)
+        if size % align:
+            size += align - (size % align)
+        offset += size
+    if offset % max_align:
+        offset += max_align - (offset % max_align)
+    return offset
+
+
+def get_datagram_result_type() -> ir.LiteralStructType:
+    """Result<Datagram, NetError> LLVM layout: { i32 tag, [5 x i64] data }."""
+    i32 = ir.IntType(32)
+    data_bytes = max(_datagram_size_bytes(), 1)
+    return ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(64),
+                                                   _payload_word_count(data_bytes))])
+
+
 def get_process_output_result_type() -> ir.LiteralStructType:
     """Result<ProcessOutput, ProcessError> LLVM layout: { i32 tag, [5 x i64] data }."""
     i32 = ir.IntType(32)

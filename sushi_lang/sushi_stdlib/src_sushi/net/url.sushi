@@ -1,0 +1,316 @@
+##:
+net/url -- a Url split into its RFC 3986 parts, pure Sushi.
+
+The module ships as bundled .sushi source and is merged as a compilation unit
+when imported (`use <net/url>`). The split is LEXICAL: no name lookup, no
+percent decoding, and no address validation. A host is kept as written, so a
+caller that wants an IpAddr hands u.host to <net/ip> itself -- which is why
+this module deliberately does not import that one, and a program that only
+parses URLs never compiles the IPv6 parser.
+
+The query is the raw text after `?` rather than a list of pairs. Whether `&`
+or `;` separates them, and what a repeated key means, is the caller's policy
+and not this module's.
+
+Limitations: an absolute URL only, so a relative reference is refused. No
+percent decoding and no IDNA. A port is read as written and is not checked
+against the scheme.
+:##
+
+use <collections/strings>
+
+##:
+One absolute URL, split into its parts.
+
+A part the text did not carry is empty, and a port it did not carry is 0.
+:##
+public struct Url:
+    ##: The scheme, lowercased, with no trailing colon. :##
+    string scheme
+    ##: The userinfo before `@`, or empty when none was written. :##
+    string userinfo
+    ##: The host, lowercased, with the brackets of an IPv6 literal removed. :##
+    string host
+    ##: The port as written, or 0 when none was written. :##
+    i32 port
+    ##: The path, `/` when the URL had an authority and no path. :##
+    string path
+    ##: The raw query after `?`, without the `?`, or empty when none. :##
+    string query
+    ##: The raw fragment after `#`, without the `#`, or empty when none. :##
+    string fragment
+
+##:
+Why one text is not an absolute URL.
+:##
+public enum UrlError:
+    ##: The text is empty. :##
+    Empty
+    ##: There is no `:`, and so no scheme. :##
+    NoScheme
+    ##: The scheme holds a character RFC 3986 does not allow there. :##
+    BadScheme
+    ##: There is an authority and its host is empty. :##
+    NoHost
+    ##: The port is not a number, or is outside 1 to 65535. :##
+    BadPort
+    ##: An IPv6 literal opens a bracket it never closes. :##
+    UnclosedHost
+
+##:
+The one-line text of a URL error.
+
+- Returns: One line, with no trailing newline.
+:##
+extend UrlError text() string:
+    match self:
+        UrlError.Empty -> return "empty"
+        UrlError.NoScheme -> return "no scheme"
+        UrlError.BadScheme -> return "bad scheme"
+        UrlError.NoHost -> return "no host"
+        UrlError.BadPort -> return "bad port"
+        UrlError.UnclosedHost -> return "unclosed host"
+
+##:
+Parses an absolute URL into its parts.
+
+The scheme and the host are lowercased; every other part is kept as written. A
+URL with an authority and no path gets the path `/`, as RFC 3986 6.2.3
+requires, which is what makes `http://host` and `http://host/` one address. A
+URL with no authority keeps its path exactly.
+
+- Parameter text: The URL to read.
+- Returns: The split URL.
+- Errors: UrlError, when the text is not an absolute URL.
+:##
+public fn parse_url(string text) Url | UrlError:
+    if (text.len() == 0):
+        return Result.Err(UrlError.Empty)
+
+    let i32 colon = text.find(":").realise(-1)
+    if (colon <= 0):
+        return Result.Err(UrlError.NoScheme)
+    let string raw_scheme = text.s(0, colon)
+    # .realise() rather than ??: these helpers answer StdError while this
+    # function answers UrlError, and a propagation matches error types
+    # exactly. None of them can fail.
+    if (not is_scheme(raw_scheme).realise(false)):
+        return Result.Err(UrlError.BadScheme)
+    let string scheme = raw_scheme.lower()
+
+    let string rest = text.s(colon + 1, text.len())
+
+    # The fragment and then the query come off the tail, in that order: a `#`
+    # ends the query, and a `?` inside a fragment is part of the fragment.
+    let string fragment = after_first(rest, "#").realise("")
+    let string without_fragment = before_first(rest, "#").realise("")
+    let string query = after_first(without_fragment, "?").realise("")
+    let string body = before_first(without_fragment, "?").realise("")
+
+    if (not body.starts_with("//")):
+        # No authority: an opaque or rooted path, kept exactly as written.
+        return Result.Ok(Url(scheme, "", "", 0, body, query, fragment))
+
+    let string authority_and_path = body.s(2, body.len())
+    let i32 slash = authority_and_path.find("/").realise(-1)
+    let string authority = ""
+    let string path = "/"
+    if (slash < 0):
+        authority := authority_and_path
+    else:
+        authority := authority_and_path.s(0, slash)
+        path := authority_and_path.s(slash, authority_and_path.len())
+
+    let string userinfo = before_last(authority, "@").realise("")
+    let string hostport = after_last(authority, "@").realise("")
+
+    let string host = ""
+    let i32 port = 0
+    if (hostport.starts_with("[")):
+        let i32 close = hostport.find("]").realise(-1)
+        if (close < 0):
+            return Result.Err(UrlError.UnclosedHost)
+        host := hostport.s(1, close)
+        let string tail = hostport.s(close + 1, hostport.len())
+        if (tail.len() > 0):
+            if (not tail.starts_with(":")):
+                return Result.Err(UrlError.BadPort)
+            port := read_port(tail.s(1, tail.len()))??
+    else:
+        let i32 mark = hostport.find(":").realise(-1)
+        if (mark < 0):
+            host := hostport.lower()
+        else:
+            host := hostport.s(0, mark).lower()
+            port := read_port(hostport.s(mark + 1, hostport.len()))??
+
+    if (host.len() == 0):
+        return Result.Err(UrlError.NoHost)
+    return Result.Ok(Url(scheme, userinfo, host, port, path, query, fragment))
+
+##:
+The port to connect to: the one written, or the scheme's default.
+
+The known schemes are http 80, https 443, ws 80, wss 443, ftp 21 and ssh 22.
+
+- Returns: The written port, the scheme's default, or -1 when no default is known.
+:##
+extend Url port_or_default() i32:
+    if (self.port != 0):
+        return self.port
+    return default_port(self.scheme).realise(-1)
+
+##:
+Whether the host was written as a bracketed IPv6 literal.
+
+The brackets are not kept, so this is the only way to tell an IPv6 literal
+from a name after parsing.
+
+- Returns: True when the host was bracketed.
+:##
+extend Url host_is_ipv6_literal() bool:
+    return self.host.contains(":")
+
+##:
+The URL rebuilt as canonical text.
+
+The scheme and host are already lowercase. A port equal to the scheme's
+default is dropped. An empty userinfo, query or fragment writes no delimiter,
+and an IPv6 host is bracketed again.
+
+- Returns: The URL as text.
+:##
+extend Url text() string:
+    # Every piece is an interpolated COPY. A field read is a borrow and push
+    # consumes by position, so pushing self.scheme itself is CE2411.
+    let string[] pieces = from([])
+    pieces.push("{self.scheme}://")
+    if (self.userinfo.len() > 0):
+        pieces.push("{self.userinfo}@")
+    if (self.host_is_ipv6_literal()):
+        pieces.push("[{self.host}]")
+    else:
+        pieces.push("{self.host}")
+    if (self.port != 0 and self.port != default_port(self.scheme).realise(-1)):
+        pieces.push(":{self.port}")
+    pieces.push("{self.path}")
+    if (self.query.len() > 0):
+        pieces.push("?{self.query}")
+    if (self.fragment.len() > 0):
+        pieces.push("#{self.fragment}")
+    return "".join(pieces)
+
+##:
+The default port of a scheme.
+
+- Parameter scheme: The lowercased scheme.
+- Returns: The default port, or -1 when the scheme has no known one.
+:##
+fn default_port(string scheme) i32:
+    if (scheme == "http" or scheme == "ws"):
+        return Result.Ok(80)
+    if (scheme == "https" or scheme == "wss"):
+        return Result.Ok(443)
+    if (scheme == "ftp"):
+        return Result.Ok(21)
+    if (scheme == "ssh"):
+        return Result.Ok(22)
+    return Result.Ok(-1)
+
+##:
+Whether a text is a scheme.
+
+RFC 3986 wants a letter first, then letters, digits, `+`, `-` and `.`.
+
+- Parameter text: The candidate scheme.
+- Returns: True when every character is allowed and the first is a letter.
+:##
+fn is_scheme(string text) bool:
+    if (text.len() == 0):
+        return Result.Ok(false)
+    let string first = text.char_at(0).lower()
+    if (first < "a" or first > "z"):
+        return Result.Ok(false)
+    foreach(i in 1..text.len()):
+        let string c = text.char_at(i).lower()
+        let bool letter = c >= "a" and c <= "z"
+        let bool digit = c >= "0" and c <= "9"
+        let bool mark = c == "+" or c == "-" or c == "."
+        if (not (letter or digit or mark)):
+            return Result.Ok(false)
+    return Result.Ok(true)
+
+##:
+Reads a port: digits only, and 1 to 65535.
+
+- Parameter text: The port's text.
+- Returns: The port.
+- Errors: UrlError.BadPort, when the text is not a port in range.
+:##
+fn read_port(string text) i32 | UrlError:
+    if (text.len() == 0 or text.len() > 5):
+        return Result.Err(UrlError.BadPort)
+    foreach(i in 0..text.len()):
+        let string c = text.char_at(i)
+        if (c < "0" or c > "9"):
+            return Result.Err(UrlError.BadPort)
+    let i32 value = text.to_i32().realise(0)
+    if (value < 1 or value > 65535):
+        return Result.Err(UrlError.BadPort)
+    return Result.Ok(value)
+
+##:
+The text before the first `mark`, or the whole text when there is none.
+
+- Parameter text: The text to cut.
+- Parameter mark: The delimiter to cut at.
+- Returns: The part before the delimiter.
+:##
+fn before_first(string text, string mark) string:
+    let i32 at = text.find(mark).realise(-1)
+    if (at < 0):
+        # The parameter is a borrow, so handing it back is CE2411: the caller
+        # keeps it. A copy is what the caller is being given.
+        return Result.Ok(text.clone())
+    return Result.Ok(text.s(0, at))
+
+##:
+The text after the first `mark`, or empty when there is none.
+
+- Parameter text: The text to cut.
+- Parameter mark: The delimiter to cut at.
+- Returns: The part after the delimiter.
+:##
+fn after_first(string text, string mark) string:
+    let i32 at = text.find(mark).realise(-1)
+    if (at < 0):
+        return Result.Ok("")
+    return Result.Ok(text.s(at + mark.len(), text.len()))
+
+##:
+The text before the last `mark`, or empty when there is none.
+
+The LAST one, because a userinfo may itself hold an `@`.
+
+- Parameter text: The text to cut.
+- Parameter mark: The delimiter to cut at.
+- Returns: The part before the last delimiter.
+:##
+fn before_last(string text, string mark) string:
+    let i32 at = text.find_last(mark).realise(-1)
+    if (at < 0):
+        return Result.Ok("")
+    return Result.Ok(text.s(0, at))
+
+##:
+The text after the last `mark`, or the whole text when there is none.
+
+- Parameter text: The text to cut.
+- Parameter mark: The delimiter to cut at.
+- Returns: The part after the last delimiter.
+:##
+fn after_last(string text, string mark) string:
+    let i32 at = text.find_last(mark).realise(-1)
+    if (at < 0):
+        return Result.Ok(text.clone())
+    return Result.Ok(text.s(at + mark.len(), text.len()))

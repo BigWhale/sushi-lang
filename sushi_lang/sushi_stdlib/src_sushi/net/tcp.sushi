@@ -1,0 +1,245 @@
+##:
+net/tcp -- TcpStream and TcpListener over one file descriptor.
+
+The module ships as bundled .sushi source and is merged as a compilation unit
+when imported (`use <net/tcp>`). It composes the <net/socket> primitives; a
+struct here is a typed name for a descriptor and carries nothing else.
+
+There is NO RAII for a socket, exactly as there is none for a file. A
+TcpStream owns no heap, so it COPIES, and a copy holds the same descriptor.
+The rule is that ONE binding owns a socket and s.close() is what ends
+it. A close writes -1 into the binding it was given, so closing that binding
+again is a success; a copy taken before the close keeps a number the kernel
+has freed and may reuse, and an operation on it is a bug this compiler cannot
+catch.
+
+Limitations: blocking sockets only, so tcp_connect has no timeout of its own
+and an unreachable address waits for the kernel to give up. recv() answers
+whatever one read gave, which may be less than the maximum asked for;
+recv_exact() is the loop for a caller that needs a count.
+:##
+
+use <net/socket>
+
+##:
+One connected TCP stream.
+:##
+public struct TcpStream:
+    ##: The descriptor, or -1 once close() has run. :##
+    i32 fd
+
+##:
+One listening TCP socket.
+:##
+public struct TcpListener:
+    ##: The descriptor, or -1 once close() has run. :##
+    i32 fd
+
+##:
+Connects to a host and port.
+
+The host may be a name or a numeric address; a name is resolved and every
+answer is tried in turn. There is no connect timeout, so an address that
+answers nothing waits for the kernel.
+
+- Parameter host: The host to reach, as a name or an address.
+- Parameter port: The port to connect to.
+- Returns: The connected stream.
+- Errors: NetError, when no answer for the host accepted a connection.
+:##
+public fn tcp_connect(string host, i32 port) TcpStream | NetError:
+    let i32 fd = sock_tcp_connect(host, port)??
+    return Result.Ok(TcpStream(fd))
+
+##:
+Binds a listening socket and starts accepting connections.
+
+An empty host means the wildcard address. Port 0 asks the kernel to choose,
+and .local_port() reads back what it chose. SO_REUSEADDR is always set, so a
+port whose last connection is still closing binds again at once.
+
+- Parameter host: The address to bind, or an empty string for the wildcard.
+- Parameter port: The port to bind, or 0 to let the kernel choose.
+- Parameter backlog: How many completed connections may wait to be accepted.
+- Returns: The listening socket.
+- Errors: NetError, when the address cannot be bound.
+:##
+public fn tcp_listen(string host, i32 port, i32 backlog) TcpListener | NetError:
+    let i32 fd = sock_tcp_listen(host, port, backlog)??
+    return Result.Ok(TcpListener(fd))
+
+##:
+Takes the next connection waiting on a listener.
+
+The call blocks until one arrives, unless set_timeout() has given the
+listener a bound, in which case it answers TimedOut.
+
+- Returns: The accepted stream.
+- Errors: NetError, when no connection could be taken.
+:##
+extend TcpListener accept() TcpStream | NetError:
+    let i32 fd = sock_tcp_accept(self.fd)??
+    return TcpStream(fd)
+
+##:
+Writes bytes, and answers how many of them went.
+
+One write may take fewer bytes than it was offered. A caller that needs the
+whole buffer gone wants send_all() instead.
+
+- Parameter data: The bytes to write. The buffer stays the caller's.
+- Returns: How many bytes were written.
+- Errors: NetError, when the write failed.
+:##
+extend TcpStream send(u8[] data) i32 | NetError:
+    return sock_send(self.fd, data)??
+
+##:
+Writes every byte, looping until the buffer is gone.
+
+- Parameter data: The bytes to write. The buffer stays the caller's.
+- Returns: Nothing.
+- Errors: NetError, when a write failed before the buffer was gone.
+:##
+extend TcpStream send_all(u8[] data) ~ | NetError:
+    let i32 total = data.len()
+    let i32 done = 0
+    while (done < total):
+        let u8[] rest = data.ss(done, total - done)
+        let i32 sent = sock_send(self.fd, rest)??
+        if (sent <= 0):
+            return Result.Err(NetError.Closed)
+        done := done + sent
+    return ~
+
+##:
+Reads what one read gives, up to a maximum.
+
+An empty answer means the peer closed cleanly. A timeout is an error rather
+than an empty answer, so the two never read alike.
+
+- Parameter max: The most bytes to take in this one read.
+- Returns: The bytes that arrived, empty when the peer closed.
+- Errors: NetError, when the read failed.
+:##
+extend TcpStream recv(i32 max) u8[] | NetError:
+    return sock_recv(self.fd, max)??
+
+##:
+Reads exactly `count` bytes, looping until they have all arrived.
+
+A peer that closes early is an error, not a short answer: a caller asking for
+an exact count has no use for a partial one.
+
+- Parameter count: How many bytes to wait for.
+- Returns: Exactly `count` bytes.
+- Errors: NetError.Closed when the peer closed early, or the read's own error.
+:##
+extend TcpStream recv_exact(i32 count) u8[] | NetError:
+    let u8[] out = from([])
+    while (out.len() < count):
+        let u8[] chunk = sock_recv(self.fd, count - out.len())??
+        if (chunk.len() == 0):
+            return Result.Err(NetError.Closed)
+        out.extend(chunk)
+    return out
+
+##:
+The address of the peer at the other end, as text.
+
+The text is numeric and no resolver is asked, so this makes no network
+request.
+
+- Returns: The peer's address.
+- Errors: NetError, when the stream has no peer.
+:##
+extend TcpStream peer_ip() string | NetError:
+    return sock_peer_ip(self.fd)??
+
+##:
+The port of the peer at the other end.
+
+- Returns: The peer's port.
+- Errors: NetError, when the stream has no peer.
+:##
+extend TcpStream peer_port() i32 | NetError:
+    return sock_peer_port(self.fd)??
+
+##:
+The port a listener actually bound.
+
+This is the only way to learn the port after binding port 0.
+
+- Returns: The bound port.
+- Errors: NetError, when the socket is not bound.
+:##
+extend TcpListener local_port() i32 | NetError:
+    return sock_local_port(self.fd)??
+
+##:
+The port a connected stream bound at this end.
+
+- Returns: The local port.
+- Errors: NetError, when the socket is not bound.
+:##
+extend TcpStream local_port() i32 | NetError:
+    return sock_local_port(self.fd)??
+
+##:
+Bounds how long a read and a write on a stream may wait.
+
+A bound that expires answers NetError.TimedOut. Without one a read waits for
+as long as the peer stays silent.
+
+- Parameter recv_ms: The read bound, in milliseconds.
+- Parameter send_ms: The write bound, in milliseconds.
+- Returns: Nothing.
+- Errors: NetError, when the option could not be set.
+:##
+extend TcpStream set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError:
+    sock_set_recv_timeout(self.fd, recv_ms)??
+    sock_set_send_timeout(self.fd, send_ms)??
+    return ~
+
+##:
+Bounds how long accept() may wait for a connection.
+
+- Parameter accept_ms: The bound, in milliseconds.
+- Returns: Nothing.
+- Errors: NetError, when the option could not be set.
+:##
+extend TcpListener set_timeout(i32 accept_ms) ~ | NetError:
+    sock_set_recv_timeout(self.fd, accept_ms)??
+    return ~
+
+##:
+Closes a stream and writes -1 into the binding.
+
+The binding is marked so that closing it again is a success. A COPY of the
+stream taken before this call still holds the old descriptor, which the kernel
+may have given to somebody else; one binding owns a socket.
+
+- Returns: Nothing. The binding reads -1 afterwards.
+- Errors: NetError, when the descriptor could not be closed.
+:##
+extend TcpStream close(poke self) ~ | NetError:
+    if (self.fd < 0):
+        return ~
+    let i32 fd = self.fd
+    self.fd := -1
+    sock_close(fd)??
+    return ~
+
+##:
+Closes a listener and writes -1 into the binding.
+
+- Returns: Nothing. The binding reads -1 afterwards.
+- Errors: NetError, when the descriptor could not be closed.
+:##
+extend TcpListener close(poke self) ~ | NetError:
+    if (self.fd < 0):
+        return ~
+    let i32 fd = self.fd
+    self.fd := -1
+    sock_close(fd)??
+    return ~

@@ -132,6 +132,35 @@ class EnumCollector:
         self.enums.order.append("FileError")
         self.known_types.add(file_error_enum)
 
+        # NetError - the <net/socket> errors. The variant ORDER is the ABI: the
+        # index is the runtime tag that errno_to_net_error_table stores into a
+        # Result payload, so a variant is only ever APPENDED. ResolveFailed is
+        # the one variant no errno reaches -- getaddrinfo answers with an EAI_*
+        # code, whose sign even flips between the platforms.
+        net_error_enum = EnumType(
+            name="NetError",
+            variants=(
+                EnumVariantInfo(name="ConnectionRefused", associated_types=()),    # ECONNREFUSED
+                EnumVariantInfo(name="ConnectionReset", associated_types=()),      # ECONNRESET, ECONNABORTED
+                EnumVariantInfo(name="TimedOut", associated_types=()),             # ETIMEDOUT, EAGAIN on a blocking socket
+                EnumVariantInfo(name="Closed", associated_types=()),               # EPIPE, ENOTCONN, EBADF
+                EnumVariantInfo(name="AddressInUse", associated_types=()),         # EADDRINUSE
+                EnumVariantInfo(name="AddressNotAvailable", associated_types=()),  # EADDRNOTAVAIL
+                EnumVariantInfo(name="NetworkUnreachable", associated_types=()),   # ENETUNREACH, ENETDOWN, ENETRESET
+                EnumVariantInfo(name="HostUnreachable", associated_types=()),      # EHOSTUNREACH
+                EnumVariantInfo(name="ResolveFailed", associated_types=()),        # a getaddrinfo answer that is not EAI_SYSTEM
+                EnumVariantInfo(name="PermissionDenied", associated_types=()),     # EACCES, EPERM
+                EnumVariantInfo(name="TooManyOpen", associated_types=()),          # EMFILE, ENFILE
+                EnumVariantInfo(name="InvalidAddress", associated_types=()),       # EAFNOSUPPORT, EINVAL, a text that is no address
+                EnumVariantInfo(name="Interrupted", associated_types=()),          # EINTR
+                EnumVariantInfo(name="MessageTooLarge", associated_types=()),      # EMSGSIZE
+                EnumVariantInfo(name="Other", associated_types=()),                # Any other error
+            )
+        )
+        self.enums.by_name["NetError"] = net_error_enum
+        self.enums.order.append("NetError")
+        self.known_types.add(net_error_enum)
+
         # FileResult enum - Result type for open() function
         # Variant: Ok(file) - success with file handle
         # Variant: Err(FileError) - failure with error information

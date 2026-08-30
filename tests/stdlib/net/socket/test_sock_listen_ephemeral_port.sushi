@@ -1,0 +1,26 @@
+# sock_tcp_listen on port 0 takes an ephemeral port, and sock_local_port reads
+# it back through getsockname. The number itself is never printed: the suite
+# runs in parallel, so every bind here asks the kernel to choose.
+# EXPECT_STDOUT_EXACT: "listener has an ephemeral port\nclosed\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/socket>
+
+fn main() i32:
+    match sock_tcp_listen("127.0.0.1", 0, 8):
+        Result.Err(_) -> println("listen failed")
+        Result.Ok(fd) ->
+            match sock_local_port(fd):
+                Result.Ok(port) ->
+                    if (port > 0):
+                        println("listener has an ephemeral port")
+                    else:
+                        println("wrong: the port is {port}")
+                Result.Err(_) -> println("local_port failed")
+
+            match sock_close(fd):
+                Result.Ok(_) -> println("closed")
+                Result.Err(_) -> println("close failed")
+
+    return Result.Ok(0)

@@ -167,6 +167,95 @@ fn main() i32:
 """,
     ),
     Case(
+        "net/socket",
+        "net/socket.md",
+        """use <net/socket>
+
+fn main() i32:
+    match sock_tcp_listen("127.0.0.1", 0, 8):
+        Result.Ok(fd) ->
+            println("port {sock_local_port(fd).realise(-1)}")
+            sock_close(fd).realise(-1)
+        Result.Err(_) -> println("no listener")
+    return Result.Ok(0)
+""",
+    ),
+    Case(
+        "net/tcp",
+        "net/tcp.md",
+        """use <net/tcp>
+
+fn run() ~ | NetError:
+    let TcpListener l = tcp_listen("127.0.0.1", 0, 8)??
+    let i32 port = l.local_port()??
+    println("port {port}")
+    l.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+""",
+    ),
+    Case(
+        "net/udp",
+        "net/udp.md",
+        """use <net/udp>
+
+fn run() ~ | NetError:
+    let UdpSocket s = udp_bind("127.0.0.1", 0)??
+    let i32 port = s.local_port()??
+    println("port {port}")
+    s.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+""",
+    ),
+    Case(
+        "net/dns",
+        "net/dns.md",
+        """use <net/dns>
+use <net/ip>
+
+fn main() i32:
+    match resolve("127.0.0.1"):
+        Result.Ok(addresses) ->
+            foreach(a in addresses.iter()):
+                println("{a.text()}")
+        Result.Err(_) -> println("no answer")
+    return Result.Ok(0)
+""",
+    ),
+    Case(
+        "net/ip",
+        "net/ip.md",
+        """use <net/ip>
+
+fn main() i32:
+    match parse_ip("2001:db8::1"):
+        Result.Ok(a) -> println("{a.text()}")
+        Result.Err(_) -> println("not an address")
+    return Result.Ok(0)
+""",
+    ),
+    Case(
+        "net/url",
+        "net/url.md",
+        """use <net/url>
+
+fn main() i32:
+    match parse_url("https://omakase.lubica.net/api?q=1"):
+        Result.Ok(u) -> println("{u.scheme} {u.host} {u.path}")
+        Result.Err(e) -> println("{e.text()}")
+    return Result.Ok(0)
+""",
+    ),
+    Case(
         "maybe",
         "maybe.md",
         """fn main() i32:
@@ -219,8 +308,14 @@ def platform_stdlib():
 # Sushi-source module that compiler/pipeline.py injects as a compilation unit (its
 # combinators are not otherwise in scope). Both are still fully covered by the
 # authoritative subprocess compile layer below.
-SEMANTIC_LAYER_SKIP = {"collections/hashmap", "collections/iter",
-                       "collections/iter-methods"}
+SEMANTIC_LAYER_SKIP = {
+    "collections/hashmap", "collections/iter",
+    "collections/iter-methods",
+    # The bundled Sushi-source net modules. They are injected as compilation
+    # units by compiler/pipeline.py, which the semantic layer does not do, so
+    # the compile layer below is what covers them.
+    "net/tcp", "net/udp", "net/dns", "net/ip", "net/url",
+}
 
 
 def test_docs_present():

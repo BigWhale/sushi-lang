@@ -119,6 +119,9 @@ def _stdlib_generator_sources() -> list:
     # a stale .bc SILENTLY (found while landing #300 phase 2).
     sources.append(sushi_lang_dir / "backend" / "types" / "core" / "mapping.py")
     sources.append(sushi_lang_dir / "backend" / "types" / "core" / "sizing.py")
+    # The errno tables live here and are baked into the .bc as a chain of selects,
+    # so an edit to one has to invalidate the bitcode that carries it.
+    sources.append(sushi_lang_dir / "backend" / "runtime" / "constants.py")
     return sorted(sources, key=str)
 
 

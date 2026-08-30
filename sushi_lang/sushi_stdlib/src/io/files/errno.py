@@ -1,29 +1,20 @@
 """errno access and FileError mapping for the <io/files> generators.
 
-The one errno seam for `.bc` code: read errno after a failed libc call and map
-it to a FileError variant tag. The mapping table is shared with the
-compiler-inline open() path (backend/runtime/constants.py); the Result byte
-layout itself lives in results.py.
+Read errno after a failed libc call and map it to a FileError variant tag. The
+mapping table is shared with the compiler-inline open() path
+(backend/runtime/constants.py); the Result byte layout lives in src/results.py
+and the errno accessor in src/libc_declarations.py, so <net/socket> reads the
+same errno through the same declaration.
 """
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_errno_location
 from sushi_lang.backend.platform_detect import get_current_platform
 from sushi_lang.backend.runtime.constants import (
     errno_to_file_error_table,
     ERRNO_DEFAULT_FILE_ERROR,
 )
 from sushi_lang.sushi_stdlib.src.io.files.results import emit_err_result
-
-
-def declare_errno_location(module: ir.Module) -> ir.Function:
-    """Declare the errno accessor: int* __error() (macOS) / __errno_location() (Linux)."""
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    name = "__errno_location" if get_current_platform().is_linux else "__error"
-    try:
-        return module.get_global(name)
-    except KeyError:
-        func_type = ir.FunctionType(i32.as_pointer(), [])
-        return ir.Function(module, func_type, name=name)
 
 
 def emit_file_error_tag(builder: ir.IRBuilder, module: ir.Module) -> ir.Value:

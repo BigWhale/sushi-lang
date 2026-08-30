@@ -1,0 +1,23 @@
+# A numeric text resolves to itself and makes no network request: getaddrinfo
+# answers a literal address without asking a resolver. This is the one DNS
+# assertion that is fully deterministic, so it prints the address -- which is
+# safe only because the address was the input.
+# EXPECT_STDOUT_EXACT: "one answer\n127.0.0.1\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/dns>
+use <net/ip>
+
+fn main() i32:
+    match resolve("127.0.0.1"):
+        Result.Ok(addresses) ->
+            if (addresses.len() == 1):
+                println("one answer")
+            else:
+                println("wrong: {addresses.len()} answers")
+            foreach(a in addresses.iter()):
+                println("{a.text()}")
+        Result.Err(_) -> println("resolve failed")
+
+    return Result.Ok(0)

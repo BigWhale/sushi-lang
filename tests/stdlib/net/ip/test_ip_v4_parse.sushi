@@ -1,0 +1,32 @@
+# The IPv4 accept and reject tables in one run. The rejects are the shapes that
+# look plausible: a leading zero (which inet_pton refuses, so 010.0.0.1 is
+# never read as octal), an octet over 255, a short or long quad, and any
+# trailing character at all.
+# EXPECT_STDOUT_EXACT: "127.0.0.1 ok\n0.0.0.0 ok\n255.255.255.255 ok\n192.168.1.1 ok\nrejected 10\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/ip>
+
+fn show(string text) ~:
+    match parse_ip(text):
+        Result.Ok(a) -> println("{a.text()} ok")
+        Result.Err(_) -> println("{text} refused")
+    return Result.Ok(~)
+
+fn main() i32:
+    show("127.0.0.1")
+    show("0.0.0.0")
+    show("255.255.255.255")
+    show("192.168.1.1")
+
+    let string[] bad = from(["", "1.2.3", "1.2.3.4.5", "256.0.0.1", "01.2.3.4",
+                             "1.2.3.", ".1.2.3", "1.2.3.4a", "1.2.-3.4", "1.2.3.4 "])
+    let i32 refused = 0
+    foreach(text in bad.iter()):
+        match parse_ip(text):
+            Result.Ok(_) -> println("wrong: {text} was accepted")
+            Result.Err(_) ->
+                refused := refused + 1
+    println("rejected {refused}")
+
+    return Result.Ok(0)

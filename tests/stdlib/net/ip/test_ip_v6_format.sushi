@@ -1,0 +1,25 @@
+# RFC 5952 in full. Lowercase hex, no leading zero in a group, `::` over the
+# LONGEST run of zero groups, the LEFTMOST run when two runs tie, and never
+# over a run of one. An IPv4-mapped address prints in the mixed form.
+# EXPECT_STDOUT_EXACT: "::1\n::\nfe80::1\n2001:db8::1:0:0:1\n2001:db8:0:1:1:1:1:1\n::ffff:192.168.0.1\n2001:db8:85a3::8a2e:370:7334\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/ip>
+
+fn show(string text) ~:
+    match parse_ip(text):
+        Result.Ok(a) -> println("{a.text()}")
+        Result.Err(_) -> println("{text} refused")
+    return Result.Ok(~)
+
+fn main() i32:
+    show("0:0:0:0:0:0:0:1")
+    show("::")
+    show("FE80:0:0:0:0:0:0:1")
+    # Two runs of two zero groups: the leftmost wins.
+    show("2001:db8:0:0:1:0:0:1")
+    # A run of ONE zero group is written out, never compressed.
+    show("2001:db8:0:1:1:1:1:1")
+    show("::ffff:c0a8:1")
+    show("2001:0db8:85a3:0000:0000:8a2e:0370:7334")
+    return Result.Ok(0)

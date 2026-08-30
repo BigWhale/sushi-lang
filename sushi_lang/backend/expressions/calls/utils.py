@@ -136,6 +136,20 @@ def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional
         'is_symlink': (BuiltinType.BOOL, 'FileError'),
         'chdir': (BuiltinType.I32, 'ProcessError'),
         'getcwd': (BuiltinType.STRING, 'ProcessError'),
+        'sock_tcp_connect': (BuiltinType.I32, 'NetError'),
+        'sock_tcp_listen': (BuiltinType.I32, 'NetError'),
+        'sock_tcp_accept': (BuiltinType.I32, 'NetError'),
+        'sock_send': (BuiltinType.I32, 'NetError'),
+        'sock_recv': (DynamicArrayType(BuiltinType.U8), 'NetError'),
+        'sock_dns_resolve': (DynamicArrayType(BuiltinType.STRING), 'NetError'),
+        'sock_udp_bind': (BuiltinType.I32, 'NetError'),
+        'sock_udp_send_to': (BuiltinType.I32, 'NetError'),
+        'sock_close': (BuiltinType.I32, 'NetError'),
+        'sock_local_port': (BuiltinType.I32, 'NetError'),
+        'sock_peer_ip': (BuiltinType.STRING, 'NetError'),
+        'sock_peer_port': (BuiltinType.I32, 'NetError'),
+        'sock_set_recv_timeout': (BuiltinType.I32, 'NetError'),
+        'sock_set_send_timeout': (BuiltinType.I32, 'NetError'),
     }
     spec = result_specs.get(func_name)
     if spec is None:
@@ -144,6 +158,11 @@ def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional
             err_enum = enums.get('ProcessError')
             if out_struct is not None and err_enum is not None:
                 return intern_result(codegen, out_struct, err_enum)
+        if func_name == 'sock_udp_recv_from':
+            datagram = codegen.struct_table.by_name.get('Datagram')
+            err_enum = enums.get('NetError')
+            if datagram is not None and err_enum is not None:
+                return intern_result(codegen, datagram, err_enum)
         return None
     ok_type, err_name = spec
     err_enum = enums.get(err_name)

@@ -1,0 +1,19 @@
+# Every part of a URL that carries one, read out in order.
+# EXPECT_STDOUT_EXACT: "scheme https\nuserinfo user\nhost example.com\nport 8443\npath /a/b\nquery x=1&y=2\nfragment top\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/url>
+
+fn main() i32:
+    match parse_url("HTTPS://user@Example.COM:8443/a/b?x=1&y=2#top"):
+        Result.Ok(u) ->
+            println("scheme {u.scheme}")
+            println("userinfo {u.userinfo}")
+            println("host {u.host}")
+            println("port {u.port}")
+            println("path {u.path}")
+            println("query {u.query}")
+            println("fragment {u.fragment}")
+        Result.Err(_) -> println("parse failed")
+
+    return Result.Ok(0)
