@@ -325,6 +325,13 @@ class SemanticAnalyzer:
             tables=self.tables,
         )
 
+        # The late-interning seam (risk 1 of the UFCS epic): when the per-unit
+        # typecheck solves a method-level type argument, the substituted signature can
+        # name an instantiation nothing else names -- reachable from the pass through
+        # the tables, because the pass has no monomorphizer of its own.
+        self.tables.intern_generic_ref = (
+            lambda ty: self._intern_generic_type_refs(monomorphizer, (ty,)))
+
         # Type arguments are resolved FIRST. `str(UnknownType("Point"))` and
         # `str(StructType("Point"))` are both "Point", so the two spellings mangle to one
         # enum name while carrying different payloads -- and EnumType hashes on the name but
@@ -523,30 +530,136 @@ class SemanticAnalyzer:
     MAX_ARRAY_EXPANSION_ROUNDS = 8
 
     def _drain_pending_array_extensions(self, monomorphizer, compilation_order) -> None:
-        """Monomorphize every queued array-template instantiation (ruling 3).
+        """Monomorphize every queued call-site extension instantiation.
 
-        The typecheck pass queued (template, element) pairs while it resolved calls;
-        each becomes a concrete ExtendDef with its own body, joins
-        `monomorphized_extensions` for the backend's weak_odr emission, and has its
-        body's function instantiations collected exactly as the struct-target round
-        above does (#392).
+        The typecheck pass queued (template, target, receiver args, method args) while
+        it resolved calls -- an array template's element (ruling 3) or a
+        method-generic's solved margs (Phase 4). Each becomes a concrete ExtendDef with
+        its own body, joins `monomorphized_extensions` for the backend's weak_odr
+        emission, and has its body's function instantiations collected exactly as the
+        struct-target round above does (#392).
         """
-        pending = self.tables.pending_array_extensions
+        pending = self.tables.pending_extension_instantiations
         if not pending:
             return
-        from sushi_lang.semantics.typesys import DynamicArrayType
         from sushi_lang.semantics.generics.extensions import monomorphize_extension_method
 
-        self.tables.pending_array_extensions = []
+        self.tables.pending_extension_instantiations = []
         fn_instantiations = set()
-        for template, element in pending:
+        new_defs = []
+        for template, target_type, receiver_args, method_type_args in pending:
             extend_def = monomorphize_extension_method(
-                template, DynamicArrayType(base_type=element), (element,),
-                substitutor=monomorphizer.substitutor)
+                template, target_type, receiver_args,
+                substitutor=monomorphizer.substitutor,
+                method_type_args=method_type_args)
+            new_defs.append(extend_def)
             self.monomorphized_extensions.append(extend_def)
+        self._intern_late_type_instantiations(monomorphizer, new_defs)
+        for extend_def in new_defs:
             fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
         if fn_instantiations:
             monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
+
+    def _intern_late_type_instantiations(self, monomorphizer, extend_defs) -> None:
+        """Intern the type instantiations a call-site-solved copy names (risk 1).
+
+        A solved method argument can name an instantiation (`List@(bool)`) that appears
+        NOWHERE else in the program, and the copy is created after `resolve`,
+        `finite-types` and `derive` have run. Every fully-concrete GenericTypeRef in
+        the copies' signatures and `let` annotations goes through the late interner.
+        """
+        from sushi_lang.semantics.ast import Block, Let
+
+        types: list = []
+
+        def visit_statements(block) -> None:
+            if not isinstance(block, Block):
+                return
+            for stmt in block.statements:
+                if isinstance(stmt, Let) and getattr(stmt, "ty", None) is not None:
+                    types.append(stmt.ty)
+                for attr in ("body", "then_block", "else_block", "block"):
+                    visit_statements(getattr(stmt, attr, None))
+                for arms in (getattr(stmt, "arms", None) or ()):
+                    if isinstance(arms, tuple):
+                        for part in arms:
+                            visit_statements(part)
+                    else:
+                        visit_statements(getattr(arms, "body", None))
+
+        for extend_def in extend_defs:
+            types.append(extend_def.ret)
+            types.append(getattr(extend_def, "err_type", None))
+            for param in extend_def.params:
+                types.append(param.ty)
+            visit_statements(extend_def.body)
+
+        self._intern_generic_type_refs(monomorphizer, types)
+
+    def _intern_generic_type_refs(self, monomorphizer, types) -> None:
+        """Monomorphize, resolve and derive every NEW instantiation `types` name.
+
+        The one late-interning seam: the typecheck pass reaches it through
+        `tables.intern_generic_ref` when a call site solves a method-level type
+        argument, and the drain reaches it for the copies' bodies. The resolve and
+        derive re-runs are idempotent walks over the tables.
+        """
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+
+        struct_insts: set = set()
+        enum_insts: set = set()
+
+        def resolve_ref(ty):
+            """A concrete Type for `ty`, queueing what is not interned yet."""
+            if not isinstance(ty, GenericTypeRef):
+                return ty
+            args = tuple(resolve_ref(a) for a in ty.type_args)
+            if any(a is None or isinstance(a, GenericTypeRef) for a in args):
+                return None
+            key = instantiation_key(ty.base_name, args)
+            interned = self.structs.by_name.get(key) or self.enums.by_name.get(key)
+            if interned is not None:
+                return interned
+            if ty.base_name in self.generic_structs.by_name:
+                struct_insts.add((ty.base_name, args))
+            elif ty.base_name in self.generic_enums.by_name:
+                enum_insts.add((ty.base_name, args))
+            return None
+
+        for ty in types:
+            if ty is not None:
+                resolve_ref(ty)
+
+        if not struct_insts and not enum_insts:
+            return
+
+        concrete_enums = monomorphizer.monomorphize_all(
+            self.generic_enums.by_name, enum_insts)
+        for enum_name, enum_type in concrete_enums.items():
+            if enum_name not in self.enums.by_name:
+                self.enums.by_name[enum_name] = enum_type
+                self.enums.order.append(enum_name)
+
+        concrete_structs = monomorphizer.monomorphize_all_structs(
+            self.generic_structs.by_name, struct_insts)
+        for struct_name, struct_type in concrete_structs.items():
+            if struct_name not in self.structs.by_name:
+                self.structs.by_name[struct_name] = struct_type
+                self.structs.order.append(struct_name)
+
+        from sushi_lang.semantics.passes.resolve import (
+            resolve_enum_variant_types, resolve_struct_field_types)
+        resolve_struct_field_types(self.structs, self.enums)
+        resolve_enum_variant_types(self.structs, self.enums)
+
+        from sushi_lang.semantics.passes.derive import (
+            register_all_array_hashes, register_all_clones,
+            register_all_enum_hashes, register_all_struct_hashes)
+        register_all_struct_hashes(self.structs)
+        register_all_enum_hashes(self.enums, self.reporter)
+        register_all_array_hashes(self.structs, self.enums)
+        register_all_clones(self.structs, self.enums)
 
     def _check_monomorphized_extensions(self, destroy_effects, enum_names,
                                         lift_target=None, only=None) -> None:

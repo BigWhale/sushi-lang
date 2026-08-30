@@ -1,0 +1,14 @@
+# A method-level type parameter that repeats a receiver-target parameter name is
+# CE2064 -- inside the body the two would be indistinguishable.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2064
+struct Box@(T):
+    T value
+
+extend Box@(T) swap@(T)(T other) T:
+    return other
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println("{b.swap(2)}")
+    return Result.Ok(0)

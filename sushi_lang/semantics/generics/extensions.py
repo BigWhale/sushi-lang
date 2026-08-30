@@ -15,9 +15,10 @@ if TYPE_CHECKING:
 
 def monomorphize_extension_method(
     generic_method: GenericExtensionMethod,
-    concrete_target_type: StructType | EnumType | DynamicArrayType,
+    concrete_target_type: StructType | EnumType | DynamicArrayType | Type,
     type_args: Tuple[Type, ...],
     substitutor: "TypeSubstitutor",
+    method_type_args: Tuple[Type, ...] = (),
 ) -> ExtendDef:
     """Monomorphize a generic extension method for a specific instantiation.
 
@@ -34,6 +35,16 @@ def monomorphize_extension_method(
     substitution = {}
     for param, arg in zip(generic_method.type_params, type_args, strict=False):
         param_name = param.name if hasattr(param, 'name') else param
+        substitution[param_name] = arg
+
+    # Method-level type arguments (`name@(U)`, solved at the call site) compose with
+    # the receiver substitution in this ONE pass over the original template body.
+    method_type_params = getattr(generic_method, "method_type_params", ()) or ()
+    if len(method_type_args) != len(method_type_params):
+        raise_internal_error("CE0096", operation=(
+            f"Method type argument count mismatch: expected {len(method_type_params)}, "
+            f"got {len(method_type_args)}"))
+    for param_name, arg in zip(method_type_params, method_type_args, strict=True):
         substitution[param_name] = arg
 
     concrete_ret_type = None
@@ -72,6 +83,7 @@ def monomorphize_extension_method(
         ret_span=generic_method.ret_span,
         err_type=concrete_err_type,
         err_span=getattr(generic_method, "err_span", None),
+        method_type_args=tuple(method_type_args),
     )
 
 
@@ -114,6 +126,12 @@ def monomorphize_all_extension_methods(
 
             for (method_name, target_key), generic_method in declarations.items():
                 if target_key and target_key != concrete_type_name:
+                    continue
+
+                # A method-generic template cannot be monomorphized from the target
+                # instantiation alone -- the CALL SITE names its method arguments, so
+                # the typecheck pass queues it instead.
+                if getattr(generic_method, "method_type_params", ()):
                     continue
 
                 # A concrete target has no type parameters, so it substitutes nothing -- its

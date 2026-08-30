@@ -1,0 +1,17 @@
+# A method-level parameter on a CONCRETE receiver: the method is generic, the
+# receiver is not.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7\n9\n"
+extend i32 pick@(U)(U a, U b) U:
+    if (self > 0):
+        return a
+    return b
+
+fn main() i32:
+    let i32 plus = 1
+    let i32 minus = -1
+    println("{plus.pick(7, 9)}")
+    println("{minus.pick(7, 9)}")
+    return Result.Ok(0)

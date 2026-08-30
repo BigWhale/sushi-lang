@@ -47,6 +47,16 @@ from sushi_lang.semantics.generics.extension_targets import classify_extension_t
 from sushi_lang.semantics.generics.type_display import display_type
 
 
+def deep_type_params(ty: Optional[Type], names) -> Optional[Type]:
+    """Convert every UnknownType naming one of `names` into a TypeParameter, THROUGH
+    the whole signature type -- nested GenericTypeRef arguments, function types and
+    array elements included, where the old top-level convert stopped."""
+    if ty is None or not names:
+        return ty
+    from sushi_lang.semantics.generics.types import substitute_type_params
+    return substitute_type_params(ty, {n: TypeParameter(name=n) for n in names})
+
+
 def is_explicit_result_type(ty: Optional[Type]) -> bool:
     """Check if a type is an explicit Result<T, E>."""
     if ty is None:
@@ -395,6 +405,9 @@ class GenericExtensionMethod:
     unit_name: Optional[str] = None  # The unit that declared it
     err_type: Optional[Type] = None  # `| E`: instances return Result@(ret, E) (ruling 1)
     err_span: Optional[Span] = None
+    # Method-level type parameters (`name@(U)`): SEPARATE from the receiver-derived
+    # `type_params`, whose CE0096 strict zip stays untouched. Solved at the call site.
+    method_type_params: Tuple[str, ...] = ()
 
 
 @dataclass
@@ -499,8 +512,9 @@ class FunctionCollector:
             # that assume a concrete `self`.
             moved = [e for e in extensions
                      if isinstance(e, ExtendDef)
-                     and isinstance(getattr(e, "target_type", None), DynamicArrayType)
-                     and (e.target_shape is None or e.target_shape.param_names)]
+                     and (getattr(e, "type_params", None)
+                          or (isinstance(getattr(e, "target_type", None), DynamicArrayType)
+                              and (e.target_shape is None or e.target_shape.param_names)))]
             if moved:
                 moved_ids = {id(e) for e in moved}
                 root.extensions[:] = [e for e in extensions if id(e) not in moved_ids]
@@ -818,11 +832,12 @@ class FunctionCollector:
         if not isinstance(name, str):
             return
 
-        # TEMPORARY (UFCS epic, Phase 1): the slot parses but nothing consumes
-        # it yet. Phase 4 removes this reject.
-        if getattr(ext, "type_params", None):
-            raise NotImplementedError(
-                "method-level type parameters on an extension are not implemented yet")
+        # Method-level type parameters (`name@(U)`, ruling on identity). Their names
+        # join the receiver-derived ones in the deep signature conversion; a name that
+        # repeats a receiver parameter is CE2064, checked where the receiver's own
+        # names are known (the generic branch and the array arm below).
+        method_type_params: Tuple[str, ...] = tuple(
+            tp.name for tp in (getattr(ext, "type_params", None) or ()))
 
         target_type: Optional[Type] = getattr(ext, "target_type", None)
         name_span: Optional[Span] = getattr(ext, "name_span", None) or getattr(ext, "loc", None)
@@ -873,7 +888,8 @@ class FunctionCollector:
         if target_type is not None and isinstance(target_type, DynamicArrayType):
             target_type = self._collect_array_extension(
                 ext, target_type, name, params, ret_ty, body,
-                name_span, target_type_span, ret_span, err_ty, err_span)
+                name_span, target_type_span, ret_span, err_ty, err_span,
+                method_type_params)
             if target_type is None:
                 return
 
@@ -893,15 +909,16 @@ class FunctionCollector:
                           "there is no partial specialization").emit()
                 return
 
-            type_param_names = set(shape.param_names)
+            shadowed = [m for m in method_type_params if m in shape.param_names]
+            if shadowed:
+                er.emit(self.r, ERR.CE2064, name_span, name=shadowed[0])
+                return
+
+            all_names = (*shape.param_names, *method_type_params)
 
             def convert_unknown_to_typeparam(ty: Optional[Type]) -> Optional[Type]:
-                """Convert UnknownType to TypeParameter if it matches a type parameter name."""
-                if ty is None:
-                    return None
-                if isinstance(ty, UnknownType) and ty.name in type_param_names:
-                    return TypeParameter(name=ty.name)
-                return ty
+                """Deep name-to-TypeParameter conversion through the signature."""
+                return deep_type_params(ty, all_names)
 
             concrete_ret_ty = convert_unknown_to_typeparam(ret_ty)
             concrete_params = []
@@ -934,6 +951,7 @@ class FunctionCollector:
                 unit_name=self.current_unit_name,
                 err_type=convert_unknown_to_typeparam(err_ty),
                 err_span=err_span,
+                method_type_params=method_type_params,
             )
 
             if self._reject_overlapping_target(generic_method, target_type, name_span):
@@ -948,6 +966,13 @@ class FunctionCollector:
                     resolved_type = self.structs.by_name[type_name]
                 elif type_name in self.enums.by_name:
                     resolved_type = self.enums.by_name[type_name]
+
+            if method_type_params and resolved_type is not None:
+                self._collect_concrete_method_generic(
+                    ext, resolved_type, name, params, ret_ty, body,
+                    name_span, target_type_span, ret_span, err_ty, err_span,
+                    method_type_params)
+                return
 
             method = ExtensionMethod(
                 target_type=resolved_type,
@@ -984,7 +1009,8 @@ class FunctionCollector:
                                  target_type_span: Optional[Span],
                                  ret_span: Optional[Span],
                                  err_ty: Optional[Type] = None,
-                                 err_span: Optional[Span] = None) -> Optional[Type]:
+                                 err_span: Optional[Span] = None,
+                                 method_type_params: Tuple[str, ...] = ()) -> Optional[Type]:
         """Classify a dynamic-array target (ruling 3): template, concrete, or CE2101.
 
         Returns the (possibly element-resolved) concrete target type, or None when the
@@ -1014,10 +1040,14 @@ class FunctionCollector:
 
         param_name = shape.param_names[0]
 
+        if param_name in method_type_params:
+            er.emit(self.r, ERR.CE2064, name_span, name=param_name)
+            return None
+
+        all_names = (param_name, *method_type_params)
+
         def convert(ty: Optional[Type]) -> Optional[Type]:
-            if isinstance(ty, UnknownType) and ty.name == param_name:
-                return TypeParameter(name=param_name)
-            return ty
+            return deep_type_params(ty, all_names)
 
         converted_params = [Param(
             name=p.name, ty=convert(p.ty), name_span=p.name_span,
@@ -1050,8 +1080,68 @@ class FunctionCollector:
             unit_name=self.current_unit_name,
             err_type=convert(err_ty),
             err_span=err_span,
+            method_type_params=method_type_params,
         ))
         return None
+
+    def _collect_concrete_method_generic(self, ext: ExtendDef, resolved_type: Type,
+                                         name: str, params: List[Param],
+                                         ret_ty: Optional[Type], body,
+                                         name_span: Optional[Span],
+                                         target_type_span: Optional[Span],
+                                         ret_span: Optional[Span],
+                                         err_ty: Optional[Type],
+                                         err_span: Optional[Span],
+                                         method_type_params: Tuple[str, ...]) -> None:
+        """A method-generic on a CONCRETE receiver (`extend i32 pick@(U)`).
+
+        The margs dimension makes it a template: it files under the receiver's display
+        name in the GenericExtensionTable -- never the ExtensionTable, which keys on
+        (type, name) alone and gets no third dimension -- and instantiates at the call
+        site, like the array binder does.
+        """
+        base = display_type(resolved_type)
+
+        for existing in self.generic_extensions.declarations(base, name):
+            self._emit_duplicate_extension(
+                f"extension method '{name}' for '{base}'",
+                name_span, existing.unit_name, existing.name_span,
+                existing.filename)
+            return
+
+        def convert(ty: Optional[Type]) -> Optional[Type]:
+            return deep_type_params(ty, method_type_params)
+
+        converted_params = [Param(
+            name=p.name, ty=convert(p.ty), name_span=p.name_span,
+            type_span=p.type_span, index=p.index,
+            is_variadic=getattr(p, "is_variadic", False),
+            is_nom=getattr(p, "is_nom", False),
+        ) for p in params]
+
+        self.generic_extensions.add_method(GenericExtensionMethod(
+            base_type_name=base,
+            type_params=(),
+            target_key="",
+            name=name,
+            loc=getattr(ext, "loc", None),
+            target_type_span=target_type_span,
+            name_span=name_span,
+            ret_type=convert(ret_ty),
+            ret_span=ret_span,
+            params=converted_params,
+            body=body,
+            self_mode=getattr(ext, "self_mode", None),
+            filename=self.current_unit_file,
+            unit_name=self.current_unit_name,
+            err_type=convert(err_ty),
+            err_span=err_span,
+            method_type_params=method_type_params,
+        ))
+        # The declaration itself must not be walked as a concrete extension: stash the
+        # receiver so the drain can rebuild the target, and let collect_extensions
+        # re-file the node under generic_extensions.
+        ext.target_type = resolved_type
 
     def _emit_duplicate_extension(self, name_text, name_span,
                                   other_unit, other_span, other_filename) -> None:

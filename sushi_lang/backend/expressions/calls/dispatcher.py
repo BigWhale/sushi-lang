@@ -346,8 +346,9 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     else:
         lang_type = codegen.types.map_llvm_to_language_type(receiver_type)
 
-    from sushi_lang.semantics.generics.name_mangling import sanitize_extension_receiver
-    func_name = f"{sanitize_extension_receiver(lang_type)}_{expr.method}"
+    from sushi_lang.semantics.generics.name_mangling import extension_symbol
+    func_name = extension_symbol(lang_type, expr.method,
+                                 getattr(expr, "callee_method_type_args", None) or ())
     llvm_fn = codegen.funcs.get(func_name)
 
     if llvm_fn is None and func_name in codegen.module.globals:

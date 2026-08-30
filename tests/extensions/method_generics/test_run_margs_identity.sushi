@@ -1,0 +1,37 @@
+# THE identity test of the UFCS epic: two different U's on ONE receiver type give two
+# symbols and two bodies. `List<i32>_mapv` alone would collide -- the second call's IR
+# would run the first body. Also the risk-1 spike: List@(bool) appears NOWHERE else in
+# this program, so the instantiation cascade must intern and derive it late.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "false\ntrue\nn1\nn2\n"
+extend List@(T) mapv@(U)(fn(T) -> U f) List@(U) | StdError:
+    let List@(U) out = List.new()
+    foreach(x in self.iter()):
+        out.push(f(x)??)
+    return out
+
+fn to_bool(i32 x) bool:
+    return Result.Ok(x > 1)
+
+fn to_str(i32 x) string:
+    return Result.Ok("n{x}")
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    match xs.mapv(to_bool):
+        Result.Ok(bs) ->
+            foreach(b in bs.iter()):
+                println("{b}")
+        Result.Err(_) ->
+            println("err")
+    match xs.mapv(to_str):
+        Result.Ok(ss) ->
+            foreach(s in ss.iter()):
+                println(s)
+        Result.Err(_) ->
+            println("err")
+    return Result.Ok(0)

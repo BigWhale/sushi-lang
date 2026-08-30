@@ -43,7 +43,14 @@ class SymbolTables:
     # table of callables -- no signature travels with a kept name, so it holds what the
     # CE3005 gate needs and nothing more.
     library_not_exported: dict[str, tuple[str, str]] = field(default_factory=dict)
-    # Array-template instantiations the typecheck pass requested: (template, element).
-    # The call site is what names a `T[]` element type, so these queue during the
-    # per-unit loop and the analyzer monomorphizes and checks them to a fixpoint after.
-    pending_array_extensions: list = field(default_factory=list)
+    # Extension instantiations the typecheck pass requested at CALL SITES:
+    # (template, target_type, receiver_args, method_type_args). An array template's
+    # element and a method-generic's solved margs both live only at the call, so these
+    # queue during the per-unit loop and the analyzer monomorphizes and checks them to
+    # a fixpoint after. `queued_extension_keys` dedupes: one copy per
+    # (receiver, method, margs), which is also what keeps the weak_odr symbol unique.
+    pending_extension_instantiations: list = field(default_factory=list)
+    queued_extension_keys: set = field(default_factory=set)
+    # The analyzer's late interner (risk 1): the typecheck pass hands it a type whose
+    # generic instantiations may not be interned yet. None outside a full analysis.
+    intern_generic_ref: object = None

@@ -32,7 +32,9 @@ def instantiate_array_extension(validator: 'TypeValidator',
     from sushi_lang.semantics.passes.collect.functions import ExtensionMethod, Param
 
     templates = validator.generic_extension_table.declarations(ARRAY_BASE_KEY, method_name)
-    template = next((t for t in templates if not t.target_key), None)
+    template = next((t for t in templates
+                     if not t.target_key
+                     and not getattr(t, "method_type_params", ())), None)
     if template is None:
         return None
 
@@ -58,7 +60,170 @@ def instantiate_array_extension(validator: 'TypeValidator',
         unit_name=template.unit_name,
         err_type=err, err_span=getattr(template, "err_span", None))
     validator.extension_table.add_method(concrete)
-    validator.tables.pending_array_extensions.append((template, element))
+    _queue_extension_instantiation(validator, template, receiver_type, (element,), ())
+    return concrete
+
+
+def _queue_extension_instantiation(validator: 'TypeValidator', template, target_type,
+                                   receiver_args, method_type_args) -> None:
+    """Queue one monomorphization request, deduped by (receiver, method, margs)."""
+    key = (str(target_type), template.name,
+           tuple(str(a) for a in method_type_args))
+    tables = validator.tables
+    if key in tables.queued_extension_keys:
+        return
+    tables.queued_extension_keys.add(key)
+    tables.pending_extension_instantiations.append(
+        (template, target_type, tuple(receiver_args), tuple(method_type_args)))
+
+
+# Returned by resolve_method_generic_extension when it found the template but the
+# call cannot use it (CE2063 already reported): the caller must not add CE2008 on top.
+RESOLUTION_REPORTED = object()
+
+
+def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
+                                  method_name: str):
+    """The method-generic template a receiver answers to, plus its receiver substitution.
+
+    Three receiver shapes: a `T[]` (the `$array` templates, element substitution), an
+    instantiation of a generic base (`List<i32>` -- base-name lookup, args from the
+    interned type), and any concrete type (its display name is the base key, empty
+    substitution). Returns (None, None) when no margs template answers.
+    """
+    from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+
+    def margs_template(declarations, target_key=""):
+        for t in declarations:
+            if not getattr(t, "method_type_params", ()):
+                continue
+            if t.target_key and t.target_key != target_key:
+                continue
+            return t
+        return None
+
+    table = validator.generic_extension_table
+    if isinstance(receiver_type, DynamicArrayType):
+        template = margs_template(table.declarations(ARRAY_BASE_KEY, method_name))
+        if template is not None:
+            subst = ({template.type_params[0]: receiver_type.base_type}
+                     if template.type_params else {})
+            return template, subst
+        # A concrete-element array template files under its display name below.
+
+    generic_base = getattr(receiver_type, "generic_base", None)
+    if generic_base is not None:
+        template = margs_template(
+            table.declarations(generic_base, method_name),
+            target_key=getattr(receiver_type, "name", ""))
+        if template is not None:
+            names = [p.name if hasattr(p, "name") else p for p in template.type_params]
+            args = getattr(receiver_type, "generic_args", None) or ()
+            subst = dict(zip(names, args, strict=False)) if not template.target_key else {}
+            return template, subst
+
+    template = margs_template(table.declarations(display_type(receiver_type), method_name))
+    if template is not None:
+        return template, {}
+    return None, None
+
+
+def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, call,
+                                     report: bool = True):
+    """Resolve a call against a method-generic template (`name@(U)`, Phase 4).
+
+    The receiver substitution and the method-parameter unification COMPOSE: the
+    receiver names T, the arguments solve U. The substituted signature is returned as
+    a synthetic ExtensionMethod -- never added to the ExtensionTable, which keys on
+    (type, name) alone -- the solved margs are stamped on the call (the backend's half
+    of the symbol identity), and the instantiation is queued for the analyzer's
+    fixpoint round. Returns None (no template), RESOLUTION_REPORTED (CE2063 emitted),
+    or the synthetic method.
+    """
+    from sushi_lang.semantics.ast import Lambda
+    from sushi_lang.semantics.generics.types import substitute_type_params
+    from sushi_lang.semantics.generics.unify import unify_types
+    from sushi_lang.semantics.passes.collect.functions import ExtensionMethod, Param
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+
+    template, receiver_subst = _find_method_generic_template(
+        validator, receiver_type, call.method)
+    if template is None:
+        return None
+
+    expected_params = [
+        substitute_type_params(p.ty, receiver_subst) if p.ty is not None else None
+        for p in template.params]
+
+    type_param_map: dict = {}
+    for expected, arg in zip(expected_params, call.args, strict=False):
+        if expected is None:
+            continue
+        if isinstance(arg, Lambda):
+            from sushi_lang.semantics.passes.types.visitor import infer_lambda_type
+            arg_type = infer_lambda_type(validator, arg, stamp=False)
+        else:
+            arg_type = validator.infer_expression_type(arg)
+        if arg_type is None:
+            continue
+        unify_types(expected, arg_type, type_param_map)
+
+    margs_names = list(template.method_type_params)
+    unsolved = [n for n in margs_names if n not in type_param_map]
+    if unsolved:
+        if report:
+            names = ", ".join(f"'{n}'" for n in unsolved)
+            er.emit_with(validator.reporter, er.ERR.CE2063, call.loc,
+                         plural="s" if len(unsolved) > 1 else "",
+                         names=names, method=call.method) \
+                .help("annotate the lambda's parameter types "
+                      "('|i32 x| ...'), or pass a named function -- a bare-param "
+                      "lambda has no type of its own to infer from").emit()
+            return RESOLUTION_REPORTED
+        return None
+
+    margs = tuple(
+        resolve_unknown_type(type_param_map[n], validator.struct_table.by_name,
+                             validator.enum_table.by_name)
+        for n in margs_names)
+
+    full_subst = dict(receiver_subst)
+    full_subst.update(dict(zip(margs_names, margs, strict=True)))
+
+    ret = (substitute_type_params(template.ret_type, full_subst)
+           if template.ret_type is not None else None)
+    err = (substitute_type_params(template.err_type, full_subst)
+           if getattr(template, "err_type", None) is not None else None)
+    params = [Param(
+        name=p.name,
+        ty=substitute_type_params(p.ty, full_subst) if p.ty is not None else None,
+        name_span=p.name_span, type_span=p.type_span, index=p.index,
+        is_variadic=getattr(p, "is_variadic", False),
+        is_nom=getattr(p, "is_nom", False),
+    ) for p in template.params]
+
+    # A solved argument can name an instantiation nothing else in the program names
+    # (risk 1): intern it NOW, so this very unit's bodies resolve against it.
+    interner = getattr(validator.tables, "intern_generic_ref", None)
+    if interner is not None:
+        for ty in (ret, err, *(p.ty for p in params)):
+            if ty is not None:
+                interner(ty)
+
+    concrete = ExtensionMethod(
+        target_type=receiver_type, name=call.method, params=params, ret_type=ret,
+        loc=template.loc, target_type_span=template.target_type_span,
+        name_span=template.name_span, ret_span=template.ret_span,
+        self_mode=template.self_mode, filename=template.filename,
+        unit_name=template.unit_name,
+        err_type=err, err_span=getattr(template, "err_span", None))
+
+    call.callee_method_type_args = margs
+
+    receiver_names = [p.name if hasattr(p, "name") else p for p in template.type_params]
+    receiver_args = tuple(receiver_subst[n] for n in receiver_names)
+    _queue_extension_instantiation(validator, template, receiver_type,
+                                   receiver_args, margs)
     return concrete
 
 
@@ -372,6 +537,12 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
 
     if method is None and isinstance(receiver_type, DynamicArrayType):
         method = instantiate_array_extension(validator, receiver_type, call.method)
+
+    if method is None:
+        resolved = resolve_method_generic_extension(validator, receiver_type, call)
+        if resolved is RESOLUTION_REPORTED:
+            return
+        method = resolved
 
     if method is None:
         if _reject_unhandled_channel_chain(validator, call, receiver_type):

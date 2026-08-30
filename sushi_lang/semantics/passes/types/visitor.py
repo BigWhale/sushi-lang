@@ -516,6 +516,11 @@ class ExpressionValidator(RecursiveVisitor):
             node.callee_param_names = temp_method_call.callee_param_names
             node.callee_param_types = temp_method_call.callee_param_types
 
+        # The solved method-level type arguments are HALF the callee's symbol: losing
+        # them here would call `List__i32_mapv` where `List__i32_mapv__bool` is defined.
+        if getattr(temp_method_call, 'callee_method_type_args', None) is not None:
+            node.callee_method_type_args = temp_method_call.callee_method_type_args
+
     def _validate_from_bits(self, node: DotCall) -> None:
         """Validate f64.from_bits(u64) / f32.from_bits(u32) static reinterpret calls."""
         tv = self.type_validator
@@ -1011,6 +1016,16 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                         instantiate_array_extension)
                     method = instantiate_array_extension(
                         self.type_validator, actual_type, node.method)
+                if method is None:
+                    # A method-generic template (`name@(U)`) likewise answers at the
+                    # call site; inference stays silent (report=False) -- the
+                    # validation half owns CE2063.
+                    from sushi_lang.semantics.passes.types.calls.methods import (
+                        RESOLUTION_REPORTED, resolve_method_generic_extension)
+                    resolved = resolve_method_generic_extension(
+                        self.type_validator, actual_type, node, report=False)
+                    if resolved is not None and resolved is not RESOLUTION_REPORTED:
+                        method = resolved
                 if method is not None:
                     # A channel method (`| E`) yields its interned Result at every
                     # call site -- one reader for what an extension call yields.
@@ -1071,6 +1086,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         inferred_type = self.visit_methodcall(temp_method_call)
         if inferred_type is not None:
             node.inferred_return_type = inferred_type
+        if getattr(temp_method_call, 'callee_method_type_args', None) is not None:
+            node.callee_method_type_args = temp_method_call.callee_method_type_args
         return inferred_type
 
     def visit_dynamicarraynew(self, node: DynamicArrayNew) -> Optional[Type]:

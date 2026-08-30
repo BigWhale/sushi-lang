@@ -363,3 +363,11 @@ _add(ErrorMessage("CE2101", Severity.ERROR,
 _add(ErrorMessage("CE2097", Severity.ERROR,
     "extension method '{name}()' conflicts with the built-in '{type}.{name}()'",
     Category.TYPE, "Method resolution always considers built-in methods before extension methods -- during type validation, during type inference, and again during code generation -- so an extension method whose name collides with one is compiled and then never called. The built-in families are: the hash() and clone() the compiler derives for every struct and enum; the primitive and string methods (to_str, hash, to_bits, len, trim, ...); the array methods; and the methods of the built-in containers Result, Maybe, Own, List and HashMap. A perk implementation is the supported way to replace a built-in: it takes precedence at every layer, by design."))
+
+_add(ErrorMessage("CE2063", Severity.ERROR,
+    "cannot infer method type parameter{plural} {names} for '{method}' from this call",
+    Category.TYPE, "A method-level type parameter (`extend List@(T) mapv@(U)(...)`) is inference-only in v1: there is no call-site `@(...)` slot on a method call, so every parameter must be solvable from the arguments. The one shape that cannot be solved is the bare-param lambda (Known Limitation 7): `xs.mapv(|x| x * 2)` gives the lambda no type of its own, so nothing unifies against `fn(T) -> U`. The escape is to annotate the lambda's parameter -- `xs.mapv(|i32 x| x * 2)` -- or to pass a named function."))
+
+_add(ErrorMessage("CE2064", Severity.ERROR,
+    "method type parameter '{name}' shadows a type parameter of the extension target",
+    Category.TYPE, "The receiver target's bare names (`extend Box@(T)`, `extend T[]`) and the method's own `@(...)` list share one namespace inside the body, so a repeated name would make `T` mean two types in one signature. Rename the method-level parameter. The rule mirrors CE2097's spirit: a declaration that could only ever mislead is refused where it is written."))

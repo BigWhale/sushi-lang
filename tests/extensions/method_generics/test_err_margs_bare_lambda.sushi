@@ -1,0 +1,21 @@
+# A bare-param lambda argument cannot be inferred (Known Limitation 7), so the
+# method-level parameter stays unsolved: CE2063, and the diagnostic names the escape
+# (annotate the lambda's parameter).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2063
+# EXPECT_STDERR_CONTAINS: "annotate"
+extend List@(T) mapv@(U)(fn(T) -> U f) List@(U) | StdError:
+    let List@(U) out = List.new()
+    foreach(x in self.iter()):
+        out.push(f(x)??)
+    return out
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    match xs.mapv(|x| x * 2):
+        Result.Ok(ds) ->
+            println("{ds.len()}")
+        Result.Err(_) ->
+            println("err")
+    return Result.Ok(0)
