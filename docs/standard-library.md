@@ -52,7 +52,7 @@ use <collections/strings>  # String methods
 use <collections/iter>     # Higher-order combinators (map/filter/fold/compose)
 use <compression/zlib>     # DEFLATE and the zlib container
 use <encoding/msgpack>     # MessagePack decoder
-use <io/stdio>             # Console I/O
+use <io/fs>             # Console I/O
 use <io/files>             # File operations
 use <io/path>              # Lexical path manipulation
 use <io/fs>                # stat, walk, mkdir_all, remove_all
@@ -74,10 +74,12 @@ use <sys/process>          # Process control
 #### Error Handling
 
 ```sushi
+use <io/fs>
+
 # Using ?? operator for propagation
 fn read_config() string:
-    let file f = open("config.txt", FileMode.Read())??
-    let string content = f.read()
+    let File f = open("config.txt", FileMode.Read())??
+    let string content = f.read().realise('')
     f.close()
     return Result.Ok(content)
 
@@ -147,24 +149,25 @@ let string filename = path.strip_prefix("/home/user/")  # "file.txt"
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 # Reading files
 match open("data.txt", FileMode.Read()):
-    FileResult.Ok(f) ->
-        let string content = f.read()
+    Result.Ok(poke f) ->
+        let string content = f.read().realise('')
         f.close()
         println(content)
-    FileResult.Err(FileError.NotFound()) ->
+    Result.Err(FileError.NotFound()) ->
         println("File not found")
-    FileResult.Err(_) ->
+    Result.Err(_) ->
         println("Other error")
 
 # Writing files
 match open("output.txt", FileMode.Write()):
-    FileResult.Ok(f) ->
+    Result.Ok(poke f) ->
         f.write("Hello, file!")
         f.close()
-    FileResult.Err(_) ->
+    Result.Err(_) ->
         println("Failed to write")
 ```
 
@@ -213,7 +216,7 @@ match open("output.txt", FileMode.Write()):
 - The decoder reads stored, fixed and dynamic blocks; the encoder emits stored and fixed
   only, so its ratio is short of a full encoder's
 
-### I/O (`use <io/stdio>`, `use <io/files>`)
+### I/O (`use <io/fs>`, `use <io/files>`)
 
 **Console I/O:**
 - `println()`, `print()` - Output with/without newline
@@ -223,7 +226,7 @@ match open("output.txt", FileMode.Write()):
 **File I/O:**
 - `open()` - Open files with Read/Write/Append modes
 - File methods: `read()`, `read_line()`, `write()`, `close()`
-- Error handling with `FileResult` and `FileError` enums
+- Error handling with `Result@(File, FileError)` and `FileError` enums
 
 ### Math (`use <math>`)
 

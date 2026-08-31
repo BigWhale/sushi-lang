@@ -4,7 +4,7 @@
 # beside a descriptor write is the same bug with the two names exchanged.
 # EXPECT_STDOUT_EXACT: "A-B-C\n"
 
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     stdout.write("A-")

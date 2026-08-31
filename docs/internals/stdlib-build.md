@@ -34,7 +34,6 @@ sushi_lang/sushi_stdlib/
 │   │   └── strings_inline.py   # emitted directly by the backend, not via build.py
 │   │                            # (is_empty()/strcmp/strlen intrinsics needed pre-`use`)
 │   ├── io/
-│   │   ├── stdio/        # -> io/stdio.bc (platform-specific handles)
 │   │   └── files/        # -> io/files.bc
 │   ├── sys/
 │   │   ├── env/          # -> sys/env.bc

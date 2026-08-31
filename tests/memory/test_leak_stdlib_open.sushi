@@ -6,20 +6,21 @@
 # EXPECT_STDOUT_EXACT: "read=Mostly Harmless\n"
 # EXPECT_NO_LEAKS
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match open('/tmp/sushi_leak_open.txt', FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(poke f) ->
             f.write("Mostly Harmless")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Ok(1)
 
     match open('/tmp/sushi_leak_open.txt', FileMode.Read()):
-        FileResult.Ok(f) ->
-            println("read={f.read()}")
+        Result.Ok(poke f) ->
+            println("read={f.read().realise('')}")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Ok(1)
 
     remove('/tmp/sushi_leak_open.txt').realise(-1)

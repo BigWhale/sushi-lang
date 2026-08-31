@@ -1,0 +1,15 @@
+# `use <io/files>` used to satisfy the `io/stdio` gate, because an import recorded
+# its own parent directory as imported too. The program reached the linker and
+# failed there on a mangled C symbol (#501).
+#
+# The stdio half of that pair is gone -- HANDLES.md Phase 5 retired <io/stdio> and
+# made the console handles File constants -- so the same property is pinned on a pair
+# that is still live. A sibling under <collections> must not open <collections/strings>.
+# EXPECT_ERROR_CODE: CE3015
+# EXPECT_STDERR_CONTAINS: "string.upper()"
+use <collections/hashmap>
+
+fn main() i32:
+    let string s = "mostly"
+    println(s.upper())
+    return Result.Ok(0)

@@ -4,7 +4,6 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_CONTAINS: "len = 0"
 
-use <io/stdio>
 use <collections/strings>
 
 fn run_test() i32:

@@ -47,8 +47,6 @@ class TypeSizing:
                     return 8
                 case BuiltinType.STRING:
                     return FAT_POINTER_SIZE_BYTES  # Fat pointer {i8*, i32, i8 owned} aligned sizeof = 16 (#145)
-                case BuiltinType.STDIN | BuiltinType.STDOUT | BuiltinType.STDERR | BuiltinType.FILE:
-                    return 8  # Pointer size (64-bit)
                 case _:
                     raise_internal_error("CE0021", type=str(semantic_type))
 
@@ -163,8 +161,6 @@ class TypeSizing:
                     return 8
                 case BuiltinType.STRING:
                     return 8
-                case BuiltinType.STDIN | BuiltinType.STDOUT | BuiltinType.STDERR | BuiltinType.FILE:
-                    return 8  # Pointer alignment
                 case _:
                     return 8  # Default to pointer alignment for unknown types
 

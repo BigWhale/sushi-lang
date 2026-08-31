@@ -78,7 +78,7 @@ def _list(elem="i32"):
     (BuiltinType.I32, "to_str"),
     (BuiltinType.I32, "hash"),
     (BuiltinType.F64, "to_bits"),
-    (BuiltinType.STDOUT, "write"),
+    (StructType(name="File", fields=()), "lines"),
     (EnumType(name="Result<i32, StdError>", variants=()), "is_ok"),
     (EnumType(name="Maybe<i32>", variants=()), "is_some"),
     (StructType(name="Own<i32>", fields=()), "get"),
@@ -97,6 +97,11 @@ def test_recognised(receiver, method):
     (BuiltinType.BOOL, "to_bits"),
     (_list(), "sum_all"),                  # the real extension in tests/bugs
     (StructType(name="Point", fields=()), "describe"),
+    # Every File method except lines() is an ordinary extension in <io/fs> now, so the
+    # seam must NOT claim them -- claiming one would make CE2097 reject the real
+    # definition (HANDLES.md Phase 5; ruling R13 is why lines() is the exception).
+    (StructType(name="File", fields=()), "write"),
+    (StructType(name="File", fields=()), "close"),
     (None, "hash"),
 ])
 def test_not_recognised(receiver, method):

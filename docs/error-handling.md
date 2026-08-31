@@ -347,16 +347,17 @@ Functions can return `Result@(Maybe@(T), E)` for three states:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn load_optional_config() Maybe@(string):
     match open("config.txt", FileMode.Read()):
-        FileResult.Ok(f) ->
-            let string content = f.read()
+        Result.Ok(poke f) ->
+            let string content = f.read().realise('')
             f.close()
             return Result.Ok(Maybe.Some(content))  # Found config
-        FileResult.Err(FileError.NotFound()) ->
+        Result.Err(FileError.NotFound()) ->
             return Result.Ok(Maybe.None())  # No config (OK!)
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Err(StdError.Error())  # Real error (permission, I/O)
 
 fn main() i32:
@@ -382,23 +383,27 @@ The `??` operator unwraps `Result@(T, E)` or `Maybe@(T)`, propagating errors aut
 **Without `??`:**
 
 ```sushi
+use <io/fs>
+
 fn read_config() string:
-    let FileResult result = open("config.txt", FileMode.Read())
+    let Result@(File, FileError) result = open("config.txt", FileMode.Read())
     match result:
-        FileResult.Ok(f) ->
-            let string content = f.read()
+        Result.Ok(poke f) ->
+            let string content = f.read().realise('')
             f.close()
             return Result.Ok(content)
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Err(StdError.Error())
 ```
 
 **With `??`:**
 
 ```sushi
+use <io/fs>
+
 fn read_config() string:
-    let file f = open("config.txt", FileMode.Read())??
-    let string content = f.read()
+    let File f = open("config.txt", FileMode.Read())??
+    let string content = f.read().realise('')
     f.close()
     return Result.Ok(content)
 ```
@@ -576,9 +581,11 @@ fn validate_input(i32 x) i32:
 ### 3. Use ?? for Sequential Operations
 
 ```sushi
+use <io/fs>
+
 fn process_pipeline() string:
-    let file f = open("input.txt", FileMode.Read())??
-    let string raw = f.read()
+    let File f = open("input.txt", FileMode.Read())??
+    let string raw = f.read().realise('')
     f.close()
 
     let string cleaned = parse(raw)??

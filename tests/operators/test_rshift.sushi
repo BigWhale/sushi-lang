@@ -1,6 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "Signed: -8 >> 2 = -2\nUnsigned: 248 >> 2 = 62\nComplex signed: (-16 + 8) >> 2 = -2\nComplex unsigned: (240 + 8) >> 2 = 62\nAll right shift tests passed!\n"
-use <io/stdio>
 
 fn main() i32:
     # Test signed right shift (arithmetic - sign extends)

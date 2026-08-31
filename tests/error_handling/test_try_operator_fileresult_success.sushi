@@ -4,25 +4,26 @@
 # Creates a test file and uses ?? to read from it
 
 use <io/files>
+use <io/fs>
 use <collections/strings>
 
 fn write_test_file() ~:
     # Use pattern matching to handle FileResult
     match open("/tmp/sushi_test_try.txt", FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(poke f) ->
             f.writeln("Hello from FileResult test!")
             f.writeln("Second line here.")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("Failed to create test file")
     return Result.Ok(~)
 
 fn read_first_line(string path) string | FileError:
     # Use ?? to unwrap FileResult from open()
-    let file f = open(path, FileMode.Read())??
+    let File f = open(path, FileMode.Read())??
 
     # Read the first line
-    let string line = f.readln()
+    let string line = f.readln().realise('')
     f.close()
 
     return Result.Ok(line)

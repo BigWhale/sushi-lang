@@ -1,8 +1,9 @@
 # The positive half. A DIRECTORY import opens the gate of every module under it,
 # which is the reading the parent walk was there to serve (#501).
-# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
-use <io>
+# EXPECT_STDOUT_EXACT: "MOSTLY\n"
+use <collections>
 
 fn main() i32:
-    stdout.write("Mostly Harmless\n")
+    let string s = "mostly"
+    println(s.upper())
     return Result.Ok(0)

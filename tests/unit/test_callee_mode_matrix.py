@@ -147,18 +147,16 @@ fn main() i32:
     return Result.Ok(0)
 """
 
-OPEN_MISMARKED = """\
+BUILT_IN_MISMARKED = """\
 use <io/files>
 
-fn read_it(string p) i32:
-    let file f = open(nom p, FileMode.Read())??
-    f.close()
-    return Result.Ok(0)
+fn look(string p) bool:
+    return Result.Ok(exists(nom p))
 
 fn main() i32:
     let string path = "cfg.txt"
-    let i32 rc = read_it(path).realise(0)
-    println("{rc}")
+    let bool there = look(path).realise(false)
+    println("{there}")
     return Result.Ok(0)
 """
 
@@ -180,5 +178,10 @@ def test_a_resolved_callee_is_still_judged_in_both_directions(analyze):
 
 
 def test_a_built_in_callee_is_still_judged(analyze):
-    """`open` carries no FuncSig, but the type checker resolves it, so it is judged."""
-    assert "CE2427" in {item.code for item in analyze(OPEN_MISMARKED).items}
+    """A registry stdlib callee carries no FuncSig, but is resolved -- so it is judged.
+
+    `open(nom p, ...)` used to say this. It stopped being a built-in in HANDLES.md
+    Phase 5: `open()` is an ordinary Sushi function in <io/fs> now and carries a FuncSig
+    like any other, so it exercises the DECLARED arm above instead of this one.
+    """
+    assert "CE2427" in {item.code for item in analyze(BUILT_IN_MISMARKED).items}

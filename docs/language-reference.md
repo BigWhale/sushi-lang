@@ -990,12 +990,14 @@ match value:
 ### Nested Patterns
 
 ```sushi
+use <io/fs>
+
 match result:
-    FileResult.Err(FileError.NotFound()) ->
+    Result.Err(FileError.NotFound()) ->
         println("File not found")
-    FileResult.Err(_) ->
+    Result.Err(_) ->
         println("Other file error")
-    FileResult.Ok(f) ->
+    Result.Ok(f) ->
         println("File opened")
 ```
 
@@ -1023,6 +1025,8 @@ its owner until the match says `nom`, and then the local is consumed exactly as
 
 <!-- docs-sweep: skip (a `File` handle and `BufWriter` arrive with HANDLES.md phases 5 and 7) -->
 ```sushi
+use <io/fs>
+
 match open("out.log", FileMode.Write()):
     Result.Ok(f) -> f.writeln("Mostly Harmless")     # a borrow: no marker, unchanged
     Result.Err(e) -> report(e)
@@ -1213,7 +1217,7 @@ that imports the aliasing unit does not see it.
 `unsafe external` namespace, or one of the unit's own declarations -- is `CE3013`. Two
 aliases for one import are legal and both work.
 
-**An empty namespace warns.** `use <io/stdio> as io` binds nothing, because the import
+**An empty namespace warns.** `use <io/fs> as io` binds nothing, because the import
 enables methods on `stdin` and brings no name: that is `CW3004`, a warning, and the
 import still does its work.
 
@@ -1296,7 +1300,7 @@ Import stdlib modules with `use`:
 # HashMap requires explicit import:
 use <collections/hashmap>
 use <collections/strings> # String utilities
-use <io/stdio>           # stdio functions
+use <io/fs>           # stdio functions
 ```
 
 ## Comments

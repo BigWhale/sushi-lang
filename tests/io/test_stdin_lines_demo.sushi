@@ -4,7 +4,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Comprehensive demonstration of stdin.lines() iterator
 
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     stdout.write("=== stdin.lines() Demo ===\n")

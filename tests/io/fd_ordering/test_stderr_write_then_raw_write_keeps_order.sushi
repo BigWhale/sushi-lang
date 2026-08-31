@@ -4,7 +4,7 @@
 # EXPECT_STDERR_CONTAINS: "A-B-C"
 # EXPECT_STDOUT_EXACT: "done\n"
 
-use <io/stdio>
+use <io/fs>
 
 unsafe external "C" as posix because "a descriptor write is the other route to fd 2":
     fn raw_write(i32 fd, string buf, i64 n) i64 = "write"

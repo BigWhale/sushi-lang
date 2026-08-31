@@ -118,7 +118,6 @@ continue_stmt: CONTINUE _NEWLINE
           | "bool" -> bool_t
           | "string" -> string_t
           | "~" -> blank_t
-          | "file" -> file_t
           | NAME "." NAME AT "(" type_list ")" -> qualified_generic_type_t
           | NAME AT "(" type_list ")" -> generic_type_t
           | NAME "." NAME -> qualified_name_t
@@ -182,9 +181,6 @@ method_name: NAME | NEW | EXTEND
      | CHAR_STRING
      | NAME
      | "~" -> blank_literal
-     | STDIN -> stdin_literal
-     | STDOUT -> stdout_literal
-     | STDERR -> stderr_literal
      | "f64" -> f64_name
      | "f32" -> f32_name
      | array_literal
@@ -316,9 +312,6 @@ CONTINUE.2: /continue\b/
 AS.2: /as\b/
 BORROW_MODE.2: /peek\b/ | /poke\b/
 NOM.2: /nom\b/
-STDIN.2: /stdin\b/
-STDOUT.2: /stdout\b/
-STDERR.2: /stderr\b/
 
 # A numeric terminal matches a PERMISSIVE superset: underscores anywhere in the
 # digit runs. Placement is checked in `ast_builder/expressions/literals.py`, which

@@ -87,25 +87,49 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
         _emit_array_foreach(codegen, node, iterator_slot, zero)
 
 
+def _is_lines_iterator(codegen: 'LLVMCodegen', node: 'Foreach') -> bool:
+    """Is this `foreach` walking a `File.lines()` iterator rather than a buffer?
+
+    Decided STATICALLY, which is possible because `Iterator@(T)` is not a nameable type
+    (CE2001): an iterator cannot be stored in a local, so it only ever appears here, in
+    the loop that consumes it. The HashMap arm above reads its own shape the same way.
+
+    It used to be a RUN-TIME test on the `length == -1` sentinel, with both loops emitted
+    every time. That was already wasteful on an ordinary array walk, and once the lazy
+    arm called a stdlib function rather than inlining libc, it broke outright: every
+    program iterating a `string[]` referenced `sushi_io_files_fd_readln` and failed to
+    link unless it happened to import <io/files>.
+
+    The sentinel itself stays exactly as it was -- ruling R13 leaves everything about
+    `lines()` for Phase 7 to decide.
+    """
+    from sushi_lang.semantics.ast import DotCall, MethodCall
+    from sushi_lang.semantics.typesys import StructType, deref_type
+    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+
+    if not isinstance(node.iterable, (DotCall, MethodCall)):
+        return False
+    if node.iterable.method != "lines":
+        return False
+    receiver_type = deref_type(infer_expr_semantic_type(codegen, node.iterable.receiver))
+    return isinstance(receiver_type, StructType) and receiver_type.name == "File"
+
+
 def _emit_string_iterator_foreach(codegen: 'LLVMCodegen', node: 'Foreach', iterator_slot: 'ir.Value', zero: 'ir.Constant') -> None:
-    """Emit foreach for string iterators (handles both stdin.lines() and array iterators)."""
-    from llvmlite import ir
-    from sushi_lang.backend import gep_utils
+    """Emit foreach over an iterator of strings: a `File.lines()` cursor, or a buffer."""
+    if not _is_lines_iterator(codegen, node):
+        _emit_array_foreach(codegen, node, iterator_slot, zero)
+        return
 
-    length_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 1, "length_ptr")
-    length = codegen.builder.load(length_ptr, name="length")
-    is_stdin_iter = codegen.builder.icmp_signed("==", length, ir.Constant(codegen.types.i32, -1))
-
-    stdin_loop_bb = codegen.func.append_basic_block(name="foreach.stdin_loop")
-    array_setup_bb = codegen.func.append_basic_block(name="foreach.array_setup")
+    lines_loop_bb = codegen.func.append_basic_block(name="foreach.lines_loop")
     end_bb = codegen.func.append_basic_block(name="foreach.end")
+    codegen.builder.branch(lines_loop_bb)
 
-    codegen.builder.cbranch(is_stdin_iter, stdin_loop_bb, array_setup_bb)
+    _emit_stdin_lines_foreach(codegen, node, iterator_slot, zero, lines_loop_bb, end_bb)
 
-    _emit_stdin_lines_foreach(codegen, node, iterator_slot, zero, stdin_loop_bb, end_bb)
-
-    codegen.builder.position_at_end(array_setup_bb)
-    _emit_array_foreach_body(codegen, node, iterator_slot, zero, length_ptr, end_bb)
+    # The statement after the loop goes here. The array arm used to leave the builder
+    # positioned at the end block for us; the lazy arm alone has to say so.
+    codegen.builder.position_at_end(end_bb)
 
 
 def _emit_stdin_lines_foreach(
@@ -116,62 +140,60 @@ def _emit_stdin_lines_foreach(
     stdin_loop_bb: 'ir.Block',
     end_bb: 'ir.Block'
 ) -> None:
-    """Emit foreach for stdin.lines() or file.lines() iterators."""
+    """Emit the lazy arm of `foreach`: a `File.lines()` iterator, read a line at a time.
+
+    The sentinel is `length == -1`, which the caller has already branched on. The data
+    slot holds a heap cell carrying the DESCRIPTOR, and one call to `fd_readln` per
+    iteration answers the next line; an empty answer is end of file and ends the loop.
+
+    This used to fork on a SECOND sentinel -- a null data slot meant stdin and reached
+    libc `fgets` on the stdio handle, a non-null one meant a file and reached a different
+    `fgets` -- and joined the two lines with a phi. `stdin` is an ordinary File over
+    descriptor 0 now, so both arms and the phi are gone. Ruling R13 leaves everything
+    else about `lines()` for Phase 7.
+    """
     from llvmlite import ir
-    from sushi_lang.semantics.ast import MethodCall, Name
-    from sushi_lang.sushi_stdlib.src.io.stdio.inline import _emit_readln as _emit_stdin_readln
-    from sushi_lang.sushi_stdlib.src.io.files.inline import _emit_readln as _emit_file_readln
     from sushi_lang.sushi_stdlib.src.collections.strings_inline import emit_string_is_empty
     from sushi_lang.backend import gep_utils
+    from sushi_lang.backend.functions import declare_stdlib_function
+    from sushi_lang.sushi_stdlib.src.type_definitions import (
+        get_result_type, get_string_type, get_unit_enum_type,
+    )
 
     codegen.builder.position_at_end(stdin_loop_bb)
-    stdin_cond_bb = codegen.func.append_basic_block(name="foreach.stdin_cond")
-    stdin_body_bb = codegen.func.append_basic_block(name="foreach.stdin_body")
+    stdin_cond_bb = codegen.func.append_basic_block(name="foreach.lines_cond")
+    stdin_body_bb = codegen.func.append_basic_block(name="foreach.lines_body")
 
     codegen.builder.branch(stdin_cond_bb)
-
     codegen.builder.position_at_end(stdin_cond_bb)
 
-    # Get the FILE* from iterator's data_ptr field
-    # For file.lines(), data_ptr stores a pointer to the FILE* pointer
-    # For stdin.lines(), data_ptr is NULL
-    data_ptr_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 2, "file_ptr_ptr")
-    data_ptr = codegen.builder.load(data_ptr_ptr, name="file_ptr_ptr")
+    cell_ptr_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 2, "fd_cell_ptr")
+    cell = codegen.builder.load(cell_ptr_ptr, name="fd_cell")
+    fd = codegen.builder.load(
+        codegen.builder.bitcast(cell, codegen.types.i32.as_pointer(), name="fd_slot"),
+        name="line_fd")
 
-    null_ptr = ir.Constant(codegen.i8.as_pointer().as_pointer(), None)
-    is_stdin = codegen.builder.icmp_unsigned('==', data_ptr, null_ptr)
+    string_ty = get_string_type()
+    result_ty = get_result_type(string_ty, get_unit_enum_type())
+    readln = declare_stdlib_function(codegen.module, "sushi_io_files_fd_readln",
+                                     result_ty, [codegen.types.i32])
+    answer = codegen.builder.call(readln, [fd], name="line_result")
 
-    use_stdin_bb = codegen.func.append_basic_block(name="foreach.use_stdin")
-    use_file_bb = codegen.func.append_basic_block(name="foreach.use_file")
-    check_empty_bb = codegen.func.append_basic_block(name="foreach.check_empty")
-
-    codegen.builder.cbranch(is_stdin, use_stdin_bb, use_file_bb)
-
-    codegen.builder.position_at_end(use_stdin_bb)
-    dummy_receiver = Name(id="stdin", loc=None)
-    dummy_call = MethodCall(receiver=dummy_receiver, method="readln", args=[], loc=None)
-    stdin_line_value = _emit_stdin_readln(codegen, dummy_call)
-    stdin_exit_bb = codegen.builder.block
-    codegen.builder.branch(check_empty_bb)
-
-    codegen.builder.position_at_end(use_file_bb)
-    file_ptr = codegen.builder.load(data_ptr, name="file_ptr")
-    dummy_file_receiver = Name(id="__file_handle", loc=None)
-    dummy_file_call = MethodCall(receiver=dummy_file_receiver, method="readln", args=[], loc=None)
-    file_line_value = _emit_file_readln(codegen, dummy_file_call, file_ptr)
-    file_exit_bb = codegen.builder.block
-    codegen.builder.branch(check_empty_bb)
-
-    codegen.builder.position_at_end(check_empty_bb)
-    from sushi_lang.semantics.typesys import BuiltinType
-    string_struct_type = codegen.types.ll_type(BuiltinType.STRING)
-    line_value = codegen.builder.phi(string_struct_type, name="line")
-    line_value.add_incoming(stdin_line_value, stdin_exit_bb)
-    line_value.add_incoming(file_line_value, file_exit_bb)
+    # A read failure and an end of file both stop the loop. `foreach` has nowhere to put
+    # a Result -- an `Iterator@(string)` yields a bare string -- which is the hole R13
+    # records as already existing rather than as something Phase 5 introduced.
+    payload = codegen.builder.alloca(result_ty.elements[1], name="line_payload")
+    codegen.builder.store(codegen.builder.extract_value(answer, 1), payload)
+    line_value = codegen.builder.load(
+        codegen.builder.bitcast(payload, string_ty.as_pointer(), name="line_str_ptr"),
+        name="line")
+    failed = codegen.builder.icmp_signed(
+        "!=", codegen.builder.extract_value(answer, 0), ir.Constant(codegen.types.i32, 0),
+        name="line_failed")
 
     is_empty = emit_string_is_empty(codegen, line_value)
-
-    codegen.builder.cbranch(is_empty, end_bb, stdin_body_bb)
+    codegen.builder.cbranch(codegen.builder.or_(failed, is_empty, name="line_done"),
+                            end_bb, stdin_body_bb)
 
     codegen.builder.position_at_end(stdin_body_bb)
     codegen.loop_stack.append((stdin_cond_bb, end_bb, codegen.memory._scope_depth + 1))

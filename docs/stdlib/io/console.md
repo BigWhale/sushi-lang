@@ -7,12 +7,43 @@ Console input and output operations for interacting with standard streams.
 ## Import
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 ```
 
 ## Overview
 
-The console I/O module provides functions for reading from standard input (stdin) and writing to standard output (stdout) and standard error (stderr). All console operations are built-in and don't require explicit imports, but stdin/stdout/stderr stream methods require `use <io/stdio>`.
+`print` and `println` are statements and need no import at all.
+
+`stdin`, `stdout` and `stderr` are ordinary **`File` constants** over descriptors 0, 1
+and 2, declared in [`<io/fs>`](fs.md) -- so they carry the whole `File` surface, and a
+function that takes a `File` takes either a file or the console:
+
+```sushi
+use <io/fs>
+
+fn banner(File out) ~ | FileError:
+    out.writeln("Mostly Harmless")??
+    return Result.Ok(~)
+
+fn main() i32:
+    banner(stdout)
+    return Result.Ok(0)
+```
+
+Two consequences worth knowing:
+
+- **The console cannot be closed.** A constant lives in read-only memory, so
+  `stdout.close()` is **CE2400** -- refused while compiling, because `close()` needs a
+  mutable receiver and a constant has no frame slot to borrow.
+- **The three are not typed apart.** One `File` type means `stdin.write("x")` compiles;
+  it fails at run time with `EBADF`. The type used to forbid it. That is the price of a
+  single handle type, and it is what makes a buffered writer over the console possible
+  at all.
+
+Every route to the console is the descriptor. `print`, `println` and `stdout.write()`
+all reach descriptor 1 through one `write(2)` seam, so bytes arrive in the order the
+program wrote them -- which was not true while `print` went through buffered `printf`
+and a file write went straight to the kernel.
 
 ## Console Output
 
@@ -106,7 +137,9 @@ Read input from standard input.
 Read a line from stdin (blocks until newline).
 
 ```sushi
-fn stdin.readln() -> string
+use <io/fs>
+
+fn stdin.readln().realise('') -> string
 ```
 
 **Returns:**
@@ -115,11 +148,11 @@ fn stdin.readln() -> string
 **Example:**
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     println("Enter your name:")
-    let string name = stdin.readln()
+    let string name = stdin.readln().realise('')
 
     println("Hello, {name}!")
 
@@ -129,12 +162,12 @@ fn main() i32:
 **Interactive prompt:**
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 use <collections/strings>
 
 fn main() i32:
     println("Enter your age:")
-    let string age_str = stdin.readln()
+    let string age_str = stdin.readln().realise('')
 
     match age_str.to_i32():
         Maybe.Some(age) ->
@@ -153,6 +186,8 @@ fn main() i32:
 Read exactly N bytes from stdin.
 
 ```sushi
+use <io/fs>
+
 fn stdin.read_bytes(i32 n) -> u8[]
 ```
 
@@ -165,11 +200,12 @@ fn stdin.read_bytes(i32 n) -> u8[]
 **Example:**
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     println("Enter 4 bytes:")
-    let u8[] data = stdin.read_bytes(4)
+    let u8[] nothing = from([])
+    let u8[] data = stdin.read_bytes(4).realise(nothing)
 
     println("Read {data.len()} bytes")
 
@@ -182,11 +218,12 @@ fn main() i32:
 **Binary data:**
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     # Read a fixed-size header
-    let u8[] header = stdin.read_bytes(16)
+    let u8[] nothing = from([])
+    let u8[] header = stdin.read_bytes(16).realise(nothing)
 
     # Process header bytes
     let string text = header.to_string()
@@ -204,6 +241,8 @@ Write to standard output.
 Write raw bytes to stdout.
 
 ```sushi
+use <io/fs>
+
 fn stdout.write_bytes(u8[] data) -> ~
 ```
 
@@ -213,7 +252,7 @@ fn stdout.write_bytes(u8[] data) -> ~
 **Example:**
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     let u8[] data = from([72 as u8, 101 as u8, 108 as u8, 108 as u8, 111 as u8])
@@ -228,7 +267,7 @@ fn main() i32:
 **Binary output:**
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 use <collections/strings>
 
 fn main() i32:
@@ -249,6 +288,8 @@ Write to standard error.
 Write raw bytes to stderr.
 
 ```sushi
+use <io/fs>
+
 fn stderr.write_bytes(u8[] data) -> ~
 ```
 
@@ -258,7 +299,7 @@ fn stderr.write_bytes(u8[] data) -> ~
 **Example:**
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 use <collections/strings>
 
 fn main() i32:
@@ -272,7 +313,7 @@ fn main() i32:
 **Error logging:**
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 use <collections/strings>
 
 fn log_error(string message) ~:
@@ -294,6 +335,8 @@ Ask whether a stream is attached to a terminal. This is the one method all three
 streams answer.
 
 ```sushi
+use <io/fs>
+
 fn stdin.is_terminal() -> bool
 fn stdout.is_terminal() -> bool
 fn stderr.is_terminal() -> bool
@@ -309,7 +352,7 @@ is not a terminal is the `false` answer, not an error.
 **Example:** colour only when a person is reading.
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     let string green = ""
@@ -329,12 +372,12 @@ bytes when the output is captured.
 **Example:** tell an interactive run from a piped one.
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     if (stdin.is_terminal()):
         stdout.write("Enter your name: ")
-        let string name = stdin.readln()
+        let string name = stdin.readln().realise('')
         println("Hello, {name}!")
     else:
         # Reading a piped list, so there is nobody to prompt.
@@ -349,6 +392,8 @@ fn main() i32:
 Push the stream buffer to the operating system. The two writing streams answer it.
 
 ```sushi
+use <io/fs>
+
 fn stdout.flush() -> ~
 fn stderr.flush() -> ~
 ```
@@ -356,7 +401,7 @@ fn stderr.flush() -> ~
 **Example:**
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     stdout.write("Working... ")
@@ -394,7 +439,7 @@ Shell redirection works as expected:
 ### Example: Logging with levels
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 use <collections/strings>
 
 fn log_info(string message) ~:
@@ -430,7 +475,7 @@ Standard output is line-buffered when connected to a terminal:
 - `print()` may be buffered until newline or buffer fills
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     # This appears immediately
@@ -450,7 +495,7 @@ fn main() i32:
 Standard error is unbuffered for immediate error visibility:
 
 ```sushi
-use <io/stdio>
+use <io/fs>
 use <collections/strings>
 
 fn main() i32:

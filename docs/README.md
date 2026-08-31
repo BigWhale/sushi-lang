@@ -85,14 +85,16 @@ nori remove my-package                     # Remove a package
 ### Quick Syntax
 
 ```sushi
+use <io/fs>
+
 # Functions return Result@(T)
 fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
 
 # Error propagation
 fn read_file() string:
-    let file f = open("data.txt", FileMode.Read())??
-    return Result.Ok(f.read())
+    let File f = open("data.txt", FileMode.Read())??
+    return Result.Ok(f.read().realise(''))
 
 # Pattern matching
 match result:

@@ -430,13 +430,10 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             validate_builtin_string_method_with_validator(call, receiver_type, validator.reporter, validator)
             return
 
-    if receiver_type in [BuiltinType.STDIN, BuiltinType.STDOUT, BuiltinType.STDERR]:
-        from sushi_lang.sushi_stdlib.src.io.stdio import is_builtin_stdio_method, validate_builtin_stdio_method_with_validator
-        if is_builtin_stdio_method(call.method):
-            validate_builtin_stdio_method_with_validator(call, receiver_type, validator.reporter, validator)
-            return
-
-    if receiver_type == BuiltinType.FILE:
+    # `lines()` is all the compiler still answers for on a File; every other method is
+    # an ordinary extension in <io/fs>. Ruling R13 keeps it until Phase 7 decides what
+    # line iteration becomes.
+    if isinstance(receiver_type, StructType) and receiver_type.name == "File":
         from sushi_lang.sushi_stdlib.src.io.files import is_builtin_file_method, validate_builtin_file_method_with_validator
         if is_builtin_file_method(call.method):
             validate_builtin_file_method_with_validator(call, validator.reporter, validator)

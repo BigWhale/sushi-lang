@@ -9,21 +9,22 @@
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match open("fd_gate_probe.txt", FileMode.Write()):
-        FileResult.Ok(out) ->
+        Result.Ok(poke out) ->
             out.writeln("Mostly Harmless")
             out.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("write failed")
             return Result.Ok(1)
 
     match open("fd_gate_probe.txt", FileMode.Read()):
-        FileResult.Ok(input) ->
-            println(input.readln())
+        Result.Ok(poke input) ->
+            println(input.readln().realise(''))
             input.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("read failed")
             return Result.Ok(1)
 

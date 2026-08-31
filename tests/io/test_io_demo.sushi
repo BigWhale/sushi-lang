@@ -1,7 +1,7 @@
 # Comprehensive I/O demonstration
 # Shows stdin, stdout, and stderr functionality
 
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     # Write to stdout

@@ -144,22 +144,15 @@ class StructEnumBuiltinInferrer:
 
 
 @dataclass
-class StdioMethodInferrer:
-    """Type inferrer for stdio methods (stdin, stdout, stderr)."""
-    receiver_type: BuiltinType
-    method_name: str
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.sushi_stdlib.src.io.stdio import is_builtin_stdio_method, get_builtin_stdio_method_return_type
-        if is_builtin_stdio_method(self.method_name):
-            return get_builtin_stdio_method_return_type(self.method_name, self.receiver_type)
-        return None
-
-
-@dataclass
 class FileMethodInferrer:
-    """Type inferrer for file methods."""
+    """Type inferrer for the ONE method `File` still gets from the compiler.
+
+    Every other file method is an ordinary extension in `<io/fs>` now. `lines()` stays
+    because what line iteration BECOMES is an open question -- ruling R13 sends it to
+    Phase 7 with its name, its return type and its missing error channel all undecided --
+    and leaving the sentinel iterator exactly as it was is the cheapest way to answer it
+    later without a migration in between.
+    """
     method_name: str
     validator: 'TypeValidator'
 
@@ -383,15 +376,10 @@ def check_primitive_methods(receiver_type, method_name, validator):
 
 
 @METHOD_TYPE_REGISTRY.register_checker
-def check_stdio_methods(receiver_type, method_name, validator):
-    if receiver_type in [BuiltinType.STDIN, BuiltinType.STDOUT, BuiltinType.STDERR]:
-        return StdioMethodInferrer(receiver_type, method_name, validator)
-    return None
-
-
-@METHOD_TYPE_REGISTRY.register_checker
 def check_file_methods(receiver_type, method_name, validator):
-    if receiver_type == BuiltinType.FILE:
+    # Keyed on the File STRUCT, the way List@(T)'s builtin methods are keyed. `stdin`
+    # is a File too now, so there is one receiver here where there used to be four.
+    if isinstance(receiver_type, StructType) and receiver_type.name == "File":
         return FileMethodInferrer(method_name, validator)
     return None
 

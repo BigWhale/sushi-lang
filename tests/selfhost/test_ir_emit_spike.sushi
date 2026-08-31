@@ -17,20 +17,20 @@
 # with the other parallel jobs has blown through it (a macOS job timed out here at
 # 10s and passed unchanged on re-run). The test itself takes ~1.3s cold locally, so
 # 60s is headroom for a slow runner, not a real expectation.
-use <io/stdio>
+use <io/fs>
 use <io/files>
 use <sys/process>
 
 fn main() i32:
     # 1. Emit a trivial LLVM IR module (a main that returns 42) as text.
-    let FileResult w = open("sushi_spike.ll", FileMode.Write())
+    let Result@(File, FileError) w = open("sushi_spike.ll", FileMode.Write())
     match w:
-        FileResult.Ok(f) ->
+        Result.Ok(poke f) ->
             f.writeln('define i32 @main() {')
             f.writeln('  ret i32 42')
             f.writeln('}')
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("emit=FAIL")
             return Result.Err(StdError.Error)
     println("emit=OK")

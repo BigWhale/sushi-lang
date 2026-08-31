@@ -2,12 +2,12 @@
 # STDIN_INPUT: "Test Line\n"
 # EXPECT_STDOUT_EXACT: "You entered: Test Line\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Test stdin.readln() - reads one line from standard input
+# Test stdin.readln().realise('') - reads one line from standard input
 
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
-    let string line = stdin.readln()
+    let string line = stdin.readln().realise('')
     stdout.write("You entered: ")
     stdout.write(line)
     stdout.write("\n")

@@ -6,35 +6,36 @@
 # EXPECTED_OUTPUT: Binary file test completed
 
 use <io/files>
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     # Write binary data to file
-    let FileResult write_result = open("test_binary_simple.bin", FileMode.WriteB())
+    let Result@(File, FileError) write_result = open("test_binary_simple.bin", FileMode.WriteB())
     match write_result:
-        FileResult.Ok(out) ->
+        Result.Ok(poke out) ->
             # Create byte array with "Hello" (72, 101, 108, 108, 111)
             let u8[] data = from([72, 101, 108, 108, 111])
             out.write_bytes(data)
             println("Wrote {data.len()} bytes")
             out.close()
             data.destroy()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             stderr.write("Error: cannot create binary file\n")
             return Result.Err(StdError.Error)
 
     # Read binary data from file
-    let FileResult read_result = open("test_binary_simple.bin", FileMode.ReadB())
+    let Result@(File, FileError) read_result = open("test_binary_simple.bin", FileMode.ReadB())
     match read_result:
-        FileResult.Ok(f) ->
+        Result.Ok(poke f) ->
             let u8[] bytes = new()
-            bytes := f.read_bytes(5)
+            let u8[] nothing = from([])
+            bytes := f.read_bytes(5).realise(nothing)
             println("Read {bytes.len()} bytes back")
             f.close()
             bytes.destroy()
             println("Binary file test completed")
             return Result.Ok(0)
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             stderr.write("Error: cannot read binary file\n")
             return Result.Err(StdError.Error)
 

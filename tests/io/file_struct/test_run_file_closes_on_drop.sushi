@@ -1,0 +1,29 @@
+# The whole point of the phase. A File owns its descriptor and closes it when its owner
+# leaves scope, with no close() written anywhere -- which EXPECT_NO_OPEN_FDS is what
+# proves. The builtin could not do this: a `file` was a copyable FILE* and leaked unless
+# the program remembered.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "wrote\nread Mostly Harmless\n"
+use <io/fs>
+
+fn write_it() ~ | FileError:
+    let File f = open("file_struct_drop.txt", FileMode.Write())??
+    f.writeln("Mostly Harmless")??
+    return Result.Ok(~)
+    # f drops here: the descriptor closes.
+
+fn read_it() string | FileError:
+    let File f = open("file_struct_drop.txt", FileMode.Read())??
+    return Result.Ok(f.readln()??)
+
+fn main() i32:
+    match write_it():
+        Result.Ok(_) -> println("wrote")
+        Result.Err(_) -> println("write failed")
+    match read_it():
+        Result.Ok(line) -> println("read {line}")
+        Result.Err(_) -> println("read failed")
+    return Result.Ok(0)

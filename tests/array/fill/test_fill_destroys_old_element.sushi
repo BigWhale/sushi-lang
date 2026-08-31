@@ -5,7 +5,6 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_CONTAINS: "clean clean"
 
-use <io/stdio>
 use <collections/strings>
 
 fn run_test() i32:

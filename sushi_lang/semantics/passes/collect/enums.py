@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 from sushi_lang.semantics.ast import EnumDef, Program, BoundedTypeParam
 from sushi_lang.semantics.typesys import (
     Type,
-    BuiltinType,
     EnumType,
     EnumVariantInfo,
 )
@@ -160,22 +159,6 @@ class EnumCollector:
         self.enums.by_name["NetError"] = net_error_enum
         self.enums.order.append("NetError")
         self.known_types.add(net_error_enum)
-
-        # FileResult enum - Result type for open() function
-        # Variant: Ok(file) - success with file handle
-        # Variant: Err(FileError) - failure with error information
-        # Note: Uses Ok/Err naming (not Success/Error) to be consistent with Result<T>
-        # No token conflict because enum variants are always qualified (FileResult.Ok vs Result.Ok)
-        file_result_enum = EnumType(
-            name="FileResult",
-            variants=(
-                EnumVariantInfo(name="Ok", associated_types=(BuiltinType.FILE,)),   # Success with file handle
-                EnumVariantInfo(name="Err", associated_types=(file_error_enum,)),    # Failure with error information
-            )
-        )
-        self.enums.by_name["FileResult"] = file_result_enum
-        self.enums.order.append("FileResult")
-        self.known_types.add(file_result_enum)
 
         std_error_enum = EnumType(
             name="StdError",

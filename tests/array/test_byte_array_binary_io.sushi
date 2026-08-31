@@ -2,7 +2,7 @@
 # EXPECTED_OUTPUT: Hello, World!
 # Test binary I/O operations with byte arrays
 
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     # Create a byte array with a message

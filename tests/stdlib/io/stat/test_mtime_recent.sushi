@@ -3,14 +3,15 @@
 # EXPECT_NO_LEAKS: true
 
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     let string path = "/tmp/sushi_stat_mtime.txt"
     match open(path, FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(poke f) ->
             f.write("x")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("setup failed")
             return Result.Ok(1)
     match mtime(path):

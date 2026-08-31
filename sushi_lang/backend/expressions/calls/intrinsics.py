@@ -97,50 +97,36 @@ def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, 
     return None
 
 
-def try_emit_stdio_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit as stdio method (stdin/stdout/stderr). Returns None if not stdio."""
-    from sushi_lang.backend.expressions.calls.stdlib import emit_stdlib_stdio_call
-
-    receiver = expr.receiver
-    method = expr.method
-    args = expr.args
-
-    if not isinstance(receiver, Name) or receiver.id not in ['stdin', 'stdout', 'stderr']:
-        return None
-
-    from sushi_lang.sushi_stdlib.src.io.stdio import is_builtin_stdio_method
-    if not is_builtin_stdio_method(method):
-        return None
-
-    require_stdlib_unit(codegen, "io/stdio", f"{receiver.id}.{method}()", expr.loc)
-
-    return emit_stdlib_stdio_call(codegen, receiver.id, method, args, to_i1)
-
-
 def try_emit_file_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit as file method. Returns None if not a file method."""
+    """Try to emit the ONE method the compiler still owns on a File: `lines()`.
+
+    Keyed on the File STRUCT and on its `fd` field, not on a builtin type: `stdin` is an
+    ordinary File constant now, so the stdin-against-file split this used to carry is
+    gone and there is one receiver. Ruling R13 keeps `lines()` here until Phase 7 decides
+    what line iteration becomes.
+    """
     from sushi_lang.backend.expressions.calls.stdlib import emit_stdlib_file_call
+    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+
+    from sushi_lang.semantics.typesys import deref_type
 
     receiver = expr.receiver
-    method = expr.method
-    args = expr.args
-
-    if not isinstance(receiver, Name):
-        return None
-
-    semantic_type = codegen.memory.find_semantic_type(receiver.id)
-    if semantic_type != BuiltinType.FILE:
+    # `deref_type` because a `poke` match binding is a ReferenceType over the struct, and
+    # a reference to a File is still a File as far as its methods are concerned.
+    semantic_type = deref_type(infer_expr_semantic_type(codegen, receiver))
+    if not isinstance(semantic_type, StructType) or semantic_type.name != "File":
         return None
 
     from sushi_lang.sushi_stdlib.src.io.files import is_builtin_file_method
-    if not is_builtin_file_method(method):
+    if not is_builtin_file_method(expr.method):
         return None
 
-    file_ptr = codegen.expressions.emit_expr(receiver)
+    handle = codegen.expressions.emit_expr(receiver)
+    fd = codegen.builder.extract_value(handle, 0, name="file_fd")
 
-    require_stdlib_unit(codegen, "io/files", f"file.{method}()", expr.loc)
+    require_stdlib_unit(codegen, "io/files", f"File.{expr.method}()", expr.loc)
 
-    return emit_stdlib_file_call(codegen, file_ptr, method, args, to_i1)
+    return emit_stdlib_file_call(codegen, fd, expr.method, expr.args, to_i1)
 
 
 def try_emit_array_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],

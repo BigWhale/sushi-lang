@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg, emit_cstr_arg
@@ -91,102 +91,36 @@ def emit_stdlib_stdio_call(
 
 def emit_stdlib_file_call(
     codegen: 'LLVMCodegen',
-    file_ptr: ir.Value,
+    fd: ir.Value,
     method: str,
     args: list,
     to_i1: bool
 ) -> ir.Value:
-    """Emit a call to a stdlib file method.
+    """Emit the ONE builtin File method, `lines()`, over a descriptor.
 
-    The arguments are emitted ONCE, here, through the built-in call-argument seam -- the
-    same rule the stream methods above follow (#475).
+    The other twelve became extension methods in `src_sushi/io/fs.sushi` and reach the
+    descriptor primitives like any other Sushi code, so this emitter has one arm where it
+    had eleven. Ruling R13 keeps `lines()` here until Phase 7 decides what line iteration
+    becomes.
     """
     require_builder(codegen)
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i32 = ir.IntType(INT32_BIT_WIDTH)
-    i64 = ir.IntType(INT64_BIT_WIDTH)
     i8_ptr = i8.as_pointer()
 
-    func_name = f"sushi_file_{method}"
-    arg_values = [emit_borrowed_arg(codegen, arg) for arg in args]
+    if method != "lines":
+        raise_internal_error("CE0024", type="File", method=method)
+    if args:
+        raise_internal_error("CE0023", method="File.lines", expected=0, got=len(args))
 
     from sushi_lang.backend.functions import declare_stdlib_function
 
-    if method in ("read", "readln", "readch"):
-        string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
-        stdlib_func = declare_stdlib_function(codegen.module, func_name, string_struct_ty, [i8_ptr])
-        result = codegen.builder.call(stdlib_func, [file_ptr], name=f"file_{method}_result")
-        return result
+    string_struct_ty = ir.LiteralStructType([i8_ptr, i32, i8])  # {data, size, owned} (#145)
+    iterator_struct_ty = ir.LiteralStructType([i32, i32, string_struct_ty.as_pointer()])
+    stdlib_func = declare_stdlib_function(codegen.module, "sushi_file_lines",
+                                          iterator_struct_ty, [i32])
+    return codegen.builder.call(stdlib_func, [fd], name="file_lines_result")
 
-    elif method == "lines":
-        string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
-        iterator_struct_ty = ir.LiteralStructType([i32, i32, string_struct_ty.as_pointer()])
-        stdlib_func = declare_stdlib_function(codegen.module, func_name, iterator_struct_ty, [i8_ptr])
-        result = codegen.builder.call(stdlib_func, [file_ptr], name="file_lines_result")
-        return result
-
-    elif method in ("write", "writeln"):
-        string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
-        arg_value = arg_values[0]
-        stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [i8_ptr, string_struct_ty])
-        result = codegen.builder.call(stdlib_func, [file_ptr, arg_value], name=f"file_{method}_result")
-        return result
-
-    elif method == "read_bytes":
-        array_struct_ty = ir.LiteralStructType([i32, i32, i8_ptr])
-        arg_value = arg_values[0]
-        stdlib_func = declare_stdlib_function(codegen.module, func_name, array_struct_ty, [i8_ptr, i32])
-        result = codegen.builder.call(stdlib_func, [file_ptr, arg_value], name="file_read_bytes_result")
-
-        result_slot = codegen.builder.alloca(array_struct_ty, name="read_bytes_slot")
-        codegen.builder.store(result, result_slot)
-        return result_slot
-
-    elif method == "write_bytes":
-        array_struct_ty = ir.LiteralStructType([i32, i32, i8_ptr])
-        arg_value = arg_values[0]
-
-        stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [i8_ptr, array_struct_ty])
-        result = codegen.builder.call(stdlib_func, [file_ptr, arg_value], name="file_write_bytes_result")
-        return result
-
-    elif method == "seek":
-        offset_value = arg_values[0]
-        seekfrom_value = arg_values[1]
-
-        # SeekFrom is a unit enum (no associated data)
-        # New shape (#300 phase 2): {i32 tag, [1 x i64] data} -- must byte-match the .bc
-        from sushi_lang.sushi_stdlib.src.type_definitions import get_unit_enum_type
-        seekfrom_struct_ty = get_unit_enum_type()
-
-        seekfrom_slot = codegen.builder.alloca(seekfrom_struct_ty, name="seekfrom_slot")
-        codegen.builder.store(seekfrom_value, seekfrom_slot)
-
-        stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [i8_ptr, i64, seekfrom_struct_ty.as_pointer()])
-        result = codegen.builder.call(stdlib_func, [file_ptr, offset_value, seekfrom_slot], name="file_seek_result")
-        return result
-
-    elif method == "tell":
-        stdlib_func = declare_stdlib_function(codegen.module, func_name, i64, [i8_ptr])
-        result = codegen.builder.call(stdlib_func, [file_ptr], name="file_tell_result")
-        return codegen.utils.as_i1(result) if to_i1 else result
-
-    elif method == "close":
-        stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [i8_ptr])
-        result = codegen.builder.call(stdlib_func, [file_ptr], name="file_close_result")
-        return result
-
-    elif method == "flush":
-        stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [i8_ptr])
-        result = codegen.builder.call(stdlib_func, [file_ptr], name="file_flush_result")
-        return result
-
-    elif method == "is_open":
-        stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [i8_ptr])
-        result = codegen.builder.call(stdlib_func, [file_ptr], name="file_is_open_result")
-        return codegen.utils.as_i1(result) if to_i1 else result
-
-    raise_internal_error("CE0028", method=method)
 
 
 def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool) -> ir.Value:

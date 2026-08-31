@@ -29,11 +29,11 @@ _add(ErrorMessage("CE2506", Severity.ERROR,
 # Try operator (??) errors (CE25xx continued)
 _add(ErrorMessage("CE2507", Severity.ERROR,
     "?? operator requires Result@(T), Maybe@(T), or result-like enum (with Ok/Err or Some/None variants), got '{got}'",
-    Category.TYPE, "The ?? operator requires an enum with Ok/Err variants (e.g., Result@(T), FileResult) or Some/None variants (e.g., Maybe@(T))."))
+    Category.TYPE, "The ?? operator requires an enum with Ok/Err variants (e.g., Result@(T)) or Some/None variants (e.g., Maybe@(T))."))
 
 _add(ErrorMessage("CE2508", Severity.ERROR,
     "?? operator can only be used in functions returning a result-like enum (with Ok/Err variants)",
-    Category.TYPE, "The ?? operator propagates errors by early return, so it requires the enclosing function to return a result-like enum (e.g., Result@(T), FileResult). Note: Maybe@(T) can be used with ??, but it propagates as Result.Err()."))
+    Category.TYPE, "The ?? operator propagates errors by early return, so it requires the enclosing function to return a result-like enum (e.g., Result@(T)). Note: Maybe@(T) can be used with ??, but it propagates as Result.Err()."))
 
 _add(ErrorMessage("CE2509", Severity.ERROR,
     "operator '+' cannot be used with string types (use string interpolation instead: \"text {{variable}}\")",

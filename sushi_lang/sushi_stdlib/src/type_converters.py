@@ -32,8 +32,6 @@ def semantic_type_to_llvm(sem_type: Type) -> ir.Type:
         return ir.IntType(8).as_pointer()
     elif sem_type == BuiltinType.BLANK:
         return ir.IntType(32)  # Represented as i32 (dummy value)
-    elif sem_type in (BuiltinType.STDIN, BuiltinType.STDOUT, BuiltinType.STDERR, BuiltinType.FILE):
-        return ir.IntType(8).as_pointer()  # FILE* as opaque pointer
     else:
         raise TypeError(f"Unsupported semantic type in standalone mode: {sem_type}")
 

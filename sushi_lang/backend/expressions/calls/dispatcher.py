@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Union
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import Call, MethodCall, DotCall, Name
-from sushi_lang.backend.expressions.calls.file_open import emit_open_function
 from sushi_lang.backend.expressions.calls.stdlib import emit_time_function, emit_math_function, emit_env_function
 from sushi_lang.backend.expressions.calls import intrinsics, generics
 from sushi_lang.backend.expressions.calls.utils import emit_receiver_value, marshal_cstr
@@ -43,9 +42,6 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if hasattr(codegen, 'generic_structs') and callee in codegen.generic_structs.by_name:
         from sushi_lang.backend.expressions import structs
         return structs.emit_struct_constructor(codegen, expr, to_i1)
-
-    if callee == "open":
-        return emit_open_function(codegen, expr, to_i1)
 
     # The unit being emitted answers for the name, exactly as the borrow pass's
     # `view_for` does: a source library's own body must read the library's
@@ -260,10 +256,6 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
         return result
 
     result = intrinsics.try_emit_struct_constructor(codegen, expr)
-    if result is not None:
-        return result
-
-    result = intrinsics.try_emit_stdio_method(codegen, expr, to_i1)
     if result is not None:
         return result
 

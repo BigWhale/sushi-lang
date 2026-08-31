@@ -49,7 +49,6 @@ from .calls import (
     validate_function_call,
     validate_struct_constructor,
     validate_enum_constructor,
-    validate_open_function,
     validate_method_call
 )
 from .inference import (
@@ -100,8 +99,7 @@ class TypeValidator:
             BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
             BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
             BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING,
-            BuiltinType.BLANK, BuiltinType.STDIN, BuiltinType.STDOUT, BuiltinType.STDERR,
-            BuiltinType.FILE
+            BuiltinType.BLANK,
         }  # Built-in types
         self.current_function: Optional[FuncDef] = None
         # Whose code is being validated. A source library's unit is compiled at the
@@ -369,10 +367,6 @@ class TypeValidator:
     def _validate_enum_constructor(self, constructor) -> None:
         """Delegate to calls module."""
         validate_enum_constructor(self, constructor)
-
-    def _validate_open_function(self, call) -> None:
-        """Delegate to calls module."""
-        validate_open_function(self, call)
 
     def _validate_method_call(self, call) -> None:
         """Delegate to calls module."""

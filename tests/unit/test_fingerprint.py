@@ -66,7 +66,7 @@ def test_fingerprint_changes_with_extension_method(tmp_path):
 def test_fingerprint_changes_with_use_statement(tmp_path):
     # Guards the USES: component of _hash_ast_structure specifically.
     a = _unit_with_ast(tmp_path, CLEAN)
-    b = _unit_with_ast(tmp_path, "use <io/stdio>\n" + CLEAN)
+    b = _unit_with_ast(tmp_path, "use <io/files>\n" + CLEAN)
     assert compute_unit_fingerprint(a) != compute_unit_fingerprint(b)
 
 

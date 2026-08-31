@@ -3,18 +3,19 @@
 # EXPECT_NO_LEAKS: true
 
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     let string path = "/tmp/sushi_flush_test.txt"
     match open(path, FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(poke f) ->
             f.write("hello")
             f.flush()
             match file_size(path):
                 Result.Ok(n) -> println("size after flush: {n}")
                 Result.Err(_) -> println("no size")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("open failed")
             return Result.Ok(1)
     match remove(path):

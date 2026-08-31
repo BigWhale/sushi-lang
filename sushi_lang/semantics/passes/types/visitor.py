@@ -753,13 +753,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_name(self, node: Name) -> Optional[Type]:
         """Infer name expression type."""
-        if node.id == "stdin":
-            return BuiltinType.STDIN
-        elif node.id == "stdout":
-            return BuiltinType.STDOUT
-        elif node.id == "stderr":
-            return BuiltinType.STDERR
-
         if node.id in {'PI', 'E', 'TAU'}:
             from sushi_lang.sushi_stdlib.src import math as math_module
             if math_module.is_builtin_math_constant(node.id):
@@ -907,9 +900,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         if function_name in self.type_validator.struct_table.by_name:
             return self.type_validator.struct_table.by_name[function_name]
-
-        if function_name == "open":
-            return self.type_validator.enum_table.by_name.get("FileResult")
 
         # A declaration answers before a name a flat `use` brought in, exactly as the
         # validating half decides it (section 8's ladder). Reading the standard library

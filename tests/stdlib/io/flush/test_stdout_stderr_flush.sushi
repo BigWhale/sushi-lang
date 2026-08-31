@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_EXACT: "one two\n"
 # EXPECT_STDERR_CONTAINS: "err mark"
 
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     stdout.write("one ")

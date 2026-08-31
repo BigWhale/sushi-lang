@@ -29,15 +29,6 @@ def expr_atom(atom: Tree | Token, ast_builder: 'ASTBuilder') -> Expr:
     if isinstance(atom, Tree) and atom.data == "blank_literal":
         return BlankLit(loc=span_of(atom))
 
-    if isinstance(atom, Tree) and atom.data == "stdin_literal":
-        return Name(id="stdin", loc=span_of(atom))
-
-    if isinstance(atom, Tree) and atom.data == "stdout_literal":
-        return Name(id="stdout", loc=span_of(atom))
-
-    if isinstance(atom, Tree) and atom.data == "stderr_literal":
-        return Name(id="stderr", loc=span_of(atom))
-
     # Primitive float type names usable as a static-method namespace, e.g.
     # f64.from_bits(bits) / f32.from_bits(bits). They lower to a Name receiver so the
     # call chain builds a DotCall, exactly like List.new(). A bare `f64`/`f32` in value

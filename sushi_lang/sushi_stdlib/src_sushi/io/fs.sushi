@@ -153,3 +153,281 @@ fn walk_into(string dir, poke List@(string) acc) ~ | FileError:
         else:
             acc.push(full.clone())
     return Result.Ok(~)
+
+##:
+One open file, and the descriptor it owns.
+
+A File moves to exactly one owner and closes itself when that owner leaves
+scope, on the same terms as TcpStream: the rule is enforced by the compiler
+rather than written down here, and handing one to a `nom` parameter is what
+transfers it.
+
+The `owned` bit is what lets the three console handles be Files too. They
+name descriptors the program did not open -- 0, 1 and 2 -- so dropping one
+must not close it. A string carries the same bit for the same reason: a
+literal frees to a no-op.
+
+Every method is a plain borrow except close(). A file's position lives in
+the KERNEL, not in this struct, so a read and a write need no mutable
+receiver; only close(), which writes -1 into the binding, does.
+
+Reads and writes are UNBUFFERED: each one is a system call. That is Rust's
+rule too, and the buffered reader is the layer above.
+:##
+public struct File:
+    ##: The descriptor, or -1 once close() has run. :##
+    i32 fd
+    ##: Whether dropping this handle closes the descriptor. :##
+    bool owned
+
+##: The descriptor the kernel gives standard input. :##
+public const i32 STDIN_FD = 0
+##: The descriptor the kernel gives standard output. :##
+public const i32 STDOUT_FD = 1
+##: The descriptor the kernel gives standard error. :##
+public const i32 STDERR_FD = 2
+
+##:
+Standard input, as a File the program does not own.
+
+It is a constant, so it lives in read-only memory: closing it is refused
+while compiling, and the descriptor cannot be taken out from under the rest
+of the program by accident.
+:##
+public const File stdin = File(fd: STDIN_FD, owned: false)
+
+##: Standard output, on the same terms as stdin. :##
+public const File stdout = File(fd: STDOUT_FD, owned: false)
+
+##: Standard error, on the same terms as stdin. :##
+public const File stderr = File(fd: STDERR_FD, owned: false)
+
+##:
+Closes the file when its owner leaves scope, if this handle owns it.
+:##
+extend File with Drop:
+    ##:
+    Closes the descriptor, unless the handle does not own it.
+
+    A destructor has nowhere to put a Result, so a close that fails here is
+    lost. Call close() to see it.
+    :##
+    fn drop(poke self) ~:
+        if (self.owned):
+            self.close()
+
+##:
+What a FileMode asks the platform for.
+
+The O_* flag VALUES differ between macOS and Linux and Sushi has no
+conditional compilation, so a number spelled here would be silently wrong on
+one of them -- 0x0400 means truncate on one and append on the other. An
+INTENT crosses the boundary instead and the platform layer maps it.
+
+POSIX draws no text/binary distinction, so the B twins are not a second
+mapping.
+
+- Returns: The intent: 0 read, 1 write, 2 append.
+:##
+extend FileMode intent() i32:
+    match self:
+        FileMode.Read -> return 0
+        FileMode.ReadB -> return 0
+        FileMode.Write -> return 1
+        FileMode.WriteB -> return 1
+        FileMode.Append -> return 2
+        FileMode.AppendB -> return 2
+
+##:
+Which end of the file a seek counts from.
+
+- Returns: The whence: 0 the start, 1 the current position, 2 the end.
+:##
+extend SeekFrom whence() i32:
+    match self:
+        SeekFrom.Start -> return 0
+        SeekFrom.Current -> return 1
+        SeekFrom.End -> return 2
+
+##:
+Opens a file and takes ownership of its descriptor.
+
+The handle closes itself when its owner leaves scope, so an explicit close()
+is only needed where the failure has to be seen.
+
+- Parameter path: The path to open.
+- Parameter mode: What the file is opened for.
+- Returns: The open file.
+- Errors: FileError, when the path could not be opened.
+:##
+public fn open(string path, FileMode mode) File | FileError:
+    let i32 fd = fd_open(path, mode.intent(), 420)??
+    return Result.Ok(File(fd: fd, owned: true))
+
+##:
+Reads what one read gives, up to a maximum.
+
+An EMPTY answer means end of file, which is what lets a caller loop until
+the answer is empty. A short answer is not an end: a pipe hands over
+whatever has arrived.
+
+- Parameter max: The most bytes to take in this one read.
+- Returns: The bytes that arrived, empty at end of file.
+- Errors: FileError, when the read failed.
+:##
+extend File read_bytes(i32 max) u8[] | FileError:
+    return fd_read(self.fd, max)??
+
+##:
+Reads the rest of the file, from the current position, as text.
+
+The whole answer is held in memory at once. A large file wants read_bytes()
+in a loop, or the buffered reader.
+
+- Returns: Everything from the current position to the end.
+- Errors: FileError, when a read failed.
+:##
+extend File read() string | FileError:
+    let u8[] all = from([])
+    let bool done = false
+    while (not done):
+        let u8[] chunk = fd_read(self.fd, 65536)??
+        if (chunk.len() == 0):
+            done := true
+        else:
+            all.extend(chunk)
+    return all.to_string()
+
+##:
+Reads one line, without its newline.
+
+An empty answer means end of file, so a caller loops until the answer is
+empty. A line is read a byte at a time on a descriptor that cannot seek --
+a pipe cannot give back an over-read -- and in chunks on one that can.
+
+- Returns: The line, or an empty string at end of file.
+- Errors: FileError, when the read failed.
+:##
+extend File readln() string | FileError:
+    return fd_readln(self.fd)??
+
+##:
+Reads one byte, as text.
+
+- Returns: One character, or an empty string at end of file.
+- Errors: FileError, when the read failed.
+:##
+extend File readch() string | FileError:
+    let u8[] one = fd_read(self.fd, 1)??
+    return one.to_string()
+
+##:
+Writes text, and does not stop until every byte has gone.
+
+- Parameter data: The text to write.
+- Returns: Nothing.
+- Errors: FileError, when the write failed.
+:##
+extend File write(string data) ~ | FileError:
+    fd_write_str(self.fd, data)??
+    return ~
+
+##:
+Writes text and a newline.
+
+Two writes rather than one: joining them would allocate a copy of the line
+on every call, and a file descriptor takes the second write for nothing.
+
+- Parameter data: The text to write.
+- Returns: Nothing.
+- Errors: FileError, when a write failed.
+:##
+extend File writeln(string data) ~ | FileError:
+    fd_write_str(self.fd, data)??
+    fd_write_str(self.fd, "\n")??
+    return ~
+
+##:
+Writes bytes, and does not stop until every one has gone.
+
+- Parameter data: The bytes to write. The buffer stays the caller's.
+- Returns: Nothing.
+- Errors: FileError, when the write failed.
+:##
+extend File write_bytes(u8[] data) ~ | FileError:
+    fd_write(self.fd, data)??
+    return ~
+
+##:
+Moves the file position.
+
+- Parameter offset: How far to move, which may be negative.
+- Parameter origin: Which end to count from.
+- Returns: Nothing. Call tell() for the new position.
+- Errors: FileError, when the descriptor cannot seek -- a pipe cannot.
+:##
+extend File seek(i64 offset, SeekFrom origin) ~ | FileError:
+    fd_seek(self.fd, offset, origin.whence())??
+    return ~
+
+##:
+The current file position, in bytes from the start.
+
+- Returns: The position.
+- Errors: FileError, when the descriptor cannot seek.
+:##
+extend File tell() i64 | FileError:
+    return fd_seek(self.fd, 0 as i64, 1)??
+
+##:
+Whether this handle still holds a descriptor.
+
+- Returns: False once close() has run.
+:##
+extend File is_open() bool:
+    return self.fd >= 0
+
+##:
+Whether the descriptor is a terminal.
+
+Answers false for a file, and for a pipe or a redirect -- which is what a
+program asks before deciding to print colour.
+
+- Returns: True only for a terminal.
+:##
+extend File is_terminal() bool:
+    return fd_isatty(self.fd)
+
+##:
+Does nothing, successfully.
+
+A descriptor is not buffered: a write has already reached the kernel by the
+time write() returns, so there is nothing here to flush. It is kept because
+a caller that moves to the buffered writer should not have to add the call
+back, and because Rust keeps it for the same reason. Getting bytes onto the
+DISK is fsync(), a much stronger promise, and not what flush() ever meant.
+
+- Returns: Nothing.
+- Errors: FileError, never in practice.
+:##
+extend File flush() ~ | FileError:
+    return ~
+
+##:
+Closes the file and writes -1 into the binding.
+
+Only for the caller who has to SEE that the close failed -- the destructor
+closes an owned handle anyway, and cannot answer a Result. The binding is
+marked so that closing it again is a success, and so that the drop which
+follows is a no-op: the descriptor is released exactly once.
+
+- Returns: Nothing. The binding reads -1 afterwards.
+- Errors: FileError, when the descriptor could not be closed.
+:##
+extend File close(poke self) ~ | FileError:
+    if (self.fd < 0):
+        return ~
+    let i32 fd = self.fd
+    self.fd := -1
+    fd_close(fd)??
+    return ~

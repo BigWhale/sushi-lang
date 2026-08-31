@@ -220,7 +220,7 @@ class CollectorPass:
         self.struct_collector.register_predefined_structs()
 
     def _register_predefined_enums(self) -> None:
-        """Register predefined enums (FileMode, FileResult, etc.)."""
+        """Register predefined enums (FileMode, SeekFrom, FileError, etc.)."""
         self.enum_collector.register_predefined_enums()
 
     def _register_predefined_perks(self) -> None:

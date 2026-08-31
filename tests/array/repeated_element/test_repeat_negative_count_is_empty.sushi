@@ -8,7 +8,6 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "0\n1 0\n1 7\n"
 
-use <io/stdio>
 
 fn run_test() i32:
     let i32 neg = 0 - 1

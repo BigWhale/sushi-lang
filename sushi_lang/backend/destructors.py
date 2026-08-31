@@ -35,9 +35,6 @@ def emit_value_destructor(
         if value_type == BuiltinType.STRING:
             emit_string_destructor(codegen, value_ptr)
             return
-        if value_type in (BuiltinType.STDIN, BuiltinType.STDOUT,
-                          BuiltinType.STDERR, BuiltinType.FILE):
-            return
         return
 
     # Through the recursion-safe wrapper: it inlines for a non-recursive type, but a

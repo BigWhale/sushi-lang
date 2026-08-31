@@ -5,7 +5,6 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "babel babel babel\nbabel\n"
 
-use <io/stdio>
 use <collections/strings>
 
 struct Names:

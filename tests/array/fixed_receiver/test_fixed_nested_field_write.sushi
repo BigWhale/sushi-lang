@@ -3,7 +3,6 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "5 5 5\n"
 
-use <io/stdio>
 
 struct Inner:
     i32[3] slots

@@ -167,10 +167,6 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         validate_struct_constructor(validator, call)
         return
 
-    if function_name == "open":
-        validate_open_function(validator, call)
-        return
-
     func_sig = validator.func_sig(function_name)
 
     # Section 8's ladder: a declaration wins over a name a flat `use` brought in, and a
@@ -310,33 +306,6 @@ def validate_call_arguments(validator: 'TypeValidator', function_name: str, func
         if _reject_misplaced_spread(validator, actual_args[i]):
             continue
         validator.validate_expression(actual_args[i])
-
-
-def validate_open_function(validator: 'TypeValidator', call: Call) -> None:
-    """Validate open() built-in function call."""
-    actual_args = call.args
-
-    if len(actual_args) != 2:
-        er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
-               name="open", expected=2, got=len(actual_args))
-        return
-
-    validator.validate_expression(actual_args[0])
-    path_type = validator.infer_expression_type(actual_args[0])
-    if path_type is not None and path_type != BuiltinType.STRING:
-        er.emit(validator.reporter, er.ERR.CE2006, actual_args[0].loc,
-               index=1, expected="string", got=display_type(path_type))
-
-    validator.validate_expression(actual_args[1])
-    mode_type = validator.infer_expression_type(actual_args[1])
-
-    file_mode_enum = validator.enum_table.by_name.get("FileMode")
-    if file_mode_enum is None:
-        return
-
-    if mode_type is not None and mode_type != file_mode_enum:
-        er.emit(validator.reporter, er.ERR.CE2006, actual_args[1].loc,
-               index=2, expected="FileMode", got=display_type(mode_type))
 
 
 def check_stdlib_function(validator: 'TypeValidator', call: Call) -> Optional[any]:

@@ -2,7 +2,8 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-Composed file-system operations: `stat`, recursive `walk`, `mkdir_all`, `remove_all`.
+The `File` handle, `open()`, the console handles, and the composed file-system
+operations `stat`, `walk`, `mkdir_all` and `remove_all`.
 
 ## Import
 
@@ -12,9 +13,45 @@ use <io/fs>
 
 ## Overview
 
-`io/fs` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it. It composes the `<io/files>` primitives with the `<io/path>` algebra; the recursive forms live here.
+`io/fs` is a **Sushi-source** standard-library module: it ships as bundled `.sushi`
+source and is merged as a compilation unit when you import it. It composes the
+`<io/files>` primitives with the `<io/path>` algebra.
+
+It is also where the file HANDLE lives. `File` owns its descriptor, moves to one owner,
+and closes when that owner leaves scope; the twelve methods on it are ordinary extension
+methods written over the `<io/files>` descriptor primitives, which is why there is no
+compiler magic behind any of them. The full method reference is in
+[File Operations](files.md), and the console handles are in [Console I/O](console.md).
 
 ## Types
+
+### `File`
+
+```sushi
+public struct File:
+    i32 fd
+    bool owned
+```
+
+One open file. `owned` says whether dropping this handle closes the descriptor: `open()`
+sets it true, and the three console constants set it false, because a program does not
+own the descriptors it was started with. A `string` carries the same bit for the same
+reason -- a literal frees to a no-op.
+
+`File` implements `Drop`, so it is a moving type: `.clone()` is CE2431 and a second
+owner cannot exist.
+
+### `stdin`, `stdout`, `stderr`
+
+```sushi
+public const File stdin  = File(fd: STDIN_FD, owned: false)
+public const File stdout = File(fd: STDOUT_FD, owned: false)
+public const File stderr = File(fd: STDERR_FD, owned: false)
+```
+
+Constants, so they live in read-only memory and closing one is refused while compiling
+(CE2400). `STDIN_FD`, `STDOUT_FD` and `STDERR_FD` are public too, for the rare caller
+that wants the number.
 
 ### `FileStat`
 

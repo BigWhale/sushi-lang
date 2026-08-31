@@ -4,7 +4,6 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\n"
 
-use <io/stdio>
 
 fn same(peek i32[] a, peek i32[] b) bool:
     if (a.len() != b.len()):

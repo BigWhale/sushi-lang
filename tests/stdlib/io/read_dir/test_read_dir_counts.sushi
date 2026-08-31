@@ -3,14 +3,15 @@
 # EXPECT_NO_LEAKS: true
 
 use <io/files>
+use <io/fs>
 
 fn write_one(string path) bool:
     match open(path, FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(poke f) ->
             f.write("x")
             f.close()
             return Result.Ok(true)
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Ok(false)
 
 fn main() i32:

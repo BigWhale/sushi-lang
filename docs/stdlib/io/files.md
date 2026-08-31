@@ -6,13 +6,46 @@ File system operations for reading, writing, and managing files.
 
 ## Import
 
+`<io/files>` holds the path utilities -- `exists()`, `remove()`, `read_dir()` -- and the
+descriptor layer. **`File`, `open()` and the three console handles live in
+[`<io/fs>`](fs.md)**, beside `stat()` and `walk()`, so most programs want both:
+
 ```sushi
 use <io/files>
+use <io/fs>
 ```
 
 ## Overview
 
-The file operations module provides safe file I/O with explicit error handling. All file operations use POSIX file descriptors under the hood and return `FileResult` for proper error handling.
+A `File` OWNS its descriptor. It moves to exactly one owner and closes itself when that
+owner leaves scope, so an explicit `close()` is only needed where the failure has to be
+seen -- a destructor cannot answer a `Result`. The compiler enforces the one-owner rule;
+nothing here has to be remembered.
+
+```sushi
+use <io/fs>
+
+fn log_it() ~ | FileError:
+    let File f = open("out.log", FileMode.Append())??
+    f.writeln("Mostly Harmless")??
+    return Result.Ok(~)
+    # f drops here. The descriptor closes.
+```
+
+Three things follow from that, and each surprises somebody:
+
+- **A `File` cannot be copied.** `.clone()` is **CE2431**: a field-by-field copy would
+  duplicate the descriptor number and leave two owners that both close it.
+- **A `match` binding is a read-only view.** `Result.Ok(f) -> f.close()` is **CE2414**,
+  because `close()` writes -1 into the handle. Write `Result.Ok(poke f)`, or -- better --
+  delete the `close()` and let the drop do it.
+- **Reads and writes are UNBUFFERED.** Each one is a system call. That is Rust's rule
+  too, and the buffered layer is a separate type.
+
+Every method is a plain borrow except `close()`. A file's position lives in the KERNEL,
+not in the struct, so reading and writing need no mutable receiver.
+
+`stdin`, `stdout` and `stderr` are `File` values too -- see [Console I/O](console.md).
 
 ## Opening Files
 
@@ -21,7 +54,9 @@ The file operations module provides safe file I/O with explicit error handling. 
 Open a file with a specific mode.
 
 ```sushi
-fn open(string path, FileMode mode) -> FileResult
+use <io/fs>
+
+fn open(string path, FileMode mode) -> Result@(File, FileError)
 ```
 
 **Parameters:**
@@ -29,8 +64,8 @@ fn open(string path, FileMode mode) -> FileResult
 - `mode` - File access mode
 
 **Returns:**
-- `FileResult.Ok(file)` - Successfully opened file
-- `FileResult.Err(error)` - Error occurred (see Error Handling section)
+- `Result.Ok(file)` - Successfully opened file
+- `Result.Err(error)` - Error occurred (see Error Handling section)
 
 **File Modes:**
 
@@ -42,13 +77,14 @@ fn open(string path, FileMode mode) -> FileResult
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match open("data.txt", FileMode.Read()):
-        FileResult.Ok(f) ->
+        Result.Ok(poke f) ->
             println("File opened successfully")
             f.close()
-        FileResult.Err(e) ->
+        Result.Err(e) ->
             println("Failed to open file")
 
     return Result.Ok(0)
@@ -58,10 +94,11 @@ fn main() i32:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn read_config() string | FileError:
-    let file f = open("config.txt", FileMode.Read())??
-    let string content = f.read()
+    let File f = open("config.txt", FileMode.Read())??
+    let string content = f.read().realise('')
     f.close()
     return Result.Ok(content)
 
@@ -82,7 +119,9 @@ fn main() i32:
 Read entire file contents as a string.
 
 ```sushi
-fn file.read() -> string
+use <io/fs>
+
+fn File.read().realise('') -> string
 ```
 
 **Returns:**
@@ -92,14 +131,15 @@ fn file.read() -> string
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match open("data.txt", FileMode.Read()):
-        FileResult.Ok(f) ->
-            let string content = f.read()
+        Result.Ok(poke f) ->
+            let string content = f.read().realise('')
             f.close()
             println("Content: {content}")
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("Failed to read file")
 
     return Result.Ok(0)
@@ -109,11 +149,12 @@ fn main() i32:
 
 ```sushi
 use <io/files>
+use <io/fs>
 use <collections/strings>
 
 fn main() i32 | FileError:
-    let file f = open("numbers.txt", FileMode.Read())??
-    let string content = f.read()
+    let File f = open("numbers.txt", FileMode.Read())??
+    let string content = f.read().realise('')
     f.close()
 
     let string[] lines = content.split("\n")
@@ -130,7 +171,9 @@ fn main() i32 | FileError:
 Read a single line from the file.
 
 ```sushi
-fn file.readln() -> string
+use <io/fs>
+
+fn File.readln().realise('') -> string
 ```
 
 **Returns:**
@@ -140,14 +183,15 @@ fn file.readln() -> string
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32 | FileError:
-    let file f = open("data.txt", FileMode.Read())??
+    let File f = open("data.txt", FileMode.Read())??
 
-    let string first_line = f.readln()
+    let string first_line = f.readln().realise('')
     println("First: {first_line}")
 
-    let string second_line = f.readln()
+    let string second_line = f.readln().realise('')
     println("Second: {second_line}")
 
     f.close()
@@ -159,15 +203,16 @@ fn main() i32 | FileError:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32 | FileError:
-    let file f = open("log.txt", FileMode.Read())??
+    let File f = open("log.txt", FileMode.Read())??
     let i32 line_count = 0
 
     # Read until empty line (EOF)
     let bool done = false
     while (not done):
-        let string line = f.readln()
+        let string line = f.readln().realise('')
 
         if (line.is_empty()):
             done := true
@@ -186,7 +231,9 @@ fn main() i32 | FileError:
 Write a string to the file.
 
 ```sushi
-fn file.write(string data) -> ~
+use <io/fs>
+
+fn File.write(string data) -> ~
 ```
 
 **Parameters:**
@@ -196,9 +243,10 @@ fn file.write(string data) -> ~
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32 | FileError:
-    let file f = open("output.txt", FileMode.Write())??
+    let File f = open("output.txt", FileMode.Write())??
 
     f.write("Hello, World!")
     f.write("\n")
@@ -213,9 +261,10 @@ fn main() i32 | FileError:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32 | FileError:
-    let file f = open("report.txt", FileMode.Write())??
+    let File f = open("report.txt", FileMode.Write())??
 
     f.write("Report\n")
     f.write("======\n\n")
@@ -233,9 +282,10 @@ fn main() i32 | FileError:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32 | FileError:
-    let file f = open("log.txt", FileMode.Append())??
+    let File f = open("log.txt", FileMode.Append())??
 
     f.write("New log entry\n")
 
@@ -249,16 +299,19 @@ fn main() i32 | FileError:
 Push the stream buffer to the operating system.
 
 ```sushi
-fn file.flush() -> ~
+use <io/fs>
+
+fn File.flush() -> ~
 ```
 
 **Example:**
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32 | FileError:
-    let file f = open("progress.log", FileMode.Write())??
+    let File f = open("progress.log", FileMode.Write())??
     f.write("step 1 done")
     f.flush()  # The bytes reach the file before the next step runs
     f.close()
@@ -273,17 +326,20 @@ fn main() i32 | FileError:
 Close the file and release resources.
 
 ```sushi
-fn file.close() -> ~
+use <io/fs>
+
+fn File.close() -> ~
 ```
 
 **Example:**
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32 | FileError:
-    let file f = open("data.txt", FileMode.Read())??
-    let string content = f.read()
+    let File f = open("data.txt", FileMode.Read())??
+    let string content = f.read().realise('')
     f.close()  # Always close files
 
     println(content)
@@ -295,12 +351,14 @@ fn main() i32 | FileError:
 
 ## Error Handling
 
-### FileResult Enum
+### Result@(File, FileError) Enum
 
 Result type for file operations:
 
 ```sushi
-enum FileResult:
+use <io/fs>
+
+enum Result@(File, FileError):
     Ok(file)
     Err(FileError)
 ```
@@ -328,18 +386,19 @@ enum FileError:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match open("config.txt", FileMode.Read()):
-        FileResult.Ok(f) ->
-            let string data = f.read()
+        Result.Ok(poke f) ->
+            let string data = f.read().realise('')
             f.close()
             println(data)
-        FileResult.Err(FileError.NotFound()) ->
+        Result.Err(FileError.NotFound()) ->
             println("File not found")
-        FileResult.Err(FileError.PermissionDenied()) ->
+        Result.Err(FileError.PermissionDenied()) ->
             println("Permission denied")
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("Other error")
 
     return Result.Ok(0)
@@ -349,23 +408,24 @@ fn main() i32:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match open("data.txt", FileMode.Read()):
-        FileResult.Ok(f) ->
+        Result.Ok(poke f) ->
             match open("output.txt", FileMode.Write()):
-                FileResult.Ok(out) ->
-                    let string data = f.read()
+                Result.Ok(poke out) ->
+                    let string data = f.read().realise('')
                     out.write(data)
                     f.close()
                     out.close()
                     println("File copied")
-                FileResult.Err(_) ->
+                Result.Err(_) ->
                     println("Failed to open output file")
                     f.close()
-        FileResult.Err(FileError.NotFound()) ->
+        Result.Err(FileError.NotFound()) ->
             println("Input file not found")
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("Failed to open input file")
 
     return Result.Ok(0)
@@ -375,13 +435,14 @@ fn main() i32:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn copy_file(string src, string dst) ~ | FileError:
-    let file input = open(src, FileMode.Read())??
-    let string content = input.read()
+    let File input = open(src, FileMode.Read())??
+    let string content = input.read().realise('')
     input.close()
 
-    let file output = open(dst, FileMode.Write())??
+    let File output = open(dst, FileMode.Write())??
     output.write(content)
     output.close()
 
@@ -418,6 +479,7 @@ fn remove(string path) -> Result@(i32)
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match remove("/tmp/old_file.txt"):
@@ -451,6 +513,7 @@ fn rename(string old_path, string new_path) -> Result@(i32)
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match rename("/tmp/old.txt", "/tmp/new.txt"):
@@ -659,6 +722,7 @@ fn copy(string src, string dst) -> Result@(i32)
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match copy("/tmp/source.txt", "/tmp/backup.txt"):
@@ -815,10 +879,11 @@ Close one descriptor.
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn read_file(string path) string | FileError:
-    let file f = open(path, FileMode.Read())??
-    let string content = f.read()
+    let File f = open(path, FileMode.Read())??
+    let string content = f.read().realise('')
     f.close()
     return Result.Ok(content)
 
@@ -833,9 +898,10 @@ fn main() i32:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn write_file(string path, string data) ~ | FileError:
-    let file f = open(path, FileMode.Write())??
+    let File f = open(path, FileMode.Write())??
     f.write(data)
     f.close()
     return Result.Ok(~)
@@ -851,11 +917,12 @@ fn main() i32 | FileError:
 
 ```sushi
 use <io/files>
+use <io/fs>
 use <collections/strings>
 
 fn main() i32 | FileError:
-    let file f = open("data.csv", FileMode.Read())??
-    let string content = f.read()
+    let File f = open("data.csv", FileMode.Read())??
+    let string content = f.read().realise('')
     f.close()
 
     let string[] lines = content.split("\n")
@@ -876,9 +943,10 @@ fn main() i32 | FileError:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn log_message(string message) ~ | FileError:
-    let file f = open("app.log", FileMode.Append())??
+    let File f = open("app.log", FileMode.Append())??
     f.write("{message}\n")
     f.close()
     return Result.Ok(~)
@@ -895,13 +963,14 @@ fn main() i32 | FileError:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn file_exists(string path) bool:
     match open(path, FileMode.Read()):
-        FileResult.Ok(f) ->
+        Result.Ok(poke f) ->
             f.close()
             return Result.Ok(true)
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Ok(false)
 
 fn main() i32:
@@ -922,10 +991,11 @@ fn main() i32:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32 | FileError:
     # Unix-style paths work on all platforms
-    let file f = open("data/input.txt", FileMode.Read())??
+    let File f = open("data/input.txt", FileMode.Read())??
     f.close()
 
     return Result.Ok(0)
@@ -955,14 +1025,15 @@ File operations are buffered by the operating system. For large files:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32 | FileError:
-    let file f = open("large.txt", FileMode.Read())??
+    let File f = open("large.txt", FileMode.Read())??
 
-    # Reading line-by-line is more memory-efficient than .read()
+    # Reading line-by-line is more memory-efficient than .read().realise('')
     let bool done = false
     while (not done):
-        let string line = f.readln()
+        let string line = f.readln().realise('')
 
         if (line.is_empty()):
             done := true
@@ -977,8 +1048,8 @@ fn main() i32 | FileError:
 
 ### Memory Usage
 
-- `.read()` loads entire file into memory
-- `.readln()` reads one line at a time (more memory-efficient)
+- `.read().realise('')` loads entire file into memory
+- `.readln().realise('')` reads one line at a time (more memory-efficient)
 
 Choose based on file size and use case.
 
@@ -990,6 +1061,7 @@ Always validate file paths from user input:
 
 ```sushi
 use <io/files>
+use <io/fs>
 use <collections/strings>
 
 fn is_safe_path(string path) bool:
@@ -1010,8 +1082,8 @@ fn main() i32 | FileError:
         println("Invalid path")
         return Result.Ok(1)
 
-    let file f = open(user_path, FileMode.Read())??
-    let string content = f.read()
+    let File f = open(user_path, FileMode.Read())??
+    let string content = f.read().realise('')
     f.close()
 
     println(content)
@@ -1025,15 +1097,16 @@ Be cautious with write operations:
 
 ```sushi
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     # Always check if overwriting is intended
     match open("important.txt", FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(poke f) ->
             # This TRUNCATES the existing file!
             f.write("New content")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("Failed to open file")
 
     return Result.Ok(0)

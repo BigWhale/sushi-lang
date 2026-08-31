@@ -1,7 +1,7 @@
 # pathcalc: the io/path differential helper. Each stdin line is
 # `op|a|b` (b only for join); the answer prints as one line.
 
-use <io/stdio>
+use <io/fs>
 use <io/path>
 
 fn answer(string op, string a, string b) string:

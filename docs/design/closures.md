@@ -374,7 +374,7 @@ fn main() i32:
   ride that pipeline for free: nothing is emitted unless a program actually instantiates a
   combinator, and adding a new combinator is just adding a function to the `.sushi` file.
 - **Why opt-in `use`, not an auto-prelude:** consistent with every other stdlib module
-  (`collections/hashmap`, `io/stdio`, `time`, ...) — Sushi has no implicit prelude, and combinators
+  (`collections/hashmap`, `io/fs`, `time`, ...) — Sushi has no implicit prelude, and combinators
   are unremarkable generic functions, not language primitives.
 
 **Constraints (documented in the module and its doc page):**

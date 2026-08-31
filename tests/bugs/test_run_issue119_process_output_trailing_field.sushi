@@ -5,7 +5,6 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "\ndone\n"
 use <sys/process>
-use <io/stdio>
 
 fn work() i32 | ProcessError:
     let ProcessOutput out = run("echo", "hi")??

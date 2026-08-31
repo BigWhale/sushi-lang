@@ -29,10 +29,6 @@ class BuiltinType(Enum):
     BOOL = "bool"
     STRING = "string"
     BLANK = "~"
-    STDIN = "stdin"
-    STDOUT = "stdout"
-    STDERR = "stderr"
-    FILE = "file"
 
     def __str__(self) -> str:
         return self.value
@@ -410,7 +406,7 @@ Type = Union[
 TYPE_NODE_NAMES = {
     "i8_t", "i16_t", "i32_t", "i64_t", "u8_t", "u16_t", "u32_t", "u64_t",
     "f32_t", "f64_t", "bool_t", "string_t", "blank_t",
-    "array_t", "dynamic_array_t", "reference_t", "file_t",
+    "array_t", "dynamic_array_t", "reference_t",
     "generic_type_t",  # Generic type instantiation (e.g., Result<i32>)
     "fn_type_t",       # First-class function type (e.g., fn(i32) -> i32)
     # A name written behind an alias. Every reader of this set asks one question --
@@ -432,7 +428,6 @@ NODE_TO_TYPE: Mapping[str, BuiltinType] = {
     "bool_t": BuiltinType.BOOL,
     "string_t": BuiltinType.STRING,
     "blank_t": BuiltinType.BLANK,
-    "file_t": BuiltinType.FILE,
 }
 
 def type_from_rule_name(name: str) -> Optional[Type]:

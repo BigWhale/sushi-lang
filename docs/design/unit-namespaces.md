@@ -385,9 +385,9 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 | Registry free functions, already keyed by `(module, name)` | `<time>`, `<math>`, `<sys/env>`, `<sys/process>`, `<random>`, `<io/files>` | **yes** — this is the cheap half, and it fixes section 1.3 |
 | Sushi-source modules, injected as ordinary units | `<collections/iter>`, `<compression/zlib>`, `<encoding/msgpack>`, `<toolchain/slib>` | **yes** — a user unit in every respect |
 | A built-in generic that the import activates | `<collections/hashmap>` (`generics/active_generics.py:3`) | **yes** — `hm.HashMap@(i32, string)`. The import brings the name, so the namespace holds it. `active_generics` retires whole — see 4.3.1 |
-| A method interface: the import enables methods on a type and brings **no name** | `<io/stdio>`, `<collections/strings>` | pointless, and said so — see below |
+| A method interface: the import enables methods on a type and brings **no name** | `<collections/strings>` | pointless, and said so — see below |
 
-`use <io/stdio>` does not bring `stdin` into scope: `stdin` is always a name
+`use <io/fs>` does not bring `stdin` into scope: `stdin` is always a name
 (`passes/types/visitor.py:703`), and what the import enables is `read_line()` on it. An
 alias on such an import binds an empty namespace, and every `io.<name>` after it fails one
 at a time with the cause several lines away.
@@ -424,7 +424,7 @@ reasons and only one of them is a mistake:
 
 | Empty because | Example |
 |---|---|
-| **structural** — a method interface can never bring a name | `use <io/stdio> as io` |
+| **structural** — a method interface can never bring a name | `use <io/fs> as io` |
 | **by design** — the unit exports methods, not names | a unit that is nothing but `extend` blocks |
 | **incidental** — the public surface happens to be empty today | one `public fn` away from changing |
 

@@ -4,14 +4,15 @@
 # This demonstrates error propagation for file operations
 
 use <io/files>
+use <io/fs>
 
 fn read_first_line(string path) string | FileError:
     # Use ?? to unwrap FileResult from open()
-    # If file doesn't exist, propagates FileResult.Err() to caller
-    let file f = open(path, FileMode.Read())??
+    # If file doesn't exist, propagates Result.Err() to caller
+    let File f = open(path, FileMode.Read())??
 
     # Read the first line
-    let string line = f.readln()
+    let string line = f.readln().realise('')
     f.close()
 
     return Result.Ok(line)

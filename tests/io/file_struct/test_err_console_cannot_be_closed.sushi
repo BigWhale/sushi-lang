@@ -1,0 +1,10 @@
+# stdout is a CONSTANT, so it lives in read-only memory and a `poke self` method has no
+# frame slot to borrow. Closing descriptor 1 out from under the rest of the program is
+# refused while compiling rather than at run time -- a property the constants give for
+# free (HANDLES.md, ruling R15).
+# EXPECT_ERROR_CODE: CE2400
+use <io/fs>
+
+fn main() i32:
+    stdout.close()
+    return Result.Ok(0)
