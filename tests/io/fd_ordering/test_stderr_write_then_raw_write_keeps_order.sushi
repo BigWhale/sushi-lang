@@ -1,0 +1,17 @@
+# Descriptor 2 obeys the same rule. POSIX leaves stderr unbuffered, so this row
+# passes today; it is here so that moving stderr.write to the descriptor cannot
+# quietly introduce a buffer that the stdout rows would not catch.
+# EXPECT_STDERR_CONTAINS: "A-B-C"
+# EXPECT_STDOUT_EXACT: "done\n"
+
+use <io/stdio>
+
+unsafe external "C" as posix because "a descriptor write is the other route to fd 2":
+    fn raw_write(i32 fd, string buf, i64 n) i64 = "write"
+
+fn main() i32:
+    stderr.write("A-")
+    posix.raw_write(2, "B-", 2 as i64)
+    stderr.write("C")
+    println("done")
+    return Result.Ok(0)

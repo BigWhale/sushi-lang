@@ -33,6 +33,11 @@ class LibCStdio:
         self.rewind: ir.Function
         self.feof: ir.Function
         self.ferror: ir.Function
+        # POSIX write(2), not stdio. It is the ONE route a print statement takes to a
+        # descriptor (HANDLES.md, Phase 5). The name says `fd_` so that a reader never
+        # mistakes it for `fwrite`, which buffers and which the console no longer uses.
+        self.fd_write: ir.Function
+        self.setvbuf: ir.Function
 
         self.stdin_handle: ir.GlobalVariable
         self.stdout_handle: ir.GlobalVariable
@@ -55,7 +60,35 @@ class LibCStdio:
         self._declare_rewind()
         self._declare_feof()
         self._declare_ferror()
+        self._declare_fd_write()
+        self._declare_setvbuf()
         self._declare_stdio_handles()
+
+    def _declare_fd_write(self) -> None:
+        """Declare write: ssize_t write(int fd, const void* buf, size_t count)."""
+        fn_ty = ir.FunctionType(
+            self.codegen.types.i64,
+            [self.codegen.i32, self.codegen.i8.as_pointer(), self.codegen.types.i64]
+        )
+        existing = self.codegen.module.globals.get("write")
+        if isinstance(existing, ir.Function):
+            self.fd_write = existing
+        else:
+            self.fd_write = ir.Function(self.codegen.module, fn_ty, name="write")
+
+    def _declare_setvbuf(self) -> None:
+        """Declare setvbuf: int setvbuf(FILE* stream, char* buf, int mode, size_t size)."""
+        file_ptr_ty = self.codegen.i8.as_pointer()
+        fn_ty = ir.FunctionType(
+            self.codegen.i32,
+            [file_ptr_ty, self.codegen.i8.as_pointer(), self.codegen.i32,
+             self.codegen.types.i64]
+        )
+        existing = self.codegen.module.globals.get("setvbuf")
+        if isinstance(existing, ir.Function):
+            self.setvbuf = existing
+        else:
+            self.setvbuf = ir.Function(self.codegen.module, fn_ty, name="setvbuf")
 
     def _declare_printf(self) -> None:
         """Declare printf: int printf(const char* format, ...)"""

@@ -1,0 +1,14 @@
+# The same rule for `print`, which writes no newline. Line buffering would not save
+# this row: with no newline to flush on, the bytes stay in the stdio buffer until
+# exit even on a terminal, so only an unbuffered route answers correctly.
+# EXPECT_STDOUT_EXACT: "A-B-C\n"
+
+unsafe external "C" as posix because "a descriptor write is the other route to fd 1":
+    fn raw_write(i32 fd, string buf, i64 n) i64 = "write"
+
+fn main() i32:
+    print("A-")
+    posix.raw_write(1, "B-", 2 as i64)
+    print("C")
+    posix.raw_write(1, "\n", 1 as i64)
+    return Result.Ok(0)

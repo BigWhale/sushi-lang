@@ -1,14 +1,20 @@
-"""stdout module - Standard output stream methods."""
+"""stdout module - Standard output stream methods.
+
+The console writes through the DESCRIPTOR, not through libc stdio. `print` and
+`println` take the same route (`runtime/formatting.py`), and one route is what keeps
+the bytes in the order they were written: stdio buffers when the stream is a pipe,
+so a buffered byte and a descriptor byte arrive in flush order and not in call
+order (HANDLES.md, Phase 5).
+"""
 
 import llvmlite.ir as ir
-from sushi_lang.sushi_stdlib.src.libc_declarations import declare_fwrite
-from sushi_lang.sushi_stdlib.src.io.stdio.common import declare_stdout_handle
+from sushi_lang.sushi_stdlib.src._platform.posix.files import declare_write
+from sushi_lang.backend.runtime.constants import STDOUT_FD
 
 
 def generate_stdout_write(module: ir.Module) -> None:
     """Generate IR for stdout.write(string) -> ~."""
-    fwrite_fn = declare_fwrite(module)
-    stdout_handle = declare_stdout_handle(module)
+    write_fn = declare_write(module)
 
     i8_ptr = ir.IntType(8).as_pointer()
     i32 = ir.IntType(32)
@@ -27,9 +33,7 @@ def generate_stdout_write(module: ir.Module) -> None:
     string_len = builder.extract_value(string_val, 1, name="string_len")
 
     string_len_i64 = builder.zext(string_len, i64, name="string_len_i64")
-    one_i64 = ir.Constant(i64, 1)
-    stdout_ptr = builder.load(stdout_handle, name="stdout")
-    builder.call(fwrite_fn, [string_data, one_i64, string_len_i64, stdout_ptr])
+    builder.call(write_fn, [ir.Constant(i32, STDOUT_FD), string_data, string_len_i64])
 
     zero = ir.Constant(i32, 0)
     builder.ret(zero)
@@ -37,8 +41,7 @@ def generate_stdout_write(module: ir.Module) -> None:
 
 def generate_stdout_write_bytes(module: ir.Module) -> None:
     """Generate IR for stdout.write_bytes(u8[]) -> ~."""
-    fwrite_fn = declare_fwrite(module)
-    stdout_handle = declare_stdout_handle(module)
+    write_fn = declare_write(module)
 
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
@@ -60,9 +63,7 @@ def generate_stdout_write_bytes(module: ir.Module) -> None:
     data_ptr = builder.extract_value(array_val, 2, name="data_ptr")
 
     length_i64 = builder.zext(length, i64, name="length_i64")
-    one_i64 = ir.Constant(i64, 1)
-    stdout_ptr = builder.load(stdout_handle, name="stdout")
-    builder.call(fwrite_fn, [data_ptr, one_i64, length_i64, stdout_ptr])
+    builder.call(write_fn, [ir.Constant(i32, STDOUT_FD), data_ptr, length_i64])
 
     zero = ir.Constant(i32, 0)
     builder.ret(zero)

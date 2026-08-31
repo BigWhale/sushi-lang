@@ -1,14 +1,17 @@
-"""stderr module - Standard error stream methods."""
+"""stderr module - Standard error stream methods.
+
+Descriptor 2, on the same terms as stdout: one route to the console, so the bytes
+keep the order they were written in (HANDLES.md, Phase 5).
+"""
 
 import llvmlite.ir as ir
-from sushi_lang.sushi_stdlib.src.libc_declarations import declare_fwrite
-from sushi_lang.sushi_stdlib.src.io.stdio.common import declare_stderr_handle
+from sushi_lang.sushi_stdlib.src._platform.posix.files import declare_write
+from sushi_lang.backend.runtime.constants import STDERR_FD
 
 
 def generate_stderr_write(module: ir.Module) -> None:
     """Generate IR for stderr.write(string) -> ~."""
-    fwrite_fn = declare_fwrite(module)
-    stderr_handle = declare_stderr_handle(module)
+    write_fn = declare_write(module)
 
     i8_ptr = ir.IntType(8).as_pointer()
     i32 = ir.IntType(32)
@@ -27,9 +30,7 @@ def generate_stderr_write(module: ir.Module) -> None:
     string_len = builder.extract_value(string_val, 1, name="string_len")
 
     string_len_i64 = builder.zext(string_len, i64, name="string_len_i64")
-    one_i64 = ir.Constant(i64, 1)
-    stderr_ptr = builder.load(stderr_handle, name="stderr")
-    builder.call(fwrite_fn, [string_data, one_i64, string_len_i64, stderr_ptr])
+    builder.call(write_fn, [ir.Constant(i32, STDERR_FD), string_data, string_len_i64])
 
     zero = ir.Constant(i32, 0)
     builder.ret(zero)
@@ -37,8 +38,7 @@ def generate_stderr_write(module: ir.Module) -> None:
 
 def generate_stderr_write_bytes(module: ir.Module) -> None:
     """Generate IR for stderr.write_bytes(u8[]) -> ~."""
-    fwrite_fn = declare_fwrite(module)
-    stderr_handle = declare_stderr_handle(module)
+    write_fn = declare_write(module)
 
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
@@ -60,9 +60,7 @@ def generate_stderr_write_bytes(module: ir.Module) -> None:
     data_ptr = builder.extract_value(array_val, 2, name="data_ptr")
 
     length_i64 = builder.zext(length, i64, name="length_i64")
-    one_i64 = ir.Constant(i64, 1)
-    stderr_ptr = builder.load(stderr_handle, name="stderr")
-    builder.call(fwrite_fn, [data_ptr, one_i64, length_i64, stderr_ptr])
+    builder.call(write_fn, [ir.Constant(i32, STDERR_FD), data_ptr, length_i64])
 
     zero = ir.Constant(i32, 0)
     builder.ret(zero)

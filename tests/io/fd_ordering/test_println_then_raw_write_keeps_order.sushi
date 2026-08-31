@@ -1,0 +1,15 @@
+# HANDLES.md Phase 5: every route to descriptor 1 keeps the order it was written in.
+# `println` used to reach the descriptor through the libc stdio BUFFER, while a
+# descriptor write reaches the kernel at once. When stdout is a pipe -- which is how
+# this suite captures it -- stdio is FULLY buffered, so every println waited for exit
+# and the descriptor write went first. The captured order was B, A, C.
+# EXPECT_STDOUT_EXACT: "A-via-println\nB-via-write\nC-via-println\n"
+
+unsafe external "C" as posix because "a descriptor write is the other route to fd 1":
+    fn raw_write(i32 fd, string buf, i64 n) i64 = "write"
+
+fn main() i32:
+    println("A-via-println")
+    posix.raw_write(1, "B-via-write\n", 12 as i64)
+    println("C-via-println")
+    return Result.Ok(0)

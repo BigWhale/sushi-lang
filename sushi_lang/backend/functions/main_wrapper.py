@@ -7,6 +7,7 @@ from sushi_lang.semantics.ast import FuncDef
 from sushi_lang.semantics.typesys import Type as Ty
 from sushi_lang.backend import enum_utils
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.runtime.constants import IONBF
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -50,6 +51,29 @@ class MainFunctionWrapper:
 
         return (is_ok, value)
 
+    def _unbuffer_libc_stdio(self) -> None:
+        """Take the buffer off libc stdout, so a stdio write keeps its place in line.
+
+        Sushi's own output goes to the descriptor and never through stdio (Phase 5), so
+        this call is not for `print` or `println`. It is for the OTHER writer: a program
+        that binds libc `printf` through an `unsafe external` block. A buffered stdio
+        byte and a descriptor byte arrive in flush order rather than in call order when
+        the stream is a pipe, and the program that wrote them cannot see why.
+
+        `_IONBF` is 2 on macOS and on glibc alike, verified in both headers rather than
+        remembered. A program that wants the buffer back may ask for it: this runs
+        before the first user statement.
+        """
+        stdio = self.codegen.runtime.libc_stdio
+        i32 = self.codegen.types.i32
+        stream = self.codegen.builder.load(stdio.stdout_handle, name="stdio_stdout")
+        self.codegen.builder.call(stdio.setvbuf, [
+            stream,
+            ir.Constant(self.codegen.types.i8.as_pointer(), None),
+            ir.Constant(i32, IONBF),
+            ir.Constant(self.codegen.types.i64, 0),
+        ])
+
     def emit_main_with_args(self, fn: FuncDef, begin_function_fn, end_function_fn, create_user_main_fn) -> ir.Function:
         """Emit the main function when command line arguments are expected."""
         c_main = self.codegen.funcs.get('main')
@@ -59,6 +83,7 @@ class MainFunctionWrapper:
         user_main = create_user_main_fn(fn)
 
         begin_function_fn(c_main)
+        self._unbuffer_libc_stdio()
 
         argc = c_main.args[0]  # int argc
         argv = c_main.args[1]  # char** argv
@@ -132,6 +157,7 @@ class MainFunctionWrapper:
         user_main = create_user_main_fn(fn)
 
         begin_function_fn(c_main)
+        self._unbuffer_libc_stdio()
 
         user_main_args = []
         for param in fn.params:
