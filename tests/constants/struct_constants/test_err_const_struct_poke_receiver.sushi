@@ -1,0 +1,17 @@
+# A `poke self` method takes its receiver's ADDRESS, and a constant has no frame slot
+# to point at. CE2400 already states exactly that and names a constant in its rationale,
+# so this needs no rule of its own. It is what stops a console handle being closed.
+# EXPECT_ERROR_CODE: CE2400
+
+struct Handle:
+    i32 fd
+
+extend Handle release(poke self) ~:
+    self.fd := -1
+    return ~
+
+const Handle OUT = Handle(1)
+
+fn main() i32:
+    OUT.release()
+    return Result.Ok(0)

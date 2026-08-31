@@ -393,9 +393,15 @@ class SemanticAnalyzer:
             monomorphizer.monomorphize_all_functions(extension_fn_instantiations, compilation_order)
 
         # resolve: AFTER monomorphization, so every struct/enum exists in the tables.
-        from sushi_lang.semantics.passes.resolve import resolve_struct_field_types, resolve_enum_variant_types
+        from sushi_lang.semantics.passes.resolve import (
+            resolve_constant_types, resolve_struct_field_types, resolve_enum_variant_types)
         resolve_struct_field_types(self.structs, self.enums)
         resolve_enum_variant_types(self.structs, self.enums)
+        resolve_constant_types(
+            self.constants,
+            [const for unit in compilation_order if unit.ast is not None
+             for const in (unit.ast.constants or [])],
+            self.structs, self.enums)
 
         # finite-types: reject types that contain themselves by value (CE2095). Must precede
         # derive, whose topological sort would report a cycle as an internal error, and must

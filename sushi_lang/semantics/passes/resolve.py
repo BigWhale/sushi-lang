@@ -1,8 +1,16 @@
-"""The resolve pass: resolve every struct field and enum variant type to a concrete type."""
+"""The resolve pass: every struct field, enum variant and constant type made concrete."""
 
-from typing import Dict
+from typing import Dict, Optional
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.typesys import StructType, EnumType, UnknownType, Type, BuiltinType
+
+
+def _type_lookup(struct_table: StructTable, enum_table: EnumTable) -> Dict[str, Type]:
+    """Every name a written type may spell, mapped to the table entry it means."""
+    lookup: Dict[str, Type] = {str(builtin).lower(): builtin for builtin in BuiltinType}
+    lookup.update(struct_table.by_name)
+    lookup.update(enum_table.by_name)
+    return lookup
 
 
 def resolve_struct_field_types(
@@ -10,16 +18,7 @@ def resolve_struct_field_types(
     enum_table: EnumTable
 ) -> None:
     """Resolve UnknownType references in struct fields to concrete types."""
-    type_lookup: Dict[str, Type] = {}
-
-    for builtin in BuiltinType:
-        type_lookup[str(builtin).lower()] = builtin
-
-    for struct_name, struct_type in struct_table.by_name.items():
-        type_lookup[struct_name] = struct_type
-
-    for enum_name, enum_type in enum_table.by_name.items():
-        type_lookup[enum_name] = enum_type
+    type_lookup = _type_lookup(struct_table, enum_table)
 
     for struct_name in list(struct_table.by_name.keys()):
         struct_type = struct_table.by_name[struct_name]
@@ -44,16 +43,7 @@ def resolve_enum_variant_types(
     enum_table: EnumTable
 ) -> None:
     """Resolve UnknownType references in enum variant associated types to concrete types."""
-    type_lookup: Dict[str, Type] = {}
-
-    for builtin in BuiltinType:
-        type_lookup[str(builtin).lower()] = builtin
-
-    for struct_name, struct_type in struct_table.by_name.items():
-        type_lookup[struct_name] = struct_type
-
-    for enum_name, enum_type in enum_table.by_name.items():
-        type_lookup[enum_name] = enum_type
+    type_lookup = _type_lookup(struct_table, enum_table)
 
     for enum_name in list(enum_table.by_name.keys()):
         enum_type = enum_table.by_name[enum_name]
@@ -85,6 +75,36 @@ def resolve_enum_variant_types(
 
         if needs_update:
             object.__setattr__(enum_type, 'variants', tuple(resolved_variants))
+
+
+def resolve_constant_types(constants, const_defs, struct_table: StructTable,
+                           enum_table: EnumTable) -> None:
+    """Resolve a constant's DECLARED type, so every reader sees the table entry.
+
+    A constant's type is written by the AST builder before any table exists, so
+    `const Handle OUT = ...` collects as `UnknownType("Handle")`. That was invisible
+    while every constant was a scalar; a constant of struct type made it visible at
+    once, because an extension method resolves on the receiver's type and an
+    `UnknownType` matches nothing.
+
+    Resolving HERE and not at the read sites is what keeps it one seam: the signature
+    and the declaration are both updated, so the typecheck pass, the borrow pass and the
+    backend all read a resolved type without any of them remembering to ask.
+    """
+    type_lookup = _type_lookup(struct_table, enum_table)
+
+    def resolved(ty: Optional[Type]) -> Optional[Type]:
+        return None if ty is None else _resolve_type(ty, type_lookup)
+
+    if constants is not None:
+        for sig in constants.by_name.values():
+            sig.const_type = resolved(sig.const_type)
+        for unit_sigs in constants.by_unit.values():
+            for sig in unit_sigs.values():
+                sig.const_type = resolved(sig.const_type)
+
+    for const_def in const_defs:
+        const_def.ty = resolved(const_def.ty)
 
 
 def _resolve_type(ty: Type, type_lookup: Dict[str, Type]) -> Type:

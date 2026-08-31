@@ -9,7 +9,7 @@ from typing import Callable, List, Mapping, Optional, Union
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
-    ConstDef, Expr, IntLit, FloatLit, BoolLit, StringLit, ArrayLiteral,
+    Call, ConstDef, Expr, IntLit, FloatLit, BoolLit, StringLit, ArrayLiteral,
     BinaryOp, UnaryOp, Name, CastExpr, IndexAccess, InterpolatedString
 )
 from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
@@ -57,9 +57,14 @@ def emit_overflow(reporter: Reporter, overflow: ConstOverflow) -> None:
 
 @dataclass
 class ConstantValue:
-    """Compile-time constant value with type information."""
+    """Compile-time constant value with type information.
+
+    A LIST value is an aggregate, and `semantic_type` says which kind: a `StructType`
+    makes it the fields in declaration order, anything else makes it array elements.
+    Every reader of an aggregate asks the type first, never the shape of the list.
+    """
     value: Union[int, float, bool, str, List['ConstantValue']]  # Python value
-    semantic_type: Type  # Sushi type (i32, f64, bool, string, etc.)
+    semantic_type: Type  # Sushi type (i32, f64, bool, string, a struct, ...)
 
 
 class ConstantEvaluator:
@@ -67,7 +72,8 @@ class ConstantEvaluator:
 
     def __init__(self, reporter: Reporter, const_table: ConstantTable,
                  ast_constants: 'UnitKeyedSymbols[ConstDef]',
-                 unit_name: Optional[str] = None, scope: object = None):
+                 unit_name: Optional[str] = None, scope: object = None,
+                 struct_table: object = None):
         """Initialize the evaluator.
 
         `unit_name` is the unit whose constant expression is being evaluated. Two units
@@ -80,6 +86,10 @@ class ConstantEvaluator:
         self.ast_constants = ast_constants
         self.unit_name = unit_name
         self.scope = scope
+        # The authority for a struct's field ORDER and field TYPES. A caller that reads
+        # only an integer -- an array size, a run count -- passes none, and a struct
+        # construction stays CE0108 there, which is what those positions want anyway.
+        self.struct_table = struct_table
         self.evaluation_stack: List[str] = []  # For cycle detection
         # The FIRST operation that left its type, for a caller whose reporter is silent.
         self.overflow: Optional[ConstOverflow] = None
@@ -116,9 +126,74 @@ class ConstantEvaluator:
         elif isinstance(expr, InterpolatedString):
             return self._evaluate_interpolation(expr, span)
 
+        elif isinstance(expr, Call):
+            return self._evaluate_struct_construction(expr, span)
+
         else:
             er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
             return None
+
+    def _evaluate_struct_construction(self, expr: Call,
+                                     span: Optional[Span]) -> Optional[ConstantValue]:
+        """A struct built entirely from constants is itself a constant.
+
+        Only a name the struct table knows reaches the aggregate path, so an ordinary
+        function call is still CE0108 -- flat, and one level down inside a field
+        argument, because each argument goes back through `evaluate`. The declared type
+        is NOT consulted for the fields: a named type is looked up and never rebuilt
+        (`docs/design/type-identity.md`), and the table is the sole authority for the
+        field order and the field types a literal argument is typed against.
+
+        The ENUM half of the limitation is deliberately not lifted; an `EnumConstructor`
+        is its own node and never arrives here.
+        """
+        struct_type = self._struct_named_by(expr.callee)
+        arguments = None if struct_type is None else self._arguments_in_field_order(
+            expr, struct_type.fields)
+        if arguments is None:
+            er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
+            return None
+
+        field_values: List[ConstantValue] = []
+        for (_field_name, field_type), argument in zip(struct_type.fields, arguments,
+                                                       strict=True):
+            value = self.evaluate(argument, field_type, argument.loc or span)
+            if value is None:
+                return None  # the recursion reported it
+            field_values.append(value)
+        return ConstantValue(field_values, struct_type)
+
+    def _struct_named_by(self, callee: Expr):
+        """The `StructType` a constructor call names, or None if it names anything else.
+
+        A qualified constructor (`geo.Vec(...)`) parses to a `DotCall` and never reaches
+        here, so it stays CE0108 rather than answering a wrong type.
+        """
+        from sushi_lang.semantics.typesys import StructType
+
+        if self.struct_table is None or not isinstance(callee, Name):
+            return None
+        struct_type = self.struct_table.by_name.get(callee.id)
+        return struct_type if isinstance(struct_type, StructType) else None
+
+    def _arguments_in_field_order(self, expr: Call, fields) -> Optional[List[Expr]]:
+        """The call's arguments in DECLARATION order, or None if they do not fit.
+
+        Named and positional construction are all-or-nothing and the parser keeps them
+        apart, so this only has to put a complete named set back in order. A count or a
+        name that does not fit is left to answer CE0108: the value is not a constant,
+        which is true, and the construction itself is reported where every other
+        constructor is.
+        """
+        if expr.field_names is None:
+            return list(expr.args) if len(expr.args) == len(fields) else None
+
+        if len(expr.field_names) != len(expr.args):
+            return None
+        by_name = dict(zip(expr.field_names, expr.args, strict=True))
+        if set(by_name) != {name for name, _ty in fields} or len(by_name) != len(fields):
+            return None
+        return [by_name[name] for name, _ty in fields]
 
     def _evaluate_int_lit(self, expr: IntLit, expected_type: Type) -> ConstantValue:
         """Evaluate integer literal with type inference."""

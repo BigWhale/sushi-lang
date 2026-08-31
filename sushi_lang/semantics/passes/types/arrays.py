@@ -29,8 +29,19 @@ def _validate_element_argument(call: MethodCall, element_type: Type, reporter: A
 
 
 def _names_an_unshadowed_constant(expr: Any, validator: Any) -> Any:
-    """The constant `expr` names, or None. A local of the same name shadows it."""
-    if validator is None or not isinstance(expr, Name):
+    """The constant at the ROOT of `expr`, or None. A local of the same name shadows it.
+
+    The root, not the expression itself: `TABLE[i] := v` and `ORIGIN.x := v` both write
+    into a constant, and `SEG.start.x := v` does so two levels down. Walking here is
+    what keeps one seam answering for every writer.
+    """
+    from sushi_lang.semantics.ast import IndexAccess, MemberAccess
+
+    if validator is None:
+        return None
+    while isinstance(expr, (MemberAccess, IndexAccess)):
+        expr = expr.receiver if isinstance(expr, MemberAccess) else expr.array
+    if not isinstance(expr, Name):
         return None
     name = expr.id
     if name in getattr(validator, 'variable_types', {}):
@@ -42,8 +53,11 @@ def reject_write_to_constant(target: Any, what: str, loc: Any,
                              reporter: Any, validator: Any) -> bool:
     """Reject a write that would reach a global constant (CE2096).
 
-    Both writers ask here: an in-place method, and an indexed assignment. The store
-    would land in .rodata, which is undefined behaviour rather than a diagnostic.
+    Three writers ask here: an in-place method, an indexed assignment, and an assignment
+    to a field. The store would land in .rodata, which is undefined behaviour rather
+    than a diagnostic. A `poke self` method call is the fourth writer and does NOT come
+    here: it takes an ADDRESS rather than storing, and CE2400 already says a constant
+    has no frame slot to borrow.
     """
     name = _names_an_unshadowed_constant(target, validator)
     if name is None:

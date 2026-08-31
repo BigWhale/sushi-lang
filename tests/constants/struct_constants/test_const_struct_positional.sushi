@@ -1,0 +1,14 @@
+# A constant may CONSTRUCT a struct, positionally, when every argument is itself a
+# constant expression. The value lives in .rodata and its fields read like any other.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1 false\n"
+
+struct Handle:
+    i32 fd
+    bool owned
+
+const Handle OUT = Handle(1, false)
+
+fn main() i32:
+    println("{OUT.fd} {OUT.owned}")
+    return Result.Ok(0)

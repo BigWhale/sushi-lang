@@ -1,0 +1,13 @@
+# A constant lives in .rodata, so writing through one is CE2096 -- the same refusal a
+# constant array already gets. This is what stops a console handle being closed.
+# EXPECT_ERROR_CODE: CE2096
+
+struct Handle:
+    i32 fd
+    bool owned
+
+const Handle OUT = Handle(1, false)
+
+fn main() i32:
+    OUT.fd := 7
+    return Result.Ok(0)

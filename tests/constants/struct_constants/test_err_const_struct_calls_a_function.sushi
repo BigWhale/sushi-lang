@@ -1,0 +1,14 @@
+# The lift reaches a STRUCT constructor and nothing else. A function call in a
+# constant is still CE0108, whether it stands alone or sits in a field argument.
+# EXPECT_ERROR_CODE: CE0108
+
+struct Handle:
+    i32 fd
+
+fn pick() i32:
+    return Result.Ok(1)
+
+const Handle OUT = Handle(pick())
+
+fn main() i32:
+    return Result.Ok(0)

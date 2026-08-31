@@ -1574,6 +1574,55 @@ fn main() i32:
   of them on a constant is **CE2096**. The constant lives in read-only memory; copy it into a local
   and mutate that. (A local shadowing the constant is freely mutable.)
 
+### Struct Constants
+
+A struct is a constant when every argument of its construction is. Positional and named
+construction both work, on the same all-or-nothing rule they follow in a body, and a
+field whose type is another struct nests:
+
+```sushi
+struct Handle:
+    i32 fd
+    bool owned
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Segment:
+    Point start
+    i32 length
+
+const i32 STDOUT_FD = 1
+
+const Handle OUT = Handle(STDOUT_FD, false)              # positional
+const Handle ERR = Handle(fd: 2, owned: false)           # named
+const Segment SEG = Segment(Point(3, 4), 7)              # nested
+
+fn main() i32:
+    println("{OUT.fd} {SEG.start.y}")                    # 1 4
+    return Result.Ok(0)
+```
+
+Only a name the compiler knows to be a struct starts a constant construction, so an
+ordinary call is refused as it always was -- flat, and inside a field argument:
+
+```sushi
+const Handle BAD = Handle(pick())                # CE0108: function calls forbidden
+const Segment ALSO_BAD = Segment(Point(pick(), 2), 3)   # CE0108, one level down
+```
+
+A struct constant lives in read-only memory like every other constant. Writing a field
+is **CE2096**, and calling a `poke self` method on one is **CE2400** -- that method takes
+its receiver's address, and a constant has no frame slot to point at:
+
+```sushi
+OUT.fd := 7          # CE2096: cannot assign to a field of constant 'OUT'
+OUT.release()        # CE2400: cannot borrow 'OUT': only a local variable can be borrowed
+```
+
+Enum construction in a constant is still refused (CE0108).
+
 ### Restrictions
 
 A constant is built from literals, other constants, operators and `as`. Referring to another
@@ -1589,11 +1638,11 @@ const bool IS_TWO = SMALLEST == 2   # bool and string compare for equality
 ```
 
 Constants cannot use:
-- Function calls (including constructors) and method calls
+- Function calls and method calls. A STRUCT construction is not a function call and is
+  allowed -- see [Struct Constants](#struct-constants)
 - Local variables (only other constants)
-- Struct or enum construction
+- Enum construction
 - Dynamic arrays
-- Interpolation -- `"{OTHER}"` in a constant is not evaluated yet
 - A compile-time loop, so a generated table has to be spelled out element by element
 
 ```sushi

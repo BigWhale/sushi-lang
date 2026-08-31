@@ -95,7 +95,7 @@ def const_value_to_llvm(value: 'ConstantValue', types) -> Optional[ir.Constant]:
     may not name an LLVM type (IR.md Phase 0). A string returns None: its bytes need a
     module to live in, so `_materialize_constant` finishes one.
     """
-    from sushi_lang.semantics.typesys import BuiltinType
+    from sushi_lang.semantics.typesys import BuiltinType, StructType
 
     if value.semantic_type == BuiltinType.BOOL:
         return ir.Constant(types.i8, 1 if value.value else 0)
@@ -121,6 +121,13 @@ def const_value_to_llvm(value: 'ConstantValue', types) -> Optional[ir.Constant]:
         return ir.Constant(types.f64, value.value)
     elif value.semantic_type == BuiltinType.STRING:
         return None
+    elif isinstance(value.semantic_type, StructType):
+        # A struct is an aggregate whose fields have types of their own, so it is asked
+        # before the array arm below -- that one reads `elements[0].type` for every slot.
+        field_constants = [const_value_to_llvm(field, types) for field in value.value]
+        if any(c is None for c in field_constants):
+            return None
+        return ir.Constant(types.ll_type(value.semantic_type), field_constants)
     elif isinstance(value.value, list):
         element_constants = [const_value_to_llvm(elem, types) for elem in value.value]
         if any(c is None for c in element_constants):

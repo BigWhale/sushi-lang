@@ -1,0 +1,20 @@
+# The refusal RECURSES. A function call one level down, inside a nested construction,
+# is refused exactly as a flat one is -- the evaluator must not accept an argument it
+# never looked into.
+# EXPECT_ERROR_CODE: CE0108
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Segment:
+    Point start
+    i32 length
+
+fn pick() i32:
+    return Result.Ok(1)
+
+const Segment SEG = Segment(Point(pick(), 2), 3)
+
+fn main() i32:
+    return Result.Ok(0)

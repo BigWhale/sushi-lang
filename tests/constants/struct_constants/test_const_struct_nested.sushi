@@ -1,0 +1,18 @@
+# A struct field whose type is another struct: the constructor argument is itself a
+# constant construction, so the evaluator recurses.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3 4 7\n"
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Segment:
+    Point start
+    i32 length
+
+const Segment SEG = Segment(Point(3, 4), 7)
+
+fn main() i32:
+    println("{SEG.start.x} {SEG.start.y} {SEG.length}")
+    return Result.Ok(0)

@@ -1,0 +1,14 @@
+# Named construction in a constant, so neither field is positional folklore. This is
+# the shape the console handles use (HANDLES.md, ruling R16).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 true\n"
+
+struct Handle:
+    i32 fd
+    bool owned
+
+const Handle ERR = Handle(owned: true, fd: 2)
+
+fn main() i32:
+    println("{ERR.fd} {ERR.owned}")
+    return Result.Ok(0)
