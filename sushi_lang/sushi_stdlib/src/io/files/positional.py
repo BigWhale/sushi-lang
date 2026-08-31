@@ -36,9 +36,9 @@ def generate_ir(module: ir.Module) -> None:
 
 # What a caller WANTS, not what the platform calls it. A portable Sushi module cannot
 # name `O_TRUNC`: the value differs between macOS and Linux and there is no conditional
-# compilation, so a number spelled in `io/file.sushi` would be wrong on one of them. The
-# intent crosses the boundary and the platform module maps it, which is where the
-# platform knowledge already lives. `FileMode` maps onto these in Phase 5.
+# compilation, so a number spelled in a Sushi-source module would be wrong on one of
+# them. The intent crosses the boundary and the platform module maps it, which is
+# where the platform knowledge already lives. `FileMode` maps onto these in Phase 5.
 INTENT_READ = 0
 INTENT_WRITE = 1     # create, truncate
 INTENT_APPEND = 2    # create, append

@@ -330,6 +330,7 @@ class PerkCollector:
         own -- the record is written after the collectors run -- or is synthesized, and
         both are allowed.
         """
+        from sushi_lang.semantics.generics.type_display import display_type
         from sushi_lang.semantics.generics.types import GenericTypeRef
         if isinstance(target_type, GenericTypeRef):
             from sushi_lang.semantics.generics.extension_targets import (
@@ -337,7 +338,7 @@ class PerkCollector:
             shape = classify_extension_target(
                 target_type, self._is_declared_type)
             if shape.param_names:
-                er.emit(self.r, ERR.CE4013, span, type=str(target_type))
+                er.emit(self.r, ERR.CE4013, span, type=display_type(target_type))
                 return True
 
         if self.visibility is None:

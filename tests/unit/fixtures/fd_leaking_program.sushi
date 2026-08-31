@@ -8,7 +8,7 @@
 # The point of the fixture is that it leaks NOTHING the malloc interposer can see.
 # It opens a file and never closes it, so `leaked` is 0 and `open_fds` is 1 -- which
 # is exactly why EXPECT_NO_LEAKS gives a handle test no coverage at all, and why
-# EXPECT_NO_OPEN_FDS exists (HANDLES.md, Phase 2).
+# the descriptor directive below exists (HANDLES.md, Phase 2).
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_CONTAINS: "fd fixture ran"
 use <io/files>

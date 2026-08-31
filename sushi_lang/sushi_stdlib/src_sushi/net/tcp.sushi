@@ -44,11 +44,14 @@ public struct TcpListener:
 
 ##:
 Closes the stream when its owner leaves scope.
-
-A destructor has nowhere to put a Result, so a close that fails here is lost.
-Call close() to see it.
 :##
 extend TcpStream with Drop:
+    ##:
+    Closes the descriptor.
+
+    A destructor has nowhere to put a Result, so a close that fails here is lost.
+    Call close() to see it.
+    :##
     fn drop(poke self) ~:
         self.close()
 
@@ -56,6 +59,9 @@ extend TcpStream with Drop:
 Closes the listener when its owner leaves scope. The same terms as TcpStream.
 :##
 extend TcpListener with Drop:
+    ##:
+    Closes the descriptor, on the same terms as the TcpStream destructor.
+    :##
     fn drop(poke self) ~:
         self.close()
 
