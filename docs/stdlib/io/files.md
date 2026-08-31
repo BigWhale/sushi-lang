@@ -709,11 +709,17 @@ fn main() i32:
 
 ## The descriptor layer
 
-Underneath the `file` handle sits a thin layer over the raw descriptor: `fd_open`,
-`fd_pread`, `fd_pwrite`, `fd_dup` and `fd_close`. It is the same shape `<net/socket>`
-gives `<net/tcp>` — the primitives a handle type is written on top of.
+Underneath the `file` handle sits a thin layer over the raw descriptor. It is the same
+shape `<net/socket>` gives `<net/tcp>` — the primitives a handle type is written on top
+of — and it comes in two halves.
 
-Reach for it when you need **positional** I/O.
+**Positional**: `fd_pread` and `fd_pwrite` take the offset as an argument and never move
+the descriptor's own file position, which is what makes them safe to share.
+
+**Sequential**: `fd_read`, `fd_write`, `fd_write_str`, `fd_readln` and `fd_seek` move it,
+which is what makes them the ones a handle is written on.
+
+`fd_open`, `fd_dup`, `fd_close` and `fd_isatty` belong to neither half.
 
 ### `fd_pread(i32 fd, i64 offset, i32 max) -> Result@(u8[], FileError)`
 ### `fd_pwrite(i32 fd, i64 offset, u8[] data) -> Result@(i32, FileError)`
@@ -746,6 +752,52 @@ intent crosses the boundary and the platform layer maps it. An unrecognised numb
 read-only, which is the safe reading of a value this function does not know.
 
 `mode` is the permission bits a newly created file gets, as an integer — `420` is `0644`.
+
+### `fd_read(i32 fd, i32 max) -> Result@(u8[], FileError)`
+
+ONE `read(2)` from the descriptor's current position, which it advances. The answer
+carries what ARRIVED and may be shorter than asked for; an **empty array is end of file**
+and not an error, so a caller loops until the answer is empty.
+
+### `fd_write(i32 fd, u8[] data) -> Result@(i32, FileError)`
+### `fd_write_str(i32 fd, string s) -> Result@(i32, FileError)`
+
+Write every byte, looping past a short write, and answer the count. `fd_write_str` takes
+the string's own bytes with no `to_bytes()` copy in front of them — a fat pointer already
+carries a pointer and a length, which is what `write(2)` wants.
+
+Unlike `sock_send`, these do not hand a partial write back to the caller. A socket's
+partial write is information — how much the peer's window took — and a file's is not.
+
+### `fd_readln(i32 fd) -> Result@(string, FileError)`
+
+One line, the newline **stripped**, and an empty string at end of file — so a caller
+loops until the answer is empty, exactly as with `fd_read`.
+
+It has two paths, and which one runs depends on whether the descriptor can seek:
+
+| descriptor | how it reads | why |
+|---|---|---|
+| a file, or anything seekable | `pread` a chunk, then one `lseek` past the newline | fast: 0.60s for 200 000 lines, against 0.47s for the buffered `fgets` it replaces |
+| a pipe, a socket, a terminal — including `stdin` | one byte at a time | correct: a pipe cannot give back an over-read, so a chunked read would swallow bytes the next reader owns |
+
+The byte-at-a-time path costs 4.49s over the same 200 000 lines, nearly all of it in the
+kernel. That is the price of not losing data, and it is only paid where it must be. For
+bulk line reading over any descriptor, the buffered reader is the general answer.
+
+### `fd_seek(i32 fd, i64 offset, i32 whence) -> Result@(i64, FileError)`
+
+Move the descriptor's file position, and answer the NEW position. `whence` is an intent
+like `fd_open`'s: `0` from the start, `1` from the current position, `2` from the end.
+
+There is no `fd_tell`, because it would say nothing new: the current position is
+`fd_seek(fd, 0, 1)`.
+
+### `fd_isatty(i32 fd) -> bool`
+
+Whether the descriptor is a terminal. A **bare bool**, not a Result: a descriptor that is
+not a terminal and a descriptor that is not open both answer false, so there is no
+failure a caller could act on.
 
 ### `fd_dup(i32 fd) -> Result@(i32, FileError)`
 

@@ -1,0 +1,21 @@
+# fd_isatty answers a BARE bool: asking whether a descriptor is a terminal cannot fail.
+# A regular file is never one, and the suite captures stdout, so descriptor 1 is not one
+# either while this runs.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "file false\ncaptured stdout false\n"
+use <io/files>
+
+fn main() i32:
+    let i32 fd = fd_open("descriptor_tty_probe.txt", 1, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return Result.Ok(1)
+
+    println("file {fd_isatty(fd)}")
+    println("captured stdout {fd_isatty(1)}")
+
+    fd_close(fd).realise(-1)
+    return Result.Ok(0)

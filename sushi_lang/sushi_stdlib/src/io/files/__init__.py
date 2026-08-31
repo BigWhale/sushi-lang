@@ -26,7 +26,8 @@ def generate_module_ir() -> ir.Module:
     from sushi_lang.sushi_stdlib.src.io.files.status import (
         generate_close, generate_is_open, generate_flush
     )
-    from sushi_lang.sushi_stdlib.src.io.files import syscalls, stat, read_dir, copy, positional
+    from sushi_lang.sushi_stdlib.src.io.files import (
+        syscalls, stat, read_dir, copy, positional, sequential)
 
     module = create_stdlib_module("io.files")
 
@@ -53,6 +54,7 @@ def generate_module_ir() -> ir.Module:
     read_dir.generate_ir(module)
     copy.generate_ir(module)
     positional.generate_ir(module)
+    sequential.generate_ir(module)
 
     return module
 

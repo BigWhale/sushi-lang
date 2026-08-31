@@ -123,8 +123,14 @@ def _get_param_specs():
     specs[("files", "fd_open")] = [STRING, I32, I32]
     specs[("files", "fd_pread")] = [I32, I64, I32]
     specs[("files", "fd_pwrite")] = [I32, I64, DynamicArrayType(BuiltinType.U8)]
-    for fn in ("fd_dup", "fd_close"):
+    for fn in ("fd_dup", "fd_close", "fd_readln", "fd_isatty"):
         specs[("files", fn)] = [I32]
+    # The sequential half (HANDLES.md, Phase 5). These move the descriptor's own file
+    # position; a string crosses as its fat pointer, with no `to_bytes()` copy in front.
+    specs[("files", "fd_read")] = [I32, I32]
+    specs[("files", "fd_write")] = [I32, DynamicArrayType(BuiltinType.U8)]
+    specs[("files", "fd_write_str")] = [I32, STRING]
+    specs[("files", "fd_seek")] = [I32, I64, I32]
 
     BYTE_ARRAY = DynamicArrayType(BuiltinType.U8)
     specs[("socket", "sock_dns_resolve")] = [STRING]
@@ -233,6 +239,8 @@ class StdlibRegistry:
         validator: Callable
     ) -> None:
         """Discover functions using heuristic approach."""
+        from sushi_lang.sushi_stdlib.src.io.files_funcs import FILE_UTILITY_FUNCTIONS
+
         common_names = {
             "time": ["sleep", "msleep", "usleep", "nanosleep", "now", "monotonic_ns"],
             "env": ["getenv", "setenv"],
@@ -247,10 +255,10 @@ class StdlibRegistry:
                 "hypot",
             ],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
-            "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename",
-                      "copy", "mkdir", "rmdir", "read_dir", "mtime", "ctime", "mode",
-                      "is_symlink",
-                      "fd_open", "fd_pread", "fd_pwrite", "fd_dup", "fd_close"],
+            # `files` READS the list rather than repeating it. The two had to be kept in
+            # step by hand, and a name in one and not the other is invisible until a
+            # program calls it and gets CE2008 for a function the compiler can emit.
+            "files": FILE_UTILITY_FUNCTIONS,
             "socket": ["sock_tcp_connect", "sock_tcp_listen", "sock_tcp_accept",
                        "sock_send", "sock_recv", "sock_close", "sock_local_port",
                        "sock_peer_ip", "sock_peer_port",

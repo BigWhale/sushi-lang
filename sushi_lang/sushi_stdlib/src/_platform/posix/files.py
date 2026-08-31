@@ -131,6 +131,37 @@ def declare_pwrite(module: ir.Module) -> ir.Function:
         return ir.Function(module, func_type, name="pwrite")
 
 
+def declare_lseek(module: ir.Module) -> ir.Function:
+    """Declare POSIX lseek(): `off_t lseek(int, off_t, int)`.
+
+    `off_t` is 64-bit on both supported platforms, which probe P6 measured for `pread`;
+    the same answer holds here, so the offset and the result are both i64.
+    """
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    func_type = ir.FunctionType(i64, [i32, i64, i32])
+
+    try:
+        return module.get_global("lseek")
+    except KeyError:
+        return ir.Function(module, func_type, name="lseek")
+
+
+def declare_isatty(module: ir.Module) -> ir.Function:
+    """Declare POSIX isatty(): `int isatty(int)`.
+
+    Asking cannot fail in any way a caller can act on -- a descriptor that is not a
+    terminal and a descriptor that is not open both answer 0 -- so `fd_isatty` gives a
+    bare bool rather than a Result.
+    """
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    func_type = ir.FunctionType(i32, [i32])
+
+    try:
+        return module.get_global("isatty")
+    except KeyError:
+        return ir.Function(module, func_type, name="isatty")
+
+
 def declare_dup(module: ir.Module) -> ir.Function:
     """Declare POSIX dup(): `int dup(int)`.
 

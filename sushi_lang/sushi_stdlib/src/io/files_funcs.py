@@ -11,6 +11,10 @@ FILE_UTILITY_FUNCTIONS = [
     # same shape `<net/socket>` gives `net/tcp.sushi`. `fd_pread`/`fd_pwrite` take the
     # offset as an argument, so the descriptor's file position never moves.
     "fd_open", "fd_pread", "fd_pwrite", "fd_dup", "fd_close",
+    # The SEQUENTIAL half (HANDLES.md, Phase 5). These move the descriptor's own
+    # file position, which is what makes them the layer `File` is written on, and
+    # what makes them the wrong answer for two readers of one descriptor.
+    "fd_read", "fd_write", "fd_write_str", "fd_readln", "fd_seek", "fd_isatty",
 ]
 
 
@@ -44,12 +48,25 @@ def get_builtin_files_function_return_type(func_name: str) -> Type:
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.semantics.generics.types import GenericTypeRef
         return GenericTypeRef("Result", (BuiltinType.I64, UnknownType("FileError")))
-    elif func_name == "fd_pread":
+    elif func_name in ["fd_pread", "fd_read"]:
         from sushi_lang.semantics.typesys import UnknownType, DynamicArrayType
         from sushi_lang.semantics.generics.types import GenericTypeRef
         return GenericTypeRef("Result", (DynamicArrayType(BuiltinType.U8),
                                          UnknownType("FileError")))
-    elif func_name in ["fd_open", "fd_pwrite", "fd_dup", "fd_close"]:
+    elif func_name == "fd_readln":
+        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Result", (BuiltinType.STRING, UnknownType("FileError")))
+    elif func_name == "fd_seek":
+        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Result", (BuiltinType.I64, UnknownType("FileError")))
+    elif func_name == "fd_isatty":
+        # A BARE bool. Asking whether a descriptor is a terminal cannot fail in a way a
+        # caller can act on, so there is no error arm to make it carry.
+        return BuiltinType.BOOL
+    elif func_name in ["fd_open", "fd_pwrite", "fd_dup", "fd_close",
+                       "fd_write", "fd_write_str"]:
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.semantics.generics.types import GenericTypeRef
         return GenericTypeRef("Result", (BuiltinType.I32, UnknownType("FileError")))
@@ -79,12 +96,17 @@ def validate_files_function_call(func_name: str, args: list, reporter, loc) -> N
             er.emit(reporter, er.ERR.CE2009, loc,
                    name=func_name, expected=1, got=len(args))
             return
-    elif func_name in ["fd_dup", "fd_close"]:
+    elif func_name in ["fd_dup", "fd_close", "fd_readln", "fd_isatty"]:
         if len(args) != 1:
             er.emit(reporter, er.ERR.CE2009, loc,
                    name=func_name, expected=1, got=len(args))
             return
-    elif func_name in ["fd_open", "fd_pread", "fd_pwrite"]:
+    elif func_name in ["fd_read", "fd_write", "fd_write_str"]:
+        if len(args) != 2:
+            er.emit(reporter, er.ERR.CE2009, loc,
+                   name=func_name, expected=2, got=len(args))
+            return
+    elif func_name in ["fd_open", "fd_pread", "fd_pwrite", "fd_seek"]:
         if len(args) != 3:
             er.emit(reporter, er.ERR.CE2009, loc,
                    name=func_name, expected=3, got=len(args))

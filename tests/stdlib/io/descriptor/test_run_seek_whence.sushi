@@ -1,0 +1,27 @@
+# The three whences, and each answers the NEW position. 0 is the start, 1 is the current
+# position and 2 is the end -- an intent the platform layer maps, the same way fd_open
+# takes an intent rather than the O_* flags whose values differ per platform.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "start 0\nend 10\ncurrent 10\nfrom start 4\nforward 6\nback from end 8\n"
+use <io/files>
+
+fn main() i32:
+    let i32 fd = fd_open("descriptor_seek_probe.txt", 3, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return Result.Ok(1)
+
+    fd_write_str(fd, "0123456789").realise(-1)
+
+    println("start {fd_seek(fd, 0 as i64, 0).realise(-1 as i64)}")
+    println("end {fd_seek(fd, 0 as i64, 2).realise(-1 as i64)}")
+    println("current {fd_seek(fd, 0 as i64, 1).realise(-1 as i64)}")
+    println("from start {fd_seek(fd, 4 as i64, 0).realise(-1 as i64)}")
+    println("forward {fd_seek(fd, 2 as i64, 1).realise(-1 as i64)}")
+    println("back from end {fd_seek(fd, -2 as i64, 2).realise(-1 as i64)}")
+
+    fd_close(fd).realise(-1)
+    return Result.Ok(0)

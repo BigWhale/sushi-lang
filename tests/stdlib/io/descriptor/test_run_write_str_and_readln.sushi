@@ -1,0 +1,28 @@
+# fd_write_str writes a string's own bytes with no to_bytes() copy, and fd_readln reads
+# one line back. The newline is STRIPPED, and end of file answers an empty string -- the
+# same contract the builtin readln had, which is what lets `lines()` keep its terminator.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "1:Mostly Harmless\n2:So long\n3:\n"
+use <io/files>
+
+fn main() i32:
+    let i32 fd = fd_open("descriptor_lines_probe.txt", 3, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return Result.Ok(1)
+
+    fd_write_str(fd, "Mostly Harmless\nSo long\n").realise(-1)
+    fd_seek(fd, 0 as i64, 0).realise(-1 as i64)
+
+    let string first = fd_readln(fd).realise('')
+    let string second = fd_readln(fd).realise('')
+    let string past_eof = fd_readln(fd).realise('')
+    println("1:{first}")
+    println("2:{second}")
+    println("3:{past_eof}")
+
+    fd_close(fd).realise(-1)
+    return Result.Ok(0)

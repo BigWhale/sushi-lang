@@ -16,6 +16,8 @@ from sushi_lang.sushi_stdlib.src._platform.posix.files import (
     declare_pread,
     declare_pwrite,
     declare_dup,
+    declare_lseek,
+    declare_isatty,
     declare_close,
     declare_mkdir,
     declare_rmdir,
@@ -30,6 +32,14 @@ O_TRUNC = 0x0400
 # crosses the boundary and `generate_fd_open` maps it here.
 O_RDWR = 0x0002
 O_APPEND = 0x0008
+
+# lseek whences. POSIX fixes these at 0, 1 and 2 on every platform, unlike the O_*
+# flags above -- but they live here anyway, so that `generate_fd_seek` reads a whence
+# from the platform module exactly as it reads a flag, and a platform that ever
+# disagreed would have one place to say so.
+SEEK_SET = 0
+SEEK_CUR = 1
+SEEK_END = 2
 
 # struct stat offsets, verified with an offsetof probe (2026-08-29). The layout
 # is the 64-bit-inode struct; on x86_64 that layout lives behind stat$INODE64,
@@ -81,6 +91,8 @@ __all__ = [
     "declare_pread",
     "declare_pwrite",
     "declare_dup",
+    "declare_lseek",
+    "declare_isatty",
     "declare_close",
     "declare_mkdir",
     "declare_rmdir",

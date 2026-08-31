@@ -277,53 +277,74 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
         result = codegen.builder.call(stdlib_func, [path_cstr, mode_value], name="mkdir_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
-    elif func_name in ("fd_open", "fd_pread", "fd_pwrite", "fd_dup", "fd_close"):
-        return _emit_descriptor_call(codegen, expr, func_name, stdlib_func_name)
+    elif func_name in _DESCRIPTOR_SIGNATURES:
+        result = _emit_descriptor_call(codegen, expr, func_name, stdlib_func_name)
+        return codegen.utils.as_i1(result) if to_i1 else result
 
     else:
         raise_internal_error("CE0024", type="io/files", method=func_name)
 
 
-def _emit_descriptor_call(codegen, expr, func_name: str, stdlib_func_name: str):
-    """The descriptor layer of <io/files> (HANDLES.md, Phase 4).
+def _descriptor_signatures():
+    """One table: what each descriptor primitive takes, and what its Ok payload is.
 
-    A path is marshalled through `emit_cstr_arg`, the one C-string seam; a descriptor is
-    a bare i32 and an offset a bare i64, so neither needs marshalling. `fd_pwrite` takes
-    the byte array BY VALUE -- a `T[]` is its descriptor everywhere -- and borrows it.
+    A signature is written ONCE and read for the parameter types, the arity and the
+    result type together. The five Phase 4 entries used to be an arity dict beside three
+    if-arms that repeated the same types, and adding the six sequential ones would have
+    tripled that.
+
+    A `None` ok type means the function answers its value BARE rather than in a Result --
+    `fd_isatty` is the only one, because asking cannot fail.
     """
-    from sushi_lang.backend.functions import declare_stdlib_function
     from sushi_lang.sushi_stdlib.src.type_definitions import (
-        get_result_type, get_unit_enum_type, get_dynamic_array_type,
+        get_byte_array_type, get_string_type,
     )
     i8_ptr = ir.PointerType(ir.IntType(8))
     i32, i64 = ir.IntType(32), ir.IntType(64)
+    bytes_ty, string_ty = get_byte_array_type(), get_string_type()
 
-    ARITY = {"fd_open": 3, "fd_pread": 3, "fd_pwrite": 3, "fd_dup": 1, "fd_close": 1}
-    expected = ARITY[func_name]
-    if len(expr.args) != expected:
+    # name -> (parameter types, Ok payload type or None, index of a path argument)
+    return {
+        "fd_open":      ([i8_ptr, i32, i32], i32, 0),
+        "fd_pread":     ([i32, i64, i32], bytes_ty, None),
+        "fd_pwrite":    ([i32, i64, bytes_ty], i32, None),
+        "fd_dup":       ([i32], i32, None),
+        "fd_close":     ([i32], i32, None),
+        "fd_read":      ([i32, i32], bytes_ty, None),
+        "fd_write":     ([i32, bytes_ty], i32, None),
+        "fd_write_str": ([i32, string_ty], i32, None),
+        "fd_readln":    ([i32], string_ty, None),
+        "fd_seek":      ([i32, i64, i32], i64, None),
+        "fd_isatty":    ([i32], None, None),
+    }
+
+
+_DESCRIPTOR_SIGNATURES = _descriptor_signatures()
+
+
+def _emit_descriptor_call(codegen, expr, func_name: str, stdlib_func_name: str):
+    """The descriptor layer of <io/files> (HANDLES.md, Phases 4 and 5).
+
+    A path is marshalled through `emit_cstr_arg`, the one C-string seam; everything else
+    crosses as the value it already is -- a descriptor is a bare i32, an offset a bare
+    i64, a `u8[]` its descriptor by value and a `string` its fat pointer. None of those
+    needs marshalling, and each is a BORROW: no callee here frees what it was handed.
+    """
+    from sushi_lang.backend.functions import declare_stdlib_function
+    from sushi_lang.sushi_stdlib.src.type_definitions import (
+        get_result_type, get_unit_enum_type,
+    )
+
+    param_types, ok_type, path_index = _DESCRIPTOR_SIGNATURES[func_name]
+    if len(expr.args) != len(param_types):
         raise_internal_error("CE0023", method=func_name,
-                             expected=expected, got=len(expr.args))
+                             expected=len(param_types), got=len(expr.args))
 
-    if func_name == "fd_pread":
-        ok_type = get_dynamic_array_type(ir.IntType(8))
-    else:
-        ok_type = i32
-    result_type = get_result_type(ok_type, get_unit_enum_type())
+    args = [emit_cstr_arg(codegen, a) if i == path_index else emit_borrowed_arg(codegen, a)
+            for i, a in enumerate(expr.args)]
 
-    if func_name == "fd_open":
-        param_types = [i8_ptr, i32, i32]
-        args = [emit_cstr_arg(codegen, expr.args[0])]
-        args += [emit_borrowed_arg(codegen, a) for a in expr.args[1:]]
-    elif func_name == "fd_pread":
-        param_types = [i32, i64, i32]
-        args = [emit_borrowed_arg(codegen, a) for a in expr.args]
-    elif func_name == "fd_pwrite":
-        param_types = [i32, i64, get_dynamic_array_type(ir.IntType(8))]
-        args = [emit_borrowed_arg(codegen, a) for a in expr.args]
-    else:
-        param_types = [i32]
-        args = [emit_borrowed_arg(codegen, expr.args[0])]
-
+    return_type = (ir.IntType(8) if ok_type is None
+                   else get_result_type(ok_type, get_unit_enum_type()))
     stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name,
-                                          result_type, param_types)
+                                          return_type, param_types)
     return codegen.builder.call(stdlib_func, args, name=f"{func_name}_result")
