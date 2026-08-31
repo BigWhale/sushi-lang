@@ -65,3 +65,4 @@ fd_fixture_probe.txt
 dup_probe.txt
 positional_probe.txt
 overwrite_probe.txt
+array_value_seam_probe.txt

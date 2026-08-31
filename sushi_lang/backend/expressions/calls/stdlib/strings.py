@@ -166,11 +166,6 @@ def emit_stdlib_string_call(
         name=f"{method}_result"
     )
 
-    if method in ("to_bytes", "split"):
-        array_ptr = codegen.builder.alloca(return_type, name=f"{method}_array")
-        codegen.builder.store(result, array_ptr)
-        return array_ptr
-
     if to_i1 and return_type == i8:
         result = codegen.utils.as_i1(result)
 
