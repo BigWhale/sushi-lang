@@ -1,0 +1,23 @@
+# A generic called from a Block arm body, with a STRUCT payload. The block was walked, but
+# the pattern binding's type was never recorded, so the type argument could not be inferred
+# from the binding alone (#539).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "weight 7\n"
+
+struct Crate:
+    i32 weight
+
+fn make() Crate:
+    return Result.Ok(Crate(7))
+
+fn echo@(T)(nom T v) T:
+    return Result.Ok(v)
+
+fn main() i32:
+    match make():
+        Result.Ok(c) ->
+            let Crate back = echo(nom c).realise(Crate(0))
+            println("weight {back.weight}")
+        Result.Err(_) -> println("no")
+    return Result.Ok(0)

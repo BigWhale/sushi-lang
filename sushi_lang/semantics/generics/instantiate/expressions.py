@@ -21,6 +21,7 @@ class ExpressionScanner:
         generic_funcs: dict,
         type_validator=None,
         namespaces=None,
+        generic_enums=None,
     ):
         """Initialize expression scanner."""
         self.type_inferrer = type_inferrer
@@ -29,6 +30,9 @@ class ExpressionScanner:
         self.generic_funcs = generic_funcs
         self.type_validator = type_validator
         self.namespaces = namespaces
+        # Templates by name, for reading a variant's payload types off a GenericTypeRef
+        # whose interned instance does not exist yet (#539).
+        self.generic_enums = generic_enums
         # Callback to scan a lambda's block body (a statement Block). Wired by the
         # InstantiationCollector to its FunctionCollector._collect_from_block; left None on
         # the unit-test paths that drive the scanner directly (a block-body lambda is a
