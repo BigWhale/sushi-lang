@@ -2,12 +2,21 @@
 # STDIN_INPUT: "Test Line\n"
 # EXPECT_STDOUT_EXACT: "You entered: Test Line\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Test stdin.readln().realise('') - reads one line from standard input
+# Test stdin.line_or_empty() - reads one line from standard input
 
 use <io/fs>
 
+# Reads one line and substitutes an empty string for the end of the file. readln()
+# answers Maybe@(string) now, so a caller that does not care which of the two it got
+# says so once, here, rather than losing the distinction at every call.
+extend File line_or_empty() string:
+    match self.readln():
+        Result.Ok(Maybe.Some(line)) -> return line.clone()
+        Result.Ok(Maybe.None) -> return ""
+        Result.Err(_) -> return ""
+
 fn main() i32:
-    let string line = stdin.readln().realise('')
+    let string line = stdin.line_or_empty()
     stdout.write("You entered: ")
     stdout.write(line)
     stdout.write("\n")

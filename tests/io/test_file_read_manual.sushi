@@ -10,6 +10,15 @@ use <io/fs>
 use <io/files>
 use <collections/strings>
 
+# Reads one line and substitutes an empty string for the end of the file. readln()
+# answers Maybe@(string) now, so a caller that does not care which of the two it got
+# says so once, here, rather than losing the distinction at every call.
+extend File line_or_empty() string:
+    match self.readln():
+        Result.Ok(Maybe.Some(line)) -> return line.clone()
+        Result.Ok(Maybe.None) -> return ""
+        Result.Err(_) -> return ""
+
 fn main() i32:
     # Write test file with multiple lines
     let Result@(File, IoError) write_result = open("test_read_manual.txt", FileMode.Write())
@@ -29,15 +38,15 @@ fn main() i32:
         Result.Ok(poke f) ->
             let i32 count = 1
 
-            let string line1 = f.readln().realise('')
+            let string line1 = f.line_or_empty()
             println("Line {count}: {line1}")
             count := count + 1
 
-            let string line2 = f.readln().realise('')
+            let string line2 = f.line_or_empty()
             println("Line {count}: {line2}")
             count := count + 1
 
-            let string line3 = f.readln().realise('')
+            let string line3 = f.line_or_empty()
             println("Line {count}: {line3}")
             count := count + 1
 

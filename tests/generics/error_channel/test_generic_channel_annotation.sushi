@@ -1,0 +1,23 @@
+# The channel a generic declares is the channel an annotation must spell. A
+# `let Result@(i32, SizeError)` over the call binds only if the call site typed the
+# error arm from the declaration and not from StdError (#538).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "5\n"
+
+use <collections/strings>
+
+enum SizeError:
+    TooSmall
+
+fn sized@(T)(T value, i32 base) i32 | SizeError:
+    if (base < 0 or value.len() == 0):
+        return Result.Err(SizeError.TooSmall)
+    return Result.Ok(base + 2)
+
+fn main() i32:
+    let Result@(i32, SizeError) answer = sized("tag", 3)
+    match answer:
+        Result.Ok(n) -> println("{n}")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

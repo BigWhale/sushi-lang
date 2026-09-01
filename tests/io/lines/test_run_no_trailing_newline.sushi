@@ -1,0 +1,34 @@
+# A last line with no newline after it is still a line. The end of file arrives on the
+# call AFTER it, as Maybe.None.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "[alpha]\n[omega]\n2\n"
+use <io/files>
+use <io/fs>
+
+fn dump(string path) i32 | IoError:
+    let File f = open(path, FileMode.Read())??
+    let i32 count = 0
+    let bool done = false
+    while (not done):
+        match f.readln()??:
+            Maybe.Some(line) ->
+                println("[{line}]")
+                count := count + 1
+            Maybe.None ->
+                done := true
+    f.close()??
+    return Result.Ok(count)
+
+fn main() i32:
+    match open("lines_no_trailing.txt", FileMode.Write()):
+        Result.Ok(w) -> w.write("alpha\nomega")
+        Result.Err(_) ->
+            println("open failed")
+            return Result.Ok(1)
+
+    println("{dump('lines_no_trailing.txt').realise(-1)}")
+    remove("lines_no_trailing.txt").realise(0)
+    return Result.Ok(0)

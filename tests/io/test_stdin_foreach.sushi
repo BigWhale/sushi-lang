@@ -2,25 +2,34 @@
 # STDIN_INPUT: "Alpha\nBeta\nGamma\n"
 # EXPECT_STDOUT_EXACT: "Received lines:\n  - Alpha\n  - Beta\n  - Gamma\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Test stdin.readln().realise('') in a foreach loop
+# Test stdin.line_or_empty() in a foreach loop
 # Read multiple lines and process them
 
 use <io/fs>
+
+# Reads one line and substitutes an empty string for the end of the file. readln()
+# answers Maybe@(string) now, so a caller that does not care which of the two it got
+# says so once, here, rather than losing the distinction at every call.
+extend File line_or_empty() string:
+    match self.readln():
+        Result.Ok(Maybe.Some(line)) -> return line.clone()
+        Result.Ok(Maybe.None) -> return ""
+        Result.Err(_) -> return ""
 
 fn main() i32:
     # Read 3 lines from stdin
     let string[] lines = new()
 
     # Read first line
-    let string line1 = stdin.readln().realise('')
+    let string line1 = stdin.line_or_empty()
     lines.push(line1)
 
     # Read second line
-    let string line2 = stdin.readln().realise('')
+    let string line2 = stdin.line_or_empty()
     lines.push(line2)
 
     # Read third line
-    let string line3 = stdin.readln().realise('')
+    let string line3 = stdin.line_or_empty()
     lines.push(line3)
 
     # Iterate over lines and print them

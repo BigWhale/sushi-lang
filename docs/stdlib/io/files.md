@@ -126,7 +126,7 @@ callable on a `TcpStream` too, which is what `<io/contracts>` is for.
 | `flush` | `() ~ \| IoError` -- a successful no-op on a descriptor | `Writer` |
 | `seek` | `(i64 offset, SeekFrom origin) i64 \| IoError` -- answers the NEW position | `Seek` |
 | `read_all` | `() string \| IoError` -- the whole file, from the current position | `File` |
-| `readln` | `() string \| IoError` -- one line, newline stripped | `File` |
+| `readln` | `() Maybe@(string) \| IoError` -- one line, newline stripped; `None` at the end | `File` |
 | `readch` | `() string \| IoError` -- one byte, as text | `File` |
 | `writeln` | `(string data) ~ \| IoError` | `File` |
 | `tell` | `() i64 \| IoError` | `File` |
@@ -193,62 +193,53 @@ fn main() i32 | IoError:
 
 ### readln
 
-Read a single line from the file.
+Read one line from the file, without its newline.
 
 ```sushi
-use <io/fs>
-
-fn File.readln().realise('') -> string
+fn File.readln() Maybe@(string) | IoError
 ```
 
-**Returns:**
-- String containing one line (without newline character)
+**Returns:** the line, or `Maybe.None` at end of file. A blank line is `Maybe.Some("")`,
+so a caller can tell a blank line from the end of the file. This is the UNBUFFERED read:
+one system call per line at best. Reading a whole file line by line wants `BufReader`
+from `<io/buf>`.
 
 **Example:**
 
+<!-- docs-sweep: skip (reads a file the sweep does not create) -->
 ```sushi
-use <io/files>
 use <io/fs>
 
-fn main() i32 | IoError:
-    let File f = open("data.txt", FileMode.Read())??
-
-    let string first_line = f.readln().realise('')
-    println("First: {first_line}")
-
-    let string second_line = f.readln().realise('')
-    println("Second: {second_line}")
-
-    f.close()
-
-    return Result.Ok(0)
+fn first_two(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    match f.readln()??:
+        Maybe.Some(line) -> println("First: {line}")
+        Maybe.None -> println("empty file")
+    match f.readln()??:
+        Maybe.Some(line) -> println("Second: {line}")
+        Maybe.None -> println("one line only")
+    return Result.Ok(~)
 ```
 
-**Line-by-line processing:**
+**Line-by-line processing:** the loop ends on `Maybe.None` and on nothing else, so a
+blank line in the middle of the file does not truncate it.
 
+<!-- docs-sweep: skip (reads a file the sweep does not create) -->
 ```sushi
-use <io/files>
 use <io/fs>
 
-fn main() i32 | IoError:
-    let File f = open("log.txt", FileMode.Read())??
-    let i32 line_count = 0
-
-    # Read until empty line (EOF)
+fn count_lines(string path) i32 | IoError:
+    let File f = open(path, FileMode.Read())??
+    let i32 lines = 0
     let bool done = false
     while (not done):
-        let string line = f.readln().realise('')
-
-        if (line.is_empty()):
-            done := true
-        else:
-            line_count := line_count + 1
-            println("{line_count}: {line}")
-
-    f.close()
-    println("Total lines: {line_count}")
-
-    return Result.Ok(0)
+        match f.readln()??:
+            Maybe.Some(line) ->
+                lines := lines + 1
+                println("{lines}: {line}")
+            Maybe.None ->
+                done := true
+    return Result.Ok(lines)
 ```
 
 ### write
@@ -902,10 +893,12 @@ carries a pointer and a length, which is what `write(2)` wants.
 Unlike `sock_send`, these do not hand a partial write back to the caller. A socket's
 partial write is information — how much the peer's window took — and a file's is not.
 
-### `fd_readln(i32 fd) -> Result@(string, FileError)`
+### `fd_readln(i32 fd) -> Result@(Maybe@(string), FileError)`
 
-One line, the newline **stripped**, and an empty string at end of file — so a caller
-loops until the answer is empty, exactly as with `fd_read`.
+One line, the newline **stripped**, in a `Maybe`. A blank line is `Maybe.Some("")` and
+the end of the file is `Maybe.None`, so the two are never the same answer. It used to
+answer an empty string for both, which truncated a file at its first blank line and made
+a failed read look like a clean end.
 
 It has two paths, and which one runs depends on whether the descriptor can seek:
 
@@ -1099,26 +1092,23 @@ use <io/fs>
 fn main() i32 | IoError:
     let File f = open("large.txt", FileMode.Read())??
 
-    # Reading line-by-line is more memory-efficient than .read_all().realise('')
+    # Reading line by line holds one line at a time, where read_all() holds the file.
     let bool done = false
     while (not done):
-        let string line = f.readln().realise('')
-
-        if (line.is_empty()):
-            done := true
-        else:
-            # Process line
-            println(line)
-
-    f.close()
+        match f.readln()??:
+            Maybe.Some(line) ->
+                println(line)
+            Maybe.None ->
+                done := true
 
     return Result.Ok(0)
 ```
 
 ### Memory Usage
 
-- `.read_all().realise('')` loads entire file into memory
-- `.readln().realise('')` reads one line at a time (more memory-efficient)
+- `read_all()` loads the whole file into memory
+- `readln()` reads one line at a time, and the buffered reader in `<io/buf>` does the
+  same with one system call per buffer rather than one per line
 
 Choose based on file size and use case.
 

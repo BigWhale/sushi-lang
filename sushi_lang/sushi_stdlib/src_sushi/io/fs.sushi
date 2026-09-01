@@ -412,14 +412,17 @@ extend File read_all() string | IoError:
 ##:
 Reads one line, without its newline.
 
-An empty answer means end of file, so a caller loops until the answer is empty. A line is
-read a byte at a time on a descriptor that cannot seek -- a pipe cannot give back an
-over-read -- and in chunks on one that can.
+A blank line is Some("") and the end of the file is None, so the two are never the same
+answer. A line is read a byte at a time on a descriptor that cannot seek -- a pipe cannot
+give back an over-read -- and in chunks on one that can.
 
-- Returns: The line, or an empty string at end of file.
+This is the unbuffered read, one system call per line at best. Reading a whole file line
+by line wants BufReader from <io/buf>.
+
+- Returns: The line, or None at end of file.
 - Errors: IoError, when the read failed.
 :##
-extend File readln() string | IoError:
+extend File readln() Maybe@(string) | IoError:
     match fd_readln(self.fd):
         Result.Ok(nom line) -> return line
         Result.Err(e) -> return Result.Err(e.to_io())

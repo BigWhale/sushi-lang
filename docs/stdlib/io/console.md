@@ -137,13 +137,11 @@ Read input from standard input.
 Read a line from stdin (blocks until newline).
 
 ```sushi
-use <io/fs>
-
-fn stdin.readln().realise('') -> string
+fn File.readln() Maybe@(string) | IoError
 ```
 
-**Returns:**
-- String containing the line (without newline character)
+**Returns:** the line without its newline, or `Maybe.None` when standard input ends. A
+blank line is `Maybe.Some("")`, so pressing Return alone is not the end of the input.
 
 **Example:**
 
@@ -152,9 +150,10 @@ use <io/fs>
 
 fn main() i32:
     println("Enter your name:")
-    let string name = stdin.readln().realise('')
-
-    println("Hello, {name}!")
+    match stdin.readln():
+        Result.Ok(Maybe.Some(name)) -> println("Hello, {name}!")
+        Result.Ok(Maybe.None) -> println("Nothing to read.")
+        Result.Err(_) -> println("Could not read the name.")
 
     return Result.Ok(0)
 ```
@@ -167,7 +166,12 @@ use <collections/strings>
 
 fn main() i32:
     println("Enter your age:")
-    let string age_str = stdin.readln().realise('')
+    let string age_str = ""
+    match stdin.readln():
+        Result.Ok(Maybe.Some(entered)) ->
+            age_str := entered.clone()
+        Result.Ok(Maybe.None) -> ~
+        Result.Err(_) -> ~
 
     match age_str.to_i32():
         Maybe.Some(age) ->
@@ -377,12 +381,13 @@ use <io/fs>
 fn main() i32:
     if (stdin.is_terminal()):
         stdout.write("Enter your name: ")
-        let string name = stdin.readln().realise('')
-        println("Hello, {name}!")
+        match stdin.readln():
+            Result.Ok(Maybe.Some(name)) -> println("Hello, {name}!")
+            Result.Ok(Maybe.None) -> println("Nobody there.")
+            Result.Err(_) -> println("Could not read the name.")
     else:
         # Reading a piped list, so there is nobody to prompt.
-        foreach(line in stdin.lines()):
-            println("read: {line}")
+        println("reading a pipe")
 
     return Result.Ok(0)
 ```

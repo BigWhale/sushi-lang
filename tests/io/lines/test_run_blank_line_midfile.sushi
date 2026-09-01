@@ -1,0 +1,35 @@
+# A blank line is data and end of file is the end. readln() answers Maybe@(string), so
+# the two are never the same answer: a file whose second line is empty reads FOUR lines,
+# where the empty-string contract truncated it to one.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "[alpha]\n[]\n[gamma]\n[]\n4\n"
+use <io/files>
+use <io/fs>
+
+fn dump(string path) i32 | IoError:
+    let File f = open(path, FileMode.Read())??
+    let i32 count = 0
+    let bool done = false
+    while (not done):
+        match f.readln()??:
+            Maybe.Some(line) ->
+                println("[{line}]")
+                count := count + 1
+            Maybe.None ->
+                done := true
+    f.close()??
+    return Result.Ok(count)
+
+fn main() i32:
+    match open("lines_blank_midfile.txt", FileMode.Write()):
+        Result.Ok(w) -> w.write("alpha\n\ngamma\n\n")
+        Result.Err(_) ->
+            println("open failed")
+            return Result.Ok(1)
+
+    println("{dump('lines_blank_midfile.txt').realise(-1)}")
+    remove("lines_blank_midfile.txt").realise(0)
+    return Result.Ok(0)

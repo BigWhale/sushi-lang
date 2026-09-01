@@ -11,6 +11,15 @@
 use <io/files>
 use <io/fs>
 
+# Reads one line and substitutes an empty string for the end of the file. readln()
+# answers Maybe@(string) now, so a caller that does not care which of the two it got
+# says so once, here, rather than losing the distinction at every call.
+extend File line_or_empty() string:
+    match self.readln():
+        Result.Ok(Maybe.Some(line)) -> return line.clone()
+        Result.Ok(Maybe.None) -> return ""
+        Result.Err(_) -> return ""
+
 fn main() i32:
     match open("fd_gate_probe.txt", FileMode.Write()):
         Result.Ok(poke out) ->
@@ -22,7 +31,7 @@ fn main() i32:
 
     match open("fd_gate_probe.txt", FileMode.Read()):
         Result.Ok(poke input) ->
-            println(input.readln().realise(''))
+            println(input.line_or_empty())
             input.close()
         Result.Err(_) ->
             println("read failed")

@@ -1,0 +1,35 @@
+# fd_write_str writes a string's own bytes with no to_bytes() copy, and fd_readln reads
+# one line back in a Maybe: a blank line is Some(""), the end of the file is None, and
+# the two are never the same answer (HANDLES.md, ruling R22).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "1:[Mostly Harmless]\n2:[]\n3:[So long]\n4:none\n"
+use <io/files>
+
+fn show(i32 tag, i32 fd) ~:
+    match fd_readln(fd):
+        Result.Ok(answer) ->
+            match answer:
+                Maybe.Some(line) -> println("{tag}:[{line}]")
+                Maybe.None -> println("{tag}:none")
+        Result.Err(_) -> println("{tag}:failed")
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 fd = fd_open("descriptor_lines_probe.txt", 3, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return Result.Ok(1)
+
+    fd_write_str(fd, "Mostly Harmless\n\nSo long\n").realise(-1)
+    fd_seek(fd, 0 as i64, 0).realise(-1 as i64)
+
+    show(1, fd)
+    show(2, fd)
+    show(3, fd)
+    show(4, fd)
+
+    fd_close(fd).realise(-1)
+    return Result.Ok(0)

@@ -153,11 +153,11 @@ def _emit_stdin_lines_foreach(
     else about `lines()` for Phase 7.
     """
     from llvmlite import ir
-    from sushi_lang.sushi_stdlib.src.collections.strings_inline import emit_string_is_empty
     from sushi_lang.backend import gep_utils
     from sushi_lang.backend.functions import declare_stdlib_function
+    from sushi_lang.sushi_stdlib.src.libc_declarations import declare_free
     from sushi_lang.sushi_stdlib.src.type_definitions import (
-        get_result_type, get_string_type, get_unit_enum_type,
+        get_maybe_type, get_result_type, get_string_type, get_unit_enum_type,
     )
 
     codegen.builder.position_at_end(stdin_loop_bb)
@@ -174,26 +174,47 @@ def _emit_stdin_lines_foreach(
         name="line_fd")
 
     string_ty = get_string_type()
-    result_ty = get_result_type(string_ty, get_unit_enum_type())
+    maybe_ty = get_maybe_type(string_ty)
+    result_ty = get_result_type(maybe_ty, get_unit_enum_type())
     readln = declare_stdlib_function(codegen.module, "sushi_io_files_fd_readln",
                                      result_ty, [codegen.types.i32])
     answer = codegen.builder.call(readln, [fd], name="line_result")
 
-    # A read failure and an end of file both stop the loop. `foreach` has nowhere to put
-    # a Result -- an `Iterator@(string)` yields a bare string -- which is the hole R13
-    # records as already existing rather than as something Phase 5 introduced.
+    # The END of the loop is the Maybe's None tag, and NOT an empty string: a blank line
+    # is `Some("")` and used to truncate the file here. A read failure also stops the
+    # loop, because `foreach` has nowhere to put a Result -- an `Iterator@(string)`
+    # yields a bare string, which is the hole R13 records.
     payload = codegen.builder.alloca(result_ty.elements[1], name="line_payload")
     codegen.builder.store(codegen.builder.extract_value(answer, 1), payload)
+    maybe_value = codegen.builder.load(
+        codegen.builder.bitcast(payload, maybe_ty.as_pointer(), name="line_maybe_ptr"),
+        name="line_maybe")
+
+    line_payload = codegen.builder.alloca(maybe_ty.elements[1], name="line_some_payload")
+    codegen.builder.store(codegen.builder.extract_value(maybe_value, 1), line_payload)
     line_value = codegen.builder.load(
-        codegen.builder.bitcast(payload, string_ty.as_pointer(), name="line_str_ptr"),
+        codegen.builder.bitcast(line_payload, string_ty.as_pointer(),
+                                name="line_str_ptr"),
         name="line")
+
     failed = codegen.builder.icmp_signed(
         "!=", codegen.builder.extract_value(answer, 0), ir.Constant(codegen.types.i32, 0),
         name="line_failed")
+    at_end = codegen.builder.icmp_signed(
+        "!=", codegen.builder.extract_value(maybe_value, 0),
+        ir.Constant(codegen.types.i32, 0), name="line_none")
 
-    is_empty = emit_string_is_empty(codegen, line_value)
-    codegen.builder.cbranch(codegen.builder.or_(failed, is_empty, name="line_done"),
-                            end_bb, stdin_body_bb)
+    done_bb = codegen.func.append_basic_block(name="foreach.lines_done")
+    codegen.builder.cbranch(codegen.builder.or_(failed, at_end, name="line_done"),
+                            done_bb, stdin_body_bb)
+
+    # The descriptor cell `sushi_file_lines` allocated is this loop's to release: the
+    # iterator has no destructor, so every `lines()` used to leak sixteen bytes.
+    codegen.builder.position_at_end(done_bb)
+    codegen.builder.call(declare_free(codegen.module),
+                         [codegen.builder.bitcast(cell, codegen.types.i8.as_pointer(),
+                                                  name="fd_cell_bytes")])
+    codegen.builder.branch(end_bb)
 
     codegen.builder.position_at_end(stdin_body_bb)
     codegen.loop_stack.append((stdin_cond_bb, end_bb, codegen.memory._scope_depth + 1))

@@ -1,0 +1,23 @@
+# A generic function bound as a VALUE carries its channel into the function type, so the
+# call through the binding answers the declared error and not StdError (#538).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "11\n"
+
+enum StepError:
+    Stuck
+
+fn bump@(T)(T value, i32 by) i32 | StepError:
+    if (by == 0):
+        return Result.Err(StepError.Stuck)
+    return Result.Ok(by + 8 + value - value)
+
+fn run_step(i32 by) i32 | StepError:
+    let fn(i32, i32) -> i32 | StepError step = bump
+    return Result.Ok(step(0, by)??)
+
+fn main() i32:
+    match run_step(3):
+        Result.Ok(n) -> println("{n}")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

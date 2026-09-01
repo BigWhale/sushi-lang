@@ -154,10 +154,19 @@ class FunctionMonomorphizer:
             from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands
             concrete_body = unroll_expands(concrete_body, pack_param_fanout)
 
+        # The channel is substituted like every other type in the signature. A copy
+        # carries `err_type` through, so `fn f@(E)(T v) i32 | E` would otherwise reach
+        # the backend with an unsubstituted type parameter in its error arm.
+        # `generics/extensions.py` does the same for a method's channel.
+        concrete_err = self.monomorphizer.substitutor.substitute_type(
+            generic.err_type, substitution
+        ) if getattr(generic, "err_type", None) else None
+
         concrete_func = copy.copy(generic)
         concrete_func.name = mangled_name
         concrete_func.params = concrete_params
         concrete_func.ret = concrete_ret
+        concrete_func.err_type = concrete_err
         concrete_func.body = concrete_body
         concrete_func.type_params = None  # No longer generic
 

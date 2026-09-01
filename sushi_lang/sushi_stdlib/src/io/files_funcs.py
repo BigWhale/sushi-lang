@@ -54,9 +54,12 @@ def get_builtin_files_function_return_type(func_name: str) -> Type:
         return GenericTypeRef("Result", (DynamicArrayType(BuiltinType.U8),
                                          UnknownType("FileError")))
     elif func_name == "fd_readln":
+        # A blank line is Some("") and end of file is None; an empty string can no
+        # longer mean both (HANDLES.md, ruling R22).
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Result", (BuiltinType.STRING, UnknownType("FileError")))
+        return GenericTypeRef("Result", (GenericTypeRef("Maybe", (BuiltinType.STRING,)),
+                                         UnknownType("FileError")))
     elif func_name == "fd_seek":
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.semantics.generics.types import GenericTypeRef

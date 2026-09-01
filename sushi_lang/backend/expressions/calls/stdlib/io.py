@@ -231,11 +231,12 @@ def _descriptor_signatures():
     `fd_isatty` is the only one, because asking cannot fail.
     """
     from sushi_lang.sushi_stdlib.src.type_definitions import (
-        get_byte_array_type, get_string_type,
+        get_byte_array_type, get_maybe_type, get_string_type,
     )
     i8_ptr = ir.PointerType(ir.IntType(8))
     i32, i64 = ir.IntType(32), ir.IntType(64)
     bytes_ty, string_ty = get_byte_array_type(), get_string_type()
+    maybe_string_ty = get_maybe_type(string_ty)
 
     # name -> (parameter types, Ok payload type or None, index of a path argument)
     return {
@@ -247,7 +248,7 @@ def _descriptor_signatures():
         "fd_read":      ([i32, i32], bytes_ty, None),
         "fd_write":     ([i32, bytes_ty], i32, None),
         "fd_write_str": ([i32, string_ty], i32, None),
-        "fd_readln":    ([i32], string_ty, None),
+        "fd_readln":    ([i32], maybe_string_ty, None),
         "fd_seek":      ([i32, i64, i32], i64, None),
         "fd_isatty":    ([i32], None, None),
     }

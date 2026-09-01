@@ -206,7 +206,11 @@ class ExpressionScanner:
             if env_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, env_error)))
             return
-        elif function_name == 'getenv':
+        elif function_name in {'getenv', 'fd_readln'}:
+            # `fd_readln` answers `Result@(Maybe@(string), FileError)`, and the Maybe is
+            # the half nothing else in the program names: the Result interns through its
+            # own seam, but a payload enum has to be asked for here or the match on the
+            # answer sees an unresolved `Maybe@(string)` (CE2048).
             self.instantiations.add(("Maybe", (BuiltinType.STRING,)))
             return
         elif function_name in {'file_size', 'mtime', 'ctime'}:

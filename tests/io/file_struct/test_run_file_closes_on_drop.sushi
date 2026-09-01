@@ -17,7 +17,9 @@ fn write_it() ~ | IoError:
 
 fn read_it() string | IoError:
     let File f = open("file_struct_drop.txt", FileMode.Read())??
-    return Result.Ok(f.readln()??)
+    match f.readln()??:
+        Maybe.Some(line) -> return Result.Ok(line.clone())
+        Maybe.None -> return Result.Ok("")
 
 fn main() i32:
     match write_it():

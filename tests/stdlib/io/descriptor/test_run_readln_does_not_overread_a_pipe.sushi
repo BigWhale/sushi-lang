@@ -12,8 +12,12 @@ use <io/files>
 use <collections/strings>
 
 fn main() i32:
-    let string first = fd_readln(0).realise('')
-    println("line {first}")
+    match fd_readln(0):
+        Result.Ok(first) ->
+            match first:
+                Maybe.Some(line) -> println("line {line}")
+                Maybe.None -> println("line")
+        Result.Err(_) -> println("line")
 
     let u8[] empty = from([])
     let u8[] rest = fd_read(0, 64).realise(empty)

@@ -6,6 +6,15 @@
 
 use <io/fs>
 
+# Reads one line and substitutes an empty string for the end of the file. readln()
+# answers Maybe@(string) now, so a caller that does not care which of the two it got
+# says so once, here, rather than losing the distinction at every call.
+extend File line_or_empty() string:
+    match self.readln():
+        Result.Ok(Maybe.Some(line)) -> return line.clone()
+        Result.Ok(Maybe.None) -> return ""
+        Result.Err(_) -> return ""
+
 fn main() i32:
     # Test stdout.write
     stdout.write("Mostly Harmless")
@@ -17,7 +26,7 @@ fn main() i32:
 
     # Test readln
     stdout.write("Enter your name: ")
-    let string name = stdin.readln().realise('')
+    let string name = stdin.line_or_empty()
     stdout.write("Hello, ")
     stdout.write(name)
     stdout.write("!\n")

@@ -12,19 +12,24 @@ to a descriptor now, and this is the file half of it.
 """
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src.type_definitions import (
-    get_basic_types, get_byte_array_type, get_result_type, get_string_type,
-    get_unit_enum_type,
+    get_basic_types, get_byte_array_type, get_maybe_type, get_result_type,
+    get_string_type, get_unit_enum_type,
 )
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.io.files.errno import (
-    emit_errno_err_result, emit_file_error_tag)
-from sushi_lang.sushi_stdlib.src.io.files.results import emit_ok_result, emit_err_result
+    emit_errno_err_result, emit_file_error_tag, emit_is_eintr)
+from sushi_lang.sushi_stdlib.src.io.files.results import (
+    emit_err_result, emit_none, emit_ok_result, emit_some)
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_free, declare_malloc
 from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
 
 # `fd_readln`'s buffer step, and its `pread` size on the seekable path. It bounds the
 # reallocations on both paths and the system calls on the chunked one.
 _LINE_CHUNK = 128
+
+# `Maybe<string>` is `{i32 tag, [2 x i64] data}`: four bytes of tag, four of padding and
+# a sixteen-byte fat pointer.
+_MAYBE_STRING_SIZE = 24
 
 
 def generate_ir(module: ir.Module) -> None:
@@ -70,13 +75,25 @@ def generate_fd_read(module: ir.Module) -> None:
     builder.position_at_end(alloc_fail_bb)
     emit_runtime_error(module, builder, "RE2021")
 
+    # A signal that lands before the first byte moves answers -1 with EINTR, and the
+    # only correct response is to ask again (probe P13).
     builder.position_at_end(do_read_bb)
-    got = builder.call(read_fn, [fd, buffer, max64], name="got")
-    ok = builder.icmp_signed(">=", got, ir.Constant(i64, 0), name="read_ok")
+    got_slot = builder.alloca(i64, name="got_slot")
+    attempt_bb = func.append_basic_block(name="read_attempt")
+    builder.branch(attempt_bb)
+
+    builder.position_at_end(attempt_bb)
+    attempt = builder.call(read_fn, [fd, buffer, max64], name="got")
+    builder.store(attempt, got_slot)
+    ok = builder.icmp_signed(">=", attempt, ir.Constant(i64, 0), name="read_ok")
 
     success_bb = func.append_basic_block(name="success")
+    interrupted_bb = func.append_basic_block(name="read_interrupted")
     failure_bb = func.append_basic_block(name="failure")
-    builder.cbranch(ok, success_bb, failure_bb)
+    builder.cbranch(ok, success_bb, interrupted_bb)
+
+    builder.position_at_end(interrupted_bb)
+    builder.cbranch(emit_is_eintr(builder, module), attempt_bb, failure_bb)
 
     # The tag before the free: free() overwrites errno.
     builder.position_at_end(failure_bb)
@@ -85,6 +102,7 @@ def generate_fd_read(module: ir.Module) -> None:
     builder.ret(emit_err_result(builder, result_type, tag))
 
     builder.position_at_end(success_bb)
+    got = builder.load(got_slot, name="got_bytes")
     descriptor = ir.Constant(array_ty, ir.Undefined)
     descriptor = builder.insert_value(descriptor,
                                       builder.trunc(got, i32, name="got32"), 0,
@@ -129,7 +147,18 @@ def _emit_write_all(builder: ir.IRBuilder, func: ir.Function, write_fn: ir.Funct
     # does: nothing moved, and the descriptor is not going to take the rest either.
     progressed = builder.icmp_signed(">", wrote, ir.Constant(i64, 0), name="progressed")
     advance_bb = func.append_basic_block(name="write_advance")
-    builder.cbranch(progressed, advance_bb, failure_bb)
+    interrupted_bb = func.append_basic_block(name="write_interrupted")
+    builder.cbranch(progressed, advance_bb, interrupted_bb)
+
+    # An interrupted write moved nothing, so the loop asks again from the same offset
+    # (probe P13). A zero-byte answer is not interrupted and still ends the loop.
+    builder.position_at_end(interrupted_bb)
+    was_error = builder.icmp_signed("<", wrote, ir.Constant(i64, 0), name="write_failed")
+    retry_bb = func.append_basic_block(name="write_retry_check")
+    builder.cbranch(was_error, retry_bb, failure_bb)
+
+    builder.position_at_end(retry_bb)
+    builder.cbranch(emit_is_eintr(builder, module), cond_bb, failure_bb)
 
     builder.position_at_end(advance_bb)
     builder.store(builder.add(done, wrote, name="advanced"), done_slot)
@@ -193,10 +222,12 @@ def generate_fd_write_str(module: ir.Module) -> None:
 
 
 def generate_fd_readln(module: ir.Module) -> None:
-    """Emit `Result<string, FileError> sushi_io_files_fd_readln(i32 fd)`.
+    """Emit `Result<Maybe<string>, FileError> sushi_io_files_fd_readln(i32 fd)`.
 
-    One line, the newline STRIPPED, and an empty string at end of file -- the contract
-    the builtin `readln` had, which is what lets a caller loop until the answer is empty.
+    One line, the newline STRIPPED, in a `Maybe`. **A blank line and end of file are
+    different answers**: a blank line is `Some("")` and the end is `None`. The old
+    contract answered an empty string for both, so a file with a blank line in it
+    truncated there and a caller could not tell a short file from a failed read.
 
     **Two paths, chosen by whether the descriptor can seek.** Reading one byte at a time
     is the only shape that is correct on a descriptor that CANNOT seek: a pipe, a socket
@@ -222,7 +253,8 @@ def generate_fd_readln(module: ir.Module) -> None:
     free_fn = declare_free(module)
 
     string_ty = get_string_type()
-    result_type = get_result_type(string_ty, get_unit_enum_type())
+    maybe_ty = get_maybe_type(string_ty)
+    result_type = get_result_type(maybe_ty, get_unit_enum_type())
     func = ir.Function(module, ir.FunctionType(result_type, [i32]),
                        name="sushi_io_files_fd_readln")
     fd = func.args[0]
@@ -234,6 +266,10 @@ def generate_fd_readln(module: ir.Module) -> None:
     buf_slot = builder.alloca(i8_ptr, name="buf")
     one_byte = builder.alloca(i8, name="one_byte")
     start_slot = builder.alloca(i64, name="line_start")
+    # Which end this is: a newline, or the file running out. Only the second one, with
+    # nothing read before it, is None. Both paths write it, so `finish` reads one flag.
+    at_eof_slot = builder.alloca(i8, name="at_eof")
+    builder.store(ir.Constant(i8, 0), at_eof_slot)
 
     builder.store(ir.Constant(i64, _LINE_CHUNK), cap_slot)
     builder.store(ir.Constant(i64, 0), len_slot)
@@ -266,22 +302,38 @@ def generate_fd_readln(module: ir.Module) -> None:
                     chunked_bb, byte_bb)
 
     _emit_readln_by_byte(builder, func, module, fd, read_fn, realloc_fn, one_byte,
-                         buf_slot, len_slot, cap_slot, byte_bb, finish_bb, failure_bb,
-                         alloc_fail_bb)
+                         buf_slot, len_slot, cap_slot, at_eof_slot, byte_bb, finish_bb,
+                         failure_bb, alloc_fail_bb)
     _emit_readln_chunked(builder, func, module, fd, pread_fn, lseek_fn, realloc_fn,
                          platform_files, buf_slot, len_slot, cap_slot, start_slot,
-                         chunked_bb, finish_bb, failure_bb, alloc_fail_bb)
+                         at_eof_slot, chunked_bb, finish_bb, failure_bb, alloc_fail_bb)
 
     builder.position_at_end(failure_bb)
     tag = emit_file_error_tag(builder, module)
     builder.call(free_fn, [builder.load(buf_slot)])
     builder.ret(emit_err_result(builder, result_type, tag))
 
-    # A NUL after the last byte, so the buffer is also a C string: nothing here promises
-    # that, but every consumer that hands one to libc gets it for free.
+    # End of file with nothing read is the ONE None. End of file after some bytes is a
+    # last line with no newline after it, and that is a line.
     builder.position_at_end(finish_bb)
     final_len = builder.load(len_slot, name="final_len")
     final_buf = builder.load(buf_slot, name="final_buf")
+    ended = builder.icmp_signed("!=", builder.load(at_eof_slot, name="eof_flag"),
+                                ir.Constant(i8, 0), name="ended_at_eof")
+    empty = builder.icmp_signed("==", final_len, ir.Constant(i64, 0), name="read_nothing")
+
+    none_bb = func.append_basic_block(name="line_none")
+    some_bb = func.append_basic_block(name="line_some")
+    builder.cbranch(builder.and_(ended, empty, name="past_end"), none_bb, some_bb)
+
+    builder.position_at_end(none_bb)
+    builder.call(free_fn, [final_buf])
+    builder.ret(emit_ok_result(builder, result_type,
+                               emit_none(builder, maybe_ty), _MAYBE_STRING_SIZE))
+
+    # A NUL after the last byte, so the buffer is also a C string: nothing here promises
+    # that, but every consumer that hands one to libc gets it for free.
+    builder.position_at_end(some_bb)
     builder.store(ir.Constant(i8, 0),
                   builder.gep(final_buf, [final_len], name="terminator"))
 
@@ -290,7 +342,8 @@ def generate_fd_readln(module: ir.Module) -> None:
     text = builder.insert_value(text, builder.trunc(final_len, i32, name="len32"), 1,
                                 name="str_size")
     text = builder.insert_value(text, ir.Constant(i8, 1), 2, name="str_owned")
-    builder.ret(emit_ok_result(builder, result_type, text, 16))
+    builder.ret(emit_ok_result(builder, result_type,
+                               emit_some(builder, maybe_ty, text), _MAYBE_STRING_SIZE))
 
 
 def _emit_grow(builder: ir.IRBuilder, func: ir.Function, realloc_fn: ir.Function,
@@ -333,8 +386,8 @@ def _emit_grow(builder: ir.IRBuilder, func: ir.Function, realloc_fn: ir.Function
 
 
 def _emit_readln_by_byte(builder, func, module, fd, read_fn, realloc_fn, one_byte,
-                         buf_slot, len_slot, cap_slot, entry_bb, finish_bb, failure_bb,
-                         alloc_fail_bb) -> None:
+                         buf_slot, len_slot, cap_slot, at_eof_slot, entry_bb, finish_bb,
+                         failure_bb, alloc_fail_bb) -> None:
     """One `read(2)` per byte: the only shape a descriptor that cannot seek allows."""
     i8, _i8_ptr, _i32, i64 = get_basic_types()
 
@@ -352,8 +405,13 @@ def _emit_readln_by_byte(builder, func, module, fd, read_fn, realloc_fn, one_byt
                     failure_bb, eof_bb)
 
     builder.position_at_end(eof_bb)
+    byte_eof_bb = func.append_basic_block(name="byte_at_eof")
     builder.cbranch(builder.icmp_signed("==", got, ir.Constant(i64, 0), name="eof"),
-                    finish_bb, have_bb)
+                    byte_eof_bb, have_bb)
+
+    builder.position_at_end(byte_eof_bb)
+    builder.store(ir.Constant(i8, 1), at_eof_slot)
+    builder.branch(finish_bb)
 
     builder.position_at_end(have_bb)
     char = builder.load(one_byte, name="char")
@@ -377,7 +435,8 @@ def _emit_readln_by_byte(builder, func, module, fd, read_fn, realloc_fn, one_byt
 
 def _emit_readln_chunked(builder, func, module, fd, pread_fn, lseek_fn, realloc_fn,
                          platform_files, buf_slot, len_slot, cap_slot, start_slot,
-                         entry_bb, finish_bb, failure_bb, alloc_fail_bb) -> None:
+                         at_eof_slot, entry_bb, finish_bb, failure_bb,
+                         alloc_fail_bb) -> None:
     """`pread` a chunk at a computed offset, then one `lseek` past the newline.
 
     Every position here is ABSOLUTE: the line's start is read once, each `pread` asks for
@@ -419,6 +478,7 @@ def _emit_readln_chunked(builder, func, module, fd, pread_fn, lseek_fn, realloc_
     builder.position_at_end(at_eof_bb)
     builder.call(lseek_fn, [fd, builder.add(start, builder.load(len_slot), name="eof_at"),
                             ir.Constant(i32, platform_files.SEEK_SET)])
+    builder.store(ir.Constant(i8, 1), at_eof_slot)
     builder.branch(finish_bb)
 
     # Scan only the bytes this pread delivered, from `len` to `len + got`.
