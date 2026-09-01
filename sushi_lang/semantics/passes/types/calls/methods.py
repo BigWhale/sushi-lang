@@ -483,11 +483,17 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
 
         _stamp_param_modes(call, perk_method)
 
+        # Arity and argument type read the SAME codes as the extension arm below: a perk
+        # method and an extension method are one rule -- a user-written method on a type --
+        # so one rule gets one code. CE0023 is in the INTERNAL family and documented as a
+        # codegen check, and CE2023 says "dynamic array method" about whatever it is
+        # handed; both were wrong here, and neither was visible until io/contracts made
+        # `write(string)` a perk method.
         expected = len(perk_method.params)
         got = len(call.args)
         if got != expected:
-            er.emit(validator.reporter, er.ERR.CE0023, call.loc,
-                   method=call.method, expected=expected, got=got)
+            er.emit(validator.reporter, er.ERR.CE2009, call.loc,
+                   name=f"{display_type(receiver_type)}.{call.method}", expected=expected, got=got)
             return
 
         for _i, (arg, param) in enumerate(zip(call.args, perk_method.params, strict=False)):
@@ -498,8 +504,8 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and expected_ty is not None:
                 if not types_compatible(validator, arg_type, expected_ty):
-                    er.emit(validator.reporter, er.ERR.CE2023, arg.loc if hasattr(arg, 'loc') else call.loc,
-                           method=call.method, expected=display_type(expected_ty), got=display_type(arg_type))
+                    er.emit(validator.reporter, er.ERR.CE2006, arg.loc if hasattr(arg, 'loc') else call.loc,
+                           index=_i + 1, expected=display_type(expected_ty), got=display_type(arg_type))
 
         if perk_method.ret is not None:
             call.inferred_return_type = extension_call_result_type(validator, perk_method)

@@ -1,0 +1,21 @@
+# A perk method's argument mismatch is the SAME rule as an extension method's, so it is the
+# same code: CE2006. It used to answer CE2023, whose text says "dynamic array method" about
+# a struct -- invisible until io/contracts made write(string) a perk method.
+# TEST_TYPE: compile_error
+# EXPECT_ERROR_CODE: CE2006
+
+perk Wr:
+    fn put(string data) ~ | StdError
+
+struct Sink:
+    i32 n
+
+extend Sink with Wr:
+    fn put(string data) ~ | StdError:
+        println(data)
+        return ~
+
+fn main() i32:
+    let Sink s = Sink(1)
+    s.put(42)
+    return Result.Ok(0)
