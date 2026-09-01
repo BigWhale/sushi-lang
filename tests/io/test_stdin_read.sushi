@@ -2,12 +2,12 @@
 # STDIN_INPUT: "Hello\nWorld\n"
 # EXPECT_STDOUT_EXACT: "Total input: Hello\nWorld\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Test stdin.read().realise('') - reads all input until EOF
+# Test stdin.read_all().realise('') - reads all input until EOF
 
 use <io/fs>
 
 fn main() i32:
-    let string input = stdin.read().realise('')
+    let string input = stdin.read_all().realise('')
     stdout.write("Total input: ")
     stdout.write(input)
     return Result.Ok(0)

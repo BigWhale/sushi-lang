@@ -88,8 +88,8 @@ roll 3: d6 -> 5
 ### Files
 
 The `<io/files>` module opens files with `open(path, mode)`, which returns a
-`Result@(File, FileError)`. Instead of the usual `Result`, file operations use a dedicated
-`Result@(File, FileError)`/`FileError` pair so you can match on specific failures like
+`Result@(File, IoError)`. Instead of the usual `Result`, file operations use a dedicated
+`Result@(File, IoError)`/`FileError` pair so you can match on specific failures like
 `FileError.NotFound()` or `FileError.PermissionDenied()`. Here we write a file under `/tmp`
 and read it straight back.
 
@@ -279,7 +279,7 @@ answer() = 42
 - Standard-library modules are imported with `use <name>`: `<time>` for sleeping,
   `<math>` for numeric intrinsics (with polymorphic `abs`/`min`/`max`/`sqrt`/`hypot`),
   `<random>` for seedable pseudo-randomness, and `<io/files>` for file I/O via
-  `Result@(File, FileError)`/`FileError`.
+  `Result@(File, IoError)`/`FileError`.
 - A native variadic parameter `...T name` collects trailing arguments into an owned `T[]`;
   zero arguments is valid, and it must be the last parameter.
 - FFI lets you call C from inside an `unsafe external "C" as <ns> because "<reason>"` block;

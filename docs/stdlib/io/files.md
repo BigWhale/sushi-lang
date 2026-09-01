@@ -56,7 +56,7 @@ Open a file with a specific mode.
 ```sushi
 use <io/fs>
 
-fn open(string path, FileMode mode) -> Result@(File, FileError)
+fn open(string path, FileMode mode) -> Result@(File, IoError)
 ```
 
 **Parameters:**
@@ -96,9 +96,9 @@ fn main() i32:
 use <io/files>
 use <io/fs>
 
-fn read_config() string | FileError:
+fn read_config() string | IoError:
     let File f = open("config.txt", FileMode.Read())??
-    let string content = f.read().realise('')
+    let string content = f.read_all().realise('')
     f.close()
     return Result.Ok(content)
 
@@ -114,6 +114,31 @@ fn main() i32:
 
 ## File Methods
 
+The whole surface, and where each method comes from. A method a contract provides is
+callable on a `TcpStream` too, which is what `<io/contracts>` is for.
+
+| method | signature | provider |
+|---|---|---|
+| `read` | `(i32 max) string \| IoError` -- one read, as text | `Reader` |
+| `read_bytes` | `(i32 max) u8[] \| IoError` -- one read, as bytes | `Reader` |
+| `write` | `(string data) ~ \| IoError` -- every byte, or an error | `Writer` |
+| `write_bytes` | `(u8[] data) ~ \| IoError` | `Writer` |
+| `flush` | `() ~ \| IoError` -- a successful no-op on a descriptor | `Writer` |
+| `seek` | `(i64 offset, SeekFrom origin) i64 \| IoError` -- answers the NEW position | `Seek` |
+| `read_all` | `() string \| IoError` -- the whole file, from the current position | `File` |
+| `readln` | `() string \| IoError` -- one line, newline stripped | `File` |
+| `readch` | `() string \| IoError` -- one byte, as text | `File` |
+| `writeln` | `(string data) ~ \| IoError` | `File` |
+| `tell` | `() i64 \| IoError` | `File` |
+| `is_open` | `() bool` -- false once `close()` has run | `File` |
+| `is_terminal` | `() bool` -- true only for a terminal | `File` |
+| `close` | `(poke self) ~ \| IoError` | `File` |
+| `lines` | `() Iterator@(string)` -- still a compiler builtin | `File` |
+
+A `File` closes itself when its owner leaves scope, so `close()` is only needed where the
+failure has to be SEEN. Every method is a plain borrow except `close()`: a file's position
+lives in the kernel, not in the struct, so a read and a write need no mutable receiver.
+
 ### read
 
 Read entire file contents as a string.
@@ -121,7 +146,7 @@ Read entire file contents as a string.
 ```sushi
 use <io/fs>
 
-fn File.read().realise('') -> string
+fn File.read_all().realise('') -> string
 ```
 
 **Returns:**
@@ -136,7 +161,7 @@ use <io/fs>
 fn main() i32:
     match open("data.txt", FileMode.Read()):
         Result.Ok(poke f) ->
-            let string content = f.read().realise('')
+            let string content = f.read_all().realise('')
             f.close()
             println("Content: {content}")
         Result.Err(_) ->
@@ -152,9 +177,9 @@ use <io/files>
 use <io/fs>
 use <collections/strings>
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     let File f = open("numbers.txt", FileMode.Read())??
-    let string content = f.read().realise('')
+    let string content = f.read_all().realise('')
     f.close()
 
     let string[] lines = content.split("\n")
@@ -185,7 +210,7 @@ fn File.readln().realise('') -> string
 use <io/files>
 use <io/fs>
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     let File f = open("data.txt", FileMode.Read())??
 
     let string first_line = f.readln().realise('')
@@ -205,7 +230,7 @@ fn main() i32 | FileError:
 use <io/files>
 use <io/fs>
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     let File f = open("log.txt", FileMode.Read())??
     let i32 line_count = 0
 
@@ -245,7 +270,7 @@ fn File.write(string data) -> ~
 use <io/files>
 use <io/fs>
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     let File f = open("output.txt", FileMode.Write())??
 
     f.write("Hello, World!")
@@ -263,7 +288,7 @@ fn main() i32 | FileError:
 use <io/files>
 use <io/fs>
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     let File f = open("report.txt", FileMode.Write())??
 
     f.write("Report\n")
@@ -284,7 +309,7 @@ fn main() i32 | FileError:
 use <io/files>
 use <io/fs>
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     let File f = open("log.txt", FileMode.Append())??
 
     f.write("New log entry\n")
@@ -310,7 +335,7 @@ fn File.flush() -> ~
 use <io/files>
 use <io/fs>
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     let File f = open("progress.log", FileMode.Write())??
     f.write("step 1 done")
     f.flush()  # The bytes reach the file before the next step runs
@@ -337,9 +362,9 @@ fn File.close() -> ~
 use <io/files>
 use <io/fs>
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     let File f = open("data.txt", FileMode.Read())??
-    let string content = f.read().realise('')
+    let string content = f.read_all().realise('')
     f.close()  # Always close files
 
     println(content)
@@ -351,21 +376,62 @@ fn main() i32 | FileError:
 
 ## Error Handling
 
-### Result@(File, FileError) Enum
+### Which channel a call answers
 
-Result type for file operations:
+Two enums, and the line between them is what the call DOES rather than which module it is
+in.
+
+| the call | channel |
+|---|---|
+| `open()`, `close()`, and every read, write and seek on a `File` | `IoError` |
+| the path utilities -- `exists`, `remove`, `rename`, `stat`, `mkdir_all`, `read_dir` | `FileError` |
+| the `fd_*` descriptor primitives | `FileError` |
+
+A read, a write and a seek answer `IoError` because those are the `Reader` / `Writer` /
+`Seek` contract methods (`<io/contracts>`), and a perk contract carries one signature. A
+`TcpStream`'s read answers the same `IoError`, which is what lets one generic serve both.
+
+`open()` and `close()` answer `IoError` too, so a function that opens a file and then reads
+it carries ONE channel from end to end and needs no conversion in the middle.
+
+### IoError
+
+```sushi
+enum IoError:
+    NotFound()          # ENOENT - the path does not exist
+    PermissionDenied()  # EACCES, EPERM - insufficient permissions
+    AlreadyExists()     # EEXIST - the path is already there
+    IsDirectory()       # EISDIR - the path is a directory
+    ConnectionReset()   # ECONNRESET, ECONNABORTED
+    TimedOut()          # ETIMEDOUT
+    Closed()            # EPIPE, ENOTCONN, EBADF
+    Interrupted()       # EINTR
+    WouldBlock()        # EAGAIN, EWOULDBLOCK
+    DiskFull()          # ENOSPC - no space left on device
+    TooManyOpen()       # EMFILE, ENFILE - too many open files
+    InvalidInput()      # EINVAL, ENAMETOOLONG
+    Os(i32 errno)       # the raw errno, for a failure with no variant of its own
+    Other()             # anything else
+```
+
+`Os(i32)` is how detail survives without a global `last_errno()`, which would not be
+thread-safe. Match it when you need the number:
 
 ```sushi
 use <io/fs>
 
-enum Result@(File, FileError):
-    Ok(file)
-    Err(FileError)
+fn main() i32:
+    match open("config.txt", FileMode.Read()):
+        Result.Ok(f) -> println(f.read_all().realise(''))
+        Result.Err(IoError.NotFound) -> println("no such file")
+        Result.Err(IoError.Os(code)) -> println("errno {code}")
+        Result.Err(_) -> println("could not open it")
+    return Result.Ok(0)
 ```
 
-### FileError Enum
+### FileError
 
-Error types for file operations:
+The path utilities and the descriptor primitives keep their own enum:
 
 ```sushi
 enum FileError:
@@ -380,6 +446,9 @@ enum FileError:
     Other()             # any other error
 ```
 
+`<io/fs>` converts one into the other at its own boundary, with
+`extend FileError to_io() IoError`, so a caller never writes the conversion.
+
 ### Error Patterns
 
 #### Pattern matching all errors
@@ -391,12 +460,12 @@ use <io/fs>
 fn main() i32:
     match open("config.txt", FileMode.Read()):
         Result.Ok(poke f) ->
-            let string data = f.read().realise('')
+            let string data = f.read_all().realise('')
             f.close()
             println(data)
-        Result.Err(FileError.NotFound()) ->
+        Result.Err(IoError.NotFound()) ->
             println("File not found")
-        Result.Err(FileError.PermissionDenied()) ->
+        Result.Err(IoError.PermissionDenied()) ->
             println("Permission denied")
         Result.Err(_) ->
             println("Other error")
@@ -415,7 +484,7 @@ fn main() i32:
         Result.Ok(poke f) ->
             match open("output.txt", FileMode.Write()):
                 Result.Ok(poke out) ->
-                    let string data = f.read().realise('')
+                    let string data = f.read_all().realise('')
                     out.write(data)
                     f.close()
                     out.close()
@@ -423,7 +492,7 @@ fn main() i32:
                 Result.Err(_) ->
                     println("Failed to open output file")
                     f.close()
-        Result.Err(FileError.NotFound()) ->
+        Result.Err(IoError.NotFound()) ->
             println("Input file not found")
         Result.Err(_) ->
             println("Failed to open input file")
@@ -437,9 +506,9 @@ fn main() i32:
 use <io/files>
 use <io/fs>
 
-fn copy_file(string src, string dst) ~ | FileError:
+fn copy_file(string src, string dst) ~ | IoError:
     let File input = open(src, FileMode.Read())??
-    let string content = input.read().realise('')
+    let string content = input.read_all().realise('')
     input.close()
 
     let File output = open(dst, FileMode.Write())??
@@ -881,9 +950,9 @@ Close one descriptor.
 use <io/files>
 use <io/fs>
 
-fn read_file(string path) string | FileError:
+fn read_file(string path) string | IoError:
     let File f = open(path, FileMode.Read())??
-    let string content = f.read().realise('')
+    let string content = f.read_all().realise('')
     f.close()
     return Result.Ok(content)
 
@@ -900,13 +969,13 @@ fn main() i32:
 use <io/files>
 use <io/fs>
 
-fn write_file(string path, string data) ~ | FileError:
+fn write_file(string path, string data) ~ | IoError:
     let File f = open(path, FileMode.Write())??
     f.write(data)
     f.close()
     return Result.Ok(~)
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     write_file("output.txt", "Hello, World!")??
     println("File written")
 
@@ -920,9 +989,9 @@ use <io/files>
 use <io/fs>
 use <collections/strings>
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     let File f = open("data.csv", FileMode.Read())??
-    let string content = f.read().realise('')
+    let string content = f.read_all().realise('')
     f.close()
 
     let string[] lines = content.split("\n")
@@ -945,13 +1014,13 @@ fn main() i32 | FileError:
 use <io/files>
 use <io/fs>
 
-fn log_message(string message) ~ | FileError:
+fn log_message(string message) ~ | IoError:
     let File f = open("app.log", FileMode.Append())??
     f.write("{message}\n")
     f.close()
     return Result.Ok(~)
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     log_message("Application started")??
     log_message("Processing data")??
     log_message("Application finished")??
@@ -993,7 +1062,7 @@ fn main() i32:
 use <io/files>
 use <io/fs>
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     # Unix-style paths work on all platforms
     let File f = open("data/input.txt", FileMode.Read())??
     f.close()
@@ -1027,10 +1096,10 @@ File operations are buffered by the operating system. For large files:
 use <io/files>
 use <io/fs>
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     let File f = open("large.txt", FileMode.Read())??
 
-    # Reading line-by-line is more memory-efficient than .read().realise('')
+    # Reading line-by-line is more memory-efficient than .read_all().realise('')
     let bool done = false
     while (not done):
         let string line = f.readln().realise('')
@@ -1048,7 +1117,7 @@ fn main() i32 | FileError:
 
 ### Memory Usage
 
-- `.read().realise('')` loads entire file into memory
+- `.read_all().realise('')` loads entire file into memory
 - `.readln().realise('')` reads one line at a time (more memory-efficient)
 
 Choose based on file size and use case.
@@ -1075,7 +1144,7 @@ fn is_safe_path(string path) bool:
 
     return Result.Ok(true)
 
-fn main() i32 | FileError:
+fn main() i32 | IoError:
     let string user_path = "data.txt"
 
     if (not is_safe_path(user_path).realise(false)):
@@ -1083,7 +1152,7 @@ fn main() i32 | FileError:
         return Result.Ok(1)
 
     let File f = open(user_path, FileMode.Read())??
-    let string content = f.read().realise('')
+    let string content = f.read_all().realise('')
     f.close()
 
     println(content)

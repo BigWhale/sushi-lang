@@ -21,7 +21,7 @@ function that takes a `File` takes either a file or the console:
 ```sushi
 use <io/fs>
 
-fn banner(File out) ~ | FileError:
+fn banner(File out) ~ | IoError:
     out.writeln("Mostly Harmless")??
     return Result.Ok(~)
 

@@ -9,7 +9,7 @@ use <io/files>
 
 fn main() i32:
     # Try to open a file that doesn't exist
-    let Result@(File, FileError) result = open("nonexistent_file_12345.txt", FileMode.Read())
+    let Result@(File, IoError) result = open("nonexistent_file_12345.txt", FileMode.Read())
 
     match result:
         Result.Ok(poke f) ->
@@ -17,9 +17,9 @@ fn main() i32:
             f.close()
             return Result.Err(StdError.Error)
         Result.Err(err) ->
-            # We have the FileError enum value, now match on it
+            # We have the IoError enum value, now match on it
             match err:
-                FileError.NotFound ->
+                IoError.NotFound ->
                     println("Error: File not found - nonexistent_file_12345.txt")
                     println("Handled file error successfully")
                     return Result.Ok(0)

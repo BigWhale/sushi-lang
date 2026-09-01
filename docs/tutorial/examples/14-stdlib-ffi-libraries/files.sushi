@@ -16,7 +16,7 @@ fn main() i32:
 
     match open("/tmp/guide_entry.txt", FileMode.Read()):
         Result.Ok(poke f) ->
-            let string content = f.read().realise('')
+            let string content = f.read_all().realise('')
             f.close()
             println("Entry reads: {content}")
         Result.Err(FileError.NotFound()) ->

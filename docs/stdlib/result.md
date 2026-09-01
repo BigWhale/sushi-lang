@@ -304,7 +304,7 @@ fn validate_username(string name) ~ | ValidationError:
 ```sushi
 fn read_config() string | FileError:
     let File f = open("config.txt", FileMode.Read())??
-    let string content = f.read()??
+    let string content = f.read_all()??
     return Result.Ok(content)
 ```
 

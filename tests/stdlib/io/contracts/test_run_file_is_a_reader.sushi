@@ -1,0 +1,32 @@
+# A File satisfies Reader, so a generic that asks for the contract takes one. This is the
+# whole point of the phase: the caller names a capability, not a type.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "read through the contract: Mostly Harmless\n"
+use <io/files>
+use <io/fs>
+use <io/contracts>
+
+fn first_text@(R: Reader)(R src) string | IoError:
+    return Result.Ok(src.read(64)??)
+
+fn main() i32:
+    match open("contract_reader_probe.txt", FileMode.Write()):
+        Result.Ok(w) -> w.write("Mostly Harmless")
+        Result.Err(_) ->
+            println("write open failed")
+            return Result.Ok(1)
+
+    match open("contract_reader_probe.txt", FileMode.Read()):
+        Result.Ok(r) ->
+            match first_text(r):
+                Result.Ok(text) -> println("read through the contract: {text}")
+                Result.Err(_) -> println("read failed")
+        Result.Err(_) ->
+            println("read open failed")
+            return Result.Ok(1)
+
+    remove("contract_reader_probe.txt").realise(0)
+    return Result.Ok(0)

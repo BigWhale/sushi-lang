@@ -18,7 +18,7 @@ fn main() i32:
 
     match open('/tmp/sushi_leak_open.txt', FileMode.Read()):
         Result.Ok(poke f) ->
-            println("read={f.read().realise('')}")
+            println("read={f.read_all().realise('')}")
             f.close()
         Result.Err(_) ->
             return Result.Ok(1)

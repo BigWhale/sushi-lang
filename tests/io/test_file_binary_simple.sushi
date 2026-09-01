@@ -10,7 +10,7 @@ use <io/fs>
 
 fn main() i32:
     # Write binary data to file
-    let Result@(File, FileError) write_result = open("test_binary_simple.bin", FileMode.WriteB())
+    let Result@(File, IoError) write_result = open("test_binary_simple.bin", FileMode.WriteB())
     match write_result:
         Result.Ok(poke out) ->
             # Create byte array with "Hello" (72, 101, 108, 108, 111)
@@ -24,7 +24,7 @@ fn main() i32:
             return Result.Err(StdError.Error)
 
     # Read binary data from file
-    let Result@(File, FileError) read_result = open("test_binary_simple.bin", FileMode.ReadB())
+    let Result@(File, IoError) read_result = open("test_binary_simple.bin", FileMode.ReadB())
     match read_result:
         Result.Ok(poke f) ->
             let u8[] bytes = new()

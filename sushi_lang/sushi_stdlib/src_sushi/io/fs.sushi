@@ -12,6 +12,7 @@ files only and does not follow a directory symlink, so a linked tree stays
 unvisited and a loop cannot form.
 :##
 
+use <io/contracts>
 use <io/files>
 use <io/path>
 
@@ -250,48 +251,158 @@ extend SeekFrom whence() i32:
         SeekFrom.End -> return 2
 
 ##:
+Turns a file-system error into the one channel the io contracts answer.
+
+Every FileError variant with no twin in IoError belongs to an open rather than to a read or
+a write, so nothing a contract method can answer is lost here. IOError has already thrown
+its errno away, so it collapses to Other rather than pretending to carry a number.
+
+- Returns: The IoError that says the same thing.
+:##
+extend FileError to_io() IoError:
+    match self:
+        FileError.NotFound -> return IoError.NotFound
+        FileError.PermissionDenied -> return IoError.PermissionDenied
+        FileError.AlreadyExists -> return IoError.AlreadyExists
+        FileError.IsDirectory -> return IoError.IsDirectory
+        FileError.DiskFull -> return IoError.DiskFull
+        FileError.TooManyOpen -> return IoError.TooManyOpen
+        FileError.InvalidPath -> return IoError.InvalidInput
+        FileError.IOError -> return IoError.Other
+        FileError.Other -> return IoError.Other
+
+##:
 Opens a file and takes ownership of its descriptor.
 
-The handle closes itself when its owner leaves scope, so an explicit close()
-is only needed where the failure has to be seen.
+The handle closes itself when its owner leaves scope, so an explicit close() is only needed
+where the failure has to be seen.
+
+The answer is on IoError rather than FileError, so a function that opens a file and then
+reads it carries ONE channel from end to end.
 
 - Parameter path: The path to open.
 - Parameter mode: What the file is opened for.
 - Returns: The open file.
-- Errors: FileError, when the path could not be opened.
+- Errors: IoError, when the path could not be opened.
 :##
-public fn open(string path, FileMode mode) File | FileError:
-    let i32 fd = fd_open(path, mode.intent(), 420)??
-    return Result.Ok(File(fd: fd, owned: true))
+public fn open(string path, FileMode mode) File | IoError:
+    match fd_open(path, mode.intent(), 420):
+        Result.Ok(fd) -> return Result.Ok(File(fd: fd, owned: true))
+        Result.Err(e) -> return Result.Err(e.to_io())
 
 ##:
-Reads what one read gives, up to a maximum.
+Reads bytes from the file, as one read and as one write.
 
-An EMPTY answer means end of file, which is what lets a caller loop until
-the answer is empty. A short answer is not an end: a pipe hands over
-whatever has arrived.
-
-- Parameter max: The most bytes to take in this one read.
-- Returns: The bytes that arrived, empty at end of file.
-- Errors: FileError, when the read failed.
+A File satisfies the contract for both directions, so a generic that asks for Reader takes
+a file exactly as it takes a socket.
 :##
-extend File read_bytes(i32 max) u8[] | FileError:
-    return fd_read(self.fd, max)??
+extend File with Reader:
+    ##:
+    Reads what one read gives, as text.
+
+    The bound counts BYTES, so a multi-byte character can be split across two calls. That
+    is today's answer and not the last one.
+
+    - Parameter max: The most bytes to take in this one read.
+    - Returns: The text that arrived, empty at end of file.
+    - Errors: IoError, when the read failed.
+    :##
+    fn read(i32 max) string | IoError:
+        let u8[] chunk = self.read_bytes(max)??
+        return chunk.to_string()
+
+    ##:
+    Reads what one read gives, as bytes.
+
+    An EMPTY answer means end of file, which is what lets a caller loop until the answer is
+    empty. A short answer is not an end: a pipe hands over whatever has arrived.
+
+    - Parameter max: The most bytes to take in this one read.
+    - Returns: The bytes that arrived, empty at end of file.
+    - Errors: IoError, when the read failed.
+    :##
+    fn read_bytes(i32 max) u8[] | IoError:
+        match fd_read(self.fd, max):
+            Result.Ok(nom chunk) -> return chunk
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+Writes to the file, and flushes what a descriptor has no need to flush.
+:##
+extend File with Writer:
+    ##:
+    Writes text, and does not stop until every byte has gone.
+
+    The string's own bytes go to the kernel with no to_bytes() copy in front of them.
+
+    - Parameter data: The text to write.
+    - Returns: Nothing.
+    - Errors: IoError, when the write failed.
+    :##
+    fn write(string data) ~ | IoError:
+        match fd_write_str(self.fd, data):
+            Result.Ok(_) -> return ~
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+    ##:
+    Writes bytes, and does not stop until every one has gone.
+
+    - Parameter data: The bytes to write. The buffer stays the caller's.
+    - Returns: Nothing.
+    - Errors: IoError, when the write failed.
+    :##
+    fn write_bytes(u8[] data) ~ | IoError:
+        match fd_write(self.fd, data):
+            Result.Ok(_) -> return ~
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+    ##:
+    Does nothing, successfully.
+
+    A descriptor is not buffered: a write has already reached the kernel by the time write()
+    returns, so there is nothing here to flush. The call is kept because a caller that moves
+    to the buffered writer should not have to add it back, and because Rust keeps it for the
+    same reason. Getting bytes onto the DISK is fsync(), a much stronger promise, and not
+    what flush() ever meant.
+
+    - Returns: Nothing.
+    - Errors: IoError, never in practice.
+    :##
+    fn flush() ~ | IoError:
+        return ~
+
+##:
+Moves the file position. A socket does not implement this perk, because a stream has no
+position to move.
+:##
+extend File with Seek:
+    ##:
+    Moves the position, and answers where it landed.
+
+    - Parameter offset: How far to move, which may be negative.
+    - Parameter origin: Which end to count from.
+    - Returns: The new position, in bytes from the start.
+    - Errors: IoError, when the descriptor cannot seek -- a pipe cannot.
+    :##
+    fn seek(i64 offset, SeekFrom origin) i64 | IoError:
+        match fd_seek(self.fd, offset, origin.whence()):
+            Result.Ok(at) -> return at
+            Result.Err(e) -> return Result.Err(e.to_io())
 
 ##:
 Reads the rest of the file, from the current position, as text.
 
-The whole answer is held in memory at once. A large file wants read_bytes()
-in a loop, or the buffered reader.
+The whole answer is held in memory at once. A large file wants read() in a loop, or the
+buffered reader.
 
 - Returns: Everything from the current position to the end.
-- Errors: FileError, when a read failed.
+- Errors: IoError, when a read failed.
 :##
-extend File read() string | FileError:
+extend File read_all() string | IoError:
     let u8[] all = from([])
     let bool done = false
     while (not done):
-        let u8[] chunk = fd_read(self.fd, 65536)??
+        let u8[] chunk = self.read_bytes(65536)??
         if (chunk.len() == 0):
             done := true
         else:
@@ -301,83 +412,51 @@ extend File read() string | FileError:
 ##:
 Reads one line, without its newline.
 
-An empty answer means end of file, so a caller loops until the answer is
-empty. A line is read a byte at a time on a descriptor that cannot seek --
-a pipe cannot give back an over-read -- and in chunks on one that can.
+An empty answer means end of file, so a caller loops until the answer is empty. A line is
+read a byte at a time on a descriptor that cannot seek -- a pipe cannot give back an
+over-read -- and in chunks on one that can.
 
 - Returns: The line, or an empty string at end of file.
-- Errors: FileError, when the read failed.
+- Errors: IoError, when the read failed.
 :##
-extend File readln() string | FileError:
-    return fd_readln(self.fd)??
+extend File readln() string | IoError:
+    match fd_readln(self.fd):
+        Result.Ok(nom line) -> return line
+        Result.Err(e) -> return Result.Err(e.to_io())
 
 ##:
 Reads one byte, as text.
 
 - Returns: One character, or an empty string at end of file.
-- Errors: FileError, when the read failed.
+- Errors: IoError, when the read failed.
 :##
-extend File readch() string | FileError:
-    let u8[] one = fd_read(self.fd, 1)??
+extend File readch() string | IoError:
+    let u8[] one = self.read_bytes(1)??
     return one.to_string()
-
-##:
-Writes text, and does not stop until every byte has gone.
-
-- Parameter data: The text to write.
-- Returns: Nothing.
-- Errors: FileError, when the write failed.
-:##
-extend File write(string data) ~ | FileError:
-    fd_write_str(self.fd, data)??
-    return ~
 
 ##:
 Writes text and a newline.
 
-Two writes rather than one: joining them would allocate a copy of the line
-on every call, and a file descriptor takes the second write for nothing.
+Two writes rather than one: joining them would allocate a copy of the line on every call,
+and a file descriptor takes the second write for nothing.
 
 - Parameter data: The text to write.
 - Returns: Nothing.
-- Errors: FileError, when a write failed.
+- Errors: IoError, when a write failed.
 :##
-extend File writeln(string data) ~ | FileError:
-    fd_write_str(self.fd, data)??
-    fd_write_str(self.fd, "\n")??
-    return ~
-
-##:
-Writes bytes, and does not stop until every one has gone.
-
-- Parameter data: The bytes to write. The buffer stays the caller's.
-- Returns: Nothing.
-- Errors: FileError, when the write failed.
-:##
-extend File write_bytes(u8[] data) ~ | FileError:
-    fd_write(self.fd, data)??
-    return ~
-
-##:
-Moves the file position.
-
-- Parameter offset: How far to move, which may be negative.
-- Parameter origin: Which end to count from.
-- Returns: Nothing. Call tell() for the new position.
-- Errors: FileError, when the descriptor cannot seek -- a pipe cannot.
-:##
-extend File seek(i64 offset, SeekFrom origin) ~ | FileError:
-    fd_seek(self.fd, offset, origin.whence())??
+extend File writeln(string data) ~ | IoError:
+    self.write(data)??
+    self.write("\n")??
     return ~
 
 ##:
 The current file position, in bytes from the start.
 
 - Returns: The position.
-- Errors: FileError, when the descriptor cannot seek.
+- Errors: IoError, when the descriptor cannot seek.
 :##
-extend File tell() i64 | FileError:
-    return fd_seek(self.fd, 0 as i64, 1)??
+extend File tell() i64 | IoError:
+    return self.seek(0 as i64, SeekFrom.Current)??
 
 ##:
 Whether this handle still holds a descriptor.
@@ -390,8 +469,8 @@ extend File is_open() bool:
 ##:
 Whether the descriptor is a terminal.
 
-Answers false for a file, and for a pipe or a redirect -- which is what a
-program asks before deciding to print colour.
+Answers false for a file, and for a pipe or a redirect -- which is what a program asks
+before deciding to print colour.
 
 - Returns: True only for a terminal.
 :##
@@ -399,35 +478,21 @@ extend File is_terminal() bool:
     return fd_isatty(self.fd)
 
 ##:
-Does nothing, successfully.
-
-A descriptor is not buffered: a write has already reached the kernel by the
-time write() returns, so there is nothing here to flush. It is kept because
-a caller that moves to the buffered writer should not have to add the call
-back, and because Rust keeps it for the same reason. Getting bytes onto the
-DISK is fsync(), a much stronger promise, and not what flush() ever meant.
-
-- Returns: Nothing.
-- Errors: FileError, never in practice.
-:##
-extend File flush() ~ | FileError:
-    return ~
-
-##:
 Closes the file and writes -1 into the binding.
 
-Only for the caller who has to SEE that the close failed -- the destructor
-closes an owned handle anyway, and cannot answer a Result. The binding is
-marked so that closing it again is a success, and so that the drop which
-follows is a no-op: the descriptor is released exactly once.
+Only for the caller who has to SEE that the close failed -- the destructor closes an owned
+handle anyway, and cannot answer a Result. The binding is marked so that closing it again
+is a success, and so that the drop which follows is a no-op: the descriptor is released
+exactly once.
 
 - Returns: Nothing. The binding reads -1 afterwards.
-- Errors: FileError, when the descriptor could not be closed.
+- Errors: IoError, when the descriptor could not be closed.
 :##
-extend File close(poke self) ~ | FileError:
+extend File close(poke self) ~ | IoError:
     if (self.fd < 0):
         return ~
     let i32 fd = self.fd
     self.fd := -1
-    fd_close(fd)??
-    return ~
+    match fd_close(fd):
+        Result.Ok(_) -> return ~
+        Result.Err(e) -> return Result.Err(e.to_io())

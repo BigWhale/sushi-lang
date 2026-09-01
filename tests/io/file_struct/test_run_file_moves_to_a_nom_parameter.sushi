@@ -8,7 +8,7 @@
 # EXPECT_STDOUT_EXACT: "callee wrote\ndone\n"
 use <io/fs>
 
-fn eat(nom File f) ~ | FileError:
+fn eat(nom File f) ~ | IoError:
     f.writeln("Mostly Harmless")??
     println("callee wrote")
     return Result.Ok(~)

@@ -1,21 +1,21 @@
 # Example 18: File I/O
 #
 # This example demonstrates file operations in Sushi, including reading from and
-# writing to files. File operations in Sushi return Result@(File, FileError), which must
+# writing to files. File operations in Sushi return Result@(File, IoError), which must
 # be handled using pattern matching to deal with potential errors.
 #
 # Key concepts covered:
 # - Using the io/files stdlib module
 # - Opening files with FileMode.Write() and FileMode.Read()
-# - Pattern matching on Result@(File, FileError) for error handling
+# - Pattern matching on Result@(File, IoError) for error handling
 # - Writing content to files with file.write()
-# - Reading content from files with file.read().realise('')
+# - Reading content from files with file.read_all().realise('')
 # - Proper file cleanup with file.close()
 # - Handling specific FileError variants (NotFound, PermissionDenied)
 #
 # File operations workflow:
 # 1. Open file with appropriate mode (Read/Write/Append)
-# 2. Match on Result@(File, FileError) to check for errors
+# 2. Match on Result@(File, IoError) to check for errors
 # 3. Perform file operations (read/write)
 # 4. Always close the file when done
 #
@@ -48,7 +48,7 @@ fn main() i32:
 
     match open("guide_entry.txt", FileMode.Read()):
         Result.Ok(poke f) ->
-            let string content = f.read().realise('')
+            let string content = f.read_all().realise('')
             f.close()
             println("Content: {content}")
         Result.Err(FileError.NotFound()) ->

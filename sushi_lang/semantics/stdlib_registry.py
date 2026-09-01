@@ -20,6 +20,7 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "collections/iter": _SRC_SUSHI_ROOT / "collections" / "iter.sushi",
     "compression/zlib": _SRC_SUSHI_ROOT / "compression" / "zlib.sushi",
     "encoding/msgpack": _SRC_SUSHI_ROOT / "encoding" / "msgpack.sushi",
+    "io/contracts": _SRC_SUSHI_ROOT / "io" / "contracts.sushi",
     "io/fs": _SRC_SUSHI_ROOT / "io" / "fs.sushi",
     "io/path": _SRC_SUSHI_ROOT / "io" / "path.sushi",
     "net/dns": _SRC_SUSHI_ROOT / "net" / "dns.sushi",

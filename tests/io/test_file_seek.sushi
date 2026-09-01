@@ -11,7 +11,7 @@ use <io/fs>
 
 fn main() i32:
     # Write test file
-    let Result@(File, FileError) write_result = open("test_seek_output.txt", FileMode.Write())
+    let Result@(File, IoError) write_result = open("test_seek_output.txt", FileMode.Write())
     match write_result:
         Result.Ok(poke out) ->
             out.writeln("First line")
@@ -26,11 +26,12 @@ fn main() i32:
             return Result.Err(StdError.Error)
 
     # Read file with seeking
-    let Result@(File, FileError) read_result = open("test_seek_output.txt", FileMode.Read())
+    let Result@(File, IoError) read_result = open("test_seek_output.txt", FileMode.Read())
     match read_result:
         Result.Ok(poke f) ->
-            # Seek to start
-            f.seek(0 as i64, SeekFrom.Start())
+            # Seek to start. seek() answers the NEW position now (ruling R19), so the
+            # answer has to go somewhere -- discarding a value Result is CW2001.
+            f.seek(0 as i64, SeekFrom.Start()).realise(-1 as i64)
             let string line = f.readln().realise('')
             println("After seek to start: {line}")
             f.close()

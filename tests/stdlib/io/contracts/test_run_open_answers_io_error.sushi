@@ -1,0 +1,25 @@
+# Ruling R20: the data path is IoError, and open() and close() moved onto it. A missing path
+# answers IoError.NotFound, and the two variants R20 added are matchable.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "not found\nis a directory\n"
+use <io/fs>
+
+fn main() i32:
+    match open("contract_no_such_probe.txt", FileMode.Read()):
+        Result.Ok(_) -> println("unexpectedly opened")
+        Result.Err(e) ->
+            match e:
+                IoError.NotFound -> println("not found")
+                _ -> println("wrong variant")
+
+    match open(".", FileMode.Write()):
+        Result.Ok(_) -> println("unexpectedly opened a directory")
+        Result.Err(e) ->
+            match e:
+                IoError.IsDirectory -> println("is a directory")
+                _ -> println("wrong variant")
+
+    return Result.Ok(0)

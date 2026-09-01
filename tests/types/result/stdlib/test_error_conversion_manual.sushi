@@ -12,16 +12,16 @@ fn app_logic() i32 | IoError:
         Result.Ok(_) ->
             return Result.Ok(42)
         Result.Err(FileError.NotFound) ->
-            return Result.Err(IoError.ReadError)
+            return Result.Err(IoError.NotFound)
         Result.Err(_) ->
-            return Result.Err(IoError.ReadError)
+            return Result.Err(IoError.NotFound)
 
 fn main() i32:
     match app_logic():
         Result.Ok(_) ->
             println("FAIL: Should have gotten error")
             return Result.Ok(1)
-        Result.Err(IoError.ReadError) ->
+        Result.Err(IoError.NotFound) ->
             println("PASS: Manual error conversion works")
             return Result.Ok(0)
         Result.Err(_) ->

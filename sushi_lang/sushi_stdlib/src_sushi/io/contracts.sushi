@@ -1,0 +1,107 @@
+##:
+io/contracts -- Reader, Writer and Seek: what a handle can do, named apart from what a
+handle IS.
+
+The module ships as bundled .sushi source and is merged as a compilation unit when
+imported (`use <io/contracts>`). It declares three perks and nothing else: no struct, no
+function, no constant. A consumer writes `@(R: Reader)` and takes a File, a TcpStream or
+anything later that satisfies the contract.
+
+Every contract method answers IoError, and it has to: a perk contract carries ONE
+signature, and there is no Self type and no associated type, so a method cannot answer
+FileError on a File and NetError on a TcpStream. That is why the concrete constructors keep
+the detailed enum -- open() and tcp_connect() -- while the data path is one channel a
+generic can propagate with ??.
+
+Limitations: a perk has no default implementations, so a convenience above these methods is
+a free generic function rather than a provided method. A perk cannot carry a type
+parameter, so there is no generic Reader@(T).
+:##
+
+##:
+A handle bytes can be read from.
+
+read() answers text and read_bytes() answers bytes. They take the same bound and differ
+only in what they hand back. A string carries a size and no capacity, so a text read has
+nowhere to write into and must allocate -- which is why read() returns rather than filling
+a buffer the caller owns.
+
+The bound counts BYTES. It will count characters once the string layer can index them; the
+two are the same number until then.
+
+An EMPTY answer means end of input, which is what lets a caller loop until the answer is
+empty. A short answer is not an end: a pipe hands over whatever has arrived.
+:##
+public perk Reader:
+    ##:
+    Reads what one read gives, as text.
+
+    - Parameter max: The most bytes to take in this one read.
+    - Returns: The text that arrived, empty at end of input.
+    - Errors: IoError, when the read failed.
+    :##
+    fn read(i32 max) string | IoError
+
+    ##:
+    Reads what one read gives, as bytes.
+
+    - Parameter max: The most bytes to take in this one read.
+    - Returns: The bytes that arrived, empty at end of input.
+    - Errors: IoError, when the read failed.
+    :##
+    fn read_bytes(i32 max) u8[] | IoError
+
+##:
+A handle bytes can be written to.
+
+Both writes answer nothing rather than a count, and both write EVERYTHING: the descriptor
+primitives loop past a short write, so there is no partial answer to report. A caller that
+needs to know how much one attempt took wants the concrete method on the handle -- a
+socket's partial write is information, and a file's is not.
+:##
+public perk Writer:
+    ##:
+    Writes text, and does not stop until every byte has gone.
+
+    - Parameter data: The text to write.
+    - Returns: Nothing.
+    - Errors: IoError, when the write failed.
+    :##
+    fn write(string data) ~ | IoError
+
+    ##:
+    Writes bytes, and does not stop until every one has gone.
+
+    - Parameter data: The bytes to write. The buffer stays the caller's.
+    - Returns: Nothing.
+    - Errors: IoError, when the write failed.
+    :##
+    fn write_bytes(u8[] data) ~ | IoError
+
+    ##:
+    Makes sure what was written has left this layer.
+
+    A descriptor is not buffered, so a handle's flush is a successful no-op. The buffered
+    writer is where the call earns its name.
+
+    - Returns: Nothing.
+    - Errors: IoError, when the flush failed.
+    :##
+    fn flush() ~ | IoError
+
+##:
+A handle whose read and write position can be moved.
+
+A file satisfies this and a socket does not: a stream has no position to move, and asking
+for the perk is how a caller says it needs one.
+:##
+public perk Seek:
+    ##:
+    Moves the position, and answers where it landed.
+
+    - Parameter offset: How far to move, which may be negative.
+    - Parameter origin: Which end to count from.
+    - Returns: The new position, in bytes from the start.
+    - Errors: IoError, when the handle cannot seek -- a pipe cannot.
+    :##
+    fn seek(i64 offset, SeekFrom origin) i64 | IoError

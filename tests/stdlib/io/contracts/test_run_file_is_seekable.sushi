@@ -1,0 +1,31 @@
+# A File satisfies Seek, and seek() answers the NEW position rather than nothing. A socket
+# does not implement the perk at all, which is the layering the contract exists to state.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "moved to 7\nHarmless\n"
+use <io/files>
+use <io/fs>
+use <io/contracts>
+
+fn skip@(S: Seek)(S h, i64 count) i64 | IoError:
+    return Result.Ok(h.seek(count, SeekFrom.Start)??)
+
+fn main() i32:
+    match open("contract_seek_probe.txt", FileMode.Write()):
+        Result.Ok(w) -> w.write("Mostly Harmless")
+        Result.Err(_) ->
+            println("open failed")
+            return Result.Ok(1)
+
+    match open("contract_seek_probe.txt", FileMode.Read()):
+        Result.Ok(r) ->
+            let i64 at = skip(r, 7 as i64).realise(-1 as i64)
+            println("moved to {at}")
+            let string rest = r.read_all().realise("")
+            println("{rest}")
+        Result.Err(_) -> println("reopen failed")
+
+    remove("contract_seek_probe.txt").realise(0)
+    return Result.Ok(0)

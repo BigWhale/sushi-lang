@@ -8,7 +8,7 @@ use <io/fs>
 
 fn main() i32:
     # Test writing to a file
-    let Result@(File, FileError) result = open("/tmp/sushi_test_file.txt", FileMode.Write())
+    let Result@(File, IoError) result = open("/tmp/sushi_test_file.txt", FileMode.Write())
     match result:
         Result.Ok(poke f) ->
             # Test write and writeln
@@ -21,7 +21,7 @@ fn main() i32:
             return Result.Ok(1)
 
     # Test reading from the file
-    let Result@(File, FileError) read_result = open("/tmp/sushi_test_file.txt", FileMode.Read())
+    let Result@(File, IoError) read_result = open("/tmp/sushi_test_file.txt", FileMode.Read())
     match read_result:
         Result.Ok(poke f) ->
             # Test readln
@@ -38,7 +38,7 @@ fn main() i32:
             return Result.Ok(1)
 
     # Test is_open
-    let Result@(File, FileError) check_result = open("/tmp/sushi_test_file.txt", FileMode.Read())
+    let Result@(File, IoError) check_result = open("/tmp/sushi_test_file.txt", FileMode.Read())
     match check_result:
         Result.Ok(poke f) ->
             if (f.is_open()):

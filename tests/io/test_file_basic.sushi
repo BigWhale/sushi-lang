@@ -10,7 +10,7 @@ use <io/files>
 
 fn main() i32:
     # Write text to file
-    let Result@(File, FileError) write_result = open("test_output.txt", FileMode.Write())
+    let Result@(File, IoError) write_result = open("test_output.txt", FileMode.Write())
     match write_result:
         Result.Ok(poke out) ->
             out.writeln("Hello, Sushi!")
@@ -21,7 +21,7 @@ fn main() i32:
             return Result.Err(StdError.Error)
 
     # Read text from file
-    let Result@(File, FileError) read_result = open("test_output.txt", FileMode.Read())
+    let Result@(File, IoError) read_result = open("test_output.txt", FileMode.Read())
     match read_result:
         Result.Ok(poke f) ->
             let string line1 = f.readln().realise('')

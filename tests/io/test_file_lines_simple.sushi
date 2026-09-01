@@ -7,7 +7,7 @@ use <io/fs>
 fn main() i32:
     # Write the file first. This test used to open a test.txt that nothing ever
     # created, so it always took the Err arm and exited 1 without reaching lines().
-    let Result@(File, FileError) write_result = open("test_lines_simple.txt", FileMode.Write())
+    let Result@(File, IoError) write_result = open("test_lines_simple.txt", FileMode.Write())
     match write_result:
         Result.Ok(poke out) ->
             out.writeln("Mostly Harmless")
@@ -15,7 +15,7 @@ fn main() i32:
         Result.Err(_) ->
             return Result.Err(StdError.Error)
 
-    let Result@(File, FileError) result = open("test_lines_simple.txt", FileMode.Read())
+    let Result@(File, IoError) result = open("test_lines_simple.txt", FileMode.Read())
     match result:
         Result.Ok(f) ->
             # Just call f.lines() to see if type inference works

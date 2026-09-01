@@ -79,7 +79,7 @@ Tests predefined stdlib error enums:
 
 - `test_std_error.sushi` - StdError.Error (generic error)
 - `test_file_error.sushi` - FileError variants (NotFound, PermissionDenied, etc.)
-- `test_io_error.sushi` - IoError variants (ReadError, WriteError, FlushError)
+- `test_io_error.sushi` - IoError variants, including the Os(i32) payload arm
 - `test_math_error.sushi` - MathError variants (DivisionByZero, Overflow, etc.)
 - `test_env_error.sushi` - EnvError variants (NotFound, InvalidValue, etc.)
 - `test_process_error.sushi` - ProcessError variants (SpawnFailed, etc.)
@@ -124,9 +124,20 @@ enum FileError:
     IoError
 
 enum IoError:
-    ReadError
-    WriteError
-    FlushError
+    NotFound
+    PermissionDenied
+    AlreadyExists
+    IsDirectory
+    ConnectionReset
+    TimedOut
+    Closed
+    Interrupted
+    WouldBlock
+    DiskFull
+    TooManyOpen
+    InvalidInput
+    Os(i32 errno)
+    Other
 
 enum MathError:
     DivisionByZero

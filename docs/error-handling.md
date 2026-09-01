@@ -352,10 +352,10 @@ use <io/fs>
 fn load_optional_config() Maybe@(string):
     match open("config.txt", FileMode.Read()):
         Result.Ok(poke f) ->
-            let string content = f.read().realise('')
+            let string content = f.read_all().realise('')
             f.close()
             return Result.Ok(Maybe.Some(content))  # Found config
-        Result.Err(FileError.NotFound()) ->
+        Result.Err(IoError.NotFound()) ->
             return Result.Ok(Maybe.None())  # No config (OK!)
         Result.Err(_) ->
             return Result.Err(StdError.Error())  # Real error (permission, I/O)
@@ -386,10 +386,10 @@ The `??` operator unwraps `Result@(T, E)` or `Maybe@(T)`, propagating errors aut
 use <io/fs>
 
 fn read_config() string:
-    let Result@(File, FileError) result = open("config.txt", FileMode.Read())
+    let Result@(File, IoError) result = open("config.txt", FileMode.Read())
     match result:
         Result.Ok(poke f) ->
-            let string content = f.read().realise('')
+            let string content = f.read_all().realise('')
             f.close()
             return Result.Ok(content)
         Result.Err(_) ->
@@ -403,7 +403,7 @@ use <io/fs>
 
 fn read_config() string:
     let File f = open("config.txt", FileMode.Read())??
-    let string content = f.read().realise('')
+    let string content = f.read_all().realise('')
     f.close()
     return Result.Ok(content)
 ```
@@ -585,7 +585,7 @@ use <io/fs>
 
 fn process_pipeline() string:
     let File f = open("input.txt", FileMode.Read())??
-    let string raw = f.read().realise('')
+    let string raw = f.read_all().realise('')
     f.close()
 
     let string cleaned = parse(raw)??

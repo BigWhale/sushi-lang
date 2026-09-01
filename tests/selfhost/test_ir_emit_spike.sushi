@@ -23,7 +23,7 @@ use <sys/process>
 
 fn main() i32:
     # 1. Emit a trivial LLVM IR module (a main that returns 42) as text.
-    let Result@(File, FileError) w = open("sushi_spike.ll", FileMode.Write())
+    let Result@(File, IoError) w = open("sushi_spike.ll", FileMode.Write())
     match w:
         Result.Ok(poke f) ->
             f.writeln('define i32 @main() {')

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 from sushi_lang.semantics.ast import EnumDef, Program, BoundedTypeParam
 from sushi_lang.semantics.typesys import (
     Type,
+    BuiltinType,
     EnumType,
     EnumVariantInfo,
 )
@@ -170,12 +171,35 @@ class EnumCollector:
         self.enums.order.append("StdError")
         self.known_types.add(std_error_enum)
 
+        # IoError - the ONE channel every io contract method answers (HANDLES.md, rulings
+        # R4 and R20). A perk contract carries one signature and there is no Self type, so
+        # `Reader.read` cannot answer FileError on a File and NetError on a TcpStream. The
+        # detailed enums stay on the concrete constructors, whose variants are the ones
+        # this vocabulary drops -- every FileError and NetError variant with no twin here
+        # belongs to an open, a connect or a bind, and never to a read or a write.
+        #
+        # The variant ORDER is the ABI, exactly as NetError's is: a variant is only ever
+        # APPENDED. `Os` carries the raw errno, which is the thread-safe way to keep the
+        # detail -- a global last_errno() is not, and that is why the payload arm is here
+        # from the start rather than added later, when it would change every match a user
+        # has written.
         io_error_enum = EnumType(
             name="IoError",
             variants=(
-                EnumVariantInfo(name="ReadError", associated_types=()),   # Failed to read
-                EnumVariantInfo(name="WriteError", associated_types=()),  # Failed to write
-                EnumVariantInfo(name="FlushError", associated_types=()),  # Failed to flush
+                EnumVariantInfo(name="NotFound", associated_types=()),          # ENOENT
+                EnumVariantInfo(name="PermissionDenied", associated_types=()),  # EACCES, EPERM
+                EnumVariantInfo(name="AlreadyExists", associated_types=()),     # EEXIST
+                EnumVariantInfo(name="IsDirectory", associated_types=()),       # EISDIR
+                EnumVariantInfo(name="ConnectionReset", associated_types=()),   # ECONNRESET, ECONNABORTED
+                EnumVariantInfo(name="TimedOut", associated_types=()),          # ETIMEDOUT
+                EnumVariantInfo(name="Closed", associated_types=()),            # EPIPE, ENOTCONN, EBADF
+                EnumVariantInfo(name="Interrupted", associated_types=()),       # EINTR
+                EnumVariantInfo(name="WouldBlock", associated_types=()),        # EAGAIN, EWOULDBLOCK
+                EnumVariantInfo(name="DiskFull", associated_types=()),          # ENOSPC
+                EnumVariantInfo(name="TooManyOpen", associated_types=()),       # EMFILE, ENFILE
+                EnumVariantInfo(name="InvalidInput", associated_types=()),      # EINVAL, ENAMETOOLONG
+                EnumVariantInfo(name="Os", associated_types=(BuiltinType.I32,)),  # the raw errno
+                EnumVariantInfo(name="Other", associated_types=()),             # anything else
             )
         )
         self.enums.by_name["IoError"] = io_error_enum

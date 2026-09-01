@@ -9,7 +9,7 @@ use <io/files>
 
 fn main() i32:
     # Try to open a file that doesn't exist - using wildcard to catch any error
-    let Result@(File, FileError) result = open("nonexistent_wildcard_test.txt", FileMode.Read())
+    let Result@(File, IoError) result = open("nonexistent_wildcard_test.txt", FileMode.Read())
 
     match result:
         Result.Ok(poke f) ->

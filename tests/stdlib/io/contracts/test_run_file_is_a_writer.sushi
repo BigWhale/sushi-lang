@@ -1,0 +1,33 @@
+# A File satisfies Writer. The generic writes text and flushes, and neither call names File.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "wrote through the contract\nMostly Harmless\n"
+use <io/files>
+use <io/fs>
+use <io/contracts>
+
+fn emit@(W: Writer)(W dst, string line) ~ | IoError:
+    dst.write(line)??
+    dst.flush()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match open("contract_writer_probe.txt", FileMode.Write()):
+        Result.Ok(w) ->
+            match emit(w, "Mostly Harmless"):
+                Result.Ok(_) -> println("wrote through the contract")
+                Result.Err(_) -> println("write failed")
+        Result.Err(_) ->
+            println("open failed")
+            return Result.Ok(1)
+
+    match open("contract_writer_probe.txt", FileMode.Read()):
+        Result.Ok(r) ->
+            let string back = r.read_all().realise("")
+            println("{back}")
+        Result.Err(_) -> println("reopen failed")
+
+    remove("contract_writer_probe.txt").realise(0)
+    return Result.Ok(0)

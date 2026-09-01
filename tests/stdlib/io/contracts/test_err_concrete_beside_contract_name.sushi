@@ -1,0 +1,14 @@
+# Ruling R17: a name has exactly ONE home. A concrete extension beside the contract method
+# of the same name is CE4007, which is what forced read, write, flush and seek onto one side
+# each. The refusal is relational and points at both declarations.
+# TEST_TYPE: compile_error
+# EXPECT_ERROR_CODE: CE4007
+use <io/fs>
+use <io/contracts>
+
+extend File read() string | IoError:
+    return "shadow"
+
+fn main() i32:
+    println("unreachable")
+    return Result.Ok(0)

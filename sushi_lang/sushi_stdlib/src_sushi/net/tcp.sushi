@@ -21,6 +21,8 @@ whatever one read gave, which may be less than the maximum asked for;
 recv_exact() is the loop for a caller that needs a count.
 :##
 
+use <collections/strings>
+use <io/contracts>
 use <net/socket>
 
 ##:
@@ -64,6 +66,119 @@ extend TcpListener with Drop:
     :##
     fn drop(poke self) ~:
         self.close()
+
+##:
+Turns a socket error into the one channel the io contracts answer.
+
+Every NetError variant with no twin in IoError belongs to a connect, a bind or a resolve,
+so nothing a contract method can answer is lost here. A stream that is already connected
+cannot report AddressInUse.
+
+- Returns: The IoError that says the same thing.
+:##
+extend NetError to_io() IoError:
+    match self:
+        NetError.ConnectionReset -> return IoError.ConnectionReset
+        NetError.TimedOut -> return IoError.TimedOut
+        NetError.Closed -> return IoError.Closed
+        NetError.PermissionDenied -> return IoError.PermissionDenied
+        NetError.TooManyOpen -> return IoError.TooManyOpen
+        NetError.InvalidAddress -> return IoError.InvalidInput
+        NetError.Interrupted -> return IoError.Interrupted
+        _ -> return IoError.Other
+
+##:
+Reads bytes from the stream. The same contract a File satisfies, so one generic serves
+both.
+:##
+extend TcpStream with Reader:
+    ##:
+    Reads what one read gives, as text.
+
+    The bound counts BYTES, so a multi-byte character can be split across two calls -- and
+    on a stream it can be split by the NETWORK as well, whatever the bound says.
+
+    - Parameter max: The most bytes to take in this one read.
+    - Returns: The text that arrived, empty when the peer closed.
+    - Errors: IoError, when the read failed.
+    :##
+    fn read(i32 max) string | IoError:
+        let u8[] chunk = self.read_bytes(max)??
+        return chunk.to_string()
+
+    ##:
+    Reads what one read gives, as bytes.
+
+    An empty answer means the peer closed cleanly. A timeout is an error rather than an
+    empty answer, so the two never read alike.
+
+    - Parameter max: The most bytes to take in this one read.
+    - Returns: The bytes that arrived, empty when the peer closed.
+    - Errors: IoError, when the read failed.
+    :##
+    fn read_bytes(i32 max) u8[] | IoError:
+        match sock_recv(self.fd, max):
+            Result.Ok(nom chunk) -> return chunk
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+Writes bytes to the stream, and flushes what an unbuffered socket has no need to flush.
+:##
+extend TcpStream with Writer:
+    ##:
+    Writes text, and does not stop until every byte has gone.
+
+    - Parameter data: The text to write.
+    - Returns: Nothing.
+    - Errors: IoError, when a write failed before the text was gone.
+    :##
+    fn write(string data) ~ | IoError:
+        # A socket has no send_str primitive, so the text is copied into bytes here. A file
+        # avoids that with fd_write_str, which hands write(2) the string's own fat pointer.
+        # One allocation against one syscall is not worth a new generator yet.
+        match self.send_all(data.to_bytes()):
+            Result.Ok(_) -> return ~
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+    ##:
+    Writes bytes, and does not stop until every one has gone.
+
+    - Parameter data: The bytes to write. The buffer stays the caller's.
+    - Returns: Nothing.
+    - Errors: IoError, when a write failed before the buffer was gone.
+    :##
+    fn write_bytes(u8[] data) ~ | IoError:
+        match self.send_all(data):
+            Result.Ok(_) -> return ~
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+    ##:
+    Does nothing, successfully.
+
+    A socket is not buffered here: send_all() has already handed every byte to the kernel
+    by the time it returns. The buffered writer is where the call earns its name.
+
+    - Returns: Nothing.
+    - Errors: IoError, never in practice.
+    :##
+    fn flush() ~ | IoError:
+        return ~
+
+##:
+Whether this handle still holds a descriptor.
+
+- Returns: False once close() has run.
+:##
+extend TcpStream is_open() bool:
+    return self.fd >= 0
+
+##:
+Whether this listener still holds a descriptor.
+
+- Returns: False once close() has run.
+:##
+extend TcpListener is_open() bool:
+    return self.fd >= 0
 
 ##:
 Connects to a host and port.

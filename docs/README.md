@@ -94,7 +94,7 @@ fn add(i32 a, i32 b) i32:
 # Error propagation
 fn read_file() string:
     let File f = open("data.txt", FileMode.Read())??
-    return Result.Ok(f.read().realise(''))
+    return Result.Ok(f.read_all().realise(''))
 
 # Pattern matching
 match result:

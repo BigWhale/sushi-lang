@@ -25,6 +25,7 @@ Complete reference for Sushi's standard library modules and types.
 - [File I/O](stdlib/io/files.md) - File operations with error handling
 - [Path algebra](stdlib/io/path.md) - Lexical path manipulation (join, basename, dirname, extension, normalize)
 - [File-system ops](stdlib/io/fs.md) - stat, recursive walk, mkdir_all, remove_all
+- [I/O contracts](stdlib/io/contracts.md) - `Reader`, `Writer`, `Seek`: what a handle can do
 
 ### Networking
 
@@ -52,10 +53,10 @@ use <collections/strings>  # String methods
 use <collections/iter>     # Higher-order combinators (map/filter/fold/compose)
 use <compression/zlib>     # DEFLATE and the zlib container
 use <encoding/msgpack>     # MessagePack decoder
-use <io/fs>             # Console I/O
-use <io/files>             # File operations
+use <io/contracts>         # Reader, Writer, Seek
+use <io/files>             # the path utilities and the fd_* primitives
 use <io/path>              # Lexical path manipulation
-use <io/fs>                # stat, walk, mkdir_all, remove_all
+use <io/fs>                # File, open, stdin/stdout/stderr, stat, walk, mkdir_all
 use <net/socket>           # the raw socket calls, and NetError
 use <net/tcp>              # TcpStream, TcpListener
 use <net/udp>              # UdpSocket
@@ -79,7 +80,7 @@ use <io/fs>
 # Using ?? operator for propagation
 fn read_config() string:
     let File f = open("config.txt", FileMode.Read())??
-    let string content = f.read().realise('')
+    let string content = f.read_all().realise('')
     f.close()
     return Result.Ok(content)
 
@@ -154,7 +155,7 @@ use <io/fs>
 # Reading files
 match open("data.txt", FileMode.Read()):
     Result.Ok(poke f) ->
-        let string content = f.read().realise('')
+        let string content = f.read_all().realise('')
         f.close()
         println(content)
     Result.Err(FileError.NotFound()) ->
@@ -226,7 +227,7 @@ match open("output.txt", FileMode.Write()):
 **File I/O:**
 - `open()` - Open files with Read/Write/Append modes
 - File methods: `read()`, `read_line()`, `write()`, `close()`
-- Error handling with `Result@(File, FileError)` and `FileError` enums
+- Error handling with `Result@(File, IoError)` and `FileError` enums
 
 ### Math (`use <math>`)
 

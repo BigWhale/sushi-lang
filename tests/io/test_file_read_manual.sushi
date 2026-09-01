@@ -12,7 +12,7 @@ use <collections/strings>
 
 fn main() i32:
     # Write test file with multiple lines
-    let Result@(File, FileError) write_result = open("test_read_manual.txt", FileMode.Write())
+    let Result@(File, IoError) write_result = open("test_read_manual.txt", FileMode.Write())
     match write_result:
         Result.Ok(poke out) ->
             out.writeln("First line")
@@ -24,7 +24,7 @@ fn main() i32:
             return Result.Err(StdError.Error)
 
     # Read file line by line manually using readln()
-    let Result@(File, FileError) read_result = open("test_read_manual.txt", FileMode.Read())
+    let Result@(File, IoError) read_result = open("test_read_manual.txt", FileMode.Read())
     match read_result:
         Result.Ok(poke f) ->
             let i32 count = 1

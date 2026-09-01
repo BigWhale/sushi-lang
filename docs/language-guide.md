@@ -437,17 +437,17 @@ The `??` operator provides elegant error propagation - it unwraps successful res
 use <io/files>
 use <io/fs>
 
-fn read_config() string | FileError:
+fn read_config() string | IoError:
     # If open fails, ?? returns Err immediately
     let File f = open("config.txt", FileMode.Read())??
 
     # Only reaches here if open succeeded
-    let string content = f.read().realise('')
+    let string content = f.read_all().realise('')
     f.close()
     return Result.Ok(content)
 
 fn main() i32:
-    let Result@(string, FileError) config = read_config()
+    let Result@(string, IoError) config = read_config()
     # Handle config...
     return Result.Ok(0)
 ```
@@ -474,7 +474,7 @@ fn process() string:
 # With ??: clean and safe
 fn process() string:
     let File f = open("data.txt", FileMode.Read())??
-    let string data = f.read().realise('')
+    let string data = f.read_all().realise('')
     return Result.Ok(data)
 ```
 
@@ -818,7 +818,7 @@ Patterns can be nested to match complex enum structures in a single expression:
 ```sushi
 use <io/fs>
 
-fn handle_file(Result@(File, FileError) result) ~:
+fn handle_file(Result@(File, IoError) result) ~:
     match result:
         Result.Ok(poke f) ->
             println("File opened successfully")
@@ -832,7 +832,7 @@ fn handle_file(Result@(File, FileError) result) ~:
     return Result.Ok(~)
 ```
 
-**Nested pattern matching**: The pattern `Result.Err(FileError.NotFound())` matches a `Result@(File, FileError)` whose `Err` variant contains a `FileError` enum with the `NotFound` variant. This lets you handle specific error combinations without nested match statements.
+**Nested pattern matching**: The pattern `Result.Err(FileError.NotFound())` matches a `Result@(File, IoError)` whose `Err` variant contains a `FileError` enum with the `NotFound` variant. This lets you handle specific error combinations without nested match statements.
 
 **Wildcard patterns**: The `_` pattern matches anything, acting as a catch-all for remaining cases. It's useful for handling "all other errors" or "default" cases.
 
