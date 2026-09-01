@@ -166,6 +166,41 @@ def _result_type_to_str(t: Type) -> str:
     return str(t)
 
 
+def _differs_only_in_nested_resolution(stored, rebuilt, structs, enums) -> bool:
+    """True when two variant tuples are one type seen at two resolution DEPTHS.
+
+    This seam has always resolved a payload's TOP LEVEL, so a stored payload that IS a bare
+    name can only come from a Result built structurally somewhere else -- the bypass CE0126
+    exists to catch, and it stays caught. What it did NOT resolve until now is a name NESTED
+    inside a payload: the error arm of a `fn(i32) -> i32`, or the element of an `IpAddr[]`.
+    An entry stored that way is this function's own earlier output, so a rebuild that
+    resolves further is the same type and not a divergence.
+
+    The line is therefore drawn at the top level: a bare name there is still a bug, and a
+    bare name below it is depth.
+    """
+    from sushi_lang.semantics.typesys import UnknownType
+    from sushi_lang.semantics.type_resolution import resolve_type_recursively
+
+    if len(stored) != len(rebuilt):
+        return False
+    for stored_variant, rebuilt_variant in zip(stored, rebuilt, strict=False):
+        if stored_variant.name != rebuilt_variant.name:
+            return False
+        stored_payloads = stored_variant.associated_types or ()
+        rebuilt_payloads = rebuilt_variant.associated_types or ()
+        if len(stored_payloads) != len(rebuilt_payloads):
+            return False
+        for stored_payload, rebuilt_payload in zip(stored_payloads, rebuilt_payloads, strict=False):
+            if stored_payload == rebuilt_payload:
+                continue
+            if isinstance(stored_payload, UnknownType):
+                return False
+            if resolve_type_recursively(stored_payload, structs, enums) != rebuilt_payload:
+                return False
+    return True
+
+
 def ensure_result_type_in_table(
     enum_table: Any,
     ok_type: Type,
@@ -174,13 +209,19 @@ def ensure_result_type_in_table(
 ) -> Optional[EnumType]:
     """Ensure ``Result<ok_type, err_type>`` exists in ``enum_table``, creating it if needed."""
     from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
-    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    from sushi_lang.semantics.type_resolution import resolve_type_recursively
     from sushi_lang.semantics.type_predicates import is_abstract_type
 
     enums = enum_table.by_name
     structs = struct_table if struct_table is not None else {}
-    ok_type = resolve_unknown_type(ok_type, structs, enums)
-    err_type = resolve_unknown_type(err_type, structs, enums)
+    # RECURSIVELY, not one level. A payload that IS a name resolved before; a payload that
+    # CONTAINS one -- `IpAddr[]`, whose element is the name -- did not, and it interned with
+    # the element unresolved. The interned NAME is identical either way, so the next intern
+    # of the same Result rebuilt different variants and the guard below fired CE0126 with
+    # two spellings that read the same. A named type is terminal in this walk, so the table
+    # stays the sole authority for its contents (docs/design/type-identity.md).
+    ok_type = resolve_type_recursively(ok_type, structs, enums)
+    err_type = resolve_type_recursively(err_type, structs, enums)
 
     result_enum_name = f"Result<{_result_type_to_str(ok_type)}, {_result_type_to_str(err_type)}>"
 
@@ -203,12 +244,13 @@ def ensure_result_type_in_table(
     existing = enums.get(result_enum_name)
     if existing is not None:
         if existing.variants and existing.variants != variants:
-            raise_internal_error(
-                "CE0126",
-                name=result_enum_name,
-                existing=str([str(t) for v in existing.variants for t in v.associated_types]),
-                rebuilt=str([str(t) for v in variants for t in v.associated_types]),
-            )
+            if not _differs_only_in_nested_resolution(existing.variants, variants, structs, enums):
+                raise_internal_error(
+                    "CE0126",
+                    name=result_enum_name,
+                    existing=str([str(t) for v in existing.variants for t in v.associated_types]),
+                    rebuilt=str([str(t) for v in variants for t in v.associated_types]),
+                )
         return existing
 
     result_enum = EnumType(
