@@ -442,8 +442,8 @@ fn read_config() string | IoError:
     let File f = open("config.txt", FileMode.Read())??
 
     # Only reaches here if open succeeded
-    let string content = f.read_all().realise('')
-    f.close()
+    let string content = f.read_all()??
+    f.close()??
     return Result.Ok(content)
 
 fn main() i32:

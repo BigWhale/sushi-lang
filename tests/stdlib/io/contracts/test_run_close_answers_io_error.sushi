@@ -10,7 +10,7 @@ use <io/fs>
 
 fn read_then_close(string path) string | IoError:
     match open(path, FileMode.Read()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             let string text = f.read_all()??
             f.close()??
             println("{text}")

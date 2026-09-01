@@ -47,7 +47,7 @@ fn valid_fixture() u8[]:
 
 fn write_fixture(string path, u8[] bytes) i32:
     match open(path, FileMode.WriteB()):
-        Result.Ok(poke out) ->
+        Result.Ok(nom out) ->
             out.write_bytes(bytes)
             out.close()
             return Result.Ok(0)

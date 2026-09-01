@@ -144,6 +144,26 @@ def _consume_collected(checker: 'BorrowChecker', arg: Expr,
     consume(checker, arg, ConsumingUse.ARRAY_ELEMENT)
 
 
+def settle_receiver(checker: 'BorrowChecker', expr) -> None:
+    """A `nom self` receiver is a consuming use of what the method was called on.
+
+    The mode is DECLARATION-only, so nothing at the call site says `nom` and the
+    diagnostic has to name the method instead (ruling R27). The name is recorded on the
+    state here, beside the span the move already records.
+    """
+    from sushi_lang.semantics.param_modes import receiver_mode
+    if not receiver_mode(getattr(expr, "callee_self_mode", None)).consumes:
+        return
+    receiver = getattr(expr, "receiver", None)
+    if receiver is None:
+        return
+    consume(checker, receiver, ConsumingUse.RECEIVER)
+    if isinstance(receiver, Name):
+        state = checker.borrow_state.get(receiver.id)
+        if state is not None and state.is_moved:
+            state.consumed_by_method = state.consumed_by_method or expr.method
+
+
 def settle_method_args(checker: 'BorrowChecker', expr) -> None:
     """Apply the declared modes of an extension or perk method to its arguments."""
     modes = getattr(expr, "callee_param_modes", None)

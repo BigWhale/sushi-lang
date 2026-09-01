@@ -8,8 +8,8 @@ fn main() i32:
     # Write the file first. This test used to open a test.txt that nothing ever
     # created, so it always took the Err arm and exited 1 without reaching lines().
     let Result@(File, IoError) write_result = open("test_lines_simple.txt", FileMode.Write())
-    match write_result:
-        Result.Ok(poke out) ->
+    match nom write_result:
+        Result.Ok(nom out) ->
             out.writeln("Mostly Harmless")
             out.close()
         Result.Err(_) ->

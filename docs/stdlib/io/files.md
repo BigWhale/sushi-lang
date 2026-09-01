@@ -36,14 +36,18 @@ Three things follow from that, and each surprises somebody:
 
 - **A `File` cannot be copied.** `.clone()` is **CE2431**: a field-by-field copy would
   duplicate the descriptor number and leave two owners that both close it.
-- **A `match` binding is a read-only view.** `Result.Ok(f) -> f.close()` is **CE2414**,
-  because `close()` writes -1 into the handle. Write `Result.Ok(poke f)`, or -- better --
-  delete the `close()` and let the drop do it.
+- **`close()` CONSUMES the handle.** A read after a close is **CE2435** while compiling,
+  not EBADF at run time, and the scope exit that follows has nothing left to close. A
+  bare `match` binding is a read-only view, so `Result.Ok(f) -> f.close()` is CE2411:
+  write `Result.Ok(nom f)` over a scrutinee the match owns, or -- better -- delete the
+  `close()` and let the drop do it. A handle held in a struct FIELD cannot be closed
+  explicitly at all, for the same reason.
 - **Reads and writes are UNBUFFERED.** Each one is a system call. That is Rust's rule
   too, and the buffered layer is a separate type.
 
-Every method is a plain borrow except `close()`. A file's position lives in the KERNEL,
-not in the struct, so reading and writing need no mutable receiver.
+Every method is a plain borrow except `close()`, which takes the handle. A file's
+position lives in the KERNEL, not in the struct, so reading and writing need no mutable
+receiver.
 
 `stdin`, `stdout` and `stderr` are `File` values too -- see [Console I/O](console.md).
 
@@ -81,7 +85,7 @@ use <io/fs>
 
 fn main() i32:
     match open("data.txt", FileMode.Read()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             println("File opened successfully")
             f.close()
         Result.Err(e) ->
@@ -132,12 +136,13 @@ callable on a `TcpStream` too, which is what `<io/contracts>` is for.
 | `tell` | `() i64 \| IoError` | `File` |
 | `is_open` | `() bool` -- false once `close()` has run | `File` |
 | `is_terminal` | `() bool` -- true only for a terminal | `File` |
-| `close` | `(poke self) ~ \| IoError` | `File` |
+| `close` | `(nom self) ~ \| IoError` -- CONSUMES the handle | `File` |
 | `lines` | `() Iterator@(string)` -- still a compiler builtin | `File` |
 
 A `File` closes itself when its owner leaves scope, so `close()` is only needed where the
-failure has to be SEEN. Every method is a plain borrow except `close()`: a file's position
-lives in the kernel, not in the struct, so a read and a write need no mutable receiver.
+failure has to be SEEN. Every method is a plain borrow except `close()`, which CONSUMES
+the handle: a file's position lives in the kernel, not in the struct, so a read and a
+write need no mutable receiver.
 
 ### read
 
@@ -160,7 +165,7 @@ use <io/fs>
 
 fn main() i32:
     match open("data.txt", FileMode.Read()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             let string content = f.read_all().realise('')
             f.close()
             println("Content: {content}")
@@ -339,31 +344,34 @@ fn main() i32 | IoError:
 
 ### close
 
-Close the file and release resources.
+Close the file, and CONSUME the handle.
 
 ```sushi
-use <io/fs>
-
-fn File.close() -> ~
+fn File.close(nom self) ~ | IoError
 ```
+
+The call takes the handle, so the binding is spent: a read after a close is **CE2435**
+while compiling, and the scope exit that follows has nothing to close. Call it only where
+the failure has to be SEEN -- an owned handle closes itself on drop, and a destructor
+cannot answer a `Result`.
 
 **Example:**
 
+<!-- docs-sweep: skip (reads a file the sweep does not create) -->
 ```sushi
-use <io/files>
 use <io/fs>
 
-fn main() i32 | IoError:
-    let File f = open("data.txt", FileMode.Read())??
-    let string content = f.read_all().realise('')
-    f.close()  # Always close files
-
+fn show(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let string content = f.read_all()??
+    f.close()??
     println(content)
-
-    return Result.Ok(0)
+    return Result.Ok(~)
 ```
 
-**Important:** Always close files after use to release system resources. File handles are limited by the operating system.
+**A handle in a struct field cannot be closed this way.** A field read is a borrow, and
+consuming one is **CE2411**. Let the struct's own drop close it, or take the handle out
+of the wrapper that holds it with `into_inner()`.
 
 ## Error Handling
 
@@ -450,7 +458,7 @@ use <io/fs>
 
 fn main() i32:
     match open("config.txt", FileMode.Read()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             let string data = f.read_all().realise('')
             f.close()
             println(data)
@@ -472,9 +480,9 @@ use <io/fs>
 
 fn main() i32:
     match open("data.txt", FileMode.Read()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             match open("output.txt", FileMode.Write()):
-                Result.Ok(poke out) ->
+                Result.Ok(nom out) ->
                     let string data = f.read_all().realise('')
                     out.write(data)
                     f.close()
@@ -1029,7 +1037,7 @@ use <io/fs>
 
 fn file_exists(string path) bool:
     match open(path, FileMode.Read()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.close()
             return Result.Ok(true)
         Result.Err(_) ->
@@ -1161,7 +1169,7 @@ use <io/fs>
 fn main() i32:
     # Always check if overwriting is intended
     match open("important.txt", FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             # This TRUNCATES the existing file!
             f.write("New content")
             f.close()

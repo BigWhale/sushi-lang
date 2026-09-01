@@ -7,7 +7,7 @@ use <io/fs>
 
 fn write_one(string path) bool:
     match open(path, FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.write("x")
             f.close()
             return Result.Ok(true)

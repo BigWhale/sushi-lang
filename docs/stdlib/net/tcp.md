@@ -45,7 +45,7 @@ fn main() i32:
     return Result.Ok(0)          # server closes here
 ```
 
-`close()` stays, for the caller who has to **see** that the close failed: a destructor has nowhere to put a `Result`, so a failure at drop is lost. It declares `poke self` and writes `-1` into the binding, which makes the drop that follows a no-op — the descriptor is released exactly once, and the kernel is never asked to close a number it may already have given to somebody else. Calling `close()` twice on one binding is a guarded no-op, not an `EBADF`.
+`close()` stays, for the caller who has to **see** that the close failed: a destructor has nowhere to put a `Result`, so a failure at drop is lost. It declares `nom self` and CONSUMES the handle, so the descriptor is released exactly once and the scope exit that follows has nothing to close. A use after a close — a second `close()`, a `recv`, a `local_port()` — is **CE2435** while compiling, rather than an `EBADF` at run time.
 
 ## Constructors
 
@@ -114,11 +114,11 @@ Bound how long a call may wait. **Set these before anything blocks.** Without th
 
 Who is at each end. All four carry the `| NetError` channel. `local_port` exists on both types: the listener's is the one that reads back a port the kernel chose, and the stream's is this end of a connection.
 
-### `s.close() ~ | NetError` and `l.close() ~ | NetError`
+### `s.close(nom self) ~ | NetError` and `l.close(nom self) ~ | NetError`
 
-Close, and write `-1` into the binding — the receiver is `poke self`. Both are safe to call twice on the same binding.
+Close, and CONSUME the handle. A use after the close is **CE2435**, which is what makes a second close unreachable rather than merely harmless.
 
-Neither is required. A socket closes itself when its owner leaves scope; `close()` is for the caller who must see a failure the destructor would swallow.
+Neither is required. A socket closes itself when its owner leaves scope; `close()` is for the caller who must see a failure the destructor would swallow. A socket held in a struct FIELD cannot be closed explicitly — a field read is a borrow, and consuming one is **CE2411**.
 
 ## Limitations
 

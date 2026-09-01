@@ -20,7 +20,7 @@ fn read_all(string path) u8[]:
         Result.Err(_) ->
             return Result.Err(StdError.Error)
     match open(path, FileMode.ReadB()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             let u8[] nothing = from([])
             let u8[] b = f.read_bytes(size).realise(nothing)
             f.close()
@@ -34,7 +34,7 @@ fn read_all(string path) u8[]:
 # emit: replace the destination file with these bytes.
 fn emit(string dst, u8[] data) i32:
     match open(dst, FileMode.WriteB()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.write_bytes(data)
             f.close()
             return Result.Ok(0)

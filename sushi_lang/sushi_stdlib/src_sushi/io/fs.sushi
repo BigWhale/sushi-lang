@@ -215,7 +215,27 @@ extend File with Drop:
     :##
     fn drop(poke self) ~:
         if (self.owned):
-            self.close()
+            close_handle(poke self)
+
+##:
+Releases the descriptor exactly once, and writes -1 into the handle.
+
+Private to this module, and the ONE place the guard and the fd_close() call are
+spelled: close() consumes its handle and cannot be reached from a destructor,
+which owns nothing to hand away, so the two callers meet here instead of each
+carrying a copy of the rule.
+
+- Parameter h: The handle to release. Reads -1 afterwards.
+- Errors: IoError, when the descriptor could not be closed.
+:##
+fn close_handle(poke File h) ~ | IoError:
+    if (h.fd < 0):
+        return Result.Ok(~)
+    let i32 fd = h.fd
+    h.fd := -1
+    match fd_close(fd):
+        Result.Ok(_) -> return Result.Ok(~)
+        Result.Err(e) -> return Result.Err(e.to_io())
 
 ##:
 What a FileMode asks the platform for.
@@ -481,21 +501,20 @@ extend File is_terminal() bool:
     return fd_isatty(self.fd)
 
 ##:
-Closes the file and writes -1 into the binding.
+Closes the file, and CONSUMES the handle.
 
-Only for the caller who has to SEE that the close failed -- the destructor closes an owned
-handle anyway, and cannot answer a Result. The binding is marked so that closing it again
-is a success, and so that the drop which follows is a no-op: the descriptor is released
-exactly once.
+Only for the caller who has to SEE that the close failed: the destructor closes an owned
+handle anyway, and cannot answer a Result. The call takes the handle, so a read after a
+close is refused while compiling (CE2435) rather than answering EBADF at run time, and
+there is nothing left for the scope exit to close.
 
-- Returns: Nothing. The binding reads -1 afterwards.
+A handle held in a struct FIELD cannot be closed this way -- a field read is a borrow,
+and consuming one is CE2411. Let the struct's own drop close it, or take the handle out
+of the wrapper that holds it with into_inner().
+
+- Returns: Nothing. The handle is spent.
 - Errors: IoError, when the descriptor could not be closed.
 :##
-extend File close(poke self) ~ | IoError:
-    if (self.fd < 0):
-        return ~
-    let i32 fd = self.fd
-    self.fd := -1
-    match fd_close(fd):
-        Result.Ok(_) -> return ~
-        Result.Err(e) -> return Result.Err(e.to_io())
+extend File close(nom self) ~ | IoError:
+    close_handle(poke self)??
+    return ~

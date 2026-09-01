@@ -11,8 +11,8 @@ fn main() i32:
     # Try to open a file that doesn't exist
     let Result@(File, IoError) result = open("nonexistent_file_12345.txt", FileMode.Read())
 
-    match result:
-        Result.Ok(poke f) ->
+    match nom result:
+        Result.Ok(nom f) ->
             stderr.write("Error: should not have succeeded!\n")
             f.close()
             return Result.Err(StdError.Error)

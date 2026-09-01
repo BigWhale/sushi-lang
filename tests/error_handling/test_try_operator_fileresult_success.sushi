@@ -10,7 +10,7 @@ use <collections/strings>
 fn write_test_file() ~:
     # Use pattern matching to handle FileResult
     match open("/tmp/sushi_test_try.txt", FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.writeln("Hello from FileResult test!")
             f.writeln("Second line here.")
             f.close()

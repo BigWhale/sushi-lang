@@ -6,6 +6,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, FunctionType, StructType, ForeignPtrType
 from sushi_lang.semantics.ast import MethodCall, Name
+from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from ..compatibility import types_compatible
 from ..propagation import propagate_declared_type_to_value
 from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args,\
@@ -326,16 +327,27 @@ def _reject_unhandled_channel_chain(validator: 'TypeValidator', call: MethodCall
     return True
 
 
-def _reject_immutable_poke_receiver(validator: 'TypeValidator', call: MethodCall) -> None:
-    """A `poke self` method call writes through its receiver's ADDRESS (#327)."""
+def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
+                                 mode) -> None:
+    """A MARKED receiver must name storage the call can reach (#327, ruling R25).
+
+    One check for both marked kinds, because they refuse the same thing for one reason:
+    a `const` lives in read-only memory, so there is no frame slot to point a `poke` at
+    and no owner to hand a `nom` away from. `stdout.close()` is the case that matters.
+
+    They differ on a TEMPORARY. A `poke self` needs an address the caller keeps, so a
+    call result is CE2404; a `nom self` takes ownership, and a temporary is owned by
+    construction -- the same rule ruling R11 states for a match scrutinee.
+    """
     from sushi_lang.semantics.ast import DotCall, MemberAccess
 
     root = call.receiver
     while isinstance(root, (MethodCall, DotCall, MemberAccess)):
-        root = root.receiver if not isinstance(root, MemberAccess) else root.obj
+        root = root.receiver
     if not isinstance(root, Name):
-        er.emit(validator.reporter, er.ERR.CE2404, call.receiver.loc,
-                expr=f"<expression>.{call.method}() receiver")
+        if mode.by_pointer:
+            er.emit(validator.reporter, er.ERR.CE2404, call.receiver.loc,
+                    expr=f"<expression>.{call.method}() receiver")
         return
     if (root.id not in validator.variable_types
             and root.id in validator.const_table.by_name):
@@ -478,8 +490,9 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         perk_self_mode = getattr(perk_method, "self_mode", None)
         if perk_self_mode is not None:
             call.callee_self_mode = perk_self_mode
-            if perk_self_mode == "poke":
-                _reject_immutable_poke_receiver(validator, call)
+            mode = receiver_mode(perk_self_mode)
+            if mode is not ParamMode.PEEK:
+                _reject_unreachable_receiver(validator, call, mode)
 
         _stamp_param_modes(call, perk_method)
 
@@ -597,8 +610,9 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     self_mode = getattr(method, "self_mode", None)
     if self_mode is not None:
         call.callee_self_mode = self_mode
-        if self_mode == "poke":
-            _reject_immutable_poke_receiver(validator, call)
+        mode = receiver_mode(self_mode)
+        if mode is not ParamMode.PEEK:
+            _reject_unreachable_receiver(validator, call, mode)
 
     _stamp_param_modes(call, method)
 

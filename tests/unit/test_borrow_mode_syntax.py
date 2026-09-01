@@ -98,7 +98,7 @@ def test_ampersand_spelling_is_gone(parser, src):
         parser.parse(src)
 
 
-# ACCEPT: `nom` in the four positions that carry a parameter mode
+# ACCEPT: `nom` in every position that carries a parameter mode
 
 ACCEPT_NOM = [
     # a parameter of a plain function
@@ -110,6 +110,11 @@ ACCEPT_NOM = [
     # a parameter of an extension method
     "extend Sink eat(nom string s) ~:\n"
     "    return ~\n",
+    # a consuming RECEIVER (ruling R25)
+    "extend Sink finish(nom self) ~:\n"
+    "    return ~\n",
+    "perk Finish:\n"
+    "    fn finish(nom self) ~\n",
     # inside a function type
     "fn main() i32:\n"
     "    let fn(nom string) -> i32 g = h\n"
@@ -159,9 +164,6 @@ REJECT_NOM = [
     # not a return type
     "fn f() nom string:\n"
     "    return Result.Ok(\"x\")\n",
-    # not a receiver mode
-    "extend Counter bump(nom self) ~:\n"
-    "    return ~\n",
     # not a variadic marker
     "fn f(nom ...string args) ~:\n"
     "    return Result.Ok(~)\n",

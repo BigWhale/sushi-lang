@@ -8,7 +8,7 @@ use <io/fs>
 fn main() i32:
     let string path = "/tmp/sushi_stat_mtime.txt"
     match open(path, FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.write("x")
             f.close()
         Result.Err(_) ->

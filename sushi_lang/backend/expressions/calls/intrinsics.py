@@ -375,9 +375,14 @@ def try_emit_perk_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
     # A `poke self` / `peek self` perk method (#327) takes the receiver by POINTER --
     # the same rule as the extension call site (dispatcher.py), read from the same
     # the typecheck pass stamp.
-    if getattr(expr, "callee_self_mode", None) is not None:
+    from sushi_lang.semantics.param_modes import receiver_mode
+    self_mode = receiver_mode(getattr(expr, "callee_self_mode", None))
+    if self_mode.by_pointer:
         from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
         receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
+    elif self_mode.consumes:
+        from sushi_lang.backend.expressions.calls.dispatcher import consume_receiver
+        receiver_value = consume_receiver(codegen, expr, receiver_value)
 
     from sushi_lang.backend.expressions.calls.dispatcher import settle_method_call_arguments
     arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]

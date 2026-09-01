@@ -20,8 +20,8 @@ extend File line_or_empty() string:
 fn main() i32:
     # Write text to file
     let Result@(File, IoError) write_result = open("test_output.txt", FileMode.Write())
-    match write_result:
-        Result.Ok(poke out) ->
+    match nom write_result:
+        Result.Ok(nom out) ->
             out.writeln("Hello, Sushi!")
             out.writeln("This is a test file.")
             out.close()
@@ -31,8 +31,8 @@ fn main() i32:
 
     # Read text from file
     let Result@(File, IoError) read_result = open("test_output.txt", FileMode.Read())
-    match read_result:
-        Result.Ok(poke f) ->
+    match nom read_result:
+        Result.Ok(nom f) ->
             let string line1 = f.line_or_empty()
             let string line2 = f.line_or_empty()
             println(line1)

@@ -14,7 +14,7 @@ fn main() i32:
     let string dst = "/tmp/sushi_copy_match_dst.txt"
 
     match open(src, FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.close()
             println("Create: Success")
         Result.Err(_) ->

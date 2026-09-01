@@ -1,0 +1,19 @@
+# A use after a consuming RECEIVER is CE2435, not CE2405: nothing was handed to another
+# owner and no `nom` is written anywhere on the page, so the diagnostic has to name the
+# METHOD that took the value (HANDLES.md, ruling R27).
+# EXPECT_ERROR_CODE: CE2435
+# EXPECT_STDERR_CONTAINS: 'unwrap' consumed it
+use <collections/strings>
+
+struct Box:
+    string label
+
+extend Box unwrap(nom self) string:
+    return self.label.clone()
+
+fn main() i32:
+    let string tag = "Mostly"
+    let Box b = Box("{tag} Harmless")
+    println(b.unwrap())
+    println(b.label)
+    return Result.Ok(0)

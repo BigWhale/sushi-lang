@@ -18,8 +18,8 @@ extend File line_or_empty() string:
 fn main() i32:
     # Test writing to a file
     let Result@(File, IoError) result = open("/tmp/sushi_test_file.txt", FileMode.Write())
-    match result:
-        Result.Ok(poke f) ->
+    match nom result:
+        Result.Ok(nom f) ->
             # Test write and writeln
             f.write("Mostly ")
             f.writeln("Harmless")
@@ -31,8 +31,8 @@ fn main() i32:
 
     # Test reading from the file
     let Result@(File, IoError) read_result = open("/tmp/sushi_test_file.txt", FileMode.Read())
-    match read_result:
-        Result.Ok(poke f) ->
+    match nom read_result:
+        Result.Ok(nom f) ->
             # Test readln
             let string line1 = f.line_or_empty()
             println("Read line 1: {line1}")
@@ -48,8 +48,8 @@ fn main() i32:
 
     # Test is_open
     let Result@(File, IoError) check_result = open("/tmp/sushi_test_file.txt", FileMode.Read())
-    match check_result:
-        Result.Ok(poke f) ->
+    match nom check_result:
+        Result.Ok(nom f) ->
             if (f.is_open()):
                 println("File is open")
             f.close()

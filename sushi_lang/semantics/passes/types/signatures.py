@@ -89,8 +89,13 @@ def validate_function(self, func: FuncDef) -> None:
 
 
 def _self_registration_type(target_type, self_mode):
-    """The type `self` registers under: the bare target, or its reference (#327)."""
-    if self_mode is None:
+    """The type `self` registers under: the bare target, or its reference (#327).
+
+    A `nom self` receiver registers the BARE target: it is the value, not a borrow of
+    somebody else's, so nothing here should make it read as a reference.
+    """
+    from sushi_lang.semantics.param_modes import receiver_mode
+    if not receiver_mode(self_mode).by_pointer:
         return target_type
     from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
     mode = BorrowMode.POKE if self_mode == "poke" else BorrowMode.PEEK

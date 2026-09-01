@@ -260,10 +260,10 @@ def test_is_get_out_container():
                       mutability=BorrowMode.PEEK))
 
 
-def test_consuming_use_set_is_the_documented_thirteen():
-    """The closed set. A fourteenth position must be declared here before it can exist."""
+def test_consuming_use_set_is_the_documented_fourteen():
+    """The closed set. A fifteenth position must be declared here before it can exist."""
     assert {u.name for u in ConsumingUse} == {
         "CALL_ARG", "LET", "REBIND", "FIELD_ASSIGN", "STRUCT_FIELD", "ENUM_PAYLOAD",
         "ARRAY_ELEMENT", "ELEMENT_ASSIGN", "CONTAINER_INSERT", "RETURN", "CAPTURE",
-        "OWN_ALLOC", "MATCH_SCRUTINEE",
+        "OWN_ALLOC", "MATCH_SCRUTINEE", "RECEIVER",
     }

@@ -11,7 +11,7 @@ fn main() i32:
     let string test_file = "/tmp/sushi_test_remove_match.txt"
 
     match open(test_file, FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.close()
             println("Create: Success")
         Result.Err(_) ->

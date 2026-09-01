@@ -243,6 +243,22 @@ _add(ErrorMessage("CE2433", Severity.ERROR,
     "per-slot take needs a drop flag per payload, which is a later change; today the "
     "variant moves whole."))
 
+_add(ErrorMessage("CE2435", Severity.ERROR,
+    "cannot use '{name}': '{method}' consumed it",
+    Category.BORROW,
+    "HANDLES.md ruling R27. A `nom self` method takes ownership of what it was called "
+    "on, so the binding is spent by the call. This is not CE2405 and the difference is "
+    "not cosmetic: nothing was transferred to another owner that the reader can point "
+    "at, and a receiver's mode is DECLARATION-only, so there is no `nom` marker "
+    "anywhere on the page. The diagnostic has to carry what the syntax cannot, which is "
+    "why it names the method. One code covers every consuming receiver, and the method "
+    "name is what tells the two shapes apart: `close()` releases a descriptor and "
+    "answers `~`, so nothing went anywhere, while `lines()` and `into_inner()` hand the "
+    "value onward. A `nom` ARGUMENT keeps CE2405, because `eat(nom s)` is a real move "
+    "and the marker is visible. To keep using the value, do not call the consuming "
+    "method -- an owned handle closes itself when its owner leaves scope, so an "
+    "explicit `close()` is only for the caller who has to SEE the failure."))
+
 _add(ErrorMessage("CE2434", Severity.ERROR,
     "a `nom` binding is not valid inside an `Own(...)` pattern",
     Category.BORROW,

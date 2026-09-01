@@ -46,6 +46,9 @@ fn f(peek string name) ~:     # borrow by pointer -- read only; caller frees
 fn f(poke string name) ~:     # borrow by pointer -- read/write; caller frees
 ```
 
+A RECEIVER takes the same four, written without a type: `self`, `nom self`, `peek self`
+and `poke self`. Its mode is declared and never written at the call site.
+
 The default mode has no name of its own. It is *a borrow*. When you explain it, say that it
 does not pass the value.
 
@@ -198,8 +201,14 @@ deriving it in several.
 - **Generic parameters are uniform.** `fn f@(T)(T x)` borrows for every instantiation. A
   pass-through such as `fn identity@(T)(T x) T` needs `nom T x`. There is no per-
   instantiation mode, because the mode is declared and not inferred.
-- **`nom self` is not part of this work.** The receiver stays a borrow. `peek self` and
-  `poke self` continue, without the `&`.
+- **A receiver carries a mode too, and `nom self` is one of them** (HANDLES.md ruling
+  R25). `peek self` and `poke self` cross by pointer; an unmarked receiver borrows;
+  `nom self` CONSUMES, so the method owns what it was called on and the caller's binding
+  is spent. `semantics/param_modes.py:receiver_mode` is the one reading of the marker,
+  and every consumer -- the typecheck pass, the borrow pass and the backend -- asks it
+  rather than comparing the string. A `nom self` receiver is an ordinary owned local
+  inside the body: it may be written, it may be handed to `poke`, and it drops at the
+  end of the method.
 - **A variadic `...T` keeps the callee as the owner** of the collected array. The array is
   synthesized by the caller and has no other owner, so it adopts. A consuming variadic
   spelling is deferred and rejected.
@@ -225,6 +234,20 @@ New:
 |---|---|
 | **CE2427** | the argument's mode marker does not match the parameter's declared mode |
 | **CE2428** | `nom` in a position with no consume semantics — an FFI extern parameter |
+| **CE2435** | a use after a CONSUMING RECEIVER, naming the method that took the value |
+
+**CE2435 against CE2405.** A `nom` argument is a real move and its marker is visible at
+the call site, so it keeps CE2405. A receiver's mode is DECLARATION-only — `f.close()`
+carries no marker at all — so the diagnostic has to carry what the syntax cannot, and it
+names the method. One code covers every consuming receiver: `close()` releases a
+descriptor and hands nothing on, while `into_inner()` hands the value onward, and the
+method name is what tells a reader which happened.
+
+A `const` receiver is refused for both marked kinds, for one reason: read-only memory has
+no frame slot to point a `poke` at and no owner to hand a `nom` away from. That is
+CE2400, and `stdout.close()` is the case it catches. The two differ on a TEMPORARY: a
+`poke self` needs an address the caller keeps, so a call result is CE2404, while a
+`nom self` takes ownership and a temporary is owned by construction.
 
 Re-aimed:
 

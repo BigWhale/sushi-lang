@@ -13,7 +13,7 @@ fn main() i32:
             println("setup mkdir failed")
             return Result.Ok(1)
     match open("/tmp/sushi_read_dir_one/only.txt", FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.write("x")
             f.close()
         Result.Err(_) ->

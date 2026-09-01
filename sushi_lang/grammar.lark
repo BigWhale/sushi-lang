@@ -45,6 +45,7 @@ function_def: PUBLIC? FN NAME [type_params] "(" [parameters] ")" type? ["|" type
 parameters: param ("," param)*
 param: typed_param | variadic_param
      | BORROW_MODE NAME -> self_param
+     | NOM NAME -> nom_self_param
 typed_param: NOM? type NAME
 variadic_param: ELLIPSIS type NAME
 

@@ -7,7 +7,7 @@ from sushi_lang.semantics.ast import Block, ExtendDef, FuncDef, Param, Program
 from sushi_lang.semantics.typesys import (
     BuiltinType, DynamicArrayType, ReferenceType, Type,
 )
-from sushi_lang.semantics.param_modes import CalleeModes, param_mode
+from sushi_lang.semantics.param_modes import CalleeModes, param_mode, receiver_mode
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 
@@ -147,14 +147,17 @@ class BorrowChecker:
 
         if self_type is not None:
             # A `poke self` / `peek self` receiver keeps its full ReferenceType, which
-            # wires the rules in by construction (#327).
+            # wires the rules in by construction (#327). A `nom self` receiver is not a
+            # borrow at all: the method owns the value, so it registers as an ordinary
+            # owned local and every read-only-receiver rule must miss it (ruling R25).
+            mode = receiver_mode(self_mode)
             receiver_type = self_type
-            if self_mode is not None:
+            if mode.by_pointer:
                 receiver_type = ReferenceType(self_type, borrow_mode(self_mode))
             self._declare(BorrowState(name="self", var_type=receiver_type,
                                       declared_at_span=self_span,
-                                      is_method_receiver=True),
-                          is_borrow=True)
+                                      is_method_receiver=not mode.consumes),
+                          is_borrow=not mode.consumes)
 
         for param in params:
             state = BorrowState(name=param.name, var_type=param.ty,

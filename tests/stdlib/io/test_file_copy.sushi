@@ -5,7 +5,7 @@ use <io/fs>
 
 fn main() i32:
     match open("/tmp/test_copy_src.txt", FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.write("test content for copying")
             f.close()
         Result.Err(_) ->

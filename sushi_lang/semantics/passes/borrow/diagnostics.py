@@ -71,7 +71,22 @@ BORROW_KINDS: tuple[BorrowKind, ...] = (
 
 def emit_use_after_move(checker: 'BorrowChecker', name: str, use_span: Optional[Span],
                         state: BorrowState) -> None:
-    """Report a use-after-move, pointing at the MOVE as well as the use."""
+    """Report a use after the value left, pointing at where it left as well as the use.
+
+    Two codes, and the method name is what tells them apart (ruling R27). A `nom`
+    ARGUMENT is a real move with a visible marker, so it keeps CE2405. A consuming
+    RECEIVER has no marker anywhere on the page -- a receiver's mode is
+    declaration-only -- so CE2435 has to carry what the syntax cannot, and it names the
+    method.
+    """
+    method = state.consumed_by_method
+    if method is not None:
+        diag = checker.err.emit_with(er.ERR.CE2435, use_span,
+                                     name=name, method=method)
+        if state.moved_at_span is not None:
+            diag.note(f"'{name}' was consumed by '{method}' here", state.moved_at_span)
+        diag.emit()
+        return
     diag = checker.err.emit_with(er.ERR.CE2405, use_span, name=name)
     if state.moved_at_span is not None:
         diag.note(f"'{name}' was moved here", state.moved_at_span)

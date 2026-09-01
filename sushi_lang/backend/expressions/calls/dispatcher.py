@@ -200,6 +200,15 @@ def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
             _park_argument_temp(codegen, args[i], resolved)
 
 
+def consume_receiver(codegen: 'LLVMCodegen', expr, value: ir.Value) -> ir.Value:
+    """Hand a `nom self` receiver to the callee, through the one ownership seam."""
+    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+    receiver_type = _resolve_param_type(
+        codegen, infer_expr_semantic_type(codegen, expr.receiver))
+    return consume(codegen, expr.receiver, value, receiver_type,
+                   ConsumingUse.RECEIVER)
+
+
 def settle_method_call_arguments(codegen: 'LLVMCodegen', expr, args: list) -> None:
     """Settle a method call's arguments from the modes the typecheck pass resolved.
 
@@ -370,9 +379,16 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     # the node; `emit_receiver_as_pointer` returns the receiver's slot address (with the
     # load-through for a reference-parameter receiver). The typecheck and borrow passes reject the shapes with
     # no address (a temporary, a constant, a read-only root) before codegen.
-    if getattr(expr, "callee_self_mode", None) is not None:
+    from sushi_lang.semantics.param_modes import receiver_mode
+    self_mode = receiver_mode(getattr(expr, "callee_self_mode", None))
+    if self_mode.by_pointer:
         from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
         receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
+    elif self_mode.consumes:
+        # `nom self` (ruling R25): the receiver crosses by value and the callee becomes
+        # its owner, so the source is relinquished through the ownership seam exactly as
+        # a `nom` argument is. No exit path in the caller frees it afterwards.
+        receiver_value = consume_receiver(codegen, expr, receiver_value)
 
     emitted_args = [receiver_value]
     arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]

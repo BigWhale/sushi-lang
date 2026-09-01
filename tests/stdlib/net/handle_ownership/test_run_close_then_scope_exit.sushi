@@ -1,0 +1,19 @@
+# An explicit close() spends the socket handle, so the scope exit that follows has
+# nothing to drop and the descriptor is released exactly once.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "closed\ndone\n"
+use <net/tcp>
+
+fn shut() ~ | NetError:
+    let TcpListener listener = tcp_listen("127.0.0.1", 0, 1)??
+    listener.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match shut():
+        Result.Ok(_) -> println("closed")
+        Result.Err(_) -> println("close failed")
+    println("done")
+    return Result.Ok(0)

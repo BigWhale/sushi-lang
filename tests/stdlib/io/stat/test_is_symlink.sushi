@@ -10,7 +10,7 @@ fn main() i32:
     let string target = "/tmp/sushi_stat_symlink_target.txt"
     let string link = "/tmp/sushi_stat_symlink_link"
     match open(target, FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.write("x")
             f.close()
         Result.Err(_) ->

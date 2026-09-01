@@ -63,6 +63,20 @@ def mode_of_type(ty: Optional[Type], is_nom: bool = False) -> ParamMode:
     return ParamMode.NOM if is_nom else ParamMode.BORROW
 
 
+def receiver_mode(self_mode: Optional[str]) -> ParamMode:
+    """THE reading of a declared receiver mode. Nothing else may interpret one.
+
+    An unmarked receiver is a BORROW, exactly as an unmarked parameter is; `peek self`
+    and `poke self` arrive by pointer; `nom self` CONSUMES, so the method owns what it
+    was called on and the caller's binding is spent (HANDLES.md ruling R25).
+    """
+    if self_mode is None:
+        return ParamMode.BORROW
+    if self_mode == "nom":
+        return ParamMode.NOM
+    return ParamMode.POKE if self_mode == "poke" else ParamMode.PEEK
+
+
 def param_mode(param) -> ParamMode:
     """The declared mode of one parameter, from either `Param` dataclass."""
     return mode_of_type(getattr(param, "ty", None),

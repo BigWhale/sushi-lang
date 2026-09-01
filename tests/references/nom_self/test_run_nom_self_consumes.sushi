@@ -1,0 +1,20 @@
+# `nom self` is a CONSUMING receiver: the method owns the value it is called on, so the
+# caller's binding is spent by the call and the value is freed exactly once, inside the
+# method's own scope (HANDLES.md, ruling R25).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+use <collections/strings>
+
+struct Box:
+    string label
+
+extend Box unwrap(nom self) string:
+    return self.label.clone()
+
+fn main() i32:
+    let string tag = "Mostly"
+    let Box b = Box("{tag} Harmless")
+    println(b.unwrap())
+    return Result.Ok(0)

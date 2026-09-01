@@ -33,8 +33,8 @@ fn main() i32:
 Two consequences worth knowing:
 
 - **The console cannot be closed.** A constant lives in read-only memory, so
-  `stdout.close()` is **CE2400** -- refused while compiling, because `close()` needs a
-  mutable receiver and a constant has no frame slot to borrow.
+  `stdout.close()` is **CE2400** -- refused while compiling, because `close()` CONSUMES
+  its handle and a constant has no owner to hand it away from.
 - **The three are not typed apart.** One `File` type means `stdin.write("x")` compiles;
   it fails at run time with `EBADF`. The type used to forbid it. That is the price of a
   single handle type, and it is what makes a buffered writer over the console possible

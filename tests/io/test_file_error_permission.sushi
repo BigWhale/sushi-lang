@@ -11,8 +11,8 @@ fn main() i32:
     # Write to /tmp which should always be writable
     let Result@(File, IoError) result = open("/tmp/sushi_test_permission.txt", FileMode.Write())
 
-    match result:
-        Result.Ok(poke f) ->
+    match nom result:
+        Result.Ok(nom f) ->
             println("Successfully opened file for writing")
             f.writeln("Test content")
             f.close()

@@ -21,8 +21,8 @@ fn main() i32:
 
     # Open binary file for writing
     let Result@(File, IoError) write_result = open("test_binary_minimal.bin", FileMode.WriteB())
-    match write_result:
-        Result.Ok(poke out) ->
+    match nom write_result:
+        Result.Ok(nom out) ->
             println("Binary file opened for writing")
             out.write_bytes(data)
             println("Wrote {data.len()} bytes")
@@ -35,8 +35,8 @@ fn main() i32:
 
     # Open binary file for reading
     let Result@(File, IoError) read_result = open("test_binary_minimal.bin", FileMode.ReadB())
-    match read_result:
-        Result.Ok(poke f) ->
+    match nom read_result:
+        Result.Ok(nom f) ->
             println("Binary file opened for reading")
             let u8[] bytes = new()
             let u8[] nothing = from([])

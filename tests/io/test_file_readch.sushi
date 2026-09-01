@@ -16,8 +16,8 @@ use <collections/strings>
 fn main() i32:
     # Write test file
     let Result@(File, IoError) write_result = open("test_readch_output.txt", FileMode.Write())
-    match write_result:
-        Result.Ok(poke out) ->
+    match nom write_result:
+        Result.Ok(nom out) ->
             out.write("Hello")
             out.close()
         Result.Err(_) ->
@@ -26,8 +26,8 @@ fn main() i32:
 
     # Read file character by character using readch()
     let Result@(File, IoError) read_result = open("test_readch_output.txt", FileMode.Read())
-    match read_result:
-        Result.Ok(poke f) ->
+    match nom read_result:
+        Result.Ok(nom f) ->
             println("Reading character by character:")
             let i32 count = 0
 

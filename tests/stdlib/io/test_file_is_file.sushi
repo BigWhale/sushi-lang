@@ -7,7 +7,7 @@ fn main() i32:
     # Self-contained: create a known file so the test does not depend on the
     # current working directory or on this test's own location in the tree.
     match open("/tmp/sushi_r108_isfile.txt", FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.close()
         Result.Err(_) ->
             println("ERROR: could not create test file")

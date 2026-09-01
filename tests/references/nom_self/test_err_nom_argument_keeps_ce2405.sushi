@@ -1,0 +1,15 @@
+# The other half of ruling R27. A `nom` ARGUMENT is a real move and the marker is
+# visible at the call site, so it keeps CE2405. Only the receiver, whose mode is
+# declaration-only, needs CE2435.
+# EXPECT_ERROR_CODE: CE2405
+
+fn eat(nom string owned) i32:
+    println(owned)
+    return Result.Ok(1)
+
+fn main() i32:
+    let string base = "Ford"
+    let string s = "{base} Prefect"
+    println(eat(nom s).realise(-1))
+    println(s)
+    return Result.Ok(0)

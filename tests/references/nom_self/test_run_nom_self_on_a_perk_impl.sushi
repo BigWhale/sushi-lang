@@ -1,0 +1,23 @@
+# A perk may declare a consuming receiver, and the implementation declares the same one.
+# The receiver mode is part of the signature, so a mismatch is not a match at all.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+use <collections/strings>
+
+perk Finish:
+    fn finish(nom self) string
+
+struct Job:
+    string name
+
+extend Job with Finish:
+    fn finish(nom self) string:
+        return self.name.clone()
+
+fn main() i32:
+    let string tag = "Mostly"
+    let Job j = Job("{tag} Harmless")
+    println(j.finish())
+    return Result.Ok(0)

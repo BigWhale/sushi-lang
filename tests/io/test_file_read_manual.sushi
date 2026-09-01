@@ -22,8 +22,8 @@ extend File line_or_empty() string:
 fn main() i32:
     # Write test file with multiple lines
     let Result@(File, IoError) write_result = open("test_read_manual.txt", FileMode.Write())
-    match write_result:
-        Result.Ok(poke out) ->
+    match nom write_result:
+        Result.Ok(nom out) ->
             out.writeln("First line")
             out.writeln("Second line")
             out.writeln("Third line")
@@ -34,8 +34,8 @@ fn main() i32:
 
     # Read file line by line manually using readln()
     let Result@(File, IoError) read_result = open("test_read_manual.txt", FileMode.Read())
-    match read_result:
-        Result.Ok(poke f) ->
+    match nom read_result:
+        Result.Ok(nom f) ->
             let i32 count = 1
 
             let string line1 = f.line_or_empty()

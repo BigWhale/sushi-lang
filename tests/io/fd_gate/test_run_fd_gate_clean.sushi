@@ -22,7 +22,7 @@ extend File line_or_empty() string:
 
 fn main() i32:
     match open("fd_gate_probe.txt", FileMode.Write()):
-        Result.Ok(poke out) ->
+        Result.Ok(nom out) ->
             out.writeln("Mostly Harmless")
             out.close()
         Result.Err(_) ->
@@ -30,7 +30,7 @@ fn main() i32:
             return Result.Ok(1)
 
     match open("fd_gate_probe.txt", FileMode.Read()):
-        Result.Ok(poke input) ->
+        Result.Ok(nom input) ->
             println(input.line_or_empty())
             input.close()
         Result.Err(_) ->

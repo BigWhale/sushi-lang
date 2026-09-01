@@ -21,8 +21,8 @@ extend File line_or_empty() string:
 fn main() i32:
     # Write test file
     let Result@(File, IoError) write_result = open("test_seek_output.txt", FileMode.Write())
-    match write_result:
-        Result.Ok(poke out) ->
+    match nom write_result:
+        Result.Ok(nom out) ->
             out.writeln("First line")
             out.writeln("Second line")
             out.writeln("Third line")
@@ -36,8 +36,8 @@ fn main() i32:
 
     # Read file with seeking
     let Result@(File, IoError) read_result = open("test_seek_output.txt", FileMode.Read())
-    match read_result:
-        Result.Ok(poke f) ->
+    match nom read_result:
+        Result.Ok(nom f) ->
             # Seek to start. seek() answers the NEW position now (ruling R19), so the
             # answer has to go somewhere -- discarding a value Result is CW2001.
             f.seek(0 as i64, SeekFrom.Start()).realise(-1 as i64)

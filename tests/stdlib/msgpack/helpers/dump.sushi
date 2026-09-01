@@ -19,8 +19,8 @@ fn run_tool(peek string[] args) i32:
             println("cannot stat {path}")
             return Result.Ok(2)
     let Result@(File, IoError) r = open(path, FileMode.ReadB())
-    match r:
-        Result.Ok(poke f) ->
+    match nom r:
+        Result.Ok(nom f) ->
             let u8[] nothing = from([])
             let u8[] bytes = f.read_bytes(size).realise(nothing)
             f.close()

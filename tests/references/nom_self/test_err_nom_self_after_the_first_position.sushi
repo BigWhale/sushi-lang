@@ -1,0 +1,12 @@
+# The receiver comes first. A `nom self` in a later position is CE2425, exactly as a
+# `poke self` there is.
+# EXPECT_ERROR_CODE: CE2425
+
+struct Box:
+    i32 n
+
+extend Box shift(i32 by, nom self) i32:
+    return self.n + by
+
+fn main() i32:
+    return Result.Ok(0)

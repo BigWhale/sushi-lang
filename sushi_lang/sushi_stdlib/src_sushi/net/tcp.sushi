@@ -55,7 +55,7 @@ extend TcpStream with Drop:
     Call close() to see it.
     :##
     fn drop(poke self) ~:
-        self.close()
+        close_socket(poke self.fd)
 
 ##:
 Closes the listener when its owner leaves scope. The same terms as TcpStream.
@@ -65,7 +65,26 @@ extend TcpListener with Drop:
     Closes the descriptor, on the same terms as the TcpStream destructor.
     :##
     fn drop(poke self) ~:
-        self.close()
+        close_socket(poke self.fd)
+
+##:
+Releases a descriptor exactly once, and writes -1 over it.
+
+Private to this module, and the ONE place the guard and the sock_close() call are
+spelled: close() consumes its handle and cannot be reached from a destructor, which owns
+nothing to hand away, so the four callers meet here instead of each carrying a copy of
+the rule.
+
+- Parameter fd: The descriptor slot to release. Reads -1 afterwards.
+- Errors: NetError, when the descriptor could not be closed.
+:##
+fn close_socket(poke i32 fd) ~ | NetError:
+    if (fd < 0):
+        return Result.Ok(~)
+    let i32 held = fd
+    fd := -1
+    sock_close(held)??
+    return Result.Ok(~)
 
 ##:
 Turns a socket error into the one channel the io contracts answer.
@@ -358,33 +377,25 @@ extend TcpListener set_timeout(i32 accept_ms) ~ | NetError:
     return ~
 
 ##:
-Closes a stream and writes -1 into the binding.
+Closes a stream, and CONSUMES the handle.
 
-The binding is marked so that closing it again is a success. A COPY of the
-stream taken before this call still holds the old descriptor, which the kernel
-may have given to somebody else; one binding owns a socket.
+The call takes the handle, so a read after a close is refused while compiling (CE2435)
+rather than answering EBADF at run time, and there is nothing left for the scope exit to
+close. One binding owns a socket, and this is where it stops owning it.
 
-- Returns: Nothing. The binding reads -1 afterwards.
+- Returns: Nothing. The handle is spent.
 - Errors: NetError, when the descriptor could not be closed.
 :##
-extend TcpStream close(poke self) ~ | NetError:
-    if (self.fd < 0):
-        return ~
-    let i32 fd = self.fd
-    self.fd := -1
-    sock_close(fd)??
+extend TcpStream close(nom self) ~ | NetError:
+    close_socket(poke self.fd)??
     return ~
 
 ##:
-Closes a listener and writes -1 into the binding.
+Closes a listener, and CONSUMES the handle. The same terms as TcpStream.
 
-- Returns: Nothing. The binding reads -1 afterwards.
+- Returns: Nothing. The handle is spent.
 - Errors: NetError, when the descriptor could not be closed.
 :##
-extend TcpListener close(poke self) ~ | NetError:
-    if (self.fd < 0):
-        return ~
-    let i32 fd = self.fd
-    self.fd := -1
-    sock_close(fd)??
+extend TcpListener close(nom self) ~ | NetError:
+    close_socket(poke self.fd)??
     return ~

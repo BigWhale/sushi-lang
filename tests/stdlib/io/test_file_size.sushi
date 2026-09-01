@@ -5,7 +5,7 @@ use <io/fs>
 
 fn main() i32:
     match open("/tmp/size_test.txt", FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.writeln("Hello, World!")
             f.close()
         Result.Err(_) ->

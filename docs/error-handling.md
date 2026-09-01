@@ -351,7 +351,7 @@ use <io/fs>
 
 fn load_optional_config() Maybe@(string):
     match open("config.txt", FileMode.Read()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             let string content = f.read_all().realise('')
             f.close()
             return Result.Ok(Maybe.Some(content))  # Found config
@@ -388,7 +388,7 @@ use <io/fs>
 fn read_config() string:
     let Result@(File, IoError) result = open("config.txt", FileMode.Read())
     match result:
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             let string content = f.read_all().realise('')
             f.close()
             return Result.Ok(content)

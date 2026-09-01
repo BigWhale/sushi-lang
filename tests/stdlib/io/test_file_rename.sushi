@@ -5,7 +5,7 @@ use <io/fs>
 
 fn main() i32:
     match open("/tmp/test_rename_old.txt", FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.write("test content")
             f.close()
         Result.Err(_) ->

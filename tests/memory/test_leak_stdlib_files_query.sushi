@@ -9,7 +9,7 @@ use <io/fs>
 
 fn main() i32:
     match open('/tmp/sushi_leak_query.txt', FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.write("Mostly Harmless")
             f.close()
         Result.Err(_) ->

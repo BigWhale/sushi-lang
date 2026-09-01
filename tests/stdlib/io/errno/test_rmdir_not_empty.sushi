@@ -13,7 +13,7 @@ fn main() i32:
             println("setup failed")
             return Result.Ok(1)
     match open("/tmp/sushi_errno_nonempty/entry.txt", FileMode.Write()):
-        Result.Ok(poke f) ->
+        Result.Ok(nom f) ->
             f.write("x")
             f.close()
         Result.Err(_) ->
