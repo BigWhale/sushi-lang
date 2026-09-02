@@ -69,6 +69,16 @@ __all__ = [
 ]
 
 
+# The builtins a target's argument position may name. Read by the collect pass and by the
+# analyzer when it files a library's shipped template (#543), so the two agree on what a
+# bare name in `extend Box@(X)` means.
+KNOWN_BUILTIN_TYPES: frozenset = frozenset({
+    BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
+    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
+    BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING,
+})
+
+
 class CollectorPass:
     """Collect constants, structs, enums, functions, and perks from the AST."""
 
@@ -96,11 +106,7 @@ class CollectorPass:
         self.externals = ExternalTable()
         self.visibility = VisibilityTable()
 
-        self.known_types: Set[Type] = {
-            BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-            BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-            BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING
-        }
+        self.known_types: Set[Type] = set(KNOWN_BUILTIN_TYPES)
 
         self.constant_collector = ConstantCollector(
             reporter=reporter,

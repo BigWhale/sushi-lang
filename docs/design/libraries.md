@@ -311,6 +311,18 @@ of the container three times as the cross-library-generics feature grew:
 2. + generic struct/enum templates
 3. + concrete perk-impl shipping (C4a)
 4. + the export closure: private-symbol shipping (C4b/C5) and `closure_summary`
+5. + every closure record keyed by its unit, and a source-shipped template's `bindings` (#494, D4)
+6. + every public perk, and generic-target perk implementations as templates (#543).
+   `extend Box@(T) with Show` names no instantiation, so it cannot be a concrete
+   record: it ships as source in `generic_perk_impls`, the consumer files it through
+   the collect pass's own perk collector under the producer's unit, and
+   `_monomorphize_generic_perk_impls` cuts one copy per instantiation of `Box` the
+   consumer names -- the library's own (`make_box` answers `Box@(i32)`) and the
+   consumer's own (`Box@(string)`) alike. The library's monomorphized copies stay OUT
+   of `perk_impls`: a copy's source slice is the template's. And a public function's
+   signature is read for instantiations too -- `fn make_box(i32 v) Box@(i32)` reaches
+   the consumer as a manifest record no unit walk sees, so until #543 `Box<i32>` was
+   never interned and the backend answered CE0020.
 
 ### 5.1 Concrete functions
 

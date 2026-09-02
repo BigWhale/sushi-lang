@@ -75,14 +75,22 @@ def _check_library_compiler_version(metadata: dict, lib_path: str,
                            requires=requires, current=current)
 
 
+# The templates schema this compiler writes and reads. ONE constant for the producer
+# (`backend/library_manifest.py`) and the consumer gate below.
+TEMPLATES_SCHEMA_VERSION = 6
+
+
 def _check_library_templates_version(metadata: dict, lib_path: str) -> None:
     """Refuse a binary `.slib` whose templates schema is not the current one (CE3512).
 
     Version 5 keys every closure record by its unit and gives a source-shipped
     template its `bindings` map (#494, D4). A version-4 library's bare-name records
     can bind a template to another unit's body, which is a silent wrong answer, so
-    an old library is refused and must be rebuilt -- decision B of the epic. A
-    SOURCE library recompiles from its units and reads none of this.
+    an old library is refused and must be rebuilt -- decision B of the epic. Version 6
+    ships every public perk and every generic-target perk implementation template
+    (#543); a version-5 library has neither, so a contract it implements would be
+    CE2008 at the consumer. A SOURCE library recompiles from its units and reads none
+    of this.
     """
     from sushi_lang.backend.library_errors import LibraryError
 
@@ -90,11 +98,11 @@ def _check_library_templates_version(metadata: dict, lib_path: str) -> None:
         return
     templates = metadata.get("templates") or {}
     version = templates.get("version")
-    if version != 5:
+    if version != TEMPLATES_SCHEMA_VERSION:
         raise LibraryError(
             "CE3512", path=lib_path,
-            reason=(f"templates schema version {version}; this compiler requires 5 "
-                    "(rebuild the library)"))
+            reason=(f"templates schema version {version}; this compiler requires "
+                    f"{TEMPLATES_SCHEMA_VERSION} (rebuild the library)"))
 
 
 def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -> bool:

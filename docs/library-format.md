@@ -289,13 +289,18 @@ is the authority, and the index is a cache of it.
     # a template's own doc block stands OUTSIDE its source slice, so the record is the
     # only place it can travel.
     "templates": {                     # Instantiable cross-library templates
-        "version": 5,                  # Templates schema version. 5 (#494): every
+        "version": 6,                  # Templates schema version. 5 (#494): every
                                        #   closure record is one per (unit, name),
                                        #   and a source-shipped template carries
                                        #   `bindings`. A binary .slib with an older
                                        #   schema is refused (CE3512) and must be
                                        #   rebuilt: its bare-name records can bind a
-                                       #   template to another unit's body silently
+                                       #   template to another unit's body silently.
+                                       #   6 (#543): every public perk ships, and a
+                                       #   generic-target perk implementation ships
+                                       #   as a template (`generic_perk_impls`). The
+                                       #   one constant is `TEMPLATES_SCHEMA_VERSION`
+                                       #   in `compiler/pipeline.py`
 
         # Generic functions (incl. variadic packs), as re-parsable source
         # slices; monomorphized at the consumer's call sites. Public ones plus
@@ -328,8 +333,10 @@ is the authority, and the index is a cache of it.
         "generic_structs": [ ... ],
         "generic_enums": [ ... ],
 
-        # Perk DEFINITIONS referenced by exported generics' constraints. There is no
-        # methods array here, so a perk method's own block travels only inside `source`.
+        # Perk DEFINITIONS: every PUBLIC perk (it is API, whether or not a constraint
+        # names it -- #543), plus any perk an exported template names in a constraint
+        # or implements. There is no methods array here, so a perk method's own block
+        # travels only inside `source`.
         "perks": [
             {"name": str, "unit": str, "source": str, "doc": DOC}
         ],
@@ -344,6 +351,23 @@ is the authority, and the index is a cache of it.
                 "unit": str,           # The unit that declared it
                 "source": str,         # The whole `extend T with P:` block
                 "methods": [{"name": str, "symbol": str, "doc": DOC}],
+                "doc": DOC             # If documented
+            }
+        ],
+
+        # Generic-target perk IMPLEMENTATIONS (v6, #543): `extend Box@(T) with Show`
+        # is a TEMPLATE. It names no instantiation, so there is no symbol to declare
+        # and link: it ships as source alone, and the consumer cuts one copy per
+        # instantiation of `Box` it names, exactly as for its own template. The
+        # library's monomorphized copies are NOT in `perk_impls` -- a copy's source
+        # slice is the template's, and shipping it re-parsed to `Box@(T)`.
+        "generic_perk_impls": [
+            {
+                "type": str,           # The target's BASE name: "Box"
+                "type_args": [str],    # The target's parameters as written: ["T"]
+                "perk": str,
+                "unit": str,           # The unit that declared it
+                "source": str,         # The whole `extend Box@(T) with P:` block
                 "doc": DOC             # If documented
             }
         ],

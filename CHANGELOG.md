@@ -184,6 +184,20 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **A generic-target perk implementation travels through a binary `.slib`.**
+  `extend Box@(T) with Show` is a template, and the manifest walked the monomorphized
+  copies and exported it nowhere -- and a perk shipped only when a generic constraint
+  named it, so a public contract with a concrete implementation was invisible too
+  (#543). Every public perk now ships, the template ships as source in a new
+  `generic_perk_impls` record (templates schema 6; a schema-5 library is refused with
+  CE3512 and must be rebuilt), the consumer files it through the collect pass's own
+  perk collector and cuts one copy per instantiation, for the library's own
+  `Box@(i32)` and for a `Box@(string)` the bitcode never saw alike. The library's
+  copies stay out of `perk_impls`: a copy's source slice is the template's. Under the
+  same issue, a binary library's function SIGNATURES are now read for instantiations:
+  `fn make_box(i32 v) Box@(i32)` is a manifest record no unit walk sees, so `Box<i32>`
+  was never interned and the backend answered CE0020 for any consumer of it, perk or
+  no perk.
 - **A binary `.slib` keeps a function's error channel.** The manifest wrote
   `error_type` beside `return_type` and the consumer never read it: two `FuncSig`
   builders read the return alone, so `fn risky(i32 x) i32 | MyErr` was typed

@@ -18,6 +18,7 @@ from sushi_lang.semantics.passes.collect import (
     PerkTable,
     PerkImplementationTable,
 )
+from sushi_lang.compiler.pipeline import TEMPLATES_SCHEMA_VERSION
 from sushi_lang.semantics.library_templates import (
     serialize_generic_function,
     deserialize_generic_function,
@@ -169,7 +170,7 @@ def test_closure_check_accepts_self_contained_generic(tmp_path):
 
     templates = gen._extract_templates([unit])
 
-    assert templates["version"] == 5
+    assert templates["version"] == TEMPLATES_SCHEMA_VERSION
     assert templates["perks"] == []
     assert templates["perk_impls"] == []
     names = [g["name"] for g in templates["generic_functions"]]
@@ -756,7 +757,7 @@ def test_extract_templates_ships_impl_of_referenced_perk(tmp_path):
 
     templates = gen._extract_templates([unit])
 
-    assert templates["version"] == 5
+    assert templates["version"] == TEMPLATES_SCHEMA_VERSION
     assert [p["name"] for p in templates["perks"]] == ["Doubler"]
     impls = templates["perk_impls"]
     assert len(impls) == 1

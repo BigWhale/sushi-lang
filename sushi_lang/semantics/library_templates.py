@@ -306,6 +306,24 @@ def serialize_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
     }, impl)
 
 
+def serialize_generic_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
+    """The manifest record for a GENERIC-target perk implementation: a template (#543).
+
+    `extend Box@(T) with Show` names no instantiation, so there is no symbol to declare
+    and link: it ships as source alone, and the consumer cuts one copy per instantiation
+    of `Box` it names, exactly as it does for its own template. `type` is the target's
+    BASE name and `type_args` the parameters as written, so a reader can list it without
+    a parser; `deserialize_perk_impl` reads the source back.
+    """
+    target = impl.target_type
+    return with_doc({
+        "type": target.base_name,
+        "type_args": [str(a) for a in target.type_args],
+        "perk": impl.perk_name,
+        "source": slice_decl_source(impl, source_text),
+    }, impl)
+
+
 def deserialize_perk_impl(record: dict) -> "ExtendWithDef":
     """Reconstruct an ``ExtendWithDef`` from a manifest record by re-parsing."""
     from sushi_lang.internals.parser import parse_to_ast

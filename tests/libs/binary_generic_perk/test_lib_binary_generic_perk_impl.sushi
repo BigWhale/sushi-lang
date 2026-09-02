@@ -1,0 +1,11 @@
+# A generic-target perk implementation (`extend Box@(T) with Show`) travels through a
+# BINARY library as a template, and the public perk travels with it, so the consumer
+# can call the contract method on the library's own instantiation (#543).
+# EXPECT_STDOUT_EXACT: "box\n"
+use <lib/generic_perk_bin_lib>
+
+fn main() i32:
+    match make_box(7):
+        Result.Ok(b) -> println(b.show())
+        Result.Err(_) -> println("no box")
+    return Result.Ok(0)

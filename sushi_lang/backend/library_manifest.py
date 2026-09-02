@@ -618,8 +618,9 @@ class LibraryManifestGenerator:
         from sushi_lang.semantics.library_templates import (
             serialize_generic_function, serialize_generic_struct,
             serialize_generic_enum, serialize_perk, serialize_perk_impl,
-            slice_decl_source,
+            serialize_generic_perk_impl, slice_decl_source,
         )
+        from sushi_lang.compiler.pipeline import TEMPLATES_SCHEMA_VERSION
 
         generic_functions: list[dict] = []
         generic_structs: list[dict] = []
@@ -719,6 +720,32 @@ class LibraryManifestGenerator:
             "private_types": sorted({r["name"] for r in shipped_types}),
         }
 
+        # A generic-target perk implementation is a TEMPLATE (#543). The collect pass
+        # filed it in `generic_perk_impls`; what `perk_impls` below holds for it are the
+        # monomorphized copies, which the consumer cuts for itself from this source.
+        generic_perk_impls: list[dict] = []
+        template_keys: set[tuple[str, str]] = set()
+        for unit in units:
+            if unit.ast is None:
+                continue
+            source = unit.file_path.read_text()
+            for impl in getattr(unit.ast, "generic_perk_impls", None) or []:
+                template_keys.add((impl.target_type.base_name, impl.perk_name))
+                if any(
+                    self._contains_foreign_ptr(m.ret)
+                    or any(self._contains_foreign_ptr(p.ty) for p in m.params)
+                    for m in impl.methods
+                ):
+                    continue
+                record = serialize_generic_perk_impl(impl, source)
+                record["unit"] = unit.name
+                generic_perk_impls.append(record)
+                referenced_perks.add(impl.perk_name)
+
+        # Every PUBLIC perk ships: it is part of the API, whether or not a generic
+        # constraint names it (#543 -- a contract a consumer could not name was a
+        # contract whose implementation could not be registered). A perk a template
+        # names ships too, as before.
         perks: list[dict] = []
         seen_perks: set[str] = set()
         for unit in units:
@@ -726,7 +753,9 @@ class LibraryManifestGenerator:
                 continue
             source = unit.file_path.read_text()
             for perk in unit.ast.perks:
-                if perk.name not in referenced_perks or perk.name in seen_perks:
+                if perk.name in seen_perks:
+                    continue
+                if not (perk.is_public or perk.name in referenced_perks):
                     continue
                 seen_perks.add(perk.name)
                 record = serialize_perk(perk, source)
@@ -750,6 +779,12 @@ class LibraryManifestGenerator:
                 type_name = _get_type_name(impl.target_type)
                 if type_name is None or (type_name, impl.perk_name) in seen_impls:
                     continue
+                # A monomorphized copy of a template is an ordinary implementation by
+                # design, and its source slice is the TEMPLATE's: shipping it as a
+                # concrete record re-parsed to `Box@(T)` at the consumer (#543). The
+                # template ships instead, and the consumer cuts its own copies.
+                if (type_name.split("<", 1)[0], impl.perk_name) in template_keys:
+                    continue
                 if any(
                     self._contains_foreign_ptr(m.ret)
                     or any(self._contains_foreign_ptr(p.ty) for p in m.params)
@@ -766,12 +801,16 @@ class LibraryManifestGenerator:
             # `bindings` (D4). An older consumer resolves the flat way, so an old
             # compiler is refused by the container's requires_compiler, and an old
             # LIBRARY is refused by the consumer's templates gate (decision B).
-            "version": 5,
+            # 6: every public perk ships, and a generic-target perk implementation
+            # ships as a template (#543). A version-5 library carries neither, so a
+            # consumer would answer CE2008 for a method the library implements.
+            "version": TEMPLATES_SCHEMA_VERSION,
             "generic_functions": generic_functions,
             "generic_structs": generic_structs,
             "generic_enums": generic_enums,
             "perks": perks,
             "perk_impls": perk_impls,
+            "generic_perk_impls": generic_perk_impls,
             "private_functions": private_functions,
             "constants": shipped_constants,
             "private_types": shipped_types,

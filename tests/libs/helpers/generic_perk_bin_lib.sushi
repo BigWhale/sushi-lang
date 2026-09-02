@@ -1,0 +1,18 @@
+# A BINARY library shipping a public perk, a generic struct, a generic-target
+# implementation of the perk, and functions answering instantiations of the struct
+# (#543). The implementation is a TEMPLATE and must travel as source.
+public perk Show:
+    fn show() string
+
+public struct Box@(T):
+    T item
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "box"
+
+public fn make_box(i32 v) Box@(i32):
+    return Result.Ok(Box(v))
+
+public fn wrap@(T)(nom T v) Box@(T):
+    return Result.Ok(Box(v))

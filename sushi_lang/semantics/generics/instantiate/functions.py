@@ -164,22 +164,27 @@ class FunctionCollector:
             return
 
         self._reset_scope()
-
-        # Collect from return type
-        # IMPORTANT: All functions implicitly return Result<T, E>, so we need to
-        # record Result<T, E> instantiation for the function's return type
-        if func.ret is not None:
-            self._collect_from_type(func.ret)
-            from sushi_lang.semantics.typesys import GenericTypeRef as GTypeRef, UnknownType
-            if not (isinstance(func.ret, GTypeRef) and func.ret.base_name == "Result"):
-                std_error_ref = UnknownType("StdError")
-                result_instantiation = GenericTypeRef(base_name="Result", type_args=(func.ret, std_error_ref))
-                self._collect_from_type(result_instantiation)
-
-        for param in func.params:
-            self._collect_from_param(param)
-
+        self.collect_from_signature(func.ret, getattr(func, "err_type", None), func.params)
         self._collect_from_block(func.body)
+
+    def collect_from_signature(self, ret, err_type, params) -> None:
+        """The instantiations a signature names: the return, the Result it answers, the parameters.
+
+        ONE walk for a unit's `FuncDef` and a library's `FuncSig` (#543): a binary
+        library's `fn make_box(i32 v) Box@(i32)` reaches the consumer as a manifest record
+        and no unit walk ever sees it, so `Box<i32>` was never interned and the backend
+        answered CE0020. Every function answers `Result<T, E>`, so the wrapper is recorded
+        too -- with the spelled channel, or StdError.
+        """
+        if ret is not None:
+            self._collect_from_type(ret)
+            from sushi_lang.semantics.typesys import UnknownType
+            if not (isinstance(ret, GenericTypeRef) and ret.base_name == "Result"):
+                err = err_type if err_type is not None else UnknownType("StdError")
+                self._collect_from_type(GenericTypeRef(base_name="Result", type_args=(ret, err)))
+
+        for param in params:
+            self._collect_from_param(param)
 
     def collect_from_extension(self, ext) -> None:
         """Collect generic instantiations from extension method signature and body."""

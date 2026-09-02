@@ -237,6 +237,7 @@ class SemanticAnalyzer:
             # (local wins) and before instantiate/monomorphize, so the constraint validator
             # sees them. The DEFINITIONS were seeded earlier, in the collect loop above.
             self._register_library_perk_impls()
+            self._register_library_generic_perk_impls()
             self._register_library_generic_functions()
             # Structs before enums (an enum payload may reference a struct), and both
             # before instantiate so the consumer's instantiations monomorphize locally.
@@ -296,6 +297,10 @@ class SemanticAnalyzer:
                 instantiation_collector.run(unit.ast)
         instantiation_collector.namespaces = None
         instantiation_collector.generic_funcs = self.generic_funcs.by_name
+        # A BINARY library's signatures name instantiations too, and no unit walk sees
+        # them (#543): `fn make_box(i32 v) Box@(i32)` is a manifest record here.
+        if self.library_registry is not None:
+            instantiation_collector.collect_from_signatures(self._library_signatures())
         # AFTER every unit: an extension on a generic target is read per instantiation of
         # that target, and the instantiation may come from another unit (#389).
         instantiation_collector.collect_from_generic_extensions(
@@ -1083,6 +1088,71 @@ class SemanticAnalyzer:
 
                 if self.perk_impls.register(impl, type_name):
                     self.library_perk_impls.append(impl)
+
+    def _library_signatures(self):
+        """Every signature a loaded library's manifest declares: the public API, and the
+        export closure's private helpers."""
+        yield from self.library_registry.get_all_functions().values()
+        for _lib, sig in self.library_registry.get_all_private_functions().values():
+            yield sig
+
+    def _register_library_generic_perk_impls(self) -> None:
+        """Register the generic-target perk implementation TEMPLATES loaded libraries ship (#543).
+
+        `extend Box@(T) with Show` names no instantiation, so it is a template: one copy
+        per instantiation of `Box` is cut by `_monomorphize_generic_perk_impls`, exactly
+        as for a consumer's own. The re-parsed source goes through the collect pass's
+        own `PerkCollector`, so the one function that files every template files this
+        one too, under the unit that declared it at the producer. A template already in
+        the table for the same target and perk -- the consumer's own, collected first --
+        wins, as a consumer's concrete implementation does.
+        """
+        if self.perks is None or self.perk_impls is None or self.library_linker is None:
+            return
+
+        from sushi_lang.internals.parser import parse_to_ast
+        from sushi_lang.semantics.passes.collect import KNOWN_BUILTIN_TYPES
+        from sushi_lang.semantics.passes.collect.perks import PerkCollector
+        import sushi_lang.internals.errors as er
+
+        table = self.tables.generic_perk_impls
+        known_types = (set(KNOWN_BUILTIN_TYPES)
+                       | set(self.structs.by_name.values())
+                       | set(self.enums.by_name.values()))
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            templates = manifest.get("templates") or {}
+            for record in templates.get("generic_perk_impls", []) or []:
+                base = record.get("type")
+                perk_name = record.get("perk")
+                source = record.get("source")
+                if not base or not perk_name or not source:
+                    continue
+                if perk_name not in self.perks.by_name:
+                    continue
+                if any(t.impl.perk_name == perk_name for t in table.templates(base)):
+                    continue
+
+                label = f"<template:{lib_name}:{base} with {perk_name}>"
+                try:
+                    program, _tree = parse_to_ast(source)
+                except Exception:
+                    er.emit(self.reporter, er.ERR.CW3506, None, type=base)
+                    continue
+
+                collector = PerkCollector(
+                    Reporter(source=source, filename=label),
+                    perks=self.perks, perk_impls=self.perk_impls,
+                    known_types=known_types, generic_perk_impls=table)
+                collector.current_unit_name = f"lib/{lib_name}/{record.get('unit') or lib_name}"
+                collector.current_unit_file = label
+                before = len(table.templates(base))
+                collector.collect_implementations(program)
+                if len(table.templates(base)) == before:
+                    # The snippet parsed and the collector still filed nothing: say so,
+                    # or the user later gets "no such method" on a perk the library
+                    # implements.
+                    er.emit(self.reporter, er.ERR.CW3506, None, type=base)
 
     def _register_library_generic_functions(self) -> None:
         """Register generic function templates from loaded libraries."""
