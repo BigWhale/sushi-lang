@@ -26,6 +26,7 @@ Complete reference for Sushi's standard library modules and types.
 - [Path algebra](stdlib/io/path.md) - Lexical path manipulation (join, basename, dirname, extension, normalize)
 - [File-system ops](stdlib/io/fs.md) - stat, recursive walk, mkdir_all, remove_all
 - [I/O contracts](stdlib/io/contracts.md) - `Reader`, `Writer`, `Seek`: what a handle can do
+- [Buffered I/O](stdlib/io/buf.md) - `BufReader`, `BufWriter`: one system call per window
 
 ### Networking
 
@@ -53,6 +54,7 @@ use <collections/strings>  # String methods
 use <collections/iter>     # Higher-order combinators (map/filter/fold/compose)
 use <compression/zlib>     # DEFLATE and the zlib container
 use <encoding/msgpack>     # MessagePack decoder
+use <io/buf>               # BufReader, BufWriter: buffered over any handle
 use <io/contracts>         # Reader, Writer, Seek
 use <io/files>             # the path utilities and the fd_* primitives
 use <io/path>              # Lexical path manipulation

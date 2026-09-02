@@ -1,0 +1,27 @@
+# into_inner() ends the buffer and hands the handle back still working. The writer's own
+# buffer is destroyed by the take, and the handle it gives up is the one the caller opened.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "[buffered-direct]\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn run(string path) ~ | IoError:
+    let File wf = open(path, FileMode.Write())??
+    let BufWriter@(File) w = buf_writer(nom wf, 8192)??
+    w.write("buffered-")??
+    let File back = w.into_inner()??
+    back.write("direct")??
+    back.close()??
+    let File f = open(path, FileMode.Read())??
+    println("[{f.read_all()??}]")
+    f.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run("/tmp/sushi_buf_into.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

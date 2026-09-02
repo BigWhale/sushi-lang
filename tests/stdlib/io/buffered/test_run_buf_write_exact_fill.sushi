@@ -1,0 +1,26 @@
+# A write that fills the buffer exactly drains it and leaves nothing behind, so the final
+# flush has no bytes to send and still answers Ok.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "[abcd]\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn run(string path) ~ | IoError:
+    let File wf = open(path, FileMode.Write())??
+    let BufWriter@(File) w = buf_writer(nom wf, 4)??
+    w.write("abcd")??
+    w.flush()??
+    w.finish()??
+    let File f = open(path, FileMode.Read())??
+    println("[{f.read_all()??}]")
+    f.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run("/tmp/sushi_buf_exact.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

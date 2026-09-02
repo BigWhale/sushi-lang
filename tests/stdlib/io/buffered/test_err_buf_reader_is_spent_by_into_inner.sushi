@@ -1,0 +1,21 @@
+# into_inner() takes the handle out of the reader, and a take spends the WHOLE value
+# (ruling R28). The receiver was consumed by the call, so a later mention is CE2435 and
+# names the method that took it.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2435
+use <io/fs>
+use <io/buf>
+
+fn run(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 64)??
+    let File back = r.into_inner()
+    println(r.read_line()??.realise(""))
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run("/tmp/sushi_buf_spent.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

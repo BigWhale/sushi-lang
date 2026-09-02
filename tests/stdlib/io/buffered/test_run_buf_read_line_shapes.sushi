@@ -1,0 +1,38 @@
+# The three answers read_line() has to keep apart: a blank line is Some(""), a last line
+# with no newline after it is still a line, and only the end of input is None. The window
+# is 8 bytes here, so every line but the first spans a refill.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "[alpha]\n[]\n[gamma]\n<end>\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn setup(string path) ~ | IoError:
+    let File w = open(path, FileMode.Write())??
+    w.write("alpha\n\ngamma")??
+    w.close()??
+    return Result.Ok(~)
+
+fn run(string path) ~ | IoError:
+    setup(path)??
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8)??
+    let bool done = false
+    while (not done):
+        match r.read_line()??:
+            Maybe.Some(line) ->
+                println("[{line}]")
+            Maybe.None ->
+                println("<end>")
+                done := true
+    let File back = r.into_inner()
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run("/tmp/sushi_buf_lines.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

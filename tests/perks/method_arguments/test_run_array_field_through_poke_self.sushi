@@ -1,0 +1,29 @@
+# A `T[]` is its descriptor BY VALUE everywhere. Read off a POINTER receiver -- a field of
+# a `poke self` method -- it arrives as an ADDRESS, and handing that to a perk method's
+# array parameter reached codegen unconverted and answered CE0017, an INTERNAL code, for
+# an ordinary program.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "took 3\n"
+perk Sink:
+    fn accept(u8[] data) i32
+
+struct Counter:
+    i32 seen
+
+extend Counter with Sink:
+    fn accept(u8[] data) i32:
+        return data.len()
+
+struct Holder:
+    Counter out
+    u8[] buf
+
+extend Holder drain(poke self) i32:
+    return self.out.accept(self.buf)
+
+fn main() i32:
+    let u8[] bytes = from([1, 2, 3])
+    let Holder h = Holder(Counter(0), bytes)
+    println("took {h.drain()}")
+    return Result.Ok(0)
