@@ -184,6 +184,53 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **An empty `from([])` takes its element type from the position, everywhere.** As a
+  `.realise()` default and as a bare extension's `return` it reached the backend with no
+  element type and was CE0000, a compiler crash on ordinary syntax (#544). Three
+  positions -- a `let`, a `Result.Ok` payload, a struct argument -- worked only because
+  each derived the element type for itself in the backend. The typecheck pass now stamps
+  the position's `T[]` on the `from([])` node, exactly as it does for `new()`, and the
+  one emitter reads it; the payload and struct derivations are gone. A `.realise(from([]))`
+  over a `Result@(u8[], E)` or a `Maybe@(T[])`, `return from([])` in a bare or a channel
+  extension, and `count(from([]))` against a `u8[]` parameter all compile and run.
+- **A generic-target perk implementation travels through a binary `.slib`.**
+  `extend Box@(T) with Show` is a template, and the manifest walked the monomorphized
+  copies and exported it nowhere -- and a perk shipped only when a generic constraint
+  named it, so a public contract with a concrete implementation was invisible too
+  (#543). Every public perk now ships, the template ships as source in a new
+  `generic_perk_impls` record (templates schema 6; a schema-5 library is refused with
+  CE3512 and must be rebuilt), the consumer files it through the collect pass's own
+  perk collector and cuts one copy per instantiation, for the library's own
+  `Box@(i32)` and for a `Box@(string)` the bitcode never saw alike. The library's
+  copies stay out of `perk_impls`: a copy's source slice is the template's. Under the
+  same issue, a binary library's function SIGNATURES are now read for instantiations:
+  `fn make_box(i32 v) Box@(i32)` is a manifest record no unit walk sees, so `Box<i32>`
+  was never interned and the backend answered CE0020 for any consumer of it, perk or
+  no perk.
+- **A binary `.slib` keeps a function's error channel.** The manifest wrote
+  `error_type` beside `return_type` and the consumer never read it: two `FuncSig`
+  builders read the return alone, so `fn risky(i32 x) i32 | MyErr` was typed
+  `Result@(i32, StdError)` at every consumer and `risky(4)??` inside a `| MyErr`
+  function was CE2511 (#541). The registry's `_parse_functions` is now the one reader
+  of a manifest signature and reads the channel; the analyzer's and the backend's
+  fallback builders are gone. The typecheck pass and the backend derive a call's
+  `Result` from a signature through one function, `signature_result_arms`, so an
+  explicit `Result@(i32, MyErr)` return is not wrapped again on the binary path either
+  -- it used to arrive as `Result@(Result@(i32, MyErr), StdError)`. A manifest type
+  string that names an instantiation the consumer has not interned (`Box<i32>`,
+  `Result<i32, MyErr>`) now reads back as the generic reference it was written from.
+- **`??` over a named `Result` or `Maybe` local spends it.** `let Result@(string, E) r =
+  make()` then `let string got = r??` gave `got` the buffer and left `r` registered to
+  free it as well: one buffer, two frees, and the printed value was garbage (#548). The
+  unwrap moves the payload out of its wrapper, so `??` is now a consuming position of its
+  own (`ConsumingUse.TRY`): a wrapper the function owns is marked moved at the `??`,
+  before the propagation path's cleanup -- the Err arm travels too -- and a later mention
+  of it is CE2405. A wrapper that owns nothing stays usable; a BORROWED wrapper (a
+  parameter, a binding) is read through, so the `let` binds a borrow and consuming it is
+  CE2411. The `foreach` `??` binder is the same rule: a protocol iterator's item is a
+  value the iteration owns, the generated `let T x = <item>??` spends it through the
+  ownership seam, the body may hand a protocol item away, and the backend's no-owner
+  special case for the item is gone. Design record: `docs/design/borrow-model.md` §10d.
 - **An interpolated string in an argument position has exactly one owner.** An
   interpolation always builds a fresh buffer, and in argument position no binding names
   it, so who frees it is the compiler's decision. Two seams were each making that

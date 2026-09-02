@@ -355,6 +355,45 @@ does the finishing work itself, which is exactly what `into_inner()` spells abov
 Like the pattern boundary, the mode is written once: there is no declaration side to
 agree with, so CE2427's both-ends rule has no field-take twin either.
 
+## 10d. The fourth boundary: `??` over a place
+
+**Added 2026-09-02, #548.** The unwrap moves the payload out of its wrapper, so `??` is a
+consuming position too -- `ConsumingUse.TRY`. Over a call it always was one in effect: the
+Result is a temporary, nothing else frees it, and the payload lands in the position that
+takes it. Over a NAMED wrapper the same words hid a second owner. `let string got = r??`
+gave `got` the buffer and left `r` registered to free it as well, and the program printed
+garbage before it aborted.
+
+The rule is the one every other boundary has: the payload has the provenance of what it
+was unwrapped from.
+
+| `r` is | `r??` is | who frees the payload | `r` afterwards |
+|---|---|---|---|
+| a temporary (`make()??`) | fresh | the position that takes it | -- |
+| a local this function OWNS | fresh, and the `??` SPENDS `r` | the position that takes it | CE2405 |
+| a borrow (a parameter, a `match` or `foreach` binding, a `let`-borrow) | a read through `r`'s owner | `r`'s owner | usable |
+
+**The class is the wrapper's, not the payload's.** A `Result@(i32, Fail)` whose `Fail`
+carries a string owns heap in its Err arm, and that arm travels: on the propagation path
+the error is returned to the caller while the scope cleanup runs, so a local left
+registered would free what the caller is about to read. A wrapper that owns nothing in
+either arm is copied out of and stays usable, like any plain value. The move is marked
+BEFORE the propagation path's cleanup is emitted; the seam is `backend/ownership.py`'s
+`unwrap`, and the borrow pass's twin is `unwrap_place`.
+
+**A borrowed wrapper is read through, not refused.** `let string s = r??` over a
+parameter binds a borrow -- `s` reads `r`'s payload and frees nothing -- and consuming the
+read (`return Result.Ok(r??)`) is CE2411 exactly as `c.get(0)??` is. The escape is the
+usual one, `.clone()`.
+
+**The `foreach` binder is this rule and nothing else.** `foreach(line?? in it)` is
+`let T line = <item>??`, and the item of a `next()` protocol iterator is a value the
+iteration OWNS -- the payload of a fresh `Maybe@(T)` nobody else frees. So the generated
+`??` spends the item like any owned local, the body may also hand a protocol item away
+(`eat(nom item)`), and a move of it does not travel the loop's back edge because the next
+iteration holds a new value. Before this ruling the backend registered no owner for the
+item under a binder, a special case that hid the general defect.
+
 ## 11. Not designed
 
 - **`nom self`.** A consuming RECEIVER. It did NOT fall out of ruling R11's machinery: a

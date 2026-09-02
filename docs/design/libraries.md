@@ -311,13 +311,31 @@ of the container three times as the cross-library-generics feature grew:
 2. + generic struct/enum templates
 3. + concrete perk-impl shipping (C4a)
 4. + the export closure: private-symbol shipping (C4b/C5) and `closure_summary`
+5. + every closure record keyed by its unit, and a source-shipped template's `bindings` (#494, D4)
+6. + every public perk, and generic-target perk implementations as templates (#543).
+   `extend Box@(T) with Show` names no instantiation, so it cannot be a concrete
+   record: it ships as source in `generic_perk_impls`, the consumer files it through
+   the collect pass's own perk collector under the producer's unit, and
+   `_monomorphize_generic_perk_impls` cuts one copy per instantiation of `Box` the
+   consumer names -- the library's own (`make_box` answers `Box@(i32)`) and the
+   consumer's own (`Box@(string)`) alike. The library's monomorphized copies stay OUT
+   of `perk_impls`: a copy's source slice is the template's. And a public function's
+   signature is read for instantiations too -- `fn make_box(i32 v) Box@(i32)` reaches
+   the consumer as a manifest record no unit walk sees, so until #543 `Box<i32>` was
+   never interned and the backend answered CE0020.
 
 ### 5.1 Concrete functions
 
 A non-generic `public fn` becomes a `public_functions` record: `name`, `params`
-(`name`+`type` strings), `return_type` (also a string — types are serialized via
-`str(ty)` and re-parsed with `parse_type_string` at the consumer, not pickled). Two
-checks gate it, both raising and aborting the `.slib` write (no partial artifact):
+(`name`+`type` strings), `return_type` and, when the declaration spells `| E`,
+`error_type` (all strings — types are serialized via `str(ty)` and re-parsed with
+`parse_type_string` at the consumer, not pickled). The consumer reads the record in ONE
+place, `LibraryRegistry._parse_functions`, and the typecheck pass and the backend derive
+the call's `Result` from that signature through one function, `signature_result_arms`:
+the spelled channel is the Err arm, an explicit `Result@(T, E)` return is not wrapped
+again. Until #541 two more builders read `return_type` alone, so a binary library's
+`| E` was `StdError` at every consumer and `??` answered CE2511. Two checks gate the
+record, both raising and aborting the `.slib` write (no partial artifact):
 
 - **CE0116** — a v1 native `...T` variadic function cannot appear here. The registry
   gives the reason as a serialization gap: the variadic flag is not written into the

@@ -76,6 +76,20 @@ class BindingScope:
         self.register(BorrowState(name=name, var_type=ty, declared_at_span=span,
                                   declared_branch_depth=self.checker.branch_depth))
 
+    def bind_item(self, name: str, ty: Optional[Type], span: Optional[Span]) -> None:
+        """Bind the item a `next()` protocol iterator answered: the iteration OWNS it.
+
+        The item is the payload of a fresh `Maybe@(T)` nobody else frees, so unlike a
+        container element it aliases nothing, and the body may write it or hand it
+        away -- which is what the `??` binder does, `let T x = <item>??` spending the
+        item like any owned local (#548). Its `declared_branch_depth` is the BODY's,
+        one deeper than the loop statement: the item is created per iteration, so a
+        move at the top of the body dominates the item's scope exit and needs no
+        run-time drop flag.
+        """
+        self.register(BorrowState(name=name, var_type=ty, declared_at_span=span,
+                                  declared_branch_depth=self.checker.branch_depth + 1))
+
     def bind_ref(self, name: str, ty: Optional[Type], marker: Optional[str],
                  span: Optional[Span], owner: Optional[Expr],
                  declared_at: Optional[Span] = None) -> None:

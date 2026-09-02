@@ -79,7 +79,9 @@ def infer_dynamic_array_from_type(validator: 'TypeValidator', expr: DynamicArray
     """Infer type of from(array_literal) constructor from array literal elements."""
     array_literal = expr.elements
     if not array_literal.elements:
-        return None
+        # An empty literal is whatever its position says (#544); nothing, when no
+        # position has said yet.
+        return expected_type or expr.resolved_type
 
     expected_element_type = expected_type.base_type if expected_type else None
 

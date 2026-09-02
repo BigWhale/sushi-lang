@@ -1,0 +1,27 @@
+# The Err path of `r??` over a named local: the error payload owns heap and travels
+# to the caller. The spent local must NOT be freed by the propagation's scope cleanup,
+# or the caller reads a freed buffer.
+# EXPECT_STDOUT_EXACT: "err: neg -3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+enum Fail:
+    Reason(string)
+
+fn make(i32 x) i32 | Fail:
+    if (x < 0):
+        return Result.Err(Fail.Reason("neg {x}"))
+    return Result.Ok(x)
+
+fn run(i32 x) i32 | Fail:
+    let Result@(i32, Fail) r = make(x)
+    let i32 n = r??
+    return Result.Ok(n)
+
+fn main() i32:
+    match run(-3):
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(e) ->
+            match e:
+                Fail.Reason(why) -> println("err: {why}")
+    return Result.Ok(0)

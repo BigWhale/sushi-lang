@@ -1,0 +1,11 @@
+# A BINARY library function whose signature names an instantiation of a shipped
+# generic struct (`Box@(i32)`): the consumer must instantiate it from the manifest
+# signature (#543). It used to reach the backend uninstantiated and answer CE0020.
+# EXPECT_STDOUT_EXACT: "7\n"
+use <lib/generic_perk_bin_lib>
+
+fn main() i32:
+    match make_box(7):
+        Result.Ok(b) -> println("{b.item}")
+        Result.Err(_) -> println("no box")
+    return Result.Ok(0)

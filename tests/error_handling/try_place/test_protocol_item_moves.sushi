@@ -1,0 +1,27 @@
+# A `next()` protocol item is a fresh value the loop iteration OWNS, so the body may
+# hand it away. The `??` binder relies on the same fact: `foreach(line?? in it)` is
+# `let T line = <item>??`, and the `??` spends the item like any owned local (#548).
+# EXPECT_STDOUT_EXACT: "word 2\nword 1\nword 0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+struct Words:
+    i32 n
+
+extend Words next(poke self) Maybe@(string):
+    if (self.n == 0):
+        return Maybe.None()
+    self.n := self.n - 1
+    return Maybe.Some("word {self.n}")
+
+fn eat(nom string s) i32:
+    println(s)
+    return Result.Ok(s.len())
+
+fn main() i32:
+    let Words w = Words(3)
+    let i32 total = 0
+    foreach(s in w):
+        total := total + eat(nom s).realise(0)
+    return Result.Ok(total - 18)

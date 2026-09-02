@@ -46,21 +46,31 @@ def emit_dynamic_array_new(codegen: 'LLVMCodegen', expr: DynamicArrayNew) -> ir.
 
 
 def emit_dynamic_array_from(codegen: 'LLVMCodegen', expr: DynamicArrayFrom) -> ir.Value:
-    """Emit from(array_literal) constructor for dynamic arrays."""
+    """Emit from(array_literal) constructor for dynamic arrays.
+
+    The element type is the one the typecheck pass stamped from the position (#544) --
+    the only source an EMPTY literal has -- and is read off the emitted elements only
+    when nothing stamped it. An empty literal with no stamp is a gap in the typecheck
+    pass, never a user error, so it is CE0042 rather than a guess.
+    """
     from ..utils import create_dynamic_array_from_elements, emit_array_literal_elements
+
+    stamped = expr.resolved_type
+    element_type = stamped.base_type if isinstance(stamped, DynamicArrayType) else None
 
     # Evaluate all element expressions, deep-copying heap-owning aliases so the new array
     # and the source each own independent buffers (a bare-Name element aliases a live owner;
-    # a fresh temp is the sole owner and moved in). Element type is derived per alias.
-    elements = emit_array_literal_elements(codegen, expr.elements.elements, None)
+    # a fresh temp is the sole owner and moved in).
+    elements = emit_array_literal_elements(codegen, expr.elements.elements, element_type)
 
-    if not elements:
-        raise NotImplementedError("Empty from() constructor not yet supported")
-
-    from ..runs import element_llvm_type as read_element_llvm_type
-
-    element_llvm_type = read_element_llvm_type(codegen, elements)
-    element_type = _infer_builtin_type_from_llvm(element_llvm_type)
+    if element_type is not None:
+        element_llvm_type = codegen.types.ll_type(element_type)
+    else:
+        if not elements:
+            raise_internal_error("CE0042", type=type(stamped).__name__)
+        from ..runs import element_llvm_type as read_element_llvm_type
+        element_llvm_type = read_element_llvm_type(codegen, elements)
+        element_type = _infer_builtin_type_from_llvm(element_llvm_type)
 
     # The DESCRIPTOR, by value -- what `ll_type(DynamicArrayType)` says a `T[]` is, and what
     # every other type's `emit_expr` yields. Returning a pointer to it made this one

@@ -1,0 +1,16 @@
+# An empty `from([])` returned BARE from an extension takes the declared return's
+# element type (#544). It reached the backend with no element type and was CE0000.
+# EXPECT_STDOUT_EXACT: "0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct S:
+    i32 x
+
+extend S empty() u8[]:
+    return from([])
+
+fn main() i32:
+    let S s = S(1)
+    println("{s.empty().len()}")
+    return Result.Ok(0)

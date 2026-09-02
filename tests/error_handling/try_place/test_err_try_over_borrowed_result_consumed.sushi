@@ -1,0 +1,18 @@
+# Consuming what `??` reads out of a BORROWED Result is CE2411, like any read through
+# a live owner: the parameter's caller still frees the payload.
+# EXPECT_ERROR_CODE: CE2411
+use <collections/strings>
+
+fn make() string:
+    let string base = "Mostly"
+    return Result.Ok(base.concat(" Harmless"))
+
+fn take(Result@(string, StdError) r) string:
+    return Result.Ok(r??)
+
+fn main() i32:
+    let Result@(string, StdError) r = make()
+    match take(r):
+        Result.Ok(s) -> println(s)
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

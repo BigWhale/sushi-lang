@@ -131,6 +131,13 @@ def is_bare_enum_constant(checker: 'BorrowChecker', expr: Optional[Expr]) -> boo
 
 def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
     """The type a read-through-an-owner expression produces."""
+    if isinstance(expr, TryExpr):
+        # The typecheck pass stamps what a `??` unwraps to. Answering the WRAPPER's type
+        # instead classified `r??` over a `Result@(i32, string)` as owning, and a plain
+        # payload read out of a borrowed wrapper was refused (#548).
+        unwrapped = expr.inferred_unwrapped_type
+        if unwrapped is not None:
+            return unwrapped
     expr = unwrap_try(expr)
 
     match expr:

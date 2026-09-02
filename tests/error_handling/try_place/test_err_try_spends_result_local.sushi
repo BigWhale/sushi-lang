@@ -1,0 +1,18 @@
+# `r??` MOVES `r` when the Result owns something (#548), so a later mention is a use
+# after move, exactly as after `f(nom r)`.
+# EXPECT_ERROR_CODE: CE2405
+use <collections/strings>
+
+fn make() string:
+    let string base = "Mostly"
+    return Result.Ok(base.concat(" Harmless"))
+
+fn run() i32:
+    let Result@(string, StdError) r = make()
+    let string got = r??
+    if (r.is_ok()):
+        return Result.Ok(got.len())
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run().realise(0))

@@ -1,0 +1,16 @@
+# A Result that owns nothing is PLAIN: `??` copies the payload out and the local stays
+# usable, like any plain value handed to an owning position.
+# EXPECT_STDOUT_EXACT: "7 true\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn make() i32:
+    return Result.Ok(7)
+
+fn run() i32:
+    let Result@(i32, StdError) r = make()
+    let i32 n = r??
+    println("{n} {r.is_ok()}")
+    return Result.Ok(n)
+
+fn main() i32:
+    return Result.Ok(run().realise(1) - 7)

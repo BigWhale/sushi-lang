@@ -201,6 +201,31 @@ def _differs_only_in_nested_resolution(stored, rebuilt, structs, enums) -> bool:
     return True
 
 
+def signature_result_arms(ret_type: Optional[Type], err_type: Optional[Type],
+                          std_error: Optional[Type]) -> Optional[tuple[Type, Type]]:
+    """The Ok and Err arm a call to a signature yields, or None when there is nothing to intern.
+
+    ONE derivation, read by the typecheck pass and by the backend's declaration of a
+    library function, so a call is typed and declared as the same Result (#541). An
+    explicit `Result@(T, E)` return is its own two arms and is never wrapped again;
+    any other return is wrapped with the spelled `| E`, or with `StdError` when the
+    signature says none. None means the caller decides: no return type, a return that
+    is already the interned enum, or a `Result` reference with the wrong arity.
+    """
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    if ret_type is None or is_result_enum(ret_type):
+        return None
+    if isinstance(ret_type, GenericTypeRef) and ret_type.base_name == "Result":
+        if len(ret_type.type_args) == 2:
+            return ret_type.type_args[0], ret_type.type_args[1]
+        return None
+    err = err_type if err_type is not None else std_error
+    if err is None:
+        return None
+    return ret_type, err
+
+
 def ensure_result_type_in_table(
     enum_table: Any,
     ok_type: Type,

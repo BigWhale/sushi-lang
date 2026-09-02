@@ -360,4 +360,18 @@ def parse_type_string(
     if type_str in enum_table:
         return enum_table[type_str]
 
+    # An instantiation the consumer has not interned yet -- `Box<i32>`, or an explicit
+    # `Result<i32, MyErr>` return -- reads back as the GenericTypeRef the producer wrote
+    # it from, so the instantiate pass can collect it and a Result is never wrapped
+    # twice (#541, #543). An UnknownType of the whole spelling resolved only by luck,
+    # when something else had already interned the name.
+    if "<" in type_str and type_str.endswith(">"):
+        from sushi_lang.semantics.generics.type_strings import split_type_arguments
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        open_at = type_str.index("<")
+        args = split_type_arguments(type_str[open_at + 1:-1])
+        return GenericTypeRef(
+            base_name=type_str[:open_at].strip(),
+            type_args=tuple(parse_type_string(a, struct_table, enum_table) for a in args))
+
     return UnknownType(name=type_str)

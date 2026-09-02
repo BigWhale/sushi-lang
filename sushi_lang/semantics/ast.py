@@ -743,6 +743,11 @@ class DynamicArrayNew(Node):
 @dataclass(slots=True)
 class DynamicArrayFrom(Node):
     elements: ArrayLiteral  # from([1, 2, 3]) -> holds the array literal
+    # The `T[]` the position expects, stamped by the typecheck pass (#544). An EMPTY
+    # literal has no other source for its element type, and every position that has a
+    # declared type -- a `let`, a field, a payload, a parameter, a `.realise()` default,
+    # a bare extension's return -- hands it over through one propagation arm.
+    resolved_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class CastExpr(Node):

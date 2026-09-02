@@ -1,0 +1,10 @@
+# The shipped template is instantiated for a type the library's bitcode never saw:
+# `Box@(string)` exists only at the consumer, so the implementation copy is cut from
+# the shipped source here (#543).
+# EXPECT_STDOUT_EXACT: "box Mostly Harmless\n"
+use <lib/generic_perk_bin_lib>
+
+fn main() i32:
+    let Box@(string) b = Box("Mostly Harmless")
+    println("{b.show()} {b.item}")
+    return Result.Ok(0)

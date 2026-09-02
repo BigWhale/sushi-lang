@@ -177,6 +177,11 @@ class LibraryRegistry:
                 self._struct_table,
                 self._enum_table
             )
+            # The channel the declaration spelled (`| E`). Absent means StdError, and
+            # the record says so by saying nothing (#541).
+            err_type_str = func_info.get("error_type")
+            err_type = (parse_type_string(err_type_str, self._struct_table, self._enum_table)
+                        if err_type_str else None)
 
             result[func_name] = FuncSig(
                 name=func_name,
@@ -187,6 +192,7 @@ class LibraryRegistry:
                 params=params,
                 is_public=owner is None,
                 unit_name=owner,
+                err_type=err_type,
                 link_symbol=func_info.get("link_symbol"),
             )
 

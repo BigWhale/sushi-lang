@@ -291,6 +291,12 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
         if isinstance(value_expr, DynamicArrayNew) and isinstance(expected_type, DynamicArrayType):
             value_expr.resolved_type = expected_type
             return
+        # `from([])` spells no element type either, and the backend raised on an empty
+        # literal in every position that did not derive the type for itself (#544). The
+        # stamp is what the emitter reads; a non-empty literal still infers from its
+        # elements when nothing stamped it.
+        if isinstance(value_expr, DynamicArrayFrom) and isinstance(expected_type, DynamicArrayType):
+            value_expr.resolved_type = expected_type
         _propagate_array_element_type(validator, value_expr, expected_type.base_type)
         return
 

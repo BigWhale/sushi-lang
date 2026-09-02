@@ -953,27 +953,22 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
-        from sushi_lang.semantics.generics.results import is_result_enum
+        from sushi_lang.semantics.generics.results import signature_result_arms
 
-        # Already the interned enum (the signature was resolved in place): return it.
-        # Wrapping it again would produce Result<Result<T, E>, StdError>.
-        if is_result_enum(func_sig.ret_type):
-            return func_sig.ret_type
-
-        if isinstance(func_sig.ret_type, GenericTypeRef) and func_sig.ret_type.base_name == "Result":
-            if len(func_sig.ret_type.type_args) == 2:
-                return self._intern_result(func_sig.ret_type.type_args[0],
-                                           func_sig.ret_type.type_args[1])
+        arms = signature_result_arms(
+            func_sig.ret_type, func_sig.err_type,
+            self.type_validator.enum_table.by_name.get("StdError"))
+        if arms is not None:
+            return self._intern_result(*arms)
+        # Already the interned enum (the signature was resolved in place): wrapping it
+        # again would produce Result<Result<T, E>, StdError>. A `Result` reference of
+        # the wrong arity resolves by name, or stays what it is.
+        if isinstance(func_sig.ret_type, GenericTypeRef):
             return resolve_unknown_type(
                 func_sig.ret_type,
                 self.type_validator.struct_table.by_name,
                 self.type_validator.enum_table.by_name
             )
-        if func_sig.err_type is not None:
-            return self._intern_result(func_sig.ret_type, func_sig.err_type)
-        err_type = self.type_validator.enum_table.by_name.get("StdError")
-        if err_type is not None:
-            return self._intern_result(func_sig.ret_type, err_type)
         return func_sig.ret_type
 
     def visit_methodcall(self, node: MethodCall) -> Optional[Type]:

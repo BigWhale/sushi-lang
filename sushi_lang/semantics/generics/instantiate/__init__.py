@@ -133,6 +133,18 @@ class InstantiationCollector:
 
         return self.instantiations, self.function_instantiations
 
+    def collect_from_signatures(self, signatures) -> None:
+        """The instantiations a library's manifest signatures name (#543).
+
+        A `FuncSig` read from a binary `.slib` belongs to no unit, so `run` never sees
+        it; its return and parameters still name instantiations the consumer has to cut.
+        """
+        function_collector = self._build_function_collector()
+        for sig in signatures:
+            function_collector._reset_scope()
+            function_collector.collect_from_signature(
+                sig.ret_type, getattr(sig, "err_type", None), sig.params)
+
     # An extension on a GENERIC target is monomorphized per instantiation of that target,
     # so its signature can only be read once the target instantiations are known -- which
     # is after every unit has been walked. Hence the second entry point rather than another

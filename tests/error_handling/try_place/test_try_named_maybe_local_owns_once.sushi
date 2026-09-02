@@ -1,0 +1,16 @@
+# The Maybe twin of #548: `??` over a named Maybe local spends it.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn run() string:
+    let string word = "Harmless"
+    let Maybe@(string) m = Maybe.Some("Mostly {word}")
+    let string got = m??
+    return Result.Ok(got)
+
+fn main() i32:
+    match run():
+        Result.Ok(s) -> println(s)
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

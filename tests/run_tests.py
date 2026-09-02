@@ -98,7 +98,8 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
 # private `helper`, shipped as one binary manifest. twolib_src is its source twin
 # and takes the default.
 BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib", "const_lib",
-                       "mangle_closure_lib", "twolib_bin"}
+                       "mangle_closure_lib", "twolib_bin", "channel_bin_lib",
+                       "generic_perk_bin_lib"}
 
 
 def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:

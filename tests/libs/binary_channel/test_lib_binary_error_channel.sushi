@@ -1,0 +1,18 @@
+# A BINARY library function declaring `| MyErr` is typed Result@(i32, MyErr) at the
+# consumer, so `??` inside a `| MyErr` function propagates it (#541). It used to be
+# typed Result@(i32, StdError) and the `??` was CE2511.
+# EXPECT_STDOUT_EXACT: "4\nbad\n"
+use <lib/channel_bin_lib>
+
+fn run(i32 x) i32 | MyErr:
+    let i32 n = risky(x)??
+    return Result.Ok(n)
+
+fn main() i32:
+    match run(4):
+        Result.Ok(n) -> println("{n}")
+        Result.Err(_) -> println("bad")
+    match run(-1):
+        Result.Ok(n) -> println("{n}")
+        Result.Err(_) -> println("bad")
+    return Result.Ok(0)

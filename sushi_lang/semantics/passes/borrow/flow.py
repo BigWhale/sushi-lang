@@ -43,6 +43,22 @@ class FlowFacts:
             invalidation=merged,
         )
 
+    def without(self, names: frozenset[str]) -> "FlowFacts":
+        """Drop every fact about `names`: bindings a loop RE-CREATES on each pass.
+
+        A `next()` protocol item is declared once in the checker and once per iteration
+        in the program, so a move of it inside the body must not travel the back edge --
+        the next iteration holds a new value (#548).
+        """
+        if not names:
+            return self
+        return FlowFacts(
+            moved=self.moved - names,
+            destroyed=self.destroyed - names,
+            owns_no_heap=self.owns_no_heap - names,
+            invalidation=tuple(e for e in self.invalidation if e[0] not in names),
+        )
+
     @staticmethod
     def join(paths: list["FlowFacts"]) -> "FlowFacts":
         """Join every surviving path of a branch."""
