@@ -42,6 +42,42 @@ All notable changes to Sushi Lang will be documented in this file.
 - **Recorded:** `??` on a `Maybe@(T)` propagates `None` as a payload-free `Result.Err`
   — Maybe is data, Result is the channel. The decision record for all of the above is
   `docs/design/ufcs-combinators.md`.
+- **A type can declare that it owns a resource.** The built-in `Drop` perk
+  (`fn drop(poke self) ~`) is how a `File` or a `TcpStream` says it owns a descriptor
+  no field walk can see. A type that implements it MOVES like a `string` or a
+  `List@(T)`: one owner, a `nom` parameter to hand it over, destruction when the owner
+  leaves scope. Only the unit that declares the type may implement `Drop` (**CE4012**),
+  and `.clone()` on a resource type is **CE2431**, because a copy verb would hide the
+  second descriptor; the operation that means one is `share()`. Scope exit destroys in
+  reverse declaration order, deterministically -- block exit used to go in hash order
+  and could change between two compilations.
+- **`nom self` exists, and a consuming receiver spends its value.** A method may
+  declare `nom self`; `close()` on every handle does, so a read after a close is
+  refused while compiling -- **CE2435**, naming the method -- rather than answering
+  EBADF at run time. A `nom` ARGUMENT keeps CE2405.
+- **A pattern binding carries a mode.** Bare borrows, `poke` points into the payload,
+  and `nom` TAKES it: `match make_rows(): Result.Ok(nom rows) -> eat(nom rows)`. Taking
+  needs a scrutinee the match owns -- a temporary, or `match nom r:` -- so a `nom`
+  binding under a plain `match r:` is **CE2432**, an arm takes the variant whole
+  (**CE2433**), and `Own(nom x)` is **CE2434**. CE2404 narrowed to a read through a
+  live owner.
+- **A marked field take.** `nom s.field`, in a `let` initializer or a `return`, is the
+  one field read that is not a borrow. It spends the WHOLE receiver: the other owning
+  fields are destroyed at the take, `drop()` does not run, and a later mention is
+  CE2405. `nom a.b.c` and a take through a borrow are CE2411.
+- **A perk method gets the error channel, and a name has one home.** A perk method may
+  declare `| E`, on the contract and on every implementation alike; a mismatch is
+  **CE0133**, relational. A perk method beside an extension method of the same name on
+  one type is **CE4007**, so a name is a contract method or a convenience and never
+  both. A perk method's argument mismatch reads CE2006/CE2009 like an extension's.
+- **A generic type can implement a perk, and can declare a resource.** `extend Box@(T)
+  with Show` is a template, one copy per instantiation; CE4013 is retired.
+- **`foreach` walks any type with `next() -> Maybe@(T)`.** No type to implement and no
+  perk to name. The protocol carries no error channel: a fallible iterator puts the
+  failure in its ITEM, `Maybe@(Result@(T, E))`, and `??` on the binder --
+  `foreach(line?? in r.lines())` -- is the short form. A `??` binder over a non-Result
+  item is **CE2517**; an unwalkable iterable is CE2033, re-texted. A protocol iterator
+  is destroyed on every exit path.
 
 ### Standard Library
 - **Sushi can talk to the network.** Six new modules cover the first seven rows
@@ -110,6 +146,42 @@ All notable changes to Sushi Lang will be documented in this file.
   elements, and KEEP the buffer -- a scratch array in a loop empties without a
   realloc. Truncate never grows, and a negative count clamps to 0 the way the slice
   family clamps.
+- **`file` becomes `File`.** A `File` is an ordinary struct in `<io/fs>` with an
+  `owned` bit; the builtin type, the `file`/`stdin`/`stdout`/`stderr` keywords,
+  `<io/stdio>` and `FileResult` are gone. The console handles are `File` CONSTANTS over
+  descriptors 0, 1 and 2, and every route to the console is the descriptor, `print` and
+  `println` included -- `printf` buffered beside a descriptor write and put the console
+  out of order. A handle owns its descriptor, moves to one owner and closes on drop;
+  `close()` consumes, for the caller who has to see the failure.
+- **`<io/contracts>`: `Reader`, `Writer` and `Seek`.** What a handle can DO, named
+  apart from what it is. `File` implements all three, `TcpStream` implements `Reader`
+  and `Writer`, `TcpListener` none. Every contract method answers `IoError`, because a
+  contract carries one signature and there is no `Self`; construction, addressing and
+  options keep the domain enum, converted inside the stdlib by `FileError.to_io()` and
+  `NetError.to_io()`. A contract write answers `~` and never a count. `read(max)` is
+  one read of `max` BYTES, and a caller that must not cut a multi-byte sequence
+  accumulates bytes and converts once.
+- **`<io/buf>`: buffered reading and writing, in pure Sushi.** `BufReader@(R)` over any
+  `Reader`, `BufWriter@(W)` over any `Writer`, one system call per window. `buf_reader`
+  and `buf_writer` take the handle; `finish()` is the checked last drain and consumes;
+  a dropped writer flushes and loses the error; `into_inner()` hands the handle back.
+  `r.lines()` answers `Lines@(R)` and is the line loop; a `File` keeps none.
+- **`File.readln()` answers `Maybe@(string)`.** A blank line is `Some("")` and the end
+  of file is `None`, so the two are never the same answer.
+- **Positional and shared I/O.** `File.read_at(offset, count)` and
+  `File.write_at(offset, data)` are `pread`/`pwrite`: the offset is an argument and
+  nothing moves, which is the answer for concurrent reads of one file. `share()` on a
+  `File` and on a `TcpListener` is `dup(2)`: a second OWNER over a SHARED open file
+  description.
+- **The descriptor layer under it.** `<io/files>` gains `fd_open` (an INTENT rather
+  than raw `O_*` flags, whose values differ per platform), `fd_read`, `fd_write`,
+  `fd_write_str`, `fd_readln`, `fd_seek`, `fd_isatty`, `fd_pread`, `fd_pwrite`,
+  `fd_dup` and `fd_close`; `<net/socket>` gains `sock_dup`. A read and a write retry
+  EINTR.
+- **`TcpStream.recv` retires.** One read on a socket is the contract's `read_bytes`,
+  and every `NetError` a read can answer has its `IoError` twin. `send` stays: a
+  socket's partial write says what the peer's window took, and `write_bytes`, which
+  writes everything, cannot.
 
 ### Fixed
 - **An interpolated string in an argument position has exactly one owner.** An
@@ -149,6 +221,16 @@ All notable changes to Sushi Lang will be documented in this file.
   string helpers (`llvm_strlen`, `llvm_string_is_empty`, `llvm_strcmp`) carried
   external linkage in every unit that needed them, so the second source-stdlib
   unit collided at link; the bodies are `linkonce_odr` now.
+- **A generic function's error channel survives the call.** `fn f@(T)(T v) i32 |
+  IoError` was typed `Result@(i32, StdError)` at the call site, so `??` answered
+  CE2511 (#538).
+- **A generic called inside a `match` arm is instantiated.** It used to be CE2061
+  (#539).
+- **A local named `open` is credited with its uses.** The scope pass exempted four
+  names before the local-wins check, so `let i32 open = 4` warned CW1001 on a
+  variable the program reads (#536). The exemption went with the keywords.
+- **Monomorphization keeps a receiver's mode.** A `poke self` method on a generic
+  target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Testing
 - **A release no longer waits for the cross-platform suite, and one gate decides for
