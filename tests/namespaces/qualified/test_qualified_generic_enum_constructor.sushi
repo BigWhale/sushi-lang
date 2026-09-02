@@ -1,7 +1,7 @@
 # A GENERIC enum's constructor behind a dot: `slot.Slot.Filled("x")` takes the type its
 # position declares exactly as the bare `Slot.Filled("x")` does. Propagation read the
 # receiver as a bare name only, so the qualified spelling carried no stamp and reached
-# the backend as a CE0113 compiler bug.
+# the backend, which refused it as CE0113, an internal error.
 # EXPECT_STDOUT_EXACT: "filled towel\nempty\n"
 use "helpers/slot" as slot
 

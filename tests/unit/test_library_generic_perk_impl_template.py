@@ -50,8 +50,12 @@ def test_the_record_names_the_base_type_its_parameters_and_the_perk():
     assert record["perk"] == "Show"
     assert record["source"].startswith("extend Box@(T) with Show:")
     assert "return \"box\"" in record["source"]
-    # A template has no symbol to declare: one copy per instantiation is cut at the consumer.
-    assert "methods" not in record
+    # The methods are records with their signatures (schema 7, #537), but none carries a
+    # symbol: a template has nothing to declare, one copy per instantiation is cut at the
+    # consumer.
+    assert [m["name"] for m in record["methods"]] == ["show"]
+    assert record["methods"][0]["return_type"] == "string"
+    assert "symbol" not in record["methods"][0]
 
 
 def test_the_record_reads_back_as_a_generic_target_implementation():
