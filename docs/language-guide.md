@@ -18,6 +18,7 @@ This guide provides a friendly tour of Sushi's features. If you're new to Sushi,
 - [Generics](#generics)
 - [Units and Imports](#units-and-imports)
 - [Memory Management](#memory-management)
+- [Files and Handles](#files-and-handles)
 
 ## Hello World
 
@@ -374,7 +375,7 @@ fn main() i32:
 
 Sushi uses `Result@(T)` as its fundamental approach to error handling. Every function in Sushi implicitly returns a `Result@(T)` type, even if you declare the return type as just `T`. This design choice eliminates entire classes of bugs by making error handling explicit and impossible to ignore.
 
-**The Philosophy**: In many languages, functions can fail silently or throw exceptions that might not be handled. Sushi takes a different approach inspired by Rust: if a function can fail, that failure is encoded in the type system. You must explicitly choose to handle errors or propagate them.
+**The Philosophy**: In many languages, functions can fail silently or throw exceptions that might not be handled. Sushi puts the failure in the type instead: if a function can fail, that failure is part of what it returns, so the compiler can tell you where you have not dealt with it. You must explicitly choose to handle errors or propagate them.
 
 ```sushi
 fn divide(i32 a, i32 b) i32:
@@ -463,19 +464,20 @@ fn main() i32:
 ```sushi
 use <io/fs>
 
-# Without ??: verbose and error-prone
-fn process() string:
-    let Result@(file) f_result = open("data.txt", FileMode.Read())
-    if (not f_result):
-        return Result.Err()
-    let File f = f_result.realise(...)  # How do we get a default file?
-    # ... more manual checks
+# Without ??: verbose, and there is no default handle to fall back on
+fn process() string | IoError:
+    match open("data.txt", FileMode.Read()):
+        Result.Ok(f) ->
+            match f.read_all():
+                Result.Ok(data) -> return Result.Ok(data)
+                Result.Err(e) -> return Result.Err(e)
+        Result.Err(e) ->
+            return Result.Err(e)
 
 # With ??: clean and safe
-fn process() string:
+fn process() string | IoError:
     let File f = open("data.txt", FileMode.Read())??
-    let string data = f.read_all().realise('')
-    return Result.Ok(data)
+    return Result.Ok(f.read_all()??)
 ```
 
 The `??` operator makes error handling code read almost like non-error-handling code, while maintaining full safety and explicit error propagation.
@@ -906,7 +908,7 @@ fn main() i32:
 
 ### Extension Methods
 
-Extension methods let you add functionality to existing types without modifying their definitions. This is similar to extension methods in C#, Kotlin, or Swift, and is inspired by Rust's trait system. In Sushi, this is called **UFCS (Uniform Function Call Syntax)**.
+Extension methods let you add functionality to existing types without modifying their definitions -- the same idea as extension methods in C#, Kotlin, or Swift. In Sushi, this is called **UFCS (Uniform Function Call Syntax)**.
 
 ```sushi
 extend i32 squared() i32:
@@ -1357,6 +1359,125 @@ fn main() i32:
 - **Trees**: Each node owns its children
 - **Optional heap data**: Use `Own@(T)` instead of nullable pointers for optional heap-allocated data
 
+## Files and Handles
+
+A file is a value. `open()` answers a `File` that OWNS its operating-system descriptor:
+it moves to exactly one owner, and when that owner leaves scope the descriptor closes.
+There is nothing to remember and nothing to pair.
+
+```sushi
+use <io/fs>
+
+fn log_it(string message) ~ | IoError:
+    let File f = open("out.log", FileMode.Append())??
+    f.writeln(message)??
+    return Result.Ok(~)
+    # f drops here, and the descriptor closes.
+
+fn main() i32:
+    match log_it("Mostly Harmless"):
+        Result.Ok(_) -> println("logged")
+        Result.Err(_) -> println("could not log")
+    return Result.Ok(0)
+```
+
+Three rules follow from the ownership, and each one is a compile error rather than a
+run-time surprise:
+
+- **A handle cannot be copied.** `.clone()` on a `File` is `CE2431`: a field-by-field
+  copy would duplicate the descriptor number and leave two owners that both close it.
+  `.share()` is the operation that means "a second handle", and it says so.
+- **`close()` CONSUMES the handle.** Use it only where the failure has to be SEEN -- a
+  destructor cannot answer a `Result`. A read after a close is `CE2435` while compiling.
+- **The channel is `IoError` from the open to the last read**, so one `??` chain covers
+  the whole function with no conversion in the middle.
+
+### What a handle can do
+
+`stdin`, `stdout` and `stderr` are `File` constants over descriptors 0, 1 and 2, so a
+function that takes a `File` takes either a file or the console. Better still, a function
+can name the CAPABILITY it needs instead of the type. `<io/contracts>` declares three
+perks -- `Reader`, `Writer` and `Seek` -- and a `TcpStream` satisfies the first two just
+as a `File` does:
+
+```sushi
+use <io/fs>
+use <io/contracts>
+
+fn emit@(W: Writer)(W dst, string line) ~ | IoError:
+    dst.write(line)??
+    dst.flush()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match emit(stdout, "Mostly Harmless\n"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+```
+
+### Buffering is a type you opt into
+
+A handle does NOT buffer: every read and every write is one system call. That keeps the
+model honest -- there is no hidden buffer to flush at a point nobody wrote, and no
+destructor swallowing the failure of a flush the program never asked for.
+
+When a loop makes that cost matter, wrap the handle. `<io/buf>` gives `BufReader@(R)`
+over any `Reader` and `BufWriter@(W)` over any `Writer`, each reading or writing one
+WINDOW per system call. The wrapper TAKES the handle (`nom`), so there is never a moment
+where both the handle and its buffer are usable:
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn count_lines(string path) i32 | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8192)??
+
+    let i32 total = 0
+    let bool done = false
+    while (not done):
+        match r.read_line()??:
+            Maybe.Some(_) ->
+                total := total + 1
+            Maybe.None ->
+                done := true
+
+    return Result.Ok(total)
+    # r drops here: it destroys its window and then the File, which closes the descriptor.
+
+fn main() i32:
+    match count_lines("large.txt"):
+        Result.Ok(n) -> println("{n} lines")
+        Result.Err(_) -> println("could not read it")
+    return Result.Ok(0)
+```
+
+A `BufWriter@(W)` flushes when it drops, but a drop cannot report a failure. `finish()`
+is the checked drain, and it CONSUMES the writer -- so once you have called it, nothing
+can forget to flush afterwards:
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn write_report(string path, i32 count) ~ | IoError:
+    let File f = open(path, FileMode.Write())??
+    let BufWriter@(File) w = buf_writer(nom f, 8192)??
+    w.write_line("Report")??
+    w.write_line("Items processed: {count}")??
+    w.finish()??               # the ONE drain, and its failure is seen
+    return Result.Ok(~)
+
+fn main() i32:
+    match write_report("report.txt", 42):
+        Result.Ok(_) -> println("written")
+        Result.Err(_) -> println("could not write it")
+    return Result.Ok(0)
+```
+
+`into_inner()` is the way back out: it flushes, then hands the handle over.
+
 ## Next Steps
 
 This guide covered the basics. For more details:
@@ -1365,6 +1486,8 @@ This guide covered the basics. For more details:
 - [Standard Library](standard-library.md) - All built-in types and methods
 - [Error Handling](error-handling.md) - Deep dive into Result and Maybe
 - [Memory Management](memory-management.md) - RAII, borrowing, and ownership
+- [File Operations](stdlib/io/files.md), [Buffered I/O](stdlib/io/buf.md) and
+  [I/O Contracts](stdlib/io/contracts.md) - the handle layer in full
 - [Examples](examples/README.md) - Hands-on code examples
 
 ---

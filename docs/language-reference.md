@@ -1023,16 +1023,17 @@ its owner until the match says `nom`, and then the local is consumed exactly as
 | `match r:` | BORROWS the local; a `nom` binding is CE2432 |
 | `match nom r:` | CONSUMES the local; `nom` bindings are legal, and a later `r` is CE2405 |
 
-<!-- docs-sweep: skip (a `File` handle and `BufWriter` arrive with HANDLES.md phases 5 and 7) -->
+<!-- docs-sweep: skip (a fragment: `report` is the narrative's, and neither match returns) -->
 ```sushi
 use <io/fs>
+use <io/buf>
 
 match open("out.log", FileMode.Write()):
     Result.Ok(f) -> f.writeln("Mostly Harmless")     # a borrow: no marker, unchanged
     Result.Err(e) -> report(e)
 
 match open("out.log", FileMode.Write()):
-    Result.Ok(nom f) -> BufWriter.new(nom f, 4096)   # takes it, and says so
+    Result.Ok(nom f) -> buf_writer(nom f, 4096)      # takes it, and says so
     Result.Err(e) -> report(e)
 ```
 

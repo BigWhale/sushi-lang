@@ -1,4 +1,4 @@
-"""T1.3 gate: the shared `owns_resource` ownership predicate (was `owns_heap`).
+"""T1.3 gate: the shared `owns_resource` ownership predicate.
 
 Every call states `drops` -- the set of type names that implement `Drop` -- because
 the predicate has no default for it (HANDLES.md ruling R2a): a forgotten argument

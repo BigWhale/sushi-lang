@@ -1,6 +1,6 @@
-# EXPECT_STDOUT_EXACT: "Successfully read: Hello from FileResult test!\n"
+# EXPECT_STDOUT_EXACT: "Successfully read: Mostly Harmless\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Test ?? operator with FileResult - success path
+# Test ?? operator over the IoError channel - success path
 # Creates a test file and uses ?? to read from it
 
 use <io/files>
@@ -8,10 +8,10 @@ use <io/fs>
 use <collections/strings>
 
 fn write_test_file() ~:
-    # Use pattern matching to handle FileResult
+    # Use pattern matching to handle the Result from open()
     match open("/tmp/sushi_test_try.txt", FileMode.Write()):
         Result.Ok(nom f) ->
-            f.writeln("Hello from FileResult test!")
+            f.writeln("Mostly Harmless")
             f.writeln("Second line here.")
             f.close()
         Result.Err(_) ->
@@ -19,7 +19,7 @@ fn write_test_file() ~:
     return Result.Ok(~)
 
 fn read_first_line(string path) string | IoError:
-    # Use ?? to unwrap FileResult from open()
+    # Use ?? to unwrap the Result from open()
     let File f = open(path, FileMode.Read())??
 
     # Read the first line

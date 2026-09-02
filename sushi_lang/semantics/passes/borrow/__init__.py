@@ -62,8 +62,8 @@ class BorrowChecker:
                  unit_name: Optional[str] = None,
                  scope: object = None):
         self.reporter = reporter
-        # Used only to RESOLVE a named type before classifying it: `owns_heap` answers
-        # False for an UnknownType, so without this an owning struct would alias.
+        # Used only to RESOLVE a named type before classifying it: `owns_resource`
+        # answers False for an UnknownType, so without this an owning struct would alias.
         self.tables = tables
         self.types = TypeQueries(tables)
         self.err = PassErrorReporter(reporter)

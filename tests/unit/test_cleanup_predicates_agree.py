@@ -103,7 +103,7 @@ def test_the_drop_set_is_what_makes_the_difference():
         type_class_of(HANDLE)  # type: ignore[call-arg]
 
 
-def test_a_string_owns_heap_but_declares_no_resource():
+def test_a_string_owns_resource_but_declares_none():
     """`owns_resource` and `holds_declared_resource` are different questions.
 
     The narrower one is what `.clone()` is refused on: a string deep-copies perfectly

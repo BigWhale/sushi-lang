@@ -79,12 +79,11 @@ use <sys/process>          # Process control
 ```sushi
 use <io/fs>
 
-# Using ?? operator for propagation
-fn read_config() string:
+# Using ?? operator for propagation. The channel is the one open() answers,
+# so a read propagates through it with no conversion in the middle.
+fn read_config() string | IoError:
     let File f = open("config.txt", FileMode.Read())??
-    let string content = f.read_all().realise('')
-    f.close()
-    return Result.Ok(content)
+    return Result.Ok(f.read_all()??)
 
 # Using pattern matching
 match parse_number("42"):
@@ -151,27 +150,33 @@ let string filename = path.strip_prefix("/home/user/")  # "file.txt"
 #### File I/O
 
 ```sushi
-use <io/files>
 use <io/fs>
 
-# Reading files
+# Reading files. A handle closes itself at the end of the arm, so nothing
+# calls close() -- and every read answers IoError.
 match open("data.txt", FileMode.Read()):
-    Result.Ok(poke f) ->
-        let string content = f.read_all().realise('')
-        f.close()
-        println(content)
-    Result.Err(FileError.NotFound()) ->
+    Result.Ok(f) ->
+        match f.read_all():
+            Result.Ok(content) -> println(content)
+            Result.Err(_) -> println("Read failed")
+    Result.Err(IoError.NotFound()) ->
         println("File not found")
     Result.Err(_) ->
         println("Other error")
 
 # Writing files
 match open("output.txt", FileMode.Write()):
-    Result.Ok(poke f) ->
-        f.write("Hello, file!")
-        f.close()
+    Result.Ok(f) ->
+        match f.writeln("Mostly Harmless"):
+            Result.Ok(_) -> println("written")
+            Result.Err(_) -> println("Failed to write")
     Result.Err(_) ->
-        println("Failed to write")
+        println("Failed to open")
+
+# Buffered, when the loop is long: one system call per window, not per line
+let BufWriter@(File) out = buf_writer(nom stdout, 8192)??
+out.write_line("Mostly Harmless")??
+out.finish()??
 ```
 
 ## Module Overview

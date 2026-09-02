@@ -18,10 +18,12 @@ source and is merged as a compilation unit when you import it. It composes the
 `<io/files>` primitives with the `<io/path>` algebra.
 
 It is also where the file HANDLE lives. `File` owns its descriptor, moves to one owner,
-and closes when that owner leaves scope; the twelve methods on it are ordinary extension
-methods written over the `<io/files>` descriptor primitives, which is why there is no
-compiler magic behind any of them. The full method reference is in
-[File Operations](files.md), and the console handles are in [Console I/O](console.md).
+and closes when that owner leaves scope. Every method on it is either a perk
+implementation (`Reader`, `Writer`, `Seek`, `Drop`) or an ordinary extension method, each
+written over the `<io/files>` descriptor primitives -- there is no compiler magic behind
+any of them. The full method reference is in [File Operations](files.md), the console
+handles are in [Console I/O](console.md), and the buffered layer above the handle is
+[Buffered I/O](buf.md).
 
 ## Types
 
@@ -131,5 +133,9 @@ fn main() i32:
 
 ## See also
 
-- [File I/O](files.md) — the primitives underneath (`read_dir`, `mkdir`, `remove`, the stat fields)
+- [File I/O](files.md) — the `File` method reference, and the primitives underneath
+  (`read_dir`, `mkdir`, `remove`, the stat fields)
+- [I/O contracts](contracts.md) — `Reader`, `Writer` and `Seek`, which is what a function
+  names when it wants a capability rather than a type
+- [Buffered I/O](buf.md) — `BufReader` and `BufWriter` over any handle
 - [Path algebra](path.md) — the joins this module builds its paths with

@@ -1,29 +1,44 @@
-use <io/files>
+use <io/fs>
+use <io/buf>
+
+# A handle owns its descriptor: it closes itself when its owner leaves scope,
+# and every read and write answers the same IoError channel.
+fn file_entry(string path, string entry) ~ | IoError:
+    let File f = open(path, FileMode.Write())??
+    f.writeln(entry)??
+    return Result.Ok(~)
+    # f drops here, and the descriptor closes.
+
+# Buffering is a type you opt into. buf_reader TAKES the handle, so the
+# unbuffered File cannot be used behind the reader's back.
+fn read_entry(string path) string | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 4096)??
+    # The scrutinee is a temporary the match OWNS, so `nom` may take the line
+    # out of it instead of borrowing it.
+    match r.read_line()??:
+        Maybe.Some(nom line) -> return Result.Ok(nom line)
+        Maybe.None -> return Result.Ok("")
 
 fn main() i32:
-    # Write a line to a file in /tmp, then read it back.
-    match open("/tmp/guide_entry.txt", FileMode.Write()):
-        Result.Ok(poke f) ->
-            f.write("Earth: Mostly Harmless")
-            f.close()
+    match file_entry("/tmp/guide_entry.txt", "Earth: Mostly Harmless"):
+        Result.Ok(_) ->
             println("Entry filed.")
-        Result.Err(FileError.PermissionDenied()) ->
+        Result.Err(IoError.PermissionDenied()) ->
             println("Permission denied")
-            return Result.Err(StdError.Error)
+            return Result.Ok(1)
         Result.Err(_) ->
             println("Failed to write entry")
-            return Result.Err(StdError.Error)
+            return Result.Ok(1)
 
-    match open("/tmp/guide_entry.txt", FileMode.Read()):
-        Result.Ok(poke f) ->
-            let string content = f.read_all().realise('')
-            f.close()
+    match read_entry("/tmp/guide_entry.txt"):
+        Result.Ok(content) ->
             println("Entry reads: {content}")
-        Result.Err(FileError.NotFound()) ->
+        Result.Err(IoError.NotFound()) ->
             println("Entry not found")
-            return Result.Err(StdError.Error)
+            return Result.Ok(1)
         Result.Err(_) ->
             println("Failed to read entry")
-            return Result.Err(StdError.Error)
+            return Result.Ok(1)
 
     return Result.Ok(0)

@@ -99,8 +99,9 @@ fn greet@(W: Writer)(W dst, string who) ~ | IoError:
     return Result.Ok(~)
 
 fn main() i32:
-    greet(stdout, "world")
-    return Result.Ok(0)
+    match greet(stdout, "world"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
 ```
 
 `stdout` is a `File` constant, so the console goes through the contract like any other

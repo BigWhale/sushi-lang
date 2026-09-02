@@ -4,8 +4,9 @@ fn main() i32:
     scores.push(20)
     scores.push(30)
 
-    # pop() removes and returns the last element.
-    let i32 last = scores.pop()
+    # pop() removes the last element and answers Maybe@(i32): an empty array
+    # has nothing to give, so the absence is in the type.
+    let i32 last = scores.pop().realise(0)
     println("Popped {last}; {scores.len()} left.")
 
     # Iterate with foreach over .iter().

@@ -25,7 +25,7 @@ nothing here has to be remembered.
 ```sushi
 use <io/fs>
 
-fn log_it() ~ | FileError:
+fn log_it() ~ | IoError:
     let File f = open("out.log", FileMode.Append())??
     f.writeln("Mostly Harmless")??
     return Result.Ok(~)
@@ -42,8 +42,10 @@ Three things follow from that, and each surprises somebody:
   write `Result.Ok(nom f)` over a scrutinee the match owns, or -- better -- delete the
   `close()` and let the drop do it. A handle held in a struct FIELD cannot be closed
   explicitly at all, for the same reason.
-- **Reads and writes are UNBUFFERED.** Each one is a system call. That is Rust's rule
-  too, and the buffered layer is a separate type.
+- **Reads and writes are UNBUFFERED.** Each one is a system call. A handle that
+  buffered would have to flush at a point nobody wrote, and a destructor cannot report
+  the failure of that flush -- so buffering is a separate type that a caller opts into,
+  [`BufReader` and `BufWriter`](buf.md).
 
 Every method is a plain borrow except `close()`, which takes the handle. A file's
 position lives in the KERNEL, not in the struct, so reading and writing need no mutable
@@ -60,7 +62,7 @@ Open a file with a specific mode.
 ```sushi
 use <io/fs>
 
-fn open(string path, FileMode mode) -> Result@(File, IoError)
+fn open(string path, FileMode mode) File | IoError
 ```
 
 **Parameters:**
@@ -86,9 +88,9 @@ use <io/fs>
 fn main() i32:
     match open("data.txt", FileMode.Read()):
         Result.Ok(nom f) ->
-            println("File opened successfully")
-            f.close()
-        Result.Err(e) ->
+            println("open: {f.is_open()}")
+            # f drops at the end of the arm, and the descriptor closes.
+        Result.Err(_) ->
             println("Failed to open file")
 
     return Result.Ok(0)
@@ -102,9 +104,8 @@ use <io/fs>
 
 fn read_config() string | IoError:
     let File f = open("config.txt", FileMode.Read())??
-    let string content = f.read_all().realise('')
-    f.close()
-    return Result.Ok(content)
+    return Result.Ok(f.read_all()??)
+    # f drops at the return, and the descriptor closes.
 
 fn main() i32:
     match read_config():
@@ -144,55 +145,58 @@ failure has to be SEEN. Every method is a plain borrow except `close()`, which C
 the handle: a file's position lives in the kernel, not in the struct, so a read and a
 write need no mutable receiver.
 
-### read
+### read and read_all
 
-Read entire file contents as a string.
+`read(max)` is ONE read and answers what arrived; `read_all()` loops until the end and
+answers the rest of the file from the current position.
 
 ```sushi
-use <io/fs>
-
-fn File.read_all().realise('') -> string
+fn File.read(i32 max) string | IoError
+fn File.read_all() string | IoError
 ```
 
-**Returns:**
-- String containing entire file contents
+`read()`'s bound counts BYTES, so a multi-byte character can be split across two calls,
+and an EMPTY answer is the end of input -- a SHORT answer is not, because a pipe hands
+over whatever has arrived so far. `read_all()` holds the whole answer in memory at once;
+a large file wants `read()` in a loop, or [`BufReader`](buf.md).
 
-**Example:**
+**Example:** the whole file, in a helper that carries the channel.
 
 ```sushi
-use <io/files>
 use <io/fs>
 
-fn main() i32:
-    match open("data.txt", FileMode.Read()):
-        Result.Ok(nom f) ->
-            let string content = f.read_all().realise('')
-            f.close()
-            println("Content: {content}")
-        Result.Err(_) ->
-            println("Failed to read file")
+fn contents(string path) string | IoError:
+    let File f = open(path, FileMode.Read())??
+    return Result.Ok(f.read_all()??)
 
+fn main() i32:
+    match contents("data.txt"):
+        Result.Ok(text) -> println("Content: {text}")
+        Result.Err(_) -> println("Failed to read file")
     return Result.Ok(0)
 ```
 
 **Processing file content:**
 
 ```sushi
-use <io/files>
 use <io/fs>
 use <collections/strings>
 
-fn main() i32 | IoError:
-    let File f = open("numbers.txt", FileMode.Read())??
-    let string content = f.read_all().realise('')
-    f.close()
-
+fn report(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let string content = f.read_all()??
     let string[] lines = content.split("\n")
 
     foreach(line in lines.iter()):
         if (not line.is_empty()):
             println("Line: {line}")
 
+    return Result.Ok(~)
+
+fn main() i32:
+    match report("numbers.txt"):
+        Result.Ok(_) -> println("read")
+        Result.Err(_) -> println("failed")
     return Result.Ok(0)
 ```
 
@@ -247,100 +251,69 @@ fn count_lines(string path) i32 | IoError:
     return Result.Ok(lines)
 ```
 
-### write
-
-Write a string to the file.
+### write and writeln
 
 ```sushi
-use <io/fs>
-
-fn File.write(string data) -> ~
+fn File.write(string data) ~ | IoError
+fn File.writeln(string data) ~ | IoError
+fn File.write_bytes(u8[] data) ~ | IoError
 ```
 
-**Parameters:**
-- `data` - String to write
+A write answers `~` and never a count: the primitive underneath LOOPS past a short write,
+so every byte has gone or the call is an error. That is why there is no partial-write case
+to handle, and why a discarded write Result is `CW2001` at every bare-statement call site.
 
 **Example:**
 
 ```sushi
-use <io/files>
 use <io/fs>
 
-fn main() i32 | IoError:
-    let File f = open("output.txt", FileMode.Write())??
+fn write_report(string path, i32 count) ~ | IoError:
+    let File f = open(path, FileMode.Write())??
+    f.writeln("Report")??
+    f.writeln("======")??
+    f.writeln("Items processed: {count}")??
+    return Result.Ok(~)
+    # f drops here, and the descriptor closes.
 
-    f.write("Hello, World!")
-    f.write("\n")
-    f.write("Second line")
-
-    f.close()
-
+fn main() i32:
+    match write_report("report.txt", 42):
+        Result.Ok(_) -> println("written")
+        Result.Err(_) -> println("failed")
     return Result.Ok(0)
 ```
 
-**Writing formatted data:**
+**Appending:** the mode is the only difference. `FileMode.Append()` puts every write at
+the end of the file, so two processes appending do not overwrite each other's lines.
 
 ```sushi
-use <io/files>
 use <io/fs>
 
-fn main() i32 | IoError:
-    let File f = open("report.txt", FileMode.Write())??
-
-    f.write("Report\n")
-    f.write("======\n\n")
-
-    let i32 count = 42
-    let string line = "Items processed: {count}\n"
-    f.write(line)
-
-    f.close()
-
-    return Result.Ok(0)
-```
-
-**Appending to file:**
-
-```sushi
-use <io/files>
-use <io/fs>
-
-fn main() i32 | IoError:
+fn log_line(string message) ~ | IoError:
     let File f = open("log.txt", FileMode.Append())??
+    f.writeln(message)??
+    return Result.Ok(~)
 
-    f.write("New log entry\n")
-
-    f.close()
-
+fn main() i32:
+    match log_line("Mostly Harmless"):
+        Result.Ok(_) -> println("logged")
+        Result.Err(_) -> println("failed")
     return Result.Ok(0)
 ```
 
 ### flush
 
-Push the stream buffer to the operating system.
-
 ```sushi
-use <io/fs>
-
-fn File.flush() -> ~
+fn File.flush() ~ | IoError
 ```
 
-**Example:**
+**It does nothing, successfully.** A descriptor is not buffered: by the time `write()`
+returns, the bytes are the kernel's. The method is on the `Writer` contract so that a
+function written against `Writer` keeps compiling when the handle it is given is swapped
+for a [`BufWriter`](buf.md), where the call does real work.
 
-```sushi
-use <io/files>
-use <io/fs>
-
-fn main() i32 | IoError:
-    let File f = open("progress.log", FileMode.Write())??
-    f.write("step 1 done")
-    f.flush()  # The bytes reach the file before the next step runs
-    f.close()
-
-    return Result.Ok(0)
-```
-
-**Note:** `close()` also flushes. Use `flush()` when the file stays open and the bytes must be visible now: a log line before a risky operation, or a file another process reads.
+Getting the bytes onto the DISK is `fsync()`, a much stronger promise, and not what
+`flush()` has ever meant.
 
 ### close
 
@@ -353,7 +326,8 @@ fn File.close(nom self) ~ | IoError
 The call takes the handle, so the binding is spent: a read after a close is **CE2435**
 while compiling, and the scope exit that follows has nothing to close. Call it only where
 the failure has to be SEEN -- an owned handle closes itself on drop, and a destructor
-cannot answer a `Result`.
+cannot answer a `Result`. The close itself can fail: a write the file system had not
+finished is reported here and nowhere else.
 
 **Example:**
 
@@ -419,12 +393,16 @@ thread-safe. Match it when you need the number:
 ```sushi
 use <io/fs>
 
+fn config() string | IoError:
+    let File f = open("config.txt", FileMode.Read())??
+    return Result.Ok(f.read_all()??)
+
 fn main() i32:
-    match open("config.txt", FileMode.Read()):
-        Result.Ok(f) -> println(f.read_all().realise(''))
+    match config():
+        Result.Ok(text) -> println(text)
         Result.Err(IoError.NotFound) -> println("no such file")
         Result.Err(IoError.Os(code)) -> println("errno {code}")
-        Result.Err(_) -> println("could not open it")
+        Result.Err(_) -> println("could not read it")
     return Result.Ok(0)
 ```
 
@@ -456,11 +434,13 @@ enum FileError:
 use <io/files>
 use <io/fs>
 
+fn read_config() string | IoError:
+    let File f = open("config.txt", FileMode.Read())??
+    return Result.Ok(f.read_all()??)
+
 fn main() i32:
-    match open("config.txt", FileMode.Read()):
-        Result.Ok(nom f) ->
-            let string data = f.read_all().realise('')
-            f.close()
+    match read_config():
+        Result.Ok(data) ->
             println(data)
         Result.Err(IoError.NotFound()) ->
             println("File not found")
@@ -478,23 +458,21 @@ fn main() i32:
 use <io/files>
 use <io/fs>
 
+fn duplicate(string src, string dst) ~ | IoError:
+    let File input = open(src, FileMode.Read())??
+    let File output = open(dst, FileMode.Write())??
+    output.write(input.read_all()??)??
+    return Result.Ok(~)
+    # Both handles drop here, in reverse declaration order: output, then input.
+
 fn main() i32:
-    match open("data.txt", FileMode.Read()):
-        Result.Ok(nom f) ->
-            match open("output.txt", FileMode.Write()):
-                Result.Ok(nom out) ->
-                    let string data = f.read_all().realise('')
-                    out.write(data)
-                    f.close()
-                    out.close()
-                    println("File copied")
-                Result.Err(_) ->
-                    println("Failed to open output file")
-                    f.close()
+    match duplicate("data.txt", "output.txt"):
+        Result.Ok(_) ->
+            println("File copied")
         Result.Err(IoError.NotFound()) ->
             println("Input file not found")
         Result.Err(_) ->
-            println("Failed to open input file")
+            println("Failed to copy")
 
     return Result.Ok(0)
 ```
@@ -507,12 +485,11 @@ use <io/fs>
 
 fn copy_file(string src, string dst) ~ | IoError:
     let File input = open(src, FileMode.Read())??
-    let string content = input.read_all().realise('')
-    input.close()
+    let string content = input.read_all()??
 
     let File output = open(dst, FileMode.Write())??
-    output.write(content)
-    output.close()
+    output.write(content)??
+    output.close()??          # the close is checked, so a failed flush to disk is seen
 
     return Result.Ok(~)
 
@@ -533,7 +510,7 @@ fn main() i32:
 Delete a file from the filesystem.
 
 ```sushi
-fn remove(string path) -> Result@(i32)
+fn remove(string path) -> Result@(i32, FileError)
 ```
 
 **Parameters:**
@@ -566,7 +543,7 @@ fn main() i32:
 Rename or move a file or directory.
 
 ```sushi
-fn rename(string old_path, string new_path) -> Result@(i32)
+fn rename(string old_path, string new_path) -> Result@(i32, FileError)
 ```
 
 **Parameters:**
@@ -600,8 +577,8 @@ fn main() i32:
 The modification and status-change times of a path, as unix seconds.
 
 ```sushi
-fn mtime(string path) -> Result@(i64)
-fn ctime(string path) -> Result@(i64)
+fn mtime(string path) -> Result@(i64, FileError)
+fn ctime(string path) -> Result@(i64, FileError)
 ```
 
 **Example:**
@@ -623,7 +600,7 @@ fn main() i32:
 The raw `st_mode` of a path: the file-type bits plus the permission bits.
 
 ```sushi
-fn mode(string path) -> Result@(i32)
+fn mode(string path) -> Result@(i32, FileError)
 ```
 
 **Example:**
@@ -647,7 +624,7 @@ Ask whether the path itself is a symbolic link. This is the one query that does
 NOT follow the link (`lstat`); `is_file` and `is_dir` answer for the target.
 
 ```sushi
-fn is_symlink(string path) -> Result@(bool)
+fn is_symlink(string path) -> Result@(bool, FileError)
 ```
 
 **Example:**
@@ -671,7 +648,7 @@ fn main() i32:
 List the entries of a directory.
 
 ```sushi
-fn read_dir(string path) -> Result@(string[])
+fn read_dir(string path) -> Result@(string[], FileError)
 ```
 
 **Parameters:**
@@ -705,7 +682,7 @@ fn main() i32:
 Create a new directory with specified permissions.
 
 ```sushi
-fn mkdir(string path, i32 mode) -> Result@(i32)
+fn mkdir(string path, i32 mode) -> Result@(i32, FileError)
 ```
 
 **Parameters:**
@@ -743,7 +720,7 @@ fn main() i32:
 Remove an empty directory.
 
 ```sushi
-fn rmdir(string path) -> Result@(i32)
+fn rmdir(string path) -> Result@(i32, FileError)
 ```
 
 **Parameters:**
@@ -775,7 +752,7 @@ fn main() i32:
 Copy a file's contents to a new location.
 
 ```sushi
-fn copy(string src, string dst) -> Result@(i32)
+fn copy(string src, string dst) -> Result@(i32, FileError)
 ```
 
 **Parameters:**
@@ -953,13 +930,12 @@ use <io/fs>
 
 fn read_file(string path) string | IoError:
     let File f = open(path, FileMode.Read())??
-    let string content = f.read_all().realise('')
-    f.close()
-    return Result.Ok(content)
+    return Result.Ok(f.read_all()??)
 
 fn main() i32:
-    let string content = read_file("data.txt").realise("")
-    println(content)
+    match read_file("data.txt"):
+        Result.Ok(content) -> println(content)
+        Result.Err(_) -> println("could not read it")
 
     return Result.Ok(0)
 ```
@@ -972,13 +948,13 @@ use <io/fs>
 
 fn write_file(string path, string data) ~ | IoError:
     let File f = open(path, FileMode.Write())??
-    f.write(data)
-    f.close()
+    f.write(data)??
     return Result.Ok(~)
 
-fn main() i32 | IoError:
-    write_file("output.txt", "Hello, World!")??
-    println("File written")
+fn main() i32:
+    match write_file("output.txt", "Mostly Harmless"):
+        Result.Ok(_) -> println("File written")
+        Result.Err(_) -> println("could not write it")
 
     return Result.Ok(0)
 ```
@@ -990,11 +966,9 @@ use <io/files>
 use <io/fs>
 use <collections/strings>
 
-fn main() i32 | IoError:
-    let File f = open("data.csv", FileMode.Read())??
-    let string content = f.read_all().realise('')
-    f.close()
-
+fn show_csv(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let string content = f.read_all()??
     let string[] lines = content.split("\n")
 
     foreach(line in lines.iter()):
@@ -1005,6 +979,13 @@ fn main() i32 | IoError:
                 print("{field}\t")
 
             println("")
+
+    return Result.Ok(~)
+
+fn main() i32:
+    match show_csv("data.csv"):
+        Result.Ok(_) -> println("read")
+        Result.Err(_) -> println("failed")
 
     return Result.Ok(0)
 ```
@@ -1017,34 +998,35 @@ use <io/fs>
 
 fn log_message(string message) ~ | IoError:
     let File f = open("app.log", FileMode.Append())??
-    f.write("{message}\n")
-    f.close()
+    f.writeln(message)??
     return Result.Ok(~)
 
-fn main() i32 | IoError:
+fn run() ~ | IoError:
     log_message("Application started")??
     log_message("Processing data")??
     log_message("Application finished")??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("logged")
+        Result.Err(_) -> println("could not log")
 
     return Result.Ok(0)
 ```
 
 ### Checking file existence
 
+`exists()` answers a bare `bool` and opens nothing, so it costs one `stat` and cannot
+leave a descriptor behind. Note that an answer is only ever a statement about the past:
+between the check and the open, another process can create or remove the path, so a
+program that must not race should open the file and read the error instead.
+
 ```sushi
 use <io/files>
-use <io/fs>
-
-fn file_exists(string path) bool:
-    match open(path, FileMode.Read()):
-        Result.Ok(nom f) ->
-            f.close()
-            return Result.Ok(true)
-        Result.Err(_) ->
-            return Result.Ok(false)
 
 fn main() i32:
-    if (file_exists("config.txt").realise(false)):
+    if (exists("config.txt")):
         println("Config file found")
     else:
         println("Config file not found")
@@ -1060,13 +1042,17 @@ fn main() i32:
 - **Recommended:** Use forward slashes for cross-platform compatibility
 
 ```sushi
-use <io/files>
 use <io/fs>
 
-fn main() i32 | IoError:
+fn read_input() string | IoError:
     # Unix-style paths work on all platforms
     let File f = open("data/input.txt", FileMode.Read())??
-    f.close()
+    return Result.Ok(f.read_all()??)
+
+fn main() i32:
+    match read_input():
+        Result.Ok(text) -> println(text)
+        Result.Err(_) -> println("no input")
 
     return Result.Ok(0)
 ```
@@ -1091,34 +1077,45 @@ File permissions are platform-specific:
 
 ### Buffering
 
-File operations are buffered by the operating system. For large files:
+**A `File` does not buffer.** Every read and every write on a handle is one system call,
+so a loop of small reads pays for one call each. That is the cost
+[`BufReader` and `BufWriter`](buf.md) exist to remove: they read a window and hand out
+of it, so a line-at-a-time loop costs one call per window instead of one per line.
 
 ```sushi
-use <io/files>
 use <io/fs>
+use <io/buf>
 
-fn main() i32 | IoError:
-    let File f = open("large.txt", FileMode.Read())??
+fn show(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8192)??
 
-    # Reading line by line holds one line at a time, where read_all() holds the file.
     let bool done = false
     while (not done):
-        match f.readln()??:
+        match r.read_line()??:
             Maybe.Some(line) ->
                 println(line)
             Maybe.None ->
                 done := true
+
+    return Result.Ok(~)
+
+fn main() i32:
+    match show("large.txt"):
+        Result.Ok(_) -> println("read")
+        Result.Err(_) -> println("failed")
 
     return Result.Ok(0)
 ```
 
 ### Memory Usage
 
-- `read_all()` loads the whole file into memory
-- `readln()` reads one line at a time, and the buffered reader in `<io/buf>` does the
-  same with one system call per buffer rather than one per line
+- `read_all()` loads the whole file into memory, however large it is
+- `readln()` holds one line at a time, at the cost of one system call per line
+- `BufReader.read_line()` holds one line at a time and pays one system call per WINDOW
 
-Choose based on file size and use case.
+Choose by file size: `read_all()` for a configuration file, the buffered reader for
+anything a user might grow without asking.
 
 ## Security Considerations
 
@@ -1131,29 +1128,29 @@ use <io/files>
 use <io/fs>
 use <collections/strings>
 
-fn is_safe_path(string path) bool:
+extend string is_safe_path() bool:
     # Reject paths with ..
-    if (path.contains("..")):
-        return Result.Ok(false)
+    if (self.contains("..")):
+        return false
 
     # Reject absolute paths if needed
-    if (path.starts_with("/")):
-        return Result.Ok(false)
+    if (self.starts_with("/")):
+        return false
 
-    return Result.Ok(true)
+    return true
 
-fn main() i32 | IoError:
-    let string user_path = "data.txt"
+fn read_checked(string path) string | IoError:
+    if (not path.is_safe_path()):
+        return Result.Err(IoError.InvalidInput)
 
-    if (not is_safe_path(user_path).realise(false)):
-        println("Invalid path")
-        return Result.Ok(1)
+    let File f = open(path, FileMode.Read())??
+    return Result.Ok(f.read_all()??)
 
-    let File f = open(user_path, FileMode.Read())??
-    let string content = f.read_all().realise('')
-    f.close()
-
-    println(content)
+fn main() i32:
+    match read_checked("data.txt"):
+        Result.Ok(content) -> println(content)
+        Result.Err(IoError.InvalidInput) -> println("Invalid path")
+        Result.Err(_) -> println("could not read it")
 
     return Result.Ok(0)
 ```
@@ -1166,15 +1163,16 @@ Be cautious with write operations:
 use <io/files>
 use <io/fs>
 
+fn overwrite() ~ | IoError:
+    # FileMode.Write() TRUNCATES the existing file.
+    let File f = open("important.txt", FileMode.Write())??
+    f.write("New content")??
+    return Result.Ok(~)
+
 fn main() i32:
-    # Always check if overwriting is intended
-    match open("important.txt", FileMode.Write()):
-        Result.Ok(nom f) ->
-            # This TRUNCATES the existing file!
-            f.write("New content")
-            f.close()
-        Result.Err(_) ->
-            println("Failed to open file")
+    match overwrite():
+        Result.Ok(_) -> println("written")
+        Result.Err(_) -> println("Failed to open file")
 
     return Result.Ok(0)
 ```
@@ -1183,6 +1181,8 @@ Use `FileMode.Append()` to preserve existing content.
 
 ## See Also
 
+- [Buffered I/O](buf.md) - `BufReader` and `BufWriter` over any handle
+- [I/O Contracts](contracts.md) - `Reader`, `Writer` and `Seek`
 - [Console I/O](console.md) - Standard input/output/error operations
 - [String Methods](../../standard-library.md) - String operations for file content
 - [Standard Library Reference](../../standard-library.md) - Complete stdlib reference

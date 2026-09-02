@@ -1,13 +1,13 @@
 # EXPECT_STDOUT_EXACT: "Result: Error reading config\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Test ?? operator with FileResult enum
+# Test ?? operator over the IoError channel that open() and every read answer.
 # This demonstrates error propagation for file operations
 
 use <io/files>
 use <io/fs>
 
 fn read_first_line(string path) string | IoError:
-    # Use ?? to unwrap FileResult from open()
+    # Use ?? to unwrap the Result from open()
     # If file doesn't exist, propagates Result.Err() to caller
     let File f = open(path, FileMode.Read())??
 
@@ -34,7 +34,7 @@ extend File line_or_empty() string:
         Result.Err(_) -> return ""
 
 fn main() i32:
-    # Test error propagation with FileResult
+    # Test error propagation over the IoError channel
     let string result = process_config().realise("Error reading config")
     println("Result: {result}")
 

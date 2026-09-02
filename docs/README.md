@@ -91,10 +91,10 @@ use <io/fs>
 fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
 
-# Error propagation
-fn read_file() string:
+# Error propagation: one channel from the open to the read
+fn read_file() string | IoError:
     let File f = open("data.txt", FileMode.Read())??
-    return Result.Ok(f.read_all().realise(''))
+    return Result.Ok(f.read_all()??)
 
 # Pattern matching
 match result:
