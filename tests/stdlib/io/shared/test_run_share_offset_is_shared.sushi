@@ -1,0 +1,34 @@
+# share() is dup(2): a SECOND descriptor over the SAME open file description. The offset
+# is part of that description, so a read through one handle moves the other. That is the
+# fact a reader gets wrong, and it is why read_at() and not share() is the answer for
+# concurrent reads of one file. Both handles own a descriptor, and both close on drop.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "first: Mostly |\nsecond: Harmless|\n"
+use <io/files>
+use <io/fs>
+
+fn probe(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let File twin = f.share()??
+    let string head = f.read(7)??
+    println("first: {head}|")
+    let string rest = twin.read_all()??
+    println("second: {rest}|")
+    return Result.Ok(~)
+
+fn main() i32:
+    match open("share_offset_probe.txt", FileMode.Write()):
+        Result.Ok(w) -> w.write("Mostly Harmless")
+        Result.Err(_) ->
+            println("open failed")
+            return Result.Ok(1)
+
+    match probe("share_offset_probe.txt"):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> println("probe failed")
+
+    remove("share_offset_probe.txt").realise(0)
+    return Result.Ok(0)

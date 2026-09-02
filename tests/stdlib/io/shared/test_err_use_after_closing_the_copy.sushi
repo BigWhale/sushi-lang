@@ -1,0 +1,20 @@
+# close() spends the handle it is called on and no other. The copy share() answered is
+# spent by its own close(), so a read through it afterwards is CE2435, while the original
+# it was shared from is untouched by either call.
+# EXPECT_ERROR_CODE: CE2435
+# EXPECT_STDERR_CONTAINS: 'close' consumed it
+use <io/fs>
+
+fn probe(string path) string | IoError:
+    let File f = open(path, FileMode.Read())??
+    let File twin = f.share()??
+    twin.close()??
+    let string still = f.read_all()??
+    let string gone = twin.read_all()??
+    return Result.Ok(still.concat(gone))
+
+fn main() i32:
+    match probe("share_after_close.txt"):
+        Result.Ok(text) -> println("{text}")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

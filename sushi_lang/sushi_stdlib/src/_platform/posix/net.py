@@ -12,7 +12,7 @@ ones that DISAGREE live in _platform/darwin/net.py and _platform/linux/net.py.
 from llvmlite import ir
 
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
-from sushi_lang.sushi_stdlib.src._platform.posix.files import declare_close
+from sushi_lang.sushi_stdlib.src._platform.posix.files import declare_close, declare_dup
 
 AF_UNSPEC = 0
 AF_INET = 2
@@ -175,5 +175,5 @@ __all__ = [
     "declare_accept", "declare_send", "declare_recv", "declare_sendto",
     "declare_recvfrom", "declare_setsockopt", "declare_getsockname",
     "declare_getpeername", "declare_shutdown", "declare_getaddrinfo",
-    "declare_freeaddrinfo", "declare_getnameinfo", "declare_close",
+    "declare_freeaddrinfo", "declare_getnameinfo", "declare_close", "declare_dup",
 ]

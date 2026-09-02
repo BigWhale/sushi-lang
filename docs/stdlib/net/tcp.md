@@ -14,7 +14,7 @@ use <net/tcp>
 
 `net/tcp` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it. It composes the `<net/socket>` primitives, and a struct here is a typed name for a descriptor and carries nothing else.
 
-The two constructors are free functions; everything with a receiver is an extension method with the `| NetError` channel, so a call site handles each one with `??`, `.realise(default)`, `match` or `.is_ok()`.
+The two constructors are free functions; everything with a receiver is an extension method with an error channel, so a call site handles each one with `??`, `.realise(default)`, `match` or `.is_ok()`. The domain methods -- `accept`, `send`, `recv`, the addresses, the timeouts, `close` -- answer `| NetError`. The contract methods a `TcpStream` shares with a `File` (`read`, `write`, `flush`, see [I/O Contracts](../io/contracts.md)) and `share()` answer `| IoError`.
 
 ## Types
 
@@ -30,7 +30,7 @@ public struct TcpListener:
 
 **A socket owns its descriptor.** `TcpStream` and `TcpListener` implement the `Drop` perk, so each one MOVES to exactly one owner and closes itself when that owner leaves scope. There is nothing to remember and nothing to leak.
 
-> **One binding owns a socket, and the compiler enforces it.** Handing a stream to a `nom` parameter transfers it, and reading the old binding afterwards is `CE2405`. A socket has no `.clone()` — a deep copy would copy the descriptor number and leave two values that both close it, which is `CE2431`.
+> **One binding owns a socket, and the compiler enforces it.** Handing a stream to a `nom` parameter transfers it, and reading the old binding afterwards is `CE2405`. A socket has no `.clone()` — a deep copy would copy the descriptor number and leave two values that both close it, which is `CE2431`. The operation that means a second handle is `share()`, and a listener has it.
 
 ```sushi
 use <net/tcp>
@@ -62,6 +62,23 @@ Connect to a host and port. There is no connect timeout — an unreachable addre
 ### `l.accept() TcpStream | NetError`
 
 Take the next connection. With `l.set_timeout(ms)` set, this answers `TimedOut` rather than waiting.
+
+### `l.share() TcpListener | IoError`
+
+A second listener over the SAME socket: `dup(2)`. Whichever handle calls `accept()` first takes the waiting connection, which is the shared-listener pattern — several workers accepting on one port — and the reason a listener gets `share()` while it implements no contract. Closing either handle leaves the other accepting, and each one closes its own descriptor on drop.
+
+The receiver is a plain borrow, so `let TcpListener twin = l.share()??` leaves `l` usable, and closing `twin` spends only `twin`. A socket has no `.clone()` (`CE2431`); this is the operation that means a second handle, and its name says so.
+
+```sushi
+use <net/tcp>
+
+fn main() i32:
+    let TcpListener server = tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
+    match server.share():
+        Result.Ok(twin) -> println("two listeners: {twin.is_open() and server.is_open()}")
+        Result.Err(_) -> println("no second listener")
+    return Result.Ok(0)
+```
 
 ### `s.send_all(u8[] data) ~ | NetError` and `s.recv_exact(i32 count) u8[] | NetError`
 

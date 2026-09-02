@@ -40,8 +40,9 @@ sets it true, and the three console constants set it false, because a program do
 own the descriptors it was started with. A `string` carries the same bit for the same
 reason -- a literal frees to a no-op.
 
-`File` implements `Drop`, so it is a moving type: `.clone()` is CE2431 and a second
-owner cannot exist.
+`File` implements `Drop`, so it is a moving type: `.clone()` is CE2431. The one way to
+a second owner is [`share()`](files.md#share), and it is a second DESCRIPTOR over the
+same open file description rather than a copy of the value -- the offset is shared.
 
 ### `stdin`, `stdout`, `stderr`
 

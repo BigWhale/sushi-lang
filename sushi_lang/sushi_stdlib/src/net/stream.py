@@ -28,6 +28,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
 def generate_ir(module: ir.Module) -> None:
     """Emit every descriptor-level symbol into the module."""
     generate_close(module)
+    generate_dup(module)
     generate_local_port(module)
     generate_send(module)
     generate_recv(module)
@@ -65,6 +66,38 @@ def generate_close(module: ir.Module) -> None:
 
     builder.position_at_end(success_bb)
     builder.ret(emit_ok_result(builder, result_type, zero, 4))
+
+
+def generate_dup(module: ir.Module) -> None:
+    """Emit `Result<i32, NetError> sushi_net_sock_dup(i32 fd)`.
+
+    A SECOND descriptor over the SAME open socket: the shared-listener primitive, where
+    several workers accept on one port. It is the socket twin of `fd_dup`, and it lives
+    here for the reason `sock_close` does -- <net/tcp> reaches the kernel through this
+    module and answers NetError, not FileError.
+    """
+    _i8, _i8_ptr, i32, _i64 = get_basic_types()
+    platform_net = get_platform_module('net')
+    dup_fn = platform_net.declare_dup(module)
+
+    result_type = get_result_type(i32, get_unit_enum_type())
+    func = ir.Function(module, ir.FunctionType(result_type, [i32]),
+                       name="sushi_net_sock_dup")
+    func.args[0].name = "fd"
+    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
+
+    copy = builder.call(dup_fn, [func.args[0]], name="dup_fd")
+    ok = builder.icmp_signed(">=", copy, ir.Constant(i32, 0), name="dup_ok")
+
+    success_bb = func.append_basic_block(name="success")
+    failure_bb = func.append_basic_block(name="failure")
+    builder.cbranch(ok, success_bb, failure_bb)
+
+    builder.position_at_end(failure_bb)
+    builder.ret(emit_errno_err_result(builder, module, result_type))
+
+    builder.position_at_end(success_bb)
+    builder.ret(emit_ok_result(builder, result_type, copy, 4))
 
 
 def generate_local_port(module: ir.Module) -> None:

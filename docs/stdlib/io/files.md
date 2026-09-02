@@ -135,6 +135,9 @@ callable on a `TcpStream` too, which is what `<io/contracts>` is for.
 | `readch` | `() string \| IoError` -- one byte, as text | `File` |
 | `writeln` | `(string data) ~ \| IoError` | `File` |
 | `tell` | `() i64 \| IoError` | `File` |
+| `read_at` | `(i64 offset, i32 count) u8[] \| IoError` -- one read at an offset; the position does not move | `File` |
+| `write_at` | `(i64 offset, u8[] data) i32 \| IoError` -- one write at an offset, answers the count; the position does not move | `File` |
+| `share` | `() File \| IoError` -- `dup(2)`: a second OWNER over the SAME open file description, so the offset is SHARED | `File` |
 | `is_open` | `() bool` -- false once `close()` has run | `File` |
 | `is_terminal` | `() bool` -- true only for a terminal | `File` |
 | `close` | `(nom self) ~ \| IoError` -- CONSUMES the handle | `File` |
@@ -352,6 +355,71 @@ fn show(string path) ~ | IoError:
 **A handle in a struct field cannot be closed this way.** A field read is a borrow, and
 consuming one is **CE2411**. Let the struct's own drop close it, or take the handle out
 of the wrapper that holds it with `into_inner()`.
+
+### read_at and write_at
+
+```sushi
+fn File.read_at(i64 offset, i32 count) u8[] | IoError
+fn File.write_at(i64 offset, u8[] data) i32 | IoError
+```
+
+The offset is an ARGUMENT, so neither call moves the file position: a `read()` or a
+`tell()` afterwards finds it where it was. That is what makes the pair the answer for
+concurrent reads of one file -- nothing is shared between two callers, so nothing can
+race. Every language that supports concurrent file I/O converged on it, and none needed
+a new kind of type: the offset stops being shared state the moment it becomes an
+argument.
+
+`read_at` is one `pread(2)` and answers what was there, which may be fewer bytes than
+asked for and is empty past the end of the file. `write_at` is one `pwrite(2)`: the bytes
+it covers are replaced, the rest of the file is left alone, and it answers the count it
+took, which may be fewer than offered -- the loop is the caller's, exactly as it is for a
+socket's `send()`. A pipe has no offset, and both answer an error on one.
+
+```sushi
+use <io/fs>
+
+fn magic(string path) string | IoError:
+    let File f = open(path, FileMode.Read())??
+    let u8[] head = f.read_at(0 as i64, 4)??
+    return Result.Ok(head.to_string())
+
+fn main() i32:
+    match magic("archive.bin"):
+        Result.Ok(m) -> println("starts with {m}")
+        Result.Err(_) -> println("no archive")
+    return Result.Ok(0)
+```
+
+### share
+
+```sushi
+fn File.share() File | IoError
+```
+
+A second handle over the SAME open file description: `dup(2)`. The answer is an
+independent descriptor the program OWNS, so it closes on drop -- even when the receiver
+is `stdout`, which does not -- and closing either handle leaves the other open. The
+receiver is a plain borrow, so `let File twin = f.share()??` leaves `f` usable, and
+`twin.close()??` spends only `twin`.
+
+**The offset is shared.** It is part of the open file description, so a read through one
+handle moves the other. That makes `share()` the shared-listener pattern -- several
+workers taking turns on one descriptor -- and NOT the answer for concurrent reads of one
+file. `read_at()` and `write_at()` are that answer, because their offset is an argument.
+
+A handle has no `.clone()` (**CE2431**): a copy verb would hide the second descriptor.
+`share()` is the operation that means one, and its name says so.
+
+```sushi
+use <io/fs>
+
+fn main() i32:
+    match stdout.share():
+        Result.Ok(out) -> out.writeln("Mostly Harmless")
+        Result.Err(_) -> println("no second handle")
+    return Result.Ok(0)
+```
 
 ## Error Handling
 
@@ -920,7 +988,7 @@ failure a caller could act on.
 
 A **second descriptor over the same open file description**. The offset is shared, so
 this is for the shared-listener pattern and not for concurrent reads of one file —
-`fd_pread` and `fd_pwrite` are that.
+`fd_pread` and `fd_pwrite` are that. `File.share()` is written on it.
 
 ### `fd_close(i32 fd) -> Result@(i32, FileError)`
 

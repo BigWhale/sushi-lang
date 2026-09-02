@@ -484,6 +484,62 @@ extend File tell() i64 | IoError:
     return self.seek(0 as i64, SeekFrom.Current)??
 
 ##:
+Reads bytes at an offset, without moving the file position.
+
+The offset is an ARGUMENT, so nothing is shared between two callers and nothing can
+race: this is the answer for concurrent reads of one file, where share() is not. One
+pread(2), so the answer may be shorter than asked for, and it is empty past the end of
+the file.
+
+- Parameter offset: Where to read from, in bytes from the start.
+- Parameter count: The most bytes to take in this one read.
+- Returns: The bytes that were there, empty past the end.
+- Errors: IoError, when the read failed. A pipe cannot be read at an offset.
+:##
+extend File read_at(i64 offset, i32 count) u8[] | IoError:
+    match fd_pread(self.fd, offset, count):
+        Result.Ok(nom chunk) -> return chunk
+        Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+Writes bytes at an offset, without moving the file position.
+
+One pwrite(2). The bytes it covers are replaced and the rest of the file is left alone.
+It answers the count it took, which may be fewer than offered, and the loop is the
+caller's, exactly as it is for a socket's send().
+
+- Parameter offset: Where to write, in bytes from the start.
+- Parameter data: The bytes to write. The buffer stays the caller's.
+- Returns: How many bytes were written.
+- Errors: IoError, when the write failed.
+:##
+extend File write_at(i64 offset, u8[] data) i32 | IoError:
+    match fd_pwrite(self.fd, offset, data):
+        Result.Ok(n) -> return n
+        Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+Opens a second handle over the same open file description.
+
+This is dup(2). The answer is an independent descriptor that this program OWNS: it
+closes on drop even when the receiver is a console constant, and closing either handle
+leaves the other open. The open file description is SHARED, and the offset is part of
+it, so a read through one handle moves the other. That makes share() the
+shared-listener pattern and not the answer for concurrent reads of one file; read_at()
+and write_at() are that answer, because their offset is an argument.
+
+A handle has no .clone() (CE2431), because a copy verb would hide the second
+descriptor. This is the operation that means one, and its name says so.
+
+- Returns: A second owning handle over the same open file description.
+- Errors: IoError, when the descriptor could not be duplicated.
+:##
+extend File share() File | IoError:
+    match fd_dup(self.fd):
+        Result.Ok(fd) -> return File(fd: fd, owned: true)
+        Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
 Whether this handle still holds a descriptor.
 
 - Returns: False once close() has run.

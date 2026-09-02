@@ -241,7 +241,7 @@ class ExpressionScanner:
                     ("Result", (DynamicArrayType(BuiltinType.STRING), file_error)))
             return
         elif function_name in {'sock_tcp_connect', 'sock_tcp_listen', 'sock_tcp_accept',
-                               'sock_send', 'sock_close', 'sock_local_port',
+                               'sock_send', 'sock_close', 'sock_dup', 'sock_local_port',
                                'sock_peer_port', 'sock_set_recv_timeout',
                                'sock_set_send_timeout', 'sock_udp_bind',
                                'sock_udp_send_to'}:

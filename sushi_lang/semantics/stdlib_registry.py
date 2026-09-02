@@ -142,7 +142,7 @@ def _get_param_specs():
     specs[("socket", "sock_tcp_connect")] = [STRING, I32]
     specs[("socket", "sock_tcp_listen")] = [STRING, I32, I32]
     specs[("socket", "sock_send")] = [I32, BYTE_ARRAY]
-    for fn in ("sock_close", "sock_local_port", "sock_tcp_accept",
+    for fn in ("sock_close", "sock_dup", "sock_local_port", "sock_tcp_accept",
                "sock_peer_ip", "sock_peer_port"):
         specs[("socket", fn)] = [I32]
     for fn in ("sock_recv", "sock_set_recv_timeout", "sock_set_send_timeout"):
@@ -242,6 +242,7 @@ class StdlibRegistry:
     ) -> None:
         """Discover functions using heuristic approach."""
         from sushi_lang.sushi_stdlib.src.io.files_funcs import FILE_UTILITY_FUNCTIONS
+        from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_FUNCTIONS
 
         common_names = {
             "time": ["sleep", "msleep", "usleep", "nanosleep", "now", "monotonic_ns"],
@@ -257,16 +258,12 @@ class StdlibRegistry:
                 "hypot",
             ],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
-            # `files` READS the list rather than repeating it. The two had to be kept in
-            # step by hand, and a name in one and not the other is invisible until a
-            # program calls it and gets CE2008 for a function the compiler can emit.
+            # `files` and `socket` READ their lists rather than repeating them. The copies
+            # had to be kept in step by hand, and a name in one and not the other is
+            # invisible until a program calls it and gets CE2008 for a function the
+            # compiler can emit.
             "files": FILE_UTILITY_FUNCTIONS,
-            "socket": ["sock_tcp_connect", "sock_tcp_listen", "sock_tcp_accept",
-                       "sock_send", "sock_recv", "sock_close", "sock_local_port",
-                       "sock_peer_ip", "sock_peer_port",
-                       "sock_set_recv_timeout", "sock_set_send_timeout",
-                       "sock_dns_resolve", "sock_udp_bind", "sock_udp_send_to",
-                       "sock_udp_recv_from"],
+            "socket": SOCKET_FUNCTIONS,
         }
 
         candidates = common_names.get(module_name, [])

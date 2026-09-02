@@ -1386,7 +1386,10 @@ run-time surprise:
 
 - **A handle cannot be copied.** `.clone()` on a `File` is `CE2431`: a field-by-field
   copy would duplicate the descriptor number and leave two owners that both close it.
-  `.share()` is the operation that means "a second handle", and it says so.
+  `.share()` is the operation that means "a second handle", and it says so: it is
+  `dup(2)`, so both handles sit over one open file description and one offset. For
+  concurrent reads of one file, `read_at()` and `write_at()` take the offset as an
+  argument and share nothing.
 - **`close()` CONSUMES the handle.** Use it only where the failure has to be SEEN -- a
   destructor cannot answer a `Result`. A read after a close is `CE2435` while compiling.
 - **The channel is `IoError` from the open to the last read**, so one `??` chain covers

@@ -226,7 +226,8 @@ fn main() i32:
 - **There is no `.clone()`** on a type that owns a resource, or on anything holding one
   (CE2431). A deep copy would copy the descriptor number and leave two values that both
   drop -- a double release the copy verb would hide. The operation that means "a second
-  owner" gets its own name, `.share()`.
+  owner" gets its own name, `.share()`, and it is `dup(2)`: a second descriptor over a
+  SHARED open file description, so the offset is shared too.
 
 ### What Copies
 

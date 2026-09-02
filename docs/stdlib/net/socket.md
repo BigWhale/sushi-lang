@@ -2,7 +2,7 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-The raw BSD socket calls, as `Result`-returning primitives: `sock_tcp_connect`, `sock_tcp_listen`, `sock_tcp_accept`, `sock_send`, `sock_recv`, `sock_close`, the timeouts, the UDP trio, and `sock_dns_resolve`.
+The raw BSD socket calls, as `Result`-returning primitives: `sock_tcp_connect`, `sock_tcp_listen`, `sock_tcp_accept`, `sock_send`, `sock_recv`, `sock_close`, `sock_dup`, the timeouts, the UDP trio, and `sock_dns_resolve`.
 
 ## Import
 
@@ -83,6 +83,10 @@ Read what one read gives, up to `max` bytes.
 ### `sock_close(i32 fd) -> Result@(i32, NetError)`
 
 Close a descriptor.
+
+### `sock_dup(i32 fd) -> Result@(i32, NetError)`
+
+A **second descriptor over the same open socket**: `dup(2)`. It is the socket twin of `<io/files>`'s `fd_dup`, and `TcpListener.share()` is written on it. Closing one descriptor leaves the other open, and a connection waiting on the port goes to whichever one accepts first.
 
 ### `sock_peer_ip(i32 fd) -> Result@(string, NetError)` and `sock_peer_port(i32 fd) -> Result@(i32, NetError)`
 

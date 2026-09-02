@@ -246,6 +246,26 @@ extend TcpListener accept() TcpStream | NetError:
     return TcpStream(fd)
 
 ##:
+Opens a second handle over the same listening socket.
+
+This is dup(2): an independent descriptor over the SAME open socket, so a connection
+waiting on the port is taken by whichever handle calls accept() first. That is the
+shared-listener pattern, where several workers accept on one port, and it is why a
+listener gets share() while it implements no contract. Closing either handle leaves the
+other accepting.
+
+A listener has no .clone() (CE2431), because a copy verb would hide the second
+descriptor. This is the operation that means one, and its name says so.
+
+- Returns: A second owning listener over the same socket.
+- Errors: IoError, when the descriptor could not be duplicated.
+:##
+extend TcpListener share() TcpListener | IoError:
+    match sock_dup(self.fd):
+        Result.Ok(fd) -> return TcpListener(fd)
+        Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
 Writes bytes, and answers how many of them went.
 
 One write may take fewer bytes than it was offered. A caller that needs the

@@ -35,7 +35,7 @@ def emit_net_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
     result_i32 = get_result_type(i32, get_unit_enum_type())
 
     # One i32 descriptor in, Result<i32, NetError> out.
-    if func_name in ("sock_close", "sock_local_port", "sock_tcp_accept",
+    if func_name in ("sock_close", "sock_dup", "sock_local_port", "sock_tcp_accept",
                      "sock_peer_port"):
         _expect_args(expr, func_name, 1)
         fd = emit_borrowed_arg(codegen, expr.args[0])
