@@ -1,0 +1,15 @@
+# R2b, the orphan rule, reads the BASE name of a generic target. A generic target is
+# keyed by the instantiation it names, and `Crate@(T)` names none -- so a key built from
+# the type-parameter spelling matches no declaration record and the rule went silent.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE4012
+use "helpers/crate"
+
+extend Crate@(T) with Drop:
+    fn drop(poke self) ~:
+        println("not yours to close")
+
+fn main() i32:
+    let Crate@(i32) c = Crate(1)
+    println("{c.item}")
+    return Result.Ok(0)

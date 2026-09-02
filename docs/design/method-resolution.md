@@ -195,9 +195,9 @@ ordinary implementation from there on.
 **The instantiation runs before the functions are monomorphized**, and that order is
 load-bearing: a `@(S: Show)` constraint is checked while a generic function is
 monomorphized, so `Box@(i32)` has to already say it implements `Show` or the call is
-CE4006 for a type that does. `Drop` is the one perk a generic target may not implement
-(CE4013): its key would have to be read before the `derive` and `effects` passes, which
-run earlier still.
+CE4006 for a type that does. It also puts `Drop` within reach: `TypeQueries.drops` reads
+the perk table, so the copy registered here is in the set before `derive`, `effects` and
+the `borrow` pass ask whether the instantiation owns a resource.
 
 **Why the overlap is rejected rather than resolved by most-specific-wins.** Under
 specialization, whether the template's body is dead code would depend on which instantiations

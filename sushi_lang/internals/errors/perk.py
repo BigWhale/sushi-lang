@@ -55,6 +55,10 @@ _add(ErrorMessage("CE4012", Severity.ERROR,
     "'Drop' cannot be implemented for '{type}' here: only unit '{owner}' declares that type",
     Category.PERK, "HANDLES.md ruling R2b: the orphan rule, narrowed to one perk. `PerkImplementationTable.replace` lets a consumer's `extend X with P` take over a library's implementation, which is the sanctioned override of decision 11 in `docs/design/visibility.md`. For an ordinary perk that is a feature. For `Drop` it lets a consumer silently stop a handle from closing, so the type that owns a resource is the only one allowed to say what releasing it means. It also bounds the incremental-cache problem: with the rule the declaration and the implementation are in one unit, so one unit's AST hash covers both. Add the implementation to the unit that declares the type, or ask that unit for a function that does the work."))
 
-_add(ErrorMessage("CE4013", Severity.ERROR,
-    "'Drop' cannot be implemented for a generic target '{type}'",
-    Category.PERK, "A perk implementation is keyed by the name of the type it targets, and a generic target's key carries the TYPE-PARAMETER names rather than a concrete type argument, so no concrete instance matches it. So `extend Box@(T) with Drop` would register an implementation that never fires, and a value that looks like it releases a resource would silently leak it. A silent no-op is worse than a refusal, so v1 refuses. Implement `Drop` on each concrete instantiation that needs it, or let the generic's owning FIELDS carry the ownership -- a `BufReader@(R)` holding an owning R needs no Drop of its own, because destroying its fields destroys the handle."))
+# CE4013 refused `Drop` on a GENERIC target, because the implementation registered
+# under a key carrying the type-parameter names and no concrete instance matched it --
+# a silent no-op, worse than a refusal. A generic-target perk implementation is a
+# TEMPLATE now, instantiated once per instantiation the program names and registered
+# under the interned name, so the key a concrete receiver resolves to is the key the
+# implementation is filed under. The rule had nothing left to refuse and the code was
+# retired. `extend BufWriter@(W) with Drop` is what needed it.

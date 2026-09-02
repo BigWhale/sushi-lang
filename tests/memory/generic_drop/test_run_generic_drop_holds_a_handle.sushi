@@ -1,0 +1,29 @@
+# What feature B is for: a generic wrapper around an owning handle. `drop()` runs FIRST,
+# then the owning fields, so the wrapper gets its say before the descriptor closes.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "wrote one\nsink closing\nok\n"
+use <io/fs>
+
+struct Sink@(T):
+    File out
+    T label
+
+extend Sink@(T) with Drop:
+    fn drop(poke self) ~:
+        println("sink closing")
+
+fn run() ~ | IoError:
+    let File f = open("/tmp/sushi_generic_drop.txt", FileMode.Write())??
+    let Sink@(string) s = Sink(nom f, "one")
+    s.out.write("Mostly Harmless\n")??
+    println("wrote {s.label}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

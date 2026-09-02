@@ -1,7 +1,7 @@
 # A perk method's argument mismatch is the SAME rule as an extension method's, so it is the
 # same code: CE2006. It used to answer CE2023, whose text says "dynamic array method" about
 # a struct -- invisible until io/contracts made write(string) a perk method.
-# TEST_TYPE: compile_error
+# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2006
 
 perk Wr:

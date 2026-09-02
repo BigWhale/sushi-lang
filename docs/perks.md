@@ -120,9 +120,12 @@ nothing else, and a partially concrete target such as `extend Pair@(i32, U) with
 **CE2098** -- there is no partial specialization. An instantiation the program never
 names costs nothing: no copy is made.
 
-`Drop` is the one perk a generic target may not implement (**CE4013**). Let the generic's
-owning FIELDS carry the ownership instead -- a wrapper holding an owning handle needs no
-`Drop` of its own, because destroying its fields destroys the handle.
+`Drop` is no exception: a generic target may implement it, and each instantiation's copy
+carries it. The orphan rule still applies and reads the target's BASE name, so only the
+unit that declares `Box` may write `extend Box@(T) with Drop` (**CE4012**). A wrapper
+whose fields already own needs no `Drop` of its own -- destroying its fields destroys the
+handle -- so declare one when the wrapper has something of its OWN to say, such as
+flushing a buffer before the handle closes.
 
 ## Generic Constraints
 

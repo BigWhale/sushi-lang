@@ -162,9 +162,10 @@ first closed.
 channel on it is CE0133 like any other contract mismatch. Only the unit that DECLARES a
 type may implement `Drop` for it (CE4012, ruling R2b) — the orphan rule, narrowed to one
 perk, because `PerkImplementationTable.replace` would otherwise let a consumer silently
-stop a handle from closing. A generic target is CE4013: its key carries the type-parameter
-names, so the implementation would register under a name no instance matches and never
-fire.
+stop a handle from closing. A GENERIC target reads its **base** name for that rule: the
+key the implementation registers under carries the type arguments (`Crate<T>`,
+`Box<i32>`), which matches no declaration record, so the rule would go silent on the one
+shape a generic `Drop` needs.
 
 **`drops` is a required argument, with no default.** `owns_resource` and `type_class_of`
 both take the set of types that implement `Drop`, and a caller that cannot supply it does

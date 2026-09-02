@@ -1,0 +1,19 @@
+# One body per instantiation, and each instantiation drops. Scope exit still destroys in
+# reverse declaration order, so the two bodies are told apart by the order they run in.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "towel 7\nreleasing 1\nreleasing 2\n"
+struct Guard@(T):
+    T value
+    i32 tag
+
+extend Guard@(T) with Drop:
+    fn drop(poke self) ~:
+        println("releasing {self.tag}")
+
+fn main() i32:
+    let Guard@(string) s = Guard("towel", 2)
+    let Guard@(i32) g = Guard(7, 1)
+    println("{s.value} {g.value}")
+    return Result.Ok(0)

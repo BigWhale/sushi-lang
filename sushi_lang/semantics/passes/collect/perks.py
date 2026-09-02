@@ -372,39 +372,31 @@ class PerkCollector:
 
     def _reject_bad_drop_target(self, impl: ExtendWithDef, target_type: Optional[Type],
                                 type_name: str, span: Optional[Span]) -> bool:
-        """The two targets `Drop` refuses. Returns True when one was reported.
+        """The one target `Drop` refuses: a FOREIGN one. True when it was reported.
 
-        A GENERIC target (CE4013) registers under a key carrying the type-parameter
-        names, which no concrete instance matches, so the implementation would never
-        fire and the resource would silently leak.
+        CE4012 is ruling R2b: only the unit that declares a type may say what releasing
+        it means. A type with no declaration record yet is THIS unit's own -- the record
+        is written after the collectors run -- or is synthesized, and both are allowed.
 
-        A FOREIGN target (CE4012) is ruling R2b: only the unit that declares a type may
-        say what releasing it means. A type with no declaration record yet is THIS unit's
-        own -- the record is written after the collectors run -- or is synthesized, and
-        both are allowed.
+        A GENERIC target reads its BASE name. `type_name` is the key the implementation
+        registers under, and for a generic target that key carries the type arguments
+        (`Crate<T>`, `Box<i32>`), which matches no declaration record -- so the rule
+        would go silent on exactly the shape a generic `Drop` needs.
         """
-        from sushi_lang.semantics.generics.type_display import display_type
         from sushi_lang.semantics.generics.types import GenericTypeRef
-        if isinstance(target_type, GenericTypeRef):
-            from sushi_lang.semantics.generics.extension_targets import (
-                classify_extension_target)
-            shape = classify_extension_target(
-                target_type, self._is_declared_type)
-            if shape.param_names:
-                er.emit(self.r, ERR.CE4013, span, type=display_type(target_type))
-                return True
-
         if self.visibility is None:
             return False
+        declared_name = (target_type.base_name
+                         if isinstance(target_type, GenericTypeRef) else type_name)
         for kind in ("struct", "enum"):
-            origin = self.visibility.origin(kind, type_name)
+            origin = self.visibility.origin(kind, declared_name)
             if origin is None or origin.unit_name is None:
                 continue
             if origin.unit_name != self.current_unit_name:
                 diag = er.emit_with(self.r, ERR.CE4012, span,
-                                    type=type_name, owner=origin.unit_name)
+                                    type=declared_name, owner=origin.unit_name)
                 if origin.name_span is not None:
-                    diag.note(f"'{type_name}' is declared here",
+                    diag.note(f"'{declared_name}' is declared here",
                               origin.name_span, origin.filename)
                 diag.emit()
                 return True

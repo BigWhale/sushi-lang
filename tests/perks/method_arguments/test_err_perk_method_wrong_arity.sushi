@@ -1,7 +1,7 @@
 # A perk method's arity mismatch answers CE2009, the same code an extension method's does.
 # It used to answer CE0023, which is in the INTERNAL family and documented as a codegen
 # check -- not a user's miscount.
-# TEST_TYPE: compile_error
+# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2009
 
 perk Wr:
