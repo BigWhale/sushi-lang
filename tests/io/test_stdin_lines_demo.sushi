@@ -13,7 +13,7 @@ fn show() ~ | IoError:
     stdout.write("=== stdin lines ===\n")??
     stdout.write("Reading lines from stdin until EOF...\n\n")??
 
-    let BufReader@(File) r = buf_reader(nom stdin, 8192)??
+    let BufReader@(File) r = buf_reader(nom stdin.share()??, 8192)??
     let i32 count = 0
     foreach(line?? in r.lines()):
         count := count + 1

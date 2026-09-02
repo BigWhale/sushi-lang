@@ -54,7 +54,8 @@ Collect global definitions before analyzing function bodies.
 
 ### Responsibilities
 
-1. **Constants**: Parse and register constant definitions
+1. **Constants**: Parse and register constant definitions, and unit variables (`var`) in
+   the same table with `is_var` set (`docs/design/unit-storage.md`)
 2. **Function Signatures**: Collect return types and parameters
 3. **Generic Types**: Register struct and enum definitions
 4. **Symbol Table**: Build initial global scope

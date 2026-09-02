@@ -9,6 +9,7 @@ from sushi_lang.semantics.library_templates import (
     doc_record, signature_record, type_string, with_doc,
 )
 from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
+from sushi_lang.semantics.ast import VarDef
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.units import Unit
@@ -136,6 +137,7 @@ class LibraryManifestGenerator:
             "compiler_version": VERSION,
             "public_functions": public_functions,
             "public_constants": self._extract_public_constants(units),
+            "public_variables": self._extract_public_variables(units),
             "structs": self._extract_structs(units),
             "enums": self._extract_enums(units),
             "templates": templates_section,
@@ -265,7 +267,7 @@ class LibraryManifestGenerator:
                     kept[enum_def.name] = "enum"
             for const in unit.ast.constants:
                 if not const.is_public and const.name not in shipped:
-                    kept[const.name] = "constant"
+                    kept[const.name] = "variable" if isinstance(const, VarDef) else "constant"
 
         return [{"name": name, "kind": kept[name]} for name in sorted(kept)]
 
@@ -300,7 +302,7 @@ class LibraryManifestGenerator:
                 continue
             source = None
             for const in unit.ast.constants:
-                if not const.is_public:
+                if not const.is_public or isinstance(const, VarDef):
                     continue
                 if source is None:
                     source = unit.file_path.read_text()
@@ -312,6 +314,36 @@ class LibraryManifestGenerator:
                 }, const))
 
         return public_consts
+
+    def _extract_public_variables(self, units: list['Unit']) -> list[dict]:
+        """The unit variables this library MARKS public.
+
+        The record mirrors a constant's -- the type, and the declaration as source, so
+        the consumer's typecheck pass has the declared type -- plus the `link_symbol`
+        of the data symbol: a `var` is ONE storage, defined in this library's bitcode,
+        and the consumer declares it as external storage rather than re-evaluating it
+        (docs/design/unit-storage.md).
+        """
+        from sushi_lang.semantics.library_templates import slice_decl_source
+
+        records = []
+        for unit in own_units(units):
+            if unit.ast is None:
+                continue
+            source = None
+            for var in unit.ast.constants:
+                if not isinstance(var, VarDef) or not var.is_public:
+                    continue
+                if source is None:
+                    source = unit.file_path.read_text()
+                records.append(with_doc({
+                    "name": var.name,
+                    "unit": unit.name,
+                    "type": self._type_to_string(var.ty),
+                    "source": slice_decl_source(var, source),
+                    "link_symbol": mangle_unit_symbol(unit.name, var.name),
+                }, var))
+        return records
 
     def _extract_structs(self, units: list['Unit']) -> list[dict]:
         """The structs this library MARKS public.
@@ -699,8 +731,12 @@ class LibraryManifestGenerator:
             }
             for fn, _src, unit_name in closure["private_functions"]
         ]
+        # A private unit variable a template body names travels as source too, and
+        # carries the symbol of the ONE storage the consumer must declare, not define.
         shipped_constants = [
-            {"name": c.name, "unit": unit_name, "source": slice_decl_source(c, src)}
+            {"name": c.name, "unit": unit_name, "source": slice_decl_source(c, src),
+             **({"link_symbol": mangle_unit_symbol(unit_name, c.name)}
+                if isinstance(c, VarDef) else {})}
             for c, src, unit_name in closure["constants"]
         ]
         # A private type travels as source, exactly as a private constant does, and for

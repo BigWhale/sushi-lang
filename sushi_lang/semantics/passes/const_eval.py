@@ -9,8 +9,9 @@ from typing import Callable, List, Mapping, Optional, Union
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
-    Call, ConstDef, Expr, IntLit, FloatLit, BoolLit, StringLit, ArrayLiteral,
-    BinaryOp, UnaryOp, Name, CastExpr, IndexAccess, InterpolatedString
+    Call, ConstDef, DotCall, DynamicArrayFrom, DynamicArrayNew, Expr, IntLit, FloatLit,
+    BoolLit, StringLit, ArrayLiteral, BinaryOp, UnaryOp, Name, CastExpr, IndexAccess,
+    InterpolatedString
 )
 from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 from sushi_lang.semantics.integer_width import (
@@ -65,6 +66,22 @@ class ConstantValue:
     """
     value: Union[int, float, bool, str, List['ConstantValue']]  # Python value
     semantic_type: Type  # Sushi type (i32, f64, bool, string, a struct, ...)
+
+
+def allocates_nothing(expr: Expr) -> bool:
+    """Is `expr` an EMPTY container constructor -- `List.new()`, `from([])`, `new()`?
+
+    Each one is the literal descriptor `{0, 0, null}` and touches no heap, which is what
+    lets a unit variable start as one (docs/design/unit-storage.md). `HashMap.new()` is
+    not here: it mallocs its buckets on the spot. ONE predicate, read by the typecheck
+    pass and the backend alike, so the two cannot disagree about what qualifies.
+    """
+    if isinstance(expr, DynamicArrayNew):
+        return True
+    if isinstance(expr, DynamicArrayFrom):
+        return not expr.elements.elements
+    return (isinstance(expr, DotCall) and expr.method == "new" and not expr.args
+            and isinstance(expr.receiver, Name) and expr.receiver.id == "List")
 
 
 class ConstantEvaluator:
@@ -393,6 +410,12 @@ class ConstantEvaluator:
         const_sig = self.const_table.lookup(const_name, self.unit_name, self.scope)
         if const_sig is None:
             er.emit(self.reporter, er.ERR.CE1002, span, name=const_name)
+            return None
+        if const_sig.is_var:
+            # Storage has a run-time value, so neither a constant nor another variable
+            # can fold it in -- and no initialization order exists to say otherwise.
+            er.emit(self.reporter, er.ERR.CE0108, span,
+                    expr_type=f"unit variable '{const_name}'")
             return None
 
         const_def = self.ast_constants.lookup(const_name, self.unit_name, self.scope)

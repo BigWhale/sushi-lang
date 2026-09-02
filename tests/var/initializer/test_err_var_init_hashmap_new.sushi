@@ -1,0 +1,11 @@
+# `HashMap.new()` mallocs its buckets on the spot, so it is no constant initializer.
+# The empty containers that ARE (`List.new()`, `from([])`, `new()`) allocate nothing.
+# EXPECT_ERROR_CODE: CE0108
+
+use <collections/hashmap>
+
+var HashMap@(i32, i32) cache = HashMap.new()
+
+fn main() i32:
+    println("{cache.len()}")
+    return Result.Ok(0)

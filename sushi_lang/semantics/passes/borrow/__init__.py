@@ -15,6 +15,7 @@ from .consume import binds_a_bare_literal_string
 from .destroy_effects import compute_destroy_effects
 from .expressions import INERT_EXPRS, check_expr
 from .flow import FlowFacts
+from .reads import unit_variables
 from .state import BorrowState, borrow_mode
 from .statements import check_block
 from .types import TypeQueries
@@ -144,6 +145,13 @@ class BorrowChecker:
         # perk-method wrapper) for the backend to read.
         self.branch_depth = 0
         self.conditional_moves = set()
+
+        # Unit variables first, so a parameter or a `let` of the same name shadows one by
+        # overwriting its entry. No `declared_at_span`: the declaration may stand in
+        # another unit's file, and a note here would point into the wrong one.
+        for name, sig in unit_variables(self):
+            self.borrow_state[name] = BorrowState(name=name, var_type=sig.const_type,
+                                                  is_unit_var=True)
 
         if self_type is not None:
             # A `poke self` / `peek self` receiver keeps its full ReferenceType, which

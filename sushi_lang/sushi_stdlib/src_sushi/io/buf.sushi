@@ -10,14 +10,13 @@ A buffered read is one system call per WINDOW rather than one per line, which is
 whole point: File.readln() reads a byte at a time on a descriptor that cannot seek, and
 reading a large file line by line that way costs one call per byte.
 
-Neither type implements Reader or Writer, and that is a refusal rather than an omission.
-A buffered read MOVES the cursor, so its receiver has to be `poke self`, and a perk
-implementation must match its contract's receiver exactly (CE4004). Widening the
-contracts to `poke self` is not available either: the console handles are File CONSTANTS
-(ruling R15), and a `poke self` method on a constant is CE2400 -- so `stdout.write(...)`
-would stop compiling. The two ways out, neither taken here, are a second perk for the
-buffered direction, or receiver modes on a contract that a
-constant can still satisfy.
+BufReader@(R) implements Reader and BufWriter@(W) implements Writer (ruling on #546,
+2026-09-02). A buffered read MOVES the cursor, so the contracts take `poke self`; the
+console handles are unit variables (`var`, docs/design/unit-storage.md), which is what
+gives `stdout.write(...)` an address to reach. A generic written `@(R: Reader)` therefore
+takes a File, a TcpStream or a BufReader@(File) alike. The extra verbs only a buffer can
+offer -- read_line(), read_all(), lines(), fill() -- stay concrete methods; a contract for
+that direction (Rust's BufRead) is a separate, later question.
 
 Limitations: fill() is part of the surface because an extension method carries no
 visibility marker -- it is as visible as the type it extends. buf_reader() and
@@ -94,45 +93,53 @@ extend BufReader@(R) fill(poke self) bool | IoError:
     return got
 
 ##:
-Reads what the window still has, as bytes, refilling it if it is spent.
+A BufReader is a Reader: the two contract methods answer from the window.
 
-The answer is never longer than `max` and never crosses a refill, so a short answer is
-not an end of input. An EMPTY answer is: that is what lets a caller loop until the
-answer is empty.
-
-- Parameter max: The most bytes to take.
-- Returns: The bytes taken, empty at end of input.
-- Errors: IoError, when a refill failed.
+The contract takes `poke self` (ruling on #546), which is what a buffered read
+needs -- its cursor moves -- so a generic written `@(R: Reader)` takes a
+BufReader@(File) exactly as it takes the File.
 :##
-extend BufReader@(R) read_bytes(poke self, i32 max) u8[] | IoError:
-    if (max < 1):
-        let u8[] none = from([])
-        return none
-    if (self.pos >= self.window.len()):
-        if (not self.fill()??):
-            let u8[] ended = from([])
-            return ended
-    let i32 avail = self.window.len() - self.pos
-    let i32 take = max
-    if (take > avail):
-        take := avail
-    let u8[] out = self.window.ss(self.pos, take)
-    self.pos := self.pos + take
-    return out
+extend BufReader@(R) with Reader:
+    ##:
+    Reads what the window still has, as bytes, refilling it if it is spent.
 
-##:
-Reads what the window still has, as text.
+    The answer is never longer than `max` and never crosses a refill, so a short answer is
+    not an end of input. An EMPTY answer is: that is what lets a caller loop until the
+    answer is empty.
 
-The bound counts BYTES, so a multi-byte character can be split across two calls. A caller
-that must not cut one reads bytes, accumulates them, and converts once.
+    - Parameter max: The most bytes to take.
+    - Returns: The bytes taken, empty at end of input.
+    - Errors: IoError, when a refill failed.
+    :##
+    fn read_bytes(poke self, i32 max) u8[] | IoError:
+        if (max < 1):
+            let u8[] none = from([])
+            return none
+        if (self.pos >= self.window.len()):
+            if (not self.fill()??):
+                let u8[] ended = from([])
+                return ended
+        let i32 avail = self.window.len() - self.pos
+        let i32 take = max
+        if (take > avail):
+            take := avail
+        let u8[] out = self.window.ss(self.pos, take)
+        self.pos := self.pos + take
+        return out
 
-- Parameter max: The most bytes to take.
-- Returns: The text taken, empty at end of input.
-- Errors: IoError, when a refill failed.
-:##
-extend BufReader@(R) read(poke self, i32 max) string | IoError:
-    let u8[] chunk = self.read_bytes(max)??
-    return chunk.to_string()
+    ##:
+    Reads what the window still has, as text.
+
+    The bound counts BYTES, so a multi-byte character can be split across two calls. A caller
+    that must not cut one reads bytes, accumulates them, and converts once.
+
+    - Parameter max: The most bytes to take.
+    - Returns: The text taken, empty at end of input.
+    - Errors: IoError, when a refill failed.
+    :##
+    fn read(poke self, i32 max) string | IoError:
+        let u8[] chunk = self.read_bytes(max)??
+        return chunk.to_string()
 
 ##:
 Reads one line, without its newline.
@@ -312,21 +319,57 @@ public fn buf_writer@(W: Writer)(nom W dst, i32 cap) BufWriter@(W) | IoError:
     return Result.Ok(BufWriter(dst, empty, size))
 
 ##:
-Sends everything waiting, then flushes the handle under it.
+A BufWriter is a Writer: the three contract methods fill and drain the buffer.
 
-This is the repeatable checked drain: it may be called as often as a caller likes and
-answers Ok when the buffer is already empty.
-
-- Returns: Nothing.
-- Errors: IoError, when the write or the handle's own flush failed.
+Nothing is promised to have reached the handle when write() returns; flush() or
+finish() is what promises that. The contract takes `poke self` (ruling on #546),
+so a generic written `@(W: Writer)` takes a BufWriter@(File) exactly as it
+takes the File or the console.
 :##
-extend BufWriter@(W) flush(poke self) ~ | IoError:
-    if (self.buf.len() == 0):
+extend BufWriter@(W) with Writer:
+    ##:
+    Sends everything waiting, then flushes the handle under it.
+
+    This is the repeatable checked drain: it may be called as often as a caller likes and
+    answers Ok when the buffer is already empty.
+
+    - Returns: Nothing.
+    - Errors: IoError, when the write or the handle's own flush failed.
+    :##
+    fn flush(poke self) ~ | IoError:
+        if (self.buf.len() == 0):
+            return ~
+        self.sink.write_bytes(self.buf)??
+        self.buf.clear()
+        self.sink.flush()??
         return ~
-    self.sink.write_bytes(self.buf)??
-    self.buf.clear()
-    self.sink.flush()??
-    return ~
+
+    ##:
+    Writes bytes into the buffer.
+
+    Nothing is promised to have reached the handle when this returns. flush() or finish()
+    is what promises that.
+
+    - Parameter data: The bytes to write. The buffer stays the caller's.
+    - Returns: Nothing.
+    - Errors: IoError, when a drain failed.
+    :##
+    fn write_bytes(poke self, u8[] data) ~ | IoError:
+        self.buf.extend(data)
+        self.drain_if_full()??
+        return ~
+
+    ##:
+    Writes text into the buffer.
+
+    - Parameter data: The text to write.
+    - Returns: Nothing.
+    - Errors: IoError, when a drain failed.
+    :##
+    fn write(poke self, string data) ~ | IoError:
+        self.buf.extend(data.to_bytes())
+        self.drain_if_full()??
+        return ~
 
 ##:
 Drains the buffer if it has reached its size. Every write goes through this one call.
@@ -337,33 +380,6 @@ Drains the buffer if it has reached its size. Every write goes through this one 
 extend BufWriter@(W) drain_if_full(poke self) ~ | IoError:
     if (self.buf.len() >= self.cap):
         self.flush()??
-    return ~
-
-##:
-Writes bytes into the buffer.
-
-Nothing is promised to have reached the handle when this returns. flush() or finish()
-is what promises that.
-
-- Parameter data: The bytes to write. The buffer stays the caller's.
-- Returns: Nothing.
-- Errors: IoError, when a drain failed.
-:##
-extend BufWriter@(W) write_bytes(poke self, u8[] data) ~ | IoError:
-    self.buf.extend(data)
-    self.drain_if_full()??
-    return ~
-
-##:
-Writes text into the buffer.
-
-- Parameter data: The text to write.
-- Returns: Nothing.
-- Errors: IoError, when a drain failed.
-:##
-extend BufWriter@(W) write(poke self, string data) ~ | IoError:
-    self.buf.extend(data.to_bytes())
-    self.drain_if_full()??
     return ~
 
 ##:

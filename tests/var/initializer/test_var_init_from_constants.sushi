@@ -1,0 +1,19 @@
+# A unit variable's initializer is a constant expression: literals, constants,
+# operators, `as`, an interpolation and a struct built from constants all qualify.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42 answer 40 3 4\n"
+# EXPECT_NO_LEAKS
+
+const i32 BASE = 40
+
+struct Point:
+    i32 x
+    i32 y
+
+var i32 answer = BASE + 2
+var string tag = "answer {BASE}"
+var Point corner = Point(BASE / 10 - 1, 4)
+
+fn main() i32:
+    println("{answer} {tag} {corner.x} {corner.y}")
+    return Result.Ok(0)

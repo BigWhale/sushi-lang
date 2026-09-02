@@ -16,6 +16,7 @@ from sushi_lang.semantics.visibility import UNMARKED_IS_PUBLIC, declared_public
 
 SOURCES = {
     "constant": ("{marker}const i32 ANSWER = 42\n", "constants"),
+    "variable": ("{marker}var i32 counter = 0\n", "constants"),
     "struct": ("{marker}struct Crate:\n    i32 weight\n", "structs"),
     "enum": ("{marker}enum Mood:\n    Calm\n", "enums"),
     "perk": ("{marker}perk Loud:\n    fn shout() string\n", "perks"),

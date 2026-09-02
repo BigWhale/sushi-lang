@@ -1,0 +1,19 @@
+# A `poke` foreach binding points into the variable's element storage, the way it
+# points into a local's. Over a constant the same loop is CE2400.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 4 6\n"
+
+var i32[] table = from([])
+
+fn fill() ~:
+    table.push(1)
+    table.push(2)
+    table.push(3)
+    return Result.Ok(~)
+
+fn main() i32:
+    fill()
+    foreach(poke r in table.iter()):
+        r := r * 2
+    println("{table[0]} {table[1]} {table[2]}")
+    return Result.Ok(0)

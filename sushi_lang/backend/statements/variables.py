@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.ast import Let, Rebind
+    from sushi_lang.semantics.typesys import Type
 
 
 def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
@@ -92,19 +93,32 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     from sushi_lang.semantics.ast import IndexAccess, Name, MemberAccess
     from sushi_lang.semantics.typesys import ReferenceType
 
-    if isinstance(stmt.target, MemberAccess):
-        _emit_field_rebind(codegen, stmt)
-        return
+    from sushi_lang.backend.expressions.names import (
+        namespaced_storage, resolve_name_slot, resolve_name_semantic_type)
 
-    if isinstance(stmt.target, IndexAccess):
+    if isinstance(stmt.target, MemberAccess):
+        storage = namespaced_storage(codegen, stmt.target)
+        if storage is None:
+            _emit_field_rebind(codegen, stmt)
+            return
+        # `geo.count := v`: the alias reaches a unit variable, so this is a rebind of
+        # that storage and not a field write.
+        var_name, slot, semantic_type = storage
+    elif isinstance(stmt.target, IndexAccess):
         _emit_element_rebind(codegen, stmt)
         return
-
-    if not isinstance(stmt.target, Name):
+    elif isinstance(stmt.target, Name):
+        var_name = stmt.target.id
+        # A local's slot, or the global backing a unit variable (unit-storage.md).
+        slot = resolve_name_slot(codegen, var_name)
+        if slot is None:
+            raise_internal_error("CE0055", name=var_name)
+        # A reference parameter's type is in codegen.variable_types; a local's in
+        # memory.semantic_types; a unit variable's in the constant table.
+        semantic_type = resolve_name_semantic_type(codegen, var_name)
+    else:
         raise_internal_error("CE0022", type=f"Unsupported rebind target: {type(stmt.target)}")
 
-    var_name = stmt.target.id
-    slot = codegen.memory.find_local_slot(var_name)
     val = codegen.expressions.emit_expr(stmt.value)
 
     # Fix for method calls returning dynamic arrays: If val is a pointer to a dynamic array struct
@@ -112,11 +126,6 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     # This must be done BEFORE the reference check
     if isinstance(val.type, ir.PointerType) and codegen.types.is_dynamic_array_type(val.type.pointee):
         val = codegen.builder.load(val, name=f"{var_name}_rebind_value")
-
-    # Check if this is a reference parameter (mutable reference)
-    # For parameters, the type is in codegen.variable_types
-    # For local variables, it's in memory.semantic_types
-    semantic_type = codegen.variable_types.get(var_name) or codegen.memory.find_semantic_type(var_name)
 
     if isinstance(semantic_type, ReferenceType):
         # A `poke` rebind stores THROUGH the pointer, so ownership applies at both ends:
@@ -147,9 +156,9 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
         # BaseStructType, not LiteralStructType: a user struct is an IDENTIFIED type and a
         # sibling rather than a subclass, so the narrower check missed every one (#257).
         if codegen.types.is_dynamic_array_type(dst):
-            _emit_dynamic_array_rebind(codegen, stmt, slot, val, dst)
+            _emit_dynamic_array_rebind(codegen, stmt, slot, val, dst, var_name, semantic_type)
         else:
-            _emit_struct_rebind(codegen, stmt, slot, val)
+            _emit_struct_rebind(codegen, stmt, slot, val, var_name, semantic_type)
     else:
         raise_internal_error("CE0022", type=str(dst))
 
@@ -159,29 +168,31 @@ def _emit_dynamic_array_rebind(
     stmt: 'Rebind',
     slot: 'ir.Value',
     val: 'ir.Value',
-    dst: 'ir.LiteralStructType'
+    dst: 'ir.LiteralStructType',
+    var_name: str,
+    semantic_type: 'Type | None',
 ) -> None:
     """Emit rebinding for dynamic arrays with move semantics."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import Name
 
-    if not isinstance(stmt.target, Name):
-        raise_internal_error("CE0022", type=f"Expected Name target, got {type(stmt.target)}")
-    var_name = stmt.target.id
-
     # Decide (and perform) ownership BEFORE the old-array destructor runs below: a COPY
     # reads the source buffer, and a source aliasing the buffer about to be freed would
     # otherwise be a use-after-free.
-    semantic_type = codegen.memory.find_semantic_type(var_name)
     val = consume(codegen, stmt.value, val, semantic_type, ConsumingUse.REBIND)
 
     # Dynamic array rebind - need to clean up old array first to prevent memory leaks
     # Clean up the old array's memory before rebinding
+    descriptor = None
     if hasattr(codegen, 'dynamic_arrays') and codegen.dynamic_arrays is not None:
         descriptor = codegen.dynamic_arrays._array(var_name)
         if descriptor is not None:
             if not descriptor.destroyed:
                 codegen.dynamic_arrays._emit_array_destructor(var_name)
+    if descriptor is None:
+        # No descriptor is registered for a unit variable -- it is never destroyed at
+        # scope exit -- so the old buffer is freed through its slot here.
+        destroy_old_value(codegen, slot, semantic_type)
 
     codegen.builder.store(val, slot)
     # The binding is RE-INITIALIZED: it owns the new array, so scope exit frees it
@@ -213,19 +224,16 @@ def _emit_dynamic_array_rebind(
             codegen.builder.store(null_ptr, data_ptr_ptr)
 
 
-def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value', val: 'ir.Value') -> None:
+def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value',
+                        val: 'ir.Value', var_name: str,
+                        semantic_type: 'Type | None') -> None:
     """Emit rebinding for user-defined structs with cleanup."""
     from sushi_lang.backend.destructors import resolve_named_type
-    from sushi_lang.semantics.ast import Name
-
-    if not isinstance(stmt.target, Name):
-        raise_internal_error("CE0022", type=f"Expected Name target, got {type(stmt.target)}")
-    var_name = stmt.target.id
 
     # User-defined struct / enum rebind - free the OLD owning value before overwriting it.
     # The private name lookup that used to stand here answered for an `UnknownType` only;
     # `resolve_named_type` is the shared one and also resolves a generic spelling.
-    resolved = resolve_named_type(codegen, codegen.memory.find_semantic_type(var_name))
+    resolved = resolve_named_type(codegen, semantic_type)
 
     # Destroy the old heap so it does not leak when overwritten (#139), but only when the
     # binding still OWNS it. A MOVED value belongs to its new owner, and a DESTROYED one

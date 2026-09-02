@@ -193,10 +193,19 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
     if isinstance(stmt.target, Name):
         var_name = stmt.target.id
         if var_name not in validator.variable_types:
-            validator.validate_expression(stmt.value)
-            return
-
-        var_type = validator.variable_types[var_name]
+            # A unit variable is rebindable storage; another unit's private one is
+            # fenced here exactly as a read of it is (CE3005).
+            sig = validator.const_sig(var_name)
+            if sig is None or not sig.is_var:
+                validator.validate_expression(stmt.value)
+                return
+            from .visibility import reject_private_name
+            if reject_private_name(validator, "variable", sig, stmt.target.loc):
+                validator.validate_expression(stmt.value)
+                return
+            var_type = sig.const_type
+        else:
+            var_type = validator.variable_types[var_name]
 
         # Unwrap reference types for validation
         # When rebinding through a reference parameter, we check compatibility

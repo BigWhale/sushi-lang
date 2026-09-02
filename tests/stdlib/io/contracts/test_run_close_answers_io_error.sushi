@@ -19,7 +19,7 @@ fn read_then_close(string path) string | IoError:
 
 fn main() i32:
     match open("contract_close_probe.txt", FileMode.Write()):
-        Result.Ok(w) -> w.write("Mostly Harmless")
+        Result.Ok(nom w) -> w.write("Mostly Harmless")
         Result.Err(_) ->
             println("open failed")
             return Result.Ok(1)

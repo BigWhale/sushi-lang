@@ -1,0 +1,20 @@
+# A `public var` crosses the unit boundary for a read, a rebind and a borrow. The
+# private one is reached through its unit's own functions.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "100 7\n5 9\n6 9\n"
+# EXPECT_NO_LEAKS
+
+use "helpers/state"
+
+fn bump(poke i32 n) ~:
+    n := n + 1
+    return Result.Ok(~)
+
+fn main() i32:
+    println("{shared} {hidden_value().realise(0)}")
+    shared := 5
+    set_hidden(9)
+    println("{shared} {hidden_value().realise(0)}")
+    bump(poke shared)
+    println("{shared} {hidden_value().realise(0)}")
+    return Result.Ok(0)

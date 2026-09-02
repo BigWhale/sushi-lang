@@ -9,6 +9,10 @@ from sushi_lang.internals.errors.registry import (
 )
 
 
+_add(ErrorMessage("CE2436", Severity.ERROR,
+    "cannot move '{name}': it is a unit variable, storage the program keeps for its whole run; borrow it instead, or take an independent value",
+    Category.BORROW, "A `var` declaration is storage in the data segment: one per program, initialized before `main`, never destroyed at exit (docs/design/unit-storage.md). Moving its value out -- a `nom` argument, a `let` bound straight from it, a `return` of it, a `nom self` method such as `close()` -- would give a callee or a binding the right to free storage nothing re-initializes, so the same rule that fences `main`'s argv view (CE2410) fences a `var`. A plain value copies out freely; only a type that owns a resource is refused. Pass it as a borrow (`f(v)`, `peek v`, `poke v`), or take an independent value: `.clone()` for a plain owner, `.share()` for a handle. A REBIND is the one way to change what the variable holds, and it frees the old value."))
+
 _add(ErrorMessage("CE2410", Severity.ERROR,
     "cannot move '{name}': it is a borrowed view of the process arguments (main's string[] args); borrow it instead with 'peek string[]'",
     Category.BORROW, "main's `string[] args` aliases the process argv, which the runtime owns and frees. Moving it by value (passing it to a by-value parameter, rebinding, or storing it) would make the callee free argv and double-free. Take it by reference with `peek string[]`."))

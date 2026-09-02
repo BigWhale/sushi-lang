@@ -25,6 +25,8 @@ from sushi_lang.semantics.passes.docs import documented
 EVERY_KIND = '''\
 const i32 ANSWER = 42
 
+var i32 counter = 0
+
 struct Ship:
     i32 hull
 

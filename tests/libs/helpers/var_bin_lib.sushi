@@ -1,0 +1,14 @@
+# The same library as a BINARY: the variable's storage lives in the library's
+# bitcode, and the consumer declares it as external storage from the manifest.
+
+public var i32 hits = 0
+
+var i32 secret = 40
+
+public fn hit() ~:
+    hits := hits + 1
+    return Result.Ok(~)
+
+public fn secret_plus(i32 n) i32:
+    secret := secret + n
+    return Result.Ok(secret)

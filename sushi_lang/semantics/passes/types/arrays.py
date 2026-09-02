@@ -40,13 +40,21 @@ def _names_an_unshadowed_constant(expr: Any, validator: Any) -> Any:
     if validator is None:
         return None
     while isinstance(expr, (MemberAccess, IndexAccess)):
+        if isinstance(expr, MemberAccess) and getattr(expr, "namespace_ref", None):
+            # `geo.SIZE`: the alias fold keeps the record's kind, so the answer is the
+            # record's and not the alias name's.
+            ref = expr.namespace_ref
+            sig = validator.const_table.lookup(ref.name, ref.origin)
+            return None if sig is None or sig.is_var else ref.name
         expr = expr.receiver if isinstance(expr, MemberAccess) else expr.array
     if not isinstance(expr, Name):
         return None
     name = expr.id
     if name in getattr(validator, 'variable_types', {}):
         return None
-    return name if name in validator.const_table.by_name else None
+    sig = validator.const_table.by_name.get(name)
+    # A unit variable is storage with an address, so a write reaches it (unit-storage.md).
+    return None if sig is None or sig.is_var else name
 
 
 def reject_write_to_constant(target: Any, what: str, loc: Any,

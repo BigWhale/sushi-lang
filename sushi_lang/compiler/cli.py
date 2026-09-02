@@ -477,6 +477,15 @@ def print_library_info(library_path: Path, show_docs: bool = False,
             records.close(_print_doc(const, "    ", opts))
         print()
 
+    variables = metadata.get('public_variables', [])
+    if _section("Public Variables", variables, opts.p):
+        records = _Records()
+        for var in variables:
+            records.open()
+            print(f"  var {_surface(var['type'])} {var['name']}")
+            records.close(_print_doc(var, "    ", opts))
+        print()
+
     structs = metadata.get('structs', [])
     if _section("Public Structs", structs, opts.p):
         records = _Records()

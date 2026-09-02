@@ -36,7 +36,7 @@ public struct File:
 ```
 
 One open file. `owned` says whether dropping this handle closes the descriptor: `open()`
-sets it true, and the three console constants set it false, because a program does not
+sets it true, and the three console handles set it false, because a program does not
 own the descriptors it was started with. A `string` carries the same bit for the same
 reason -- a literal frees to a no-op.
 
@@ -47,14 +47,19 @@ same open file description rather than a copy of the value -- the offset is shar
 ### `stdin`, `stdout`, `stderr`
 
 ```sushi
-public const File stdin  = File(fd: STDIN_FD, owned: false)
-public const File stdout = File(fd: STDOUT_FD, owned: false)
-public const File stderr = File(fd: STDERR_FD, owned: false)
+public var File stdin  = File(fd: STDIN_FD, owned: false)
+public var File stdout = File(fd: STDOUT_FD, owned: false)
+public var File stderr = File(fd: STDERR_FD, owned: false)
 ```
 
-Constants, so they live in read-only memory and closing one is refused while compiling
-(CE2400). `STDIN_FD`, `STDOUT_FD` and `STDERR_FD` are public too, for the rare caller
-that wants the number.
+Unit variables (`var`, [the reference](../../language-reference.md#unit-variables)), so
+each has an address the `poke self` contract methods reach, and a program may rebind one
+for a run: `stdout := open("log.txt", FileMode.Write())??` puts every later
+`stdout.write(...)` into the file, and `stdout := File(fd: STDOUT_FD, owned: false)` puts
+it back. A unit variable is never moved out of, so closing one is refused while
+compiling (CE2436): `stdout.close()` would take the handle. `STDIN_FD`, `STDOUT_FD` and
+`STDERR_FD` are public too, for the caller that wants the number -- or a fresh handle
+over it.
 
 ### `FileStat`
 

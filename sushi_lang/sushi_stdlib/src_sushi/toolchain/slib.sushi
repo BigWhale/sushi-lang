@@ -48,7 +48,7 @@ fn slib_header_check(peek u8[] header) ~ | SlibError:
 # slib_read_metadata: decode the metadata map of a .slib file into a MsgValue.
 public fn slib_read_metadata(string path) MsgValue | SlibError:
     match open(path, FileMode.ReadB()):
-        Result.Ok(f) ->
+        Result.Ok(nom f) ->
             let u8[] empty1 = from([])
             let u8[] header = f.read_bytes(52).realise(empty1)
             if (header.len() < 52):
@@ -80,7 +80,7 @@ public struct SlibSizes:
 # section first. No report needs a blob itself, only its length.
 public fn slib_sizes(string path) SlibSizes | SlibError:
     match open(path, FileMode.ReadB()):
-        Result.Ok(f) ->
+        Result.Ok(nom f) ->
             let u8[] empty3 = from([])
             let u8[] header = f.read_bytes(52).realise(empty3)
             if (header.len() < 52):

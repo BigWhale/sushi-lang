@@ -1397,23 +1397,24 @@ run-time surprise:
 
 ### What a handle can do
 
-`stdin`, `stdout` and `stderr` are `File` constants over descriptors 0, 1 and 2, so a
-function that takes a `File` takes either a file or the console. Better still, a function
-can name the CAPABILITY it needs instead of the type. `<io/contracts>` declares three
-perks -- `Reader`, `Writer` and `Seek` -- and a `TcpStream` satisfies the first two just
-as a `File` does:
+`stdin`, `stdout` and `stderr` are `File` unit variables (`public var`, storage with an
+address) over descriptors 0, 1 and 2, so a function that takes a `poke File` takes either
+a file or the console. Better still, a function can name the CAPABILITY it needs instead
+of the type. `<io/contracts>` declares three perks -- `Reader`, `Writer` and `Seek` --
+whose methods take `poke self`, and a `TcpStream` or a `BufWriter@(File)` satisfies the
+first two just as a `File` does:
 
 ```sushi
 use <io/fs>
 use <io/contracts>
 
-fn emit@(W: Writer)(W dst, string line) ~ | IoError:
+fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
     dst.write(line)??
     dst.flush()??
     return Result.Ok(~)
 
 fn main() i32:
-    match emit(stdout, "Mostly Harmless\n"):
+    match emit(poke stdout, "Mostly Harmless\n"):
         Result.Ok(_) -> return Result.Ok(0)
         Result.Err(_) -> return Result.Ok(1)
 ```

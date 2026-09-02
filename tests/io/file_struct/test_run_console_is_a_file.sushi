@@ -1,6 +1,7 @@
-# The three console handles are ordinary Files over descriptors 0, 1 and 2. They carry
-# owned = false, so a binding that drops one does NOT close it -- the same guarded shape
-# a string literal uses for its buffer. That is what lets one type serve both.
+# The three console handles are ordinary Files over descriptors 0, 1 and 2, declared as
+# unit variables. They carry owned = false, so a rebind that drops one does NOT close the
+# descriptor -- the same guarded shape a string literal uses for its buffer -- and a borrow
+# of one ends with the call. That is what lets one type serve both.
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -14,12 +15,13 @@ fn main() i32:
 
     stdout.write("out\n")
 
-    # A binding to a console handle drops at the end of the block and must not close it.
-    let bool ok = borrow_and_drop().realise(false)
+    # A borrow of a console handle ends with the call and must not close it, and the
+    # rebind that puts a fresh handle in drops the old one without closing descriptor 1.
+    let bool ok = borrow(peek stdout).realise(false)
+    stdout := File(fd: STDOUT_FD, owned: false)
     if (ok):
         stdout.write("still open\n")
     return Result.Ok(0)
 
-fn borrow_and_drop() bool:
-    let File out = stdout
+fn borrow(peek File out) bool:
     return Result.Ok(out.is_open())

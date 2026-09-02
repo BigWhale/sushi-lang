@@ -411,8 +411,12 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
             er.emit(validator.reporter, er.ERR.CE2404, call.receiver.loc,
                     expr=f"<expression>.{call.method}() receiver")
         return
-    if (root.id not in validator.variable_types
-            and root.id in validator.const_table.by_name):
+    if root.id in validator.variable_types:
+        return
+    sig = validator.const_table.by_name.get(root.id)
+    # A unit variable has an address for a `poke self`; whether a `nom self` may take
+    # it is the borrow pass's rule (CE2436), not a question of storage.
+    if sig is not None and not sig.is_var:
         er.emit(validator.reporter, er.ERR.CE2400, root.loc, name=root.id)
 
 

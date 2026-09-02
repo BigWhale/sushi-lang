@@ -9,19 +9,19 @@ use <io/files>
 use <io/fs>
 use <io/contracts>
 
-fn first_text@(R: Reader)(R src) string | IoError:
+fn first_text@(R: Reader)(poke R src) string | IoError:
     return Result.Ok(src.read(64)??)
 
 fn main() i32:
     match open("contract_reader_probe.txt", FileMode.Write()):
-        Result.Ok(w) -> w.write("Mostly Harmless")
+        Result.Ok(nom w) -> w.write("Mostly Harmless")
         Result.Err(_) ->
             println("write open failed")
             return Result.Ok(1)
 
     match open("contract_reader_probe.txt", FileMode.Read()):
-        Result.Ok(r) ->
-            match first_text(r):
+        Result.Ok(nom r) ->
+            match first_text(poke r):
                 Result.Ok(text) -> println("read through the contract: {text}")
                 Result.Err(_) -> println("read failed")
         Result.Err(_) ->

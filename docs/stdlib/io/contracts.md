@@ -16,8 +16,8 @@ satisfies the contract.
 
 | perk | methods | who implements it |
 |---|---|---|
-| `Reader` | `read`, `read_bytes` | `File`, `TcpStream` |
-| `Writer` | `write`, `write_bytes`, `flush` | `File`, `TcpStream` |
+| `Reader` | `read`, `read_bytes` | `File`, `TcpStream`, `BufReader@(R)` |
+| `Writer` | `write`, `write_bytes`, `flush` | `File`, `TcpStream`, `BufWriter@(W)` |
 | `Seek` | `seek` | `File` |
 
 A `TcpListener` implements none of them: a listener only accepts, and a stream has no
@@ -25,17 +25,37 @@ position to move.
 
 ```sushi
 public perk Reader:
-    fn read(i32 max) string | IoError
-    fn read_bytes(i32 max) u8[] | IoError
+    fn read(poke self, i32 max) string | IoError
+    fn read_bytes(poke self, i32 max) u8[] | IoError
 
 public perk Writer:
-    fn write(string data) ~ | IoError
-    fn write_bytes(u8[] data) ~ | IoError
-    fn flush() ~ | IoError
+    fn write(poke self, string data) ~ | IoError
+    fn write_bytes(poke self, u8[] data) ~ | IoError
+    fn flush(poke self) ~ | IoError
 
 public perk Seek:
-    fn seek(i64 offset, SeekFrom origin) i64 | IoError
+    fn seek(poke self, i64 offset, SeekFrom origin) i64 | IoError
 ```
+
+## Every contract method takes `poke self`
+
+A buffered read MOVES its cursor, and a buffered write fills a buffer, so a
+`BufReader@(R)` or a `BufWriter@(W)` can only implement the contract if the contract's
+receiver is writable. A perk implementation must match its contract's receiver exactly
+(**CE4004**), so the mode is on the contract and on every implementation alike: `File`
+and `TcpStream` take `poke self` too, though a descriptor's position lives in the kernel
+and the mode costs them nothing.
+
+Two things follow for a caller:
+
+- **A generic over a contract takes its handle `poke`**: `fn emit@(W: Writer)(poke W dst,
+  ...)`, called as `emit(poke stdout, ...)`, `emit(poke f, ...)`. A generic written
+  `(W dst)` is a borrow, and a write through it is **CE2422**.
+- **A handle you write through must be writable storage**: a `let` local, a `poke`
+  parameter, a `nom` or `poke` match binding (`Result.Ok(nom f) -> f.write(...)`), or a
+  unit variable. The console handles are `public var File` declarations in `<io/fs>`,
+  which is what gives `stdout.write(...)` an address to reach (the ruling on #546;
+  `docs/design/unit-storage.md`).
 
 ## Why every contract method answers IoError
 
@@ -101,7 +121,7 @@ meant.
 use <io/contracts>
 use <io/fs>
 
-fn greet@(W: Writer)(W dst, string who) ~ | IoError:
+fn greet@(W: Writer)(poke W dst, string who) ~ | IoError:
     dst.write("Mostly Harmless, ")??
     dst.write(who)??
     dst.write("\n")??
@@ -109,13 +129,14 @@ fn greet@(W: Writer)(W dst, string who) ~ | IoError:
     return Result.Ok(~)
 
 fn main() i32:
-    match greet(stdout, "world"):
+    match greet(poke stdout, "world"):
         Result.Ok(_) -> return Result.Ok(0)
         Result.Err(_) -> return Result.Ok(1)
 ```
 
-`stdout` is a `File` constant, so the console goes through the contract like any other
-handle.
+`stdout` is a `File` unit variable, so the console goes through the contract like any
+other handle, and `poke stdout` is how a writable handle is passed. A `BufWriter@(File)`
+over the console goes through the same `greet`.
 
 ### Asking for two contracts at once
 
@@ -123,7 +144,7 @@ handle.
 use <io/contracts>
 use <io/fs>
 
-fn copy_text@(R: Reader, W: Writer)(R src, W dst) ~ | IoError:
+fn copy_text@(R: Reader, W: Writer)(poke R src, poke W dst) ~ | IoError:
     let string chunk = src.read(4096)??
     dst.write(chunk)??
     dst.flush()??

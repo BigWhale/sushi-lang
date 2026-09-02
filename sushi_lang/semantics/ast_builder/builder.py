@@ -115,17 +115,23 @@ class ASTBuilder:
         first_declaration_span = None
 
         # Constants come first, whatever order they were written in: a fixed array's
-        # size may name one, and every other declaration can hold such a type.
+        # size may name one, and every other declaration can hold such a type. A unit
+        # variable rides in the same list and is NOT declared as a size: its value is
+        # read at run time (CE2099).
         for ch in tree.children:
             if not isinstance(ch, Tree):
                 continue
-            const = (_first_tree(ch.children, "const_def") or _find_tree_recursive(ch, "const_def")
-                     if ch.data == "toplevel" else
-                     ch if ch.data == "const_def" else None)
-            if const is not None:
-                const_def = constants.parse_constdef(const, self)
-                constants_list.append(const_def)
-                self.unit_constants.declare(const_def.name, const_def)
+            for rule, parse in (("const_def", constants.parse_constdef),
+                                ("var_def", constants.parse_vardef)):
+                found = (_first_tree(ch.children, rule) or _find_tree_recursive(ch, rule)
+                         if ch.data == "toplevel" else
+                         ch if ch.data == rule else None)
+                if found is None:
+                    continue
+                decl = parse(found, self)
+                constants_list.append(decl)
+                if rule == "const_def":
+                    self.unit_constants.declare(decl.name, decl)
 
         for ch in tree.children:
             if not isinstance(ch, Tree):
@@ -194,7 +200,7 @@ class ASTBuilder:
 
             elif node.data == "use_stmt":
                 uses.append(imports.parse_usestatement(node, self))
-            elif node.data == "const_def":
+            elif node.data in ("const_def", "var_def"):
                 continue
             elif node.data == "struct_def":
                 structs_list.append(structs.parse_structdef(node, self))

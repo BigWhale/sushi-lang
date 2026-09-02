@@ -19,6 +19,9 @@ Complete syntax and semantics reference for Sushi Lang. For a gentler introducti
 - [Module System](#module-system)
 - [Comments](#comments)
 - [Documentation Blocks](#documentation-blocks)
+- [Keywords](#keywords)
+- [Constants](#constants)
+- [Unit Variables](#unit-variables)
 
 ## Program Structure
 
@@ -1418,7 +1421,9 @@ every diagnostic.
 Reserved keywords:
 
 - `fn` - Function declaration
-- `let` - Variable declaration
+- `let` - Variable declaration (block-scoped)
+- `const` - Constant declaration (compile-time, no address)
+- `var` - Unit variable declaration (storage with an address, one per program)
 - `struct` - Struct definition
 - `enum` - Enum definition
 - `if`, `elif`, `else` - Conditionals
@@ -1431,7 +1436,7 @@ Reserved keywords:
 - `true`, `false` - Boolean literals
 - `as` - Type casting
 - `unit` - Unit declaration
-- `public` - Visibility marker (`fn`, `const`, `struct`, `enum`, `perk`)
+- `public` - Visibility marker (`fn`, `const`, `var`, `struct`, `enum`, `perk`)
 - `use` - Module import
 - `extend` - Extension method
 - `self` - Extension method receiver
@@ -1730,6 +1735,96 @@ concatenation operator anywhere, interpolation is the way to combine strings.
 
 Integer `/` and `%` in a constant mean what they mean in a body: division truncates toward
 zero and a remainder takes the sign of its dividend, so `-7 / 2` is `-3` and `-7 % 2` is `-1`.
+
+## Unit Variables
+
+### Declaration
+
+A **unit variable** is storage a unit keeps for the whole run of the program. It is
+declared with `var` at the top level, beside a `const`, with the same shape: a type, a
+name and an initializer. Where a constant is a value the compiler folds into every use, a
+variable has an ADDRESS, so a rebind, a field assignment, a mutating method and a `poke`
+all reach it.
+
+```sushi
+var i32 counter = 0                 # storage, initialized before main() runs
+
+fn bump() ~:
+    counter := counter + 1          # a rebind writes the storage
+    return Result.Ok(~)
+
+fn main() i32:
+    bump()
+    bump()
+    println("{counter}")            # 2
+    return Result.Ok(0)
+```
+
+A unit variable is **private by default** and `public var` makes it visible to another
+unit, exactly as for `fn`, `const`, `struct`, `enum` and `perk`. Reading, rebinding or
+borrowing another unit's private variable is **CE3005**. A public variable may not hand
+out a private type (**CE3009**). Behind an alias it is written
+`t.count` like a constant, and `t.count := 3` and `poke t.count` reach the storage.
+
+The console handles are the built-in example: `stdin`, `stdout` and `stderr` are
+`public var File` declarations in `<io/fs>`, which is what lets `stdout.write(...)` call
+a `poke self` contract method.
+
+### The initializer
+
+The initializer is a **constant expression**: a literal, another constant, operators,
+`as`, an interpolation, or a struct built from constants -- everything a `const` accepts.
+Nothing runs before `main`, so there is no initialization order to define, and a
+variable cannot name another variable in its initializer (**CE0108**); a constant cannot
+name a variable at all (**CE0108**).
+
+One addition over a constant: an **empty container** is a legal initializer, because it
+allocates nothing.
+
+<!-- docs-sweep: skip (declarations only; the sweep compiles a block with a main) -->
+```sushi
+var i32[] table = from([])          # the descriptor {0, 0, null}
+var u8[] bytes = new()
+var List@(string) names = List.new()
+
+fn remember(string s) ~:
+    names.push(s)                   # a mutating method reaches the storage
+    return Result.Ok(~)
+```
+
+`HashMap.new()` mallocs its buckets and is refused, and so is a `from([1, 2])` with
+elements (**CE0108** either way).
+
+### Borrowing, rebinding, and what is refused
+
+A unit variable is borrowable like a local: `peek counter` and `poke counter` hand its
+address to a function, one `poke` at a time (**CE2403**), and `foreach(poke r in
+table.iter())` points into its elements. A `let` bound from a read out of it
+(`let string first = names[0]`) borrows and freezes it, exactly as it would a local.
+
+A unit variable is **never moved out of**. It owns its storage for the whole run, so a
+`nom` argument, a `let` bound straight from it, a `return` of it and a `nom self` method
+such as `close()` are all **CE2436** when the type owns a resource. A plain value copies
+out freely, and a rebind is the one way to change what the variable holds: the old value
+is dropped, the new one is stored.
+
+<!-- docs-sweep: skip (declarations only; the sweep compiles a block with a main) -->
+```sushi
+use <io/fs>
+
+fn redirect(nom File f) ~:
+    stdout := f                     # legal: the old handle is dropped, `f` moves in
+    return Result.Ok(~)
+
+# ERROR CE2436: cannot move 'stdout': it is a unit variable
+# let File mine = stdout
+```
+
+Nothing destroys a unit variable at exit. The process ends and the operating system
+reclaims the pages; a variable that holds heap at that moment is not freed first.
+
+A fixed array's size still wants an integer CONSTANT: a variable has a run-time value,
+so `i32[N]` with `var i32 N = 3` is **CE2099**.
 
 ---
 

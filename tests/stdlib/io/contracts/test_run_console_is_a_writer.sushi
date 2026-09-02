@@ -1,20 +1,21 @@
-# stdout is a File CONSTANT, so it satisfies Writer like any other handle. This is the
-# reason R6 refused to leave the console a builtin: a builtin could never enter a generic,
-# so BufWriter over the terminal would have been impossible on day one.
+# stdout is a File unit variable (`var`), so it satisfies Writer like any other handle and
+# has the address a `poke self` contract method needs. This is the reason R6 refused to
+# leave the console a builtin: a builtin could never enter a generic, so BufWriter over
+# the terminal would have been impossible on day one.
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
 use <io/fs>
 use <io/contracts>
 
-fn emit@(W: Writer)(W dst, string line) ~ | IoError:
+fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
     dst.write(line)??
     dst.write("\n")??
     dst.flush()??
     return Result.Ok(~)
 
 fn main() i32:
-    match emit(stdout, "Mostly Harmless"):
+    match emit(poke stdout, "Mostly Harmless"):
         Result.Ok(_) -> ~
         Result.Err(_) -> return Result.Ok(1)
     return Result.Ok(0)

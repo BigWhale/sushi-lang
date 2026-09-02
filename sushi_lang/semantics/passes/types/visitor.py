@@ -619,12 +619,13 @@ class ExpressionValidator(RecursiveVisitor):
         if const_sig is not None:
             # The one place a bare constant is validated, so the one place the fence
             # sits (D3). A local of the same name shadows it and never reaches here.
-            if not reject_private_name(tv, "constant", const_sig, node.loc):
-                reject_ambiguous_name(tv, "constant", node.id, node.loc)
+            kind = "variable" if const_sig.is_var else "constant"
+            if not reject_private_name(tv, kind, const_sig, node.loc):
+                reject_ambiguous_name(tv, kind, node.id, node.loc)
             return
         # A constant a binary library declares and keeps registers in no table: the
         # manifest holds the name and the kind, and that is the whole origin (#487).
-        if reject_private_kept(tv, node.id, node.loc, kinds={"constant"}):
+        if reject_private_kept(tv, node.id, node.loc, kinds={"constant", "variable"}):
             return
         if tv.generic_sig(node.id) is not None:
             # A generic-fn reference is allowed WITH an explicit expected fn type: solve
@@ -807,7 +808,15 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         const_sig = self.type_validator.const_sig(node.id)
         if const_sig is not None:
-            return const_sig.const_type
+            # The record keeps the DECLARED spelling, which is an `UnknownType` for a
+            # struct until the declaring unit's own typecheck resolves it. A reader in
+            # another unit -- the instantiate pass inferring `stdin.share()??` as a generic
+            # argument -- needs the interned type, so resolve it here, the one place a
+            # bare constant or unit variable is typed.
+            from sushi_lang.semantics.type_resolution import resolve_unknown_type
+            return resolve_unknown_type(const_sig.const_type,
+                                        self.type_validator.struct_table.by_name,
+                                        self.type_validator.enum_table.by_name)
 
         fn_value_type = function_value_type_of(self.type_validator, node.id)
         if fn_value_type is not None:
@@ -1183,6 +1192,16 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         inner_type = self.type_validator.infer_expression_type(node.expr)
         if inner_type is None:
             return None
+
+        ref = getattr(node.expr, "namespace_ref", None)
+        if ref is not None and ref.kind == "constant":
+            # `poke geo.SIZE`: the alias reaches the record, and the record decides. A
+            # constant has no address behind an alias either (CE2400); a `var` has one.
+            sig = self.type_validator.const_table.lookup(ref.name, ref.origin)
+            if sig is not None and not sig.is_var:
+                er.emit(self.type_validator.reporter, er.ERR.CE2400, node.expr.loc,
+                        name=ref.name)
+                return None
 
         mutability = BorrowMode.PEEK if node.mutability == "peek" else BorrowMode.POKE
         return ReferenceType(referenced_type=inner_type, mutability=mutability)

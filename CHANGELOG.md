@@ -5,6 +5,22 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **Unit-level storage: the `var` declaration.** `var i32 counter = 0` at the top of a
+  unit is storage in the data segment -- one per program, initialized from a constant
+  expression before `main`, never destroyed at exit -- where a `const` is a value the
+  compiler folds into every use. A variable has an ADDRESS, so a rebind, a field
+  assignment, a mutating method, a `poke` argument and a `poke` foreach binding all reach
+  it, from its own unit or through an alias (`t.count := 3`). It is private by default and
+  `public var` crosses the unit boundary, like the five marked kinds; a public variable of
+  a private type is CE3009. The initializer accepts everything a constant does plus an
+  EMPTY container (`List.new()`, `from([])`, `new()`), which allocates nothing;
+  `HashMap.new()`, a non-empty `from(...)` and another variable are CE0108. A variable is
+  never moved out of: a `nom` argument, a `let` bound straight from it, a `return` of it
+  and a `nom self` method are the new **CE2436** when the type owns a resource, and a
+  plain value copies out. A binary `.slib` carries a `public_variables` record with the
+  storage's `link_symbol`; `--lib-info` prints `var T name`. Design record:
+  `docs/design/unit-storage.md`; reference: the Unit Variables section of
+  `docs/language-reference.md`.
 - **A condition is a bool, and nothing else is one.** A `Result@(T, E)` used to answer
   for its Ok tag, so `if (f())` meant "did the call succeed". A `Result@(bool, E)` then
   had two readings and the compiler took one in silence: `Ok(false)` ran the true branch
@@ -80,6 +96,19 @@ All notable changes to Sushi Lang will be documented in this file.
   is destroyed on every exit path.
 
 ### Standard Library
+- **`Reader`, `Writer` and `Seek` take `poke self`, and the buffered types implement
+  them.** `BufReader@(R)` is a `Reader` and `BufWriter@(W)` is a `Writer`, so one generic
+  written `@(W: Writer)` takes the console, a `File`, a `TcpStream` and a
+  `BufWriter@(File)` alike (#546, route 2). The mode is on the contract and on every
+  implementation, so `File` and `TcpStream` moved with it, and the conveniences over the
+  contract (`read_all`, `readch`, `writeln`, `tell`) too. A generic over a contract now
+  takes its handle `poke` (`poke W dst`, called as `emit(poke stdout, ...)`), and a write
+  through an unmarked `File` parameter is CE2422, the rule every borrow already answered
+  to. The console handles `stdin`, `stdout` and `stderr` became `public var File`
+  declarations, which is what gives `stdout.write(...)` an address to reach; they can be
+  rebound for a run (`stdout := open(...)??`) and are never moved out of, so
+  `stdout.close()` is CE2436 (it was CE2400) and a buffered writer over the console
+  takes `stdout.share()` or a fresh `File(fd: STDOUT_FD, owned: false)`.
 - **Sushi can talk to the network.** Six new modules cover the first seven rows
   of the net gap list: `<net/socket>` is the low-level half, a Python IR
   generator, because an array or a struct may not cross the C ABI, a `u8[]` has

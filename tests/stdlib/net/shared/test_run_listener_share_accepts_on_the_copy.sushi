@@ -19,10 +19,10 @@ fn main() i32:
         Result.Ok(twin) ->
             server.close()
             match tcp_connect("127.0.0.1", port):
-                Result.Ok(client) ->
+                Result.Ok(nom client) ->
                     client.write("Mostly Harmless")
                     match twin.accept():
-                        Result.Ok(session) ->
+                        Result.Ok(nom session) ->
                             let string got = session.read(64).realise("")
                             println("accepted on the copy: {got}")
                         Result.Err(_) -> println("accept failed")

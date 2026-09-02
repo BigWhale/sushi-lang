@@ -1,0 +1,24 @@
+# Passing a unit variable to an unmarked parameter is a borrow, as for any argument,
+# and a `poke` parameter writes back into it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n6\n"
+
+var i32[] table = from([])
+
+fn total(i32[] xs) i32:
+    let i32 sum = 0
+    foreach(x in xs.iter()):
+        sum := sum + x
+    return Result.Ok(sum)
+
+fn grow(poke i32[] xs, i32 n) ~:
+    xs.push(n)
+    return Result.Ok(~)
+
+fn main() i32:
+    grow(poke table, 1)
+    grow(poke table, 2)
+    println("{total(table).realise(0)}")
+    grow(poke table, 3)
+    println("{total(table).realise(0)}")
+    return Result.Ok(0)

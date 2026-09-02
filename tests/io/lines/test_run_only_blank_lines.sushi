@@ -24,7 +24,7 @@ fn dump(string path) i32 | IoError:
 
 fn main() i32:
     match open("lines_only_blank.txt", FileMode.Write()):
-        Result.Ok(w) -> w.write("\n\n\n")
+        Result.Ok(nom w) -> w.write("\n\n\n")
         Result.Err(_) ->
             println("open failed")
             return Result.Ok(1)

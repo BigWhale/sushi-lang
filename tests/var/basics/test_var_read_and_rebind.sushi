@@ -1,0 +1,19 @@
+# A unit variable is storage the program keeps. `bump()` rebinds it, and every later
+# reader sees the new value, with no `let` anywhere and no value threaded through.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0\n3\n"
+# EXPECT_NO_LEAKS
+
+var i32 counter = 0
+
+fn bump() ~:
+    counter := counter + 1
+    return Result.Ok(~)
+
+fn main() i32:
+    println("{counter}")
+    bump()
+    bump()
+    bump()
+    println("{counter}")
+    return Result.Ok(0)

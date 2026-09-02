@@ -209,6 +209,22 @@ class ConstDef(Node):
     doc: Optional[DocBlock] = None
     public_span: Optional[Span] = None
 
+
+@dataclass(slots=True)
+class VarDef(ConstDef):
+    """Unit-level storage: `var T name = <constant expression>`.
+
+    A `ConstDef` in every field, and a subclass so that every pass which treats the two
+    alike -- collection, name resolution, the type of a bare name, visibility, the
+    namespace alias, the doc lints -- handles one node kind. The passes that tell them
+    apart ask `isinstance(node, VarDef)`: a constant is `.rodata` with no address, a
+    variable is data-segment storage that a rebind, a `poke` and a mutating method
+    reach (docs/design/unit-storage.md).
+    """
+    # A consumer of a BINARY library declares the storage the library's bitcode
+    # defines, under this symbol; None for a variable this program defines itself.
+    link_symbol: Optional[str] = None
+
 @dataclass(slots=True)
 class StructField:
     """Single field in a struct definition."""
@@ -820,7 +836,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 
 __all__ = [
-    "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
+    "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding", "NomBinding",

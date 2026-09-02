@@ -1,0 +1,17 @@
+# The three empty container spellings are constant initializers: each is the literal
+# descriptor {0, 0, null} and allocates nothing. No leak directive: the buffers the
+# pushes allocate are live at exit, by design.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0 0 0\n1 1 1\n"
+
+var i32[] a = from([])
+var u8[] b = new()
+var List@(string) c = List.new()
+
+fn main() i32:
+    println("{a.len()} {b.len()} {c.len()}")
+    a.push(1)
+    b.push(2)
+    c.push("three")
+    println("{a.len()} {b.len()} {c.len()}")
+    return Result.Ok(0)

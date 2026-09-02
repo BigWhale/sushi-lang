@@ -135,6 +135,10 @@ section 7 of that document holds the boundary between the two phases.
 
 `fn`, `const`, `struct` and `enum` are private to their unit unless they say `public`.
 
+> 2026-09-03: `var`, the unit-level storage declaration (`docs/design/unit-storage.md`),
+> is the sixth marked kind and follows this ruling unchanged -- an explicit `public`,
+> private by default. The kind is `"variable"` in the walk and the four sets.
+
 <!-- docs-sweep: skip (declarations only; the sweep compiles a block with a main) -->
 ```sushi
 public const i32 MAX_DEPTH = 32     # another unit may name it

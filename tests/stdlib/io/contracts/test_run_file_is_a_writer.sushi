@@ -8,15 +8,15 @@ use <io/files>
 use <io/fs>
 use <io/contracts>
 
-fn emit@(W: Writer)(W dst, string line) ~ | IoError:
+fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
     dst.write(line)??
     dst.flush()??
     return Result.Ok(~)
 
 fn main() i32:
     match open("contract_writer_probe.txt", FileMode.Write()):
-        Result.Ok(w) ->
-            match emit(w, "Mostly Harmless"):
+        Result.Ok(nom w) ->
+            match emit(poke w, "Mostly Harmless"):
                 Result.Ok(_) -> println("wrote through the contract")
                 Result.Err(_) -> println("write failed")
         Result.Err(_) ->
@@ -24,7 +24,7 @@ fn main() i32:
             return Result.Ok(1)
 
     match open("contract_writer_probe.txt", FileMode.Read()):
-        Result.Ok(r) ->
+        Result.Ok(nom r) ->
             let string back = r.read_all().realise("")
             println("{back}")
         Result.Err(_) -> println("reopen failed")

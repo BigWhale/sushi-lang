@@ -8,12 +8,12 @@
 use <net/tcp>
 use <io/contracts>
 
-fn emit@(W: Writer)(W dst, string line) ~ | IoError:
+fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
     dst.write(line)??
     dst.flush()??
     return Result.Ok(~)
 
-fn first_text@(R: Reader)(R src) string | IoError:
+fn first_text@(R: Reader)(poke R src) string | IoError:
     return Result.Ok(src.read(64)??)
 
 fn main() i32:
@@ -24,13 +24,13 @@ fn main() i32:
         return Result.Ok(1)
 
     match tcp_connect("127.0.0.1", port):
-        Result.Ok(client) ->
-            match emit(client, "Mostly Harmless"):
+        Result.Ok(nom client) ->
+            match emit(poke client, "Mostly Harmless"):
                 Result.Ok(_) -> println("sent through the contract")
                 Result.Err(_) -> println("send failed")
             match server.accept():
-                Result.Ok(session) ->
-                    let string got = first_text(session).realise("")
+                Result.Ok(nom session) ->
+                    let string got = first_text(poke session).realise("")
                     println("server read: {got}")
                 Result.Err(_) -> println("accept failed")
         Result.Err(_) -> println("connect failed")

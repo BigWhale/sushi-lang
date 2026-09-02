@@ -350,7 +350,7 @@ use <io/fs>
 
 fn load_optional_config() Maybe@(string) | IoError:
     match open("config.txt", FileMode.Read()):
-        Result.Ok(f) ->
+        Result.Ok(nom f) ->
             return Result.Ok(Maybe.Some(f.read_all()??))  # Found config
         Result.Err(IoError.NotFound()) ->
             return Result.Ok(Maybe.None())                # No config (OK!)

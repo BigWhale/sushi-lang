@@ -1,0 +1,31 @@
+# `stdout` is a unit variable, so a program can put its console on a file for a while:
+# the rebind drops the old handle (owned: false, so it closes nothing) and the writes land
+# in the file. `println` reaches descriptor 1 directly and never sees the variable.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "before\nmeanwhile\nafter: into the file\n"
+
+use <io/fs>
+
+const string PATH = "/tmp/sushi_console_rebind_redirects.txt"
+
+fn run() ~ | IoError:
+    stdout.write("before\n")??
+    stdout := open(PATH, FileMode.Write())??
+    stdout.write("into the file")??
+    println("meanwhile")
+    stdout := File(fd: STDOUT_FD, owned: false)
+    let File back = open(PATH, FileMode.Read())??
+    let string body = back.read_all()??
+    stdout.write("after: {body}\n")??
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 code = 0
+    match run():
+        Result.Ok(_) ->
+            code := 0
+        Result.Err(_) ->
+            code := 1
+    remove_all(PATH)
+    return Result.Ok(code)

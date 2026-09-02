@@ -1,0 +1,10 @@
+# A fixed array's size is a count the compiler can read. A unit variable is storage
+# with a run-time value, so it is refused where an integer constant is accepted.
+# EXPECT_ERROR_CODE: CE2099
+
+var i32 N = 3
+
+fn main() i32:
+    let i32[N] slots = [0, 0, 0]
+    println("{slots[0]}")
+    return Result.Ok(0)

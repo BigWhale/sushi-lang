@@ -60,7 +60,9 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     if isinstance(receiver, Name):
-        semantic_type = codegen.memory.find_semantic_type(receiver.id)
+        # A local's recorded type, or a unit variable's declared one (unit-storage.md).
+        from sushi_lang.backend.expressions.names import resolve_name_semantic_type
+        semantic_type = resolve_name_semantic_type(codegen, receiver.id)
         if isinstance(semantic_type, ReferenceType):
             semantic_type = semantic_type.referenced_type
 
@@ -76,7 +78,20 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
     # what lets List/Own methods claim the call instead of the dynamic-array dispatch,
     # which crashes on a List backing struct.
     if isinstance(receiver, MemberAccess):
+        from sushi_lang.backend.expressions.names import namespaced_storage
         from sushi_lang.backend.expressions.structs import infer_struct_type
+        storage = namespaced_storage(codegen, receiver)
+        if storage is not None:
+            # `geo.items.push(x)`: the alias reaches a unit variable, whose declared
+            # type answers, not a field of `geo`.
+            field_type = storage[2]
+            if isinstance(field_type, StructType) and field_type.name.startswith(prefix):
+                return field_type
+            if isinstance(field_type, GenericTypeRef):
+                type_name = str(field_type)
+                if type_name.startswith(prefix) and type_name in codegen.struct_table.by_name:
+                    return codegen.struct_table.by_name[type_name]
+            return None
         try:
             parent_struct = infer_struct_type(codegen, receiver.receiver)
             field_type = parent_struct.get_field_type(receiver.member)
@@ -178,7 +193,9 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     if isinstance(receiver, Name):
-        semantic_type = codegen.memory.find_semantic_type(receiver.id)
+        # A local's recorded type, or a unit variable's declared one (unit-storage.md).
+        from sushi_lang.backend.expressions.names import resolve_name_semantic_type
+        semantic_type = resolve_name_semantic_type(codegen, receiver.id)
         if isinstance(semantic_type, ReferenceType):
             semantic_type = semantic_type.referenced_type
 

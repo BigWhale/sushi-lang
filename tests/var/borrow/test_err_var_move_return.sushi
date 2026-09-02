@@ -1,0 +1,13 @@
+# Returning an owning unit variable by value would hand its storage to the caller,
+# who frees it. Refused, like every other move out of one.
+# EXPECT_ERROR_CODE: CE2436
+
+var i32[] table = from([])
+
+fn take() i32[]:
+    return Result.Ok(table)
+
+fn main() i32:
+    let i32[] got = take().realise(from([]))
+    println("{got.len()}")
+    return Result.Ok(0)

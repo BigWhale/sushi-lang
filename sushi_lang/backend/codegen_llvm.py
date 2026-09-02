@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
     from sushi_lang.semantics.passes.const_eval import ConstantValue
 
-from sushi_lang.semantics.ast import ConstDef, ExtendDef
+from sushi_lang.semantics.ast import ConstDef, ExtendDef, VarDef
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.library_registry import LibraryRegistry
@@ -636,7 +636,9 @@ class LLVMCodegen:
             if unit.ast is None:
                 continue
             for const in unit.ast.constants:
-                self._emit_global_constant(const, unit.name)
+                # A unit variable is defined by its own unit's module only.
+                self._emit_global_constant(const, unit.name,
+                                           defining=unit.name == target_unit.name)
 
         # First round: declare function prototypes
         # For the target unit: declare ALL functions (public + private, they'll get bodies)
@@ -971,27 +973,64 @@ class LLVMCodegen:
             [data_ptr, ir.Constant(self.i32, size), ir.Constant(self.i8, 0)])
 
     def _register_global_constant(self, name: str, llvm_type: ir.Type,
-                                  value: ir.Constant,
-                                  unit_name: str | None = None) -> None:
-        """Publish an evaluated constant as a read-only global.
+                                  value: Optional[ir.Constant],
+                                  unit_name: str | None = None, *,
+                                  storage: bool = False,
+                                  symbol: Optional[str] = None) -> None:
+        """Publish an evaluated constant as a read-only global, or a `var` as storage.
 
         The global's NAME carries the declaring unit, exactly as a function symbol does:
         two units may each declare a private `SCRATCH`, and the monolithic path puts both
         into one module (`docs/design/unit-namespaces.md` section 9).
+
+        A constant is `internal` and `.rodata`: every module that reads it gets its own
+        copy, which is harmless for a value. A unit variable (`storage`) is ONE storage
+        per program (docs/design/unit-storage.md), so it is writable and externally
+        linked: the declaring unit's module defines it, and every other module -- and a
+        consumer of a binary library, under the manifest's `symbol` -- declares it with
+        no initializer.
         """
-        # Internal linkage: cross-unit visibility comes from sharing one LLVM module.
-        # True separate compilation would need external linkage for a public constant.
-        global_const = ir.GlobalVariable(
-            self.module, llvm_type, name=mangle_unit_symbol(unit_name, name))
-        global_const.linkage = 'internal'
-        global_const.global_constant = True
-        global_const.initializer = value
-        global_const.unnamed_addr = True  # Allow merging identical constants
-        self.constants.declare(name, global_const, unit=unit_name)
+        global_var = ir.GlobalVariable(
+            self.module, llvm_type, name=symbol or mangle_unit_symbol(unit_name, name))
+        if storage:
+            if value is None:
+                global_var.linkage = 'external'
+            else:
+                global_var.initializer = value
+        else:
+            global_var.linkage = 'internal'
+            global_var.global_constant = True
+            global_var.initializer = value
+            global_var.unnamed_addr = True  # Allow merging identical constants
+        self.constants.declare(name, global_var, unit=unit_name)
+
+    def _emit_unit_variable(self, var: VarDef, unit_name: str | None,
+                            defining: bool) -> None:
+        """Define a `var`'s storage in its own unit's module; declare it everywhere else."""
+        ll_type = self.types.ll_type(var.ty)
+        if var.link_symbol is not None or not defining:
+            self._register_global_constant(var.name, ll_type, None, unit_name,
+                                           storage=True, symbol=var.link_symbol)
+            return
+        from sushi_lang.semantics.passes.const_eval import allocates_nothing
+        if allocates_nothing(var.value):
+            # The empty descriptor `{0, 0, null}` is the zero value of its type.
+            initializer: Optional[ir.Constant] = ir.Constant(ll_type, None)
+        else:
+            const_value = self._evaluate_constant_expression(var.value, var.ty, unit_name)
+            if const_value is None:
+                return
+            initializer = self._materialize_constant(
+                const_value, mangle_unit_symbol(unit_name, f".str_data.{var.name}"))
+            if initializer is None:
+                return
+        self._register_global_constant(var.name, ll_type, initializer, unit_name,
+                                       storage=True)
 
     def _emit_global_constant(self, const: ConstDef,
-                              unit_name: str | None = None) -> None:
-        """Emit a global constant definition.
+                              unit_name: str | None = None, *,
+                              defining: bool = True) -> None:
+        """Emit a global constant definition, or a unit variable's storage.
 
         The route is the VALUE the evaluator produced, never the shape of the
         expression that produced it. Matching a string constant syntactically meant
@@ -1001,6 +1040,10 @@ class LLVMCodegen:
         """
         if const.ty is None:
             return  # Skip constants with no type (should be caught in semantic analysis)
+
+        if isinstance(const, VarDef):
+            self._emit_unit_variable(const, unit_name, defining)
+            return
 
         # Materializing at the DECLARED type keeps a context-typed literal at its own
         # width: `const u8 MAX = 200` yields a u8 initializer, not an i32 one.

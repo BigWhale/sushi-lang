@@ -1,0 +1,36 @@
+# `BufReader@(R)` implements `Reader`: a generic written over the contract takes a plain
+# `File` and a `BufReader@(File)` alike, and the buffered one answers from its window.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "plain: Mostly\nbuffered: Mostly\n"
+
+use <io/fs>
+use <io/buf>
+use <io/contracts>
+
+const string PATH = "/tmp/sushi_bufreader_is_a_reader.txt"
+
+fn first_text@(R: Reader)(poke R src) string | IoError:
+    return Result.Ok(src.read(6)??)
+
+fn run() ~ | IoError:
+    let File out = open(PATH, FileMode.Write())??
+    out.write("Mostly Harmless")??
+    out.close()??
+    let File plain = open(PATH, FileMode.Read())??
+    let string a = first_text(poke plain)??
+    stdout.write("plain: {a}\n")??
+    let BufReader@(File) r = buf_reader(nom open(PATH, FileMode.Read())??, 64)??
+    let string b = first_text(poke r)??
+    stdout.write("buffered: {b}\n")??
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 code = 0
+    match run():
+        Result.Ok(_) ->
+            code := 0
+        Result.Err(_) ->
+            code := 1
+    remove_all(PATH)
+    return Result.Ok(code)

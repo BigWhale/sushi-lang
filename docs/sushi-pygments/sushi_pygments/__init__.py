@@ -23,7 +23,7 @@ __all__ = ["SushiLexer"]
 
 # Reserved words that introduce declarations, control flow, and modifiers.
 _KEYWORDS = (
-    "fn", "let", "const", "return", "if", "elif", "else", "while", "foreach",
+    "fn", "let", "const", "var", "return", "if", "elif", "else", "while", "foreach",
     "expand", "in", "match", "struct", "enum", "perk", "extend", "with", "use",
     "public", "unsafe", "external", "because", "break", "continue", "as", "new",
     "peek", "poke", "nom",

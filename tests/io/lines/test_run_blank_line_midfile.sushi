@@ -25,7 +25,7 @@ fn dump(string path) i32 | IoError:
 
 fn main() i32:
     match open("lines_blank_midfile.txt", FileMode.Write()):
-        Result.Ok(w) -> w.write("alpha\n\ngamma\n\n")
+        Result.Ok(nom w) -> w.write("alpha\n\ngamma\n\n")
         Result.Err(_) ->
             println("open failed")
             return Result.Ok(1)

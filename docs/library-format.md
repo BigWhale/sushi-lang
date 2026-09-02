@@ -237,6 +237,21 @@ is the authority, and the index is a cache of it.
         }
     ],
 
+    # A unit variable (`public var`, docs/design/unit-storage.md) mirrors a constant --
+    # the consumer needs the declared type -- and adds the symbol of its ONE storage,
+    # which the library's bitcode defines and the consumer declares as external. A
+    # source library recompiles the declaring unit and reads none of this.
+    "public_variables": [
+        {
+            "name": str,
+            "unit": str,
+            "type": str,
+            "source": str,             # The whole `public var ...` declaration
+            "link_symbol": str,        # `<unit>$<name>`, the data symbol
+            "doc": DOC                 # If documented
+        }
+    ],
+
     "structs": [
         {
             "name": str,

@@ -1,0 +1,41 @@
+# The contracts take `poke self` (ruling on #546, route 2), so `BufWriter@(W)` implements
+# `Writer`, and ONE generic takes the console, a plain file and a buffered file alike. The
+# console reaches it as `poke stdout`, which is what makes `stdout` a unit variable.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "console\nbuffered\nfile: plain\n"
+
+use <io/fs>
+use <io/buf>
+use <io/contracts>
+
+const string PATH = "/tmp/sushi_bufwriter_is_a_writer.txt"
+
+fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
+    dst.write(line)??
+    dst.write("\n")??
+    dst.flush()??
+    return Result.Ok(~)
+
+fn run() ~ | IoError:
+    emit(poke stdout, "console")??
+    let BufWriter@(File) w = buf_writer(nom File(fd: STDOUT_FD, owned: false), 64)??
+    emit(poke w, "buffered")??
+    w.finish()??
+    let File f = open(PATH, FileMode.Write())??
+    emit(poke f, "plain")??
+    f.close()??
+    let File back = open(PATH, FileMode.Read())??
+    let string body = back.read(5)??
+    stdout.write("file: {body}\n")??
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 code = 0
+    match run():
+        Result.Ok(_) ->
+            code := 0
+        Result.Err(_) ->
+            code := 1
+    remove_all(PATH)
+    return Result.Ok(code)

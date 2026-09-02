@@ -16,11 +16,13 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
     from sushi_lang.semantics.typesys import ReferenceType
 
     if isinstance(expr.expr, Name):
-        # Original logic: borrow a variable. Only a local is borrowable, and
-        # find_local_slot raises CE0055 itself if the name is not one -- which is exactly
-        # what the `except KeyError` here used to re-raise by hand.
+        # A local's slot, or the global backing a unit variable (unit-storage.md); a
+        # constant never reaches here (CE2400 in the scope pass).
+        from sushi_lang.backend.expressions.names import resolve_name_slot
         var_name = expr.expr.id
-        slot = codegen.memory.find_local_slot(var_name)
+        slot = resolve_name_slot(codegen, var_name)
+        if slot is None:
+            raise_internal_error("CE0055", name=var_name)
 
         if hasattr(codegen, 'variable_types') and var_name in codegen.variable_types:
             semantic_type = codegen.variable_types[var_name]
@@ -30,6 +32,10 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
         return slot  # Return the pointer directly (zero-cost)
 
     elif isinstance(expr.expr, MemberAccess):
+        from sushi_lang.backend.expressions.names import namespaced_storage
+        storage = namespaced_storage(codegen, expr.expr)
+        if storage is not None:
+            return storage[1]  # `poke geo.count`: the variable's own address
         return emit_member_access_borrow(codegen, expr.expr)
 
     else:

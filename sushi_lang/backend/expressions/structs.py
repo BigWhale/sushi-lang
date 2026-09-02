@@ -123,7 +123,9 @@ def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool =
 def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr) -> Optional[ir.Value]:
     """Try to get the alloca instruction or pointer for a struct variable."""
     if isinstance(receiver_expr, Name):
-        slot = codegen.memory.try_find_local_slot(receiver_expr.id)
+        # A local's slot, or the global backing a constant or a unit variable.
+        from sushi_lang.backend.expressions.names import resolve_name_slot
+        slot = resolve_name_slot(codegen, receiver_expr.id)
         if slot is None:
             return None
 
@@ -133,6 +135,10 @@ def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr) -> Option
         else:
             return slot
     elif isinstance(receiver_expr, MemberAccess):
+        from sushi_lang.backend.expressions.names import namespaced_storage
+        storage = namespaced_storage(codegen, receiver_expr)
+        if storage is not None:
+            return storage[1]  # `geo.pair.a := v` writes into the variable's storage
         base_alloca = try_get_struct_alloca(codegen, receiver_expr.receiver)
         if base_alloca is None:
             return None
@@ -231,6 +237,28 @@ def _infer_get_element_struct(codegen: 'LLVMCodegen',
     return None
 
 
+def _struct_type_of(codegen: 'LLVMCodegen', var_type) -> StructType:
+    """The struct a NAMED value's semantic type denotes, whichever spelling it kept."""
+    if isinstance(var_type, ReferenceType):
+        var_type = var_type.referenced_type
+
+    if isinstance(var_type, UnknownType):
+        if var_type.name not in codegen.struct_table.by_name:
+            raise_internal_error("CE0020", type=var_type.name)
+        return codegen.struct_table.by_name[var_type.name]
+    if isinstance(var_type, StructType):
+        return var_type
+
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    if isinstance(var_type, GenericTypeRef):
+        type_args_str = ", ".join(str(arg) for arg in var_type.type_args)
+        struct_name = f"{var_type.base_name}<{type_args_str}>"
+        if struct_name in codegen.struct_table.by_name:
+            return codegen.struct_table.by_name[struct_name]
+
+    raise_internal_error("CE0031", type=str(var_type))
+
+
 def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
     """Infer the struct type of an expression."""
     if isinstance(expr, Name):
@@ -241,27 +269,14 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
         var_type = resolve_name_semantic_type(codegen, var_name)
         if var_type is None:
             raise_internal_error("CE0056", name=var_name)
-
-        if isinstance(var_type, ReferenceType):
-            var_type = var_type.referenced_type
-
-        if isinstance(var_type, UnknownType):
-            if var_type.name not in codegen.struct_table.by_name:
-                raise_internal_error("CE0020", type=var_type.name)
-            return codegen.struct_table.by_name[var_type.name]
-        elif isinstance(var_type, StructType):
-            return var_type
-        else:
-            from sushi_lang.semantics.generics.types import GenericTypeRef
-            if isinstance(var_type, GenericTypeRef):
-                type_args_str = ", ".join(str(arg) for arg in var_type.type_args)
-                struct_name = f"{var_type.base_name}<{type_args_str}>"
-                if struct_name in codegen.struct_table.by_name:
-                    return codegen.struct_table.by_name[struct_name]
-
-            raise_internal_error("CE0031", type=str(var_type))
+        return _struct_type_of(codegen, var_type)
 
     elif isinstance(expr, MemberAccess):
+        from sushi_lang.backend.expressions.names import namespaced_storage
+        storage = namespaced_storage(codegen, expr)
+        if storage is not None:
+            # `geo.pair` names a unit variable behind an alias, not a field of `geo`.
+            return _struct_type_of(codegen, storage[2])
         parent_struct_type = infer_struct_type(codegen, expr.receiver)
         field_type = parent_struct_type.get_field_type(expr.member)
 

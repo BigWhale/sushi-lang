@@ -1,0 +1,21 @@
+# A struct unit variable has an address, so a field assignment lands in it and a
+# later read sees the new field. A struct CONSTANT refuses the same write (CE2096).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1 2\n5 2\n"
+# EXPECT_NO_LEAKS
+
+struct Point:
+    i32 x
+    i32 y
+
+var Point origin = Point(1, 2)
+
+fn shift() ~:
+    origin.x := 5
+    return Result.Ok(~)
+
+fn main() i32:
+    println("{origin.x} {origin.y}")
+    shift()
+    println("{origin.x} {origin.y}")
+    return Result.Ok(0)

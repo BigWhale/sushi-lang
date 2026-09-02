@@ -1,0 +1,13 @@
+# A SOURCE library with unit-level storage: one public variable, one kept one.
+
+public var i32 hits = 0
+
+var i32 secret = 40
+
+public fn hit() ~:
+    hits := hits + 1
+    return Result.Ok(~)
+
+public fn secret_plus(i32 n) i32:
+    secret := secret + n
+    return Result.Ok(secret)

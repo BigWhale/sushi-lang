@@ -34,7 +34,7 @@ from sushi_lang.internals.report import Reporter, Span
 # comes from. `docs/design/visibility.md` rules on all four groups, and
 # `tests/unit/test_visibility_seam_is_total.py` asserts the union is the whole walk, so a
 # new declaration kind cannot get half the rule.
-CARRIES_MARKER = frozenset({"constant", "struct", "enum", "perk", "function"})
+CARRIES_MARKER = frozenset({"constant", "variable", "struct", "enum", "perk", "function"})
 
 # As visible as the declaration it is part of. A private enum variant would make a total
 # `match` unwritable across a unit boundary, so exhaustiveness decides this one.
@@ -67,6 +67,7 @@ _VERB = {
     "function": "call",
     "generic_function": "call",
     "constant": "read",
+    "variable": "read",
 }
 _DEFAULT_VERB = "use"
 

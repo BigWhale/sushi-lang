@@ -1,0 +1,9 @@
+# Only an EMPTY `from([])` is a constant initializer. Elements need a buffer, and a
+# buffer needs a malloc that no code runs before `main`.
+# EXPECT_ERROR_CODE: CE0108
+
+var i32[] table = from([1, 2])
+
+fn main() i32:
+    println("{table.len()}")
+    return Result.Ok(0)

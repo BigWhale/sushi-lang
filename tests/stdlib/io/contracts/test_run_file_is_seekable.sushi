@@ -9,19 +9,19 @@ use <io/files>
 use <io/fs>
 use <io/contracts>
 
-fn skip@(S: Seek)(S h, i64 count) i64 | IoError:
+fn skip@(S: Seek)(poke S h, i64 count) i64 | IoError:
     return Result.Ok(h.seek(count, SeekFrom.Start)??)
 
 fn main() i32:
     match open("contract_seek_probe.txt", FileMode.Write()):
-        Result.Ok(w) -> w.write("Mostly Harmless")
+        Result.Ok(nom w) -> w.write("Mostly Harmless")
         Result.Err(_) ->
             println("open failed")
             return Result.Ok(1)
 
     match open("contract_seek_probe.txt", FileMode.Read()):
-        Result.Ok(r) ->
-            let i64 at = skip(r, 7 as i64).realise(-1 as i64)
+        Result.Ok(nom r) ->
+            let i64 at = skip(poke r, 7 as i64).realise(-1 as i64)
             println("moved to {at}")
             let string rest = r.read_all().realise("")
             println("{rest}")

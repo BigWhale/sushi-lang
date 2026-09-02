@@ -1,0 +1,12 @@
+# A unit variable is initialized before `main` runs and nothing runs before `main`,
+# so a call is not an initializer. The same refusal a constant answers.
+# EXPECT_ERROR_CODE: CE0108
+
+fn seed() i32:
+    return Result.Ok(7)
+
+var i32 n = seed().realise(0)
+
+fn main() i32:
+    println("{n}")
+    return Result.Ok(0)

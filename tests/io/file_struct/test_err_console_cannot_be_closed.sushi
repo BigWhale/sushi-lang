@@ -1,8 +1,8 @@
-# stdout is a CONSTANT, so it lives in read-only memory and a `poke self` method has no
-# frame slot to borrow. Closing descriptor 1 out from under the rest of the program is
-# refused while compiling rather than at run time -- a property the constants give for
-# free (HANDLES.md, ruling R15).
-# EXPECT_ERROR_CODE: CE2400
+# stdout is a unit variable (`var`): storage the program keeps, never moved out of. A
+# `nom self` method such as close() would take it, so closing descriptor 1 out from under
+# the rest of the program is refused while compiling rather than at run time (the ruling
+# on #546 moved the handles from `const` to `var`; the refusal moved from CE2400 to CE2436).
+# EXPECT_ERROR_CODE: CE2436
 use <io/fs>
 
 fn main() i32:
