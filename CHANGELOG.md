@@ -184,6 +184,15 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **An empty `from([])` takes its element type from the position, everywhere.** As a
+  `.realise()` default and as a bare extension's `return` it reached the backend with no
+  element type and was CE0000, a compiler crash on ordinary syntax (#544). Three
+  positions -- a `let`, a `Result.Ok` payload, a struct argument -- worked only because
+  each derived the element type for itself in the backend. The typecheck pass now stamps
+  the position's `T[]` on the `from([])` node, exactly as it does for `new()`, and the
+  one emitter reads it; the payload and struct derivations are gone. A `.realise(from([]))`
+  over a `Result@(u8[], E)` or a `Maybe@(T[])`, `return from([])` in a bare or a channel
+  extension, and `count(from([]))` against a `u8[]` parameter all compile and run.
 - **A generic-target perk implementation travels through a binary `.slib`.**
   `extend Box@(T) with Show` is a template, and the manifest walked the monomorphized
   copies and exported it nowhere -- and a perk shipped only when a generic constraint

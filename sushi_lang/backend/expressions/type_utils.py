@@ -154,6 +154,9 @@ def _dynamic_array_from_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
     """The `T[]` an inline `from([...])` produces, read off its first element."""
     from sushi_lang.semantics.typesys import DynamicArrayType
 
+    stamped = getattr(expr, "resolved_type", None)
+    if isinstance(stamped, DynamicArrayType):
+        return stamped
     elements = expr.elements.elements
     if not elements:
         return None

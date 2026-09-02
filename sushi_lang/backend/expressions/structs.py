@@ -4,8 +4,7 @@ from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import (
-    Expr, Name, Call, MemberAccess, MethodCall, DotCall, DynamicArrayFrom,
-    IndexAccess,
+    Expr, Name, Call, MemberAccess, MethodCall, DotCall, IndexAccess,
 )
 from sushi_lang.semantics.typesys import (
     UnknownType, StructType, ArrayType, DynamicArrayType, ReferenceType,
@@ -29,34 +28,23 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
     field_values = []
     for arg, (_field_name, field_type) in zip(expr.args, struct_type.fields, strict=True):
         if isinstance(field_type, DynamicArrayType):
-            if isinstance(arg, DynamicArrayFrom):
-                # Create initialized dynamic array struct from array literal. A heap-owning
-                # element that aliases a live owner is deep-copied so the struct field and
-                # the source each own independent buffers (#139); a fresh temp is moved in.
-                from sushi_lang.backend.types import arrays
-                elements = arrays.emit_array_literal_elements(
-                    codegen, arg.elements.elements, field_type.base_type
-                )
+            # A `from([...])` argument is emitted like any other expression: the typecheck
+            # pass stamped the field's `T[]` on it, and the one emitter reads that stamp
+            # (#544), so no derivation of the element type lives here.
+            arg_value = codegen.expressions.emit_expr(arg)
+
+            if isinstance(arg_value.type, ir.PointerType):
                 element_llvm_type = codegen.types.ll_type(field_type.base_type)
-                array_struct = arrays.create_dynamic_array_from_elements(
-                    codegen, field_type.base_type, element_llvm_type, elements
-                )
-                field_values.append(array_struct)
-            else:
-                arg_value = codegen.expressions.emit_expr(arg)
+                expected_struct_type = ir.LiteralStructType([
+                    codegen.types.i32,
+                    codegen.types.i32,
+                    ir.PointerType(element_llvm_type)
+                ])
+                if arg_value.type.pointee == expected_struct_type:
+                    arg_value = codegen.builder.load(arg_value)
 
-                if isinstance(arg_value.type, ir.PointerType):
-                    element_llvm_type = codegen.types.ll_type(field_type.base_type)
-                    expected_struct_type = ir.LiteralStructType([
-                        codegen.types.i32,
-                        codegen.types.i32,
-                        ir.PointerType(element_llvm_type)
-                    ])
-                    if arg_value.type.pointee == expected_struct_type:
-                        arg_value = codegen.builder.load(arg_value)
-
-                field_values.append(consume(codegen, arg, arg_value, field_type,
-                                            ConsumingUse.STRUCT_FIELD))
+            field_values.append(consume(codegen, arg, arg_value, field_type,
+                                        ConsumingUse.STRUCT_FIELD))
         else:
             arg_value = codegen.expressions.emit_expr(arg)
 

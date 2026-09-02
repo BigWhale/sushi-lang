@@ -23,6 +23,11 @@ Both types share common methods, while dynamic arrays have additional memory man
 Both are mutable in place: `arr[i] := v` writes one element, and `.fill()` / `.reverse()` write
 all of them. Only the LENGTH of a fixed array is immutable.
 
+A dynamic array is built by `from([...])` or `new()`. An empty `from([])` and a `new()` spell
+no element type, so each takes the type of its position: a `let`, a struct field, a payload,
+a parameter, a `.realise()` default, or an extension's bare `return`. `r.realise(from([]))`
+over a `Result@(u8[], E)` is a `u8[]`.
+
 ## Every receiver shape
 
 A built-in method works the same through every receiver: a local, a struct field, a nested

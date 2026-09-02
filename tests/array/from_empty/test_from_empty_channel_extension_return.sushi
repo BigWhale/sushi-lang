@@ -1,0 +1,18 @@
+# The same return through a channel extension: the bare success wraps into Ok, and the
+# empty array still reads its element type from the declared return (#544).
+# EXPECT_STDOUT_EXACT: "0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct S:
+    i32 x
+
+extend S empty() u8[] | StdError:
+    if (self.x < 0):
+        return Result.Err(StdError.Error)
+    return from([])
+
+fn main() i32:
+    let S s = S(1)
+    println("{s.empty().realise(from([9])).len()}")
+    return Result.Ok(0)

@@ -1,0 +1,14 @@
+# An empty `from([])` as a `.realise()` default takes the Ok arm's element type (#544).
+# It reached the backend with no element type and was CE0000.
+# EXPECT_STDOUT_EXACT: "0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn make() u8[]:
+    let u8[] e = from([])
+    return Result.Ok(e)
+
+fn main() i32:
+    let u8[] e = make().realise(from([]))
+    println("{e.len()}")
+    return Result.Ok(0)

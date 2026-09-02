@@ -188,7 +188,13 @@ let i32[5] fixed = [1, 2, 3, 4, 5]
 ```sushi
 let i32[] dynamic = from([1, 2, 3])
 let string[] empty = new()
+let u8[] none = from([])
 ```
+
+An empty `from([])` and a `new()` spell no element type of their own: each takes the type
+of its position -- a `let`, a struct field, a `Result.Ok` payload, a parameter, a
+`.realise()` default, an extension's bare `return`. So `make().realise(from([]))` and
+`return from([])` in an `extend S empty() u8[]` both mean `u8[]`.
 
 ### Function Types
 

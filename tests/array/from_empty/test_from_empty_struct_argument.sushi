@@ -1,0 +1,14 @@
+# An empty `from([])` as a struct constructor argument takes the field's element type.
+# This position worked before #544; it stays on the one route every position takes now.
+# EXPECT_STDOUT_EXACT: "0 1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Holder:
+    u8[] data
+    string[] names
+
+fn main() i32:
+    let Holder h = Holder(from([]), from(["towel"]))
+    println("{h.data.len()} {h.names.len()}")
+    return Result.Ok(0)

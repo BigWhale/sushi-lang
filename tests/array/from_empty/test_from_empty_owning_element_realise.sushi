@@ -1,0 +1,15 @@
+# The element type the position hands an empty `from([])` may own heap: a `string[]`
+# default is pushed into afterwards and freed once (#544).
+# EXPECT_STDOUT_EXACT: "1 Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn none() string[] | StdError:
+    return Result.Err(StdError.Error)
+
+fn main() i32:
+    let string k = "Harmless"
+    let string[] names = none().realise(from([]))
+    names.push("Mostly {k}")
+    println("{names.len()} {names[0]}")
+    return Result.Ok(0)

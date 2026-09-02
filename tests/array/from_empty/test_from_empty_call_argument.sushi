@@ -1,0 +1,11 @@
+# An empty `from([])` as a call argument takes the parameter's element type (#544).
+# EXPECT_STDOUT_EXACT: "0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn count(u8[] xs) i32:
+    return Result.Ok(xs.len())
+
+fn main() i32:
+    println("{count(from([])).realise(-1)}")
+    return Result.Ok(0)

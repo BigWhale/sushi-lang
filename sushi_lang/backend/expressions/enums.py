@@ -82,39 +82,23 @@ def emit_enum_constructor_from_method_call(
         # cannot disagree (they used to derive offsets from two different size walks).
         field_offsets = codegen.types.payload_field_offsets(variant.associated_types)
         for i, (arg_expr, arg_type) in enumerate(zip(args, variant.associated_types, strict=True)):
-            from sushi_lang.semantics.ast import DynamicArrayFrom
-            from sushi_lang.semantics.typesys import DynamicArrayType
+            arg_value = codegen.expressions.emit_expr(arg_expr)
 
-            if isinstance(arg_type, DynamicArrayType) and isinstance(arg_expr, DynamicArrayFrom):
-                # An owning element that aliases a live local is deep-copied, or the enum
-                # local and the source both free the shared buffer (#139). A fresh temp is
-                # already the sole owner and moves in unchanged.
-                from sushi_lang.backend.types import arrays
-                elements = arrays.emit_array_literal_elements(
-                    codegen, arg_expr.elements.elements, arg_type.base_type
-                )
-                element_llvm_type = codegen.types.ll_type(arg_type.base_type)
-                arg_value = arrays.create_dynamic_array_from_elements(
-                    codegen, arg_type.base_type, element_llvm_type, elements
-                )
-            else:
-                arg_value = codegen.expressions.emit_expr(arg_expr)
+            # Some expressions hand back a POINTER rather than the value -- an array
+            # `.clone()`, for one. The payload goes into the variant's byte blob
+            # verbatim, so an unnormalized pointer read back a garbage length.
+            if (isinstance(arg_value.type, ir.PointerType)
+                    and arg_value.type.pointee == codegen.types.ll_type(arg_type)):
+                arg_value = codegen.builder.load(arg_value, name="enum_payload_by_value")
 
-                # Some expressions hand back a POINTER rather than the value -- an array
-                # `.clone()`, for one. The payload goes into the variant's byte blob
-                # verbatim, so an unnormalized pointer read back a garbage length.
-                if (isinstance(arg_value.type, ir.PointerType)
-                        and arg_value.type.pointee == codegen.types.ll_type(arg_type)):
-                    arg_value = codegen.builder.load(arg_value, name="enum_payload_by_value")
-
-                # An enum payload is stored SHALLOWLY into the variant's byte blob, so the
-                # enum becomes an owner of whatever the value points at. Which is why the
-                # decision matters here more than almost anywhere: a returned Result is
-                # emitted BEFORE scope cleanup, so `return Result.Ok(w.items)` handed the
-                # caller an already-freed buffer when this position got it wrong (#256).
-                from sushi_lang.backend.ownership import ConsumingUse, consume
-                arg_value = consume(codegen, arg_expr, arg_value, arg_type,
-                                    ConsumingUse.ENUM_PAYLOAD)
+            # An enum payload is stored SHALLOWLY into the variant's byte blob, so the
+            # enum becomes an owner of whatever the value points at. Which is why the
+            # decision matters here more than almost anywhere: a returned Result is
+            # emitted BEFORE scope cleanup, so `return Result.Ok(w.items)` handed the
+            # caller an already-freed buffer when this position got it wrong (#256).
+            from sushi_lang.backend.ownership import ConsumingUse, consume
+            arg_value = consume(codegen, arg_expr, arg_value, arg_type,
+                                ConsumingUse.ENUM_PAYLOAD)
 
             # Store the argument at its aligned offset. Natural alignment throughout:
             # the base is 8-aligned and the offset is naturally aligned (#300 phase 2),

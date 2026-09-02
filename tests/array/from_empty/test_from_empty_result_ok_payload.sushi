@@ -1,0 +1,12 @@
+# An empty `from([])` as a Result.Ok payload takes the Ok arm's element type. This
+# position worked before #544; it stays on the one route every position takes now.
+# EXPECT_STDOUT_EXACT: "0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn make() u8[]:
+    return Result.Ok(from([]))
+
+fn main() i32:
+    println("{make().realise(from([1])).len()}")
+    return Result.Ok(0)

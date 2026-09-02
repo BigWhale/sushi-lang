@@ -1,0 +1,12 @@
+# The Maybe twin: an empty `from([])` as a `.realise()` default over a Maybe@(T[]) (#544).
+# EXPECT_STDOUT_EXACT: "0 2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let Maybe@(i32[]) none = Maybe.None()
+    let Maybe@(i32[]) some = Maybe.Some(from([4, 2]))
+    let i32[] a = none.realise(from([]))
+    let i32[] b = some.realise(from([]))
+    println("{a.len()} {b.len()}")
+    return Result.Ok(0)
