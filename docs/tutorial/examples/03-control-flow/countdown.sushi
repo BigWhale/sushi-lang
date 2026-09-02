@@ -1,0 +1,22 @@
+# `foreach` walks anything that carries a `next()` answering `Maybe@(T)`. There is no
+# type to implement and no perk to name: this struct becomes walkable by gaining one
+# method, and the loop calls it until it answers `None`.
+
+struct Countdown:
+    i32 at
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.at <= 0):
+        let Maybe@(i32) ended = Maybe.None()
+        return ended
+    let i32 now = self.at
+    self.at := self.at - 1
+    let Maybe@(i32) got = Maybe.Some(now)
+    return got
+
+fn main() i32:
+    let Countdown c = Countdown(3)
+    foreach(n in c):
+        println("  {n}")
+    println("Liftoff!")
+    return Result.Ok(0)

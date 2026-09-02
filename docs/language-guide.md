@@ -1424,33 +1424,34 @@ destructor swallowing the failure of a flush the program never asked for.
 When a loop makes that cost matter, wrap the handle. `<io/buf>` gives `BufReader@(R)`
 over any `Reader` and `BufWriter@(W)` over any `Writer`, each reading or writing one
 WINDOW per system call. The wrapper TAKES the handle (`nom`), so there is never a moment
-where both the handle and its buffer are usable:
+where both the handle and its buffer are usable.
+
+`r.lines()` then takes the reader in turn and answers a line iterator that `foreach`
+walks. The `??` on the binder is the short form: the item is an ordinary
+`Result@(string, IoError)`, and the marker leaves the function on the first read failure
+exactly as `??` does anywhere else. Drop it and the body gets the `Result` itself, which
+is what lets a loop report one bad line and carry on.
 
 ```sushi
 use <io/fs>
 use <io/buf>
 
-fn count_lines(string path) i32 | IoError:
+fn number_lines(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
     let BufReader@(File) r = buf_reader(nom f, 8192)??
 
-    let i32 total = 0
-    let bool done = false
-    while (not done):
-        match r.read_line()??:
-            Maybe.Some(_) ->
-                total := total + 1
-            Maybe.None ->
-                done := true
+    let i32 n = 0
+    foreach(line?? in r.lines()):
+        n := n + 1
+        println("{n}: {line}")
 
-    return Result.Ok(total)
-    # r drops here: it destroys its window and then the File, which closes the descriptor.
+    return Result.Ok(~)
+    # The iterator drops here: it destroys the reader, which closes the descriptor.
 
 fn main() i32:
-    match count_lines("large.txt"):
-        Result.Ok(n) -> println("{n} lines")
-        Result.Err(_) -> println("could not read it")
-    return Result.Ok(0)
+    match number_lines("large.txt"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
 ```
 
 A `BufWriter@(W)` flushes when it drops, but a drop cannot report a failure. `finish()`

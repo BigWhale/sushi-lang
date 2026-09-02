@@ -454,8 +454,14 @@ perk Iterator@(Item):
 # CE4010: perk Iterator cannot have type parameters
 ```
 
-**Status:** Planned for future release (Phase 6). The compiler now rejects the
-declaration outright (**CE4010**) — it used to be silently accepted and ignored.
+**Status:** Planned for future release. The compiler rejects the declaration outright
+(**CE4010**) — it used to be silently accepted and ignored.
+
+**This example is not a missing feature, though.** Iteration needs no perk: `foreach`
+walks any type carrying `next()` that answers `Maybe@(T)`, resolved as a method rather
+than through a contract. That is a PROTOCOL, and it exists precisely because a perk
+cannot name what it yields — see
+[Iteration (design)](design/iteration.md), ruling 1.
 
 ### 4. No Perk Inheritance
 

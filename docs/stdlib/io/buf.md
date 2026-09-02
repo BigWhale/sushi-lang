@@ -228,6 +228,7 @@ nothing.
 
 ## See also
 
+- [Iteration (design)](../../design/iteration.md) -- why the failure rides in the item
 - [io/contracts](contracts.md) -- the `Reader`, `Writer` and `Seek` perks
 - [io/fs](fs.md) -- `File`, `open()` and the console handles
 - [io/files](files.md) -- the `fd_*` primitives under both

@@ -579,7 +579,8 @@ let string combined = "{a}{b}"   # "foobar"
 ### Other
 
 - `as` - Type casting
-- `??` - Error propagation
+- `??` - Error propagation. Postfix on an expression, and also on a `foreach` binder
+  (`foreach(line?? in it)`), where it unwraps the loop's item
 
 ## Control Flow
 
@@ -676,6 +677,10 @@ INTO storage, and there is nothing to unwrap there.
 
 `foreach` CONSUMES its iterable, and a protocol iterator is destroyed when the loop ends --
 by `break` and by `return` as well as at the end of the input.
+
+The argument behind all of this -- why the failure rides in the ITEM rather than on the
+loop head, why the protocol is not a perk, and why a line iterator's stop is sticky -- is
+[Iteration (design)](design/iteration.md).
 
 ## Arrays
 

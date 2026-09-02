@@ -228,13 +228,22 @@ out.finish()??
 
 **Console I/O:**
 - `println()`, `print()` - Output with/without newline
-- `stdin.read_line()` - Read user input
-- `stdout`, `stderr` - Direct stream access
+- `stdin.readln()` - One line, or `Maybe.None` at end of input
+- `stdin`, `stdout`, `stderr` - `File` constants over descriptors 0, 1 and 2
 
 **File I/O:**
 - `open()` - Open files with Read/Write/Append modes
-- File methods: `read()`, `read_line()`, `write()`, `close()`
-- Error handling with `Result@(File, IoError)` and `FileError` enums
+- One read: `read(max)` / `read_bytes(max)`; the whole file: `read_all()`; one line:
+  `readln()`; writing: `write()` / `write_bytes()` / `writeln()`
+- `close()` CONSUMES the handle, and is only needed where the failure has to be SEEN --
+  a `File` closes itself when its owner leaves scope
+- Every read, write, seek, `open()` and `close()` answers `IoError`; the path utilities
+  and the `fd_*` primitives keep `FileError`
+
+**Buffered I/O** (`use <io/buf>`):
+- `buf_reader(nom src, cap)` / `buf_writer(nom dst, cap)` - one system call per WINDOW
+- `r.lines()` answers a `Lines@(R)`, which `foreach` walks:
+  `foreach(line?? in r.lines())`
 
 ### Math (`use <math>`)
 

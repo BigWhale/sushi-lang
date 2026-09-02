@@ -120,6 +120,8 @@ nav:
       - Slib reader: stdlib/toolchain/slib.md
       - Console: stdlib/io/console.md
       - Files: stdlib/io/files.md
+      - Contracts: stdlib/io/contracts.md
+      - Buffered: stdlib/io/buf.md
       - Path algebra: stdlib/io/path.md
       - File-system ops: stdlib/io/fs.md
       - Socket primitives: stdlib/net/socket.md
@@ -152,4 +154,5 @@ nav:
       - "Visibility (design)": design/visibility.md
       - "Unit Namespaces (design)": design/unit-namespaces.md
       - "UFCS Combinators (design)": design/ufcs-combinators.md
+      - "Iteration (design)": design/iteration.md
   - Examples: examples/README.md

@@ -442,9 +442,63 @@ fn process_with_cleanup(bool succeed) i32:
 ```
 
 **Resources automatically cleaned:**
-- Dynamic arrays
+- Dynamic arrays, `List@(T)`, `HashMap@(K, V)`, `Own@(T)`, strings
 - Struct fields (dynamic arrays, nested structs)
-- File handles (when implemented)
+- Anything implementing the `Drop` perk — a `File`, a `TcpStream`, a `BufWriter@(W)` —
+  whose `drop()` runs on the propagation path like any other destructor
+- A `foreach` iterator the loop owns, on every exit path: the end of the input, a
+  `break`, a `return`, and the propagation path a `??` binder takes
+
+### `??` on a `foreach` binder
+
+`foreach` walks any type carrying `next()` that answers `Maybe@(T)`. When `T` is a
+`Result` — a fallible iterator puts its failure IN the item — `??` on the BINDER is the
+short form for "leave the function on the first failure":
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn show(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    foreach(line?? in r.lines()):        # the first read failure leaves show()
+        println(line)
+    return Result.Ok(~)
+
+fn main() i32:
+    match show("/etc/hosts"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+```
+
+It is the same `??`, in one more position: the error types must match exactly (CE2511),
+the loop's own scope is cleaned up on the way out, and it warns in `main` (CW2511) like
+any other.
+
+Drop the marker and the item is the plain `Result`, which is what lets a body report one
+failure and carry on:
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn show(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    foreach(item in r.lines()):
+        match item:
+            Result.Ok(line) -> println(line)
+            Result.Err(_) -> println("<unreadable>")
+    return Result.Ok(~)
+
+fn main() i32:
+    match show("/etc/hosts"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+```
+
+A `??` binder over an item that is not a `Result` has nothing to unwrap: **CE2517**.
 
 ### Using ?? with Maybe@(T)
 

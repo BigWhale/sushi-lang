@@ -235,7 +235,9 @@ fn first_two(string path) ~ | IoError:
 ```
 
 **Line-by-line processing:** the loop ends on `Maybe.None` and on nothing else, so a
-blank line in the middle of the file does not truncate it.
+blank line in the middle of the file does not truncate it. Note that this is the
+UNBUFFERED loop, at one system call per line: `foreach(line?? in r.lines())` over a
+[`BufReader`](buf.md) is what a whole file wants, and it is shorter besides.
 
 <!-- docs-sweep: skip (reads a file the sweep does not create) -->
 ```sushi
@@ -1094,13 +1096,8 @@ fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
     let BufReader@(File) r = buf_reader(nom f, 8192)??
 
-    let bool done = false
-    while (not done):
-        match r.read_line()??:
-            Maybe.Some(line) ->
-                println(line)
-            Maybe.None ->
-                done := true
+    foreach(line?? in r.lines()):
+        println(line)
 
     return Result.Ok(~)
 
@@ -1116,9 +1113,10 @@ fn main() i32:
 
 - `read_all()` loads the whole file into memory, however large it is
 - `readln()` holds one line at a time, at the cost of one system call per line
-- `BufReader.read_line()` holds one line at a time and pays one system call per WINDOW
+- `BufReader.read_line()`, and `foreach` over `r.lines()`, hold one line at a time and
+  pay one system call per WINDOW
 
-Choose by file size: `read_all()` for a configuration file, the buffered reader for
+Choose by file size: `read_all()` for a configuration file, the buffered loop for
 anything a user might grow without asking.
 
 ## Security Considerations
