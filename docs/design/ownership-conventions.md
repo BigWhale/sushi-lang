@@ -100,6 +100,9 @@ class ConsumingUse(Enum):
     RETURN            # return Result.Ok(<source>)
     CAPTURE           # a lambda's captured environment slot
     OWN_ALLOC         # Own.alloc(<source>)
+    MATCH_SCRUTINEE   # match nom <source>: -- ruling R11
+    RECEIVER          # h.close() on a `nom self` method -- ruling R25
+    TRY               # <source>?? -- the unwrap spends a wrapper the writer owns (#548)
 ```
 
 **Closedness is the property that fixes the recurring bug, not the naming.** Today nobody can answer

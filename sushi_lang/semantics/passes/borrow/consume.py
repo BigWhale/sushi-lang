@@ -6,12 +6,12 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr, Lambda, Let, Name, Spread, StringLit
+from sushi_lang.semantics.ast import Expr, Lambda, Let, Name, Spread, StringLit, TryExpr
 from sushi_lang.semantics.ownership import Ownership, Provenance, classify
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
 from .diagnostics import emit_consume_of_borrow, emit_consume_of_read
-from .reads import read_type, reads_through_owner, root_owner
+from .reads import read_type, reads_through_owner, root_owner, unwrap_try
 from .state import BorrowState
 from .takes import field_take, spend
 from .writes import check_owner_not_borrowed
@@ -56,10 +56,42 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
     if field_take(checker, expr) is not None:
         return Provenance.OWNED
 
+    # `r??` yields what `r` holds, and the payload has `r`'s provenance (#548). A
+    # borrowed `r` keeps its owner, so the payload is a read through it. An owned `r`
+    # was SPENT by the `??` itself (`unwrap_place`), so nothing owns the payload now
+    # and the position adopts it -- FRESH, never OWNED, because there is no source
+    # state left for the position to mark.
+    inner = unwrap_try(expr)
+    if inner is not expr and isinstance(inner, Name):
+        if name_provenance(checker, inner.id) is Provenance.BORROWED:
+            return Provenance.BORROWED
+        return Provenance.FRESH
+
     if reads_through_owner(checker, expr):
         return Provenance.BORROWED
 
     return Provenance.FRESH
+
+
+def unwrap_place(checker: 'BorrowChecker', expr: TryExpr) -> None:
+    """`r??` over a bare name spends `r` when `r` owns what it wraps (#548).
+
+    The unwrap moves the payload out of the wrapper, so a wrapper the writer OWNS has
+    nothing left to free: the `??` is a consuming position of its own, and `r` after it
+    is CE2405 exactly as after `f(nom r)`. The class is the WRAPPER's and not the
+    payload's, because the Err arm travels too -- a `Result@(i32, Fail)` whose Fail
+    holds a string is spent on the propagation path, or the scope cleanup frees the
+    error the caller is about to read. A wrapper that owns nothing is copied out of
+    and stays usable. A BORROWED wrapper is left to its owner: the payload is a read
+    through it, and `source_provenance` says so at the position that takes it.
+    """
+    source = expr.expr
+    if not isinstance(source, Name):
+        return
+    provenance = name_provenance(checker, source.id)
+    source.ownership_provenance = provenance
+    if provenance is Provenance.OWNED:
+        consume_named(checker, source.id, provenance, expr.loc)
 
 
 def name_provenance(checker: 'BorrowChecker', name: str) -> Provenance:

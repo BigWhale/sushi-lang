@@ -47,7 +47,7 @@ from .calls import (
     settle_namespaced_args,
     settle_receiver,
 )
-from .consume import consume, consume_each, consume_named, name_provenance
+from .consume import consume, consume_each, consume_named, name_provenance, unwrap_place
 from .diagnostics import emit_use_after_move, emit_use_of_invalidated_borrow
 from .writes import maybe_reject_mutation
 
@@ -76,8 +76,13 @@ def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
         case BinaryOp():
             check_expr(checker, expr.left)
             check_expr(checker, expr.right)
-        case UnaryOp() | CastExpr() | TryExpr():
+        case UnaryOp() | CastExpr():
             check_expr(checker, expr.expr)
+        case TryExpr():
+            # `r??` is a consuming position of its own: an owned wrapper is spent here
+            # (#548), and a use of `r` after it is CE2405.
+            check_expr(checker, expr.expr)
+            unwrap_place(checker, expr)
         case IndexAccess():
             check_expr(checker, expr.array)
             check_expr(checker, expr.index)

@@ -449,6 +449,37 @@ fn process_with_cleanup(bool succeed) i32:
 - A `foreach` iterator the loop owns, on every exit path: the end of the input, a
   `break`, a `return`, and the propagation path a `??` binder takes
 
+### `??` over a named Result
+
+`??` moves the payload out of its wrapper. Over a call the wrapper is a temporary and the
+payload simply lands where it is taken. Over a NAMED `Result` or `Maybe` that owns
+something -- a string, an array, a handle, in EITHER arm -- the `??` spends the local:
+
+```sushi
+use <collections/strings>
+
+fn make() string:
+    let string base = "Mostly"
+    return Result.Ok(base.concat(" Harmless"))
+
+fn run() string:
+    let Result@(string, StdError) r = make()
+    let string got = r??          # `r` is spent here; `got` owns the buffer
+    return Result.Ok(got)         # a mention of `r` after this line is CE2405
+
+fn main() i32:
+    match run():
+        Result.Ok(s) -> println(s)
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)
+```
+
+A `Result` that owns nothing (`Result@(i32, StdError)`) is copied out of, and the local
+stays usable. A BORROWED `Result` -- a parameter, a `match` or `foreach` binding -- is read
+through, not spent: `let string s = r??` binds a borrow that frees nothing, and consuming
+the read (`return Result.Ok(r??)`) is **CE2411**, with `.clone()` as the escape. The design
+record is `docs/design/borrow-model.md` §10d.
+
 ### `??` on a `foreach` binder
 
 `foreach` walks any type carrying `next()` that answers `Maybe@(T)`. When `T` is a

@@ -150,19 +150,13 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
 
     # The item is the Maybe's payload, and the Maybe is a temporary nobody else frees --
     # so this binding OWNS what it holds, unlike an array item, which aliases the
-    # container's buffer and is registered with no cleanup at all.
-    #
-    # The `??` binder is the exception, and the accounting is what decides it: the
-    # generated `??` SPENDS the item. On the Ok path the payload becomes the `let`'s,
-    # on the Err path it becomes the caller's, and there is no third path -- so a second
-    # owner here is a double free rather than insurance. (A hand-written `??` over a
-    # NAMED Result local double-frees for exactly this reason today, which is a
-    # pre-existing defect and not this arm's; §6 files it.)
-    item_owns = node.item_try_let is None
+    # container's buffer and is registered with no cleanup at all. The `??` binder needs
+    # no exception: its generated `let T x = <item>??` spends the item through the
+    # ownership seam like any `??` over a named wrapper (#548), so the scope exit skips it.
     item_slot = codegen.memory.create_local(
         node.item_name, item_ll_type, item_value, node.item_type,
         register_cleanup=False)
-    if item_owns and node.item_type is not None:
+    if node.item_type is not None:
         codegen.memory.register_owning_value(node.item_name, node.item_type, item_slot)
 
     _emit_block(codegen, node.body)

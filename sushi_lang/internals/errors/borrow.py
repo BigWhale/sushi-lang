@@ -40,7 +40,7 @@ _add(ErrorMessage("CE2404", Severity.ERROR,
 
 _add(ErrorMessage("CE2405", Severity.ERROR,
     "cannot borrow moved variable '{name}'",
-    Category.BORROW, "Attempted to borrow a variable whose ownership has been transferred elsewhere."))
+    Category.BORROW, "Attempted to borrow a variable whose ownership has been transferred elsewhere: `f(nom x)`, `match nom x:`, a marked field take `nom x.field`, or `x??` over a `Result`/`Maybe` local that owns something in either arm (#548) -- the unwrap moves the payload out, so the wrapper is spent (`docs/design/borrow-model.md` S10d)."))
 
 _add(ErrorMessage("CE2406", Severity.ERROR,
     "use of destroyed variable '{name}'",
@@ -68,7 +68,7 @@ _add(ErrorMessage("CE2414", Severity.ERROR,
 
 _add(ErrorMessage("CE2411", Severity.ERROR,
     "cannot consume '{name}': another owner keeps this value",
-    Category.BORROW, "A borrow names storage something else owns and still frees, so a position that takes ownership cannot have it. Three shapes borrow: a `match` payload binding, a `foreach` loop binding, and every read THROUGH a live owner -- a field read (`h.inner`), an index (`rows[i]`) and a container get-out (`c.get(0)??`, `own.get()`). Reading through a borrow is free; clone it to take an independent value: `{name}.clone()`. Where the OWNER is a local this function holds, `nom {name}` is the third way -- a marked field TAKE, one step off a bare name, which hands the field over and spends the whole receiver (ruling R28, `docs/design/borrow-model.md` S10c). Only a value whose type transitively owns heap (a dynamic array, List, Own, HashMap, a string or a capturing closure) is affected -- a primitive borrow is unrestricted, and so is a string bound directly from a literal, which points into read-only memory and owns nothing."))
+    Category.BORROW, "A borrow names storage something else owns and still frees, so a position that takes ownership cannot have it. Three shapes borrow: a `match` payload binding, a `foreach` loop binding over a container, and every read THROUGH a live owner -- a field read (`h.inner`), an index (`rows[i]`), a container get-out (`c.get(0)??`, `own.get()`) and `r??` over a BORROWED `Result`/`Maybe` (#548; over one the function owns, the `??` spends it instead). Reading through a borrow is free; clone it to take an independent value: `{name}.clone()`. Where the OWNER is a local this function holds, `nom {name}` is the third way -- a marked field TAKE, one step off a bare name, which hands the field over and spends the whole receiver (ruling R28, `docs/design/borrow-model.md` S10c). Only a value whose type transitively owns heap (a dynamic array, List, Own, HashMap, a string or a capturing closure) is affected -- a primitive borrow is unrestricted, and so is a string bound directly from a literal, which points into read-only memory and owns nothing."))
 
 # --- The undefined reference POSITIONS (R4) ------------------------------------------
 #

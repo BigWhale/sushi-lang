@@ -184,6 +184,18 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **`??` over a named `Result` or `Maybe` local spends it.** `let Result@(string, E) r =
+  make()` then `let string got = r??` gave `got` the buffer and left `r` registered to
+  free it as well: one buffer, two frees, and the printed value was garbage (#548). The
+  unwrap moves the payload out of its wrapper, so `??` is now a consuming position of its
+  own (`ConsumingUse.TRY`): a wrapper the function owns is marked moved at the `??`,
+  before the propagation path's cleanup -- the Err arm travels too -- and a later mention
+  of it is CE2405. A wrapper that owns nothing stays usable; a BORROWED wrapper (a
+  parameter, a binding) is read through, so the `let` binds a borrow and consuming it is
+  CE2411. The `foreach` `??` binder is the same rule: a protocol iterator's item is a
+  value the iteration owns, the generated `let T x = <item>??` spends it through the
+  ownership seam, the body may hand a protocol item away, and the backend's no-owner
+  special case for the item is gone. Design record: `docs/design/borrow-model.md` §10d.
 - **An interpolated string in an argument position has exactly one owner.** An
   interpolation always builds a fresh buffer, and in argument position no binding names
   it, so who frees it is the compiler's decision. Two seams were each making that

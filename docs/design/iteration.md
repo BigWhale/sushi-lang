@@ -178,10 +178,15 @@ end block, registered through `register_owning_value` — the complete registry 
 (#382). Every exit path destroys it: the end of the input, a `break`, a `return` from the
 body, and the propagation path a `??` binder takes.
 
-The ONE thing not registered as an owner is the item under a `??` binder, and that is
-accounting rather than an exception. The generated `??` SPENDS the item: on the Ok path the
-payload becomes the `let`'s, on the Err path it becomes the caller's, and there is no third
-path. A second owner there would be a double free.
+The item of a protocol iterator is registered as an owner too: it is the payload of a
+fresh `Maybe@(T)` nobody else frees, so the iteration owns it, the body may hand it away,
+and the scope exit destroys what the body did not take. The `??` binder is the same rule
+and not an exception: `foreach(line?? in it)` is `let T line = <item>??`, and `??` over a
+named wrapper the writer owns SPENDS it (`borrow-model.md` §10d, #548). On the Ok path the
+payload becomes the `let`'s, on the Err path it becomes the caller's, and the item is freed
+by nobody because the `??` marked it moved through the ownership seam. Until #548 the
+backend registered no owner for an item under a binder instead, a special case that hid the
+general defect: a hand-written `let string got = r??` over a named Result local double-freed.
 
 ### 7. A reference binding is refused over a protocol iterator
 

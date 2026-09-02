@@ -272,7 +272,11 @@ def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:
 
 
 def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
-    """The loop variable BORROWS the element, and lives for the LOOP and no longer."""
+    """The loop variable lives for the LOOP and no longer; what it is depends on the walk.
+
+    Over a container the item BORROWS the element. Over a `next()` protocol iterator
+    the item is the value `next()` answered, and the iteration OWNS it.
+    """
     check_expr(checker, stmt.iterable)
     clear_borrows(checker)
     # A value binding matches the backend's `register_cleanup=False`; a reference binding
@@ -283,20 +287,29 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
         if stmt.item_borrow is not None:
             scope.bind_ref(stmt.item_name, stmt.item_type, stmt.item_borrow, span,
                            owner=stmt.iterable, declared_at=stmt.item_borrow_span)
+        elif stmt.protocol_next is not None:
+            scope.bind_item(stmt.item_name, stmt.item_type, span)
+            check_loop_body(checker, stmt.body, per_iteration=frozenset({stmt.item_name}))
+            return
         else:
             scope.bind_value(stmt.item_name, stmt.item_type, span)
         check_loop_body(checker, stmt.body)
 
 
-def check_loop_body(checker: 'BorrowChecker', body: Block) -> None:
-    """Borrow-check a loop body to a fixed point so the back edge is honoured."""
+def check_loop_body(checker: 'BorrowChecker', body: Block,
+                    per_iteration: frozenset[str] = frozenset()) -> None:
+    """Borrow-check a loop body to a fixed point so the back edge is honoured.
+
+    `per_iteration` names the bindings the loop creates anew on every pass -- a protocol
+    item -- whose facts at the end of the body do not reach the next iteration.
+    """
     entry = snapshot_flow(checker)
     prev_suppressed = checker.err.suppressed
     checker.err.suppressed = True
     with _branch(checker):
         check_block(checker, body)
     checker.err.suppressed = prev_suppressed
-    fixed_point = entry | snapshot_flow(checker)
+    fixed_point = entry | snapshot_flow(checker).without(per_iteration)
     restore_flow(checker, fixed_point)
     with _branch(checker):
         check_block(checker, body)

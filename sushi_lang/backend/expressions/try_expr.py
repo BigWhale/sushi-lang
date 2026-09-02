@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils
+from sushi_lang.semantics.ast import Name
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -24,6 +25,12 @@ def emit_try_expr(codegen: 'LLVMCodegen', expr: 'TryExpr') -> ir.Value:
         raise_internal_error("CE0124")
 
     result_value = codegen.expressions.emit_expr(expr.expr)
+
+    # `r??` over a NAMED wrapper spends it (#548): the payload becomes the position's on
+    # the Ok path and the caller's on the Err path, so the local must not free it too.
+    if isinstance(expr.expr, Name):
+        from sushi_lang.backend import ownership
+        result_value = ownership.unwrap(codegen, expr.expr, result_value, inner_type)
 
     is_success = enum_utils.check_enum_variant(
         codegen, result_value, success_tag, signed=True, name="is_success"

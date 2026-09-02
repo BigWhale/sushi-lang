@@ -38,6 +38,7 @@ class ConsumingUse(Enum):
     OWN_ALLOC = "own_alloc"              # Own.alloc(<source>)
     MATCH_SCRUTINEE = "match_scrutinee"  # match nom <source>: -- ruling R11
     RECEIVER = "receiver"                # h.close() on a `nom self` method -- ruling R25
+    TRY = "try"                          # r?? -- the unwrap spends a wrapper the writer owns (#548)
 
 
 class Provenance(Enum):

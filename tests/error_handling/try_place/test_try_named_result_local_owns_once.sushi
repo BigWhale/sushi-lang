@@ -1,0 +1,22 @@
+# `??` over a NAMED Result local (#548). The unwrap SPENDS the local: the payload has one
+# owner after it, the new binding, and the Result local is not freed at scope exit.
+# Before the fix both freed the same buffer and the printed line was garbage.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+fn make() string:
+    let string base = "Mostly"
+    return Result.Ok(base.concat(" Harmless"))
+
+fn run() string:
+    let Result@(string, StdError) r = make()
+    let string got = r??
+    return Result.Ok(got)
+
+fn main() i32:
+    match run():
+        Result.Ok(s) -> println(s)
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

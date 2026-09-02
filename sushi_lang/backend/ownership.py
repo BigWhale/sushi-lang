@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 __all__ = ["ConsumingUse", "bind", "consume", "copy_out", "drops_of", "relinquish",
-           "relinquish_temp", "resolver_for"]
+           "relinquish_temp", "resolver_for", "unwrap"]
 
 
 def relinquish_temp(codegen: 'LLVMCodegen', name: str) -> None:
@@ -82,6 +82,25 @@ def consume(codegen: 'LLVMCodegen', source, value: ir.Value,
     # means the borrow checker classified the same source differently from this call --
     # impossible while both go through `classify`, so it is a real internal error.
     raise_internal_error("CE0129", use=use.value, node=type(source).__name__)
+
+
+def unwrap(codegen: 'LLVMCodegen', source, value: ir.Value,
+           wrapper_type: Optional[Type]) -> ir.Value:
+    """`source??` over a place: spend the wrapper if the writer owns it (#548).
+
+    The payload leaves the wrapper here, so an OWNED wrapper that owns heap has nothing
+    left to free and is marked moved -- BEFORE the propagation path's scope cleanup is
+    emitted, so the Err arm is not freed under the caller who is about to read it. The
+    class is the WRAPPER's, as in the borrow pass's `unwrap_place`. REJECT is not an
+    error here: a borrowed wrapper keeps its owner, the payload is a read through it,
+    and the position that takes the payload decides (CE2411 there, from the borrow
+    pass). A wrapper that owns nothing is copied out of.
+    """
+    provenance = _provenance_of(source, ConsumingUse.TRY)
+    decision = classify(provenance, type_class_of(wrapper_type, drops_of(codegen), resolver_for(codegen)))
+    if decision is Ownership.MOVE:
+        _mark_moved(codegen, source)
+    return value
 
 
 def copy_out(codegen: 'LLVMCodegen', value: ir.Value,
