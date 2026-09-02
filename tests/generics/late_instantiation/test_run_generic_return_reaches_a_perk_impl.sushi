@@ -1,0 +1,25 @@
+# A generic-target perk implementation applies to every instantiation, including one
+# that appears only as a generic function's substituted return type (#555).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "box Mostly Harmless\n"
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "box"
+
+fn wrap@(T)(nom T v) Box@(T):
+    return Result.Ok(Box(v))
+
+fn main() i32:
+    match wrap(nom "Mostly Harmless"):
+        Result.Ok(b) -> println("{b.show()} {b.item}")
+        Result.Err(_) -> println("no box")
+    return Result.Ok(0)

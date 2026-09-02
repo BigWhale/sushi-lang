@@ -61,15 +61,21 @@ class FunctionCollector:
         """The scrutinee's type, through the typecheck pass's own inferrer."""
         if scrutinee is None:
             return None
+        inferred = None
         validator = getattr(self.expression_scanner, "type_validator", None)
-        if validator is None:
-            return None
-        try:
-            return validator.infer_expression_type(scrutinee)
-        except Exception:
-            # This pass reports nothing: a scrutinee it cannot type simply collects no
-            # binding, and the typecheck pass raises the real diagnostic afterwards.
-            return None
+        if validator is not None:
+            try:
+                inferred = validator.infer_expression_type(scrutinee)
+            except Exception:
+                # This pass reports nothing: a scrutinee it cannot type simply collects
+                # no binding, and the typecheck pass raises the real diagnostic afterwards.
+                inferred = None
+        if inferred is None:
+            # A GENERIC call has no monomorphized copy yet, so the validator cannot type
+            # it. The scanner has the type arguments and answers from the substituted
+            # signature (#549).
+            inferred = self.expression_scanner.generic_call_type(scrutinee)
+        return inferred
 
     def _variant_payload_types(self, scrutinee_type, variant_name):
         """The payload types of one variant, or () when they cannot be read here.

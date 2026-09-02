@@ -184,6 +184,18 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **A generic call's substituted signature reaches the instantiation collector.**
+  `match buf_reader(nom f, 4096): Result.Ok(nom r) -> r.into_inner()` was CE2008
+  "undefined function" while the `let BufReader@(File) r = ...` form compiled (#549), and
+  `wrap(nom "x").show()` over `fn wrap@(T)(nom T v) Box@(T)` with `extend Box@(T) with
+  Show` was the same CE2008 (#555). The instantiate pass recorded a generic call's
+  `Result` wrapper and nothing else, through a substitution that rewrote a top-level type
+  parameter and left `Box@(T)` untouched -- so an instantiation named only by a generic's
+  return or parameter never reached the set the generic-target extension and
+  perk-implementation copies are cut from. The pass now walks the whole substituted
+  signature, and a `match` over a generic call types its arm bindings from it (the
+  typecheck pass's inferrer has no monomorphized copy to read yet), so a generic called
+  with such a binding is collected too.
 - **A bare `Maybe.None` on a generic enum constructs the value.** A payload-free variant
   spelled without parentheses parses as a field read on the type name, and only the
   parenthesized spelling reached the typecheck pass. On a MONOMORPHIZED generic enum

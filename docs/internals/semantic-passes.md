@@ -341,6 +341,20 @@ Detect which generic instantiations are needed.
 3. When `.push()` is called on `List@(i32)`, record `List@(i32).push`
 4. Build complete set of required instantiations
 
+### A generic call's substituted signature
+
+A call to `fn wrap@(T)(nom T v) Box@(T)` with a string names `Box@(string)`, and the program
+may name that instantiation nowhere else: a `match` arm binds the payload, or the value is
+passed straight on. The generic-target extension and perk-implementation copies are cut from
+the set this pass collects, so the pass records the SUBSTITUTED signature of every generic
+call it resolves -- the return, the `Result` the declaration wraps it in, and the parameters
+-- through the same type walk a concrete declaration gets (#549, #555).
+
+The typecheck pass's inferrer types a generic call through its monomorphized copy, which does
+not exist yet, so it answers nothing for one here. A `match` over a generic call therefore
+types its arm bindings from that substituted signature, and a generic called with such a
+binding is collected like any other (#549).
+
 ### Example
 
 ```sushi

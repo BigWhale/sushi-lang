@@ -1,0 +1,28 @@
+# The instantiation is known BEFORE the functions are monomorphized, so a constraint
+# checked while `show_it` is cut already sees `Box@(string)` implementing `Show` (#555).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "box\n"
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "box"
+
+fn wrap@(T)(nom T v) Box@(T):
+    return Result.Ok(Box(v))
+
+fn show_it@(S: Show)(S s) string:
+    return Result.Ok(s.show())
+
+fn main() i32:
+    match wrap(nom "towel"):
+        Result.Ok(b) -> println(show_it(b).realise("?"))
+        Result.Err(_) -> println("no box")
+    return Result.Ok(0)
