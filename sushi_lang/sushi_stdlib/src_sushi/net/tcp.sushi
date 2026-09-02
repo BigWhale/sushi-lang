@@ -16,7 +16,7 @@ destructor cannot answer a Result. It writes -1 into the binding, so the drop
 that follows is a no-op and the descriptor is released exactly once.
 
 Limitations: blocking sockets only, so tcp_connect has no timeout of its own
-and an unreachable address waits for the kernel to give up. recv() answers
+and an unreachable address waits for the kernel to give up. read_bytes() answers
 whatever one read gave, which may be less than the maximum asked for;
 recv_exact() is the loop for a caller that needs a count.
 :##
@@ -115,7 +115,8 @@ extend TcpStream with Reader:
     Reads what one read gives, as text.
 
     The bound counts BYTES, so a multi-byte character can be split across two calls -- and
-    on a stream it can be split by the NETWORK as well, whatever the bound says.
+    on a stream it can be split by the NETWORK as well, whatever the bound says. A caller
+    that must not cut one reads bytes, accumulates them, and converts once.
 
     - Parameter max: The most bytes to take in this one read.
     - Returns: The text that arrived, empty when the peer closed.
@@ -271,6 +272,12 @@ Writes bytes, and answers how many of them went.
 One write may take fewer bytes than it was offered. A caller that needs the
 whole buffer gone wants send_all() instead.
 
+This is the one write that answers a COUNT: a socket's partial write says what the peer's
+window took, and the contract's write_bytes(), which writes everything, cannot say that.
+There is no recv() beside it. One read on a socket is the contract's read_bytes(), and
+every NetError a read can answer has its IoError twin, so a second name would have
+carried nothing of its own.
+
 - Parameter data: The bytes to write. The buffer stays the caller's.
 - Returns: How many bytes were written.
 - Errors: NetError, when the write failed.
@@ -295,19 +302,6 @@ extend TcpStream send_all(u8[] data) ~ | NetError:
             return Result.Err(NetError.Closed)
         done := done + sent
     return ~
-
-##:
-Reads what one read gives, up to a maximum.
-
-An empty answer means the peer closed cleanly. A timeout is an error rather
-than an empty answer, so the two never read alike.
-
-- Parameter max: The most bytes to take in this one read.
-- Returns: The bytes that arrived, empty when the peer closed.
-- Errors: NetError, when the read failed.
-:##
-extend TcpStream recv(i32 max) u8[] | NetError:
-    return sock_recv(self.fd, max)??
 
 ##:
 Reads exactly `count` bytes, looping until they have all arrived.

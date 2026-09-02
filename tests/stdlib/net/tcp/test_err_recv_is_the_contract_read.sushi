@@ -1,0 +1,14 @@
+# A socket has no recv(): one read on a stream is the contract's read_bytes(), and every
+# NetError a read can answer has its IoError twin, so a second name carried nothing of its
+# own. send() stays, because a socket's partial write is information a file's is not, and
+# the contract's write_bytes() writes everything.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2008
+use <net/tcp>
+
+fn main() i32:
+    let TcpStream s = tcp_connect("127.0.0.1", 1).realise(TcpStream(-1))
+    match s.recv(16):
+        Result.Ok(got) -> println("{got.len()}")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

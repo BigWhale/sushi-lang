@@ -14,7 +14,7 @@ use <net/tcp>
 
 `net/tcp` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it. It composes the `<net/socket>` primitives, and a struct here is a typed name for a descriptor and carries nothing else.
 
-The two constructors are free functions; everything with a receiver is an extension method with an error channel, so a call site handles each one with `??`, `.realise(default)`, `match` or `.is_ok()`. The domain methods -- `accept`, `send`, `recv`, the addresses, the timeouts, `close` -- answer `| NetError`. The contract methods a `TcpStream` shares with a `File` (`read`, `write`, `flush`, see [I/O Contracts](../io/contracts.md)) and `share()` answer `| IoError`.
+The two constructors are free functions; everything with a receiver is an extension method with an error channel, so a call site handles each one with `??`, `.realise(default)`, `match` or `.is_ok()`. The domain methods -- `accept`, `send`, the addresses, the timeouts, `close` -- answer `| NetError`. The contract methods a `TcpStream` shares with a `File` (`read`, `read_bytes`, `write`, `write_bytes`, `flush`, see [I/O Contracts](../io/contracts.md)) and `share()` answer `| IoError`.
 
 ## Types
 
@@ -45,7 +45,7 @@ fn main() i32:
     return Result.Ok(0)          # server closes here
 ```
 
-`close()` stays, for the caller who has to **see** that the close failed: a destructor has nowhere to put a `Result`, so a failure at drop is lost. It declares `nom self` and CONSUMES the handle, so the descriptor is released exactly once and the scope exit that follows has nothing to close. A use after a close — a second `close()`, a `recv`, a `local_port()` — is **CE2435** while compiling, rather than an `EBADF` at run time.
+`close()` stays, for the caller who has to **see** that the close failed: a destructor has nowhere to put a `Result`, so a failure at drop is lost. It declares `nom self` and CONSUMES the handle, so the descriptor is released exactly once and the scope exit that follows has nothing to close. A use after a close — a second `close()`, a `read`, a `local_port()` — is **CE2435** while compiling, rather than an `EBADF` at run time.
 
 ## Constructors
 
@@ -82,7 +82,7 @@ fn main() i32:
 
 ### `s.send_all(u8[] data) ~ | NetError` and `s.recv_exact(i32 count) u8[] | NetError`
 
-The two loops every caller would otherwise write. One send may take fewer bytes than it was offered and one receive answers whatever arrived, so anything that depends on a byte count wants these rather than `send` and `recv`.
+The two loops every caller would otherwise write. One send may take fewer bytes than it was offered and one receive answers whatever arrived, so anything that depends on a byte count wants these rather than `send` and `read_bytes`.
 
 `recv_exact` treats a peer that closes early as an error: a caller asking for an exact count has no use for a partial answer.
 
@@ -119,9 +119,11 @@ fn main() i32:
         Result.Err(_) -> return Result.Ok(1)
 ```
 
-### `s.send(u8[] data) i32 | NetError` and `s.recv(i32 max) u8[] | NetError`
+### `s.send(u8[] data) i32 | NetError`
 
-One write and one read. `recv` answers an empty array when the peer closed cleanly; a timeout is an error instead, so the two never read alike.
+One write, answering how many bytes it took. This is the one write that answers a COUNT: a socket's partial write says what the peer's window took, and the contract's `write_bytes` -- which writes everything -- cannot say that.
+
+There is no `recv` beside it. One read on a socket is the contract's `read_bytes(i32 max)`: it answers an empty array when the peer closed cleanly, and a timeout is an error instead, so the two never read alike. Every `NetError` a read can answer has its `IoError` twin, so a second name would have carried nothing of its own.
 
 ### `s.set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError` and `l.set_timeout(i32 accept_ms) ~ | NetError`
 
