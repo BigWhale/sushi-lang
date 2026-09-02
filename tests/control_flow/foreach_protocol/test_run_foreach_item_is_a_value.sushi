@@ -1,0 +1,32 @@
+# Without the marker the item is the plain Result, so every tool the language already has
+# works on it: this body SKIPS the failure and carries on, which the short form cannot
+# express and which is the reason the item is a value rather than a loop-head channel.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "ok 1\nok 2\nskipped\nok 4\nend\n"
+
+enum Bad:
+    Broken()
+
+struct Steps:
+    i32 at
+
+extend Steps next(poke self) Maybe@(Result@(i32, Bad)):
+    self.at := self.at + 1
+    if (self.at > 4):
+        let Maybe@(Result@(i32, Bad)) ended = Maybe.None()
+        return ended
+    if (self.at == 3):
+        let Maybe@(Result@(i32, Bad)) failed = Maybe.Some(Result.Err(Bad.Broken))
+        return failed
+    let Maybe@(Result@(i32, Bad)) got = Maybe.Some(Result.Ok(self.at))
+    return got
+
+fn main() i32:
+    let Steps s = Steps(0)
+    foreach(item in s):
+        match item:
+            Result.Ok(n) -> println("ok {n}")
+            Result.Err(_) -> println("skipped")
+    println("end")
+    return Result.Ok(0)

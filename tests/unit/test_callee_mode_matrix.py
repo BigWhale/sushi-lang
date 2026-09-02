@@ -11,6 +11,7 @@ from sushi_lang.semantics.param_modes import (
     declared_modes,
     modes_for,
     param_mode,
+    receiver_mode,
 )
 
 
@@ -147,18 +148,16 @@ fn main() i32:
     return Result.Ok(0)
 """
 
-OPEN_MISMARKED = """\
+BUILT_IN_MISMARKED = """\
 use <io/files>
 
-fn read_it(string p) i32:
-    let file f = open(nom p, FileMode.Read())??
-    f.close()
-    return Result.Ok(0)
+fn look(string p) bool:
+    return Result.Ok(exists(nom p))
 
 fn main() i32:
     let string path = "cfg.txt"
-    let i32 rc = read_it(path).realise(0)
-    println("{rc}")
+    let bool there = look(path).realise(false)
+    println("{there}")
     return Result.Ok(0)
 """
 
@@ -180,5 +179,49 @@ def test_a_resolved_callee_is_still_judged_in_both_directions(analyze):
 
 
 def test_a_built_in_callee_is_still_judged(analyze):
-    """`open` carries no FuncSig, but the type checker resolves it, so it is judged."""
-    assert "CE2427" in {item.code for item in analyze(OPEN_MISMARKED).items}
+    """A registry stdlib callee carries no FuncSig, but is resolved -- so it is judged.
+
+    `open(nom p, ...)` used to say this. It stopped being a built-in in HANDLES.md
+    Phase 5: `open()` is an ordinary Sushi function in <io/fs> now and carries a FuncSig
+    like any other, so it exercises the DECLARED arm above instead of this one.
+    """
+    assert "CE2427" in {item.code for item in analyze(BUILT_IN_MISMARKED).items}
+
+
+# 5. The RECEIVER's mode is read through the same seam
+
+RECEIVER_DECLARATIONS = {
+    ParamMode.BORROW: None,
+    ParamMode.PEEK: "peek",
+    ParamMode.POKE: "poke",
+    ParamMode.NOM: "nom",
+}
+
+
+@pytest.mark.parametrize("mode,marker", list(RECEIVER_DECLARATIONS.items()))
+def test_the_receiver_mode_resolver_is_total(mode, marker):
+    """Every `ParamMode` has a receiver spelling, and the resolver answers each one."""
+    assert receiver_mode(marker) is mode
+
+
+def test_an_unmarked_receiver_borrows_like_an_unmarked_parameter():
+    assert receiver_mode(None) is ParamMode.BORROW
+    assert not receiver_mode(None).consumes
+    assert not receiver_mode(None).by_pointer
+
+
+def test_only_the_consuming_receiver_takes_ownership():
+    consuming = [m for m in RECEIVER_DECLARATIONS
+                 if receiver_mode(RECEIVER_DECLARATIONS[m]).consumes]
+    assert consuming == [ParamMode.NOM]
+
+
+def test_the_receiver_declaration_parses_to_the_mode_it_spells():
+    for mode, marker in RECEIVER_DECLARATIONS.items():
+        if marker is None:
+            continue
+        src = (f"struct Box:\n    i32 n\n\n"
+               f"extend Box touch({marker} self) i32:\n    return self.n\n")
+        program, _tree = parse_to_ast(src)
+        ext = program.extensions[0]
+        assert receiver_mode(ext.self_mode) is mode, marker

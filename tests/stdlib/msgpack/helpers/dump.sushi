@@ -3,6 +3,7 @@
 # 0 decoded, 1 decode error, 2 usage or I/O error.
 
 use <io/files>
+use <io/fs>
 use <encoding/msgpack>
 
 fn run_tool(peek string[] args) i32:
@@ -17,10 +18,11 @@ fn run_tool(peek string[] args) i32:
         Result.Err(_) ->
             println("cannot stat {path}")
             return Result.Ok(2)
-    let FileResult r = open(path, FileMode.ReadB())
-    match r:
-        FileResult.Ok(f) ->
-            let u8[] bytes = f.read_bytes(size)
+    let Result@(File, IoError) r = open(path, FileMode.ReadB())
+    match nom r:
+        Result.Ok(nom f) ->
+            let u8[] nothing = from([])
+            let u8[] bytes = f.read_bytes(size).realise(nothing)
             f.close()
             match mp_decode(bytes):
                 Result.Ok(v) ->
@@ -37,7 +39,7 @@ fn run_tool(peek string[] args) i32:
                         MpError.Trailing(p) ->
                             println("Trailing({p})")
                     return Result.Ok(1)
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("cannot open {path}")
             return Result.Ok(2)
     return Result.Ok(0)

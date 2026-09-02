@@ -50,6 +50,10 @@ def register_synthesized_function(
         loc=None,
         name_span=funcdef.name_span,
         unit_name=home_unit,
+        # The channel is part of the signature, not decoration on the declaration. A
+        # `FuncSig` that drops it types every call site `Result@(T, StdError)`, and a
+        # caller that declares the same channel then answers CE2511 (#538).
+        err_type=funcdef.err_type,
     )
     func_table.declare(name, sig)
 

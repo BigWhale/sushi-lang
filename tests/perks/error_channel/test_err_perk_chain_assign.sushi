@@ -1,0 +1,25 @@
+# Ruling 5, the assignment row: an unhandled channel is a Result, and binding one to
+# the bare type is refused. The perk arm answers what the extension arm answers, which
+# is what this test pins -- the gate is receiver-kind blind.
+# The CODE is CE2002 and the matrix says CE2505: #535 owns that drift, and this
+# expectation moves with it.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2002
+enum SourceError:
+    Closed
+
+perk Source:
+    fn read_one() i32 | SourceError
+
+struct Counter:
+    i32 value
+
+extend Counter with Source:
+    fn read_one() i32 | SourceError:
+        return self.value
+
+fn main() i32:
+    let Counter c = Counter(1)
+    let i32 x = c.read_one()
+    println("{x}")
+    return Result.Ok(0)

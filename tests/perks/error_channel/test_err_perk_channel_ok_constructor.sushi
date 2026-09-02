@@ -1,0 +1,21 @@
+# A channel body returns its success BARE and spells Result.Err only. A spelled
+# Result.Ok is still CE2091, the same rule an extension channel body obeys.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2091
+enum SourceError:
+    Closed
+
+perk Source:
+    fn read_one() i32 | SourceError
+
+struct Counter:
+    i32 value
+
+extend Counter with Source:
+    fn read_one() i32 | SourceError:
+        return Result.Ok(self.value)
+
+fn main() i32:
+    let Counter c = Counter(1)
+    println("{c.read_one().realise(0)}")
+    return Result.Ok(0)

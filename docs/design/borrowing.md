@@ -65,6 +65,11 @@ One surface vocabulary, six mechanisms. Each has its own extent and its own diag
 | 4 | pattern value binding | `E.V(p)`, `foreach(n in ...)` | the arm or the loop body | **CE2414** | **CE2411** |
 | 5 | pattern reference binding | `foreach(poke r in xs.iter())`, `Own(poke x)`, `E.V(poke p)` | the arm or the loop body | `poke`: in place; `peek`: **CE2408** | **CE2411** |
 | 6 | method parameter, `self` included | `extend T m(H h)` | the method body | **CE2421** (receiver), **CE2422** (by value) | **CE2411** |
+| 7 | pattern TAKING binding | `E.V(nom p)` | the arm | in place -- the arm owns it | yes: it is the owner |
+
+Seven now, and row 7 is the only one that is not a borrow at all. It is listed here because
+it shares the surface vocabulary and because it is what row 4's diagnostic offers as a way
+out.
 
 **1 — the call-site borrow** is tracked by counters that are cleared at the end of every
 statement. Therefore the exclusivity rules have jurisdiction inside one statement only: a
@@ -100,7 +105,19 @@ authority (`TypeSizing.payload_field_offsets`). Four fences: an iterable whose i
 no address is **CE2423** (a range, `HashMap.entries()`); a reference binding in a NESTED
 match pattern is **CE2424** (extraction walks through temporary copies there); a temporary
 scrutinee is CE2404; and a `poke` binding out of a `peek` owner is CE2408, out of a
-constant CE2400.
+constant CE2400. The temporary fence was LIFTED by HANDLES.md ruling R11: a match parks a
+scrutinee it owns in a slot for the whole statement, so the pointer has storage to aim at.
+CE2404 now means a read THROUGH a live owner, which still has none.
+
+**7 — the pattern taking binding** (HANDLES.md ruling R11) is not a borrow: `E.V(nom p)`
+moves the payload out and the arm becomes its owner, so it is registered for its own free
+through `register_owning_value`, the complete registry router. What stops the second free
+is the SCRUTINEE'S drop flag, cleared at the head of the taking arm, so whether the match
+still owns its value at the end is a run-time fact -- exactly the #414 mechanism a
+conditional move of an ordinary local uses. Three fences: the match must OWN its scrutinee
+(**CE2432**, and `match nom r:` is how a local is handed over); an arm takes the variant
+whole (**CE2433**); and `Own(nom x)` is refused because the heap cell would leak
+(**CE2434**). `docs/design/borrow-model.md` section 10b is the normative half.
 
 **6 — the method parameter.** Every parameter of an extension or perk method is a borrow,
 `self` included, and the caller keeps ownership (the #298 ruling). There is no `string`
@@ -135,7 +152,7 @@ indexed assignment, which routes through the same gate:
 
 | kind | code | escape |
 |---|---|---|
-| `match` / `foreach` value binding | CE2414 | `.clone()`, mutate, store back; or a reference binding |
+| `match` / `foreach` value binding | CE2414 | bind it `poke` to write through, or `nom` to take it; otherwise `.clone()`, mutate, store back (`.share()` for a resource) |
 | `peek` reference | CE2408 | declare the parameter `poke` |
 | method receiver | CE2421 | `poke self` |
 | by-value method parameter | CE2422 | declare the parameter `poke T` |
@@ -245,6 +262,9 @@ designed:
 - **Lifetimes.** Nothing relates a borrow to the value it names, which is why a borrow
   cannot be returned (CE2417) or stored in data (CE2415, CE2416, CE2419).
 - **A checked reference-typed `let`** (CE2413).
-- **A reference binding in a nested match pattern** (CE2424).
+- **A reference binding in a nested match pattern** (CE2424). A TAKING binding is legal
+  there: nothing points into the scrutinee, so the temporary-copy hazard does not apply.
+- **A `nom` binding inside `Own(...)`** (CE2434), and a per-slot take of one payload out of
+  a variant (CE2433).
 - **A scrutinee-side spelling** for a mutable binding (Rust's `match &mut x`). Sushi marks
   the binding instead.

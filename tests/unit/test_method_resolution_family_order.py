@@ -35,8 +35,14 @@ VALIDATION_MARKERS = {
     "DERIVED_CLONE": r'call\.method == "clone"',
     "FUNCTION_CLONE": r"is_builtin_function_method",
     "PRIMITIVE": r"validate_primitive_method",
-    "EXTENSION": r"extension_table\.get_method",
+    "EXTENSION": r"resolve_extension_method\(validator",
 }
+
+# The validation side is measured inside the DISPATCHER's body and not over the whole
+# file: the extension rungs live in `resolve_extension_method`, a shared helper declared
+# above the dispatcher, so a first-occurrence scan of the file reads the helper's
+# definition rather than the step that calls it.
+VALIDATION_SCOPE = "def validate_method_call("
 CODEGEN_MARKERS = {
     "PERK": r"try_emit_perk_method",
     "DERIVED_HASH": r"try_emit_struct_hash",
@@ -47,8 +53,11 @@ CODEGEN_MARKERS = {
 }
 
 
-def _family_order(path: Path, markers: dict[str, str]) -> list[str]:
+def _family_order(path: Path, markers: dict[str, str], scope: str | None = None) -> list[str]:
     text = path.read_text(encoding="utf-8")
+    if scope is not None:
+        start = text.index(scope)
+        text = text[start:]
     positions = {}
     for family, marker in markers.items():
         match = re.search(marker, text)
@@ -58,7 +67,8 @@ def _family_order(path: Path, markers: dict[str, str]) -> list[str]:
 
 
 def test_validation_resolves_families_in_the_canonical_order():
-    assert _family_order(VALIDATION, VALIDATION_MARKERS) == CANONICAL_ORDER
+    assert _family_order(VALIDATION, VALIDATION_MARKERS,
+                         scope=VALIDATION_SCOPE) == CANONICAL_ORDER
 
 
 def test_codegen_resolves_families_in_the_canonical_order():

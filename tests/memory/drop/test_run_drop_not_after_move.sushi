@@ -1,0 +1,22 @@
+# A moved binding drops ONCE, at the new owner. The caller's scope exit must skip
+# it -- a second drop() here is a double close.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "eating 5\ndrop 5\ndone\n"
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+fn eat(nom Handle h) ~:
+    println("eating {h.id}")
+    return Result.Ok(~)
+
+fn main() i32:
+    let Handle h = Handle(5)
+    eat(nom h)
+    println("done")
+    return Result.Ok(0)

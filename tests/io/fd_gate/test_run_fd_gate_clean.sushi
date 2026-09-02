@@ -1,0 +1,40 @@
+# The descriptor gate on a program that opens two files and closes both. It is the
+# POSITIVE control for EXPECT_NO_OPEN_FDS: the directive has to pass on a correct
+# program before it is worth anything on an incorrect one. EXPECT_NO_LEAKS rides
+# beside it, because the two count different things -- bytes and descriptors -- and
+# the malloc interposer can never see a file.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+use <io/files>
+use <io/fs>
+
+# Reads one line and substitutes an empty string for the end of the file. readln()
+# answers Maybe@(string) now, so a caller that does not care which of the two it got
+# says so once, here, rather than losing the distinction at every call.
+extend File line_or_empty() string:
+    match self.readln():
+        Result.Ok(Maybe.Some(line)) -> return line.clone()
+        Result.Ok(Maybe.None) -> return ""
+        Result.Err(_) -> return ""
+
+fn main() i32:
+    match open("fd_gate_probe.txt", FileMode.Write()):
+        Result.Ok(nom out) ->
+            out.writeln("Mostly Harmless")
+            out.close()
+        Result.Err(_) ->
+            println("write failed")
+            return Result.Ok(1)
+
+    match open("fd_gate_probe.txt", FileMode.Read()):
+        Result.Ok(nom input) ->
+            println(input.line_or_empty())
+            input.close()
+        Result.Err(_) ->
+            println("read failed")
+            return Result.Ok(1)
+
+    return Result.Ok(0)

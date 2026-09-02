@@ -103,8 +103,9 @@ error (`CE2405`).
 **A plain call argument does NOT transfer.** A parameter is a borrow unless it says otherwise, so
 `f(x)` leaves `x` yours. See [Function Arguments](#function-arguments) for the four modes.
 
-Everything else **copies**: primitives, and *plain-data* composites built only from those. This is
-Rust's `Copy` tier, derived automatically from a type's shape rather than opted into.
+Everything else **copies**: primitives, and *plain-data* composites built only from those. The
+class is derived from the type's SHAPE, so there is nothing to opt into and no way for a type to
+lie about what it owns.
 
 **One exception, tracked per binding, not per type.** A `string` bound directly from a string
 literal (`let string s = "hi"`) owns nothing -- it points into read-only program data with the
@@ -185,6 +186,49 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+**A type that DECLARES a resource moves, whatever its fields say.** Most types own HEAP,
+and the compiler works that out by walking the fields. A file or a socket holds one `i32`
+descriptor, and no field walk can see that it means something: the type has to SAY so, by
+implementing the built-in `Drop` perk.
+
+```sushi
+struct Ticket:
+    i32 seat
+
+extend Ticket with Drop:
+    fn drop(poke self) ~:
+        println("ticket {self.seat} returned")
+
+fn take(nom Ticket t) ~:
+    println("using ticket {t.seat}")
+    return Result.Ok(~)
+
+fn main() i32:
+    let Ticket a = Ticket(7)
+    take(nom a)          # a is handed over, and drops inside take()
+    # println(a.seat)    # ERROR CE2405: a was moved
+
+    let Ticket b = Ticket(9)
+    println("holding {b.seat}")
+    return Result.Ok(0)  # b drops here: "ticket 9 returned"
+```
+
+`Drop` needs no import. Four rules go with it:
+
+- **`drop()` runs first, then the fields.** A struct that holds a `Ticket` runs its own
+  `drop()` before the ticket is destroyed, so what it owns is still readable while it
+  closes itself down.
+- **Scope exit destroys in reverse declaration order.** The last binding opened is the
+  first closed.
+- **Only the unit that declares a type may implement `Drop` for it** (CE4012). Otherwise
+  another unit could quietly replace the implementation and stop a resource being
+  released.
+- **There is no `.clone()`** on a type that owns a resource, or on anything holding one
+  (CE2431). A deep copy would copy the descriptor number and leave two values that both
+  drop -- a double release the copy verb would hide. The operation that means "a second
+  owner" gets its own name, `.share()`, and it is `dup(2)`: a second descriptor over a
+  SHARED open file description, so the offset is shared too.
+
 ### What Copies
 
 **Primitives, and plain-data composites of only those:**
@@ -234,7 +278,7 @@ fn take(nom string s) ~:
     return Result.Ok(~)
 
 fn main() i32:
-    let Wrapper w = Wrapper(inner: "Hello, world!")
+    let Wrapper w = Wrapper(inner: "Mostly Harmless")
 
     # ERROR CE2411: cannot consume 'w.inner': another owner keeps this value
     # take(nom w.inner)
@@ -245,10 +289,53 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-There are no partial moves: `w` above is never marked moved, only `w.inner`'s *value* is read (and,
-via `.clone()`, duplicated). A `let` behaves the same way for a source that reads through an owner:
-`let string x = w.inner` binds `x` as a borrow of `w`, not an independent copy -- see
+A `let` behaves the same way for a source that reads through an owner: `let string x = w.inner`
+binds `x` as a borrow of `w`, not an independent copy -- see
 [Borrowed `let` Bindings](#borrowed-let-bindings) below.
+
+### Taking a Field Out
+
+A field read is a borrow, and that left one thing unspellable: handing a handle back **out** of the
+value that holds it. `nom` marks the take:
+
+```sushi
+use <io/fs>
+
+struct Sink:
+    File out
+    string label
+
+fn run() ~ | IoError:
+    let File f = open("/tmp/report.txt", FileMode.Write())??
+    let Sink s = Sink(f, "report")
+
+    let File back = nom s.out    # the take: `back` owns the handle now
+    back.write("Mostly Harmless\n")??
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("done")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)
+```
+
+The marker is legal in a `let` initializer and in a `return`, one step off a bare name, and only
+where that name is a local the function **owns** -- through a `peek`/`poke` parameter or a
+`let`-borrow it is still `CE2411`, and so is a chain such as `nom a.b.c`. A field that owns nothing
+is copied as it always was; the marker changes nothing there.
+
+**A take spends the whole receiver.** There are no partial moves: what suppresses `s`'s own free is
+the whole value and not one field, so the fields left behind are destroyed at the take and `s` is
+finished. A later mention of it is `CE2405`. If the type declares `Drop`, that `drop()` does **not**
+run -- a destructor is written for a value that goes away whole, so the method doing the take does
+the finishing work itself:
+
+```sushi
+extend Sink into_inner(nom self) File:
+    return nom self.out
+```
 
 ### Writing an Array Element
 
@@ -622,7 +709,7 @@ fn main() i32:
 The borrow lasts to the end of the block that declared it. Two things are checked while it is live:
 
 1. **Mutating, freeing, or rebinding the owner is `CE2412`**, reported at the *use* of the borrowed
-   binding that follows the change (not at the change itself -- this is non-lexical, like Rust):
+   binding that follows the change (not at the change itself -- the borrow is non-lexical):
 
 ```sushi
 struct Wrapper:

@@ -1,0 +1,43 @@
+# One generic may ask for two contracts. Probe P-B proved the mechanism; this pins it on the
+# real handles, so a copy loop can be written once for a file and a socket alike.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "copied\nMostly Harmless\n"
+use <io/files>
+use <io/fs>
+use <io/contracts>
+
+fn copy_text@(R: Reader, W: Writer)(R src, W dst) ~ | IoError:
+    let string all = src.read(64)??
+    dst.write(all)??
+    dst.flush()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match open("contract_two_probe_a.txt", FileMode.Write()):
+        Result.Ok(w) -> w.write("Mostly Harmless")
+        Result.Err(_) ->
+            println("open a failed")
+            return Result.Ok(1)
+
+    match open("contract_two_probe_a.txt", FileMode.Read()):
+        Result.Ok(src) ->
+            match open("contract_two_probe_b.txt", FileMode.Write()):
+                Result.Ok(dst) ->
+                    match copy_text(src, dst):
+                        Result.Ok(_) -> println("copied")
+                        Result.Err(_) -> println("copy failed")
+                Result.Err(_) -> println("open b failed")
+        Result.Err(_) -> println("reopen a failed")
+
+    match open("contract_two_probe_b.txt", FileMode.Read()):
+        Result.Ok(r) ->
+            let string back = r.read_all().realise("")
+            println("{back}")
+        Result.Err(_) -> println("read b failed")
+
+    remove("contract_two_probe_a.txt").realise(0)
+    remove("contract_two_probe_b.txt").realise(0)
+    return Result.Ok(0)

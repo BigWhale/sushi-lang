@@ -1,0 +1,18 @@
+# A generic called from an arm body that is an EXPRESSION. The instantiate pass walked only
+# Block bodies, so this shape produced no instance and answered CE2061 -- for any type
+# argument, i32 included (#539).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "took 5\n"
+
+fn make() i32:
+    return Result.Ok(5)
+
+fn echo@(T)(nom T v) T:
+    return Result.Ok(v)
+
+fn main() i32:
+    match make():
+        Result.Ok(n) -> println("took {echo(nom n).realise(-1)}")
+        Result.Err(_) -> println("no")
+    return Result.Ok(0)

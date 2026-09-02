@@ -63,11 +63,23 @@ def _is_spelled_result_err(expr: 'Expr') -> bool:
 
 def _consume_returned_value(codegen: 'LLVMCodegen', stmt: 'Return',
                             value: 'ir.Value') -> 'ir.Value':
-    """Route a bare returned value through the ownership seam."""
-    from sushi_lang.semantics.ast import Name
+    """Route a bare returned value through the ownership seam.
+
+    Two shapes reach the seam: a bare name, and a marked field TAKE (ruling R28), which
+    is the only field read that ever carries Provenance.OWNED. Every other expression
+    keeps its value untouched, because it owns nothing the return could transfer.
+    """
+    from sushi_lang.semantics.ast import MemberAccess, Name
+    from sushi_lang.semantics.ownership import Provenance
     from sushi_lang.backend.ownership import ConsumingUse, consume
 
-    if not isinstance(stmt.value, Name):
+    source = stmt.value
+    if isinstance(source, Name):
+        semantic_type = codegen.memory.find_semantic_type(source.id)
+    elif (isinstance(source, MemberAccess)
+          and getattr(source, "ownership_provenance", None) is Provenance.OWNED):
+        from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+        semantic_type = infer_expr_semantic_type(codegen, source)
+    else:
         return value
-    semantic_type = codegen.memory.find_semantic_type(stmt.value.id)
-    return consume(codegen, stmt.value, value, semantic_type, ConsumingUse.RETURN)
+    return consume(codegen, source, value, semantic_type, ConsumingUse.RETURN)

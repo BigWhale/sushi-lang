@@ -71,7 +71,22 @@ BORROW_KINDS: tuple[BorrowKind, ...] = (
 
 def emit_use_after_move(checker: 'BorrowChecker', name: str, use_span: Optional[Span],
                         state: BorrowState) -> None:
-    """Report a use-after-move, pointing at the MOVE as well as the use."""
+    """Report a use after the value left, pointing at where it left as well as the use.
+
+    Two codes, and the method name is what tells them apart (ruling R27). A `nom`
+    ARGUMENT is a real move with a visible marker, so it keeps CE2405. A consuming
+    RECEIVER has no marker anywhere on the page -- a receiver's mode is
+    declaration-only -- so CE2435 has to carry what the syntax cannot, and it names the
+    method.
+    """
+    method = state.consumed_by_method
+    if method is not None:
+        diag = checker.err.emit_with(er.ERR.CE2435, use_span,
+                                     name=name, method=method)
+        if state.moved_at_span is not None:
+            diag.note(f"'{name}' was consumed by '{method}' here", state.moved_at_span)
+        diag.emit()
+        return
     diag = checker.err.emit_with(er.ERR.CE2405, use_span, name=name)
     if state.moved_at_span is not None:
         diag.note(f"'{name}' was moved here", state.moved_at_span)
@@ -97,6 +112,23 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
         state.invalidated_at = None
 
 
+def escape_help(checker: 'BorrowChecker', text: str, ty) -> str:
+    """What CE2411 offers as the way out, which depends on WHAT is being consumed.
+
+    `.clone()` for an ordinary owning value. A resource type has no clone (CE2431), so
+    offering one there would be a rejection with no escape -- the exact hole the clone
+    totality gate exists to prevent (HANDLES.md ruling R3). For a resource the second
+    owner is `.share()`, and the message says why a descriptor cannot be deep-copied.
+    """
+    from sushi_lang.semantics.typesys import holds_declared_resource
+    drops = checker.types.drops
+    if drops and holds_declared_resource(ty, drops, resolve=checker.types.resolve_named):
+        return (f"a descriptor cannot be deep-copied, so there is no `{text}.clone()`; "
+                f"take a second owner with `{text}.share()`, or restructure so only one "
+                f"owner is needed")
+    return f"clone it to take an independent value: `{text}.clone()`"
+
+
 def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr) -> None:
     """Report CE2411 for a read through a live owner (`h.inner`, `c.get(0)??`)."""
     text = expr_to_string(expr)
@@ -106,10 +138,13 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr) -> None:
     if state is not None and state.declared_at_span is not None:
         diag.note(f"'{owner}' owns this value and still frees it",
                   state.declared_at_span)
+    # The OWNER's type answers the escape question: a read through it can only be
+    # refused when what is read owns something, and it is the owner that holds it.
+    owner_type = state.var_type if state is not None else None
     # ONE branch, on purpose: a get-out `.clone()` still hits CE0019, and that is a real
     # defect rather than a reason to word around it. The three RED `test_own_get_*` files
     # hold the branch honest until it is fixed.
-    diag.help(f"clone it to take an independent value: `{text}.clone()`")
+    diag.help(escape_help(checker, text, owner_type))
     diag.emit()
 
 
@@ -122,7 +157,7 @@ def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
             mode = getattr(state.var_type, "mutability", "")
             diag.note(kind.note.format(name=name, mode=mode), kind.note_span(state))
             break
-    diag.help(f"clone it to take an independent value: `{name}.clone()`")
+    diag.help(escape_help(checker, name, state.var_type))
     diag.emit()
 
 

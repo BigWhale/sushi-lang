@@ -2,7 +2,8 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-Composed file-system operations: `stat`, recursive `walk`, `mkdir_all`, `remove_all`.
+The `File` handle, `open()`, the console handles, and the composed file-system
+operations `stat`, `walk`, `mkdir_all` and `remove_all`.
 
 ## Import
 
@@ -12,9 +13,48 @@ use <io/fs>
 
 ## Overview
 
-`io/fs` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it. It composes the `<io/files>` primitives with the `<io/path>` algebra; the recursive forms live here.
+`io/fs` is a **Sushi-source** standard-library module: it ships as bundled `.sushi`
+source and is merged as a compilation unit when you import it. It composes the
+`<io/files>` primitives with the `<io/path>` algebra.
+
+It is also where the file HANDLE lives. `File` owns its descriptor, moves to one owner,
+and closes when that owner leaves scope. Every method on it is either a perk
+implementation (`Reader`, `Writer`, `Seek`, `Drop`) or an ordinary extension method, each
+written over the `<io/files>` descriptor primitives -- there is no compiler magic behind
+any of them. The full method reference is in [File Operations](files.md), the console
+handles are in [Console I/O](console.md), and the buffered layer above the handle is
+[Buffered I/O](buf.md).
 
 ## Types
+
+### `File`
+
+```sushi
+public struct File:
+    i32 fd
+    bool owned
+```
+
+One open file. `owned` says whether dropping this handle closes the descriptor: `open()`
+sets it true, and the three console constants set it false, because a program does not
+own the descriptors it was started with. A `string` carries the same bit for the same
+reason -- a literal frees to a no-op.
+
+`File` implements `Drop`, so it is a moving type: `.clone()` is CE2431. The one way to
+a second owner is [`share()`](files.md#share), and it is a second DESCRIPTOR over the
+same open file description rather than a copy of the value -- the offset is shared.
+
+### `stdin`, `stdout`, `stderr`
+
+```sushi
+public const File stdin  = File(fd: STDIN_FD, owned: false)
+public const File stdout = File(fd: STDOUT_FD, owned: false)
+public const File stderr = File(fd: STDERR_FD, owned: false)
+```
+
+Constants, so they live in read-only memory and closing one is refused while compiling
+(CE2400). `STDIN_FD`, `STDOUT_FD` and `STDERR_FD` are public too, for the rare caller
+that wants the number.
 
 ### `FileStat`
 
@@ -94,5 +134,9 @@ fn main() i32:
 
 ## See also
 
-- [File I/O](files.md) — the primitives underneath (`read_dir`, `mkdir`, `remove`, the stat fields)
+- [File I/O](files.md) — the `File` method reference, and the primitives underneath
+  (`read_dir`, `mkdir`, `remove`, the stat fields)
+- [I/O contracts](contracts.md) — `Reader`, `Writer` and `Seek`, which is what a function
+  names when it wants a capability rather than a type
+- [Buffered I/O](buf.md) — `BufReader` and `BufWriter` over any handle
 - [Path algebra](path.md) — the joins this module builds its paths with

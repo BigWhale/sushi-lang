@@ -10,6 +10,7 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import Expr
 from sushi_lang.semantics.typesys import ReferenceType
 
+from .diagnostics import escape_help
 from .reads import chain_call_boundary, root_owner
 from .state import BorrowState
 
@@ -88,9 +89,12 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
                                and not state.is_let_borrow),
         note_span=lambda state: state.bound_at_span,
         note="'{name}' is bound here, as a read-only view",
-        help="the write ({what}) would land on a private copy and be lost; take an "
-             "independent value with `{name}.clone()`, mutate it, and store it back "
-             "into the owner",
+        # `{escape}` rather than a spelled `.clone()`: a type that owns a resource has
+        # no clone (CE2431), so the copy route has to be asked for rather than assumed.
+        # The MODES come first, because they are the escape this binding actually has.
+        help="the write ({what}) would land on a private copy and be lost; bind the "
+             "payload `poke` to write through to the owner, or `nom` to take it where "
+             "the match owns its scrutinee -- otherwise {escape}, and store it back",
     ),
     ReadOnlyReceiver(
         # The fifth kind (#344). CE2412 asks "may I mutate the OWNER while the binding
@@ -157,7 +161,8 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
         note_span = kind.note_span(state)
         if note_span is not None:
             diag.note(kind.note.format(name=name), note_span)
-        diag.help(kind.help.format(name=name, what=what))
+        diag.help(kind.help.format(name=name, what=what,
+                                   escape=escape_help(checker, name, state.var_type)))
         diag.emit()
         return True
     return False

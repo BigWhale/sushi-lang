@@ -258,7 +258,7 @@ def own_temporary(codegen: 'LLVMCodegen', expr, value: ir.Value,
     if value is None or semantic_type is None:
         return None
     resolved = resolve_named_type(codegen, semantic_type)
-    if resolved is None or not needs_cleanup(resolved):
+    if resolved is None or not needs_cleanup(codegen, resolved):
         return None
     if not expression_is_temporary(codegen, expr):
         return None
@@ -298,7 +298,7 @@ def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,
     # `needs_cleanup` is table-free: an unresolved UnknownType answers False, which is exactly
     # how a Result's owning payload escaped every RAII predicate in #179. Resolve first.
     resolved = resolve_named_type(codegen, enum_type)
-    if not isinstance(resolved, EnumType) or not needs_cleanup(resolved):
+    if not isinstance(resolved, EnumType) or not needs_cleanup(codegen, resolved):
         return
 
     # emit_value_destructor takes a POINTER, and the temporary is an SSA aggregate. Park it in an
@@ -462,7 +462,7 @@ def _clone_own_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struct
 def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
     """Deep-copy a List<T>: allocate a fresh buffer and copy the elements."""
     from sushi_lang.backend.generics.list.types import extract_element_type
-    from sushi_lang.backend.destructors import field_needs_cleanup
+    from sushi_lang.backend.destructors import needs_cleanup
     from sushi_lang.backend.generics.container_walk import emit_container_walk
 
     b = codegen.builder
@@ -490,7 +490,7 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
         b.call(_declare_memcpy(codegen),
                [new_raw, old_i8, bytes_to_copy, ir.Constant(ir.IntType(1), 0)])
 
-        if field_needs_cleanup(codegen, elem_ty):
+        if needs_cleanup(codegen, elem_ty):
             def clone_element(element_ptr: ir.Value, _index: ir.Value) -> None:
                 loaded = codegen.builder.load(element_ptr, name="list_clone_elem")
                 cloned = emit_value_clone(codegen, loaded, elem_ty)
@@ -562,9 +562,9 @@ def _clone_hashmap_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: St
 def _clone_fixed_array_value(codegen: 'LLVMCodegen', value: ir.Value,
                              value_type: 'ArrayType') -> ir.Value:
     """Deep-copy a fixed array `T[N]` element by element."""
-    from sushi_lang.backend.destructors import field_needs_cleanup
+    from sushi_lang.backend.destructors import needs_cleanup
 
-    if not field_needs_cleanup(codegen, value_type.base_type):
+    if not needs_cleanup(codegen, value_type.base_type):
         return value
 
     b = codegen.builder
@@ -578,12 +578,12 @@ def _clone_fixed_array_value(codegen: 'LLVMCodegen', value: ir.Value,
 
 def _clone_struct_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
     """Deep-copy a regular struct field-by-field, recursing through emit_value_clone."""
-    from sushi_lang.backend.destructors import field_needs_cleanup
+    from sushi_lang.backend.destructors import needs_cleanup
 
     b = codegen.builder
     new_struct = value
     for i, (_field_name, field_type) in enumerate(value_type.fields):
-        if field_needs_cleanup(codegen, field_type):
+        if needs_cleanup(codegen, field_type):
             field_val = b.extract_value(value, i, name=f"clone_field_{i}")
             cloned = emit_value_clone(codegen, field_val, field_type)
             new_struct = b.insert_value(new_struct, cloned, i, name=f"cloned_field_{i}")
@@ -592,7 +592,7 @@ def _clone_struct_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Str
 
 def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir.Value:
     """Deep-copy an enum by cloning the active variant's owning associated data."""
-    from sushi_lang.backend.destructors import field_needs_cleanup
+    from sushi_lang.backend.destructors import needs_cleanup
     from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
 
     b = codegen.builder
@@ -602,7 +602,7 @@ def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir
     # (which did not) handed out a shallow copy sharing the same pointer: double free (#183).
     variants_nc = [
         (i, v) for i, v in enumerate(value_type.variants)
-        if v.associated_types and any(field_needs_cleanup(codegen, t) for t in v.associated_types)
+        if v.associated_types and any(needs_cleanup(codegen, t) for t in v.associated_types)
     ]
     if not variants_nc:
         return value  # no owning payload in any variant -> nothing to clone
@@ -625,7 +625,7 @@ def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir
         # Field offsets from the ONE layout authority (#300 phase 2).
         field_offsets = codegen.types.payload_field_offsets(variant.associated_types)
         for assoc_type, field_offset in zip(variant.associated_types, field_offsets, strict=True):
-            if field_needs_cleanup(codegen, assoc_type):
+            if needs_cleanup(codegen, assoc_type):
                 data_i8_ptr = b.bitcast(data_ptr, ir.PointerType(ir.IntType(8)),
                                         name="clone_enum_data_i8")
                 field_i8_ptr = b.gep(data_i8_ptr, [make_i32_const(field_offset)],

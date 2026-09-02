@@ -27,9 +27,13 @@ def emit_struct_cleanup(codegen: 'LLVMCodegen') -> None:
     # An early-exit path. Emit the destructor for every live, non-moved struct WITHOUT
     # marking it cleaned: each exit path is a separate, mutually-exclusive block, so every
     # one must emit its own free (#59/#60). `pop_scope` drains the tracking.
+    #
+    # Innermost scope first, and REVERSE declaration order within each -- the same order
+    # the fall-through drain uses, or a `return` inside a block would destroy in the
+    # opposite order to falling off the end of it.
     for scope_idx in range(len(codegen.memory.struct_variables) - 1, -1, -1):
         struct_scope = codegen.memory.struct_variables[scope_idx]
-        for var_name, (struct_type, alloca) in struct_scope.items():
+        for var_name, (struct_type, alloca) in reversed(list(struct_scope.items())):
             codegen.moves.emit_free_unless_moved(
                 alloca,
                 lambda n=var_name, t=struct_type, a=alloca:
@@ -57,7 +61,7 @@ def emit_dynamic_array_cleanup(codegen: 'LLVMCodegen') -> None:
     # make later exit paths skip the free and leak (#59).
     for scope_idx in range(len(codegen.dynamic_arrays.scope_stack) - 1, -1, -1):
         array_scope = codegen.dynamic_arrays.scope_stack[scope_idx]
-        for array_name in array_scope:
+        for array_name in reversed(array_scope):
             if array_name in codegen.dynamic_arrays.arrays:
                 codegen.dynamic_arrays._emit_array_destructor(array_name)
 
@@ -68,7 +72,7 @@ def emit_list_cleanup(codegen: 'LLVMCodegen') -> None:
         return
 
     for scope_idx in range(len(codegen.dynamic_arrays.list_scope_stack) - 1, -1, -1):
-        for list_name in codegen.dynamic_arrays.list_scope_stack[scope_idx]:
+        for list_name in reversed(codegen.dynamic_arrays.list_scope_stack[scope_idx]):
             codegen.dynamic_arrays._emit_list_destructor(list_name)
 
 

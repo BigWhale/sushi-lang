@@ -131,8 +131,6 @@ class ScopeAnalyzer:
 
     def _names_a_non_local(self, name: str) -> bool:
         """True if `name` resolves to something that is not a variable at all."""
-        if name in ('stdin', 'stdout', 'stderr', 'open'):
-            return True
         if self._is_math_constant(name):
             return True
         # Local-wins: a bound local shadows an enum name, a constant and a function

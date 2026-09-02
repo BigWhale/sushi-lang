@@ -1,0 +1,14 @@
+# The other direction, and the reason the console methods move with print. This row
+# passes while stdout.write and println share one route. It is the gate that says
+# they still share ONE route after print moves to the descriptor: a stdio write
+# beside a descriptor write is the same bug with the two names exchanged.
+# EXPECT_STDOUT_EXACT: "A-B-C\n"
+
+use <io/fs>
+
+fn main() i32:
+    stdout.write("A-")
+    print("B-")
+    stdout.write("C")
+    println("")
+    return Result.Ok(0)

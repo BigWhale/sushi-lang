@@ -89,8 +89,13 @@ def validate_function(self, func: FuncDef) -> None:
 
 
 def _self_registration_type(target_type, self_mode):
-    """The type `self` registers under: the bare target, or its reference (#327)."""
-    if self_mode is None:
+    """The type `self` registers under: the bare target, or its reference (#327).
+
+    A `nom self` receiver registers the BARE target: it is the value, not a borrow of
+    somebody else's, so nothing here should make it read as a reference.
+    """
+    from sushi_lang.semantics.param_modes import receiver_mode
+    if not receiver_mode(self_mode).by_pointer:
         return target_type
     from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
     mode = BorrowMode.POKE if self_mode == "poke" else BorrowMode.PEEK
@@ -193,15 +198,22 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
 
     validate_perk_implementation(impl, perk_def, self.reporter)
 
+    # A GENERIC target resolves like a plain name, and it must: `self` needs the
+    # instantiation's own StructType to read a field through, and the interned name is
+    # what the table already keyed the implementation under. Leaving the
+    # `GenericTypeRef` in place registered `self` as an unresolved type, so every
+    # `self.field` in the body silently failed to resolve -- and a `??` beside one then
+    # reached codegen unannotated, as a CE0124.
+    from sushi_lang.semantics.generics.types import GenericTypeRef
     resolved_type = impl.target_type
-    if isinstance(impl.target_type, UnknownType):
+    if isinstance(impl.target_type, (UnknownType, GenericTypeRef)):
         resolved_type = resolve_unknown_type(
             impl.target_type, self.struct_table.by_name, self.enum_table.by_name)
     if resolved_type is not None:
         check_no_conflicts_with_regular_methods(
             resolved_type, impl, self.extension_table, self.reporter)
 
-    _validate_target_type(self, impl.target_type, impl.target_type_span)
+    _validate_target_type(self, resolved_type, impl.target_type_span)
 
     for method in impl.methods:
-        _validate_method_body(self, impl.target_type, method)
+        _validate_method_body(self, resolved_type, method)

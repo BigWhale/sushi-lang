@@ -1,64 +1,74 @@
 # Example 18: File I/O
 #
-# This example demonstrates file operations in Sushi, including reading from and
-# writing to files. File operations in Sushi return FileResult@(file), which must
-# be handled using pattern matching to deal with potential errors.
+# This example demonstrates file operations in Sushi. A File OWNS its
+# operating-system descriptor: it moves to exactly one owner, and when that
+# owner leaves scope the descriptor closes. So there is no close() to remember,
+# and no way to leak one.
 #
 # Key concepts covered:
-# - Using the io/files stdlib module
+# - Using the io/fs stdlib module, which is where File and open() live
 # - Opening files with FileMode.Write() and FileMode.Read()
-# - Pattern matching on FileResult for error handling
-# - Writing content to files with file.write()
-# - Reading content from files with file.read()
-# - Proper file cleanup with file.close()
-# - Handling specific FileError variants (NotFound, PermissionDenied)
+# - One IoError channel from the open to the last read, so one ?? chain covers
+#   a whole function
+# - Writing with f.writeln() and reading with f.read_all()
+# - Handling specific IoError variants (NotFound, PermissionDenied)
+# - Buffering with <io/buf>, which is a type you opt into rather than a
+#   hidden buffer the handle keeps
 #
 # File operations workflow:
-# 1. Open file with appropriate mode (Read/Write/Append)
-# 2. Match on FileResult to check for errors
-# 3. Perform file operations (read/write)
-# 4. Always close the file when done
+# 1. Open the file with the mode you want (Read/Write/Append)
+# 2. Propagate the IoError with ?? inside a helper that declares the channel
+# 3. Perform the reads and writes
+# 4. Let the handle drop; call close() only where the failure has to be SEEN
 #
-# Common FileError variants:
-# - FileError.NotFound() - File doesn't exist (for reading)
-# - FileError.PermissionDenied() - Insufficient permissions
-# - FileError.AlreadyExists() - File exists (when creating)
-# - FileError.IoError() - Other I/O errors
+# Common IoError variants:
+# - IoError.NotFound()         - the path does not exist
+# - IoError.PermissionDenied() - insufficient permissions
+# - IoError.AlreadyExists()    - the path is already there
+# - IoError.Os(errno)          - a failure with no variant of its own
 
-use <io/files>
+use <io/fs>
+use <io/buf>
+
+fn write_entry(string path, string entry) ~ | IoError:
+    let File f = open(path, FileMode.Write())??
+    f.writeln(entry)??
+    return Result.Ok(~)
+    # f drops here, and the descriptor closes.
+
+# Buffered reading: buf_reader TAKES the handle, so the unbuffered File cannot
+# be used behind the reader's back. One system call per window, not per line.
+fn read_entry(string path) string | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 4096)??
+    return Result.Ok(r.read_all()??)
 
 fn main() i32:
-    # Write to file
     println("Creating guide entry...")
 
-    match open("guide_entry.txt", FileMode.Write()):
-        FileResult.Ok(f) ->
-            f.write("Earth: Mostly Harmless")
-            f.close()
+    match write_entry("guide_entry.txt", "Earth: Mostly Harmless"):
+        Result.Ok(_) ->
             println("File written successfully")
-        FileResult.Err(FileError.PermissionDenied()) ->
+        Result.Err(IoError.PermissionDenied()) ->
             println("Permission denied")
-            return Result.Err(StdError.Error)
-        FileResult.Err(_) ->
+            return Result.Ok(1)
+        Result.Err(_) ->
             println("Failed to create file")
-            return Result.Err(StdError.Error)
+            return Result.Ok(1)
 
-    # Read from file
     println("Reading guide entry...")
 
-    match open("guide_entry.txt", FileMode.Read()):
-        FileResult.Ok(f) ->
-            let string content = f.read()
-            f.close()
+    match read_entry("guide_entry.txt"):
+        Result.Ok(content) ->
             println("Content: {content}")
-        FileResult.Err(FileError.NotFound()) ->
+        Result.Err(IoError.NotFound()) ->
             println("File not found")
-            return Result.Err(StdError.Error)
-        FileResult.Err(FileError.PermissionDenied()) ->
+            return Result.Ok(1)
+        Result.Err(IoError.PermissionDenied()) ->
             println("Permission denied")
-            return Result.Err(StdError.Error)
-        FileResult.Err(_) ->
+            return Result.Ok(1)
+        Result.Err(_) ->
             println("Failed to read file")
-            return Result.Err(StdError.Error)
+            return Result.Ok(1)
 
     return Result.Ok(0)

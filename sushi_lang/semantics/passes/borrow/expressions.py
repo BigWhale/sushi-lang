@@ -45,6 +45,7 @@ from .calls import (
     reject_self_aliasing_copy,
     settle_method_args,
     settle_namespaced_args,
+    settle_receiver,
 )
 from .consume import consume, consume_each, consume_named, name_provenance
 from .diagnostics import emit_use_after_move, emit_use_of_invalidated_borrow
@@ -147,6 +148,7 @@ def _check_method_call(checker: 'BorrowChecker', expr: MethodCall) -> None:
     _check_receiver_and_args(checker, expr)
     maybe_reject_mutation(checker, expr)
     reject_self_aliasing_copy(checker, expr)
+    settle_receiver(checker, expr)
     settle_method_args(checker, expr)
     maybe_mark_container_insert(checker, expr)
     maybe_mark_own_alloc_move(checker, expr)
@@ -174,6 +176,7 @@ def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
         # receiver names a namespace and takes no argument position.
         settle_namespaced_args(checker, expr)
     else:
+        settle_receiver(checker, expr)
         settle_method_args(checker, expr)
         maybe_mark_container_insert(checker, expr)
     maybe_mark_own_alloc_move(checker, expr)

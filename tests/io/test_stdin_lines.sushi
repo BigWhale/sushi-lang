@@ -1,18 +1,26 @@
+# Reading standard input line by line: the console handle goes into a BufReader like any
+# other, and `nom stdin` hands the constant over without closing descriptor 0 -- a console
+# handle carries `owned: false`, so its drop closes nothing.
 # TEST_TYPE: runtime
 # STDIN_INPUT: "First\nSecond\nThird\n"
 # EXPECT_STDOUT_EXACT: "Reading lines from stdin:\n  > First\n  > Second\n  > Third\nDone!\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Test stdin.lines() iterator in foreach loop
+# EXPECT_NO_LEAKS: true
 
-use <io/stdio>
+use <io/fs>
+use <io/buf>
+
+fn echo_lines() ~ | IoError:
+    stdout.write("Reading lines from stdin:\n")??
+    let BufReader@(File) r = buf_reader(nom stdin, 8192)??
+    foreach(line?? in r.lines()):
+        stdout.write("  > ")??
+        stdout.write(line)??
+        stdout.write("\n")??
+    stdout.write("Done!\n")??
+    return Result.Ok(~)
 
 fn main() i32:
-    stdout.write("Reading lines from stdin:\n")
-
-    foreach(line in stdin.lines()):
-        stdout.write("  > ")
-        stdout.write(line)
-        stdout.write("\n")
-
-    stdout.write("Done!\n")
-    return Result.Ok(0)
+    match echo_lines():
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)

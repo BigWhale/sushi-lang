@@ -22,7 +22,8 @@ with `T[]`, `List@(T)`, `Own@(T)`, and capturing closures. After this change:
 - `.clone()` becomes the **single, explicit** way to copy an owning value — newly auto-derived for
   structs and enums (the machinery already exists as the implicit `emit_value_clone`).
 - Plain-data composites (primitives, strings, and composites of only those) keep **copy**
-  semantics. This is Rust's `Copy` tier, derived automatically instead of opted into.
+  semantics. The class is derived from a type's SHAPE, so there is nothing to opt into and
+  no way for a type to lie about what it owns.
 
 **Why.** The current split is memory-safe but inconsistent: refactoring `f(list)` into
 `f(WrapperStruct)` silently turns a move into a hidden O(n) deep copy — exactly the invisible cost
@@ -45,7 +46,8 @@ kept for the historical reasoning — the string-owning-heap-but-copies asymmetr
 the time — but `docs/design/ownership-conventions.md` §4.1/§6 is the current answer: **`string` now
 moves like every other heap-owning type**, so `needs_cleanup` ("must RAII free it?") and the move
 predicate ("does it own a resource?") became the *same question* by construction, and the backend's
-`needs_cleanup` is now a thin alias of the single semantics predicate, `owns_heap`
+`needs_cleanup` is the single rule with the tables supplied; the semantics predicate is
+`owns_resource`
 (`sushi_lang/semantics/typesys.py`). The reasoning below explains why unifying them seemed unsound
 at the time — the fix was not to keep them apart, but to remove the one type they disagreed about
 from the disagreement.
@@ -104,7 +106,7 @@ semantics flags what backend copies → spurious CE2405). Mitigations, both requ
 
 1. The backend imports and uses the **same** semantics predicate at every flip site (`backend`
    importing `semantics` is the allowed direction).
-2. A unit test (now `tests/unit/test_owns_heap_verdicts.py`; the predicate is `owns_heap`
+2. A unit test (now `tests/unit/test_owns_resource_verdicts.py`; the predicate is `owns_resource`
    since the 2026-08-14 ownership refactor) that builds representative types —
    plain struct, string-only struct, `struct {i32[]}`, nested owning struct, owning enum,
    recursive enum via `Own@(T)`, fixed array of owning structs, `struct {string, List@(i32)}` —
@@ -227,7 +229,7 @@ method on every user type with a lazily-bound backend emitter":
    every type — primitives, `string`, fixed and dynamic arrays, `List@(T)`, `Own@(T)`, and now a
    function value too (the fat pointer's `clone_ptr`, see `docs/design/closures.md`) all have one,
    with `tests/unit/test_clone_totality.py` as the gate. The one gap is `HashMap@(K, V)`, absent
-   only because it is absent from `owns_heap`'s callers that ask this question, not because of a
+   only because it is absent from `owns_resource`'s callers that ask this question, not because of a
    CE0052-style structural exclusion.)
 2. **Lazy backend binding**: mirror `_lazy_hash_emitter` (`semantics/generics/hashing.py:284-296`)
    + `register_clone_emitter_factory` self-registration from the backend (pattern:
@@ -318,7 +320,8 @@ locations** of the relational diagnostic; value tests use `EXPECT_STDOUT_EXACT`.
   #159).
 - `test_memberaccess_copy_keeps_owner.sushi` — `# EXPECT_NO_LEAKS`: `take(s.field)` copies;
   `s` stays fully usable and both the copy and the original free exactly once (§3.1 pin).
-- Unit: `tests/unit/test_owns_heap_verdicts.py` (§2.1; formerly `test_move_predicate_sync`).
+- Unit: `tests/unit/test_owns_resource_verdicts.py` (§2.1; formerly `test_move_predicate_sync`),
+  plus `tests/unit/test_cleanup_predicates_agree.py` for the DECLARED half.
 
 **Tests that flip (copy → move):**
 - `tests/unit/test_struct_raii.py::test_byvalue_struct_param_freed_by_callee` and

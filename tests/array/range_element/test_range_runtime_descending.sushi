@@ -3,7 +3,6 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "5 4 0\n4 4 1\n"
 
-use <io/stdio>
 
 fn run_test() i32:
     let i32 k = 4

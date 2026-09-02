@@ -1,0 +1,17 @@
+# Ruling R11, the CE2404 half: a `poke` binding needs the scrutinee to HAVE storage,
+# and a temporary the match OWNS has one -- the match parks it in a slot for the whole
+# statement. The write reaches that slot, so the length the arm prints is the pushed one.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4\n"
+fn make() i32[]:
+    return Result.Ok(from([1, 2, 3]))
+
+fn main() i32:
+    match make():
+        Result.Ok(poke p) ->
+            p.push(9)
+            println(p.len())
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

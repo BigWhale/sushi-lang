@@ -195,7 +195,7 @@ def is_valid_cast(source_type: Type, target_type: Type) -> bool:
         return True
 
     # Only allow casts between numeric types for now
-    # This implements the Rust-style explicit-only casting system
+    # Casts are explicit only: there is no implicit numeric conversion
     numeric_types = {
         BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
         BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,

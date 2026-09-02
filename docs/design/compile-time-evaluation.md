@@ -104,8 +104,11 @@ expression `200 + 100` walks past the same rule only because nothing checks a co
 
 ### The rule
 
-**Sushi follows Rust. The compiler computes at the declared width, and it reports an
-operation whose result leaves the type.**
+**The compiler computes at the declared width, and it reports an operation whose result
+leaves the type.** Computing wider and truncating at the store -- C's model -- makes the
+evaluator disagree with the machine: a `u8` constant of `200 + 100` would hold 300, so a
+widening cast reads 300 while the same expression at run time prints 44. One expression
+has to have one meaning, and reporting is the only answer that keeps it.
 
 The operators split in two groups. Get this split right, because it is the part that is easy
 to reverse.
@@ -139,8 +142,7 @@ The rule applies to an expression whose value the compiler reads. That is a cons
 fold of literals in a body. Both must give the same answer, because a reader expects one
 meaning for one expression.
 
-Run time does not change. Two locals still wrap, as they do in Rust with the overflow checks
-off:
+Run time does not change. Two locals still wrap, because no check is inserted there:
 
 <!-- docs-sweep: skip (fragment, and the first line is what this ruling rejects) -->
 ```sushi

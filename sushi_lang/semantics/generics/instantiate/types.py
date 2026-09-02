@@ -64,13 +64,6 @@ class TypeInferrer:
 
     def _infer_name_type(self, expr) -> "Type | None":
         """Infer type for name references (variables, builtins)."""
-        if expr.id == "stdin":
-            return BuiltinType.STDIN
-        elif expr.id == "stdout":
-            return BuiltinType.STDOUT
-        elif expr.id == "stderr":
-            return BuiltinType.STDERR
-
         if expr.id in self.variable_types:
             return self.variable_types[expr.id]
 

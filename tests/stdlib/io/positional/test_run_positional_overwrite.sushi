@@ -1,0 +1,32 @@
+# A pwrite at an offset replaces exactly the bytes it covers and leaves the rest
+# of the file alone. A pread that asks for more than the file holds answers what is
+# there, not what was asked for.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "5\n72 97 108 108 111\nshort read 5\n"
+use <io/files>
+
+fn main() i32:
+    let i32 fd = fd_open("overwrite_probe.txt", 3, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return Result.Ok(1)
+
+    let u8[] hello = from([72, 101, 108, 108, 111])
+    println("{fd_pwrite(fd, 0 as i64, hello).realise(-1)}")
+
+    let u8[] one = from([97])
+    fd_pwrite(fd, 1 as i64, one).realise(-1)
+
+    let u8[] fallback = from([0])
+    let u8[] all = fd_pread(fd, 0 as i64, 5).realise(fallback)
+    println("{all.get(0).realise(0)} {all.get(1).realise(0)} {all.get(2).realise(0)} {all.get(3).realise(0)} {all.get(4).realise(0)}")
+
+    let u8[] over_fallback = from([0])
+    let u8[] over = fd_pread(fd, 0 as i64, 64).realise(over_fallback)
+    println("short read {over.len()}")
+
+    fd_close(fd).realise(-1)
+    return Result.Ok(0)

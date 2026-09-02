@@ -16,7 +16,7 @@ use <net/udp>
 
 A datagram socket has no peer of its own, so every send names its destination and every receive answers with a `Datagram`: the bytes, and who sent them. That is not a convenience — an unconnected socket cannot be asked afterwards, because the sender exists only at the instant its datagram arrives.
 
-The close rule is `<net/tcp>`'s: **one binding owns a socket**, `s.close()` ends it and writes `-1` back (the receiver is `poke self`), and a copy taken before the close holds a descriptor the kernel may have given to somebody else.
+**One binding owns a socket.** `s.close()` ends it and writes `-1` back; the receiver is `poke self` here, because a `UdpSocket` does not implement `Drop` yet — so the guarded second close stays reachable, which is not true of `<net/tcp>`'s handles.
 
 `udp_bind` is the one free function; everything with a receiver is an extension method with the `| NetError` channel.
 

@@ -26,11 +26,26 @@ class SymbolTableMerger:
         self._merge_by_name(unit_tables.generic_structs, global_tables.generic_structs)
         self._merge_by_name(unit_tables.perks, global_tables.perks)
         self._merge_perk_impls(unit_tables.perk_impls, global_tables.perk_impls)
+        self._merge_generic_perk_impls(unit_tables.generic_perk_impls,
+                                       global_tables.generic_perk_impls)
         self._merge_functions(unit_tables.funcs, global_tables.funcs)
         self._merge_by_type(unit_tables.extensions, global_tables.extensions)
         self._merge_by_type(unit_tables.generic_extensions, global_tables.generic_extensions)
         self._merge_generic_functions(unit_tables.generic_funcs, global_tables.generic_funcs)
         self._merge_visibility(unit_tables.visibility, global_tables.visibility)
+
+    @staticmethod
+    def _merge_generic_perk_impls(unit_table, global_table) -> None:
+        """Merge the generic-target templates, by the base name of their target.
+
+        A list per base name rather than one entry, because two perks may be
+        implemented on one generic type and each is its own template.
+        """
+        for base_name, templates in unit_table.by_base.items():
+            known = {id(t) for t in global_table.by_base.get(base_name, ())}
+            for template in templates:
+                if id(template) not in known:
+                    global_table.add(template)
 
     @staticmethod
     def _merge_visibility(unit_table, global_table) -> None:

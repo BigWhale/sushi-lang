@@ -1,0 +1,26 @@
+# A generic called inside a match nested in another match's arm. Both bindings have to be
+# recorded, so the walk recurses -- and an inner arm must not lose an outer binding of the
+# same name when it ends (#539).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "inner 9 outer 4\n"
+
+fn outer() i32:
+    return Result.Ok(4)
+
+fn inner(i32 seed) i32:
+    return Result.Ok(seed + 5)
+
+fn echo@(T)(nom T v) T:
+    return Result.Ok(v)
+
+fn main() i32:
+    match outer():
+        Result.Ok(a) ->
+            match inner(a):
+                Result.Ok(b) ->
+                    let i32 got = echo(nom b).realise(-1)
+                    println("inner {got} outer {echo(nom a).realise(-1)}")
+                Result.Err(_) -> println("inner failed")
+        Result.Err(_) -> println("outer failed")
+    return Result.Ok(0)

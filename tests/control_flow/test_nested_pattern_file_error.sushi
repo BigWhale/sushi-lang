@@ -3,25 +3,26 @@
 # EXPECTED_OUTPUT: Using default config (file not found)
 # EXPECTED_OUTPUT: Config: default=true
 
-# Realistic FileResult/FileError nested pattern example
+# Realistic nested pattern example over a handle's error channel, which is IoError
 # This tests nested pattern matching with the file I/O system
 
 use <io/files>
+use <io/fs>
 
 fn load_config() string:
-    let FileResult result = open("nonexistent_nested_test.txt", FileMode.Read())
-    match result:
-        FileResult.Ok(f) ->
-            let string content = f.read()
+    let Result@(File, IoError) result = open("nonexistent_nested_test.txt", FileMode.Read())
+    match nom result:
+        Result.Ok(nom f) ->
+            let string content = f.read_all().realise('')
             f.close()
             return Result.Ok(content)
-        FileResult.Err(FileError.NotFound) ->
+        Result.Err(IoError.NotFound) ->
             println("Using default config (file not found)")
             return Result.Ok("default=true")
-        FileResult.Err(FileError.PermissionDenied) ->
+        Result.Err(IoError.PermissionDenied) ->
             println("Error: Permission denied")
             return Result.Err(StdError.Error)
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("Error: Other I/O error")
             return Result.Err(StdError.Error)
 

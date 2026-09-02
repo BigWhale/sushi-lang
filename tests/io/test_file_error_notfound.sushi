@@ -4,22 +4,22 @@
 # EXPECTED_OUTPUT: Error: File not found - nonexistent_file_12345.txt
 # EXPECTED_OUTPUT: Handled file error successfully
 
-use <io/stdio>
+use <io/fs>
 use <io/files>
 
 fn main() i32:
     # Try to open a file that doesn't exist
-    let FileResult result = open("nonexistent_file_12345.txt", FileMode.Read())
+    let Result@(File, IoError) result = open("nonexistent_file_12345.txt", FileMode.Read())
 
-    match result:
-        FileResult.Ok(f) ->
+    match nom result:
+        Result.Ok(nom f) ->
             stderr.write("Error: should not have succeeded!\n")
             f.close()
             return Result.Err(StdError.Error)
-        FileResult.Err(err) ->
-            # We have the FileError enum value, now match on it
+        Result.Err(err) ->
+            # We have the IoError enum value, now match on it
             match err:
-                FileError.NotFound ->
+                IoError.NotFound ->
                     println("Error: File not found - nonexistent_file_12345.txt")
                     println("Handled file error successfully")
                     return Result.Ok(0)

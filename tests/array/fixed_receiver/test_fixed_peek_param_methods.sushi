@@ -3,7 +3,6 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "3\n10\n30\n60\ntrue\n"
 
-use <io/stdio>
 
 fn report(peek i32[3] arr) ~:
     println(arr.len())

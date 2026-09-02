@@ -119,6 +119,15 @@ def errno_to_net_error_table(is_linux: bool) -> dict[int, int]:
 # EAI_* code and not with errno, so it is set by emit_gai_err alone.
 ERRNO_DEFAULT_NET_ERROR = 14  # Other
 
+# The two console descriptors. POSIX fixes them, so they are constants rather than
+# a lookup: a print statement writes to 1 and a diagnostic to 2 (HANDLES.md, Phase 5).
+STDOUT_FD = 1
+STDERR_FD = 2
+
+# setvbuf's "no buffering" mode. It is 2 in the macOS header and in glibc alike,
+# read from both rather than remembered.
+IONBF = 2
+
 FORMAT_STRINGS = {
     "i32": "%d",
     "i64": "%lld",

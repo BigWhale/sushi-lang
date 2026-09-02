@@ -1,0 +1,32 @@
+# share() on a listener is dup(2): a second descriptor over the same listening socket,
+# which is the shared-listener pattern. Closing the original leaves the copy accepting,
+# and a connection accepted through the copy carries the bytes the client sent.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "accepted on the copy: Mostly Harmless\n"
+use <net/tcp>
+use <io/contracts>
+
+fn main() i32:
+    let TcpListener server = tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
+    let i32 port = server.local_port().realise(0)
+    if (port == 0):
+        println("no port")
+        return Result.Ok(1)
+
+    match server.share():
+        Result.Ok(twin) ->
+            server.close()
+            match tcp_connect("127.0.0.1", port):
+                Result.Ok(client) ->
+                    client.write("Mostly Harmless")
+                    match twin.accept():
+                        Result.Ok(session) ->
+                            let string got = session.read(64).realise("")
+                            println("accepted on the copy: {got}")
+                        Result.Err(_) -> println("accept failed")
+                Result.Err(_) -> println("connect failed")
+        Result.Err(_) -> println("share failed")
+
+    return Result.Ok(0)

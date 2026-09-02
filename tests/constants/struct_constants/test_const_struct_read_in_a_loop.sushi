@@ -1,0 +1,22 @@
+# A constant struct is read-only storage the program shares, not a value copied per
+# read. Reading one in a loop and passing it to a function must not disturb it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0:10 1:10 2:10\nwidth 10\n"
+
+struct Box:
+    i32 width
+    i32 height
+
+const Box UNIT = Box(10, 10)
+
+fn measure(Box b) i32:
+    return Result.Ok(b.width)
+
+fn main() i32:
+    foreach(i in 0..3):
+        print("{i}:{UNIT.width}")
+        if (i < 2):
+            print(" ")
+    println("")
+    println("width {measure(UNIT).realise(0)}")
+    return Result.Ok(0)

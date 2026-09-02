@@ -1,0 +1,27 @@
+# A reference binding points INTO a container's element storage, and a protocol iterator
+# has none: the item is the value next() answered, held in the loop's own slot. The
+# iterable is spelled `iter()` here on purpose -- the name is on the addressability
+# allowlist, so the refusal has to come from the protocol and not from the spelling.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2423
+
+struct Countdown:
+    i32 at
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.at <= 0):
+        let Maybe@(i32) ended = Maybe.None()
+        return ended
+    let i32 now = self.at
+    self.at := self.at - 1
+    let Maybe@(i32) got = Maybe.Some(now)
+    return got
+
+extend Countdown iter() Countdown:
+    return self
+
+fn main() i32:
+    let Countdown c = Countdown(3)
+    foreach(poke n in c.iter()):
+        println(n)
+    return Result.Ok(0)

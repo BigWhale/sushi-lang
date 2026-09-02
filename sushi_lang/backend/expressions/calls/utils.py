@@ -145,6 +145,7 @@ def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional
         'sock_udp_bind': (BuiltinType.I32, 'NetError'),
         'sock_udp_send_to': (BuiltinType.I32, 'NetError'),
         'sock_close': (BuiltinType.I32, 'NetError'),
+        'sock_dup': (BuiltinType.I32, 'NetError'),
         'sock_local_port': (BuiltinType.I32, 'NetError'),
         'sock_peer_ip': (BuiltinType.STRING, 'NetError'),
         'sock_peer_port': (BuiltinType.I32, 'NetError'),

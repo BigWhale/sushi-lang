@@ -60,12 +60,53 @@ def validate_perk_implementation(
             continue
 
         required_sig = required_methods[method_name]
+        # The channel arm answers FIRST and with its own code. CE4004 says "the
+        # signature does not match" and points nowhere; a channel mismatch is
+        # relational, and CE0133 is the code that carries the note.
+        if _reject_channel_mismatch(impl_method, required_sig, perk_def, reporter):
+            valid = False
+            continue
+
         if not _signatures_match(impl_method, required_sig):
             er.emit(reporter, er.ERR.CE4004, impl_method.loc,
                    method=method_name, perk=perk_def.name)
             valid = False
 
     return valid
+
+
+def _channel_phrase(err_type) -> str:
+    """How a signature's error channel reads in a diagnostic, present or absent."""
+    if err_type is None:
+        return "no error channel"
+    from sushi_lang.semantics.generics.type_display import display_type
+    return f"the error channel '| {display_type(err_type)}'"
+
+
+def _reject_channel_mismatch(impl: FuncDef, required: PerkMethodSignature,
+                             perk_def: PerkDef, reporter: Reporter) -> bool:
+    """CE0133: the implementation's `| E` must be the contract's `| E` (ruling R1).
+
+    Relational in both directions -- a contract that declares a channel the
+    implementation omits, and an implementation that invents one the contract has
+    not got, are the same mismatch read from opposite ends.
+    """
+    impl_err = getattr(impl, "err_type", None)
+    required_err = getattr(required, "err_type", None)
+    if impl_err == required_err:
+        return False
+
+    diag = er.emit_with(
+        reporter, er.ERR.CE0133,
+        getattr(impl, "name_span", None) or getattr(impl, "loc", None),
+        name=impl.name, found=_channel_phrase(impl_err), perk=perk_def.name,
+        expected=_channel_phrase(required_err))
+    contract_span = (getattr(required, "name_span", None)
+                     or getattr(required, "loc", None))
+    if contract_span is not None:
+        diag.note(f"perk '{perk_def.name}' declares '{impl.name}' here", contract_span)
+    diag.emit()
+    return True
 
 
 def _signatures_match(impl: FuncDef, required: PerkMethodSignature) -> bool:
@@ -82,6 +123,12 @@ def _signatures_match(impl: FuncDef, required: PerkMethodSignature) -> bool:
             return False
 
     if impl.ret != required.ret:
+        return False
+
+    # The channel is part of the signature (ruling R1). `_reject_channel_mismatch`
+    # owns the diagnostic; the predicate stays total so no other reader of it can
+    # call a mismatched pair a match.
+    if getattr(impl, "err_type", None) != getattr(required, "err_type", None):
         return False
 
     return True

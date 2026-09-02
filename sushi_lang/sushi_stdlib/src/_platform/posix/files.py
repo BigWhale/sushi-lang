@@ -97,6 +97,87 @@ def declare_write(module: ir.Module) -> ir.Function:
         return ir.Function(module, func_type, name="write")
 
 
+def declare_pread(module: ir.Module) -> ir.Function:
+    """Declare POSIX pread(): `ssize_t pread(int, void *, size_t, off_t)`.
+
+    The POSITIONAL read. The offset is an argument, so the descriptor's own file position
+    never moves and two readers of one descriptor cannot race over it -- the reason every
+    language that supports concurrent file I/O converged on this primitive rather than on
+    a new kind of type (HANDLES.md, Phase 8).
+
+    `off_t` is 64-bit on both supported platforms: probe P6 measured 8 bytes on macOS
+    arm64 and on Linux x86_64, where plain `pread` already IS the wide-offset entry point.
+    """
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    func_type = ir.FunctionType(i64, [i32, i8_ptr, i64, i64])
+
+    try:
+        return module.get_global("pread")
+    except KeyError:
+        return ir.Function(module, func_type, name="pread")
+
+
+def declare_pwrite(module: ir.Module) -> ir.Function:
+    """Declare POSIX pwrite(): `ssize_t pwrite(int, const void *, size_t, off_t)`.
+
+    The positional write, and `declare_pread`'s twin in every respect.
+    """
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    func_type = ir.FunctionType(i64, [i32, i8_ptr, i64, i64])
+
+    try:
+        return module.get_global("pwrite")
+    except KeyError:
+        return ir.Function(module, func_type, name="pwrite")
+
+
+def declare_lseek(module: ir.Module) -> ir.Function:
+    """Declare POSIX lseek(): `off_t lseek(int, off_t, int)`.
+
+    `off_t` is 64-bit on both supported platforms, which probe P6 measured for `pread`;
+    the same answer holds here, so the offset and the result are both i64.
+    """
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    func_type = ir.FunctionType(i64, [i32, i64, i32])
+
+    try:
+        return module.get_global("lseek")
+    except KeyError:
+        return ir.Function(module, func_type, name="lseek")
+
+
+def declare_isatty(module: ir.Module) -> ir.Function:
+    """Declare POSIX isatty(): `int isatty(int)`.
+
+    Asking cannot fail in any way a caller can act on -- a descriptor that is not a
+    terminal and a descriptor that is not open both answer 0 -- so `fd_isatty` gives a
+    bare bool rather than a Result.
+    """
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    func_type = ir.FunctionType(i32, [i32])
+
+    try:
+        return module.get_global("isatty")
+    except KeyError:
+        return ir.Function(module, func_type, name="isatty")
+
+
+def declare_dup(module: ir.Module) -> ir.Function:
+    """Declare POSIX dup(): `int dup(int)`.
+
+    A SECOND descriptor over the SAME open file description. The offset is shared, so
+    this is the shared-listener primitive and not the answer for concurrent reads of one
+    file -- `pread`/`pwrite` are that. `.share()` is built on it in Phase 8.
+    """
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    func_type = ir.FunctionType(i32, [i32])
+
+    try:
+        return module.get_global("dup")
+    except KeyError:
+        return ir.Function(module, func_type, name="dup")
+
+
 def declare_close(module: ir.Module) -> ir.Function:
     """Declare POSIX close() syscall."""
     i8, i8_ptr, i32, i64 = get_basic_types()

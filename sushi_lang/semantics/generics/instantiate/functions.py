@@ -57,6 +57,107 @@ class FunctionCollector:
             if resolved is not None and resolved != target_type:
                 self.variable_types["self"] = resolved
 
+    def _infer_scrutinee_type(self, scrutinee):
+        """The scrutinee's type, through the typecheck pass's own inferrer."""
+        if scrutinee is None:
+            return None
+        validator = getattr(self.expression_scanner, "type_validator", None)
+        if validator is None:
+            return None
+        try:
+            return validator.infer_expression_type(scrutinee)
+        except Exception:
+            # This pass reports nothing: a scrutinee it cannot type simply collects no
+            # binding, and the typecheck pass raises the real diagnostic afterwards.
+            return None
+
+    def _variant_payload_types(self, scrutinee_type, variant_name):
+        """The payload types of one variant, or () when they cannot be read here.
+
+        Two shapes reach this. A monomorphized `EnumType` carries its payload types
+        already substituted. A `GenericTypeRef` does not -- the interned instance does not
+        exist until the monomorphize pass -- so the generic TEMPLATE is read and its type
+        parameters are substituted with the reference's own arguments. That keeps the rule
+        general: `Result` and `Maybe` take the same path as a user's generic enum.
+        """
+        from sushi_lang.semantics.typesys import EnumType
+
+        if isinstance(scrutinee_type, EnumType):
+            for variant in scrutinee_type.variants:
+                if variant.name == variant_name:
+                    return tuple(variant.associated_types or ())
+            return ()
+
+        if isinstance(scrutinee_type, GenericTypeRef):
+            tables = getattr(self.expression_scanner, "generic_enums", None)
+            if tables is None:
+                return ()
+            template = tables.get(scrutinee_type.base_name)
+            if template is None:
+                return ()
+            inferrer = self.expression_scanner.type_inferrer
+            for variant in template.variants:
+                if variant.name == variant_name:
+                    return tuple(
+                        inferrer.substitute_type_simple(
+                            payload, template.type_params, scrutinee_type.type_args
+                        )
+                        for payload in (variant.associated_types or ())
+                    )
+            return ()
+
+        return ()
+
+    def _bind_pattern_payloads(self, pattern, scrutinee_type) -> list[tuple[str, "Type | None"]]:
+        """Record an arm's payload bindings, and answer what to put back afterwards.
+
+        A binding lives for its own arm only, so the previous value of every name touched
+        is returned rather than the scope being cleared -- an arm must not see the arm
+        before it, and it must not lose an outer local of the same name.
+        """
+        from sushi_lang.semantics.ast import Pattern, NomBinding
+
+        if not isinstance(pattern, Pattern) or scrutinee_type is None:
+            return []
+
+        payloads = self._variant_payload_types(scrutinee_type, pattern.variant_name)
+        if not payloads:
+            return []
+
+        saved: list[tuple[str, "Type | None"]] = []
+        for binding, raw_payload in zip(pattern.bindings, payloads, strict=False):
+            # Resolve before binding, exactly as a `let` local's annotation is resolved. A
+            # template's payload can be a bare name -- an UnknownType("NetError") displays
+            # as "NetError" while the enum table holds the real EnumType -- and binding the
+            # unresolved one interns a Result whose element differs from the canonical
+            # instance, which is the poisoned intern CE0126 reports with two identical
+            # spellings.
+            payload = self._resolve_local_type(raw_payload)
+            if isinstance(binding, str):
+                if binding == "_":
+                    continue
+                saved.append((binding, self.variable_types.get(binding)))
+                self.variable_types[binding] = payload
+            elif isinstance(binding, NomBinding):
+                # A taken payload is the arm's own VALUE, so its type is the payload's --
+                # no reference wrapper (borrow-model.md S10b).
+                saved.append((binding.name, self.variable_types.get(binding.name)))
+                self.variable_types[binding.name] = payload
+            elif isinstance(binding, Pattern):
+                saved.extend(self._bind_pattern_payloads(binding, payload))
+            # A `peek`/`poke` RefBinding carries a ReferenceType rather than the payload's
+            # own type, and a reference is not a type argument a generic can be called
+            # with, so nothing is recorded for one.
+        return saved
+
+    def _unbind(self, saved: list[tuple[str, "Type | None"]]) -> None:
+        """Put back what an arm's bindings displaced."""
+        for name, previous in reversed(saved):
+            if previous is None:
+                self.variable_types.pop(name, None)
+            else:
+                self.variable_types[name] = previous
+
     def collect_from_function(self, func) -> None:
         """Collect generic instantiations from function signature and body."""
         if hasattr(func, 'type_params') and func.type_params:
@@ -180,12 +281,22 @@ class FunctionCollector:
         elif isinstance(stmt, Match):
             if stmt.scrutinee is not None:
                 self.expression_scanner.scan_expression(stmt.scrutinee)
+            # A pattern binding is a LOCAL, and a generic called with one needs its type
+            # exactly as a `let` local's is needed. `resolved_scrutinee_type` is stamped by
+            # the typecheck pass, which runs after this one, so the scrutinee is typed here
+            # (#539).
+            scrutinee_type = self._infer_scrutinee_type(stmt.scrutinee)
             for arm in stmt.arms:
                 from sushi_lang.semantics.ast import Block
+                bound = self._bind_pattern_payloads(arm.pattern, scrutinee_type)
                 if isinstance(arm.body, Block):
                     self._collect_from_block(arm.body)
-                # Note: If arm.body is an Expr, we don't need to collect types from it
-                # because expressions don't introduce new type annotations
+                else:
+                    # An arm body that is an EXPRESSION introduces no type ANNOTATION, which
+                    # is why it used to be skipped -- but it may still CALL a generic, and
+                    # the call is what needs collecting (#539).
+                    self.expression_scanner.scan_expression(arm.body)
+                self._unbind(bound)
 
         elif isinstance(stmt, Return):
             if stmt.value is not None:

@@ -1,10 +1,15 @@
-# `<io/stdio>` is a method interface: it enables `stdin.read_line()` and brings
-# no name at all. The `as` bound an empty namespace, and the import still did its
-# work, so this warns (section 4.4, CW3004).
+# `<collections/strings>` is a method interface: it enables `s.upper()` and brings no
+# name at all. The `as` bound an empty namespace, and the import still did its work,
+# so this warns (section 4.4, CW3004).
+#
+# It used to say this with `<io/stdio>`, the other method-interface module. That one
+# was retired when the console handles became File constants (HANDLES.md Phase 5), and
+# `<io/fs>` brings names, so it cannot stand in.
 # EXPECT_ERROR_CODE: CW3004
-# EXPECT_STDOUT_EXACT: "42\n"
-use <io/stdio> as io
+# EXPECT_STDOUT_EXACT: "MOSTLY\n"
+use <collections/strings> as s
 
 fn main() i32:
-    println("42")
+    let string text = "mostly"
+    println(text.upper())
     return Result.Ok(0)

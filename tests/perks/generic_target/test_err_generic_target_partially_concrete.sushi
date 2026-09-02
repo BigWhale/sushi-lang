@@ -1,0 +1,17 @@
+# A partially-concrete target is partial specialization, which Sushi does not have. The
+# rule is the extension target's (CE2098) and a perk implementation reads the same code.
+# EXPECT_ERROR_CODE: CE2098
+
+perk Show:
+    fn show() string
+
+struct Pair@(T, U):
+    T first
+    U second
+
+extend Pair@(i32, U) with Show:
+    fn show() string:
+        return "pair"
+
+fn main() i32:
+    return Result.Ok(0)

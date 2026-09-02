@@ -72,7 +72,7 @@ def parse_perkdef(t: Tree, ast_builder: 'ASTBuilder') -> PerkDef:
 
 
 def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMethodSignature:
-    """Parse perk_method: FN NAME "(" [parameters] ")" type _NEWLINE"""
+    """Parse perk_method: FN NAME "(" [parameters] ")" type ["|" type] _NEWLINE"""
     t = expect(t, "perk_method")
 
     name_tok = first_name(t.children)
@@ -84,16 +84,21 @@ def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMetho
     params = parse_params(params_node, ast_builder) if params_node else []
     self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
 
-    return_type_node = None
-    for child in t.children:
-        if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
-            return_type_node = child
-            break
+    # The return type, then the optional `| E` channel -- the same two-type read
+    # `parse_funcdef` does, because the contract and the implementation now declare
+    # the channel in the same shape.
+    type_nodes = [child for child in t.children
+                  if isinstance(child, Tree)
+                  and (child.data in TYPE_NODE_NAMES or child.data == "name_t")]
 
-    if return_type_node is None:
+    if not type_nodes:
         ice(t, "missing return type")
 
+    return_type_node = type_nodes[0]
+    err_type_node = type_nodes[1] if len(type_nodes) >= 2 else None
+
     return_type = ast_builder._parse_type(return_type_node)
+    err_type = ast_builder._parse_type(err_type_node) if err_type_node is not None else None
 
     return PerkMethodSignature(
         name=str(name_tok),
@@ -101,6 +106,8 @@ def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMetho
         ret=return_type,
         self_mode=self_mode,
         self_mode_span=self_mode_span,
+        err_type=err_type,
+        err_span=span_of(err_type_node) if err_type_node is not None else None,
         loc=span_of(t),
         name_span=span_of(name_tok),
         ret_span=span_of(return_type_node),

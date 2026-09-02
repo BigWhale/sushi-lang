@@ -24,7 +24,7 @@ enum_variant: NAME ["(" [enum_variant_fields] ")"] _NEWLINE
 enum_variant_fields: type ("," type)*
 
 perk_def: PUBLIC? PERK NAME [type_params] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | perk_method)+ _DEDENT
-perk_method: FN NAME "(" [parameters] ")" type _NEWLINE
+perk_method: FN NAME "(" [parameters] ")" type ["|" type] _NEWLINE
 
 // Foreign Function Interface (FFI) - unsafe external blocks
 external_block: UNSAFE EXTERNAL STRING AS NAME [BECAUSE STRING] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | extern_decl)+ _DEDENT
@@ -45,6 +45,7 @@ function_def: PUBLIC? FN NAME [type_params] "(" [parameters] ")" type? ["|" type
 parameters: param ("," param)*
 param: typed_param | variadic_param
      | BORROW_MODE NAME -> self_param
+     | NOM NAME -> nom_self_param
 typed_param: NOM? type NAME
 variadic_param: ELLIPSIS type NAME
 
@@ -66,11 +67,14 @@ variadic_param: ELLIPSIS type NAME
 
 rebind_stmt: postfix ASSIGN_REBIND expr _NEWLINE
 
-return_stmt: "return" expr _NEWLINE?
+# `nom` marks a field TAKE (`return nom self.out`). The marker rides on the statement
+# rather than on `?unary`, for the reason `nom_arg` states: at the expression level it
+# would bind to the innermost operand and mark a cast's operand instead of the cast.
+return_stmt: "return" NOM? expr _NEWLINE?
 print_stmt: "print" "(" expr ")" _NEWLINE
 println_stmt: "println" "(" expr ")" _NEWLINE
 
-let_stmt: "let" [type] NAME "=" expr _NEWLINE
+let_stmt: "let" [type] NAME "=" NOM? expr _NEWLINE
         | "let" [type] NAME "=" lambda_block       -> let_stmt
 call_stmt: postfix _NEWLINE
 
@@ -79,11 +83,15 @@ elif_part: ELIF "(" expr ")" ":" block
 else_part: ELSE ":" block
 
 while_stmt: WHILE "(" expr ")" ":" block
-foreach_stmt: FOREACH "(" [type] NAME "in" expr ")" ":" block
+// The `??` on the BINDER (`foreach(line?? in it)`) is the short form over a fallible
+// iterator: the item is an ordinary Result and the marker propagates its Err, exactly
+// as `??` does in any other position. A reference binding takes no marker -- a `peek`
+// or `poke` binding points INTO storage, and there is nothing to unwrap there.
+foreach_stmt: FOREACH "(" [type] NAME [DOUBLE_QUESTION] "in" expr ")" ":" block
             | FOREACH "(" BORROW_MODE NAME "in" expr ")" ":" block -> foreach_ref
 expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
 
-match_stmt: MATCH expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
+match_stmt: MATCH NOM? expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
 match_arm: (pattern | literal_pattern | wildcard_pattern) "->" (match_arm_inline | block)
 literal_pattern: "-" (INT | HEX_INT | BIN_INT | OCT_INT) -> neg_literal_pattern
                | (INT | HEX_INT | BIN_INT | OCT_INT)
@@ -92,6 +100,7 @@ pattern: [NAME "."] NAME "." NAME ["(" [pattern_list] ")"]
 pattern_list: pattern_item ("," pattern_item)*
 pattern_item: pattern | NAME | wildcard_pattern | own_pattern
             | BORROW_MODE NAME -> ref_binding
+            | NOM NAME -> nom_binding
 own_pattern: NAME "(" pattern_item ")"  -> own_pattern_call
 wildcard_pattern: UNDERSCORE
 
@@ -117,7 +126,6 @@ continue_stmt: CONTINUE _NEWLINE
           | "bool" -> bool_t
           | "string" -> string_t
           | "~" -> blank_t
-          | "file" -> file_t
           | NAME "." NAME AT "(" type_list ")" -> qualified_generic_type_t
           | NAME AT "(" type_list ")" -> generic_type_t
           | NAME "." NAME -> qualified_name_t
@@ -181,9 +189,6 @@ method_name: NAME | NEW | EXTEND
      | CHAR_STRING
      | NAME
      | "~" -> blank_literal
-     | STDIN -> stdin_literal
-     | STDOUT -> stdout_literal
-     | STDERR -> stderr_literal
      | "f64" -> f64_name
      | "f32" -> f32_name
      | array_literal
@@ -315,9 +320,6 @@ CONTINUE.2: /continue\b/
 AS.2: /as\b/
 BORROW_MODE.2: /peek\b/ | /poke\b/
 NOM.2: /nom\b/
-STDIN.2: /stdin\b/
-STDOUT.2: /stdout\b/
-STDERR.2: /stderr\b/
 
 # A numeric terminal matches a PERMISSIVE superset: underscores anywhere in the
 # digit runs. Placement is checked in `ast_builder/expressions/literals.py`, which

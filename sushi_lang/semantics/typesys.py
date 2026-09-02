@@ -1,6 +1,6 @@
 from __future__ import annotations
 from enum import Enum
-from typing import Optional, Mapping, Union
+from typing import AbstractSet, Optional, Mapping, Union
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
@@ -29,10 +29,6 @@ class BuiltinType(Enum):
     BOOL = "bool"
     STRING = "string"
     BLANK = "~"
-    STDIN = "stdin"
-    STDOUT = "stdout"
-    STDERR = "stderr"
-    FILE = "file"
 
     def __str__(self) -> str:
         return self.value
@@ -225,12 +221,24 @@ class FunctionType:
                 self.modes == other.modes)
 
 
-def owns_heap(t: Optional["Type"], _visited: Optional[set] = None,
-              resolve=None) -> bool:
-    """True if a value of this type owns heap that RAII must free and a sink must transfer."""
+def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
+                  _visited: Optional[set] = None, resolve=None) -> bool:
+    """True if a value of this type owns something RAII must release and a sink must transfer.
+
+    Two ways to own. Most types own HEAP, and the answer is structural: a `string`, a
+    `T[]`, an `Own`, a `List`, a `HashMap`, a capturing closure, or a composite holding
+    one. A type may also DECLARE that it owns a resource, by implementing the `Drop`
+    perk -- a file or a socket holds one `i32` descriptor, so no field walk can find it
+    (HANDLES.md ruling R2).
+
+    `drops` is the set of type names that implement `Drop`. It is REQUIRED and has no
+    default: a caller that forgets it would answer False for every handle in the
+    program, and a false answer here is a leaked descriptor with no diagnostic
+    (ruling R2a).
+    """
     if t is None:
         return False
-    if resolve is not None and isinstance(t, UnknownType):
+    if resolve is not None and isinstance(t, (UnknownType, GenericTypeRef)):
         t = resolve(t) or t
 
     if isinstance(t, ForeignPtrType):
@@ -257,6 +265,10 @@ def owns_heap(t: Optional["Type"], _visited: Optional[set] = None,
         _visited = set()
 
     if isinstance(t, StructType):
+        # A DECLARED resource, before any field walk: the whole point of `Drop` is that
+        # the fields do not say so.
+        if t.name in drops:
+            return True
         # Own<T> / List<T> / HashMap<K, V> always own a heap allocation, but their only
         # fields are raw pointers or a placeholder, so the field scan below answers False and
         # every recursion gate would skip them. That mismatch was #162 / #181 / #183.
@@ -265,17 +277,73 @@ def owns_heap(t: Optional["Type"], _visited: Optional[set] = None,
         if t.name in _visited:
             return False
         _visited.add(t.name)
-        return any(owns_heap(ft, _visited, resolve) for _, ft in t.fields)
+        return any(owns_resource(ft, drops, _visited, resolve) for _, ft in t.fields)
     if isinstance(t, EnumType):
+        if t.name in drops:
+            return True
         if t.name in _visited:
             return False
         _visited.add(t.name)
-        return any(owns_heap(at, _visited, resolve)
+        return any(owns_resource(at, drops, _visited, resolve)
                    for variant in t.variants for at in variant.associated_types)
     if isinstance(t, ArrayType):
         # A fixed array `T[N]` owns no buffer of its own -- its storage is inline -- but its
         # ELEMENTS can own heap (#185).
-        return owns_heap(t.base_type, _visited, resolve)
+        return owns_resource(t.base_type, drops, _visited, resolve)
+    return False
+
+
+def holds_declared_resource(t: Optional["Type"], drops: AbstractSet[str],
+                            _visited: Optional[set] = None, resolve=None) -> bool:
+    """Does this type declare a resource, or hold one anywhere inside it?
+
+    NARROWER than `owns_resource`, and the difference is the whole point: a `string`
+    owns heap and answers True there, and it deep-copies perfectly well. This asks only
+    about the DECLARED half -- a `Drop` type, a struct with one in a field, an array or
+    a container of them.
+
+    It is what `.clone()` is refused on (ruling R3). A derived clone of a handle copies
+    the descriptor number, so two values hold one descriptor and both drop: a double
+    close that the copy verb hides. `.share()` is the operation that means a second
+    owner, and it says so in its name.
+    """
+    if t is None:
+        return False
+    if resolve is not None and isinstance(t, (UnknownType, GenericTypeRef)):
+        t = resolve(t) or t
+
+    if isinstance(t, ReferenceType):
+        return holds_declared_resource(t.referenced_type, drops, _visited, resolve)
+    if isinstance(t, (DynamicArrayType, ArrayType)):
+        return holds_declared_resource(t.base_type, drops, _visited, resolve)
+    if isinstance(t, GenericTypeRef):
+        return any(holds_declared_resource(a, drops, _visited, resolve)
+                   for a in (t.type_args or ()))
+
+    if _visited is None:
+        _visited = set()
+
+    if isinstance(t, StructType):
+        if t.name in drops:
+            return True
+        if t.name in _visited:
+            return False
+        _visited.add(t.name)
+        # A container's element type rides in `generic_args`; its FIELDS are raw pointers
+        # and a placeholder, so the field walk alone cannot see a `List@(Handle)`.
+        if any(holds_declared_resource(a, drops, _visited, resolve)
+               for a in (t.generic_args or ())):
+            return True
+        return any(holds_declared_resource(ft, drops, _visited, resolve)
+                   for _, ft in t.fields)
+    if isinstance(t, EnumType):
+        if t.name in drops:
+            return True
+        if t.name in _visited:
+            return False
+        _visited.add(t.name)
+        return any(holds_declared_resource(at, drops, _visited, resolve)
+                   for variant in t.variants for at in variant.associated_types)
     return False
 
 
@@ -338,7 +406,7 @@ Type = Union[
 TYPE_NODE_NAMES = {
     "i8_t", "i16_t", "i32_t", "i64_t", "u8_t", "u16_t", "u32_t", "u64_t",
     "f32_t", "f64_t", "bool_t", "string_t", "blank_t",
-    "array_t", "dynamic_array_t", "reference_t", "file_t",
+    "array_t", "dynamic_array_t", "reference_t",
     "generic_type_t",  # Generic type instantiation (e.g., Result<i32>)
     "fn_type_t",       # First-class function type (e.g., fn(i32) -> i32)
     # A name written behind an alias. Every reader of this set asks one question --
@@ -360,7 +428,6 @@ NODE_TO_TYPE: Mapping[str, BuiltinType] = {
     "bool_t": BuiltinType.BOOL,
     "string_t": BuiltinType.STRING,
     "blank_t": BuiltinType.BLANK,
-    "file_t": BuiltinType.FILE,
 }
 
 def type_from_rule_name(name: str) -> Optional[Type]:

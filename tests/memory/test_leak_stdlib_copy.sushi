@@ -7,13 +7,14 @@
 # EXPECT_STDOUT_EXACT: "ok=0 err=-1\n"
 # EXPECT_NO_LEAKS
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match open('/tmp/sushi_leak_copy_src.txt', FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(nom f) ->
             f.write("Mostly Harmless")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Ok(1)
 
     let i32 ok = copy('/tmp/sushi_leak_copy_src.txt', '/tmp/sushi_leak_copy_dst.txt').realise(-1)

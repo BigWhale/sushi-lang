@@ -5,6 +5,7 @@
 # EXPECT_STDOUT_EXACT: "md=0 rn=0 rm=0 rd=0\n"
 # EXPECT_NO_LEAKS
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     let string root = "/tmp"
@@ -12,10 +13,10 @@ fn main() i32:
     let i32 md = mkdir(dir, 0o755).realise(-1)
 
     match open('/tmp/sushi_leak_mutate_a.txt', FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(nom f) ->
             f.write("x")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Ok(1)
 
     let i32 rn = rename('/tmp/sushi_leak_mutate_a.txt', '/tmp/sushi_leak_mutate_b.txt').realise(-1)

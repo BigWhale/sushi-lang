@@ -1,0 +1,21 @@
+# Ruling 5, the discard row: a channel perk call whose Result nobody reads warns
+# with CW2001 and still compiles.
+# TEST_TYPE: warning
+# EXPECT_ERROR_CODE: CW2001
+enum SourceError:
+    Closed
+
+perk Source:
+    fn read_one() i32 | SourceError
+
+struct Counter:
+    i32 value
+
+extend Counter with Source:
+    fn read_one() i32 | SourceError:
+        return self.value
+
+fn main() i32:
+    let Counter c = Counter(1)
+    c.read_one()
+    return Result.Ok(0)

@@ -283,7 +283,6 @@ sushi/
     └── dist/                  # Platform-organized precompiled .bc files
         ├── darwin/            # macOS
         │   ├── collections/strings.bc
-        │   ├── io/stdio.bc
         │   ├── io/files.bc
         │   ├── math.bc
         │   ├── time.bc

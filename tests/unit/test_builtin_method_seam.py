@@ -78,7 +78,6 @@ def _list(elem="i32"):
     (BuiltinType.I32, "to_str"),
     (BuiltinType.I32, "hash"),
     (BuiltinType.F64, "to_bits"),
-    (BuiltinType.STDOUT, "write"),
     (EnumType(name="Result<i32, StdError>", variants=()), "is_ok"),
     (EnumType(name="Maybe<i32>", variants=()), "is_some"),
     (StructType(name="Own<i32>", fields=()), "get"),
@@ -97,6 +96,13 @@ def test_recognised(receiver, method):
     (BuiltinType.BOOL, "to_bits"),
     (_list(), "sum_all"),                  # the real extension in tests/bugs
     (StructType(name="Point", fields=()), "describe"),
+    # EVERY File method is an ordinary extension or perk implementation in <io/fs> now,
+    # so the seam must claim none of them -- claiming one would make CE2097 reject the
+    # real definition (HANDLES.md Phase 5). `lines()` was the last builtin and Phase 7d
+    # removed it: line iteration is BufReader's, walked by the `next()` protocol.
+    (StructType(name="File", fields=()), "write"),
+    (StructType(name="File", fields=()), "close"),
+    (StructType(name="File", fields=()), "lines"),
     (None, "hash"),
 ])
 def test_not_recognised(receiver, method):

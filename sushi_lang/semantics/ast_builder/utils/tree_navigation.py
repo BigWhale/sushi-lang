@@ -46,6 +46,11 @@ def first_name(children: List[object]) -> Optional[Token]:
     return first(children, lambda c: isinstance(c, Token) and c.type == "NAME")  # type: ignore[return-value]
 
 
+def first_token(children: List[object], token_type: str) -> Optional[Token]:
+    """Get the first token of `token_type` among the children."""
+    return first(children, lambda c: isinstance(c, Token) and c.type == token_type)  # type: ignore[return-value]
+
+
 def name_tokens(children: List[object]) -> List[Token]:
     """Every NAME token among the children, in source order.
 
@@ -102,3 +107,16 @@ def first_tree_child(t: Tree) -> Tree:
     if ch is None:
         ice(t, "missing operand")
     return ch
+
+
+def mark_nom(expr, token):
+    """Stamp the `nom` marker a call argument, a `let` or a `return` may carry.
+
+    ONE place, because `nom` is a call-site MARKER and not an operator: it sets a flag
+    rather than wrapping the expression in a node every pass would then dispatch on.
+    Three positions admit it -- `f(nom x)`, `let T x = nom s.f` and `return nom s.f` --
+    and a fourth spelling of the same two lines is how one of them would drift.
+    """
+    expr.nom_marked = True
+    expr.nom_span = span_of(token)
+    return expr

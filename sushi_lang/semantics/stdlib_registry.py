@@ -20,6 +20,8 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "collections/iter": _SRC_SUSHI_ROOT / "collections" / "iter.sushi",
     "compression/zlib": _SRC_SUSHI_ROOT / "compression" / "zlib.sushi",
     "encoding/msgpack": _SRC_SUSHI_ROOT / "encoding" / "msgpack.sushi",
+    "io/buf": _SRC_SUSHI_ROOT / "io" / "buf.sushi",
+    "io/contracts": _SRC_SUSHI_ROOT / "io" / "contracts.sushi",
     "io/fs": _SRC_SUSHI_ROOT / "io" / "fs.sushi",
     "io/path": _SRC_SUSHI_ROOT / "io" / "path.sushi",
     "net/dns": _SRC_SUSHI_ROOT / "net" / "dns.sushi",
@@ -117,6 +119,20 @@ def _get_param_specs():
     for fn in ("rename", "copy"):
         specs[("files", fn)] = [STRING, STRING]
     specs[("files", "mkdir")] = [STRING, I32]
+    # The descriptor layer (HANDLES.md, Phase 4). A path is a `string` and is marshalled
+    # by the call site; a descriptor is a bare i32, and an offset is i64 because `off_t`
+    # is 64-bit on both supported platforms (probe P6).
+    specs[("files", "fd_open")] = [STRING, I32, I32]
+    specs[("files", "fd_pread")] = [I32, I64, I32]
+    specs[("files", "fd_pwrite")] = [I32, I64, DynamicArrayType(BuiltinType.U8)]
+    for fn in ("fd_dup", "fd_close", "fd_readln", "fd_isatty"):
+        specs[("files", fn)] = [I32]
+    # The sequential half (HANDLES.md, Phase 5). These move the descriptor's own file
+    # position; a string crosses as its fat pointer, with no `to_bytes()` copy in front.
+    specs[("files", "fd_read")] = [I32, I32]
+    specs[("files", "fd_write")] = [I32, DynamicArrayType(BuiltinType.U8)]
+    specs[("files", "fd_write_str")] = [I32, STRING]
+    specs[("files", "fd_seek")] = [I32, I64, I32]
 
     BYTE_ARRAY = DynamicArrayType(BuiltinType.U8)
     specs[("socket", "sock_dns_resolve")] = [STRING]
@@ -126,7 +142,7 @@ def _get_param_specs():
     specs[("socket", "sock_tcp_connect")] = [STRING, I32]
     specs[("socket", "sock_tcp_listen")] = [STRING, I32, I32]
     specs[("socket", "sock_send")] = [I32, BYTE_ARRAY]
-    for fn in ("sock_close", "sock_local_port", "sock_tcp_accept",
+    for fn in ("sock_close", "sock_dup", "sock_local_port", "sock_tcp_accept",
                "sock_peer_ip", "sock_peer_port"):
         specs[("socket", fn)] = [I32]
     for fn in ("sock_recv", "sock_set_recv_timeout", "sock_set_send_timeout"):
@@ -225,6 +241,9 @@ class StdlibRegistry:
         validator: Callable
     ) -> None:
         """Discover functions using heuristic approach."""
+        from sushi_lang.sushi_stdlib.src.io.files_funcs import FILE_UTILITY_FUNCTIONS
+        from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_FUNCTIONS
+
         common_names = {
             "time": ["sleep", "msleep", "usleep", "nanosleep", "now", "monotonic_ns"],
             "env": ["getenv", "setenv"],
@@ -239,13 +258,12 @@ class StdlibRegistry:
                 "hypot",
             ],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
-            "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir", "read_dir", "mtime", "ctime", "mode", "is_symlink"],
-            "socket": ["sock_tcp_connect", "sock_tcp_listen", "sock_tcp_accept",
-                       "sock_send", "sock_recv", "sock_close", "sock_local_port",
-                       "sock_peer_ip", "sock_peer_port",
-                       "sock_set_recv_timeout", "sock_set_send_timeout",
-                       "sock_dns_resolve", "sock_udp_bind", "sock_udp_send_to",
-                       "sock_udp_recv_from"],
+            # `files` and `socket` READ their lists rather than repeating them. The copies
+            # had to be kept in step by hand, and a name in one and not the other is
+            # invisible until a program calls it and gets CE2008 for a function the
+            # compiler can emit.
+            "files": FILE_UTILITY_FUNCTIONS,
+            "socket": SOCKET_FUNCTIONS,
         }
 
         candidates = common_names.get(module_name, [])

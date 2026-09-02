@@ -1,0 +1,17 @@
+# A socket handle follows the same rule as a file handle: close() consumes it, and a use
+# after the close is CE2435 rather than an EBADF at run time.
+# EXPECT_ERROR_CODE: CE2435
+# EXPECT_STDERR_CONTAINS: 'close' consumed it
+use <net/tcp>
+
+fn shut_then_ask() ~ | NetError:
+    let TcpListener listener = tcp_listen("127.0.0.1", 0, 1)??
+    listener.close()??
+    println("{listener.local_port()??}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match shut_then_ask():
+        Result.Ok(_) -> println("done")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

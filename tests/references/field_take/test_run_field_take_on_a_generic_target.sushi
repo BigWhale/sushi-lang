@@ -1,0 +1,32 @@
+# The shape the buffered readers need: a generic wrapper hands its inner handle back.
+# The take reads the field type of the INSTANTIATION, so `Wrap@(File)` takes a handle
+# while `Wrap@(i32)` would copy an integer.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "held 1\nok\n"
+use <io/fs>
+
+struct Wrap@(T):
+    T inner
+    string label
+
+extend Wrap@(T) into_inner(nom self) T:
+    return nom self.inner
+
+fn run() ~ | IoError:
+    let File f = open("/tmp/sushi_field_take_generic.txt", FileMode.Write())??
+    let i32 n = 1
+    let Wrap@(File) w = Wrap(f, "held {n}")
+    println(w.label)
+    let File back = w.into_inner()
+    back.write("Mostly Harmless\n")??
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

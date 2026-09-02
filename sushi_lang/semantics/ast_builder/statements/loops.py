@@ -1,14 +1,46 @@
 """Loop statement parsing (foreach)."""
 from __future__ import annotations
+from itertools import count
 from typing import TYPE_CHECKING, Optional
 from lark import Tree, Token
-from sushi_lang.semantics.ast import Foreach, Expand
+from sushi_lang.semantics.ast import Block, Foreach, Expand, Let, Name, TryExpr
 from sushi_lang.semantics.typesys import ReferenceType, Type, TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import ice
 from sushi_lang.internals.report import span_of, Span
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
+
+# One counter for the whole process. A `??` binder needs a name for the loop's own
+# binding that the user cannot have written, and a nested loop must not shadow its
+# parent's -- `__` is not a legal identifier start in Sushi, so nothing can collide.
+_try_binder_ids = count()
+
+
+def _desugar_try_binder(item_name: str, item_name_span: Optional[Span],
+                        try_token: Token, body: Block) -> tuple[str, Let]:
+    """Turn `foreach(x?? in it)` into a hidden binding plus `let <T> x = <hidden>??`.
+
+    The `??` is a MARKER, not an operator, and this is the whole of its implementation:
+    the loop binds the raw item under a hidden name and the body opens with an ordinary
+    `Let` of an ordinary `TryExpr`. So the unwrap, the error propagation, the channel
+    check (CE2511) and the scope cleanup on the error path are all the ones `??` already
+    has everywhere else -- there is no second implementation to keep in step.
+
+    The `Let` leaves here with no type. The typecheck pass fills it in from the item
+    type, which is the one thing the parser cannot know.
+    """
+    hidden = f"__fe_item{next(_try_binder_ids)}"
+    unwrap = Let(
+        name=item_name,
+        ty=None,
+        value=TryExpr(expr=Name(id=hidden, loc=item_name_span), loc=span_of(try_token)),
+        name_span=item_name_span,
+        type_span=item_name_span,
+        loc=span_of(try_token),
+    )
+    body.statements.insert(0, unwrap)
+    return hidden, unwrap
 
 
 def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
@@ -34,6 +66,12 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
     item_name_span = span_of(name_tok)
     idx += 1
 
+    try_token: Optional[Token] = None
+    if (idx < len(children) and isinstance(children[idx], Token)
+            and children[idx].type == "DOUBLE_QUESTION"):
+        try_token = children[idx]
+        idx += 1
+
     while idx < len(children) and isinstance(children[idx], Token) and children[idx].value == "in":
         idx += 1
 
@@ -43,6 +81,13 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
 
     block_tree = children[idx]
     body = ast_builder._block(block_tree)
+
+    item_try_let: Optional[Let] = None
+    item_try_span: Optional[Span] = None
+    if try_token is not None:
+        item_try_span = span_of(try_token)
+        item_name, item_try_let = _desugar_try_binder(
+            item_name, item_name_span, try_token, body)
 
     # A reference-typed item (`foreach(poke i32 r in ...)`) is the long spelling of
     # the marker form (`foreach(poke r in ...)`) -- normalize it, so every downstream
@@ -63,6 +108,8 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
         item_type_span=item_type_span,
         item_borrow=item_borrow,
         item_borrow_span=item_borrow_span,
+        item_try_let=item_try_let,
+        item_try_span=item_try_span,
         loc=span_of(node)
     )
 

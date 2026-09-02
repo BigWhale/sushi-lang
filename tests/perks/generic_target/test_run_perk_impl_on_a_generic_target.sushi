@@ -1,0 +1,23 @@
+# A perk implementation may target a GENERIC struct. One copy is instantiated per
+# instantiation the program names, so Box@(i32) and Box@(string) each get their own
+# body -- the same rule an extension method on a generic target already followed.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "boxed 7\nboxed towel\n"
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "boxed {self.item}"
+
+fn main() i32:
+    let Box@(i32) n = Box(7)
+    let Box@(string) s = Box("towel")
+    println(n.show())
+    println(s.show())
+    return Result.Ok(0)

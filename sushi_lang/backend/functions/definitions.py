@@ -98,8 +98,10 @@ class FunctionDefinitions:
         # resolution. A moded receiver (#327) registers its full ReferenceType -- the
         # single fact `is_reference_parameter` keys on, so every deref/write consumer
         # treats `self` as the pointer it now is.
+        from sushi_lang.semantics.param_modes import receiver_mode
+        self_receiver_mode = receiver_mode(getattr(ext, "self_mode", None))
         self_semantic = ext.target_type
-        if self_semantic is not None and getattr(ext, "self_mode", None) is not None:
+        if self_semantic is not None and self_receiver_mode.by_pointer:
             from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
             self_semantic = ReferenceType(
                 ext.target_type,
@@ -120,6 +122,16 @@ class FunctionDefinitions:
         for param in ext.params:
             if param.ty is not None:
                 self.codegen.memory.set_semantic_type(param.name, param.ty)
+
+        # A `nom self` receiver is OWNED by this body, exactly as a `nom` parameter is,
+        # so it needs the registration that frees it at scope exit. Every other receiver
+        # mode is a borrow and must stay unregistered, or the body frees the caller's
+        # value (ruling R25).
+        if self_receiver_mode.consumes:
+            slot = self.codegen.memory.try_find_local_slot("self")
+            if slot is not None:
+                self.codegen.memory.register_owning_value(
+                    "self", ext.target_type, slot)
 
         self.codegen.statements.emit_block(ext.body)
 

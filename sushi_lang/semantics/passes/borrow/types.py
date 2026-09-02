@@ -47,12 +47,21 @@ class TypeQueries:
         self.tables = tables
 
     def resolve_named(self, ty: Optional[Type]):
-        """Resolve an `UnknownType` against the struct/enum tables; identity otherwise."""
-        if not isinstance(ty, UnknownType) or self.tables is None:
+        """Resolve an `UnknownType` or a `GenericTypeRef` against the struct/enum tables.
+
+        A `GenericTypeRef` spells its own interned name, so the monomorphized type IS
+        reachable by lookup -- and it has to be. A `let Result@(i32[], StdError) r`
+        keeps the ref as its declared type, and an unresolved ref answers PLAIN: this
+        pass would then classify a Result holding a dynamic array as owning nothing,
+        while the backend, which resolves it, classifies it MOVE. That disagreement is
+        a use after move with no diagnostic in front of it.
+        """
+        if self.tables is None or not isinstance(ty, (UnknownType, GenericTypeRef)):
             return ty
         structs = getattr(getattr(self.tables, "structs", None), "by_name", None) or {}
         enums = getattr(getattr(self.tables, "enums", None), "by_name", None) or {}
-        return structs.get(ty.name) or enums.get(ty.name) or ty
+        name = ty.name if isinstance(ty, UnknownType) else str(ty)
+        return structs.get(name) or enums.get(name) or ty
 
     def variant_payload_types(self, enum_type: Optional[Type],
                              variant_name: str) -> tuple:
@@ -122,9 +131,22 @@ class TypeQueries:
         except Exception:
             return None
 
+    @property
+    def drops(self) -> frozenset:
+        """The type names that implement `Drop`, read from the perk table.
+
+        The semantics half of ruling R2a. The classifier takes the answer rather than
+        reaching for a registry, and the tables this object already holds are where the
+        answer lives.
+        """
+        impls = getattr(self.tables, "perk_impls", None)
+        if impls is None:
+            return frozenset()
+        return frozenset(impls.by_perk.get("Drop", ()))
+
     def type_class(self, ty: Optional[Type]) -> TypeClass:
         """Classify a type as PLAIN or MOVE, resolving named types first."""
-        return type_class_of(ty, self.resolve_named)
+        return type_class_of(ty, self.drops, self.resolve_named)
 
     def type_class_of_source(self, state: Optional[BorrowState],
                              ty: Optional[Type]) -> TypeClass:

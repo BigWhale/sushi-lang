@@ -5,7 +5,6 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "3 10 20 30\n0\n0\n3 30 40 50\n0\n3 10 20 30\n"
 
-use <io/stdio>
 
 fn run_test() i32:
     let i32[] src = from([10, 20, 30, 40, 50])

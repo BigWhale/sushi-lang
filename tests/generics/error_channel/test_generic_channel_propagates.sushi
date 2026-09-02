@@ -1,0 +1,31 @@
+# A GENERIC function declares `| E`, and the channel survives monomorphization: the call
+# site types the call `Result@(T, StepError)`, so `??` inside a caller that declares the
+# same channel is legal and CE2511 does not fire (#538).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\ncaught\n"
+
+use <collections/strings>
+
+enum StepError:
+    TooSmall
+
+fn doubled@(T)(T value, i32 base) i32 | StepError:
+    if (base < 1 or value.len() == 0):
+        return Result.Err(StepError.TooSmall)
+    return Result.Ok(base + base + 1)
+
+fn twice(i32 base) i32 | StepError:
+    let i32 first = doubled("tag", base)??
+    return Result.Ok(first)
+
+fn main() i32:
+    match twice(3):
+        Result.Ok(n) -> println("{n}")
+        Result.Err(_) -> println("failed")
+
+    match twice(0):
+        Result.Ok(n) -> println("{n}")
+        Result.Err(_) -> println("caught")
+
+    return Result.Ok(0)

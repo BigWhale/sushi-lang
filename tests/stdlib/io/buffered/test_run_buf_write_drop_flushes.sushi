@@ -1,0 +1,28 @@
+# A dropped writer sends whatever is waiting (ruling R8). The bytes are not lost by
+# forgetting finish(); only the answer to "did they arrive?" is.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "[unflushed]\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn leave_unflushed(string path) ~ | IoError:
+    let File wf = open(path, FileMode.Write())??
+    let BufWriter@(File) w = buf_writer(nom wf, 8192)??
+    w.write("unflushed")??
+    return Result.Ok(~)
+
+fn run(string path) ~ | IoError:
+    leave_unflushed(path)??
+    let File f = open(path, FileMode.Read())??
+    println("[{f.read_all()??}]")
+    f.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run("/tmp/sushi_buf_drop.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

@@ -75,8 +75,8 @@ def test_nested_unit_name_mirrors_the_source_tree(cache):
 # Path mangling
 
 def test_stdlib_object_path_mangles_separators(cache):
-    path = cache.stdlib_object_path("io/stdio", "fp-1")
-    assert path.name.startswith("io_stdio.")
+    path = cache.stdlib_object_path("io/files", "fp-1")
+    assert path.name.startswith("io_files.")
     assert path.suffix == ".o"
     assert path.parent == cache.stdlib_path
 

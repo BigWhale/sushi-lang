@@ -1,0 +1,27 @@
+# break and continue mean the same thing over a protocol iterator as over an array: the
+# loop's own scope is destroyed on the way out, and the iterator with it.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "5\n4\nstop at 3\nafter\n"
+
+struct Countdown:
+    i32 at
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.at <= 0):
+        let Maybe@(i32) ended = Maybe.None()
+        return ended
+    let i32 now = self.at
+    self.at := self.at - 1
+    let Maybe@(i32) got = Maybe.Some(now)
+    return got
+
+fn main() i32:
+    let Countdown c = Countdown(5)
+    foreach(n in c):
+        if (n == 3):
+            println("stop at {n}")
+            break
+        println(n)
+    println("after")
+    return Result.Ok(0)

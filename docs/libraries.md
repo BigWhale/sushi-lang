@@ -311,7 +311,7 @@ Enums (1):
     Blue
 
 Dependencies (1):
-  <io/stdio>
+  <io/fs>
 
 Source: 1,204 bytes
 ```

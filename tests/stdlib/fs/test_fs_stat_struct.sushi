@@ -8,10 +8,10 @@ use <io/fs>
 fn main() i32:
     let string path = "/tmp/sushi_fs_stat.txt"
     match open(path, FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(nom f) ->
             f.write("abc")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("setup failed")
             return Result.Ok(1)
 

@@ -1,7 +1,8 @@
 # pathcalc: the io/path differential helper. Each stdin line is
 # `op|a|b` (b only for join); the answer prints as one line.
 
-use <io/stdio>
+use <io/fs>
+use <io/buf>
 use <io/path>
 
 fn answer(string op, string a, string b) string:
@@ -17,12 +18,18 @@ fn answer(string op, string a, string b) string:
         return Result.Ok(normalize(a)??)
     return Result.Ok("unknown op: {op}")
 
-fn main() i32:
-    foreach(line in stdin.lines()):
+fn run() ~ | IoError:
+    let BufReader@(File) r = buf_reader(nom stdin, 8192)??
+    foreach(line?? in r.lines()):
         let string[] parts = line.split("|")
         if (parts.len() >= 3):
             let string op = parts.get(0).realise("")
             let string a = parts.get(1).realise("")
             let string b = parts.get(2).realise("")
             println(answer(op, a, b).realise("?"))
-    return Result.Ok(0)
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)

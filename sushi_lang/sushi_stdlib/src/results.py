@@ -12,6 +12,10 @@ generator picks the table that turns an errno into that tag.
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
 
+# Maybe<T>'s two variant tags, in declaration order.
+MAYBE_SOME_TAG = 0
+MAYBE_NONE_TAG = 1
+
 
 def emit_ok_result(builder: ir.IRBuilder, result_type: ir.LiteralStructType,
                    value: ir.Value, size_bytes: int) -> ir.Value:
@@ -58,3 +62,35 @@ def emit_err_result(builder: ir.IRBuilder, result_type: ir.LiteralStructType,
     err_result = builder.insert_value(err_result, ir.Constant(i32, 1), 0, name="err_with_tag")
     err_result = builder.insert_value(err_result, data_value, 1, name="err_result")
     return err_result
+
+
+def emit_some(builder: ir.IRBuilder, maybe_type: ir.LiteralStructType,
+              value: ir.Value) -> ir.Value:
+    """Build Maybe.Some(value): the payload is stored through the data array's own type.
+
+    A store through a bitcast of the data slot, rather than a memcpy of a byte count,
+    because the payload of a Maybe is one value and its size is the array's.
+    """
+    i8, i8_ptr, i32, i64 = get_basic_types()
+    data_type = maybe_type.elements[1]
+
+    data_alloca = builder.alloca(data_type, name="some_data")
+    builder.store(ir.Constant(data_type, None), data_alloca)
+    builder.store(value, builder.bitcast(data_alloca, value.type.as_pointer(),
+                                         name="some_payload_ptr"))
+
+    some = ir.Constant(maybe_type, ir.Undefined)
+    some = builder.insert_value(some, ir.Constant(i32, MAYBE_SOME_TAG), 0,
+                                name="some_with_tag")
+    return builder.insert_value(some, builder.load(data_alloca, name="some_data_value"),
+                                1, name="some_value")
+
+
+def emit_none(builder: ir.IRBuilder, maybe_type: ir.LiteralStructType) -> ir.Value:
+    """Build Maybe.None: the tag alone, over a zeroed payload."""
+    _i8, _i8_ptr, i32, _i64 = get_basic_types()
+    none = ir.Constant(maybe_type, ir.Undefined)
+    none = builder.insert_value(none, ir.Constant(i32, MAYBE_NONE_TAG), 0,
+                                name="none_with_tag")
+    return builder.insert_value(none, ir.Constant(maybe_type.elements[1], None), 1,
+                                name="none_value")

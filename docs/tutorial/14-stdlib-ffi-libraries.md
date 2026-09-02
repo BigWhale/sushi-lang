@@ -87,11 +87,18 @@ roll 3: d6 -> 5
 
 ### Files
 
-The `<io/files>` module opens files with `open(path, mode)`, which returns a
-`FileResult@(file)`. Instead of the usual `Result`, file operations use a dedicated
-`FileResult`/`FileError` pair so you can match on specific failures like
-`FileError.NotFound()` or `FileError.PermissionDenied()`. Here we write a file under `/tmp`
-and read it straight back.
+`<io/fs>` opens files with `open(path, mode)`, which answers a `File` on an `IoError`
+channel. A `File` OWNS its operating-system descriptor: it moves to exactly one owner,
+and when that owner leaves scope the descriptor closes. So there is no `close()` to
+remember, and no way to leak one -- and the same `IoError` carries every read, write and
+seek, so one `??` chain covers a whole function.
+
+Buffering is a separate type you opt into. `<io/buf>` gives `BufReader@(R)` over
+anything that can read and `BufWriter@(W)` over anything that can write, each paying one
+system call per WINDOW rather than one per line. The constructor TAKES the handle, so the
+unbuffered `File` cannot be used behind the reader's back.
+
+Here we write a file under `/tmp` and read the first line back through a buffer.
 
 ```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/files.sushi"
@@ -104,8 +111,11 @@ Entry filed.
 Entry reads: Earth: Mostly Harmless
 ```
 
-Other modules you will reach for include `<env>` for environment variables, `<io/stdio>`
-for stream access, and `<collections/strings>` for UTF-8-aware string utilities. The
+`<io/files>` sits UNDER all of that: the path utilities (`exists`, `remove`, `read_dir`)
+and the `fd_*` descriptor primitives that `File` is written on top of. Other modules you
+will reach for include `<sys/env>` for environment variables, `<io/contracts>` when a
+function should name the capability it needs rather than the type, and
+`<collections/strings>` for UTF-8-aware string utilities. The
 [Standard Library reference](../standard-library.md)
 lists them all.
 
@@ -279,7 +289,7 @@ answer() = 42
 - Standard-library modules are imported with `use <name>`: `<time>` for sleeping,
   `<math>` for numeric intrinsics (with polymorphic `abs`/`min`/`max`/`sqrt`/`hypot`),
   `<random>` for seedable pseudo-randomness, and `<io/files>` for file I/O via
-  `FileResult`/`FileError`.
+  `Result@(File, IoError)`/`FileError`.
 - A native variadic parameter `...T name` collects trailing arguments into an owned `T[]`;
   zero arguments is valid, and it must be the last parameter.
 - FFI lets you call C from inside an `unsafe external "C" as <ns> because "<reason>"` block;

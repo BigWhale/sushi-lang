@@ -3,7 +3,6 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "4 0 3\n"
 
-use <io/stdio>
 
 const i32 LIMIT = 4
 

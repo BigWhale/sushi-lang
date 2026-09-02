@@ -102,6 +102,8 @@ class StdlibLinker:
         "collections/iter",
         "compression/zlib",
         "encoding/msgpack",
+        "io/buf",
+        "io/contracts",
         "io/fs",
         "io/path",
         "net/dns",

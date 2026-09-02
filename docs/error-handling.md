@@ -346,27 +346,25 @@ Functions can return `Result@(Maybe@(T), E)` for three states:
 3. **Failure**: `Result.Err(error)`
 
 ```sushi
-use <io/files>
+use <io/fs>
 
-fn load_optional_config() Maybe@(string):
+fn load_optional_config() Maybe@(string) | IoError:
     match open("config.txt", FileMode.Read()):
-        FileResult.Ok(f) ->
-            let string content = f.read()
-            f.close()
-            return Result.Ok(Maybe.Some(content))  # Found config
-        FileResult.Err(FileError.NotFound()) ->
-            return Result.Ok(Maybe.None())  # No config (OK!)
-        FileResult.Err(_) ->
-            return Result.Err(StdError.Error())  # Real error (permission, I/O)
+        Result.Ok(f) ->
+            return Result.Ok(Maybe.Some(f.read_all()??))  # Found config
+        Result.Err(IoError.NotFound()) ->
+            return Result.Ok(Maybe.None())                # No config (OK!)
+        Result.Err(e) ->
+            return Result.Err(e)                          # Real error
 
 fn main() i32:
-    let Maybe@(string) config = load_optional_config().realise(Maybe.None())
-
-    match config:
-        Maybe.Some(content) ->
+    match load_optional_config():
+        Result.Ok(Maybe.Some(content)) ->
             println("Config: {content}")
-        Maybe.None() ->
+        Result.Ok(Maybe.None) ->
             println("Using defaults")
+        Result.Err(_) ->
+            println("Could not read the config")
 
     return Result.Ok(0)
 ```
@@ -382,25 +380,27 @@ The `??` operator unwraps `Result@(T, E)` or `Maybe@(T)`, propagating errors aut
 **Without `??`:**
 
 ```sushi
-fn read_config() string:
-    let FileResult result = open("config.txt", FileMode.Read())
+use <io/fs>
+
+fn read_config() string | IoError:
+    let Result@(File, IoError) result = open("config.txt", FileMode.Read())
     match result:
-        FileResult.Ok(f) ->
-            let string content = f.read()
-            f.close()
-            return Result.Ok(content)
-        FileResult.Err(_) ->
-            return Result.Err(StdError.Error())
+        Result.Ok(f) ->
+            match f.read_all():
+                Result.Ok(content) -> return Result.Ok(content)
+                Result.Err(e) -> return Result.Err(e)
+        Result.Err(e) ->
+            return Result.Err(e)
 ```
 
 **With `??`:**
 
 ```sushi
-fn read_config() string:
-    let file f = open("config.txt", FileMode.Read())??
-    let string content = f.read()
-    f.close()
-    return Result.Ok(content)
+use <io/fs>
+
+fn read_config() string | IoError:
+    let File f = open("config.txt", FileMode.Read())??
+    return Result.Ok(f.read_all()??)
 ```
 
 ### How It Works
@@ -442,9 +442,63 @@ fn process_with_cleanup(bool succeed) i32:
 ```
 
 **Resources automatically cleaned:**
-- Dynamic arrays
+- Dynamic arrays, `List@(T)`, `HashMap@(K, V)`, `Own@(T)`, strings
 - Struct fields (dynamic arrays, nested structs)
-- File handles (when implemented)
+- Anything implementing the `Drop` perk — a `File`, a `TcpStream`, a `BufWriter@(W)` —
+  whose `drop()` runs on the propagation path like any other destructor
+- A `foreach` iterator the loop owns, on every exit path: the end of the input, a
+  `break`, a `return`, and the propagation path a `??` binder takes
+
+### `??` on a `foreach` binder
+
+`foreach` walks any type carrying `next()` that answers `Maybe@(T)`. When `T` is a
+`Result` — a fallible iterator puts its failure IN the item — `??` on the BINDER is the
+short form for "leave the function on the first failure":
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn show(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    foreach(line?? in r.lines()):        # the first read failure leaves show()
+        println(line)
+    return Result.Ok(~)
+
+fn main() i32:
+    match show("/etc/hosts"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+```
+
+It is the same `??`, in one more position: the error types must match exactly (CE2511),
+the loop's own scope is cleaned up on the way out, and it warns in `main` (CW2511) like
+any other.
+
+Drop the marker and the item is the plain `Result`, which is what lets a body report one
+failure and carry on:
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn show(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    foreach(item in r.lines()):
+        match item:
+            Result.Ok(line) -> println(line)
+            Result.Err(_) -> println("<unreadable>")
+    return Result.Ok(~)
+
+fn main() i32:
+    match show("/etc/hosts"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+```
+
+A `??` binder over an item that is not a `Result` has nothing to unwrap: **CE2517**.
 
 ### Using ?? with Maybe@(T)
 
@@ -575,11 +629,23 @@ fn validate_input(i32 x) i32:
 
 ### 3. Use ?? for Sequential Operations
 
+`??` requires the error types to match EXACTLY, so a function that reads a file and then
+calls `StdError` helpers is two functions: one per channel, with a `match` at the seam
+that converts.
+
+<!-- docs-sweep: skip (calls parse/validate/transform, which the narrative owns) -->
 ```sushi
+use <io/fs>
+
+fn read_input() string | IoError:
+    let File f = open("input.txt", FileMode.Read())??
+    return Result.Ok(f.read_all()??)
+
 fn process_pipeline() string:
-    let file f = open("input.txt", FileMode.Read())??
-    let string raw = f.read()
-    f.close()
+    let string raw = ""
+    match read_input():
+        Result.Ok(text) -> raw := text.clone()          # the one conversion point
+        Result.Err(_) -> return Result.Err(StdError.Error())
 
     let string cleaned = parse(raw)??
     let string validated = validate(cleaned)??

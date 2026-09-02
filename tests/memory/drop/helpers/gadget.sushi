@@ -1,0 +1,3 @@
+# A type with NO Drop of its own, so a second unit can try to give it one.
+public struct Gadget:
+    i32 id

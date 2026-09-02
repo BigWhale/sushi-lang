@@ -1,7 +1,7 @@
 # `is_terminal()` takes no arguments.
 # EXPECT_ERROR_CODE: CE2009
 
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     println(stdout.is_terminal(1))

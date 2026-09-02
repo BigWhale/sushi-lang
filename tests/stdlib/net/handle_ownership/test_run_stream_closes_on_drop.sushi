@@ -1,0 +1,22 @@
+# A TcpStream owns its descriptor. Connect to a listener this program made, let the
+# stream leave scope with no close() anywhere, and no descriptor is left open.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "connected\ndone\n"
+use <net/tcp>
+
+fn main() i32:
+    let TcpListener server = tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
+    let i32 port = server.local_port().realise(0)
+    if (port == 0):
+        println("no port")
+        return Result.Ok(1)
+
+    if (true):
+        match tcp_connect("127.0.0.1", port):
+            Result.Ok(_) -> println("connected")
+            Result.Err(_) -> println("connect failed")
+
+    println("done")
+    return Result.Ok(0)

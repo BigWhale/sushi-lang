@@ -171,10 +171,12 @@ fn main() i32:
 The `??` operator unwraps values or propagates errors automatically:
 
 ```sushi
-fn read_config() string:
-    let file f = open("config.txt", FileMode.Read())??
-    let string content = f.read()
-    f.close()
+use <io/fs>
+
+fn read_config() string | IoError:
+    let File f = open("config.txt", FileMode.Read())??
+    let string content = f.read_all()??
+    f.close()??
     return Result.Ok(content)
 ```
 

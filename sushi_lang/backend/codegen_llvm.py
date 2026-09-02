@@ -75,6 +75,11 @@ def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
         # lost write of #326, reintroduced through the perk door.
         self_mode=getattr(method, "self_mode", None),
         self_mode_span=getattr(method, "self_mode_span", None),
+        # And so must the error channel (ruling R1): `extension_result_of` reads it
+        # for the declaration ABI, the Ok wrap at the return seam and the Err default,
+        # and a dropped one would compile a channel body against a bare signature.
+        err_type=getattr(method, "err_type", None),
+        err_span=getattr(method, "err_span", None),
     )
 
 
@@ -1070,7 +1075,8 @@ class LLVMCodegen:
         silent_reporter = Reporter()
         evaluating_unit = unit_name or self.emitting_unit
         evaluator = ConstantEvaluator(silent_reporter, self.const_table, self.ast_constants,
-                                      evaluating_unit, self.scope_of(evaluating_unit))
+                                      evaluating_unit, self.scope_of(evaluating_unit),
+                                      self.struct_table)
         return evaluator.evaluate(expr, expected_type, None)
 
     def _materialize_constant(self, value, data_name: str) -> Optional[ir.Constant]:
@@ -1084,6 +1090,18 @@ class LLVMCodegen:
 
         if value.semantic_type == BuiltinType.STRING:
             return self._constant_string_value(value.value, data_name)
+
+        # An aggregate asks its TYPE which kind it is, never the shape of the list: a
+        # struct's fields have types of their own, so `ArrayType(elements[0].type, ...)`
+        # would build a homogeneous array out of them and mis-type the initializer.
+        from sushi_lang.semantics.typesys import StructType
+
+        if isinstance(value.semantic_type, StructType):
+            fields = [self._materialize_constant(field, f"{data_name}.{i}")
+                      for i, field in enumerate(value.value)]
+            if any(f is None for f in fields):
+                return None
+            return ir.Constant(self.types.ll_type(value.semantic_type), fields)
 
         if isinstance(value.value, list):
             elements = [self._materialize_constant(element, f"{data_name}.{i}")

@@ -1,0 +1,28 @@
+# A `nom` binding hands the payload to the arm, and a generic may then take it. This is the
+# shape the io contracts need: `match open(...): Result.Ok(nom f) -> use_it(nom f)`. A taken
+# payload has the payload's OWN type, with no reference wrapper (#539).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate 3\n"
+
+fn make() i32[]:
+    return Result.Ok(from([1, 2, 3]))
+
+# The body only has to CONSUME what it took. Hashing is the one operation total over an
+# opaque T, so it is what reads the payload here; the answer is 1 either way, because the
+# test asserts the CALL happened and not what a hash is.
+fn eat@(T)(nom T v) i32:
+    let u64 fingerprint = v.hash()
+    if (fingerprint == 0 as u64):
+        return Result.Ok(1)
+    return Result.Ok(1)
+
+fn main() i32:
+    match make():
+        Result.Ok(nom xs) ->
+            let i32 n = xs.len()
+            let i32 one = eat(nom xs).realise(0)
+            println("ate {n * one}")
+        Result.Err(_) -> println("no")
+    return Result.Ok(0)

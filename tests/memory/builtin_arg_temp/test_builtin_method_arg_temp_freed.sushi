@@ -8,7 +8,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 
-use <io/stdio>
+use <io/fs>
 use <collections/strings>
 use <collections/hashmap>
 use <sys/env>

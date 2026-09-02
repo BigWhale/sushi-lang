@@ -1,0 +1,21 @@
+# A BARE perk method still has no Result to propagate into, so '??' is CE0131.
+# The channel narrows the gate; it does not remove it.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE0131
+perk Greet:
+    fn hello() i32
+
+struct Robot:
+    i32 head_count
+
+fn answer() i32:
+    return Result.Ok(42)
+
+extend Robot with Greet:
+    fn hello() i32:
+        return answer()??
+
+fn main() i32:
+    let Robot marvin = Robot(1)
+    println("{marvin.hello()}")
+    return Result.Ok(0)

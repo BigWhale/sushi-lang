@@ -35,7 +35,9 @@ from .functions import (
     ExtensionMethod,
     GenericExtensionMethod,
 )
-from .perks import PerkCollector, PerkTable, PerkImplementationTable
+from .perks import (
+    GenericPerkImpl, GenericPerkImplTable, PerkCollector, PerkImplementationTable,
+    PerkTable)
 from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
 from sushi_lang.semantics.visibility import VisibilityTable, record_declarations
@@ -53,6 +55,8 @@ __all__ = [
     'GenericExtensionTable',
     'PerkTable',
     'PerkImplementationTable',
+    'GenericPerkImpl',
+    'GenericPerkImplTable',
     'ExternalTable',
     'ConstSig',
     'ExternalSig',
@@ -88,6 +92,7 @@ class CollectorPass:
         self.generic_extensions = GenericExtensionTable()
         self.perks = PerkTable()
         self.perk_impls = PerkImplementationTable()
+        self.generic_perk_impls = GenericPerkImplTable()
         self.externals = ExternalTable()
         self.visibility = VisibilityTable()
 
@@ -121,7 +126,9 @@ class CollectorPass:
         self.perk_collector = PerkCollector(
             reporter=reporter,
             perks=self.perks,
-            perk_impls=self.perk_impls
+            perk_impls=self.perk_impls,
+            known_types=self.known_types,
+            generic_perk_impls=self.generic_perk_impls,
         )
 
         self.external_collector = ExternalCollector(
@@ -155,6 +162,7 @@ class CollectorPass:
 
         self._register_predefined_structs()
         self._register_predefined_enums()
+        self._register_predefined_perks()
         self._register_predefined_generics()
 
     def run(self, root: Program, unit_name: Optional[str] = None,
@@ -205,6 +213,7 @@ class CollectorPass:
             generic_structs=self.generic_structs,
             perks=self.perks,
             perk_impls=self.perk_impls,
+            generic_perk_impls=self.generic_perk_impls,
             funcs=self.funcs,
             extensions=self.extensions,
             generic_extensions=self.generic_extensions,
@@ -218,8 +227,12 @@ class CollectorPass:
         self.struct_collector.register_predefined_structs()
 
     def _register_predefined_enums(self) -> None:
-        """Register predefined enums (FileMode, FileResult, etc.)."""
+        """Register predefined enums (FileMode, SeekFrom, FileError, etc.)."""
         self.enum_collector.register_predefined_enums()
+
+    def _register_predefined_perks(self) -> None:
+        """Register predefined perks (Drop)."""
+        self.perk_collector.register_predefined_perks()
 
     def _register_predefined_generics(self) -> None:
         """Register predefined generic enums and structs."""

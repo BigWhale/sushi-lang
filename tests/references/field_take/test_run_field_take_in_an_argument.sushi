@@ -1,0 +1,31 @@
+# The marker means one thing in every consuming position, so a `nom` ARGUMENT takes the
+# field too. `w` is spent by the call, exactly as it is by a `let` take or a `return`
+# one, and the handle is freed once -- by the callee.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "eating\nok\n"
+use <io/fs>
+
+struct Sink:
+    File out
+    string label
+
+fn eat(nom File h) ~ | IoError:
+    println("eating")
+    h.close()??
+    return Result.Ok(~)
+
+fn run() ~ | IoError:
+    let File f = open("/tmp/sushi_field_take_arg.txt", FileMode.Write())??
+    let i32 n = 1
+    let Sink s = Sink(f, "held {n}")
+    eat(nom s.out)??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

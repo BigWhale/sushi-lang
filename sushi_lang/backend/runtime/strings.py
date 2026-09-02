@@ -92,7 +92,7 @@ class StringOperations:
         """The i32 sign of `lhs - rhs` in byte order: memcmp, then the length.
 
         memcmp compares as unsigned char, which is the byte order the four order
-        operators promise, and it agrees with Rust and Go. It reads only the common
+        operators promise. It reads only the common
         prefix, so the length breaks the tie when those bytes agree and a prefix
         comes out below the longer string that starts with it.
         """

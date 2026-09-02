@@ -1,0 +1,24 @@
+# A File MOVES. Handing one to a `nom` parameter transfers the descriptor, the callee
+# closes it, and the caller's binding is gone -- the shape a BufWriter will use in
+# Phase 7. A copyable builtin could never express this.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "callee wrote\ndone\n"
+use <io/fs>
+
+fn eat(nom File f) ~ | IoError:
+    f.writeln("Mostly Harmless")??
+    println("callee wrote")
+    return Result.Ok(~)
+    # the callee owns it now, so the descriptor closes here.
+
+fn main() i32:
+    match open("file_struct_move.txt", FileMode.Write()):
+        Result.Ok(nom f) ->
+            match eat(nom f):
+                Result.Ok(_) -> println("done")
+                Result.Err(_) -> println("callee failed")
+        Result.Err(_) -> println("open failed")
+    return Result.Ok(0)

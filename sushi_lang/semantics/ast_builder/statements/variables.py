@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import Let, Rebind
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, ice
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
+    first_name, first_token, first_tree, ice, mark_nom)
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import find_outer_expr_structural, _EXPR_NODES
 from sushi_lang.internals.report import span_of
 
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def parse_let_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Let:
-    """Parse let_stmt: LET [type] NAME "=" expr"""
+    """Parse let_stmt: LET [type] NAME "=" NOM? expr"""
     nm = first_name(node.children)
     if nm is None:
         ice(node, "NAME missing")
@@ -35,6 +36,9 @@ def parse_let_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Let:
         if expr_node is None:
             ice(node, "expression missing")
         value = ast_builder._expr(expr_node)
+        nom = first_token(node.children, "NOM")
+        if nom is not None:
+            mark_nom(value, nom)
 
     return Let(
         name=str(nm),

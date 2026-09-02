@@ -1717,7 +1717,8 @@ question: what a block claims, and what it leaves out.
 Layout (R38, R39), colour behind one decision (R41, R43), the rendered Markdown subset
 (R40, R44), `- Example:` (R48), the four sections and two spellings that were wrong
 (R45-R47, R49), and `--docs` to gate the prose (R50). It also grew `is_terminal()` in
-`<io/stdio>` (R42), because a tool that wants colour has to ask whether anyone is looking.
+`<io/stdio>` (R42), because a tool that wants colour has to ask whether anyone is
+looking. That module was later retired and the method is a `File` method in `<io/fs>`.
 
 **A Markdown checker was cut from this phase, and §2 of the plan records why.** A Sushi
 tool has no Sushi parser: `slib_info.sushi` reads a `.slib` through msgpack and cannot open

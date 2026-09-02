@@ -3,6 +3,7 @@
 # EXPECT_NO_LEAKS: true
 
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     let string dir = "/tmp/sushi_errno_nonempty"
@@ -12,10 +13,10 @@ fn main() i32:
             println("setup failed")
             return Result.Ok(1)
     match open("/tmp/sushi_errno_nonempty/entry.txt", FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(nom f) ->
             f.write("x")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("setup open failed")
             return Result.Ok(1)
 

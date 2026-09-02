@@ -144,33 +144,6 @@ class StructEnumBuiltinInferrer:
 
 
 @dataclass
-class StdioMethodInferrer:
-    """Type inferrer for stdio methods (stdin, stdout, stderr)."""
-    receiver_type: BuiltinType
-    method_name: str
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.sushi_stdlib.src.io.stdio import is_builtin_stdio_method, get_builtin_stdio_method_return_type
-        if is_builtin_stdio_method(self.method_name):
-            return get_builtin_stdio_method_return_type(self.method_name, self.receiver_type)
-        return None
-
-
-@dataclass
-class FileMethodInferrer:
-    """Type inferrer for file methods."""
-    method_name: str
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.sushi_stdlib.src.io.files import is_builtin_file_method, get_builtin_file_method_return_type
-        if is_builtin_file_method(self.method_name):
-            return get_builtin_file_method_return_type(self.method_name)
-        return None
-
-
-@dataclass
 class ResultMethodInferrer:
     """Type inferrer for Result<T, E> methods."""
     receiver_type: EnumType
@@ -380,20 +353,6 @@ def check_primitive_methods(receiver_type, method_name, validator):
     if validator.perk_impl_table.get_method(receiver_type, method_name) is not None:
         return None
     return PrimitiveMethodInferrer(receiver_type, method_name, validator)
-
-
-@METHOD_TYPE_REGISTRY.register_checker
-def check_stdio_methods(receiver_type, method_name, validator):
-    if receiver_type in [BuiltinType.STDIN, BuiltinType.STDOUT, BuiltinType.STDERR]:
-        return StdioMethodInferrer(receiver_type, method_name, validator)
-    return None
-
-
-@METHOD_TYPE_REGISTRY.register_checker
-def check_file_methods(receiver_type, method_name, validator):
-    if receiver_type == BuiltinType.FILE:
-        return FileMethodInferrer(method_name, validator)
-    return None
 
 
 # Registration ORDER is load-bearing. BEFORE the container checkers, because

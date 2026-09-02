@@ -211,10 +211,10 @@ def generate_getenv(module: ir.Module) -> None:
 ```
 
 `sushi_stdlib/src/time/sleep.py` (backs `use <time>`) follows the identical pattern with
-`get_platform_module('time')`, and `sushi_stdlib/src/io/stdio/common.py` (backs
-`use <io/stdio>`) does the same with `get_platform_module('stdio')`. The platform module
-is resolved once per generator module, at import time, and reused for every function it
-generates.
+`get_platform_module('time')`, and `sushi_stdlib/src/error_emission.py` does the same
+with `get_platform_module('stdio')` to name the `stderr` handle a runtime error prints
+to. The platform module is resolved once per generator module, at import time, and
+reused for every function it generates.
 
 ## Platform-Organized Build Outputs
 
@@ -228,7 +228,6 @@ sushi_stdlib/dist/
 │   ├── collections/strings.bc
 │   ├── core/primitives.bc
 │   ├── io/files.bc
-│   ├── io/stdio.bc
 │   ├── math.bc
 │   ├── random.bc
 │   ├── sys/env.bc
@@ -273,7 +272,7 @@ def _detect_platform(self) -> str:
 ```
 
 `self.platform` is combined with `self.stdlib_dir` (`sushi_stdlib/dist/`) to resolve both
-individual units (`"io/stdio"` -> `sushi_stdlib/dist/darwin/io/stdio.bc`) and directory
+individual units (`"io/files"` -> `sushi_stdlib/dist/darwin/io/files.bc`) and directory
 imports (`"io"` -> every `.bc` file under `sushi_stdlib/dist/darwin/io/`). There is no
 `windows` case here either — a Windows host resolves to `"unknown"`, and `resolve_unit_path`
 then fails to find the (nonexistent) `sushi_stdlib/dist/unknown/` directory with a clear

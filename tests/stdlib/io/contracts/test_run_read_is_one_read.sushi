@@ -1,0 +1,37 @@
+# read(max) is ONE read bounded by the caller, not the whole file: ruling R19. read_all() is
+# the whole-file method, and the two answers differ on a file larger than the bound. The
+# bound counts BYTES today; this input is ASCII, so it also counts characters.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "one read: 100\nwhole file: 5000\n"
+use <io/files>
+use <io/fs>
+use <io/contracts>
+
+fn main() i32:
+    match open("contract_chunk_probe.txt", FileMode.Write()):
+        Result.Ok(w) ->
+            let i32 written = 0
+            while (written < 5000):
+                w.write("x")
+                written := written + 1
+        Result.Err(_) ->
+            println("open failed")
+            return Result.Ok(1)
+
+    match open("contract_chunk_probe.txt", FileMode.Read()):
+        Result.Ok(r) ->
+            let string one = r.read(100).realise("")
+            println("one read: {one.len()}")
+        Result.Err(_) -> println("reopen failed")
+
+    match open("contract_chunk_probe.txt", FileMode.Read()):
+        Result.Ok(r) ->
+            let string all = r.read_all().realise("")
+            println("whole file: {all.len()}")
+        Result.Err(_) -> println("reopen failed")
+
+    remove("contract_chunk_probe.txt").realise(0)
+    return Result.Ok(0)

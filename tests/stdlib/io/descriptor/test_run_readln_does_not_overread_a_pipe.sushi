@@ -1,0 +1,26 @@
+# The reason fd_readln has two paths. A descriptor that cannot seek must be read one
+# byte at a time: a chunked read there would swallow bytes the NEXT reader owns and
+# could never give them back. Reading one line and then taking the rest with fd_read
+# is what proves it -- an over-reading readln would lose "second" and "third" here.
+# Descriptor 0 is a pipe when the runner feeds STDIN_INPUT.
+# TEST_TYPE: runtime
+# STDIN_INPUT: "first\nsecond\nthird\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "line first\nrest second\nthird\n"
+use <io/files>
+use <collections/strings>
+
+fn main() i32:
+    match fd_readln(0):
+        Result.Ok(first) ->
+            match first:
+                Maybe.Some(line) -> println("line {line}")
+                Maybe.None -> println("line")
+        Result.Err(_) -> println("line")
+
+    let u8[] empty = from([])
+    let u8[] rest = fd_read(0, 64).realise(empty)
+    print("rest {rest.to_string()}")
+
+    return Result.Ok(0)

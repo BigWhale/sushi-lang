@@ -29,14 +29,19 @@ def test_every_known_module_registers_functions():
 def test_missing_interface_symbols_raise():
     """A module that imports fine but lacks the three symbols must be loud.
 
-    sushi_stdlib.src.io.stdio is the real-world case: it exposes a METHOD
-    interface (is_builtin_stdio_method), not the function interface the
-    registry reads -- which is exactly why its KNOWN_MODULES entry could
+    sushi_stdlib.src.collections.strings is the real-world case: it exposes a
+    METHOD interface (is_builtin_string_method), not the function interface the
+    registry reads -- which is exactly why a KNOWN_MODULES entry for it could
     never have worked.
+
+    io/stdio used to be the example here, and was the better one because its
+    entry had actually been tried. It was retired in HANDLES.md Phase 5, when the
+    console handles became File constants.
     """
     registry = StdlibRegistry()
-    with pytest.raises(RuntimeError, match="stdio"):
-        registry._discover_module("io/stdio", "sushi_lang.sushi_stdlib.src.io.stdio")
+    with pytest.raises(RuntimeError, match="strings"):
+        registry._discover_module(
+            "collections/strings", "sushi_lang.sushi_stdlib.src.collections.strings")
 
 
 def test_unimportable_module_raises():

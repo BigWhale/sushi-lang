@@ -2,7 +2,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "Welcome to Sushi I/O!\nThis is stdout\nTesting variables\n"
 
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     # Test combined I/O operations

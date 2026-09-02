@@ -57,6 +57,14 @@ class InstantiationCollector:
 
     visited_types: Set[str] = field(default_factory=set)
 
+    def _generic_enums_by_name(self) -> dict:
+        """The generic enum templates, keyed by name. Empty when the tables are absent."""
+        tables = self.tables
+        if tables is None:
+            return {}
+        generic_enums = getattr(tables, "generic_enums", None)
+        return getattr(generic_enums, "by_name", None) or {}
+
     def _build_function_collector(self) -> FunctionCollector:
         """The collaborator trio, wired. Both entry points walk types the same way."""
         type_inferrer = TypeInferrer(
@@ -80,6 +88,7 @@ class InstantiationCollector:
             generic_funcs=self.generic_funcs or {},
             type_validator=type_validator,
             namespaces=self.namespaces,
+            generic_enums=self._generic_enums_by_name(),
         )
 
         function_collector = FunctionCollector(

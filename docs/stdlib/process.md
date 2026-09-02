@@ -295,7 +295,7 @@ shell-quoting or injection surface. Field names are `stdout_text` / `stderr_text
 
 ```sushi
 use <sys/process>
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     match run("echo", "Mostly Harmless"):
@@ -314,7 +314,7 @@ fn main() i32:
 
 ```sushi
 use <sys/process>
-use <io/stdio>
+use <io/fs>
 
 fn compile_ir(string path) i32 | ProcessError:
     let string[] argv = from([path, "-o", "out"])
@@ -576,7 +576,7 @@ fn main() i32:
 
 ```sushi
 use <sys/process>
-use <io/stdio>
+use <io/fs>
 
 fn process_directory(string dir_path) i32 | ProcessError:
     println("Processing directory: {dir_path}")

@@ -4,30 +4,30 @@
 # EXPECTED_OUTPUT: H
 # EXPECTED_OUTPUT: Done
 
-use <io/stdio>
+use <io/fs>
 use <io/files>
 
 fn main() i32:
     # Write test file
-    let FileResult write_result = open("test_readch_simple.txt", FileMode.Write())
-    match write_result:
-        FileResult.Ok(out) ->
+    let Result@(File, IoError) write_result = open("test_readch_simple.txt", FileMode.Write())
+    match nom write_result:
+        Result.Ok(nom out) ->
             out.write("H")
             out.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             stderr.write("Error: cannot create test file\n")
             return Result.Err(StdError.Error)
 
     # Read file character by character using readch()
-    let FileResult read_result = open("test_readch_simple.txt", FileMode.Read())
-    match read_result:
-        FileResult.Ok(f) ->
-            let string ch = f.readch()
+    let Result@(File, IoError) read_result = open("test_readch_simple.txt", FileMode.Read())
+    match nom read_result:
+        Result.Ok(nom f) ->
+            let string ch = f.readch().realise('')
             println(ch)
             f.close()
             println("Done")
             return Result.Ok(0)
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             stderr.write("Error: cannot read test file\n")
             return Result.Err(StdError.Error)
 

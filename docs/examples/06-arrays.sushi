@@ -38,8 +38,9 @@ fn main() i32:
 
     println("After push: length={fibonacci.len()}, capacity={fibonacci.capacity()}")
 
-    # Pop elements
-    let i32 last = fibonacci.pop()
+    # Pop elements. pop() answers Maybe@(i32), because an empty array has
+    # nothing to give; .realise() names the value to use when it is empty.
+    let i32 last = fibonacci.pop().realise(0)
     println("Popped: {last}")
 
     # Create empty dynamic array

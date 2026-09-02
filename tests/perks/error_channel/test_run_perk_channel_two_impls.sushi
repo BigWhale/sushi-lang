@@ -1,0 +1,35 @@
+# Two types implement one fallible contract, and a generic constrained by that
+# contract dispatches to each. This is the Reader shape Phase 6 needs.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "0 1\n"
+enum SourceError:
+    Closed
+
+perk Source:
+    fn read_one() i32 | SourceError
+
+struct Zero:
+    i32 pad
+
+struct One:
+    i32 pad
+
+extend Zero with Source:
+    fn read_one() i32 | SourceError:
+        return 0
+
+extend One with Source:
+    fn read_one() i32 | SourceError:
+        return 1
+
+fn pull@(T: Source)(T s) i32 | SourceError:
+    let i32 v = s.read_one()??
+    return Result.Ok(v)
+
+fn main() i32:
+    let Zero z = Zero(0)
+    let One o = One(0)
+    println("{pull(z).realise(-1)} {pull(o).realise(-1)}")
+    return Result.Ok(0)

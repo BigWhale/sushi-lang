@@ -84,6 +84,11 @@ def monomorphize_extension_method(
         err_type=concrete_err_type,
         err_span=getattr(generic_method, "err_span", None),
         method_type_args=tuple(method_type_args),
+        # The receiver's MODE is part of the signature, so it has to survive the copy.
+        # Losing it made every generic-target method's `self` by value: a `poke self`
+        # write reached a private copy, and a `nom self` receiver registered as a borrow
+        # so a field take out of it answered CE2411 (ruling R28).
+        self_mode=getattr(generic_method, "self_mode", None),
     )
 
 
@@ -147,5 +152,110 @@ def monomorphize_all_extension_methods(
 
                 key = (concrete_type_name, method_name, type_args)
                 result[key] = concrete_method
+
+    return result
+
+
+def monomorphize_perk_impl(
+    template,
+    concrete_target_type: StructType | EnumType | Type,
+    type_args: Tuple[Type, ...],
+    substitutor: "TypeSubstitutor",
+):
+    """One instantiation's copy of a generic-target perk implementation.
+
+    The same substitution `monomorphize_extension_method` applies to one method, applied
+    to every method of the implementation and to the target it names. The copy is an
+    ordinary `ExtendWithDef` over a concrete type: nothing downstream -- the typecheck
+    pass, the backend, the perk-impl table -- can tell it from a hand-written one.
+    """
+    import copy as _copy
+    from sushi_lang.semantics.ast import ExtendWithDef
+
+    if len(type_args) != len(template.type_params):
+        raise_internal_error("CE0096", operation=(
+            f"Type argument count mismatch: expected {len(template.type_params)}, "
+            f"got {len(type_args)}"))
+
+    substitution = {name: arg
+                    for name, arg in zip(template.type_params, type_args, strict=True)}
+
+    methods = []
+    for method in template.impl.methods:
+        concrete = _copy.copy(method)
+        concrete.ret = (substitute_type_params(method.ret, substitution)
+                        if method.ret is not None else None)
+        concrete.err_type = (
+            substitute_type_params(method.err_type, substitution)
+            if getattr(method, "err_type", None) is not None else None)
+        concrete.params = [
+            Param(name=param.name,
+                  ty=(substitute_type_params(param.ty, substitution)
+                      if param.ty is not None else None),
+                  name_span=param.name_span,
+                  type_span=param.type_span,
+                  is_nom=getattr(param, "is_nom", False),
+                  nom_span=getattr(param, "nom_span", None))
+            for param in method.params
+        ]
+        # This instantiation's OWN body, for the reason `monomorphize_extension_method`
+        # states: the typecheck pass's stamps and the borrow pass's decisions are per
+        # instantiation and would otherwise land on one shared set of nodes (#391).
+        concrete.body = substitutor.substitute_body(method.body, substitution)
+        methods.append(concrete)
+
+    return ExtendWithDef(
+        target_type=concrete_target_type,
+        perk_name=template.impl.perk_name,
+        methods=methods,
+        target_type_span=template.impl.target_type_span,
+        perk_name_span=template.impl.perk_name_span,
+        loc=template.impl.loc,
+        doc=template.impl.doc,
+    )
+
+
+def monomorphize_all_perk_impls(
+    generic_perk_impls,
+    struct_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
+    monomorphized_structs: Dict[str, StructType],
+    enum_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
+    monomorphized_enums: Dict[str, EnumType],
+    substitutor: "TypeSubstitutor",
+) -> Dict[Tuple[str, str], object]:
+    """Every generic-target perk implementation, once per instantiation that exists.
+
+    The loop `monomorphize_all_extension_methods` walks, over the implementations rather
+    than the methods. A base name with no instantiation in the program produces nothing,
+    which is what makes an unused `BufReader@(R)` cost nothing.
+    """
+    result: Dict[Tuple[str, str], object] = {}
+    if not generic_perk_impls:
+        return result
+
+    sources = (
+        (struct_instantiations, monomorphized_structs),
+        (enum_instantiations, monomorphized_enums),
+    )
+    for instantiations, monomorphized_types in sources:
+        for base_name, type_args in instantiations:
+            templates = generic_perk_impls.templates(base_name)
+            if not templates:
+                continue
+            concrete_type_name = instantiation_key(base_name, type_args)
+            concrete_target = monomorphized_types.get(concrete_type_name)
+            if concrete_target is None:
+                continue
+            for template in templates:
+                if len(template.type_params) != len(type_args):
+                    continue
+                key = (concrete_type_name, template.impl.perk_name)
+                if key in result:
+                    continue
+                result[key] = (
+                    template,
+                    monomorphize_perk_impl(template, concrete_target, type_args,
+                                           substitutor=substitutor),
+                )
 
     return result

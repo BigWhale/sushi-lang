@@ -1,0 +1,35 @@
+# write_at() replaces exactly the bytes it covers, answers the count it took, and moves
+# nothing: the position a sequential write left behind is where tell() still finds it.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "took 6\nposition 15\nMainly Harmless\n"
+use <io/files>
+use <io/fs>
+
+fn patch(string path) ~ | IoError:
+    let File f = open(path, FileMode.Write())??
+    f.write("Mostly Harmless")??
+    let u8[] fix = "Mainly".to_bytes()
+    let i32 took = f.write_at(0 as i64, fix)??
+    println("took {took}")
+    let i64 at = f.tell()??
+    println("position {at}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match patch("write_at_probe.txt"):
+        Result.Ok(_) -> ~
+        Result.Err(_) ->
+            println("patch failed")
+            return Result.Ok(1)
+
+    match open("write_at_probe.txt", FileMode.Read()):
+        Result.Ok(r) ->
+            let string text = r.read_all().realise("")
+            println("{text}")
+        Result.Err(_) -> println("reopen failed")
+
+    remove("write_at_probe.txt").realise(0)
+    return Result.Ok(0)

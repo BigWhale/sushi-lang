@@ -5,6 +5,7 @@
 # EXPECT_NO_LEAKS: true
 
 use <io/files>
+use <io/fs>
 use <encoding/msgpack>
 use <toolchain/slib>
 
@@ -24,11 +25,11 @@ fn fixture_header(u8 version, u8 mlen) u8[]:
 
 fn write_fixture(string path, u8[] bytes) i32:
     match open(path, FileMode.WriteB()):
-        FileResult.Ok(out) ->
+        Result.Ok(nom out) ->
             out.write_bytes(bytes)
             out.close()
             return Result.Ok(0)
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Ok(1)
     return Result.Ok(1)
 

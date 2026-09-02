@@ -13,6 +13,7 @@ from sushi_lang.backend.platform_detect import get_current_platform
 from sushi_lang.backend.runtime.constants import (
     errno_to_file_error_table,
     ERRNO_DEFAULT_FILE_ERROR,
+    ERRNO_EINTR,
 )
 from sushi_lang.sushi_stdlib.src.io.files.results import emit_err_result
 
@@ -40,3 +41,16 @@ def emit_errno_err_result(builder: ir.IRBuilder, module: ir.Module,
                           result_type: ir.LiteralStructType) -> ir.Value:
     """The whole failure path: read errno, map it, build Result.Err(FileError)."""
     return emit_err_result(builder, result_type, emit_file_error_tag(builder, module))
+
+
+def emit_is_eintr(builder: ir.IRBuilder, module: ir.Module) -> ir.Value:
+    """Was the call that just failed interrupted by a signal? Answers an i1.
+
+    A read or a write that a signal interrupts before any byte moves answers -1 with
+    EINTR, and the caller is expected to ask again. Nothing in this layer did, so a
+    program that takes a signal saw a read failure that was not one.
+    """
+    _i8, _i8_ptr, i32, _i64 = get_basic_types()
+    errno_ptr = builder.call(declare_errno_location(module), [], name="errno_ptr")
+    return builder.icmp_signed("==", builder.load(errno_ptr, name="errno_value"),
+                               ir.Constant(i32, ERRNO_EINTR), name="was_interrupted")

@@ -1,0 +1,13 @@
+# A File declares a resource, so .clone() is refused: a derived clone copies field by
+# field, which would duplicate the descriptor number and leave two owners that both
+# close it. Ruling R3, and the same rule TcpStream gets.
+# EXPECT_ERROR_CODE: CE2431
+use <io/fs>
+
+fn main() i32:
+    match open("file_struct_clone.txt", FileMode.Write()):
+        Result.Ok(f) ->
+            let File copy = f.clone()
+            println("{copy.fd}")
+        Result.Err(_) -> println("no")
+    return Result.Ok(0)

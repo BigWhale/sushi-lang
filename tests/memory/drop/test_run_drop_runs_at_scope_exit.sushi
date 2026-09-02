@@ -1,0 +1,19 @@
+# A type that implements Drop owns a resource. Its drop() runs when the binding
+# leaves scope, without the type owning any heap at all.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "in scope 7\ndrop 7\nafter\n"
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+fn main() i32:
+    if (true):
+        let Handle h = Handle(7)
+        println("in scope {h.id}")
+    println("after")
+    return Result.Ok(0)

@@ -575,9 +575,10 @@ applies.
 
 The static pick is SAFE because an iterator is not a value (4.4): `Iterator` is not a
 nameable type, so the iterable of every `foreach` is a source expression `typecheck`
-can see whole. `file.lines()` rides the same descriptor as `stdin.lines()` and is
-`StdinLines`'s sibling — the variant covers both, or gains a `source` field; the
-lowering decides which spelling, not the design.
+can see whole. Line iteration needs no variant of its own any more: Phase 7d deleted the
+`lines()` builtin and its `length = -1` sentinel, and `foreach` learned a `next()`
+PROTOCOL instead — so a `Lines@(R)` is an ordinary owning value and the variant that
+covers it is a `NextProtocol` one, holding the iterator's place and the stamped call.
 
 `foreach(poke r in ...)` is `ArrayIter` with `by: Ref(Poke)`.
 

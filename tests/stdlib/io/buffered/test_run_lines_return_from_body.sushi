@@ -1,0 +1,35 @@
+# A `return` from inside the loop leaves the function, not just the loop, so the
+# iterator's destruction rides the function-exit path instead of the loop's.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "found beta\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn setup(string path) ~ | IoError:
+    let File w = open(path, FileMode.Write())??
+    w.write("alpha\nbeta\ngamma\n")??
+    w.close()??
+    return Result.Ok(~)
+
+fn find(string path, string want) bool | IoError:
+    setup(path)??
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8)??
+    foreach(line?? in r.lines()):
+        if (line == want):
+            return Result.Ok(true)
+    return Result.Ok(false)
+
+fn main() i32:
+    match find("/tmp/sushi_lines_return.txt", "beta"):
+        Result.Ok(hit) ->
+            if (hit):
+                println("found beta")
+            else:
+                println("no beta")
+        Result.Err(_) -> println("failed")
+    println("ok")
+    return Result.Ok(0)

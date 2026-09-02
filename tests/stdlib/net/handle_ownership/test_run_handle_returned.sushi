@@ -1,0 +1,19 @@
+# A function that returns a socket hands ownership to its caller, and the caller's
+# scope exit is what closes it.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "got one\ndone\n"
+use <net/tcp>
+
+fn make_server() TcpListener | NetError:
+    let TcpListener listener = tcp_listen("127.0.0.1", 0, 1)??
+    return Result.Ok(listener)
+
+fn main() i32:
+    if (true):
+        match make_server():
+            Result.Ok(_) -> println("got one")
+            Result.Err(_) -> println("listen failed")
+    println("done")
+    return Result.Ok(0)

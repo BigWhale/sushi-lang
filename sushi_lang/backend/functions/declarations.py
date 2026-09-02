@@ -125,10 +125,13 @@ class FunctionDeclarations:
         param_names = []
 
         if ext.target_type:
+            from sushi_lang.semantics.param_modes import receiver_mode
             self_ll = self.codegen.types.ll_type(ext.target_type)
-            if getattr(ext, "self_mode", None) is not None:
+            if receiver_mode(getattr(ext, "self_mode", None)).by_pointer:
                 # `poke self` / `peek self` (#327): the receiver arrives by POINTER,
-                # so a write through it reaches the caller's value.
+                # so a write through it reaches the caller's value. A `nom self`
+                # receiver crosses BY VALUE, like the unmarked one: what it takes is
+                # ownership, not an address.
                 self_ll = ir.PointerType(self_ll)
             param_types.append(self_ll)
             param_names.append("self")

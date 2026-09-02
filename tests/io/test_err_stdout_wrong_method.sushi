@@ -1,8 +1,0 @@
-# Test error: calling invalid method on stdout
-# EXPECT_ERROR_CODE: CE2008
-
-use <io/stdio>
-
-fn main() i32:
-    let string line = stdout.readln()  # stdout only has write()
-    return Result.Ok(0)

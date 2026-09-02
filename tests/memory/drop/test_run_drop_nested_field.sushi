@@ -1,0 +1,26 @@
+# A struct that HOLDS a Drop type: the outer drop() runs first, then the fields are
+# destroyed. The order is stated so a handle is still readable while its owner
+# closes itself down.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "9\ndrop wrapper 9\ndrop 1\n"
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+struct Wrapper:
+    Handle inner
+    i32 tag
+
+extend Wrapper with Drop:
+    fn drop(poke self) ~:
+        println("drop wrapper {self.tag}")
+
+fn main() i32:
+    let Wrapper w = Wrapper(Handle(1), 9)
+    println("{w.tag}")
+    return Result.Ok(0)

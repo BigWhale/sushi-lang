@@ -1,0 +1,16 @@
+# A declared resource refuses `.clone()` whatever declared it. The instantiation carries
+# the implementation, so `Guard@(i32)` answers CE2431 exactly as a plain `Handle` does.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2431
+struct Guard@(T):
+    T value
+
+extend Guard@(T) with Drop:
+    fn drop(poke self) ~:
+        println("releasing")
+
+fn main() i32:
+    let Guard@(i32) g = Guard(7)
+    let Guard@(i32) t = g.clone()
+    println("{t.value}")
+    return Result.Ok(0)

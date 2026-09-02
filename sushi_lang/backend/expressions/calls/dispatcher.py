@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Union
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import Call, MethodCall, DotCall, Name
-from sushi_lang.backend.expressions.calls.file_open import emit_open_function
 from sushi_lang.backend.expressions.calls.stdlib import emit_time_function, emit_math_function, emit_env_function
 from sushi_lang.backend.expressions.calls import intrinsics, generics
 from sushi_lang.backend.expressions.calls.utils import emit_receiver_value, marshal_cstr
@@ -43,9 +42,6 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if hasattr(codegen, 'generic_structs') and callee in codegen.generic_structs.by_name:
         from sushi_lang.backend.expressions import structs
         return structs.emit_struct_constructor(codegen, expr, to_i1)
-
-    if callee == "open":
-        return emit_open_function(codegen, expr, to_i1)
 
     # The unit being emitted answers for the name, exactly as the borrow pass's
     # `view_for` does: a source library's own body must read the library's
@@ -199,9 +195,18 @@ def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
         if mode.consumes:
             args[i] = consume(codegen, arg_expr, args[i], resolved,
                               ConsumingUse.CALL_ARG)
-        elif (resolved is not None and needs_cleanup(resolved)
+        elif (resolved is not None and needs_cleanup(codegen, resolved)
                 and expression_is_temporary(codegen, arg_expr)):
             _park_argument_temp(codegen, args[i], resolved)
+
+
+def consume_receiver(codegen: 'LLVMCodegen', expr, value: ir.Value) -> ir.Value:
+    """Hand a `nom self` receiver to the callee, through the one ownership seam."""
+    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+    receiver_type = _resolve_param_type(
+        codegen, infer_expr_semantic_type(codegen, expr.receiver))
+    return consume(codegen, expr.receiver, value, receiver_type,
+                   ConsumingUse.RECEIVER)
 
 
 def settle_method_call_arguments(codegen: 'LLVMCodegen', expr, args: list) -> None:
@@ -260,14 +265,6 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
         return result
 
     result = intrinsics.try_emit_struct_constructor(codegen, expr)
-    if result is not None:
-        return result
-
-    result = intrinsics.try_emit_stdio_method(codegen, expr, to_i1)
-    if result is not None:
-        return result
-
-    result = intrinsics.try_emit_file_method(codegen, expr, to_i1)
     if result is not None:
         return result
 
@@ -378,9 +375,16 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     # the node; `emit_receiver_as_pointer` returns the receiver's slot address (with the
     # load-through for a reference-parameter receiver). The typecheck and borrow passes reject the shapes with
     # no address (a temporary, a constant, a read-only root) before codegen.
-    if getattr(expr, "callee_self_mode", None) is not None:
+    from sushi_lang.semantics.param_modes import receiver_mode
+    self_mode = receiver_mode(getattr(expr, "callee_self_mode", None))
+    if self_mode.by_pointer:
         from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
         receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
+    elif self_mode.consumes:
+        # `nom self` (ruling R25): the receiver crosses by value and the callee becomes
+        # its owner, so the source is relinquished through the ownership seam exactly as
+        # a `nom` argument is. No exit path in the caller frees it afterwards.
+        receiver_value = consume_receiver(codegen, expr, receiver_value)
 
     emitted_args = [receiver_value]
     arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]

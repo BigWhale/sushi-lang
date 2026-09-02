@@ -1,0 +1,37 @@
+# fd_read and fd_write move the descriptor's OWN file position, which is what separates
+# them from the positional pair. A write leaves the position at the end, so reading needs
+# a seek back to the start first.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "wrote 5\nat 5\nback to 0\nread Hello\nat eof 0\n"
+use <io/files>
+use <collections/strings>
+
+fn main() i32:
+    let i32 fd = fd_open("descriptor_seq_probe.txt", 3, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return Result.Ok(1)
+
+    let u8[] payload = 'Hello'.to_bytes()
+    println("wrote {fd_write(fd, payload).realise(-1)}")
+
+    # SEEK_CUR is whence 1, so this reads the position without moving it.
+    let i64 here = fd_seek(fd, 0 as i64, 1).realise(-1 as i64)
+    println("at {here}")
+
+    println("back to {fd_seek(fd, 0 as i64, 0).realise(-1 as i64)}")
+
+    let u8[] empty = from([])
+    let u8[] back = fd_read(fd, 16).realise(empty)
+    println("read {back.to_string()}")
+
+    # A read at end of file answers an EMPTY array, not an error.
+    let u8[] empty2 = from([])
+    let u8[] nothing = fd_read(fd, 16).realise(empty2)
+    println("at eof {nothing.len()}")
+
+    fd_close(fd).realise(-1)
+    return Result.Ok(0)

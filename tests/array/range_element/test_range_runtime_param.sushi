@@ -4,7 +4,6 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "5 0 4\n2 0 1\n"
 
-use <io/stdio>
 
 fn slots(i32 n) i32[]:
     return Result.Ok(from([0..n]))

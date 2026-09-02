@@ -1,0 +1,48 @@
+# The hole ruling R11 closes was never about handles: `List@(T)` and `T[]` have it too.
+# The same three modes, over both -- read through a bare binding, write through `poke`,
+# take with `nom`.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "read 3\npoked 4\narray 3\nlist 2\n"
+enum Box:
+    Rows(i32[])
+    Items(List@(i32))
+
+fn rows() Box:
+    return Result.Ok(Box.Rows(from([1, 2, 3])))
+
+fn items() Box:
+    let List@(i32) l = List.new()
+    l.push(4)
+    l.push(5)
+    return Result.Ok(Box.Items(l))
+
+fn eat_array(nom i32[] xs) ~:
+    println("array {xs.len()}")
+    return Result.Ok(~)
+
+fn eat_list(nom List@(i32) xs) ~:
+    println("list {xs.len()}")
+    return Result.Ok(~)
+
+fn run() ~:
+    match rows()??:
+        Box.Rows(r) -> println("read {r.len()}")
+        Box.Items(_) -> println("items")
+    match rows()??:
+        Box.Rows(poke r) ->
+            r.push(9)
+            println("poked {r.len()}")
+        Box.Items(_) -> println("items")
+    match rows()??:
+        Box.Rows(nom r) -> eat_array(nom r)
+        Box.Items(_) -> println("items")
+    match items()??:
+        Box.Items(nom l) -> eat_list(nom l)
+        Box.Rows(_) -> println("rows")
+    return Result.Ok(~)
+
+fn main() i32:
+    run()
+    return Result.Ok(0)

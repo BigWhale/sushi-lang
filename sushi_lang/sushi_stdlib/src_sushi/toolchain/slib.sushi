@@ -12,6 +12,7 @@
 # count, reads nothing, and reports a decode error on the empty blob.
 
 use <io/files>
+use <io/fs>
 use <encoding/msgpack>
 
 public enum SlibError:
@@ -47,14 +48,14 @@ fn slib_header_check(peek u8[] header) ~ | SlibError:
 # slib_read_metadata: decode the metadata map of a .slib file into a MsgValue.
 public fn slib_read_metadata(string path) MsgValue | SlibError:
     match open(path, FileMode.ReadB()):
-        FileResult.Ok(f) ->
-            let u8[] header = f.read_bytes(52)
+        Result.Ok(f) ->
+            let u8[] empty1 = from([])
+            let u8[] header = f.read_bytes(52).realise(empty1)
             if (header.len() < 52):
-                f.close()
                 return Result.Err(SlibError.Truncated())
             let i32 mlen = slib_le_uint(peek header, 44, 8)?? as i32
-            let u8[] blob = f.read_bytes(mlen)
-            f.close()
+            let u8[] empty2 = from([])
+            let u8[] blob = f.read_bytes(mlen).realise(empty2)
             slib_header_check(peek header)??
             if (blob.len() < mlen):
                 return Result.Err(SlibError.Truncated())
@@ -63,7 +64,7 @@ public fn slib_read_metadata(string path) MsgValue | SlibError:
                     return Result.Ok(v.clone())
                 Result.Err(e) ->
                     return Result.Err(SlibError.Decode(e))
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Err(SlibError.OpenFailed(path.clone()))
     return Result.Err(SlibError.OpenFailed(path.clone()))
 
@@ -79,22 +80,24 @@ public struct SlibSizes:
 # section first. No report needs a blob itself, only its length.
 public fn slib_sizes(string path) SlibSizes | SlibError:
     match open(path, FileMode.ReadB()):
-        FileResult.Ok(f) ->
-            let u8[] header = f.read_bytes(52)
+        Result.Ok(f) ->
+            let u8[] empty3 = from([])
+            let u8[] header = f.read_bytes(52).realise(empty3)
             if (header.len() < 52):
-                f.close()
                 return Result.Err(SlibError.Truncated())
             let i32 mlen = slib_le_uint(peek header, 44, 8)?? as i32
-            let u8[] blob = f.read_bytes(mlen)
-            let u8[] src_field = f.read_bytes(8)
+            let u8[] empty4 = from([])
+            let u8[] blob = f.read_bytes(mlen).realise(empty4)
+            let u8[] empty5 = from([])
+            let u8[] src_field = f.read_bytes(8).realise(empty5)
             if (src_field.len() < 8):
-                f.close()
                 slib_header_check(peek header)??
                 return Result.Err(SlibError.Truncated())
             let u64 slen = slib_le_uint(peek src_field, 0, 8)??
-            let u8[] src_blob = f.read_bytes(slen as i32)
-            let u8[] size_field = f.read_bytes(8)
-            f.close()
+            let u8[] empty6 = from([])
+            let u8[] src_blob = f.read_bytes(slen as i32).realise(empty6)
+            let u8[] empty7 = from([])
+            let u8[] size_field = f.read_bytes(8).realise(empty7)
             slib_header_check(peek header)??
             if (blob.len() < mlen):
                 return Result.Err(SlibError.Truncated())
@@ -104,7 +107,7 @@ public fn slib_sizes(string path) SlibSizes | SlibError:
                 return Result.Err(SlibError.Truncated())
             let u64 bclen = slib_le_uint(peek size_field, 0, 8)??
             return Result.Ok(SlibSizes(slen, bclen))
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Err(SlibError.OpenFailed(path.clone()))
     return Result.Err(SlibError.OpenFailed(path.clone()))
 

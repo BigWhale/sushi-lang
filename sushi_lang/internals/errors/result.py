@@ -29,11 +29,11 @@ _add(ErrorMessage("CE2506", Severity.ERROR,
 # Try operator (??) errors (CE25xx continued)
 _add(ErrorMessage("CE2507", Severity.ERROR,
     "?? operator requires Result@(T), Maybe@(T), or result-like enum (with Ok/Err or Some/None variants), got '{got}'",
-    Category.TYPE, "The ?? operator requires an enum with Ok/Err variants (e.g., Result@(T), FileResult) or Some/None variants (e.g., Maybe@(T))."))
+    Category.TYPE, "The ?? operator requires an enum with Ok/Err variants (e.g., Result@(T)) or Some/None variants (e.g., Maybe@(T))."))
 
 _add(ErrorMessage("CE2508", Severity.ERROR,
     "?? operator can only be used in functions returning a result-like enum (with Ok/Err variants)",
-    Category.TYPE, "The ?? operator propagates errors by early return, so it requires the enclosing function to return a result-like enum (e.g., Result@(T), FileResult). Note: Maybe@(T) can be used with ??, but it propagates as Result.Err()."))
+    Category.TYPE, "The ?? operator propagates errors by early return, so it requires the enclosing function to return a result-like enum (e.g., Result@(T)). Note: Maybe@(T) can be used with ??, but it propagates as Result.Err()."))
 
 _add(ErrorMessage("CE2509", Severity.ERROR,
     "operator '+' cannot be used with string types (use string interpolation instead: \"text {{variable}}\")",
@@ -62,6 +62,10 @@ _add(ErrorMessage("CE2514", Severity.ERROR,
 _add(ErrorMessage("CE2515", Severity.ERROR,
     "'{method}' is not a method of '{wrapper}' -- the call before it returns a channel that is still unhandled",
     Category.TYPE, "A method that declares '| E' returns Result@(T, E), and a Maybe@(T) is likewise more than the bare T, so the chain stops until the wrapper is handled (ruling 5 of the UFCS epic). This is a RESOLUTION FALLBACK, not a receiver-kind ban: resolution runs first, a method found on the Result/Maybe enum itself (.realise, .hash) is legal, and this code fires only when the method is missing there but present on the payload type -- which is what tells a typo from an unhandled channel. Append '??' to the call that returns the wrapper to propagate its Err/None, or handle it in place with match or .realise(default)."))
+
+_add(ErrorMessage("CE2517", Severity.ERROR,
+    "the '??' binder needs an item that is a Result, and this loop's item is '{ty}'",
+    Category.TYPE, "A foreach walks anything whose next() answers Maybe@(T), and the '??' on the BINDER is the short form for the case where T is a Result: it unwraps the Ok and leaves the function on the first Err, exactly as '??' does in every other position. An item that is not a Result has nothing to unwrap, so the marker would mean nothing -- drop it and bind the item itself. This is not CE2515, which is a resolution fallback for a CHAINED call whose channel is still unhandled, and not CE2516, which is a wrapper standing where a bool belongs; here the item is the right shape for the loop and the wrong shape for the marker. A fallible iterator is written by setting T to a Result: next() answers Maybe@(Result@(T, E)), where the outer Maybe says whether there is more and the inner Result says whether reading it worked (HANDLES.md ruling R21). The protocol itself carries no error channel, so a next() that declares '| E' is not a fallible iterator -- it is a method whose own answer is wrapped, and the loop will not accept it."))
 
 _add(ErrorMessage("CE2516", Severity.ERROR,
     "a condition must be a bool, and '{ty}' is an unhandled {wrapper}",

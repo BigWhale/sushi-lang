@@ -1,0 +1,35 @@
+# The `??` binder is the SHORT form: the item is an ordinary Result, and the marker on the
+# binder leaves the function at the first Err exactly as `??` does anywhere else. The
+# third step fails here, so two lines print and the caller sees the error.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "ok 1\nok 2\nfailed\n"
+
+enum Bad:
+    Broken()
+
+struct Steps:
+    i32 at
+
+extend Steps next(poke self) Maybe@(Result@(i32, Bad)):
+    self.at := self.at + 1
+    if (self.at > 4):
+        let Maybe@(Result@(i32, Bad)) ended = Maybe.None()
+        return ended
+    if (self.at == 3):
+        let Maybe@(Result@(i32, Bad)) failed = Maybe.Some(Result.Err(Bad.Broken))
+        return failed
+    let Maybe@(Result@(i32, Bad)) got = Maybe.Some(Result.Ok(self.at))
+    return got
+
+fn walk() ~ | Bad:
+    let Steps s = Steps(0)
+    foreach(n?? in s):
+        println("ok {n}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match walk():
+        Result.Ok(_) -> println("finished")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

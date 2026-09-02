@@ -1,0 +1,9 @@
+# A receiver has no meaning on a plain top-level function, whatever its mode. `nom self`
+# joins `peek self` and `poke self` under CE2425.
+# EXPECT_ERROR_CODE: CE2425
+
+fn detach(nom self) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(0)

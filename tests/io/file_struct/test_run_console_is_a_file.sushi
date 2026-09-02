@@ -1,0 +1,25 @@
+# The three console handles are ordinary Files over descriptors 0, 1 and 2. They carry
+# owned = false, so a binding that drops one does NOT close it -- the same guarded shape
+# a string literal uses for its buffer. That is what lets one type serve both.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "0 1 2\nfalse false false\nout\nstill open\n"
+use <io/fs>
+
+fn main() i32:
+    println("{stdin.fd} {stdout.fd} {stderr.fd}")
+    println("{stdin.owned} {stdout.owned} {stderr.owned}")
+
+    stdout.write("out\n")
+
+    # A binding to a console handle drops at the end of the block and must not close it.
+    let bool ok = borrow_and_drop().realise(false)
+    if (ok):
+        stdout.write("still open\n")
+    return Result.Ok(0)
+
+fn borrow_and_drop() bool:
+    let File out = stdout
+    return Result.Ok(out.is_open())

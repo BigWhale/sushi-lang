@@ -1,0 +1,17 @@
+# The console constants are Files the program does not own. share() on one answers a
+# descriptor the program DOES own: it writes through to the same terminal, and it closes
+# on drop without touching descriptor 1.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nstill here\n"
+use <io/fs>
+
+fn main() i32:
+    if (true):
+        match stdout.share():
+            Result.Ok(out) -> out.writeln("Mostly Harmless")
+            Result.Err(_) -> println("share failed")
+    println("still here")
+    return Result.Ok(0)

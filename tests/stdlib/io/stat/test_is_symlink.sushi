@@ -3,16 +3,17 @@
 # EXPECT_NO_LEAKS: true
 
 use <io/files>
+use <io/fs>
 use <sys/process>
 
 fn main() i32:
     let string target = "/tmp/sushi_stat_symlink_target.txt"
     let string link = "/tmp/sushi_stat_symlink_link"
     match open(target, FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(nom f) ->
             f.write("x")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("setup failed")
             return Result.Ok(1)
     match run("ln", "-s", target, link):

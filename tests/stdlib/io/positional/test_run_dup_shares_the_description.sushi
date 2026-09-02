@@ -1,0 +1,32 @@
+# dup() gives a SECOND descriptor over the SAME open file description. Closing one
+# leaves the other usable, which is the shared-listener pattern Phase 8 needs.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "two descriptors\nstill readable 72\n"
+use <io/files>
+
+fn main() i32:
+    let i32 fd = fd_open("dup_probe.txt", 3, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return Result.Ok(1)
+
+    let u8[] hi = from([72, 105])
+    fd_pwrite(fd, 0 as i64, hi).realise(-1)
+
+    let i32 copy = fd_dup(fd).realise(-1)
+    if (copy < 0 or copy == fd):
+        println("dup failed")
+        fd_close(fd).realise(-1)
+        return Result.Ok(1)
+    println("two descriptors")
+
+    fd_close(fd).realise(-1)
+    let u8[] empty = from([0])
+    let u8[] got = fd_pread(copy, 0 as i64, 1).realise(empty)
+    println("still readable {got.get(0).realise(0)}")
+
+    fd_close(copy).realise(-1)
+    return Result.Ok(0)

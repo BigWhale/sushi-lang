@@ -1,0 +1,20 @@
+# Both sides declare a channel and the error types differ. Still CE0133.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE0133
+enum SourceError:
+    Closed
+
+perk Source:
+    fn read_one() i32 | SourceError
+
+struct Counter:
+    i32 value
+
+extend Counter with Source:
+    fn read_one() i32 | StdError:
+        return self.value
+
+fn main() i32:
+    let Counter c = Counter(1)
+    println("{c.read_one().realise(0)}")
+    return Result.Ok(0)

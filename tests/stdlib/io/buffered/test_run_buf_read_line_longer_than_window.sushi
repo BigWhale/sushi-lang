@@ -1,0 +1,27 @@
+# A line longer than the window spans as many refills as it needs, and the bulk copy has
+# to stitch them into one answer.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "40\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn run(string path) ~ | IoError:
+    let File w = open(path, FileMode.Write())??
+    w.write("0123456789012345678901234567890123456789\n")??
+    w.close()??
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 4)??
+    let string line = r.read_line()??.realise("")
+    println("{line.len()}")
+    let File back = r.into_inner()
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run("/tmp/sushi_buf_long.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

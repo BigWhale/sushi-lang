@@ -1,0 +1,33 @@
+# A `T[]` is its descriptor BY VALUE everywhere (docs/design/array-representation.md).
+# `to_bytes()` and `split()` were the only producers that answered an ADDRESS instead, so
+# every consumer that did not carry a load-if-pointer workaround crashed on one: passing
+# `s.to_bytes()` straight to a callee that borrows the array was CE0000, an internal
+# error, while `.clone()` in the same position worked.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "wrote 5\nread Hello\nparts 3\n"
+use <io/files>
+use <collections/strings>
+
+fn main() i32:
+    let i32 fd = fd_open("array_value_seam_probe.txt", 3, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return Result.Ok(1)
+
+    # The rvalue goes straight in: no local to bind it to, and no copy.
+    let i32 wrote = fd_pwrite(fd, 0 as i64, 'Hello'.to_bytes()).realise(-1)
+    println("wrote {wrote}")
+
+    let u8[] empty = from([])
+    let u8[] back = fd_pread(fd, 0 as i64, 5).realise(empty)
+    println("read {back.to_string()}")
+
+    # split() is the other producer, and answers a string[] rather than a u8[].
+    let i32 parts = 'a,b,c'.split(',').len()
+    println("parts {parts}")
+
+    fd_close(fd).realise(-1)
+    return Result.Ok(0)

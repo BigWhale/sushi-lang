@@ -1,0 +1,18 @@
+# The call site reads the receiver's mode off the extension-table record, so a
+# monomorphized copy that loses it makes a consuming receiver look like a borrow: the
+# call was accepted, the value was never spent, and a later mention compiled.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2435
+struct Wrap@(T):
+    T inner
+    string label
+
+extend Wrap@(T) eat(nom self) i32:
+    return 7
+
+fn main() i32:
+    let i32 n = 1
+    let Wrap@(string) w = Wrap("payload", "held {n}")
+    let i32 k = w.eat()
+    println("{k} {w.label}")
+    return Result.Ok(0)

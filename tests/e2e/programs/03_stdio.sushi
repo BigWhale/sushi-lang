@@ -1,4 +1,4 @@
-use <io/stdio>
+use <io/fs>
 
 fn main() i32:
     stdout.write("Mostly Harmless\n")

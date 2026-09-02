@@ -29,7 +29,6 @@ from llvmlite import ir
 
 from sushi_lang.backend import gep_utils
 from sushi_lang.backend.generics.container_walk import emit_container_walk
-from sushi_lang.semantics import typesys
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -43,13 +42,15 @@ def emit_range_copy(codegen: 'LLVMCodegen', dest_data: ir.Value, source_data: ir
 
     The caller has already made room and checked the bounds. This is the copy alone.
     """
-    from sushi_lang.backend.ownership import copy_out
+    from sushi_lang.backend.destructors import needs_cleanup
 
     source_base = gep_utils.gep_array_element(codegen, source_data, start, f"{prefix}_src")
 
-    if element_type is None or not typesys.owns_heap(element_type):
+    if element_type is None or not needs_cleanup(codegen, element_type):
         _emit_memcpy(codegen, dest_data, source_base, count, element_llvm_type)
         return
+
+    from sushi_lang.backend.ownership import copy_out
 
     def clone_one(slot: ir.Value, index: ir.Value) -> None:
         source_slot = gep_utils.gep_array_element(codegen, source_base, index)

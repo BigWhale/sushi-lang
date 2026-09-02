@@ -579,7 +579,8 @@ let string combined = "{a}{b}"   # "foobar"
 ### Other
 
 - `as` - Type casting
-- `??` - Error propagation
+- `??` - Error propagation. Postfix on an expression, and also on a `foreach` binder
+  (`foreach(line?? in it)`), where it unwraps the loop's item
 
 ## Control Flow
 
@@ -625,6 +626,61 @@ Type annotation optional:
 foreach(i32 element in array.iter()):
     println(element)
 ```
+
+**Two things are walkable.** An ITERATOR -- what `.iter()` answers on an array or a
+`List@(T)`, what `.keys()` / `.values()` / `.entries()` answer on a `HashMap`, and what a
+range is. Or **any type carrying `next()` answering `Maybe@(T)`**: the loop calls it until
+it answers `None`, and that is the whole protocol. There is no type to implement and no
+perk to name, so a struct becomes walkable by gaining one method.
+
+<!-- docs-sweep: skip (a fragment: the narrative owns the struct) -->
+```sushi
+extend Countdown next(poke self) Maybe@(i32):    # this makes a Countdown walkable
+    ...
+
+foreach(n in c):                                 # calls c.next() until it answers None
+    println(n)
+```
+
+The protocol carries **no error channel**. A `next()` declaring `| E` answers a `Result`
+rather than a `Maybe` and is not walkable; a FALLIBLE iterator puts the failure in its
+ITEM instead, answering `Maybe@(Result@(T, E))`. The outer `Maybe` says whether there is
+more and the inner `Result` says whether reading it worked, and the two are never the same
+answer.
+
+The item is then an ordinary value, so every tool the language already has works on it --
+a `match` that skips a failure, `.realise(default)` that substitutes one, a `break`. And
+`??` **on the binder** is the short form for the common case, leaving the function on the
+first failure exactly as `??` does in any other position:
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn show(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    foreach(line?? in r.lines()):        # the first read failure leaves show()
+        println(line)
+    return Result.Ok(~)
+
+fn main() i32:
+    match show("/etc/hosts"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+```
+
+A `??` binder over an item that is not a `Result` has nothing to unwrap and is
+**CE2517**. An iterable that is neither an iterator nor a type with `next()` is
+**CE2033**. A reference binding (`foreach(poke r in ...)`) takes no `??` marker: it points
+INTO storage, and there is nothing to unwrap there.
+
+`foreach` CONSUMES its iterable, and a protocol iterator is destroyed when the loop ends --
+by `break` and by `return` as well as at the end of the input.
+
+The argument behind all of this -- why the failure rides in the ITEM rather than on the
+loop head, why the protocol is not a perk, and why a line iterator's stop is sticky -- is
+[Iteration (design)](design/iteration.md).
 
 ## Arrays
 
@@ -990,14 +1046,57 @@ match value:
 ### Nested Patterns
 
 ```sushi
+use <io/fs>
+
 match result:
-    FileResult.Err(FileError.NotFound()) ->
+    Result.Err(FileError.NotFound()) ->
         println("File not found")
-    FileResult.Err(_) ->
+    Result.Err(_) ->
         println("Other file error")
-    FileResult.Ok(f) ->
+    Result.Ok(f) ->
         println("File opened")
 ```
+
+### Binding Modes
+
+A payload binding carries a MODE, and the three are the ones a parameter has. The bare
+form is the common case and is unchanged.
+
+| pattern | the binding is | write through it | may be given away |
+|---|---|---|---|
+| `Ok(x)` | a read-only view | no (CE2414) | no (CE2411) |
+| `Ok(poke x)` | a pointer into the scrutinee's payload | yes, and it reaches the owner | no |
+| `Ok(nom x)` | the value itself, now the arm's | yes | yes |
+
+`nom` TAKES the payload, so the match has to own its scrutinee. A temporary -- a call
+result, a constructor, a `??` -- is owned by construction. A place expression belongs to
+its owner until the match says `nom`, and then the local is consumed exactly as
+`f(nom r)` consumes it.
+
+| scrutinee | the match |
+|---|---|
+| `match open("out.log", FileMode.Write()):` | OWNS a temporary; `nom` bindings are legal |
+| `match r:` | BORROWS the local; a `nom` binding is CE2432 |
+| `match nom r:` | CONSUMES the local; `nom` bindings are legal, and a later `r` is CE2405 |
+
+<!-- docs-sweep: skip (a fragment: `report` is the narrative's, and neither match returns) -->
+```sushi
+use <io/fs>
+use <io/buf>
+
+match open("out.log", FileMode.Write()):
+    Result.Ok(f) -> f.writeln("Mostly Harmless")     # a borrow: no marker, unchanged
+    Result.Err(e) -> report(e)
+
+match open("out.log", FileMode.Write()):
+    Result.Ok(nom f) -> buf_writer(nom f, 4096)      # takes it, and says so
+    Result.Err(e) -> report(e)
+```
+
+An arm takes the variant WHOLE: if any binding in it is `nom`, every other owning payload
+of that variant must be `nom` too (CE2433). `nom` is not valid inside an `Own(...)`
+pattern (CE2434), and a `peek`/`poke` binding still needs a scrutinee with storage -- a
+read through a live owner has none (CE2404).
 
 ### Exhaustiveness
 
@@ -1175,7 +1274,7 @@ that imports the aliasing unit does not see it.
 `unsafe external` namespace, or one of the unit's own declarations -- is `CE3013`. Two
 aliases for one import are legal and both work.
 
-**An empty namespace warns.** `use <io/stdio> as io` binds nothing, because the import
+**An empty namespace warns.** `use <io/fs> as io` binds nothing, because the import
 enables methods on `stdin` and brings no name: that is `CW3004`, a warning, and the
 import still does its work.
 
@@ -1228,6 +1327,14 @@ spelled constructor. Array targets take a concrete element (`extend i32[]`) or a
 name that binds a type parameter (`extend T[]`). The design record is
 `docs/design/ufcs-combinators.md`.
 
+A **perk method** takes the same error channel, and the perk states it in the contract:
+`fn read(poke u8[] into) i32 | IoError`. Every implementation repeats the channel
+exactly; a channel one side declares and the other does not, and two channels over
+different error types, are both `CE0133`, which points at the contract and the
+implementation together. A perk method has no method-level type parameters (`CE4010`
+covers the perk itself) and no `Self` type, so a contract cannot promise to return
+another one of the implementing type.
+
 A **private perk** hides the CONTRACT, not the method. Another unit may not implement it
 (`extend X with Loud`) and may not constrain a type parameter with it (`@(T: Loud)`) --
 both are `CE4011` -- but a method it provides stays callable on any type you publish,
@@ -1250,7 +1357,7 @@ Import stdlib modules with `use`:
 # HashMap requires explicit import:
 use <collections/hashmap>
 use <collections/strings> # String utilities
-use <io/stdio>           # stdio functions
+use <io/fs>           # stdio functions
 ```
 
 ## Comments
@@ -1528,6 +1635,55 @@ fn main() i32:
   of them on a constant is **CE2096**. The constant lives in read-only memory; copy it into a local
   and mutate that. (A local shadowing the constant is freely mutable.)
 
+### Struct Constants
+
+A struct is a constant when every argument of its construction is. Positional and named
+construction both work, on the same all-or-nothing rule they follow in a body, and a
+field whose type is another struct nests:
+
+```sushi
+struct Handle:
+    i32 fd
+    bool owned
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Segment:
+    Point start
+    i32 length
+
+const i32 STDOUT_FD = 1
+
+const Handle OUT = Handle(STDOUT_FD, false)              # positional
+const Handle ERR = Handle(fd: 2, owned: false)           # named
+const Segment SEG = Segment(Point(3, 4), 7)              # nested
+
+fn main() i32:
+    println("{OUT.fd} {SEG.start.y}")                    # 1 4
+    return Result.Ok(0)
+```
+
+Only a name the compiler knows to be a struct starts a constant construction, so an
+ordinary call is refused as it always was -- flat, and inside a field argument:
+
+```sushi
+const Handle BAD = Handle(pick())                # CE0108: function calls forbidden
+const Segment ALSO_BAD = Segment(Point(pick(), 2), 3)   # CE0108, one level down
+```
+
+A struct constant lives in read-only memory like every other constant. Writing a field
+is **CE2096**, and calling a `poke self` method on one is **CE2400** -- that method takes
+its receiver's address, and a constant has no frame slot to point at:
+
+```sushi
+OUT.fd := 7          # CE2096: cannot assign to a field of constant 'OUT'
+OUT.release()        # CE2400: cannot borrow 'OUT': only a local variable can be borrowed
+```
+
+Enum construction in a constant is still refused (CE0108).
+
 ### Restrictions
 
 A constant is built from literals, other constants, operators and `as`. Referring to another
@@ -1543,11 +1699,11 @@ const bool IS_TWO = SMALLEST == 2   # bool and string compare for equality
 ```
 
 Constants cannot use:
-- Function calls (including constructors) and method calls
+- Function calls and method calls. A STRUCT construction is not a function call and is
+  allowed -- see [Struct Constants](#struct-constants)
 - Local variables (only other constants)
-- Struct or enum construction
+- Enum construction
 - Dynamic arrays
-- Interpolation -- `"{OTHER}"` in a constant is not evaluated yet
 - A compile-time loop, so a generated table has to be spelled out element by element
 
 ```sushi

@@ -1,0 +1,20 @@
+# A struct that HOLDS a resource type has no derived clone either: cloning it would
+# copy the descriptor one level down.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2431
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+struct Wrapper:
+    Handle inner
+    i32 tag
+
+fn main() i32:
+    let Wrapper w = Wrapper(Handle(1), 9)
+    let Wrapper t = w.clone()
+    println("{w.tag} {t.tag}")
+    return Result.Ok(0)

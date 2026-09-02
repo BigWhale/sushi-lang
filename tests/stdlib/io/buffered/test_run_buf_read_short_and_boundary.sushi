@@ -1,0 +1,30 @@
+# read() takes what the window still has and never crosses a refill, so a short answer is
+# not an end of input: the window holds "alpha-be", read(5) takes five of it and read(64)
+# takes the three left rather than reading again. read_all() then takes everything left,
+# across refills.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "[alpha]\n[-be]\n[ta-gamma-delta]\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn run(string path) ~ | IoError:
+    let File w = open(path, FileMode.Write())??
+    w.write("alpha-beta-gamma-delta")??
+    w.close()??
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8)??
+    println("[{r.read(5)??}]")
+    println("[{r.read(64)??}]")
+    println("[{r.read_all()??}]")
+    let File back = r.into_inner()
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run("/tmp/sushi_buf_short.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

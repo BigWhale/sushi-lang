@@ -1,0 +1,22 @@
+# Ruling R11: a bare payload binding still BORROWS. It reads, it is not registered for
+# its own free, and the temporary the match owns drops once, at the end of the match.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "got 7\ndrop 7\nafter\n"
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+fn make(i32 id) Handle:
+    return Result.Ok(Handle(id))
+
+fn main() i32:
+    match make(7):
+        Result.Ok(h) -> println("got {h.id}")
+        Result.Err(_) -> println("failed")
+    println("after")
+    return Result.Ok(0)

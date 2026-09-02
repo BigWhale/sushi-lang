@@ -1,0 +1,15 @@
+# A TcpListener owns its descriptor and closes it when the binding leaves scope,
+# with no explicit close() anywhere in the program.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "listening\ndone\n"
+use <net/tcp>
+
+fn main() i32:
+    if (true):
+        match tcp_listen("127.0.0.1", 0, 1):
+            Result.Ok(_) -> println("listening")
+            Result.Err(_) -> println("listen failed")
+    println("done")
+    return Result.Ok(0)

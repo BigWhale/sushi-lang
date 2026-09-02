@@ -46,6 +46,9 @@ fn f(peek string name) ~:     # borrow by pointer -- read only; caller frees
 fn f(poke string name) ~:     # borrow by pointer -- read/write; caller frees
 ```
 
+A RECEIVER takes the same four, written without a type: `self`, `nom self`, `peek self`
+and `poke self`. Its mode is declared and never written at the call site.
+
 The default mode has no name of its own. It is *a borrow*. When you explain it, say that it
 does not pass the value.
 
@@ -198,8 +201,14 @@ deriving it in several.
 - **Generic parameters are uniform.** `fn f@(T)(T x)` borrows for every instantiation. A
   pass-through such as `fn identity@(T)(T x) T` needs `nom T x`. There is no per-
   instantiation mode, because the mode is declared and not inferred.
-- **`nom self` is not part of this work.** The receiver stays a borrow. `peek self` and
-  `poke self` continue, without the `&`.
+- **A receiver carries a mode too, and `nom self` is one of them** (HANDLES.md ruling
+  R25). `peek self` and `poke self` cross by pointer; an unmarked receiver borrows;
+  `nom self` CONSUMES, so the method owns what it was called on and the caller's binding
+  is spent. `semantics/param_modes.py:receiver_mode` is the one reading of the marker,
+  and every consumer -- the typecheck pass, the borrow pass and the backend -- asks it
+  rather than comparing the string. A `nom self` receiver is an ordinary owned local
+  inside the body: it may be written, it may be handed to `poke`, and it drops at the
+  end of the method.
 - **A variadic `...T` keeps the callee as the owner** of the collected array. The array is
   synthesized by the caller and has no other owner, so it adopts. A consuming variadic
   spelling is deferred and rejected.
@@ -225,6 +234,20 @@ New:
 |---|---|
 | **CE2427** | the argument's mode marker does not match the parameter's declared mode |
 | **CE2428** | `nom` in a position with no consume semantics — an FFI extern parameter |
+| **CE2435** | a use after a CONSUMING RECEIVER, naming the method that took the value |
+
+**CE2435 against CE2405.** A `nom` argument is a real move and its marker is visible at
+the call site, so it keeps CE2405. A receiver's mode is DECLARATION-only — `f.close()`
+carries no marker at all — so the diagnostic has to carry what the syntax cannot, and it
+names the method. One code covers every consuming receiver: `close()` releases a
+descriptor and hands nothing on, while `into_inner()` hands the value onward, and the
+method name is what tells a reader which happened.
+
+A `const` receiver is refused for both marked kinds, for one reason: read-only memory has
+no frame slot to point a `poke` at and no owner to hand a `nom` away from. That is
+CE2400, and `stdout.close()` is the case it catches. The two differ on a TEMPORARY: a
+`poke self` needs an address the caller keeps, so a call result is CE2404, while a
+`nom self` takes ownership and a temporary is owned by construction.
 
 Re-aimed:
 
@@ -256,10 +279,92 @@ Two more follow:
 - **The default is the safe one.** The mode a careless author gets is the one that cannot
   double-free, and the dangerous one has to be written down at both ends.
 
+## 10b. The other boundary: a pattern binding
+
+**Added 2026-08-30, HANDLES.md ruling R11.** A call is not the only place a value crosses
+into a new name. A `match` arm binds a payload, and until this ruling that binding could
+only ever borrow -- there was no route by which a `match` arm took ownership of what it
+bound, for `List@(T)` and `T[]` as much as for a handle.
+
+The pattern boundary carries the same three modes, with the same meanings, marked the same
+way:
+
+| pattern | what the binding is | who frees | write through it |
+|---|---|---|---|
+| `Ok(x)` | a private copy of the payload | the scrutinee's owner | no -- CE2414 |
+| `Ok(poke x)` | a pointer into the payload's storage | the scrutinee's owner | yes |
+| `Ok(nom x)` | the value, now the arm's | **the arm** | yes |
+
+The differences from the call boundary are two, and both come from the same fact: a match
+has no declaration side to agree with.
+
+- **The mode is written once, at the binding.** There is nothing to mark at the other end,
+  so CE2427's both-ends rule has no pattern twin.
+- **Whether the mode is legal is a property of the SCRUTINEE.** A `nom` binding needs the
+  match to own what it matches. A temporary is owned by construction; a place expression is
+  not, and `match nom r:` is how the local is handed over -- one more consuming position,
+  `ConsumingUse.MATCH_SCRUTINEE`, so `r` afterwards is CE2405 exactly as after `f(nom r)`.
+  A `nom` binding under a plain `match r:` is CE2432.
+
+An arm takes the variant WHOLE (CE2433): what suppresses the match's free is the whole
+scrutinee, not one payload slot, so a payload left borrowed beside a taken one would be
+freed by nobody. A per-slot take needs a drop flag per payload and is a later change.
+
+`peek` and `poke` are unchanged by the ruling except in one place: a binding into a
+TEMPORARY was CE2404, because a temporary had no address. It has one now -- the match parks
+what it owns in a slot for the whole statement, which `nom` needed in any case. A read
+through a live owner still has none, and is still CE2404.
+
+## 10c. The third boundary: a field take
+
+**Added 2026-09-02, P7 ruling R28.** A field read is a borrow, which left one shape with
+no spelling at all: handing a handle back OUT of the value that holds it. A struct that
+owns a `File` could never give it away, so `close()` on a field-held handle was CE2411
+with no escape -- and R26 promised `into_inner()` as that escape.
+
+`nom` marks the take, in the two positions a taken value can go to:
+
+```sushi
+extend BufWriter@(W) into_inner(nom self) W | IoError:
+    self.flush()??
+    return nom self.sink            # a return
+
+let File back = nom wrapper.out     # a let
+```
+
+Four conditions, each of them load-bearing:
+
+| condition | why |
+|---|---|
+| the marker is written | an unmarked field read stays the borrow it has always been, so nothing existing changes meaning |
+| ONE step off a bare NAME | there is a local to spend, and no intermediate field is read through. `nom a.b.c` is CE2411 |
+| the name is a local this function OWNS | a `peek`/`poke` parameter, a `let`-borrow or a match binding names storage the caller keeps, so a take out of one is CE2411 |
+| the field OWNS something | a field that owns nothing has nothing to hand over, so the marker is an ordinary copy there and the receiver is untouched |
+
+**A take spends the WHOLE receiver.** This is CE2433's all-or-nothing rule read on a
+struct instead of a variant: what suppresses the receiver's own free is the whole value
+and not one field, so a field left behind would be freed by nobody. The remaining owning
+fields are destroyed at the take, in declaration order, and a later mention of the
+receiver is CE2405 -- a real move, with the marker visible on the page.
+
+**`drop()` does not run.** A destructor is written for a value that goes away whole, and
+here one field survives it, so a `drop()` that flushed into the taken handle or closed it
+would be told it still owns what the caller is taking. The method performing the take
+does the finishing work itself, which is exactly what `into_inner()` spells above.
+
+Like the pattern boundary, the mode is written once: there is no declaration side to
+agree with, so CE2427's both-ends rule has no field-take twin either.
+
 ## 11. Not designed
 
+- **`nom self`.** A consuming RECEIVER. It did NOT fall out of ruling R11's machinery: a
+  pattern binding is a value the arm names, while a receiver mode is part of a method's
+  declaration and belongs to `semantics/param_modes.py`. HANDLES.md Phase 7 decides it,
+  with `BufWriter.into_inner()` and a consuming `close()` as the two consumers.
+- **A `nom` binding inside `Own(...)`** (CE2434). Taking the pointee out would leave the
+  heap cell with nothing to free it.
+
 - **A consuming variadic** (`nom ...T`). Rejected today.
-- **`nom self`.** Rejected today.
 - **Lifetimes.** Nothing relates a borrow to the value it names, so a borrow still cannot
   be returned or stored (CE2415, CE2416, CE2417, CE2419).
 - **Mode inference at a call site.** The marker is written, never deduced. A deduced marker

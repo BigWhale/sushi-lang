@@ -21,6 +21,7 @@ class ExpressionScanner:
         generic_funcs: dict,
         type_validator=None,
         namespaces=None,
+        generic_enums=None,
     ):
         """Initialize expression scanner."""
         self.type_inferrer = type_inferrer
@@ -29,6 +30,9 @@ class ExpressionScanner:
         self.generic_funcs = generic_funcs
         self.type_validator = type_validator
         self.namespaces = namespaces
+        # Templates by name, for reading a variant's payload types off a GenericTypeRef
+        # whose interned instance does not exist yet (#539).
+        self.generic_enums = generic_enums
         # Callback to scan a lambda's block body (a statement Block). Wired by the
         # InstantiationCollector to its FunctionCollector._collect_from_block; left None on
         # the unit-test paths that drive the scanner directly (a block-body lambda is a
@@ -202,7 +206,11 @@ class ExpressionScanner:
             if env_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, env_error)))
             return
-        elif function_name == 'getenv':
+        elif function_name in {'getenv', 'fd_readln'}:
+            # `fd_readln` answers `Result@(Maybe@(string), FileError)`, and the Maybe is
+            # the half nothing else in the program names: the Result interns through its
+            # own seam, but a payload enum has to be asked for here or the match on the
+            # answer sees an unresolved `Maybe@(string)` (CE2048).
             self.instantiations.add(("Maybe", (BuiltinType.STRING,)))
             return
         elif function_name in {'file_size', 'mtime', 'ctime'}:
@@ -233,7 +241,7 @@ class ExpressionScanner:
                     ("Result", (DynamicArrayType(BuiltinType.STRING), file_error)))
             return
         elif function_name in {'sock_tcp_connect', 'sock_tcp_listen', 'sock_tcp_accept',
-                               'sock_send', 'sock_close', 'sock_local_port',
+                               'sock_send', 'sock_close', 'sock_dup', 'sock_local_port',
                                'sock_peer_port', 'sock_set_recv_timeout',
                                'sock_set_send_timeout', 'sock_udp_bind',
                                'sock_udp_send_to'}:

@@ -76,10 +76,11 @@ def materialize_function_ref(
 
 def env_owns_field(codegen: "LLVMCodegen", field_type) -> bool:
     """Does the heap environment own this captured field?"""
-    from sushi_lang.backend.ownership import resolver_for
+    from sushi_lang.backend.ownership import drops_of, resolver_for
     from sushi_lang.semantics.ownership import TypeClass, type_class_of
 
-    return type_class_of(field_type, resolver_for(codegen)) is not TypeClass.PLAIN
+    return type_class_of(field_type, drops_of(codegen),
+                         resolver_for(codegen)) is not TypeClass.PLAIN
 
 
 def get_or_create_env_drop(codegen: "LLVMCodegen", env_struct) -> ir.Function:

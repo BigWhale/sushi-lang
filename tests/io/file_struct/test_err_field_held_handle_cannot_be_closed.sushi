@@ -1,0 +1,20 @@
+# The one thing R26 forecloses. A handle held in a struct FIELD cannot be closed
+# explicitly: a field read is a borrow, and consuming a borrow is CE2411. The struct's
+# own drop still closes it, and into_inner() on a buffered wrapper is the way to see the
+# error.
+# EXPECT_ERROR_CODE: CE2411
+use <io/fs>
+
+struct Log:
+    File sink
+
+fn shut(string path) ~ | IoError:
+    let Log log = Log(open(path, FileMode.Write())??)
+    log.sink.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match shut("field_held_handle.txt"):
+        Result.Ok(_) -> println("closed")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

@@ -58,3 +58,15 @@ tests/leakcheck/bin/
 *.swp
 *.swo
 *~
+
+# Probe files a descriptor-gate test writes beside itself.
+fd_gate_probe.txt
+fd_fixture_probe.txt
+dup_probe.txt
+positional_probe.txt
+overwrite_probe.txt
+array_value_seam_probe.txt
+descriptor_seq_probe.txt
+descriptor_lines_probe.txt
+descriptor_seek_probe.txt
+descriptor_tty_probe.txt

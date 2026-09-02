@@ -1,0 +1,27 @@
+# The writer collects and drains. finish() is the checked last drain and it CONSUMES, so
+# nothing can forget to flush after it -- there is nothing left to forget with.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "[alpha\n\ngamma]\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn run(string path) ~ | IoError:
+    let File wf = open(path, FileMode.Write())??
+    let BufWriter@(File) w = buf_writer(nom wf, 4)??
+    w.write_line("alpha")??
+    w.write_line("")??
+    w.write("gamma")??
+    w.finish()??
+    let File f = open(path, FileMode.Read())??
+    println("[{f.read_all()??}]")
+    f.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run("/tmp/sushi_buf_write.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

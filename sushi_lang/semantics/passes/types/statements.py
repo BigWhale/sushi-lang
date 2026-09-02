@@ -1,10 +1,12 @@
 """Statement validation for type validation."""
 from __future__ import annotations
+from itertools import count
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
 from sushi_lang.semantics.ast import Let, Return, Rebind, If, While, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess
+from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
 from .compatibility import validate_assignment_compatibility, types_compatible
@@ -207,6 +209,13 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
     elif isinstance(stmt.target, MemberAccess):
         validator.validate_expression(stmt.target)
 
+        # A field of a constant is .rodata like any other part of it (CE2096).
+        from .arrays import reject_write_to_constant
+        if reject_write_to_constant(stmt.target, "assign to a field of",
+                                    stmt.loc, validator.reporter, validator):
+            validator.validate_expression(stmt.value)
+            return
+
         actual_type = validator.infer_expression_type(stmt.target)
         if actual_type is None:
             validator.validate_expression(stmt.value)
@@ -284,11 +293,37 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
     if iterable_type is None:
         return  # Error already emitted during expression validation
 
-    if not isinstance(iterable_type, IteratorType):
-        er.emit(validator.reporter, er.ERR.CE2033, stmt.iterable.loc, got=display_type(iterable_type))
-        return
+    if isinstance(iterable_type, IteratorType):
+        element_type = iterable_type.element_type
+    else:
+        # Not an iterator: it may still carry `next()` (HANDLES.md ruling R21). The
+        # protocol is asked SECOND, because `Iterator@(T)` is a cursor over contiguous
+        # storage and its walk needs no call at all.
+        element_type = resolve_protocol_iterator(validator, stmt, iterable_type)
+        if element_type is None:
+            er.emit(validator.reporter, er.ERR.CE2033, stmt.iterable.loc,
+                    got=display_type(iterable_type))
+            return
 
-    element_type = iterable_type.element_type
+    # The `??` binder: the loop binds the raw item under the hidden name the AST builder
+    # gave it, and the body opens with `let <T> <name> = <hidden>??`. Filling in that
+    # `let`'s type is the ONE thing the parser could not do, so it is the only rule the
+    # marker needs here -- the unwrap itself is the ordinary TryExpr.
+    if stmt.item_try_let is not None:
+        ok_payload = _result_ok_payload(element_type)
+        if ok_payload is None:
+            er.emit(validator.reporter, er.ERR.CE2517,
+                    stmt.item_try_span or stmt.loc, ty=display_type(element_type))
+            return
+        # A declared type on a `??` binder names what the USER binds, which is the
+        # unwrapped value -- so it belongs to the `let` and not to the loop's own slot.
+        if stmt.item_type is not None:
+            stmt.item_try_let.ty = stmt.item_type
+            stmt.item_try_let.type_span = stmt.item_type_span
+            stmt.item_type = None
+            stmt.item_type_span = None
+        else:
+            stmt.item_try_let.ty = ok_payload
 
     if stmt.item_type is not None:
         validate_type_name(validator, stmt.item_type, stmt.item_type_span)
@@ -312,8 +347,15 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
     # A reference binding points INTO the container's element storage, so the iterable
     # must have some: a range and `map.entries()` synthesize their values. The allowlist
     # is deliberate -- a new iterable kind must be PROVEN addressable first (#300).
+    #
+    # A `next()` protocol iterator never has element storage: the item is the value the
+    # CALL answered, held in the loop's own slot. The spelling of the iterable does not
+    # change that, so the protocol is asked before the allowlist -- a user `iter()`
+    # answering a protocol iterator would otherwise pass the name test and bind a
+    # pointer into a temporary.
     if stmt.item_borrow is not None:
-        if not _foreach_iterable_is_addressable(stmt.iterable):
+        if (stmt.protocol_next is not None
+                or not _foreach_iterable_is_addressable(stmt.iterable)):
             er.emit(validator.reporter, er.ERR.CE2423,
                     stmt.item_borrow_span or stmt.loc)
             return
@@ -339,6 +381,92 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
             validator.variable_types.pop(stmt.item_name, None)
         else:
             validator.variable_types[stmt.item_name] = previous
+
+
+# One counter for the whole process, for the same reason the AST builder keeps one: the
+# hidden local a protocol loop holds its iterator in must be a name no source can write,
+# and a nested loop must not reuse its parent's.
+_protocol_iter_ids = count()
+
+
+def _result_ok_payload(ty):
+    """The Ok payload of a `Result@(T, E)`, or None when this is not one."""
+    if not isinstance(ty, EnumType) or not ty.name.startswith("Result<"):
+        return None
+    ok_variant = ty.get_variant("Ok")
+    if ok_variant is None or len(ok_variant.associated_types) != 1:
+        return None
+    return ok_variant.associated_types[0]
+
+
+def _maybe_some_payload(ty):
+    """The Some payload of a `Maybe@(T)`, or None when this is not one."""
+    if not isinstance(ty, EnumType) or not ty.name.startswith("Maybe<"):
+        return None
+    some_variant = ty.get_variant("Some")
+    if some_variant is None or len(some_variant.associated_types) != 1:
+        return None
+    return some_variant.associated_types[0]
+
+
+def resolve_protocol_iterator(validator: 'TypeValidator', stmt: Foreach, iterable_type):
+    """The `next()` protocol: what this loop yields, or None when the type is not walkable.
+
+    A type is walkable when it carries a nullary `next()` answering `Maybe@(T)`. That is
+    the whole protocol -- no type to implement, no perk to name (HANDLES.md ruling R21) --
+    and the element type is T.
+
+    Resolution goes through `resolve_method`, the one ladder validation and inference
+    already share, so a perk method named `next` and an extension method named `next`
+    answer by the same rule as everywhere else. Three shapes are refused, and each for
+    the same reason -- the loop has to be able to call it repeatedly and read a stop out
+    of the answer. A `next()` taking ARGUMENTS has nothing to be handed. One declaring
+    `| E` answers a Result rather than a Maybe: the protocol carries no error channel,
+    and a fallible iterator says so in its ITEM instead. And a `nom self` receiver
+    answers once and spends the iterator.
+
+    The call the loop will make is built and VALIDATED here, against a hidden local
+    holding the iterator. That is what stamps the receiver mode, the parameter modes and
+    the return type, so the backend emits an ordinary method call and needs no second
+    resolution of its own.
+    """
+    from sushi_lang.semantics.passes.types.calls.methods import (
+        RESOLUTION_REPORTED, extension_call_result_type, resolve_method,
+        validate_method_call)
+
+    resolved = resolve_method(validator, iterable_type, "next", report=False)
+    if resolved is None or resolved is RESOLUTION_REPORTED:
+        return None
+    if getattr(resolved.method, "params", None):
+        return None
+    # A CONSUMING receiver cannot answer twice: the first call would spend the loop's
+    # own iterator and the second would read a value that has been given away. So
+    # `nom self` on a `next()` makes a type unwalkable rather than walkable once.
+    if receiver_mode(getattr(resolved.method, "self_mode", None)) is ParamMode.NOM:
+        return None
+    element_type = _maybe_some_payload(
+        extension_call_result_type(validator, resolved.method))
+    if element_type is None:
+        return None
+
+    if stmt.protocol_iter_name is None:
+        stmt.protocol_iter_name = f"__fe_iter{next(_protocol_iter_ids)}"
+    iter_name = stmt.protocol_iter_name
+
+    call = MethodCall(receiver=Name(id=iter_name, loc=stmt.iterable.loc),
+                      method="next", args=[], loc=stmt.iterable.loc)
+    _MISSING = object()
+    previous = validator.variable_types.get(iter_name, _MISSING)
+    validator.variable_types[iter_name] = iterable_type
+    try:
+        validate_method_call(validator, call)
+    finally:
+        if previous is _MISSING:
+            validator.variable_types.pop(iter_name, None)
+        else:
+            validator.variable_types[iter_name] = previous
+    stmt.protocol_next = call
+    return element_type
 
 
 def _foreach_iterable_is_addressable(iterable) -> bool:

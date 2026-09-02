@@ -1,0 +1,28 @@
+# A take spends the receiver, so every OTHER owning field is destroyed at the take. The
+# label owns heap here, and nothing frees it afterwards -- the leak check is the assertion.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "sink 7\nok\n"
+use <io/fs>
+
+struct Sink:
+    File out
+    string label
+
+fn run() ~ | IoError:
+    let File f = open("/tmp/sushi_field_take_rest.txt", FileMode.Write())??
+    let i32 n = 7
+    let string label = "sink {n}"
+    let Sink s = Sink(f, label)
+    println(s.label)
+    let File back = nom s.out
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

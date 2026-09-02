@@ -13,7 +13,7 @@ from sushi_lang.internals.report import span_of
 
 
 def strip_self_param(params: List[Param], where_span=None):
-    """Lift a `poke self` / `peek self` parameter off a parsed param list (#327)."""
+    """Lift a `poke self` / `peek self` / `nom self` parameter off a param list."""
     self_mode = None
     self_mode_span = None
     remaining: List[Param] = []
@@ -113,12 +113,14 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
         if not isinstance(node, Tree):
             continue
 
-        if node.data == "self_param":
-            # `poke self` / `peek self` (#327): a receiver-mode parameter. The mode
-            # rides on the Param; `strip_self_param` lifts it onto the declaration and
-            # validates the position, so collect never sees a `self`-named Param.
+        if node.data in ("self_param", "nom_self_param"):
+            # `poke self` / `peek self` (#327) and `nom self` (ruling R25): a
+            # receiver-mode parameter. The mode rides on the Param; `strip_self_param`
+            # lifts it onto the declaration and validates the position, so collect never
+            # sees a `self`-named Param.
+            token_type = "NOM" if node.data == "nom_self_param" else "BORROW_MODE"
             mode_tok = next((c for c in node.children
-                             if isinstance(c, Token) and c.type == "BORROW_MODE"), None)
+                             if isinstance(c, Token) and c.type == token_type), None)
             name_tok = first_name(node.children)
             if mode_tok is None or name_tok is None:
                 ice(node, "malformed self_param")

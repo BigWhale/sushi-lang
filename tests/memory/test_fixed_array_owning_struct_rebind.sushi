@@ -1,8 +1,9 @@
 # A fixed array of owning STRUCTS rebound by value MOVES, as the documentation states:
-# `owns_heap(ArrayType(owning, N))` answers True (`tests/unit/test_owns_heap_verdicts.py`
-# pins the verdict), the binding consumes the source (a later use of `bs` is CE2405), and
-# scope exit frees every element exactly once. Before the 2026-08-14 ownership refactor
-# no sink consumed the predicate's answer for a fixed array, so the value was ALIASED --
+# `owns_resource(ArrayType(owning, N), drops)` answers True
+# (`tests/unit/test_owns_resource_verdicts.py` pins the verdict), the binding consumes
+# the source (a later use of `bs` is CE2405), and scope exit frees every element
+# exactly once. Before the 2026-08-14 ownership refactor no sink consumed the
+# predicate's answer for a fixed array, so the value was ALIASED --
 # the unit test passed while the language did the opposite.
 # EXPECT_STDOUT_EXACT: "cs=1\n"
 # EXPECT_RUNTIME_EXIT: 0

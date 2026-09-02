@@ -54,6 +54,7 @@ class BorrowState:
     bound_at_span: Optional[Span] = None      # where the binding was introduced
     declared_at_span: Optional[Span] = None   # where the variable was introduced
     moved_at_span: Optional[Span] = None      # where ownership was transferred away
+    consumed_by_method: Optional[str] = None  # the `nom self` method that took it (R27)
     borrows_from: Optional[str] = None        # the root owner a `let`-borrow reads out of
     invalidated_at: Optional[Span] = None     # where that owner changed or was released
     invalidated_by: tuple = ()                # (owner name, what the change was)

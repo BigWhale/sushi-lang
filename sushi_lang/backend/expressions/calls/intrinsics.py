@@ -97,52 +97,6 @@ def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, 
     return None
 
 
-def try_emit_stdio_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit as stdio method (stdin/stdout/stderr). Returns None if not stdio."""
-    from sushi_lang.backend.expressions.calls.stdlib import emit_stdlib_stdio_call
-
-    receiver = expr.receiver
-    method = expr.method
-    args = expr.args
-
-    if not isinstance(receiver, Name) or receiver.id not in ['stdin', 'stdout', 'stderr']:
-        return None
-
-    from sushi_lang.sushi_stdlib.src.io.stdio import is_builtin_stdio_method
-    if not is_builtin_stdio_method(method):
-        return None
-
-    require_stdlib_unit(codegen, "io/stdio", f"{receiver.id}.{method}()", expr.loc)
-
-    return emit_stdlib_stdio_call(codegen, receiver.id, method, args, to_i1)
-
-
-def try_emit_file_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit as file method. Returns None if not a file method."""
-    from sushi_lang.backend.expressions.calls.stdlib import emit_stdlib_file_call
-
-    receiver = expr.receiver
-    method = expr.method
-    args = expr.args
-
-    if not isinstance(receiver, Name):
-        return None
-
-    semantic_type = codegen.memory.find_semantic_type(receiver.id)
-    if semantic_type != BuiltinType.FILE:
-        return None
-
-    from sushi_lang.sushi_stdlib.src.io.files import is_builtin_file_method
-    if not is_builtin_file_method(method):
-        return None
-
-    file_ptr = codegen.expressions.emit_expr(receiver)
-
-    require_stdlib_unit(codegen, "io/files", f"file.{method}()", expr.loc)
-
-    return emit_stdlib_file_call(codegen, file_ptr, method, args, to_i1)
-
-
 def try_emit_array_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                            receiver_value: ir.Value, receiver_type: ir.Type, semantic_type: 'Type', to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as array method. Returns None if not an array method."""
@@ -389,9 +343,14 @@ def try_emit_perk_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
     # A `poke self` / `peek self` perk method (#327) takes the receiver by POINTER --
     # the same rule as the extension call site (dispatcher.py), read from the same
     # the typecheck pass stamp.
-    if getattr(expr, "callee_self_mode", None) is not None:
+    from sushi_lang.semantics.param_modes import receiver_mode
+    self_mode = receiver_mode(getattr(expr, "callee_self_mode", None))
+    if self_mode.by_pointer:
         from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
         receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
+    elif self_mode.consumes:
+        from sushi_lang.backend.expressions.calls.dispatcher import consume_receiver
+        receiver_value = consume_receiver(codegen, expr, receiver_value)
 
     from sushi_lang.backend.expressions.calls.dispatcher import settle_method_call_arguments
     arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]

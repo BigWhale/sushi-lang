@@ -15,6 +15,10 @@ from sushi_lang.semantics.typesys import (
     StructType,
 )
 
+# No type in this gate's corpus implements `Drop`; the resource
+# half of the predicate is `tests/unit/test_cleanup_predicates_agree.py`.
+NO_DROPS: frozenset = frozenset()
+
 
 def _fn(captures=None) -> FunctionType:
     """A `fn(i32) -> i32`. `captures=None` is the common case AND the owning one."""
@@ -62,7 +66,10 @@ REPRESENTATIVE_TYPES: list[tuple[str, object]] = [
 #              argument outside Result/Maybe. It owns nothing, so it can never be MOVE.
 #              Both clauses are vacuous for it BY CONSTRUCTION, not by exception.
 # * `~`, stdin/stdout/stderr/file
-#           -- not value types a user binds, passes and drops.
+#           -- `~` is not a value a user binds. The io handles are a builtin `FILE*`
+#              until Phase 5 of HANDLES.md turns them into a `File` struct; when it does,
+#              they become RESOURCE types and the entry below is the rule that covers
+#              them. Do not widen this reason back to "not a value a user binds".
 # * Iterator<T>
 #           -- a transient view over storage someone else owns; Rust's `Iterator: Clone` is
 #              opt-in for the same reason. If an iterator ever becomes ownable, this is the
@@ -70,7 +77,8 @@ REPRESENTATIVE_TYPES: list[tuple[str, object]] = [
 EXEMPT_REASONS: dict[str, str] = {
     "ptr": "no methods (CE5011); not a generic type argument (CE5012); owns nothing",
     "blank": "not a value a user binds",
-    "io handles": "not a value a user binds",
+    "io handles": "a RESOURCE type: no clone by design (CE2431), and no valid argument "
+                  "to a generic that clones -- the escape is .share(), and CE2411 names it",
     "Iterator<T>": "a transient view; ownership belongs to what it iterates",
 }
 
@@ -80,7 +88,7 @@ EXEMPT_REASONS: dict[str, str] = {
 # Only a MOVE type reaches REJECT, so clause 1 is filtered rather than skipped: a skip means
 # "this environment cannot run it", and a type that is PLAIN by construction is not that.
 # `test_the_gate_can_actually_see_types` keeps the filter from silently emptying the list.
-MOVE_TYPES = [(n, t) for n, t in REPRESENTATIVE_TYPES if type_class_of(t) is TypeClass.MOVE]
+MOVE_TYPES = [(n, t) for n, t in REPRESENTATIVE_TYPES if type_class_of(t, NO_DROPS) is TypeClass.MOVE]
 
 
 @pytest.mark.parametrize("name,ty", MOVE_TYPES, ids=[n for n, _ in MOVE_TYPES])
@@ -145,7 +153,7 @@ fn main() i32:
     return Result.Ok(0)
 """)
     bag = StructType(name="Bag", fields=(("items", DynamicArrayType(base_type=BuiltinType.I32)),))
-    assert type_class_of(bag) is TypeClass.MOVE
+    assert type_class_of(bag, NO_DROPS) is TypeClass.MOVE
     assert builtin_method_exists(StructType(name="Bag", fields=()), "clone")
 
 
@@ -175,5 +183,5 @@ def test_hashmap_carries_a_clone():
 def test_the_gate_can_actually_see_types():
     """Guard against the whole file passing because every case skipped or the list emptied."""
     assert len(REPRESENTATIVE_TYPES) >= 12
-    moving = [n for n, t in REPRESENTATIVE_TYPES if type_class_of(t) is TypeClass.MOVE]
+    moving = [n for n, t in REPRESENTATIVE_TYPES if type_class_of(t, NO_DROPS) is TypeClass.MOVE]
     assert len(moving) >= 4, f"clause 1 must actually bind to something; it bound to {moving}"

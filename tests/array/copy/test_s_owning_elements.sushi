@@ -3,7 +3,6 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "2 guide babel\n3 towel guide babel\n"
 
-use <io/stdio>
 
 fn run_test() i32:
     let string[] words = from(["towel", "guide", "babel"])

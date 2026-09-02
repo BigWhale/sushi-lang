@@ -5,24 +5,31 @@ The module ships as bundled .sushi source and is merged as a compilation unit
 when imported (`use <net/tcp>`). It composes the <net/socket> primitives; a
 struct here is a typed name for a descriptor and carries nothing else.
 
-There is NO RAII for a socket, exactly as there is none for a file. A
-TcpStream owns no heap, so it COPIES, and a copy holds the same descriptor.
-The rule is that ONE binding owns a socket and s.close() is what ends
-it. A close writes -1 into the binding it was given, so closing that binding
-again is a success; a copy taken before the close keeps a number the kernel
-has freed and may reuse, and an operation on it is a bug this compiler cannot
-catch.
+A socket OWNS its descriptor. TcpStream and TcpListener implement the Drop
+perk, so each one moves to exactly one owner and closes itself when that owner
+leaves scope. There is nothing to remember and nothing to leak: the rule that
+one binding owns a socket is enforced by the compiler rather than written down
+here, and handing a stream to a `nom` parameter is what transfers it.
+
+close() stays, for the caller who has to SEE that the close failed -- a
+destructor cannot answer a Result. It writes -1 into the binding, so the drop
+that follows is a no-op and the descriptor is released exactly once.
 
 Limitations: blocking sockets only, so tcp_connect has no timeout of its own
-and an unreachable address waits for the kernel to give up. recv() answers
+and an unreachable address waits for the kernel to give up. read_bytes() answers
 whatever one read gave, which may be less than the maximum asked for;
 recv_exact() is the loop for a caller that needs a count.
 :##
 
+use <collections/strings>
+use <io/contracts>
 use <net/socket>
 
 ##:
 One connected TCP stream.
+
+It owns its descriptor: the stream moves to one owner and closes when that
+owner leaves scope. Call close() when the failure has to be seen.
 :##
 public struct TcpStream:
     ##: The descriptor, or -1 once close() has run. :##
@@ -30,10 +37,168 @@ public struct TcpStream:
 
 ##:
 One listening TCP socket.
+
+It owns its descriptor, on the same terms as TcpStream.
 :##
 public struct TcpListener:
     ##: The descriptor, or -1 once close() has run. :##
     i32 fd
+
+##:
+Closes the stream when its owner leaves scope.
+:##
+extend TcpStream with Drop:
+    ##:
+    Closes the descriptor.
+
+    A destructor has nowhere to put a Result, so a close that fails here is lost.
+    Call close() to see it.
+    :##
+    fn drop(poke self) ~:
+        close_socket(poke self.fd)
+
+##:
+Closes the listener when its owner leaves scope. The same terms as TcpStream.
+:##
+extend TcpListener with Drop:
+    ##:
+    Closes the descriptor, on the same terms as the TcpStream destructor.
+    :##
+    fn drop(poke self) ~:
+        close_socket(poke self.fd)
+
+##:
+Releases a descriptor exactly once, and writes -1 over it.
+
+Private to this module, and the ONE place the guard and the sock_close() call are
+spelled: close() consumes its handle and cannot be reached from a destructor, which owns
+nothing to hand away, so the four callers meet here instead of each carrying a copy of
+the rule.
+
+- Parameter fd: The descriptor slot to release. Reads -1 afterwards.
+- Errors: NetError, when the descriptor could not be closed.
+:##
+fn close_socket(poke i32 fd) ~ | NetError:
+    if (fd < 0):
+        return Result.Ok(~)
+    let i32 held = fd
+    fd := -1
+    sock_close(held)??
+    return Result.Ok(~)
+
+##:
+Turns a socket error into the one channel the io contracts answer.
+
+Every NetError variant with no twin in IoError belongs to a connect, a bind or a resolve,
+so nothing a contract method can answer is lost here. A stream that is already connected
+cannot report AddressInUse.
+
+- Returns: The IoError that says the same thing.
+:##
+extend NetError to_io() IoError:
+    match self:
+        NetError.ConnectionReset -> return IoError.ConnectionReset
+        NetError.TimedOut -> return IoError.TimedOut
+        NetError.Closed -> return IoError.Closed
+        NetError.PermissionDenied -> return IoError.PermissionDenied
+        NetError.TooManyOpen -> return IoError.TooManyOpen
+        NetError.InvalidAddress -> return IoError.InvalidInput
+        NetError.Interrupted -> return IoError.Interrupted
+        _ -> return IoError.Other
+
+##:
+Reads bytes from the stream. The same contract a File satisfies, so one generic serves
+both.
+:##
+extend TcpStream with Reader:
+    ##:
+    Reads what one read gives, as text.
+
+    The bound counts BYTES, so a multi-byte character can be split across two calls -- and
+    on a stream it can be split by the NETWORK as well, whatever the bound says. A caller
+    that must not cut one reads bytes, accumulates them, and converts once.
+
+    - Parameter max: The most bytes to take in this one read.
+    - Returns: The text that arrived, empty when the peer closed.
+    - Errors: IoError, when the read failed.
+    :##
+    fn read(i32 max) string | IoError:
+        let u8[] chunk = self.read_bytes(max)??
+        return chunk.to_string()
+
+    ##:
+    Reads what one read gives, as bytes.
+
+    An empty answer means the peer closed cleanly. A timeout is an error rather than an
+    empty answer, so the two never read alike.
+
+    - Parameter max: The most bytes to take in this one read.
+    - Returns: The bytes that arrived, empty when the peer closed.
+    - Errors: IoError, when the read failed.
+    :##
+    fn read_bytes(i32 max) u8[] | IoError:
+        match sock_recv(self.fd, max):
+            Result.Ok(nom chunk) -> return chunk
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+Writes bytes to the stream, and flushes what an unbuffered socket has no need to flush.
+:##
+extend TcpStream with Writer:
+    ##:
+    Writes text, and does not stop until every byte has gone.
+
+    - Parameter data: The text to write.
+    - Returns: Nothing.
+    - Errors: IoError, when a write failed before the text was gone.
+    :##
+    fn write(string data) ~ | IoError:
+        # A socket has no send_str primitive, so the text is copied into bytes here. A file
+        # avoids that with fd_write_str, which hands write(2) the string's own fat pointer.
+        # One allocation against one syscall is not worth a new generator yet.
+        match self.send_all(data.to_bytes()):
+            Result.Ok(_) -> return ~
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+    ##:
+    Writes bytes, and does not stop until every one has gone.
+
+    - Parameter data: The bytes to write. The buffer stays the caller's.
+    - Returns: Nothing.
+    - Errors: IoError, when a write failed before the buffer was gone.
+    :##
+    fn write_bytes(u8[] data) ~ | IoError:
+        match self.send_all(data):
+            Result.Ok(_) -> return ~
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+    ##:
+    Does nothing, successfully.
+
+    A socket is not buffered here: send_all() has already handed every byte to the kernel
+    by the time it returns. The buffered writer is where the call earns its name.
+
+    - Returns: Nothing.
+    - Errors: IoError, never in practice.
+    :##
+    fn flush() ~ | IoError:
+        return ~
+
+##:
+Whether this handle still holds a descriptor.
+
+- Returns: False once close() has run.
+:##
+extend TcpStream is_open() bool:
+    return self.fd >= 0
+
+##:
+Whether this listener still holds a descriptor.
+
+- Returns: False once close() has run.
+:##
+extend TcpListener is_open() bool:
+    return self.fd >= 0
 
 ##:
 Connects to a host and port.
@@ -82,10 +247,36 @@ extend TcpListener accept() TcpStream | NetError:
     return TcpStream(fd)
 
 ##:
+Opens a second handle over the same listening socket.
+
+This is dup(2): an independent descriptor over the SAME open socket, so a connection
+waiting on the port is taken by whichever handle calls accept() first. That is the
+shared-listener pattern, where several workers accept on one port, and it is why a
+listener gets share() while it implements no contract. Closing either handle leaves the
+other accepting.
+
+A listener has no .clone() (CE2431), because a copy verb would hide the second
+descriptor. This is the operation that means one, and its name says so.
+
+- Returns: A second owning listener over the same socket.
+- Errors: IoError, when the descriptor could not be duplicated.
+:##
+extend TcpListener share() TcpListener | IoError:
+    match sock_dup(self.fd):
+        Result.Ok(fd) -> return TcpListener(fd)
+        Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
 Writes bytes, and answers how many of them went.
 
 One write may take fewer bytes than it was offered. A caller that needs the
 whole buffer gone wants send_all() instead.
+
+This is the one write that answers a COUNT: a socket's partial write says what the peer's
+window took, and the contract's write_bytes(), which writes everything, cannot say that.
+There is no recv() beside it. One read on a socket is the contract's read_bytes(), and
+every NetError a read can answer has its IoError twin, so a second name would have
+carried nothing of its own.
 
 - Parameter data: The bytes to write. The buffer stays the caller's.
 - Returns: How many bytes were written.
@@ -111,19 +302,6 @@ extend TcpStream send_all(u8[] data) ~ | NetError:
             return Result.Err(NetError.Closed)
         done := done + sent
     return ~
-
-##:
-Reads what one read gives, up to a maximum.
-
-An empty answer means the peer closed cleanly. A timeout is an error rather
-than an empty answer, so the two never read alike.
-
-- Parameter max: The most bytes to take in this one read.
-- Returns: The bytes that arrived, empty when the peer closed.
-- Errors: NetError, when the read failed.
-:##
-extend TcpStream recv(i32 max) u8[] | NetError:
-    return sock_recv(self.fd, max)??
 
 ##:
 Reads exactly `count` bytes, looping until they have all arrived.
@@ -213,33 +391,25 @@ extend TcpListener set_timeout(i32 accept_ms) ~ | NetError:
     return ~
 
 ##:
-Closes a stream and writes -1 into the binding.
+Closes a stream, and CONSUMES the handle.
 
-The binding is marked so that closing it again is a success. A COPY of the
-stream taken before this call still holds the old descriptor, which the kernel
-may have given to somebody else; one binding owns a socket.
+The call takes the handle, so a read after a close is refused while compiling (CE2435)
+rather than answering EBADF at run time, and there is nothing left for the scope exit to
+close. One binding owns a socket, and this is where it stops owning it.
 
-- Returns: Nothing. The binding reads -1 afterwards.
+- Returns: Nothing. The handle is spent.
 - Errors: NetError, when the descriptor could not be closed.
 :##
-extend TcpStream close(poke self) ~ | NetError:
-    if (self.fd < 0):
-        return ~
-    let i32 fd = self.fd
-    self.fd := -1
-    sock_close(fd)??
+extend TcpStream close(nom self) ~ | NetError:
+    close_socket(poke self.fd)??
     return ~
 
 ##:
-Closes a listener and writes -1 into the binding.
+Closes a listener, and CONSUMES the handle. The same terms as TcpStream.
 
-- Returns: Nothing. The binding reads -1 afterwards.
+- Returns: Nothing. The handle is spent.
 - Errors: NetError, when the descriptor could not be closed.
 :##
-extend TcpListener close(poke self) ~ | NetError:
-    if (self.fd < 0):
-        return ~
-    let i32 fd = self.fd
-    self.fd := -1
-    sock_close(fd)??
+extend TcpListener close(nom self) ~ | NetError:
+    close_socket(poke self.fd)??
     return ~

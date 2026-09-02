@@ -366,7 +366,8 @@ class ExpressionValidator(RecursiveVisitor):
 
         # CE2094: capturing a peek/poke borrow is deferred to Tier 2. A captured
         # name whose enclosing type is a reference is a borrow capture.
-        from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, DynamicArrayType, owns_heap
+        from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, DynamicArrayType, owns_resource
+        drops = tv.drop_type_names
         for cap in (node.captures or []):
             if isinstance(cap.ty, ReferenceType):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
@@ -376,7 +377,7 @@ class ExpressionValidator(RecursiveVisitor):
                 # which owns it and frees it in the env destructor. The outer binding is
                 # consumed (borrow-checked use-after-move, CE2405). No diagnostic.
                 pass
-            elif owns_heap(cap.ty):
+            elif owns_resource(cap.ty, drops):
                 # Move-capture into the env: the env owns and frees it, and the outer
                 # binding is consumed (CE2405).
                 pass
@@ -386,7 +387,7 @@ class ExpressionValidator(RecursiveVisitor):
         # `owned` bit is cleared at entry, so it frees nothing, and including it would
         # silently make `|string s| ...` illegal.
         for p in node.params:
-            if p.ty != BuiltinType.STRING and owns_heap(p.ty):
+            if p.ty != BuiltinType.STRING and owns_resource(p.ty, drops):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"lambda parameter '{p.name}' has an owning type '{display_type(p.ty)}'; "
                                f"owning function-value parameters are deferred to Tier 2")
@@ -752,13 +753,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_name(self, node: Name) -> Optional[Type]:
         """Infer name expression type."""
-        if node.id == "stdin":
-            return BuiltinType.STDIN
-        elif node.id == "stdout":
-            return BuiltinType.STDOUT
-        elif node.id == "stderr":
-            return BuiltinType.STDERR
-
         if node.id in {'PI', 'E', 'TAU'}:
             from sushi_lang.sushi_stdlib.src import math as math_module
             if math_module.is_builtin_math_constant(node.id):
@@ -907,9 +901,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if function_name in self.type_validator.struct_table.by_name:
             return self.type_validator.struct_table.by_name[function_name]
 
-        if function_name == "open":
-            return self.type_validator.enum_table.by_name.get("FileResult")
-
         # A declaration answers before a name a flat `use` brought in, exactly as the
         # validating half decides it (section 8's ladder). Reading the standard library
         # first gave this unit's own `sin` the library's return type.
@@ -1027,38 +1018,25 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             # no EnumType, so every consumer reading the stamp fell through -- the backend
             # to a layout heuristic that answered `Maybe<i32>` and then mis-typed the
             # payload (#387).
-            from .utils import resolve_declared_type
-
+            #
+            # ONE ladder, shared with the validation half and with the `foreach` protocol
+            # (`resolve_method`). Inference stays silent -- report=False -- because the
+            # validation half owns CE2063. A `T[]` template and a method-generic template
+            # both answer at the CALL SITE, so inference may be the first call site that
+            # instantiates one.
             if inferred_type is None:
-                perk_method = self.type_validator.perk_impl_table.get_method(actual_type, node.method)
-                if perk_method is not None and perk_method.ret is not None:
-                    inferred_type = resolve_declared_type(self.type_validator, perk_method.ret)
-
-            if inferred_type is None:
-                method = self.type_validator.extension_table.get_method(actual_type, node.method)
-                if method is None and isinstance(actual_type, DynamicArrayType):
-                    # A `T[]` template instantiates at the call site, and inference may
-                    # be that first call site -- same lazy path the validation half uses.
-                    from sushi_lang.semantics.passes.types.calls.methods import (
-                        instantiate_array_extension)
-                    method = instantiate_array_extension(
-                        self.type_validator, actual_type, node.method)
-                if method is None:
-                    # A method-generic template (`name@(U)`) likewise answers at the
-                    # call site; inference stays silent (report=False) -- the
-                    # validation half owns CE2063.
-                    from sushi_lang.semantics.passes.types.calls.methods import (
-                        RESOLUTION_REPORTED, resolve_method_generic_extension)
-                    resolved = resolve_method_generic_extension(
-                        self.type_validator, actual_type, node, report=False)
-                    if resolved is not None and resolved is not RESOLUTION_REPORTED:
-                        method = resolved
-                if method is not None:
-                    # A channel method (`| E`) yields its interned Result at every
-                    # call site -- one reader for what an extension call yields.
-                    from sushi_lang.semantics.passes.types.calls.methods import (
-                        extension_call_result_type)
-                    inferred_type = extension_call_result_type(self.type_validator, method)
+                from sushi_lang.semantics.passes.types.calls.methods import (
+                    RESOLUTION_REPORTED, extension_call_result_type, resolve_method)
+                resolved = resolve_method(self.type_validator, actual_type, node.method,
+                                          call=node, report=False)
+                if resolved is not None and resolved is not RESOLUTION_REPORTED:
+                    # A channel method (`| E`, ruling R1) yields its interned Result at
+                    # every call site -- one reader for what a method call yields, and
+                    # the same one whether a perk or an extension answered. A perk method
+                    # spells its bare return `ret` and an ExtensionMethod spells it
+                    # `ret_type`, which is why the reader takes the method and not a type.
+                    inferred_type = extension_call_result_type(
+                        self.type_validator, resolved.method)
 
             if inferred_type is not None:
                 node.inferred_return_type = inferred_type

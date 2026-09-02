@@ -13,8 +13,7 @@ from sushic_path import SUSHIC, needs_sushic
 
 pytestmark = needs_sushic
 
-PRELUDE = """use <io/stdio>
-
+PRELUDE = """
 """
 
 

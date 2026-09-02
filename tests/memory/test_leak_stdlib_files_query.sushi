@@ -5,13 +5,14 @@
 # EXPECT_STDOUT_EXACT: "e=true f=true d=true size=15\n"
 # EXPECT_NO_LEAKS
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match open('/tmp/sushi_leak_query.txt', FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(nom f) ->
             f.write("Mostly Harmless")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Ok(1)
 
     let bool e = exists('/tmp/sushi_leak_query.txt')

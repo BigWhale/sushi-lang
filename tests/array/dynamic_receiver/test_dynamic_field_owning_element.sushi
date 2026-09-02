@@ -5,7 +5,6 @@
 # EXPECT_STDOUT_EXACT: "mostly\nharmless\n2\n"
 # EXPECT_NO_LEAKS: true
 
-use <io/stdio>
 
 struct Bag:
     string[] words

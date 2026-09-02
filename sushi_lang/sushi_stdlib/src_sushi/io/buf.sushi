@@ -1,0 +1,426 @@
+##:
+io/buf -- buffered reading and writing over any handle, pure Sushi.
+
+The module ships as bundled .sushi source and is merged as a compilation unit when
+imported (`use <io/buf>`). BufReader@(R) wraps anything that satisfies Reader and
+BufWriter@(W) wraps anything that satisfies Writer, so a File and a TcpStream are
+buffered by the same code.
+
+A buffered read is one system call per WINDOW rather than one per line, which is the
+whole point: File.readln() reads a byte at a time on a descriptor that cannot seek, and
+reading a large file line by line that way costs one call per byte.
+
+Neither type implements Reader or Writer, and that is a refusal rather than an omission.
+A buffered read MOVES the cursor, so its receiver has to be `poke self`, and a perk
+implementation must match its contract's receiver exactly (CE4004). Widening the
+contracts to `poke self` is not available either: the console handles are File CONSTANTS
+(ruling R15), and a `poke self` method on a constant is CE2400 -- so `stdout.write(...)`
+would stop compiling. The two ways out, neither taken here, are a second perk for the
+buffered direction, or receiver modes on a contract that a
+constant can still satisfy.
+
+Limitations: fill() is part of the surface because an extension method carries no
+visibility marker -- it is as visible as the type it extends. buf_reader() and
+buf_writer() answer IoError and never fail today; the channel is there so the call
+composes with the handle it wraps. write() copies the string's bytes twice, once into
+to_bytes() and once into the buffer.
+:##
+
+use <io/contracts>
+use <io/fs>
+
+##:
+A reader that holds the last refill whole and hands lines and chunks out of it.
+
+The window is the last read, held as bytes with a cursor into it. A read takes what the
+window still has; only an exhausted window costs a system call. End of input is sticky:
+once a refill has answered nothing, no further call reads the handle again.
+:##
+public struct BufReader@(R):
+    ##: The handle being read. This value owns it. :##
+    R inner
+    ##: The last refill, held whole. :##
+    u8[] window
+    ##: How far into the window the cursor has moved. :##
+    i32 pos
+    ##: The refill size, in bytes. :##
+    i32 cap
+    ##: Whether a refill has already answered end of input. :##
+    bool at_end
+
+##:
+Wraps a handle in a buffered reader, TAKING the handle.
+
+The reader owns the handle from here: it closes when the reader is destroyed, and
+into_inner() is how a caller gets it back.
+
+- Parameter src: The handle to read. The reader takes ownership of it.
+- Parameter cap: The refill size in bytes. Anything below 1 becomes 8192.
+- Returns: The buffered reader.
+- Errors: IoError, never today. The channel is here so the call composes with the
+  handle it wraps.
+:##
+public fn buf_reader@(R: Reader)(nom R src, i32 cap) BufReader@(R) | IoError:
+    let i32 size = cap
+    if (size < 1):
+        size := 8192
+    let u8[] empty = from([])
+    return Result.Ok(BufReader(src, empty, 0, size, false))
+
+##:
+Reads the next window from the handle, replacing the one held.
+
+Every read here goes through this one call, so end of input is decided in one place and
+stays decided. A caller rarely needs it; the reads below do.
+
+A refill costs ONE allocation and no copy: the read primitive allocates its answer, and
+the window takes that answer whole. Measured against the page cache at an 8 KB window,
+the allocation is about six percent of the refill, and a fill-into form could not remove
+it: a u8[] crosses to the primitive by value, so the primitive cannot set the caller's
+length.
+
+- Returns: Whether any byte arrived. False means end of input.
+- Errors: IoError, when the underlying read failed.
+:##
+extend BufReader@(R) fill(poke self) bool | IoError:
+    if (self.at_end):
+        return false
+    let u8[] chunk = self.inner.read_bytes(self.cap)??
+    let bool got = chunk.len() > 0
+    self.window := chunk
+    self.pos := 0
+    if (not got):
+        self.at_end := true
+    return got
+
+##:
+Reads what the window still has, as bytes, refilling it if it is spent.
+
+The answer is never longer than `max` and never crosses a refill, so a short answer is
+not an end of input. An EMPTY answer is: that is what lets a caller loop until the
+answer is empty.
+
+- Parameter max: The most bytes to take.
+- Returns: The bytes taken, empty at end of input.
+- Errors: IoError, when a refill failed.
+:##
+extend BufReader@(R) read_bytes(poke self, i32 max) u8[] | IoError:
+    if (max < 1):
+        let u8[] none = from([])
+        return none
+    if (self.pos >= self.window.len()):
+        if (not self.fill()??):
+            let u8[] ended = from([])
+            return ended
+    let i32 avail = self.window.len() - self.pos
+    let i32 take = max
+    if (take > avail):
+        take := avail
+    let u8[] out = self.window.ss(self.pos, take)
+    self.pos := self.pos + take
+    return out
+
+##:
+Reads what the window still has, as text.
+
+The bound counts BYTES, so a multi-byte character can be split across two calls. A caller
+that must not cut one reads bytes, accumulates them, and converts once.
+
+- Parameter max: The most bytes to take.
+- Returns: The text taken, empty at end of input.
+- Errors: IoError, when a refill failed.
+:##
+extend BufReader@(R) read(poke self, i32 max) string | IoError:
+    let u8[] chunk = self.read_bytes(max)??
+    return chunk.to_string()
+
+##:
+Reads one line, without its newline.
+
+A blank line is Some("") and the end of input is None, so the two are never the same
+answer. A last line with no newline after it is still a line, and the None arrives on
+the call after it. The line is copied out of the window in bulk, never a byte at a time,
+and a line longer than the window spans as many refills as it needs.
+
+- Returns: The line, or None at end of input.
+- Errors: IoError, when a refill failed.
+:##
+extend BufReader@(R) read_line(poke self) Maybe@(string) | IoError:
+    let u8[] line = from([])
+    let bool saw_any = false
+    let bool done = false
+    while (not done):
+        if (self.pos >= self.window.len()):
+            if (not self.fill()??):
+                done := true
+        if (not done):
+            let i32 stop = self.window.len()
+            let i32 at = -1
+            let i32 i = self.pos
+            while (i < stop):
+                if (self.window[i] == 10):
+                    at := i
+                    break
+                i := i + 1
+            saw_any := true
+            if (at < 0):
+                line.extend_range(self.window, self.pos, stop - self.pos)
+                self.pos := stop
+            else:
+                line.extend_range(self.window, self.pos, at - self.pos)
+                self.pos := at + 1
+                done := true
+    if (not saw_any):
+        let Maybe@(string) ended = Maybe.None()
+        return ended
+    let Maybe@(string) got = Maybe.Some(line.to_string())
+    return got
+
+##:
+Reads everything left, as text.
+
+The whole answer is held in memory at once, so a large input wants read_line() or
+read() in a loop instead.
+
+- Returns: Everything from the cursor to the end of input.
+- Errors: IoError, when a refill failed.
+:##
+extend BufReader@(R) read_all(poke self) string | IoError:
+    let u8[] all = from([])
+    let bool done = false
+    while (not done):
+        let u8[] chunk = self.read_bytes(65536)??
+        if (chunk.len() == 0):
+            done := true
+        else:
+            all.extend(chunk)
+    return all.to_string()
+
+##:
+Hands the handle back and ends the reader.
+
+The window is destroyed here and the reader is spent: a later mention of it is refused
+while compiling. Whatever was already buffered and not read is DISCARDED, so the handle
+comes back positioned where the last refill left the kernel and not where the cursor
+was.
+
+- Returns: The handle, now the caller's.
+:##
+extend BufReader@(R) into_inner(nom self) R:
+    return nom self.inner
+
+##:
+A line iterator over a buffered reader, which it OWNS.
+
+next() answers Maybe@(Result@(string, IoError)): the outer Maybe says whether the input
+has more, and the inner Result says whether reading it worked. The two are never the
+same answer -- a blank line is Some(Ok("")) and the end is None.
+
+The stop is STICKY. A read failure reaches the caller once, as Some(Err(e)), and every
+call after it answers None. Nothing retries and nothing is skipped, so a loop over this
+iterator cannot spin on a descriptor that keeps failing.
+:##
+public struct Lines@(R):
+    ##: The reader being walked. This value owns it, and the handle under it. :##
+    BufReader@(R) reader
+    ##: Whether the end or a failure has already been answered once. :##
+    bool stopped
+
+##:
+Turns the reader into a line iterator, TAKING the reader.
+
+The iterator owns the reader from here, and the reader owns the handle, so one drop
+closes the descriptor. A later mention of the reader is refused while compiling.
+
+- Returns: The iterator.
+
+- Example:
+  ```sushi no_run
+  use <io/fs>
+
+  fn show(string path) ~ | IoError:
+      let File f = open(path, FileMode.Read())??
+      let BufReader@(File) r = buf_reader(nom f, 8192)??
+      foreach(line?? in r.lines()):
+          println(line)
+      return Result.Ok(~)
+
+  fn main() i32:
+      match show("data.txt"):
+          Result.Ok(_) -> return Result.Ok(0)
+          Result.Err(_) -> return Result.Ok(1)
+  ```
+:##
+extend BufReader@(R) lines(nom self) Lines@(R):
+    return Lines(self, false)
+
+##:
+Answers the next line, or nothing when the input has ended.
+
+- Returns: Some(Ok(line)) for a line, Some(Err(e)) for the ONE failure, None at the end.
+:##
+extend Lines@(R) next(poke self) Maybe@(Result@(string, IoError)):
+    if (self.stopped):
+        let Maybe@(Result@(string, IoError)) ended = Maybe.None()
+        return ended
+    match self.reader.read_line():
+        Result.Ok(Maybe.Some(nom line)) ->
+            let Maybe@(Result@(string, IoError)) got = Maybe.Some(Result.Ok(nom line))
+            return got
+        Result.Ok(Maybe.None) ->
+            self.stopped := true
+            let Maybe@(Result@(string, IoError)) done = Maybe.None()
+            return done
+        Result.Err(e) ->
+            self.stopped := true
+            let Maybe@(Result@(string, IoError)) failed = Maybe.Some(Result.Err(e))
+            return failed
+
+##:
+A writer that collects bytes and hands them over a window at a time.
+
+Bytes go into a buffer and reach the handle when the buffer has filled, when flush() is
+called, or when the writer is destroyed. The buffered write is what makes writing a
+line at a time cheap: one system call per window rather than one per line.
+:##
+public struct BufWriter@(W):
+    ##: The handle being written. This value owns it. :##
+    W sink
+    ##: The bytes waiting to go. :##
+    u8[] buf
+    ##: The size at which the buffer drains itself, in bytes. :##
+    i32 cap
+
+##:
+Wraps a handle in a buffered writer, TAKING the handle.
+
+The writer owns the handle from here: it closes when the writer is destroyed, and
+into_inner() is how a caller gets it back.
+
+- Parameter dst: The handle to write. The writer takes ownership of it.
+- Parameter cap: The size at which the buffer drains, in bytes. Anything below 1
+  becomes 8192.
+- Returns: The buffered writer.
+- Errors: IoError, never today. The channel is here so the call composes with the
+  handle it wraps.
+:##
+public fn buf_writer@(W: Writer)(nom W dst, i32 cap) BufWriter@(W) | IoError:
+    let i32 size = cap
+    if (size < 1):
+        size := 8192
+    let u8[] empty = from([])
+    return Result.Ok(BufWriter(dst, empty, size))
+
+##:
+Sends everything waiting, then flushes the handle under it.
+
+This is the repeatable checked drain: it may be called as often as a caller likes and
+answers Ok when the buffer is already empty.
+
+- Returns: Nothing.
+- Errors: IoError, when the write or the handle's own flush failed.
+:##
+extend BufWriter@(W) flush(poke self) ~ | IoError:
+    if (self.buf.len() == 0):
+        return ~
+    self.sink.write_bytes(self.buf)??
+    self.buf.clear()
+    self.sink.flush()??
+    return ~
+
+##:
+Drains the buffer if it has reached its size. Every write goes through this one call.
+
+- Returns: Nothing.
+- Errors: IoError, when the drain failed.
+:##
+extend BufWriter@(W) drain_if_full(poke self) ~ | IoError:
+    if (self.buf.len() >= self.cap):
+        self.flush()??
+    return ~
+
+##:
+Writes bytes into the buffer.
+
+Nothing is promised to have reached the handle when this returns. flush() or finish()
+is what promises that.
+
+- Parameter data: The bytes to write. The buffer stays the caller's.
+- Returns: Nothing.
+- Errors: IoError, when a drain failed.
+:##
+extend BufWriter@(W) write_bytes(poke self, u8[] data) ~ | IoError:
+    self.buf.extend(data)
+    self.drain_if_full()??
+    return ~
+
+##:
+Writes text into the buffer.
+
+- Parameter data: The text to write.
+- Returns: Nothing.
+- Errors: IoError, when a drain failed.
+:##
+extend BufWriter@(W) write(poke self, string data) ~ | IoError:
+    self.buf.extend(data.to_bytes())
+    self.drain_if_full()??
+    return ~
+
+##:
+Writes text and a newline into the buffer.
+
+One append rather than two writes: the newline goes into the same buffer, so a line
+costs no system call of its own.
+
+- Parameter data: The text to write.
+- Returns: Nothing.
+- Errors: IoError, when a drain failed.
+:##
+extend BufWriter@(W) write_line(poke self, string data) ~ | IoError:
+    self.buf.extend(data.to_bytes())
+    self.buf.push(10)
+    self.drain_if_full()??
+    return ~
+
+##:
+Ends the writer, sending everything waiting first.
+
+This is the call that ends a BufWriter, and it CONSUMES: nothing can forget to flush
+after it, because there is nothing left to forget with. The handle closes when the
+writer is destroyed, which happens as this call returns.
+
+flush() is the repeatable form. Use finish() where the writer is finished with, so that
+the last drain's failure cannot be lost.
+
+- Returns: Nothing.
+- Errors: IoError, when the final drain failed.
+:##
+extend BufWriter@(W) finish(nom self) ~ | IoError:
+    self.flush()??
+    return ~
+
+##:
+Sends everything waiting, then hands the handle back and ends the writer.
+
+The buffer is destroyed here and the writer is spent: a later mention of it is refused
+while compiling.
+
+- Returns: The handle, now the caller's.
+- Errors: IoError, when the final drain failed.
+:##
+extend BufWriter@(W) into_inner(nom self) W | IoError:
+    self.flush()??
+    return nom self.sink
+
+##:
+Sends whatever is waiting when the writer is destroyed, and drops the error.
+
+A destructor has nowhere to put a Result, so a failure here is LOST. finish() is the
+checked path and exists for that reason.
+:##
+extend BufWriter@(W) with Drop:
+    ##: Drains the buffer, ignoring a failure. :##
+    fn drop(poke self) ~:
+        match self.flush():
+            Result.Ok(_) -> return ~
+            Result.Err(_) -> return ~

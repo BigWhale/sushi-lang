@@ -154,10 +154,19 @@ class FunctionMonomorphizer:
             from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands
             concrete_body = unroll_expands(concrete_body, pack_param_fanout)
 
+        # The channel is substituted like every other type in the signature. A copy
+        # carries `err_type` through, so `fn f@(E)(T v) i32 | E` would otherwise reach
+        # the backend with an unsubstituted type parameter in its error arm.
+        # `generics/extensions.py` does the same for a method's channel.
+        concrete_err = self.monomorphizer.substitutor.substitute_type(
+            generic.err_type, substitution
+        ) if getattr(generic, "err_type", None) else None
+
         concrete_func = copy.copy(generic)
         concrete_func.name = mangled_name
         concrete_func.params = concrete_params
         concrete_func.ret = concrete_ret
+        concrete_func.err_type = concrete_err
         concrete_func.body = concrete_body
         concrete_func.type_params = None  # No longer generic
 
@@ -302,6 +311,28 @@ class FunctionMonomorphizer:
         saved_unit = self._asking_unit
         self._asking_unit = None
         self._collect_block_instantiations(extend_def.body, {}, var_types)
+        self._asking_unit = saved_unit
+        found = self.monomorphizer.pending_instantiations
+        self.monomorphizer.pending_instantiations = saved if saved is not None else set()
+        return found
+
+    def collect_from_perk_method_body(self, target_type: Type,
+                                      method) -> Set[Tuple[str, Tuple[Type, ...]]]:
+        """The same walk, for one monomorphized perk-implementation method.
+
+        A perk method carries no target of its own -- the `extend X with P` header does
+        -- so the receiver's type is handed in rather than read off the node.
+        """
+        var_types: Dict[str, Type] = {"self": target_type}
+        for param in method.params:
+            if param.ty is not None:
+                var_types[param.name] = param.ty
+
+        saved = getattr(self.monomorphizer, 'pending_instantiations', None)
+        self.monomorphizer.pending_instantiations = set()
+        saved_unit = self._asking_unit
+        self._asking_unit = None
+        self._collect_block_instantiations(method.body, {}, var_types)
         self._asking_unit = saved_unit
         found = self.monomorphizer.pending_instantiations
         self.monomorphizer.pending_instantiations = saved if saved is not None else set()

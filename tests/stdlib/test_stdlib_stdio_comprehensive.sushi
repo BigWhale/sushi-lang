@@ -4,8 +4,17 @@
 # EXPECT_STDERR_CONTAINS: "stderr: This is an error message"
 # EXPECT_RUNTIME_EXIT: 0
 
-use <io/stdio>
+use <io/fs>
 use <collections/strings>
+
+# Reads one line and substitutes an empty string for the end of the file. readln()
+# answers Maybe@(string) now, so a caller that does not care which of the two it got
+# says so once, here, rather than losing the distinction at every call.
+extend File line_or_empty() string:
+    match self.readln():
+        Result.Ok(Maybe.Some(line)) -> return line.clone()
+        Result.Ok(Maybe.None) -> return ""
+        Result.Err(_) -> return ""
 
 fn main() i32:
     # Test 1: Basic write operations
@@ -20,7 +29,7 @@ fn main() i32:
 
     # Test 3: Read and write
     stdout.write("Test 3: Enter a line (or skip with empty): ")
-    let string line = stdin.readln()
+    let string line = stdin.line_or_empty()
     if (line.len() > 0):
         stdout.write("You entered: ")
         stdout.write(line)

@@ -76,22 +76,58 @@ fn main() i32:
         "io/files.md",
         """use <io/files>
 fn main() i32:
+    let bool there = exists("/nonexistent_r0_smoke")
+    println("exists {there}")
+    return Result.Ok(0)
+""",
+    ),
+    # `File`, `open()` and the console handles live in <io/fs> since HANDLES.md Phase 5;
+    # `<io/stdio>` was retired with them, and console.md documents <io/fs> now.
+    Case(
+        "io/fs",
+        "io/fs.md",
+        """use <io/fs>
+fn main() i32:
     match open("/nonexistent_r0_smoke", FileMode.Read()):
-        FileResult.Ok(f) ->
-            f.close()
-        FileResult.Err(_) ->
-            println("io/files err path")
+        Result.Ok(f) ->
+            println("opened {f.is_open()}")
+        Result.Err(_) ->
+            println("io/fs err path")
     return Result.Ok(0)
 """,
     ),
     Case(
-        "io/stdio",
+        "io/fs console",
         "io/console.md",
-        """use <io/stdio>
+        """use <io/fs>
 fn main() i32:
     let u8[] data = from([72 as u8, 105 as u8])
     stdout.write_bytes(data)
     println("")
+    return Result.Ok(0)
+""",
+    ),
+    # <io/buf> is the buffered layer over the contracts. The program takes the error path
+    # -- the file does not exist -- and still names buf_reader(), read_line() and
+    # into_inner(), which is what ties the case to the documented surface.
+    Case(
+        "io/buf",
+        "io/buf.md",
+        """use <io/fs>
+use <io/buf>
+
+fn peek_first(string path) string | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 4096)??
+    let string line = r.read_line()??.realise("")
+    let File back = r.into_inner()
+    back.close()??
+    return Result.Ok(line)
+
+fn main() i32:
+    match peek_first("/nonexistent_r0_smoke"):
+        Result.Ok(s) -> println("buf {s}")
+        Result.Err(_) -> println("io/buf err path")
     return Result.Ok(0)
 """,
     ),
@@ -314,6 +350,11 @@ SEMANTIC_LAYER_SKIP = {
     # units by compiler/pipeline.py, which the semantic layer does not do, so
     # the compile layer below is what covers them.
     "net/tcp", "net/udp", "net/dns", "net/ip", "net/url",
+    # io/fs joined them in HANDLES.md Phase 5: File, open() and the console
+    # handles are Sushi source now, not compiler builtins.
+    "io/fs", "io/fs console",
+    # <io/buf> is the same shape: bundled Sushi source, injected as a unit.
+    "io/buf",
 }
 
 

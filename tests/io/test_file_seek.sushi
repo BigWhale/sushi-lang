@@ -7,36 +7,46 @@
 # EXPECTED_OUTPUT: Seek test completed
 
 use <io/files>
-use <io/stdio>
+use <io/fs>
+
+# Reads one line and substitutes an empty string for the end of the file. readln()
+# answers Maybe@(string) now, so a caller that does not care which of the two it got
+# says so once, here, rather than losing the distinction at every call.
+extend File line_or_empty() string:
+    match self.readln():
+        Result.Ok(Maybe.Some(line)) -> return line.clone()
+        Result.Ok(Maybe.None) -> return ""
+        Result.Err(_) -> return ""
 
 fn main() i32:
     # Write test file
-    let FileResult write_result = open("test_seek_output.txt", FileMode.Write())
-    match write_result:
-        FileResult.Ok(out) ->
+    let Result@(File, IoError) write_result = open("test_seek_output.txt", FileMode.Write())
+    match nom write_result:
+        Result.Ok(nom out) ->
             out.writeln("First line")
             out.writeln("Second line")
             out.writeln("Third line")
             println("Wrote 3 lines to file")
-            let i64 pos = out.tell()
+            let i64 pos = out.tell().realise(-1 as i64)
             println("Position after writes: {pos}")
             out.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             stderr.write("Error: cannot create test file\n")
             return Result.Err(StdError.Error)
 
     # Read file with seeking
-    let FileResult read_result = open("test_seek_output.txt", FileMode.Read())
-    match read_result:
-        FileResult.Ok(f) ->
-            # Seek to start
-            f.seek(0 as i64, SeekFrom.Start())
-            let string line = f.readln()
+    let Result@(File, IoError) read_result = open("test_seek_output.txt", FileMode.Read())
+    match nom read_result:
+        Result.Ok(nom f) ->
+            # Seek to start. seek() answers the NEW position now (ruling R19), so the
+            # answer has to go somewhere -- discarding a value Result is CW2001.
+            f.seek(0 as i64, SeekFrom.Start()).realise(-1 as i64)
+            let string line = f.line_or_empty()
             println("After seek to start: {line}")
             f.close()
             println("Seek test completed")
             return Result.Ok(0)
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             stderr.write("Error: cannot read test file\n")
             return Result.Err(StdError.Error)
 

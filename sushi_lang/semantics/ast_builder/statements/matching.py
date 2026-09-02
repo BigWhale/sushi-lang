@@ -18,9 +18,12 @@ def parse_match_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Match:
     """Parse match_stmt: MATCH expr ":" _NEWLINE _INDENT match_arm+ _DEDENT"""
     scrutinee_tree = None
     arms: List[MatchArm] = []
+    nom_token = None
 
     for child in node.children:
-        if isinstance(child, Tree):
+        if isinstance(child, Token) and child.type == "NOM":
+            nom_token = child
+        elif isinstance(child, Tree):
             if child.data == "match_arm":
                 arms.append(parse_matcharm(child, ast_builder))
             elif child.data in _EXPR_NODES and scrutinee_tree is None:
@@ -33,7 +36,10 @@ def parse_match_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Match:
         ice(node, "must have at least one match arm")
 
     scrutinee = ast_builder._expr(scrutinee_tree)
-    return Match(scrutinee=scrutinee, arms=arms, loc=span_of(node))
+    return Match(scrutinee=scrutinee, arms=arms,
+                 consumes_scrutinee=nom_token is not None,
+                 consumes_span=None if nom_token is None else span_of(nom_token),
+                 loc=span_of(node))
 
 
 def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
@@ -153,6 +159,19 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> P
                         name=str(name_tok.value), mode=str(mode_tok.value),
                         loc=span_of(child)))
                     continue
+                if child.data == "nom_binding":
+                    # `Variant(nom x)` (ruling R11): the arm TAKES this payload. Legal
+                    # nested as well as at the top level -- nothing here points into the
+                    # scrutinee, so the temporary-copy hazard that fences `poke` (CE2424)
+                    # does not apply.
+                    name_tok = next((c for c in child.children
+                                     if isinstance(c, Token) and c.type == "NAME"), None)
+                    if name_tok is None:
+                        ice(t, "malformed nom_binding in pattern")
+                    from sushi_lang.semantics.ast import NomBinding
+                    bindings.append(NomBinding(name=str(name_tok.value),
+                                               loc=span_of(child)))
+                    continue
                 if child.data == "pattern_item":
                     inner_pattern = first_tree(child.children, "pattern")
                     inner_wildcard = first_tree(child.children, "wildcard_pattern")
@@ -205,6 +224,16 @@ def parse_own_pattern(t: Tree, ast_builder: 'ASTBuilder') -> 'OwnPattern':
             inner_borrow_span=span_of(ref_tree),
             loc=span_of(t)
         )
+
+    # `Own(nom x)` would take the pointee out and leave the heap cell with nothing to
+    # free it (ruling R11). Refused where it is written, rather than at a later pass that
+    # would have to reconstruct what the user typed.
+    nom_tree = first_tree(t.children, "nom_binding")
+    if nom_tree is not None:
+        raise SyntaxDiagnostic("CE2434", span=span_of(nom_tree)) \
+            .help("bind the pointee by value, or `Own(poke x)` to write through it; to "
+                  "take the value out, move the whole `Own@(T)` with a `nom` binding on "
+                  "the payload that holds it")
 
     pattern_item_tree = first_tree(t.children, "pattern_item")
     if pattern_item_tree is None:

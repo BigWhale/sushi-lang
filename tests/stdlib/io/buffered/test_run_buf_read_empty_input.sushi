@@ -1,0 +1,31 @@
+# An empty input is one None and nothing else. read_all() answers the empty string on the
+# same input, and neither reads the handle twice: end of input is sticky.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "<end>\n<end>\nall[]\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn run(string path) ~ | IoError:
+    let File w = open(path, FileMode.Write())??
+    w.close()??
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 64)??
+    match r.read_line()??:
+        Maybe.Some(_) -> println("<line>")
+        Maybe.None -> println("<end>")
+    match r.read_line()??:
+        Maybe.Some(_) -> println("<line>")
+        Maybe.None -> println("<end>")
+    println("all[{r.read_all()??}]")
+    let File back = r.into_inner()
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run("/tmp/sushi_buf_empty.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

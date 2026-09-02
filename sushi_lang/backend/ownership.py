@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Optional
 from llvmlite import ir
 
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.ast import Name
+from sushi_lang.semantics.ast import MemberAccess, Name
 from sushi_lang.semantics.ownership import (
     ConsumingUse,
     Ownership,
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-__all__ = ["ConsumingUse", "bind", "consume", "copy_out", "relinquish",
+__all__ = ["ConsumingUse", "bind", "consume", "copy_out", "drops_of", "relinquish",
            "relinquish_temp", "resolver_for"]
 
 
@@ -52,7 +52,7 @@ def bind(codegen: 'LLVMCodegen', source, value: ir.Value,
     the binding owns nothing rather than being CE0129 (#242).
     """
     provenance = _provenance_of(source, ConsumingUse.LET)
-    decision = classify(provenance, type_class_of(target_type, resolver_for(codegen)))
+    decision = classify(provenance, type_class_of(target_type, drops_of(codegen), resolver_for(codegen)))
 
     if decision is Ownership.MOVE:
         _mark_moved(codegen, source)
@@ -70,7 +70,7 @@ def consume(codegen: 'LLVMCodegen', source, value: ir.Value,
     that guessed would be a second derivation of the rule this seam exists to centralize.
     """
     provenance = _provenance_of(source, use)
-    decision = classify(provenance, type_class_of(target_type, resolver_for(codegen)))
+    decision = classify(provenance, type_class_of(target_type, drops_of(codegen), resolver_for(codegen)))
 
     if decision is Ownership.MOVE:
         _mark_moved(codegen, source)
@@ -88,6 +88,19 @@ def copy_out(codegen: 'LLVMCodegen', value: ir.Value,
              value_type: Optional[Type]) -> ir.Value:
     """Return an independent copy of a value read out of a container it still owns."""
     return _clone(codegen, value, value_type)
+
+
+def drops_of(codegen: 'LLVMCodegen') -> frozenset:
+    """The type names that implement `Drop`, read from the backend's perk table.
+
+    The backend half of ruling R2a. `owns_resource` and `type_class_of` both take this
+    set rather than reaching for a registry, so a caller that cannot supply it does not
+    compile -- and every backend caller already holds `codegen`.
+    """
+    table = getattr(codegen, "perk_impl_table", None)
+    if table is None:
+        return frozenset()
+    return frozenset(table.by_perk.get("Drop", ()))
 
 
 def resolver_for(codegen: 'LLVMCodegen'):
@@ -110,12 +123,35 @@ def _provenance_of(source, use: ConsumingUse) -> Provenance:
 
 def _mark_moved(codegen: 'LLVMCodegen', source) -> None:
     """Record that the source no longer owns the value, so scope exit skips it."""
+    if isinstance(source, MemberAccess):
+        _spend_taken_from(codegen, source)
+        return
     if not isinstance(source, Name):
         return
     codegen.memory.mark_struct_as_moved(source.id)
     da = getattr(codegen, "dynamic_arrays", None)
     if da is not None:
         da.mark_as_moved(source.id)
+
+
+def _spend_taken_from(codegen: 'LLVMCodegen', source: MemberAccess) -> None:
+    """A marked field take spends its receiver: destroy the rest, then mark it moved.
+
+    Reaching here at all is the stamp: a MemberAccess carries Provenance.OWNED only
+    where the borrow pass read it as a take (ruling R28), and every other field read is
+    BORROWED, which never decides MOVE. What suppresses the receiver's own free is the
+    whole value and not one field, so the fields left behind are destroyed here -- the
+    scope exit is about to skip them.
+    """
+    receiver = source.receiver
+    if not isinstance(receiver, Name):
+        return
+    from sushi_lang.backend.destructors import emit_struct_fields_except
+    slot = codegen.memory.try_find_local_slot(receiver.id)
+    receiver_type = codegen.memory.find_semantic_type(receiver.id)
+    if slot is not None and receiver_type is not None:
+        emit_struct_fields_except(codegen, slot, receiver_type, source.member)
+    _mark_moved(codegen, receiver)
 
 
 def _clone(codegen: 'LLVMCodegen', value: ir.Value,

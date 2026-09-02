@@ -1,0 +1,16 @@
+# A second close is the same refusal. The -1 guard still exists, because the destructor
+# needs it, but a caller can no longer reach it: the first close spent the handle.
+# EXPECT_ERROR_CODE: CE2435
+use <io/fs>
+
+fn close_twice(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    f.close()??
+    f.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match close_twice("nowhere.txt"):
+        Result.Ok(_) -> println("closed")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

@@ -29,8 +29,7 @@ READ_ROWS = [
     ("constant", "", "TRIPLE"),
 ]
 
-PRELUDE = """use <io/stdio>
-
+PRELUDE = """
 const i32[3] TRIPLE = [1, 2, 3]
 
 struct Buf:

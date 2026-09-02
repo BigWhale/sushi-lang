@@ -1,0 +1,23 @@
+# The DECLARED half of `owns_resource`: `Guard@(i32)` holds nothing structural, so it is
+# the perk implementation alone that makes it move. It drops once, at the new owner.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "eating 1\nreleasing 1\ndone\n"
+struct Guard@(T):
+    T value
+    i32 tag
+
+extend Guard@(T) with Drop:
+    fn drop(poke self) ~:
+        println("releasing {self.tag}")
+
+fn eat(nom Guard@(i32) g) ~:
+    println("eating {g.tag}")
+    return Result.Ok(~)
+
+fn main() i32:
+    let Guard@(i32) g = Guard(7, 1)
+    eat(nom g)
+    println("done")
+    return Result.Ok(0)

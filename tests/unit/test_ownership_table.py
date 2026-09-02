@@ -27,6 +27,11 @@ from sushi_lang.semantics.typesys import (
     UnknownType,
 )
 
+# The Drop set `type_class_of` reads (ruling R2a). This module's corpus
+# declares no resource type; the resource half of the predicate is
+# `tests/unit/test_cleanup_predicates_agree.py`.
+NO_DROPS: frozenset = frozenset()
+
 
 I32 = BuiltinType.I32
 STR = BuiltinType.STRING
@@ -92,7 +97,7 @@ def test_plain_types():
     for ty in (I32, BuiltinType.BOOL, BuiltinType.F64,
                _struct("P", ("x", I32), ("y", I32)),
                ArrayType(base_type=I32, size=3)):
-        assert type_class_of(ty) is TypeClass.PLAIN
+        assert type_class_of(ty, NO_DROPS) is TypeClass.PLAIN
 
 
 def test_string_and_string_composites_move():
@@ -102,7 +107,7 @@ def test_string_and_string_composites_move():
                _struct("M", ("i", I32), ("s", STR)),
                ArrayType(base_type=STR, size=2),
                DynamicArrayType(base_type=STR)):
-        assert type_class_of(ty) is TypeClass.MOVE, ty
+        assert type_class_of(ty, NO_DROPS) is TypeClass.MOVE, ty
 
 
 def test_move_types():
@@ -113,13 +118,13 @@ def test_move_types():
                owning_struct,
                # A fixed array inherits move-ness from its elements.
                ArrayType(base_type=owning_struct, size=2)):
-        assert type_class_of(ty) is TypeClass.MOVE, ty
+        assert type_class_of(ty, NO_DROPS) is TypeClass.MOVE, ty
 
 
 def test_a_type_that_owns_two_kinds_of_heap_still_moves():
     """A struct holding BOTH a string and a dynamic array MOVES."""
     both = _struct("B", ("s", STR), ("items", DynamicArrayType(base_type=I32)))
-    assert type_class_of(both) is TypeClass.MOVE
+    assert type_class_of(both, NO_DROPS) is TypeClass.MOVE
 
 
 def test_enum_payload_is_walked():
@@ -130,8 +135,8 @@ def test_enum_payload_is_walked():
     stringy = EnumType(name="F", variants=(
         EnumVariantInfo(name="Msg", associated_types=(STR,)),
     ))
-    assert type_class_of(owning) is TypeClass.MOVE
-    assert type_class_of(stringy) is TypeClass.MOVE   # was COPY before Phase 9
+    assert type_class_of(owning, NO_DROPS) is TypeClass.MOVE
+    assert type_class_of(stringy, NO_DROPS) is TypeClass.MOVE   # was COPY before Phase 9
 
 
 def test_unresolved_named_type_is_resolved_before_classifying():
@@ -143,8 +148,8 @@ def test_unresolved_named_type_is_resolved_before_classifying():
     def resolve(ty):
         return table.get(getattr(ty, "name", None))
 
-    assert type_class_of(named) is TypeClass.PLAIN          # no resolver: the hazard
-    assert type_class_of(named, resolve) is TypeClass.MOVE
+    assert type_class_of(named, NO_DROPS) is TypeClass.PLAIN          # no resolver: the hazard
+    assert type_class_of(named, NO_DROPS, resolve) is TypeClass.MOVE
 
 
 def test_a_resolver_that_misses_leaves_the_type_alone():
@@ -153,8 +158,8 @@ def test_a_resolver_that_misses_leaves_the_type_alone():
         return None
 
     owning = _struct("W", ("items", DynamicArrayType(base_type=I32)))
-    assert type_class_of(owning, resolve) is TypeClass.MOVE
-    assert type_class_of(UnknownType(name="W"), resolve) is TypeClass.PLAIN
+    assert type_class_of(owning, NO_DROPS, resolve) is TypeClass.MOVE
+    assert type_class_of(UnknownType(name="W"), NO_DROPS, resolve) is TypeClass.PLAIN
 
 
 def test_reference_classifies_as_its_referent():
@@ -162,16 +167,16 @@ def test_reference_classifies_as_its_referent():
     owning = DynamicArrayType(base_type=I32)
     for mode in (BorrowMode.PEEK, BorrowMode.POKE):
         assert type_class_of(ReferenceType(referenced_type=owning,
-                                           mutability=mode)) is TypeClass.MOVE
+                                           mutability=mode), NO_DROPS) is TypeClass.MOVE
     for mode in (BorrowMode.PEEK, BorrowMode.POKE):
         assert type_class_of(ReferenceType(referenced_type=I32,
-                                           mutability=mode)) is TypeClass.PLAIN
+                                           mutability=mode), NO_DROPS) is TypeClass.PLAIN
 
 
 def test_reference_to_string_moves():
     """`string` owns heap at the type level, so a borrow of one classifies MOVE."""
     assert type_class_of(ReferenceType(referenced_type=STR,
-                                       mutability=BorrowMode.PEEK)) is TypeClass.MOVE
+                                       mutability=BorrowMode.PEEK), NO_DROPS) is TypeClass.MOVE
 
 
 def test_reference_referent_is_resolved_through_the_reference():
@@ -182,25 +187,25 @@ def test_reference_referent_is_resolved_through_the_reference():
         return owning if getattr(ty, "name", None) == "W" else ty
 
     ref = ReferenceType(referenced_type=UnknownType(name="W"), mutability=BorrowMode.POKE)
-    assert type_class_of(ref, resolve) is TypeClass.MOVE
+    assert type_class_of(ref, NO_DROPS, resolve) is TypeClass.MOVE
 
 
 def test_consuming_a_reference_is_rejected():
     """The cell that follows: a borrow of an owning value cannot be given away."""
     owning = ReferenceType(referenced_type=DynamicArrayType(base_type=I32),
                            mutability=BorrowMode.POKE)
-    assert classify(Provenance.BORROWED, type_class_of(owning)) is Ownership.REJECT
+    assert classify(Provenance.BORROWED, type_class_of(owning, NO_DROPS)) is Ownership.REJECT
 
 
 def test_consuming_a_reference_to_a_plain_value_adopts():
     """(BORROWED, PLAIN) stays ADOPT: copying a value that owns no heap transfers nothing."""
     plain = ReferenceType(referenced_type=I32, mutability=BorrowMode.PEEK)
-    assert classify(Provenance.BORROWED, type_class_of(plain)) is Ownership.ADOPT
+    assert classify(Provenance.BORROWED, type_class_of(plain, NO_DROPS)) is Ownership.ADOPT
 
 
 def test_none_is_plain():
     """A binding with no recorded type must not be guessed at as owning."""
-    assert type_class_of(None) is TypeClass.PLAIN
+    assert type_class_of(None, NO_DROPS) is TypeClass.PLAIN
 
 
 def test_every_function_value_moves_whatever_its_captures_say():
@@ -209,8 +214,8 @@ def test_every_function_value_moves_whatever_its_captures_say():
     capturing = FunctionType(param_types=(I32,), ok_type=I32,
                              err_type=UnknownType(name="StdError"),
                              captures=(("k", I32),))
-    assert type_class_of(declared) is TypeClass.MOVE
-    assert type_class_of(capturing) is TypeClass.MOVE
+    assert type_class_of(declared, NO_DROPS) is TypeClass.MOVE
+    assert type_class_of(capturing, NO_DROPS) is TypeClass.MOVE
 
 
 def test_recursive_type_terminates():
@@ -218,7 +223,7 @@ def test_recursive_type_terminates():
     node = StructType(name="Node", fields=())
     node.__dict__["fields"] = (("next", GenericTypeRef(base_name="Own", type_args=[node])),
                                ("label", STR))
-    assert type_class_of(node) is TypeClass.MOVE
+    assert type_class_of(node, NO_DROPS) is TypeClass.MOVE
 
 
 # --- Get-out detection ---------------------------------------------------------------
@@ -255,10 +260,10 @@ def test_is_get_out_container():
                       mutability=BorrowMode.PEEK))
 
 
-def test_consuming_use_set_is_the_documented_twelve():
-    """The closed set. A thirteenth position must be declared here before it can exist."""
+def test_consuming_use_set_is_the_documented_fourteen():
+    """The closed set. A fifteenth position must be declared here before it can exist."""
     assert {u.name for u in ConsumingUse} == {
         "CALL_ARG", "LET", "REBIND", "FIELD_ASSIGN", "STRUCT_FIELD", "ENUM_PAYLOAD",
         "ARRAY_ELEMENT", "ELEMENT_ASSIGN", "CONTAINER_INSERT", "RETURN", "CAPTURE",
-        "OWN_ALLOC",
+        "OWN_ALLOC", "MATCH_SCRUTINEE", "RECEIVER",
     }

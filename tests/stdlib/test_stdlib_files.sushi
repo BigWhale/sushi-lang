@@ -4,46 +4,56 @@
 # This test exercises all 12 file methods using the stdlib IR implementation
 
 use <io/files>
+use <io/fs>
+
+# Reads one line and substitutes an empty string for the end of the file. readln()
+# answers Maybe@(string) now, so a caller that does not care which of the two it got
+# says so once, here, rather than losing the distinction at every call.
+extend File line_or_empty() string:
+    match self.readln():
+        Result.Ok(Maybe.Some(line)) -> return line.clone()
+        Result.Ok(Maybe.None) -> return ""
+        Result.Err(_) -> return ""
 
 fn main() i32:
     # Test writing to a file
-    let FileResult result = open("/tmp/sushi_test_file.txt", FileMode.Write())
-    match result:
-        FileResult.Ok(f) ->
+    let Result@(File, IoError) result = open("/tmp/sushi_test_file.txt", FileMode.Write())
+    match nom result:
+        Result.Ok(nom f) ->
             # Test write and writeln
             f.write("Mostly ")
             f.writeln("Harmless")
             f.write("Line 2")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("Failed to open file for writing")
             return Result.Ok(1)
 
     # Test reading from the file
-    let FileResult read_result = open("/tmp/sushi_test_file.txt", FileMode.Read())
-    match read_result:
-        FileResult.Ok(f) ->
+    let Result@(File, IoError) read_result = open("/tmp/sushi_test_file.txt", FileMode.Read())
+    match nom read_result:
+        Result.Ok(nom f) ->
             # Test readln
-            let string line1 = f.readln()
+            let string line1 = f.line_or_empty()
             println("Read line 1: {line1}")
 
             # Test readch
-            let string ch1 = f.readch()
+            let string ch1 = f.readch().realise('')
             println("Read char: {ch1}")
 
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("Failed to open file for reading")
             return Result.Ok(1)
 
     # Test is_open
-    let FileResult check_result = open("/tmp/sushi_test_file.txt", FileMode.Read())
-    match check_result:
-        FileResult.Ok(f) ->
+    let Result@(File, IoError) check_result = open("/tmp/sushi_test_file.txt", FileMode.Read())
+    match nom check_result:
+        Result.Ok(nom f) ->
             if (f.is_open()):
                 println("File is open")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             println("Failed")
 
     println("File I/O tests complete!")

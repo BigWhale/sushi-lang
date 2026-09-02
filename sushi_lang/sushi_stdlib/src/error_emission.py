@@ -5,7 +5,7 @@ from sushi_lang.internals.errors import message_for
 
 from .libc_declarations import declare_fprintf, declare_exit
 from .string_helpers import create_string_constant
-from .io.stdio.common import get_stderr_handle_name
+from ._platform import get_platform_module
 
 
 def emit_runtime_error(
@@ -18,7 +18,7 @@ def emit_runtime_error(
     fprintf_fn = declare_fprintf(module)
     exit_fn = declare_exit(module)
 
-    stderr_handle_name = get_stderr_handle_name()
+    stderr_handle_name = get_platform_module('stdio').get_stderr_handle_name()
     i8_ptr = ir.IntType(8).as_pointer()
     i8_ptr.as_pointer()
 

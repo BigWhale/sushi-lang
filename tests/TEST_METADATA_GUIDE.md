@@ -141,6 +141,37 @@ and any non-zero balance fails the test.
   declares a leak assertion is, because that is the only way to leak-check a
   warned-but-legal construct such as shadowing an owning binding.
 
+#### EXPECT_NO_OPEN_FDS
+
+Asserts the compiled binary holds no open **descriptor** at exit -- a file or a socket it
+opened and never closed.
+
+```sushi
+# EXPECT_NO_OPEN_FDS: true
+```
+
+**This is not what `EXPECT_NO_LEAKS` checks.** The malloc interposer counts BYTES, so a
+program that opens a file and never closes it reports a perfectly clean byte balance. A
+handle test gets no coverage from the leak directive at all; this is the half that sees
+it, and the two are declared independently.
+
+- Values: `true`, `yes`, `1` (case-insensitive). The **bare** form with no colon --
+  `# EXPECT_NO_OPEN_FDS` -- also means true.
+- Same enforcement as `EXPECT_NO_LEAKS`: every `--enhanced` run that executes the test.
+- **One re-run answers both.** The check rides the same interposer, which counts the
+  per-process fd directory (`/dev/fd` on macOS, `/proc/self/fd` on Linux) in its
+  constructor and again at exit and reports the delta. Descriptors 0, 1 and 2 are
+  excluded, and so is the handle the count itself holds. Deliberately no shim of its own:
+  two shims would be two build steps racing to link onto one path, which is already why
+  `pytest` and `run_tests.py --enhanced` must not run at the same time.
+- If the interposer is too old to report the field, or the fd directory cannot be read,
+  the assertion is **skipped and reported**, never silently passed -- the rule the byte
+  half follows.
+- Reported BEFORE the byte balance when both are declared: a leaked descriptor is the
+  defect the byte gate cannot see, so it must not be shadowed by it.
+- `--leaks-only` does not select on this directive; it selects on `EXPECT_NO_LEAKS`.
+  Declare both on a test that should be covered by that faster gate too.
+
 ### Compilation Diagnostics Directives
 
 #### EXPECT_ERROR_CODE
@@ -400,8 +431,10 @@ When a test runs in enhanced mode:
    - Stdout matches `EXPECT_STDOUT_EXACT` (if specified)
    - Stderr contains `EXPECT_STDERR_CONTAINS` strings
    - Stderr is empty if `EXPECT_STDERR_EMPTY: true`
-5. **Leak check** (if `EXPECT_NO_LEAKS` is declared): re-runs the binary under the malloc-interposer and
-   fails the test on any outstanding allocation
+5. **Leak and descriptor checks** (if `EXPECT_NO_LEAKS` or `EXPECT_NO_OPEN_FDS` is
+   declared): ONE re-run under the interposer, which reports both the outstanding byte
+   balance and the open-descriptor delta. Fails on a leaked descriptor first, then on any
+   outstanding allocation
 6. **Result reporting**: Pass/fail with detailed error messages
 
 ## Common Pitfalls

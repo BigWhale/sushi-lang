@@ -89,10 +89,6 @@ class TypeMapper:
             BuiltinType.BOOL: self.i8,
             BuiltinType.STRING: self.string_struct,
             BuiltinType.BLANK: self.i32,
-            BuiltinType.STDIN: self.str_ptr,
-            BuiltinType.STDOUT: self.str_ptr,
-            BuiltinType.STDERR: self.str_ptr,
-            BuiltinType.FILE: self.str_ptr,
         }
 
     def _create_string_struct_type(self) -> ir.LiteralStructType:

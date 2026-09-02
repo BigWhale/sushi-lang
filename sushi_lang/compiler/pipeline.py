@@ -595,10 +595,14 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
             slib_path = library_linker.resolve_library(lib_path)
             library_fingerprints[lib_path] = compute_lib_fingerprint(slib_path)
 
+    # Whole-program, so it is computed once and folded into every unit.
+    drop_types = frozenset(cg.perk_impl_table.by_perk.get("Drop", ()))
+
     for unit in compilation_order:
         fp = compute_unit_fingerprint(
             unit, unit_manager, monomorphized_extensions,
             library_fingerprints=library_fingerprints,
+            drop_types=drop_types,
         )
 
         if cache.has_cached_unit(unit.name, fp):

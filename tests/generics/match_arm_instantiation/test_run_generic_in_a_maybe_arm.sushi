@@ -1,0 +1,16 @@
+# The same gap through Maybe rather than Result: a variant's payload type is read off the
+# scrutinee either way, so one fix serves both (#539).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "got 3\n"
+
+fn echo@(T)(nom T v) T:
+    return Result.Ok(v)
+
+fn main() i32:
+    let i32[] xs = from([3, 4, 5])
+    match xs.get(0):
+        Maybe.Some(first) -> println("got {echo(nom first).realise(-1)}")
+        Maybe.None -> println("empty")
+    return Result.Ok(0)

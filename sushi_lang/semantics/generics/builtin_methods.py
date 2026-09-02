@@ -12,9 +12,6 @@ from sushi_lang.semantics.typesys import (
     Type,
 )
 
-_STDIO_RECEIVERS = (BuiltinType.STDIN, BuiltinType.STDOUT, BuiltinType.STDERR)
-
-
 def _struct_enum_derived(receiver_type: Type, method_name: str) -> bool:
     """The derive pass's auto-derived pair (hash, clone), read from the registry."""
     from sushi_lang.sushi_stdlib.src.common import get_builtin_method
@@ -38,14 +35,6 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str) -> bool:
         from sushi_lang.semantics.generics.primitives import has_primitive_method
         return (is_builtin_string_method(method_name)
                 or has_primitive_method(receiver_type, method_name))
-
-    if receiver_type in _STDIO_RECEIVERS:
-        from sushi_lang.sushi_stdlib.src.io.stdio import is_builtin_stdio_method
-        return is_builtin_stdio_method(method_name)
-
-    if receiver_type == BuiltinType.FILE:
-        from sushi_lang.sushi_stdlib.src.io.files import is_builtin_file_method
-        return is_builtin_file_method(method_name)
 
     if isinstance(receiver_type, BuiltinType):
         from sushi_lang.semantics.generics.primitives import has_primitive_method

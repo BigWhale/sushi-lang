@@ -12,6 +12,7 @@ from sushi_lang.semantics.passes.collect import (
     GenericStructTable,
     PerkTable,
     PerkImplementationTable,
+    GenericPerkImplTable,
     FunctionTable,
     ExtensionTable,
     GenericExtensionTable,
@@ -31,6 +32,9 @@ class SymbolTables:
     generic_structs: GenericStructTable = field(default_factory=GenericStructTable)
     perks: PerkTable = field(default_factory=PerkTable)
     perk_impls: PerkImplementationTable = field(default_factory=PerkImplementationTable)
+    # The perk implementations whose target names a type PARAMETER. Templates: one copy
+    # per instantiation joins `perk_impls` after monomorphization.
+    generic_perk_impls: GenericPerkImplTable = field(default_factory=GenericPerkImplTable)
     funcs: FunctionTable = field(default_factory=FunctionTable)
     extensions: ExtensionTable = field(default_factory=ExtensionTable)
     generic_extensions: GenericExtensionTable = field(default_factory=GenericExtensionTable)

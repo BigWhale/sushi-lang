@@ -1,38 +1,39 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "PASS: IoError.ReadError works\nPASS: IoError.WriteError works\nPASS: IoError.FlushError works\n"
+# EXPECT_STDOUT_EXACT: "PASS: IoError.NotFound works\nPASS: IoError.DiskFull works\nPASS: IoError.Os carries the errno 13\n"
 # EXPECT_STDERR_EMPTY: true
 
-# Tests IoError enum variants
+# Tests IoError enum variants, including the Os(i32) payload arm: IoError is the ONE
+# channel every io contract method answers (HANDLES.md, rulings R4 and R20).
 
 fn do_io(string op) i32 | IoError:
     if (op == "read"):
-        return Result.Err(IoError.ReadError)
+        return Result.Err(IoError.NotFound)
     if (op == "write"):
-        return Result.Err(IoError.WriteError)
+        return Result.Err(IoError.DiskFull)
     if (op == "flush"):
-        return Result.Err(IoError.FlushError)
+        return Result.Err(IoError.Os(13))
     return Result.Ok(100)
 
 fn main() i32:
     match do_io("read"):
-        Result.Err(IoError.ReadError) ->
-            println("PASS: IoError.ReadError works")
+        Result.Err(IoError.NotFound) ->
+            println("PASS: IoError.NotFound works")
         _ ->
-            println("FAIL: ReadError pattern failed")
+            println("FAIL: NotFound pattern failed")
             return Result.Ok(1)
 
     match do_io("write"):
-        Result.Err(IoError.WriteError) ->
-            println("PASS: IoError.WriteError works")
+        Result.Err(IoError.DiskFull) ->
+            println("PASS: IoError.DiskFull works")
         _ ->
-            println("FAIL: WriteError pattern failed")
+            println("FAIL: DiskFull pattern failed")
             return Result.Ok(1)
 
     match do_io("flush"):
-        Result.Err(IoError.FlushError) ->
-            println("PASS: IoError.FlushError works")
+        Result.Err(IoError.Os(code)) ->
+            println("PASS: IoError.Os carries the errno {code}")
         _ ->
-            println("FAIL: FlushError pattern failed")
+            println("FAIL: Os pattern failed")
             return Result.Ok(1)
 
     return Result.Ok(0)

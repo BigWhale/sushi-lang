@@ -5,7 +5,7 @@
 # tests/unit/test_slib_info_parity.py locks the two together.
 # Exit codes: 0 report printed or --help answered, 2 usage or read error.
 
-use <io/stdio>
+use <io/fs>
 use <collections/strings>
 use <encoding/msgpack>
 use <sys/env>

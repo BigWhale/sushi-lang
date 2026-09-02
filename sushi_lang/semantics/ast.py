@@ -95,7 +95,11 @@ class Program(Node):
     functions: List["FuncDef"]
     extensions: List["ExtendDef"]           # Non-generic extensions only
     generic_extensions: List["ExtendDef"]   # Generic extensions only (e.g., extend Box<T>)
-    perk_impls: List["ExtendWithDef"]
+    perk_impls: List["ExtendWithDef"]          # Non-generic perk implementations only
+    # Perk implementations on a GENERIC target (`extend Box@(T) with Show`). Templates,
+    # moved here by the collector for the same reason `generic_extensions` exists: every
+    # later walk over `perk_impls` assumes a concrete `self`.
+    generic_perk_impls: List["ExtendWithDef"] = None
     externals: List["ExternalBlock"] = None
     doc: Optional["DocBlock"] = None            # the unit block: first item, attached to nothing
     orphan_docs: List["DocBlock"] = None        # every block that documents nothing
@@ -110,6 +114,8 @@ class Program(Node):
             self.externals = []
         if self.orphan_docs is None:
             self.orphan_docs = []
+        if self.generic_perk_impls is None:
+            self.generic_perk_impls = []
 
 @dataclass(slots=True)
 class Param:
@@ -276,6 +282,8 @@ class PerkMethodSignature:
     ret_span: Optional[Span] = None
     self_mode: Optional[str] = None  # "peek"/"poke" when the perk declares `(poke self, ...)` (#327)
     self_mode_span: Optional[Span] = None
+    err_type: Optional[Type] = None  # `| E` opts the CONTRACT into the Result channel
+    err_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
 
 @dataclass(slots=True)
@@ -387,6 +395,18 @@ class Foreach(Stmt):
     item_type_span: Optional[Span] = None
     item_borrow: Optional[str] = None       # None | "peek" | "poke"
     item_borrow_span: Optional[Span] = None
+    # The `??` binder (`foreach(line?? in it)`). The AST builder renamed the loop's own
+    # binding to a hidden name and prepended `let <T> <name> = <hidden>??` to the body;
+    # this points at that Let so the typecheck pass can fill in its type once the item
+    # type is known. Nothing downstream needs a rule of its own: the unwrap is the
+    # ordinary TryExpr and the binding the ordinary Let.
+    item_try_let: "Optional[Let]" = None
+    item_try_span: Optional[Span] = None
+    # A `next()` protocol iterator (HANDLES.md ruling R21): the synthetic
+    # `<hidden>.next()` call the typecheck pass built and stamped, and the hidden local
+    # the iterator lives in. Both None for an `Iterator@(T)`, which is the buffer walk.
+    protocol_next: "Optional[MethodCall]" = None
+    protocol_iter_name: Optional[str] = None
 
 @dataclass(slots=True)
 class Expand(Stmt):
@@ -409,7 +429,7 @@ class Pattern(Node):
     """Pattern for match arms: EnumName.VariantName(binding1, binding2, ...)"""
     enum_name: str
     variant_name: str
-    bindings: List[Union[str, 'Pattern', 'OwnPattern', 'RefBinding']]
+    bindings: List[Union[str, 'Pattern', 'OwnPattern', 'RefBinding', 'NomBinding']]
     enum_name_span: Optional[Span] = None
     variant_name_span: Optional[Span] = None
     # The alias the enum was written behind: `geo.Sign.Plus ->`. The enum name stays
@@ -441,6 +461,19 @@ class RefBinding(Node):
 
 
 @dataclass(slots=True)
+class NomBinding(Node):
+    """A TAKING binding in a match pattern: `Result.Ok(nom f)` (HANDLES.md ruling R11).
+
+    Its own node rather than a third `RefBinding.mode`, because `nom` is not a
+    reference: a `peek`/`poke` binding is a pointer into the scrutinee's payload and
+    carries a `ReferenceType`, while this one is a VALUE the arm now owns. Parameters
+    already split the same way -- `nom` is a flag on the parameter, `peek`/`poke` are
+    a type.
+    """
+    name: str
+
+
+@dataclass(slots=True)
 class OwnPattern(Node):
     """Own(inner_pattern) - auto-unwrap Own<T> in pattern matching."""
     inner_pattern: Union[str, 'Pattern']
@@ -467,6 +500,11 @@ class Match(Stmt):
     # An INTEGER scrutinee instead (#415). The backend dispatches on this; an EnumType
     # scrutinee uses `resolved_scrutinee_type` above.
     integer_match_type: Optional[Type] = None
+    # `match nom r:` (ruling R11). The match CONSUMES a scrutinee that names storage,
+    # which is what makes a `nom` payload binding legal on it. A temporary scrutinee is
+    # owned by construction and needs no marker.
+    consumes_scrutinee: bool = False
+    consumes_span: Optional[Span] = None
 
 
 @dataclass(slots=True)
@@ -779,7 +817,7 @@ __all__ = [
     "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
-    "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding",
+    "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding", "NomBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]
 

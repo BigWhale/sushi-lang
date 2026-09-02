@@ -1,0 +1,12 @@
+# The ENUM half of the limitation is NOT lifted (HANDLES.md, ruling R15). Constructing
+# an enum in a constant stays CE0108.
+# EXPECT_ERROR_CODE: CE0108
+
+enum Colour:
+    Red
+    Green
+
+const Colour FAVOURITE = Colour.Red()
+
+fn main() i32:
+    return Result.Ok(0)

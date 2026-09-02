@@ -10,8 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from sushi_lang.sushi_stdlib.src.collections import strings
 from sushi_lang.backend.types import primitives
-from sushi_lang.sushi_stdlib.src.io import stdio
-from sushi_lang.backend.platform_detect import get_current_platform, TargetPlatform
+from sushi_lang.backend.platform_detect import get_current_platform
 
 
 def init_llvm():
@@ -64,17 +63,6 @@ def build_core_primitives(platform_dir: Path, quiet: bool = False) -> list[str]:
     module = primitives.generate_module_ir()
 
     output = platform_dir / "core" / "primitives.bc"
-    return compile_module_to_bc(module, output, quiet=quiet)
-
-
-def build_io_stdio(platform_dir: Path, platform: TargetPlatform, quiet: bool = False) -> list[str]:
-    """Build io/stdio unit (platform-specific)."""
-    if not quiet:
-        print(f"Building io/stdio (platform: {platform.os})...")
-
-    module = stdio.generate_module_ir()
-
-    output = platform_dir / "io" / "stdio.bc"
     return compile_module_to_bc(module, output, quiet=quiet)
 
 
@@ -169,8 +157,6 @@ def build_all(platform_name: str, quiet: bool = False) -> None:
     script_dir = Path(__file__).parent.resolve()  # sushi_stdlib/
     platform_dir = script_dir / "dist" / platform_name
 
-    platform = get_current_platform()
-
     if not quiet:
         print(f"Building stdlib for {platform_name}...")
         print(f"Output directory: {platform_dir}")
@@ -187,7 +173,6 @@ def build_all(platform_name: str, quiet: bool = False) -> None:
     defined.update(build_random(platform_dir, quiet=quiet))
     defined.update(build_net(platform_dir, quiet=quiet))
 
-    defined.update(build_io_stdio(platform_dir, platform, quiet=quiet))
 
     # Note: core/results and core/maybe use inline emission only
     # They are not built as stdlib units because monomorphizing for

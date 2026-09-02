@@ -374,7 +374,7 @@ fn main() i32:
   ride that pipeline for free: nothing is emitted unless a program actually instantiates a
   combinator, and adding a new combinator is just adding a function to the `.sushi` file.
 - **Why opt-in `use`, not an auto-prelude:** consistent with every other stdlib module
-  (`collections/hashmap`, `io/stdio`, `time`, ...) — Sushi has no implicit prelude, and combinators
+  (`collections/hashmap`, `io/fs`, `time`, ...) — Sushi has no implicit prelude, and combinators
   are unremarkable generic functions, not language primitives.
 
 **Constraints (documented in the module and its doc page):**
@@ -542,7 +542,7 @@ Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
 | Expected-type propagation to bare-param lambdas | `semantics/passes/types/propagation.py` |
 | The `lift` pass | `semantics/passes/lift.py` |
 | Shared fn-synthesis wiring | `semantics/generics/synthesis.py:register_synthesized_function` |
-| Ownership predicate (single source of truth) | `semantics/typesys.py:owns_heap` (Phase 9 merged `is_owning_type` into it — see `docs/design/ownership-conventions.md` §6) |
+| Ownership predicate (single source of truth) | `semantics/typesys.py:owns_resource` (Phase 9 merged `is_owning_type` into it — see `docs/design/ownership-conventions.md` §6) |
 | Ownership seam (consume/bind/copy_out) | `semantics/ownership.py` (the `classify()` table), `backend/ownership.py` (the seam functions) |
 | Env heap alloc / recursive env destructor / cloner | `backend/generics/own.py:emit_own_alloc`, `backend/destructors.py:emit_value_destructor`, `backend/runtime/closures.py` (env clone, `clone_ptr`) |
 | Runtime API (thunk, build value, indirect call, `emit_lambda`) | `backend/runtime/closures.py` |
@@ -715,7 +715,7 @@ treat this as a known authoring gotcha rather than a validated error path.
    `|` = bitwise-or), validated through the parser generator with no new conflicts.
 5. **Ownership vs. the move/borrow tracker.** Only *capturing* values are owning (capture-taint);
    non-capturing values stay copyable to preserve v1 ergonomics; the runtime-guarded drop makes
-   conservative (erased-provenance) frees sound. This is answered by `owns_heap`
+   conservative (erased-provenance) frees sound. This is answered by `owns_resource`
    (`semantics/typesys.py`), the single ownership predicate every type asks — see
    `docs/design/ownership-conventions.md` §6.
 6. **Pass-ordering.** Lambda-lifting needs resolved capture *types* (post-`types`) but its

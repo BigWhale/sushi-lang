@@ -182,6 +182,23 @@ registered for every instantiation of `Box`: it answered a `Box@(string)` receiv
 a `CE0000` as soon as the body touched the type. A perk implementation on the same target had
 always scoped correctly -- one question, two answer sites, which is the #239 class exactly.
 
+**A PERK IMPLEMENTATION reads the same table.** `extend Box@(T) with Show` is a template
+and `extend Box@(i32) with Show` is a constraint, exactly as above, and a partially
+concrete target is the same CE2098. The template is re-filed out of `Program.perk_impls`
+and into `Program.generic_perk_impls` -- the same move a generic extension makes, and for
+the same reason: the typecheck pass, the backend's declaration and definition loops and
+the unit fingerprint all walk `perk_impls` assuming a concrete `self`. One copy per
+instantiation the program names is registered in the perk-impl table under the
+instantiation's interned name and appended to the DECLARING unit's AST, so it is an
+ordinary implementation from there on.
+
+**The instantiation runs before the functions are monomorphized**, and that order is
+load-bearing: a `@(S: Show)` constraint is checked while a generic function is
+monomorphized, so `Box@(i32)` has to already say it implements `Show` or the call is
+CE4006 for a type that does. It also puts `Drop` within reach: `TypeQueries.drops` reads
+the perk table, so the copy registered here is in the set before `derive`, `effects` and
+the `borrow` pass ask whether the instantiation owns a resource.
+
 **Why the overlap is rejected rather than resolved by most-specific-wins.** Under
 specialization, whether the template's body is dead code would depend on which instantiations
 exist ELSEWHERE in the program: with only `Box@(string)` live the template method is compiled
@@ -214,6 +231,40 @@ Result/Maybe receiver and present on its payload type, which is an unhandled cha
 not a typo. Resolution still runs first — a method found on the wrapper itself
 (`.realise`) is rung 1 as always. The decision record is
 [ufcs-combinators.md](ufcs-combinators.md).
+
+## A perk method and an extension method differ in one thing
+
+> **The target type comes from a different place. Nothing else separates them.**
+
+An extension method names its target in its own declaration (`extend i32 squared()`); a
+perk-implementation method takes it from the `extend X with P` header. Every other
+property is shared, and the compiler shares the code that reads it: one body validator
+(`passes/types/signatures.py:_validate_method_body`), one `CalleeKind.METHOD` for
+parameter modes, and one backend path -- a perk method is wrapped as a synthetic
+`ExtendDef` and emitted through the extension emitter.
+
+The **error channel** was the last exception, and `HANDLES.md` ruling R1 removed it. A
+perk method declares `| E` in the same shape an extension method does, on the CONTRACT
+and on every implementation alike:
+
+```sushi
+perk Source:
+    fn read_one() i32 | SourceError
+
+extend Counter with Source:
+    fn read_one() i32 | SourceError:
+        return self.value          # the success returns BARE; the seam wraps it
+```
+
+The channel is part of the signature, so the contract and the implementation must
+agree: a contract that declares one and an implementation that omits it, an
+implementation that invents one the contract has not got, and two channels over
+different error types are all the same mismatch. **CE0133** is the relational
+diagnostic -- the primary at the implementation, a note at the contract method.
+
+A perk method has no `Self` type, so a contract cannot say "returns another one of me".
+That is the one thing a perk still cannot express, and it is why `.share()` is written
+on each handle rather than on a contract.
 
 **Where the rule lives.** The classification is decided ONCE, in the collect pass
 (`semantics/generics/extension_targets.py:classify_extension_target`), because that is the

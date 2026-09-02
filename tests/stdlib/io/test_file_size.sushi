@@ -1,13 +1,14 @@
 # EXPECT_STDOUT_EXACT: "OK: Correctly returns Err for non-existent file\nOK: file_size() works correctly\n"
 # EXPECT_RUNTIME_EXIT: 0
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match open("/tmp/size_test.txt", FileMode.Write()):
-        FileResult.Ok(f) ->
+        Result.Ok(nom f) ->
             f.writeln("Hello, World!")
             f.close()
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Ok(1)
 
     match file_size("/tmp/size_test.txt"):

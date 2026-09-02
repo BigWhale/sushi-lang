@@ -1,0 +1,28 @@
+# A field argument is a constant EXPRESSION, not only a literal: another constant, an
+# operator over two of them, and a cast all reach the same evaluator the scalar
+# constants already use.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0 1 2 96 5\n"
+
+struct Descriptors:
+    i32 input
+    i32 output
+    i32 errors
+
+const i32 STDIN_FD = 0
+const i32 STDOUT_FD = 1
+const i32 STDERR_FD = 2
+
+const Descriptors STD = Descriptors(STDIN_FD, STDOUT_FD, STDERR_FD)
+
+struct Frame:
+    i32 area
+    u8 depth
+
+const i32 WIDTH = 12
+const i32 HEIGHT = 8
+const Frame BOX = Frame(WIDTH * HEIGHT, 5 as u8)
+
+fn main() i32:
+    println("{STD.input} {STD.output} {STD.errors} {BOX.area} {BOX.depth}")
+    return Result.Ok(0)

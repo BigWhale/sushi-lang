@@ -1,0 +1,12 @@
+# A fallible perk contract in one library unit, its implementation in another.
+# The consumer calls the channel method and reads both arms.
+# EXPECT_STDOUT_EXACT: "12\nout of range\n"
+use <lib/perkchan_lib>
+
+fn main() i32:
+    let Gadget g = Gadget(10)
+    println("{g.probe(2).realise(-1)}")
+    match g.probe(-1):
+        Result.Ok(v) -> println("{v}")
+        Result.Err(_) -> println("out of range")
+    return Result.Ok(0)

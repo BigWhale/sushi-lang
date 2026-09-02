@@ -25,6 +25,8 @@ Complete reference for Sushi's standard library modules and types.
 - [File I/O](stdlib/io/files.md) - File operations with error handling
 - [Path algebra](stdlib/io/path.md) - Lexical path manipulation (join, basename, dirname, extension, normalize)
 - [File-system ops](stdlib/io/fs.md) - stat, recursive walk, mkdir_all, remove_all
+- [I/O contracts](stdlib/io/contracts.md) - `Reader`, `Writer`, `Seek`: what a handle can do
+- [Buffered I/O](stdlib/io/buf.md) - `BufReader`, `BufWriter`: one system call per window
 
 ### Networking
 
@@ -52,10 +54,11 @@ use <collections/strings>  # String methods
 use <collections/iter>     # Higher-order combinators (map/filter/fold/compose)
 use <compression/zlib>     # DEFLATE and the zlib container
 use <encoding/msgpack>     # MessagePack decoder
-use <io/stdio>             # Console I/O
-use <io/files>             # File operations
+use <io/buf>               # BufReader, BufWriter: buffered over any handle
+use <io/contracts>         # Reader, Writer, Seek
+use <io/files>             # the path utilities and the fd_* primitives
 use <io/path>              # Lexical path manipulation
-use <io/fs>                # stat, walk, mkdir_all, remove_all
+use <io/fs>                # File, open, stdin/stdout/stderr, stat, walk, mkdir_all
 use <net/socket>           # the raw socket calls, and NetError
 use <net/tcp>              # TcpStream, TcpListener
 use <net/udp>              # UdpSocket
@@ -74,12 +77,13 @@ use <sys/process>          # Process control
 #### Error Handling
 
 ```sushi
-# Using ?? operator for propagation
-fn read_config() string:
-    let file f = open("config.txt", FileMode.Read())??
-    let string content = f.read()
-    f.close()
-    return Result.Ok(content)
+use <io/fs>
+
+# Using ?? operator for propagation. The channel is the one open() answers,
+# so a read propagates through it with no conversion in the middle.
+fn read_config() string | IoError:
+    let File f = open("config.txt", FileMode.Read())??
+    return Result.Ok(f.read_all()??)
 
 # Using pattern matching
 match parse_number("42"):
@@ -146,26 +150,33 @@ let string filename = path.strip_prefix("/home/user/")  # "file.txt"
 #### File I/O
 
 ```sushi
-use <io/files>
+use <io/fs>
 
-# Reading files
+# Reading files. A handle closes itself at the end of the arm, so nothing
+# calls close() -- and every read answers IoError.
 match open("data.txt", FileMode.Read()):
-    FileResult.Ok(f) ->
-        let string content = f.read()
-        f.close()
-        println(content)
-    FileResult.Err(FileError.NotFound()) ->
+    Result.Ok(f) ->
+        match f.read_all():
+            Result.Ok(content) -> println(content)
+            Result.Err(_) -> println("Read failed")
+    Result.Err(IoError.NotFound()) ->
         println("File not found")
-    FileResult.Err(_) ->
+    Result.Err(_) ->
         println("Other error")
 
 # Writing files
 match open("output.txt", FileMode.Write()):
-    FileResult.Ok(f) ->
-        f.write("Hello, file!")
-        f.close()
-    FileResult.Err(_) ->
-        println("Failed to write")
+    Result.Ok(f) ->
+        match f.writeln("Mostly Harmless"):
+            Result.Ok(_) -> println("written")
+            Result.Err(_) -> println("Failed to write")
+    Result.Err(_) ->
+        println("Failed to open")
+
+# Buffered, when the loop is long: one system call per window, not per line
+let BufWriter@(File) out = buf_writer(nom stdout, 8192)??
+out.write_line("Mostly Harmless")??
+out.finish()??
 ```
 
 ## Module Overview
@@ -213,17 +224,26 @@ match open("output.txt", FileMode.Write()):
 - The decoder reads stored, fixed and dynamic blocks; the encoder emits stored and fixed
   only, so its ratio is short of a full encoder's
 
-### I/O (`use <io/stdio>`, `use <io/files>`)
+### I/O (`use <io/fs>`, `use <io/files>`)
 
 **Console I/O:**
 - `println()`, `print()` - Output with/without newline
-- `stdin.read_line()` - Read user input
-- `stdout`, `stderr` - Direct stream access
+- `stdin.readln()` - One line, or `Maybe.None` at end of input
+- `stdin`, `stdout`, `stderr` - `File` constants over descriptors 0, 1 and 2
 
 **File I/O:**
 - `open()` - Open files with Read/Write/Append modes
-- File methods: `read()`, `read_line()`, `write()`, `close()`
-- Error handling with `FileResult` and `FileError` enums
+- One read: `read(max)` / `read_bytes(max)`; the whole file: `read_all()`; one line:
+  `readln()`; writing: `write()` / `write_bytes()` / `writeln()`
+- `close()` CONSUMES the handle, and is only needed where the failure has to be SEEN --
+  a `File` closes itself when its owner leaves scope
+- Every read, write, seek, `open()` and `close()` answers `IoError`; the path utilities
+  and the `fd_*` primitives keep `FileError`
+
+**Buffered I/O** (`use <io/buf>`):
+- `buf_reader(nom src, cap)` / `buf_writer(nom dst, cap)` - one system call per WINDOW
+- `r.lines()` answers a `Lines@(R)`, which `foreach` walks:
+  `foreach(line?? in r.lines())`
 
 ### Math (`use <math>`)
 

@@ -6,6 +6,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 import llvmlite.ir as ir
 from .types import extract_element_type, get_list_len_ptr, get_list_capacity_ptr, get_list_data_ptr
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32
+from sushi_lang.backend.generics.debug_output import emit_debug_string, emit_debug_i32
 
 
 def emit_list_debug(
@@ -34,13 +35,13 @@ def emit_list_debug(
     # interpolating it directly leaks the retired syntax for a nested generic
     # element ("List@(List<i32>)" instead of "List@(List@(i32))").
     header_str = f"List@({display_type(element_type)}) {{\n"
-    emit_printf_string(codegen, builder, header_str)
+    emit_debug_string(codegen, builder, header_str)
 
-    emit_printf_string(codegen, builder, "  len: ")
-    emit_printf_i32(codegen, builder, length)
-    emit_printf_string(codegen, builder, ", capacity: ")
-    emit_printf_i32(codegen, builder, capacity)
-    emit_printf_string(codegen, builder, "\n")
+    emit_debug_string(codegen, builder, "  len: ")
+    emit_debug_i32(codegen, builder, length)
+    emit_debug_string(codegen, builder, ", capacity: ")
+    emit_debug_i32(codegen, builder, capacity)
+    emit_debug_string(codegen, builder, "\n")
 
     i = builder.alloca(codegen.types.i32, name="i")
     builder.store(zero_i32, i)
@@ -59,15 +60,15 @@ def emit_list_debug(
     builder.position_at_end(loop_body_bb)
     i_val = builder.load(i, name="i_val")
 
-    emit_printf_string(codegen, builder, "  [")
-    emit_printf_i32(codegen, builder, i_val)
-    emit_printf_string(codegen, builder, "] ")
+    emit_debug_string(codegen, builder, "  [")
+    emit_debug_i32(codegen, builder, i_val)
+    emit_debug_string(codegen, builder, "] ")
 
     element_ptr = builder.gep(data_ptr, [i_val], name="element_ptr")
     element = builder.load(element_ptr, name="element")
 
     emit_debug_print_value(codegen, builder, element, element_type)
-    emit_printf_string(codegen, builder, "\n")
+    emit_debug_string(codegen, builder, "\n")
 
     i_next = builder.add(i_val, one_i32, name="i_next")
     builder.store(i_next, i)
@@ -75,64 +76,22 @@ def emit_list_debug(
 
     builder.position_at_end(loop_end_bb)
 
-    emit_printf_string(codegen, builder, "}\n")
+    emit_debug_string(codegen, builder, "}\n")
 
     return ir.Constant(codegen.types.i32, 0)
-
-
-def emit_printf_string(codegen: Any, builder: Any, text: str) -> None:
-    """Helper to print a string using printf."""
-    str_bytes = (text + '\0').encode('utf-8')
-    str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
-
-    global_name = f".str_debug_{abs(hash(text)) % 1000000}"
-
-    try:
-        str_const = codegen.builder.module.get_global(global_name)
-    except KeyError:
-        str_const = ir.GlobalVariable(codegen.builder.module, str_type, name=global_name)
-        str_const.linkage = 'internal'
-        str_const.global_constant = True
-        str_const.initializer = ir.Constant(str_type, bytearray(str_bytes))
-
-    str_ptr = builder.gep(str_const, [ZERO_I32, ZERO_I32], name="str_ptr")
-
-    printf_fn = codegen.runtime.libc_stdio.printf
-    builder.call(printf_fn, [str_ptr])
-
-
-def emit_printf_i32(codegen: Any, builder: Any, value: ir.Value) -> None:
-    """Helper to print an i32 using printf."""
-    fmt_str = "%d"
-    str_bytes = (fmt_str + '\0').encode('utf-8')
-    str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
-
-    global_name = ".fmt_i32_debug"
-    try:
-        str_const = codegen.builder.module.get_global(global_name)
-    except KeyError:
-        str_const = ir.GlobalVariable(codegen.builder.module, str_type, name=global_name)
-        str_const.linkage = 'internal'
-        str_const.global_constant = True
-        str_const.initializer = ir.Constant(str_type, bytearray(str_bytes))
-
-    str_ptr = builder.gep(str_const, [ZERO_I32, ZERO_I32], name="fmt_ptr")
-
-    printf_fn = codegen.runtime.libc_stdio.printf
-    builder.call(printf_fn, [str_ptr, value])
 
 
 def emit_debug_print_value(codegen: Any, builder: Any, value: ir.Value, value_type: Type) -> None:
     """Helper to print a value for debug output."""
 
     if value_type == BuiltinType.I32:
-        emit_printf_i32(codegen, builder, value)
+        emit_debug_i32(codegen, builder, value)
     elif value_type == BuiltinType.I8:
         value_i32 = builder.zext(value, codegen.types.i32, name="i8_to_i32")
-        emit_printf_i32(codegen, builder, value_i32)
+        emit_debug_i32(codegen, builder, value_i32)
     elif value_type == BuiltinType.I16:
         value_i32 = builder.sext(value, codegen.types.i32, name="i16_to_i32")
-        emit_printf_i32(codegen, builder, value_i32)
+        emit_debug_i32(codegen, builder, value_i32)
     elif value_type == BuiltinType.I64:
         fmt_str = "%lld"
         str_bytes = (fmt_str + '\0').encode('utf-8')
@@ -152,7 +111,7 @@ def emit_debug_print_value(codegen: Any, builder: Any, value: ir.Value, value_ty
         printf_fn = codegen.runtime.libc_stdio.printf
         builder.call(printf_fn, [str_ptr, value])
     elif value_type == BuiltinType.STRING:
-        emit_printf_string(codegen, builder, '"')
+        emit_debug_string(codegen, builder, '"')
         fmt_str = "%s"
         str_bytes = (fmt_str + '\0').encode('utf-8')
         str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
@@ -170,7 +129,7 @@ def emit_debug_print_value(codegen: Any, builder: Any, value: ir.Value, value_ty
 
         printf_fn = codegen.runtime.libc_stdio.printf
         builder.call(printf_fn, [str_ptr, value])
-        emit_printf_string(codegen, builder, '"')
+        emit_debug_string(codegen, builder, '"')
     elif value_type == BuiltinType.BOOL:
         true_bb = builder.append_basic_block(name="print_true")
         false_bb = builder.append_basic_block(name="print_false")
@@ -180,11 +139,11 @@ def emit_debug_print_value(codegen: Any, builder: Any, value: ir.Value, value_ty
         builder.cbranch(is_true, true_bb, false_bb)
 
         builder.position_at_end(true_bb)
-        emit_printf_string(codegen, builder, "true")
+        emit_debug_string(codegen, builder, "true")
         builder.branch(after_bb)
 
         builder.position_at_end(false_bb)
-        emit_printf_string(codegen, builder, "false")
+        emit_debug_string(codegen, builder, "false")
         builder.branch(after_bb)
 
         builder.position_at_end(after_bb)
@@ -210,4 +169,4 @@ def emit_debug_print_value(codegen: Any, builder: Any, value: ir.Value, value_ty
         printf_fn = codegen.runtime.libc_stdio.printf
         builder.call(printf_fn, [str_ptr, value])
     else:
-        emit_printf_string(codegen, builder, "<value>")
+        emit_debug_string(codegen, builder, "<value>")

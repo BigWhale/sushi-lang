@@ -140,6 +140,16 @@ class LLVMUtils:
         if isinstance(dst, ir.ArrayType):
             return self._cast_to_array(v, dst)
 
+        # A value read off a POINTER receiver arrives as its ADDRESS: `self.field` inside a
+        # `poke self` method is a GEP and not a load. A dynamic array is the case that
+        # shows it, because the rule is that a `T[]` is its descriptor BY VALUE everywhere
+        # (docs/design/array-representation.md), so a parameter wanting the descriptor got
+        # the address and answered CE0017 -- an INTERNAL code for an ordinary program. The
+        # pointee must match the destination EXACTLY, so this can only ever load what the
+        # parameter already asked for.
+        if isinstance(v.type, ir.PointerType) and v.type.pointee == dst:
+            return self.codegen.builder.load(v, name="param_by_value")
+
         # Struct type checks (exact match required - no conversion between different struct
         # types). BaseStructType so a user struct's identified type (#257) reports the
         # specific "cannot convert struct to struct" diagnostic rather than the generic one.

@@ -1,0 +1,34 @@
+# A file of nothing but newlines is three blank lines and then the end, not an immediate
+# end: Maybe.Some("") three times, then Maybe.None.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "[]\n[]\n[]\n3\n"
+use <io/files>
+use <io/fs>
+
+fn dump(string path) i32 | IoError:
+    let File f = open(path, FileMode.Read())??
+    let i32 count = 0
+    let bool done = false
+    while (not done):
+        match f.readln()??:
+            Maybe.Some(line) ->
+                println("[{line}]")
+                count := count + 1
+            Maybe.None ->
+                done := true
+    f.close()??
+    return Result.Ok(count)
+
+fn main() i32:
+    match open("lines_only_blank.txt", FileMode.Write()):
+        Result.Ok(w) -> w.write("\n\n\n")
+        Result.Err(_) ->
+            println("open failed")
+            return Result.Ok(1)
+
+    println("{dump('lines_only_blank.txt').realise(-1)}")
+    remove("lines_only_blank.txt").realise(0)
+    return Result.Ok(0)

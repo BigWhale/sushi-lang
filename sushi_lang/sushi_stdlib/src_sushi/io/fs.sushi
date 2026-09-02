@@ -12,6 +12,7 @@ files only and does not follow a directory symlink, so a linked tree stays
 unvisited and a loop cannot form.
 :##
 
+use <io/contracts>
 use <io/files>
 use <io/path>
 
@@ -153,3 +154,425 @@ fn walk_into(string dir, poke List@(string) acc) ~ | FileError:
         else:
             acc.push(full.clone())
     return Result.Ok(~)
+
+##:
+One open file, and the descriptor it owns.
+
+A File moves to exactly one owner and closes itself when that owner leaves
+scope, on the same terms as TcpStream: the rule is enforced by the compiler
+rather than written down here, and handing one to a `nom` parameter is what
+transfers it.
+
+The `owned` bit is what lets the three console handles be Files too. They
+name descriptors the program did not open -- 0, 1 and 2 -- so dropping one
+must not close it. A string carries the same bit for the same reason: a
+literal frees to a no-op.
+
+Every method is a plain borrow except close(). A file's position lives in
+the KERNEL, not in this struct, so a read and a write need no mutable
+receiver; only close(), which writes -1 into the binding, does.
+
+Reads and writes are UNBUFFERED: each one is a system call. A handle that buffered would
+have to flush at a point nobody wrote, and a destructor cannot report the failure of that
+flush -- so buffering is the layer above, in <io/buf>, which a caller opts into.
+:##
+public struct File:
+    ##: The descriptor, or -1 once close() has run. :##
+    i32 fd
+    ##: Whether dropping this handle closes the descriptor. :##
+    bool owned
+
+##: The descriptor the kernel gives standard input. :##
+public const i32 STDIN_FD = 0
+##: The descriptor the kernel gives standard output. :##
+public const i32 STDOUT_FD = 1
+##: The descriptor the kernel gives standard error. :##
+public const i32 STDERR_FD = 2
+
+##:
+Standard input, as a File the program does not own.
+
+It is a constant, so it lives in read-only memory: closing it is refused
+while compiling, and the descriptor cannot be taken out from under the rest
+of the program by accident.
+:##
+public const File stdin = File(fd: STDIN_FD, owned: false)
+
+##: Standard output, on the same terms as stdin. :##
+public const File stdout = File(fd: STDOUT_FD, owned: false)
+
+##: Standard error, on the same terms as stdin. :##
+public const File stderr = File(fd: STDERR_FD, owned: false)
+
+##:
+Closes the file when its owner leaves scope, if this handle owns it.
+:##
+extend File with Drop:
+    ##:
+    Closes the descriptor, unless the handle does not own it.
+
+    A destructor has nowhere to put a Result, so a close that fails here is
+    lost. Call close() to see it.
+    :##
+    fn drop(poke self) ~:
+        if (self.owned):
+            close_handle(poke self)
+
+##:
+Releases the descriptor exactly once, and writes -1 into the handle.
+
+Private to this module, and the ONE place the guard and the fd_close() call are
+spelled: close() consumes its handle and cannot be reached from a destructor,
+which owns nothing to hand away, so the two callers meet here instead of each
+carrying a copy of the rule.
+
+- Parameter h: The handle to release. Reads -1 afterwards.
+- Errors: IoError, when the descriptor could not be closed.
+:##
+fn close_handle(poke File h) ~ | IoError:
+    if (h.fd < 0):
+        return Result.Ok(~)
+    let i32 fd = h.fd
+    h.fd := -1
+    match fd_close(fd):
+        Result.Ok(_) -> return Result.Ok(~)
+        Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+What a FileMode asks the platform for.
+
+The O_* flag VALUES differ between macOS and Linux and Sushi has no
+conditional compilation, so a number spelled here would be silently wrong on
+one of them -- 0x0400 means truncate on one and append on the other. An
+INTENT crosses the boundary instead and the platform layer maps it.
+
+POSIX draws no text/binary distinction, so the B twins are not a second
+mapping.
+
+- Returns: The intent: 0 read, 1 write, 2 append.
+:##
+extend FileMode intent() i32:
+    match self:
+        FileMode.Read -> return 0
+        FileMode.ReadB -> return 0
+        FileMode.Write -> return 1
+        FileMode.WriteB -> return 1
+        FileMode.Append -> return 2
+        FileMode.AppendB -> return 2
+
+##:
+Which end of the file a seek counts from.
+
+- Returns: The whence: 0 the start, 1 the current position, 2 the end.
+:##
+extend SeekFrom whence() i32:
+    match self:
+        SeekFrom.Start -> return 0
+        SeekFrom.Current -> return 1
+        SeekFrom.End -> return 2
+
+##:
+Turns a file-system error into the one channel the io contracts answer.
+
+Every FileError variant with no twin in IoError belongs to an open rather than to a read or
+a write, so nothing a contract method can answer is lost here. IOError has already thrown
+its errno away, so it collapses to Other rather than pretending to carry a number.
+
+- Returns: The IoError that says the same thing.
+:##
+extend FileError to_io() IoError:
+    match self:
+        FileError.NotFound -> return IoError.NotFound
+        FileError.PermissionDenied -> return IoError.PermissionDenied
+        FileError.AlreadyExists -> return IoError.AlreadyExists
+        FileError.IsDirectory -> return IoError.IsDirectory
+        FileError.DiskFull -> return IoError.DiskFull
+        FileError.TooManyOpen -> return IoError.TooManyOpen
+        FileError.InvalidPath -> return IoError.InvalidInput
+        FileError.IOError -> return IoError.Other
+        FileError.Other -> return IoError.Other
+
+##:
+Opens a file and takes ownership of its descriptor.
+
+The handle closes itself when its owner leaves scope, so an explicit close() is only needed
+where the failure has to be seen.
+
+The answer is on IoError rather than FileError, so a function that opens a file and then
+reads it carries ONE channel from end to end.
+
+- Parameter path: The path to open.
+- Parameter mode: What the file is opened for.
+- Returns: The open file.
+- Errors: IoError, when the path could not be opened.
+:##
+public fn open(string path, FileMode mode) File | IoError:
+    match fd_open(path, mode.intent(), 420):
+        Result.Ok(fd) -> return Result.Ok(File(fd: fd, owned: true))
+        Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+Reads bytes from the file, as one read and as one write.
+
+A File satisfies the contract for both directions, so a generic that asks for Reader takes
+a file exactly as it takes a socket.
+:##
+extend File with Reader:
+    ##:
+    Reads what one read gives, as text.
+
+    The bound counts BYTES, so a multi-byte character can be split across two calls. A
+    caller that must not cut one reads bytes, accumulates them, and converts once.
+
+    - Parameter max: The most bytes to take in this one read.
+    - Returns: The text that arrived, empty at end of file.
+    - Errors: IoError, when the read failed.
+    :##
+    fn read(i32 max) string | IoError:
+        let u8[] chunk = self.read_bytes(max)??
+        return chunk.to_string()
+
+    ##:
+    Reads what one read gives, as bytes.
+
+    An EMPTY answer means end of file, which is what lets a caller loop until the answer is
+    empty. A short answer is not an end: a pipe hands over whatever has arrived.
+
+    - Parameter max: The most bytes to take in this one read.
+    - Returns: The bytes that arrived, empty at end of file.
+    - Errors: IoError, when the read failed.
+    :##
+    fn read_bytes(i32 max) u8[] | IoError:
+        match fd_read(self.fd, max):
+            Result.Ok(nom chunk) -> return chunk
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+Writes to the file, and flushes what a descriptor has no need to flush.
+:##
+extend File with Writer:
+    ##:
+    Writes text, and does not stop until every byte has gone.
+
+    The string's own bytes go to the kernel with no to_bytes() copy in front of them.
+
+    - Parameter data: The text to write.
+    - Returns: Nothing.
+    - Errors: IoError, when the write failed.
+    :##
+    fn write(string data) ~ | IoError:
+        match fd_write_str(self.fd, data):
+            Result.Ok(_) -> return ~
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+    ##:
+    Writes bytes, and does not stop until every one has gone.
+
+    - Parameter data: The bytes to write. The buffer stays the caller's.
+    - Returns: Nothing.
+    - Errors: IoError, when the write failed.
+    :##
+    fn write_bytes(u8[] data) ~ | IoError:
+        match fd_write(self.fd, data):
+            Result.Ok(_) -> return ~
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+    ##:
+    Does nothing, successfully.
+
+    A descriptor is not buffered: a write has already reached the kernel by the time write()
+    returns, so there is nothing here to flush. The method is on the contract because a
+    contract carries ONE signature: a function written against Writer must keep compiling
+    when the handle it is handed is swapped for a BufWriter, where the call drains a real
+    buffer. Getting bytes onto the DISK is fsync(), a much stronger promise, and not what
+    flush() ever meant.
+
+    - Returns: Nothing.
+    - Errors: IoError, never in practice.
+    :##
+    fn flush() ~ | IoError:
+        return ~
+
+##:
+Moves the file position. A socket does not implement this perk, because a stream has no
+position to move.
+:##
+extend File with Seek:
+    ##:
+    Moves the position, and answers where it landed.
+
+    - Parameter offset: How far to move, which may be negative.
+    - Parameter origin: Which end to count from.
+    - Returns: The new position, in bytes from the start.
+    - Errors: IoError, when the descriptor cannot seek -- a pipe cannot.
+    :##
+    fn seek(i64 offset, SeekFrom origin) i64 | IoError:
+        match fd_seek(self.fd, offset, origin.whence()):
+            Result.Ok(at) -> return at
+            Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+Reads the rest of the file, from the current position, as text.
+
+The whole answer is held in memory at once. A large file wants read() in a loop, or the
+buffered reader.
+
+- Returns: Everything from the current position to the end.
+- Errors: IoError, when a read failed.
+:##
+extend File read_all() string | IoError:
+    let u8[] all = from([])
+    let bool done = false
+    while (not done):
+        let u8[] chunk = self.read_bytes(65536)??
+        if (chunk.len() == 0):
+            done := true
+        else:
+            all.extend(chunk)
+    return all.to_string()
+
+##:
+Reads one line, without its newline.
+
+A blank line is Some("") and the end of the file is None, so the two are never the same
+answer. A line is read a byte at a time on a descriptor that cannot seek -- a pipe cannot
+give back an over-read -- and in chunks on one that can.
+
+This is the unbuffered read, one system call per line at best. Reading a whole file line
+by line wants BufReader from <io/buf>.
+
+- Returns: The line, or None at end of file.
+- Errors: IoError, when the read failed.
+:##
+extend File readln() Maybe@(string) | IoError:
+    match fd_readln(self.fd):
+        Result.Ok(nom line) -> return line
+        Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+Reads one byte, as text.
+
+- Returns: One character, or an empty string at end of file.
+- Errors: IoError, when the read failed.
+:##
+extend File readch() string | IoError:
+    let u8[] one = self.read_bytes(1)??
+    return one.to_string()
+
+##:
+Writes text and a newline.
+
+Two writes rather than one: joining them would allocate a copy of the line on every call,
+and a file descriptor takes the second write for nothing.
+
+- Parameter data: The text to write.
+- Returns: Nothing.
+- Errors: IoError, when a write failed.
+:##
+extend File writeln(string data) ~ | IoError:
+    self.write(data)??
+    self.write("\n")??
+    return ~
+
+##:
+The current file position, in bytes from the start.
+
+- Returns: The position.
+- Errors: IoError, when the descriptor cannot seek.
+:##
+extend File tell() i64 | IoError:
+    return self.seek(0 as i64, SeekFrom.Current)??
+
+##:
+Reads bytes at an offset, without moving the file position.
+
+The offset is an ARGUMENT, so nothing is shared between two callers and nothing can
+race: this is the answer for concurrent reads of one file, where share() is not. One
+pread(2), so the answer may be shorter than asked for, and it is empty past the end of
+the file.
+
+- Parameter offset: Where to read from, in bytes from the start.
+- Parameter count: The most bytes to take in this one read.
+- Returns: The bytes that were there, empty past the end.
+- Errors: IoError, when the read failed. A pipe cannot be read at an offset.
+:##
+extend File read_at(i64 offset, i32 count) u8[] | IoError:
+    match fd_pread(self.fd, offset, count):
+        Result.Ok(nom chunk) -> return chunk
+        Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+Writes bytes at an offset, without moving the file position.
+
+One pwrite(2). The bytes it covers are replaced and the rest of the file is left alone.
+It answers the count it took, which may be fewer than offered, and the loop is the
+caller's, exactly as it is for a socket's send().
+
+- Parameter offset: Where to write, in bytes from the start.
+- Parameter data: The bytes to write. The buffer stays the caller's.
+- Returns: How many bytes were written.
+- Errors: IoError, when the write failed.
+:##
+extend File write_at(i64 offset, u8[] data) i32 | IoError:
+    match fd_pwrite(self.fd, offset, data):
+        Result.Ok(n) -> return n
+        Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+Opens a second handle over the same open file description.
+
+This is dup(2). The answer is an independent descriptor that this program OWNS: it
+closes on drop even when the receiver is a console constant, and closing either handle
+leaves the other open. The open file description is SHARED, and the offset is part of
+it, so a read through one handle moves the other. That makes share() the
+shared-listener pattern and not the answer for concurrent reads of one file; read_at()
+and write_at() are that answer, because their offset is an argument.
+
+A handle has no .clone() (CE2431), because a copy verb would hide the second
+descriptor. This is the operation that means one, and its name says so.
+
+- Returns: A second owning handle over the same open file description.
+- Errors: IoError, when the descriptor could not be duplicated.
+:##
+extend File share() File | IoError:
+    match fd_dup(self.fd):
+        Result.Ok(fd) -> return File(fd: fd, owned: true)
+        Result.Err(e) -> return Result.Err(e.to_io())
+
+##:
+Whether this handle still holds a descriptor.
+
+- Returns: False once close() has run.
+:##
+extend File is_open() bool:
+    return self.fd >= 0
+
+##:
+Whether the descriptor is a terminal.
+
+Answers false for a file, and for a pipe or a redirect -- which is what a program asks
+before deciding to print colour.
+
+- Returns: True only for a terminal.
+:##
+extend File is_terminal() bool:
+    return fd_isatty(self.fd)
+
+##:
+Closes the file, and CONSUMES the handle.
+
+Only for the caller who has to SEE that the close failed: the destructor closes an owned
+handle anyway, and cannot answer a Result. The call takes the handle, so a read after a
+close is refused while compiling (CE2435) rather than answering EBADF at run time, and
+there is nothing left for the scope exit to close.
+
+A handle held in a struct FIELD cannot be closed this way -- a field read is a borrow,
+and consuming one is CE2411. Let the struct's own drop close it, or take the handle out
+of the wrapper that holds it with into_inner().
+
+- Returns: Nothing. The handle is spent.
+- Errors: IoError, when the descriptor could not be closed.
+:##
+extend File close(nom self) ~ | IoError:
+    close_handle(poke self)??
+    return ~

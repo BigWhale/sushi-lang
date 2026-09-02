@@ -93,6 +93,55 @@ Ranges compile down to plain counting loops — there's no iterator object alloc
 the scenes, so they're free. (`from([...])` builds an array literal; arrays get their own
 [chapter](07-arrays.md) later.)
 
+## Making your own type walkable
+
+`.iter()` is how you walk an array, but `foreach` is not limited to containers. **Any type
+that carries a `next()` answering `Maybe@(T)` is walkable**: the loop calls it until it
+answers `Maybe.None`, and that is the whole protocol. There is no interface to implement
+and no perk to name — the type gains one method and the loop accepts it.
+
+```sushi
+--8<-- "docs/tutorial/examples/03-control-flow/countdown.sushi"
+```
+
+Output:
+
+```
+  3
+  2
+  1
+Liftoff!
+```
+
+The receiver is `poke self` because `next()` has to MOVE the cursor; a `next()` that
+changes nothing is an infinite loop.
+
+**When reading the next item can fail**, the failure goes IN the item: `next()` answers
+`Maybe@(Result@(T, E))`, where the outer `Maybe` says whether there is more and the inner
+`Result` says whether reading it worked. Reading a file line by line is the everyday case:
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn show(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    foreach(line?? in r.lines()):
+        println(line)
+    return Result.Ok(~)
+
+fn main() i32:
+    match show("/etc/hosts"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+```
+
+The `??` on the binder is the short form: it unwraps each item and leaves the function on
+the first failure, exactly as `??` does anywhere else. Leave the marker off and the body
+gets the `Result` itself, which is what lets a loop report one bad line and keep going.
+[Buffered I/O](../stdlib/io/buf.md) has the whole reading surface.
+
 ## `break` and `continue`
 
 Inside any loop, `break` exits the loop immediately, and `continue` skips to the next
@@ -127,7 +176,10 @@ won't let a stray `break` slip through.
   progress.
 - `foreach(x in source):` iterates; ranges give you `start..end` (exclusive), `start..=end`
   (inclusive), and automatic descending order.
-- `.iter()` lets `foreach` walk an array.
+- `.iter()` lets `foreach` walk an array. Any other type becomes walkable by carrying a
+  `next()` that answers `Maybe@(T)` — the loop calls it until it answers `Maybe.None`.
+- A fallible iterator puts the failure in its item (`Maybe@(Result@(T, E))`), and `??` on
+  the binder is the short form for leaving on the first one.
 - `break` leaves a loop early; `continue` jumps to the next iteration.
 
 We've been calling `println` and `from` without thinking about it. Time to write our own

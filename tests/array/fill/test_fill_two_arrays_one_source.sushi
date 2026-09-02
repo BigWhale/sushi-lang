@@ -5,7 +5,6 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_CONTAINS: "a=2 b=3 towel=MOSTLY HARMLESS"
 
-use <io/stdio>
 use <collections/strings>
 
 fn run_test() i32:

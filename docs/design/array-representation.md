@@ -51,6 +51,35 @@ define internal { i32, [2 x i64] } @take({ i32, i32, ptr } %a)
   %v = load { i32, i32, ptr }, ptr %v_struct        ; the call site loads first
 ```
 
+## Two producers that disagreed, and how the drift was found
+
+`to_bytes()` and `split()` kept the old shape long after the rule was written. Each
+`alloca`d a slot, stored the returned struct into it and handed back the ADDRESS, so a
+`u8[]` from a string and a `u8[]` from anything else were different things in the same
+position.
+
+The cost was paid by whoever consumed one. Three sites grew a
+"if it is a pointer to a dynamic array, load it" branch --
+`statements/variables.py`, `statements/initialization.py` and `types/core/inference.py` --
+and one of them named `to_bytes()` in its comment. Any consumer WITHOUT that branch
+crashed: `fd_pwrite(fd, 0, s.to_bytes())` was CE0000, an internal error, while
+`fd_pwrite(fd, 0, other.clone())` in the same position worked, because `.clone()` obeys
+the rule. The regression test is `tests/array/value_seam/`.
+
+**The two producers now answer the descriptor, and the three sites STAY.** They were
+instrumented to crash if they ever fired and the suite was re-run: five tests still hit
+them, so they are a normalisation point rather than a workaround. Two producers remain
+and they are different in kind:
+
+- `f.read_bytes(n)`, the file builtin, is the SAME violation and is deleted rather than
+  repaired -- HANDLES.md Phase 5 rewrites it in Sushi over `fd_read`.
+- `let i32[] b = w.items` is NOT a violation. A field read is a GEP by nature -- the
+  paragraph above says so -- and the `let` is where it must be loaded and deep-copied.
+
+The lesson is narrow and worth keeping: a defensive branch is only dead once something
+has proved it cannot fire. Deleting the two producers and re-running the suite would have
+come back green either way.
+
 ## Why not make `ll_type` a pointer instead
 
 That would make the type system agree with what `emit_expr` used to produce, and it was

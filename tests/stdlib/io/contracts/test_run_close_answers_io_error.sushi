@@ -1,0 +1,31 @@
+# close() moved onto IoError with the rest of the data path, so a function that reads and
+# then closes explicitly needs no conversion on its last line.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nclosed\n"
+use <io/files>
+use <io/fs>
+
+fn read_then_close(string path) string | IoError:
+    match open(path, FileMode.Read()):
+        Result.Ok(nom f) ->
+            let string text = f.read_all()??
+            f.close()??
+            println("{text}")
+            return Result.Ok("closed")
+        Result.Err(e) -> return Result.Err(e)
+
+fn main() i32:
+    match open("contract_close_probe.txt", FileMode.Write()):
+        Result.Ok(w) -> w.write("Mostly Harmless")
+        Result.Err(_) ->
+            println("open failed")
+            return Result.Ok(1)
+
+    let string state = read_then_close("contract_close_probe.txt").realise("failed")
+    println("{state}")
+
+    remove("contract_close_probe.txt").realise(0)
+    return Result.Ok(0)

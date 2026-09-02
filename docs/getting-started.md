@@ -152,7 +152,7 @@ uv sync --dev
 uv run python sushi_lang/sushi_stdlib/build.py
 
 # This generates LLVM bitcode for:
-# - collections/strings, io/stdio, io/files
+# - collections/strings, io/fs, io/files
 # - time, math, sys/env, random
 ```
 

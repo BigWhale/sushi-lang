@@ -6,7 +6,7 @@
 # Every stage nests inside the match arm that produced its value, because a
 # match payload is a borrow and lifting one out with `x := payload` is CE2411.
 
-use <io/stdio>
+use <io/fs>
 use <io/files>
 use <collections/strings>
 use <compression/zlib>
@@ -20,24 +20,25 @@ fn read_all(string path) u8[]:
         Result.Err(_) ->
             return Result.Err(StdError.Error)
     match open(path, FileMode.ReadB()):
-        FileResult.Ok(f) ->
-            let u8[] b = f.read_bytes(size)
+        Result.Ok(nom f) ->
+            let u8[] nothing = from([])
+            let u8[] b = f.read_bytes(size).realise(nothing)
             f.close()
             if (b.len() < size):
                 return Result.Err(StdError.Error)
             return Result.Ok(b)
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             return Result.Err(StdError.Error)
     return Result.Err(StdError.Error)
 
 # emit: replace the destination file with these bytes.
 fn emit(string dst, u8[] data) i32:
     match open(dst, FileMode.WriteB()):
-        FileResult.Ok(f) ->
+        Result.Ok(nom f) ->
             f.write_bytes(data)
             f.close()
             return Result.Ok(0)
-        FileResult.Err(_) ->
+        Result.Err(_) ->
             stderr.write("cannot write {dst}\n")
             return Result.Ok(2)
     return Result.Ok(2)

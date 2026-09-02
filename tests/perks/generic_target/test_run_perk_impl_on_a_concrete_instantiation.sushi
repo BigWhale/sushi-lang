@@ -1,0 +1,21 @@
+# A perk implementation may target one INSTANTIATION of a generic struct. The target is
+# a constraint, exactly as it is for an extension method (#393): the implementation
+# applies to Box@(i32) and to nothing else.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "boxed 7\n"
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T item
+
+extend Box@(i32) with Show:
+    fn show() string:
+        return "boxed {self.item}"
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println(b.show())
+    return Result.Ok(0)

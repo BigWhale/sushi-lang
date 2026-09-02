@@ -89,6 +89,44 @@ extend Point with Displayable:
 - Can implement multiple perks for the same type
 - Can access struct fields via `self`
 
+### A generic type may implement a perk
+
+The target may name a type parameter, and then every instantiation the program uses gets
+its own copy of the implementation:
+
+```sushi
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "boxed {self.item}"
+
+fn render@(S: Show)(S thing) string:
+    return Result.Ok(thing.show())
+
+fn main() i32:
+    let Box@(i32) n = Box(7)
+    println(render(n).realise("failed"))
+    return Result.Ok(0)
+```
+
+A concrete type argument is a **constraint** rather than a parameter name, the same rule
+an extension target follows: `extend Box@(i32) with Show` applies to `Box@(i32)` and to
+nothing else, and a partially concrete target such as `extend Pair@(i32, U) with Show` is
+**CE2098** -- there is no partial specialization. An instantiation the program never
+names costs nothing: no copy is made.
+
+`Drop` is no exception: a generic target may implement it, and each instantiation's copy
+carries it. The orphan rule still applies and reads the target's BASE name, so only the
+unit that declares `Box` may write `extend Box@(T) with Drop` (**CE4012**). A wrapper
+whose fields already own needs no `Drop` of its own -- destroying its fields destroys the
+handle -- so declare one when the wrapper has something of its OWN to say, such as
+flushing a buffer before the handle closes.
+
 ## Generic Constraints
 
 Perks enable type constraints on generic types:
@@ -416,8 +454,14 @@ perk Iterator@(Item):
 # CE4010: perk Iterator cannot have type parameters
 ```
 
-**Status:** Planned for future release (Phase 6). The compiler now rejects the
-declaration outright (**CE4010**) — it used to be silently accepted and ignored.
+**Status:** Planned for future release. The compiler rejects the declaration outright
+(**CE4010**) — it used to be silently accepted and ignored.
+
+**This example is not a missing feature, though.** Iteration needs no perk: `foreach`
+walks any type carrying `next()` that answers `Maybe@(T)`, resolved as a method rather
+than through a contract. That is a PROTOCOL, and it exists precisely because a perk
+cannot name what it yields — see
+[Iteration (design)](design/iteration.md), ruling 1.
 
 ### 4. No Perk Inheritance
 
