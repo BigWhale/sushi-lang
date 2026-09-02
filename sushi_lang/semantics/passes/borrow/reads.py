@@ -122,9 +122,13 @@ def is_bare_enum_constant(checker: 'BorrowChecker', expr: Optional[Expr]) -> boo
         return False
     if expr.receiver.id in checker.borrow_state:
         return False  # a local shadows the enum name
-    tables = checker.tables
-    enums = getattr(tables, "enums", None) if tables is not None else None
-    enum_type = getattr(enums, "by_name", {}).get(expr.receiver.id) if enums else None
+    # A GENERIC enum's bare variant carries the interned instance as a stamp: the
+    # receiver is written `Maybe` and the table holds `Maybe<string>` (#545).
+    enum_type = getattr(expr, "resolved_enum_type", None)
+    if enum_type is None:
+        tables = checker.tables
+        enums = getattr(tables, "enums", None) if tables is not None else None
+        enum_type = getattr(enums, "by_name", {}).get(expr.receiver.id) if enums else None
     get_variant = getattr(enum_type, "get_variant", None)
     return get_variant is not None and get_variant(expr.member) is not None
 

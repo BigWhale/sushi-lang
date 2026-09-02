@@ -110,7 +110,7 @@ def _propagate_array_element_type(validator: 'TypeValidator', value_expr: 'Expr'
 def _propagate_to_enum_args(validator: 'TypeValidator', node: Expr,
                             enum_type: EnumType) -> None:
     """Recursively propagate types to enum constructor arguments."""
-    if not node.args:
+    if not getattr(node, "args", None):
         return
 
     variant_name = None
@@ -164,14 +164,24 @@ def _propagate_to_struct_args(validator: 'TypeValidator', node: Expr,
 
 def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
                                  enum_type: EnumType) -> None:
-    """Propagate generic enum type (Maybe, Either, user-defined) to constructor."""
-    if not isinstance(node, (EnumConstructor, DotCall)):
+    """Propagate generic enum type (Maybe, Either, user-defined) to constructor.
+
+    Three spellings construct a variant: `EnumConstructor`, the `DotCall`
+    `Maybe.None()`, and the bare `Maybe.None`, which parses as a field read on the
+    type NAME. The bare one took no stamp, so a generic enum's payload-free variant
+    reached the borrow pass and the backend as a read of an unknown owner (#545).
+    """
+    from sushi_lang.semantics.ast import MemberAccess
+
+    if not isinstance(node, (EnumConstructor, DotCall, MemberAccess)):
         return
 
     enum_name = None
     if isinstance(node, EnumConstructor):
         enum_name = node.enum_name
-    elif isinstance(node, DotCall) and isinstance(node.receiver, Name):
+    elif (isinstance(node.receiver, Name)
+          and node.receiver.id not in validator.variable_types):
+        # Local-wins (#296): a local named after the enum is a value, not the type.
         enum_name = node.receiver.id
 
     if not (enum_name and isinstance(enum_type, EnumType)):

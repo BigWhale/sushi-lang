@@ -184,6 +184,18 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **A bare `Maybe.None` on a generic enum constructs the value.** A payload-free variant
+  spelled without parentheses parses as a field read on the type name, and only the
+  parenthesized spelling reached the typecheck pass. On a MONOMORPHIZED generic enum
+  the bare spelling then carried no type -- the borrow pass looked `Maybe` up by its
+  bare name where the table holds `Maybe<string>`, read the initializer as a borrow, and
+  moving the binding was CE2411 (#545); a program that never moved it reached the
+  backend and was a CE0056 internal error. The hole was wider than the report: a bare
+  variant of a PLAIN enum skipped the variant check, so `Shape.Nope` compiled. The bare
+  spelling now takes the same path as `Maybe.None()`: propagation stamps the interned
+  instance on it, validation checks the variant (CE2045), and the borrow pass and the
+  backend read the stamp. Every position that hands a value its type is covered -- a
+  `let`, a `return`, a constructor argument, a call argument, a rebind.
 - **An empty `from([])` takes its element type from the position, everywhere.** As a
   `.realise()` default and as a bare extension's `return` it reached the backend with no
   element type and was CE0000, a compiler crash on ordinary syntax (#544). Three

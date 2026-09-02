@@ -1,0 +1,24 @@
+# Every position that hands a bare generic variant its type: a return, a constructor
+# argument, a call argument, and a rebind. One propagation rule serves them all (#545).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "false false 7 false\n"
+
+struct Holder:
+    Maybe@(string) name
+
+fn none_ret() Maybe@(string):
+    return Result.Ok(Maybe.None)
+
+fn take(nom Maybe@(i32) m) i32:
+    return Result.Ok(m.realise(7))
+
+fn main() i32:
+    let Holder h = Holder(Maybe.None)
+    let Maybe@(string) r = none_ret().realise(Maybe.Some("wrong"))
+    let i32 t = take(nom Maybe.None).realise(-1)
+    let Maybe@(string) again = Maybe.Some("towel")
+    again := Maybe.None
+    println("{r.is_some()} {h.name.is_some()} {t} {again.is_some()}")
+    return Result.Ok(0)

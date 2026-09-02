@@ -1,0 +1,8 @@
+# The same check on a generic enum, whose interned name is `Maybe<i32>` and not `Maybe`
+# (#545).
+# EXPECT_ERROR_CODE: CE2045
+
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Nope
+    println("{m.is_some()}")
+    return Result.Ok(0)
