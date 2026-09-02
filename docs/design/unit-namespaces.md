@@ -485,6 +485,14 @@ alias folds into `Sign`, and what is left is the `EnumConstructor` path the comp
 already takes. The `DotCall` ladder in `visit_dotcall` (`passes/types/visitor.py:410`)
 gains no rung: the namespace check is the rung `_resolve_external_call` already occupies.
 
+One phase runs BEFORE the fold: propagation, which stamps a GENERIC enum's constructor
+with the instantiation its position declares. It reads the enum's name through the alias
+for itself (`_enum_receiver_name`, `passes/types/propagation.py`), because a
+`my_math.Slot.Filled(x)` reaches it with the `MemberAccess` receiver still in place; read
+as a bare name only, the qualified spelling of a generic enum carried no stamp and the
+backend reported the program as a compiler bug (CE0113). The bare `my_math.Slot.Empty`
+takes the same reading (#545).
+
 ### 5.1 The grammar
 
 Two rules gain a qualifier, both unambiguous because a `.` cannot mean anything else in

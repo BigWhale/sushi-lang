@@ -197,6 +197,15 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A generic enum's constructor works behind an alias.** `slot.Slot.Filled("x")` with
+  `use "slot" as slot` reached the backend as a CE0113 compiler bug -- "semantic
+  analysis should have set resolved_enum_type" -- and so did the bare `slot.Slot.Empty`.
+  Propagation stamps a generic enum's constructor with the instantiation its position
+  declares, and it read the receiver as a bare name only; the fold that turns the alias
+  into `Slot` runs later, during validation. Propagation now reads the enum's name
+  through the alias for itself, so both qualified spellings take the type of a `let`, a
+  return, a struct argument, a call argument and a rebind exactly as the bare ones do.
+  Found under #545.
 - **A late instantiation gets its generic-target templates.** A type named only inside a
   generic body -- `let Box@(T) b` in `outer@(T)`, or the return of a generic it calls --
   exists only once that body is substituted, after the extension and perk-implementation

@@ -1,0 +1,5 @@
+# A generic enum behind an alias, for the qualified constructor batch: a payload
+# variant and a payload-free one, so both spellings of a variant have a target.
+public enum Slot@(T):
+    Filled(T)
+    Empty
