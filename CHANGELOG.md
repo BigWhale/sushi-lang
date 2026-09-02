@@ -184,6 +184,17 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **A late instantiation gets its generic-target templates.** A type named only inside a
+  generic body -- `let Box@(T) b` in `outer@(T)`, or the return of a generic it calls --
+  exists only once that body is substituted, after the extension and perk-implementation
+  copies were cut, so `b.show()` and `b.label()` were CE2008 on a `Box@(string)` that
+  plainly existed (found under #555). Three gaps in the same path closed with it: a copy's
+  body walk bound no `let` local, so a generic called with one was never collected
+  (CE2061); a `let` annotation's instantiation lived in the substitutor's cache and was
+  never interned (CE2008 on the type itself); and a `@(S: Show)` constraint on a late type
+  depended on the order the copies were cut in. Every instantiation the tables hold with
+  no copy yet is cut after the functions, to a fixpoint, and the constraint check reads
+  the templates beside the registered copies.
 - **A generic call's substituted signature reaches the instantiation collector.**
   `match buf_reader(nom f, 4096): Result.Ok(nom r) -> r.into_inner()` was CE2008
   "undefined function" while the `let BufReader@(File) r = ...` form compiled (#549), and

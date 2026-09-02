@@ -388,6 +388,21 @@ Generate concrete types from generic definitions.
 3. Create specialized struct/function
 4. Add to AST as concrete definition
 
+### A late instantiation
+
+A generic BODY names types the collector never saw: `let Box@(T) b` inside `outer@(T)` is
+a `Box@(string)` only once `outer@(string)` is substituted. A copy binds its `let` locals
+while it walks its body for nested generic calls, so a generic called with one is collected
+like one called with a parameter, and it interns every type its `let` annotations name,
+exactly as it interns its signature's.
+
+The generic-target extension and perk-implementation copies are first cut from the
+collector's set, before the functions are monomorphized. Every instantiation interned after
+that -- the tables are the authority on what exists -- gets its copies afterwards, and a
+copy's body can instantiate more functions, so this runs to a fixpoint (#555). A perk
+constraint on such a type reads the templates as well as the registered copies, so its
+answer does not depend on the order the copies were cut in.
+
 ### Example
 
 **Generic definition:**

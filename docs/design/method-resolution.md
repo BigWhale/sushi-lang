@@ -199,6 +199,14 @@ CE4006 for a type that does. It also puts `Drop` within reach: `TypeQueries.drop
 the perk table, so the copy registered here is in the set before `derive`, `effects` and
 the `borrow` pass ask whether the instantiation owns a resource.
 
+**A LATE instantiation gets its copy too** (#555). A type named only inside a generic body
+-- `let Box@(T) b` in `outer@(T)`, or the return of a generic it calls -- is interned while
+that body is substituted, after the first cut. Every instantiation the tables hold with no
+copy yet is cut afterwards, to a fixpoint, so `Box@(string)` has its `show()` whether the
+program spelled it or a substitution produced it. The constraint check reads the templates
+beside the registered copies: a template applies to every instantiation of its base name by
+construction, so `@(S: Show)` holds for a late `Box@(string)` before its copy is cut.
+
 **Why the overlap is rejected rather than resolved by most-specific-wins.** Under
 specialization, whether the template's body is dead code would depend on which instantiations
 exist ELSEWHERE in the program: with only `Box@(string)` live the template method is compiled
