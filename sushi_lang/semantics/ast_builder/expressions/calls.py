@@ -4,7 +4,8 @@ from typing import List, Union, Tuple, Optional, TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.ast import Expr, Call, MethodCall, Name, Spread
 from sushi_lang.semantics.ast_builder.types.generics import parse_type_list
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, find_tree_recursive, first_name, ice, expect
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
+    first_tree, find_tree_recursive, first_name, ice, expect, mark_nom)
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -35,9 +36,7 @@ def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[
                             # would dispatch on. At the ARGUMENT level, not in `?unary`, so
                             # `nom 1000 as i64` marks the cast and not just the literal.
                             marked = ast_builder._expr(expr_node.children[-1])
-                            marked.nom_marked = True
-                            marked.nom_span = span_of(expr_node.children[0])
-                            args.append(marked)
+                            args.append(mark_nom(marked, expr_node.children[0]))
                         else:
                             args.append(ast_builder._expr(expr_node))
                     field_names = None

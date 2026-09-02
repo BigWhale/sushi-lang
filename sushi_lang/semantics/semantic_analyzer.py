@@ -449,6 +449,12 @@ class SemanticAnalyzer:
                 name_span=getattr(extend_def, "name_span", None),
                 err_type=getattr(extend_def, "err_type", None),
                 err_span=getattr(extend_def, "err_span", None),
+                # The receiver's MODE, because the CALL SITE reads it off this record:
+                # a `poke self` receiver arrives by pointer and a `nom self` one is
+                # consumed. Dropped here, every generic-target method's receiver was a
+                # private copy -- a write was lost (#253's shape) and a consuming
+                # receiver was freed twice, in the method and again at the call site.
+                self_mode=getattr(extend_def, "self_mode", None),
             )
             self.extensions.add_method(extension_method)
 

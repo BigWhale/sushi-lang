@@ -1,0 +1,32 @@
+# A take dismantles the receiver, so `drop()` does NOT run: a destructor written for a
+# value that goes away WHOLE would be told it still owns the field the caller is taking.
+# The method doing the take does the finishing work itself.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "before\nafter\nok\n"
+use <io/fs>
+
+struct Sink:
+    File out
+    i32 tag
+
+extend Sink with Drop:
+    fn drop(poke self) ~:
+        println("sink drop")
+
+fn run() ~ | IoError:
+    let File f = open("/tmp/sushi_field_take_drop.txt", FileMode.Write())??
+    let Sink s = Sink(f, 1)
+    println("before")
+    let File back = nom s.out
+    println("after")
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

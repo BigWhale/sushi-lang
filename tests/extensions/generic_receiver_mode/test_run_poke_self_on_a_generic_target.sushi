@@ -1,0 +1,20 @@
+# The same rule for `poke self`: the receiver arrives by POINTER, so the write reaches
+# the owner. With the mode lost the method wrote to a private copy and the change was
+# silently dropped, which is #253's shape on a generic target.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "0\n42\n"
+struct Cell@(T):
+    T item
+    i32 count
+
+extend Cell@(T) bump(poke self) ~:
+    self.count := 42
+
+fn main() i32:
+    let Cell@(string) c = Cell("payload", 0)
+    println("{c.count}")
+    c.bump()
+    println("{c.count}")
+    return Result.Ok(0)

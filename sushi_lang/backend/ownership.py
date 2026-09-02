@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Optional
 from llvmlite import ir
 
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.ast import Name
+from sushi_lang.semantics.ast import MemberAccess, Name
 from sushi_lang.semantics.ownership import (
     ConsumingUse,
     Ownership,
@@ -123,12 +123,35 @@ def _provenance_of(source, use: ConsumingUse) -> Provenance:
 
 def _mark_moved(codegen: 'LLVMCodegen', source) -> None:
     """Record that the source no longer owns the value, so scope exit skips it."""
+    if isinstance(source, MemberAccess):
+        _spend_taken_from(codegen, source)
+        return
     if not isinstance(source, Name):
         return
     codegen.memory.mark_struct_as_moved(source.id)
     da = getattr(codegen, "dynamic_arrays", None)
     if da is not None:
         da.mark_as_moved(source.id)
+
+
+def _spend_taken_from(codegen: 'LLVMCodegen', source: MemberAccess) -> None:
+    """A marked field take spends its receiver: destroy the rest, then mark it moved.
+
+    Reaching here at all is the stamp: a MemberAccess carries Provenance.OWNED only
+    where the borrow pass read it as a take (ruling R28), and every other field read is
+    BORROWED, which never decides MOVE. What suppresses the receiver's own free is the
+    whole value and not one field, so the fields left behind are destroyed here -- the
+    scope exit is about to skip them.
+    """
+    receiver = source.receiver
+    if not isinstance(receiver, Name):
+        return
+    from sushi_lang.backend.destructors import emit_struct_fields_except
+    slot = codegen.memory.try_find_local_slot(receiver.id)
+    receiver_type = codegen.memory.find_semantic_type(receiver.id)
+    if slot is not None and receiver_type is not None:
+        emit_struct_fields_except(codegen, slot, receiver_type, source.member)
+    _mark_moved(codegen, receiver)
 
 
 def _clone(codegen: 'LLVMCodegen', value: ir.Value,

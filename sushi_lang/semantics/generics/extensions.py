@@ -84,6 +84,11 @@ def monomorphize_extension_method(
         err_type=concrete_err_type,
         err_span=getattr(generic_method, "err_span", None),
         method_type_args=tuple(method_type_args),
+        # The receiver's MODE is part of the signature, so it has to survive the copy.
+        # Losing it made every generic-target method's `self` by value: a `poke self`
+        # write reached a private copy, and a `nom self` receiver registered as a borrow
+        # so a field take out of it answered CE2411 (ruling R28).
+        self_mode=getattr(generic_method, "self_mode", None),
     )
 
 

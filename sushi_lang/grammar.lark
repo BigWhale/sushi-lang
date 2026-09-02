@@ -67,11 +67,14 @@ variadic_param: ELLIPSIS type NAME
 
 rebind_stmt: postfix ASSIGN_REBIND expr _NEWLINE
 
-return_stmt: "return" expr _NEWLINE?
+# `nom` marks a field TAKE (`return nom self.out`). The marker rides on the statement
+# rather than on `?unary`, for the reason `nom_arg` states: at the expression level it
+# would bind to the innermost operand and mark a cast's operand instead of the cast.
+return_stmt: "return" NOM? expr _NEWLINE?
 print_stmt: "print" "(" expr ")" _NEWLINE
 println_stmt: "println" "(" expr ")" _NEWLINE
 
-let_stmt: "let" [type] NAME "=" expr _NEWLINE
+let_stmt: "let" [type] NAME "=" NOM? expr _NEWLINE
         | "let" [type] NAME "=" lambda_block       -> let_stmt
 call_stmt: postfix _NEWLINE
 

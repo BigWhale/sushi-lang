@@ -276,7 +276,7 @@ fn take(nom string s) ~:
     return Result.Ok(~)
 
 fn main() i32:
-    let Wrapper w = Wrapper(inner: "Hello, world!")
+    let Wrapper w = Wrapper(inner: "Mostly Harmless")
 
     # ERROR CE2411: cannot consume 'w.inner': another owner keeps this value
     # take(nom w.inner)
@@ -287,10 +287,53 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-There are no partial moves: `w` above is never marked moved, only `w.inner`'s *value* is read (and,
-via `.clone()`, duplicated). A `let` behaves the same way for a source that reads through an owner:
-`let string x = w.inner` binds `x` as a borrow of `w`, not an independent copy -- see
+A `let` behaves the same way for a source that reads through an owner: `let string x = w.inner`
+binds `x` as a borrow of `w`, not an independent copy -- see
 [Borrowed `let` Bindings](#borrowed-let-bindings) below.
+
+### Taking a Field Out
+
+A field read is a borrow, and that left one thing unspellable: handing a handle back **out** of the
+value that holds it. `nom` marks the take:
+
+```sushi
+use <io/fs>
+
+struct Sink:
+    File out
+    string label
+
+fn run() ~ | IoError:
+    let File f = open("/tmp/report.txt", FileMode.Write())??
+    let Sink s = Sink(f, "report")
+
+    let File back = nom s.out    # the take: `back` owns the handle now
+    back.write("Mostly Harmless\n")??
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("done")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)
+```
+
+The marker is legal in a `let` initializer and in a `return`, one step off a bare name, and only
+where that name is a local the function **owns** -- through a `peek`/`poke` parameter or a
+`let`-borrow it is still `CE2411`, and so is a chain such as `nom a.b.c`. A field that owns nothing
+is copied as it always was; the marker changes nothing there.
+
+**A take spends the whole receiver.** There are no partial moves: what suppresses `s`'s own free is
+the whole value and not one field, so the fields left behind are destroyed at the take and `s` is
+finished. A later mention of it is `CE2405`. If the type declares `Drop`, that `drop()` does **not**
+run -- a destructor is written for a value that goes away whole, so the method doing the take does
+the finishing work itself:
+
+```sushi
+extend Sink into_inner(nom self) File:
+    return nom self.out
+```
 
 ### Writing an Array Element
 

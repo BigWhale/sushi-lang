@@ -1,0 +1,17 @@
+# A take needs a value the function OWNS. A `peek` parameter names storage the caller
+# keeps and still frees, so taking a field out of it would be a second owner: CE2411,
+# the same code every other read through a live owner answers.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2411
+use <io/fs>
+
+struct Sink:
+    File out
+    i32 tag
+
+fn steal(peek Sink s) File:
+    return nom s.out
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

@@ -1,0 +1,24 @@
+# The all-or-nothing rule CE2433 states for a match arm, carried over to a struct: what
+# suppresses the receiver's free is the WHOLE value and not one field, so a take spends
+# it. A later mention is CE2405 -- a real move, with the marker visible on the page.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2405
+use <io/fs>
+
+struct Sink:
+    File out
+    i32 tag
+
+fn run() ~ | IoError:
+    let File f = open("/tmp/sushi_field_take_spent.txt", FileMode.Write())??
+    let Sink s = Sink(f, 1)
+    let File back = nom s.out
+    println("{s.tag}")
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

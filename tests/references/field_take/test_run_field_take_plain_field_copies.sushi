@@ -1,0 +1,15 @@
+# The marker bites only where there is something to take. A field that owns no heap is
+# copied, exactly as an unmarked read of it is, and the receiver is untouched.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "5 5\n"
+struct Pair:
+    i32 first
+    i32 second
+
+fn main() i32:
+    let Pair p = Pair(5, 9)
+    let i32 taken = nom p.first
+    println("{taken} {p.first}")
+    return Result.Ok(0)

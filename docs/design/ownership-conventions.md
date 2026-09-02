@@ -207,7 +207,7 @@ Three, not four:
 
 | provenance | meaning | expression shapes |
 |---|---|---|
-| **OWNED** | a registered owner in this scope | a bare `Name` bound by `let` or a by-value parameter |
+| **OWNED** | a registered owner in this scope | a bare `Name` bound by `let` or a by-value parameter, **and a marked field TAKE** — `nom s.field`, the one field read that is not a borrow (P7 ruling R28, `docs/design/borrow-model.md` S10c) |
 | **BORROWED** | names storage owned elsewhere, for a shorter lifetime | a `match` payload binding, a `foreach` binding, a `peek`/`poke` parameter, a `let` bound from any of these, **and every read THROUGH a still-live owner** — `s.field`, `own.get()`, `arr[i]`, `list.get(i)??` |
 | **FRESH** | nothing owns it yet | a constructor, a call result, `.clone()`, a literal, `arr.pop()` / `List.pop()` (which REMOVE the element, so the container stops owning it) |
 

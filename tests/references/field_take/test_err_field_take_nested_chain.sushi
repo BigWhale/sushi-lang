@@ -1,0 +1,25 @@
+# One step only. A chain reads through the intermediate field, which is a borrow, so the
+# marker cannot make it a take -- CE2411, and `.clone()` is what the help offers.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2411
+use <io/fs>
+
+struct Inner:
+    File out
+
+struct Outer:
+    Inner held
+    i32 tag
+
+fn run() ~ | IoError:
+    let File f = open("/tmp/sushi_field_take_chain.txt", FileMode.Write())??
+    let Outer o = Outer(Inner(f), 1)
+    let File back = nom o.held.out
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

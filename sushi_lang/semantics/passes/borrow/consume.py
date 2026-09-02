@@ -13,6 +13,7 @@ from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceTyp
 from .diagnostics import emit_consume_of_borrow, emit_consume_of_read
 from .reads import read_type, reads_through_owner, root_owner
 from .state import BorrowState
+from .takes import field_take, spend
 from .writes import check_owner_not_borrowed
 
 if TYPE_CHECKING:
@@ -49,6 +50,11 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
     """Where the value at a consuming use came from -- the half only semantics knows."""
     if isinstance(expr, Name):
         return name_provenance(checker, expr.id)
+
+    # A marked field take is the one read through an owner that is not a borrow: the
+    # owner is a local this function holds, and the take spends it (ruling R28).
+    if field_take(checker, expr) is not None:
+        return Provenance.OWNED
 
     if reads_through_owner(checker, expr):
         return Provenance.BORROWED
@@ -92,6 +98,11 @@ def consume(checker: 'BorrowChecker', expr: Expr, use) -> None:
 
     if isinstance(expr, Name):
         consume_named(checker, expr.id, provenance, expr.loc)
+        return
+
+    take = field_take(checker, expr)
+    if take is not None:
+        spend(checker, take[0], expr.loc)
         return
 
     # A read through a live owner has no owner to mark moved, but it CAN be rejected
@@ -160,6 +171,13 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
 
     dest = checker.borrow_state.get(stmt.name)
     if dest is None:
+        return
+
+    # A take, so the binding OWNS what it was handed and the receiver is spent. Before
+    # the decision below, which reads the source's own state and has none for a take.
+    take = field_take(checker, expr)
+    if take is not None:
+        spend(checker, take[0], expr.loc)
         return
 
     src_state = checker.borrow_state.get(expr.id) if isinstance(expr, Name) else None

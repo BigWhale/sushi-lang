@@ -1,0 +1,31 @@
+# What the take is for: `into_inner()` on a `nom self` receiver. The method owns its
+# receiver, hands the handle back, and the wrapper's other fields go with it.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "wrapped\nok\n"
+use <io/fs>
+
+struct Sink:
+    File out
+    string label
+
+extend Sink into_inner(nom self) File:
+    return nom self.out
+
+fn run() ~ | IoError:
+    let File f = open("/tmp/sushi_field_take_method.txt", FileMode.Write())??
+    let i32 n = 1
+    let Sink s = Sink(f, "wrapped {n}")
+    println("wrapped")
+    let File back = s.into_inner()
+    back.write("Mostly Harmless\n")??
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

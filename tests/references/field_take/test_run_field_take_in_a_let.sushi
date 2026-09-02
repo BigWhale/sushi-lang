@@ -1,0 +1,27 @@
+# A marked field take: `nom s.out` hands the handle out of a value this function owns.
+# The handle still works afterwards, and it closes exactly once.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "taken 1\nok\n"
+use <io/fs>
+
+struct Sink:
+    File out
+    i32 tag
+
+fn run() ~ | IoError:
+    let File f = open("/tmp/sushi_field_take_let.txt", FileMode.Write())??
+    let Sink s = Sink(f, 1)
+    println("taken {s.tag}")
+    let File back = nom s.out
+    back.write("Mostly Harmless\n")??
+    back.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

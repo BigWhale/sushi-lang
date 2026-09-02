@@ -315,6 +315,46 @@ TEMPORARY was CE2404, because a temporary had no address. It has one now -- the 
 what it owns in a slot for the whole statement, which `nom` needed in any case. A read
 through a live owner still has none, and is still CE2404.
 
+## 10c. The third boundary: a field take
+
+**Added 2026-09-02, P7 ruling R28.** A field read is a borrow, which left one shape with
+no spelling at all: handing a handle back OUT of the value that holds it. A struct that
+owns a `File` could never give it away, so `close()` on a field-held handle was CE2411
+with no escape -- and R26 promised `into_inner()` as that escape.
+
+`nom` marks the take, in the two positions a taken value can go to:
+
+```sushi
+extend BufWriter@(W) into_inner(nom self) W | IoError:
+    self.flush()??
+    return nom self.sink            # a return
+
+let File back = nom wrapper.out     # a let
+```
+
+Four conditions, each of them load-bearing:
+
+| condition | why |
+|---|---|
+| the marker is written | an unmarked field read stays the borrow it has always been, so nothing existing changes meaning |
+| ONE step off a bare NAME | there is a local to spend, and no intermediate field is read through. `nom a.b.c` is CE2411 |
+| the name is a local this function OWNS | a `peek`/`poke` parameter, a `let`-borrow or a match binding names storage the caller keeps, so a take out of one is CE2411 |
+| the field OWNS something | a field that owns nothing has nothing to hand over, so the marker is an ordinary copy there and the receiver is untouched |
+
+**A take spends the WHOLE receiver.** This is CE2433's all-or-nothing rule read on a
+struct instead of a variant: what suppresses the receiver's own free is the whole value
+and not one field, so a field left behind would be freed by nobody. The remaining owning
+fields are destroyed at the take, in declaration order, and a later mention of the
+receiver is CE2405 -- a real move, with the marker visible on the page.
+
+**`drop()` does not run.** A destructor is written for a value that goes away whole, and
+here one field survives it, so a `drop()` that flushed into the taken handle or closed it
+would be told it still owns what the caller is taking. The method performing the take
+does the finishing work itself, which is exactly what `into_inner()` spells above.
+
+Like the pattern boundary, the mode is written once: there is no declaration side to
+agree with, so CE2427's both-ends rule has no field-take twin either.
+
 ## 11. Not designed
 
 - **`nom self`.** A consuming RECEIVER. It did NOT fall out of ruling R11's machinery: a
