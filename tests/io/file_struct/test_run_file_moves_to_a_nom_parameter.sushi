@@ -6,6 +6,7 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "callee wrote\ndone\n"
+use <io/files>
 use <io/fs>
 
 fn eat(nom File f) ~ | IoError:
@@ -21,4 +22,5 @@ fn main() i32:
                 Result.Ok(_) -> println("done")
                 Result.Err(_) -> println("callee failed")
         Result.Err(_) -> println("open failed")
+    remove("file_struct_move.txt").realise(0)
     return Result.Ok(0)

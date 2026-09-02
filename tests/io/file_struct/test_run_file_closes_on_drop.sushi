@@ -7,6 +7,7 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "wrote\nread Mostly Harmless\n"
+use <io/files>
 use <io/fs>
 
 fn write_it() ~ | IoError:
@@ -28,4 +29,5 @@ fn main() i32:
     match read_it():
         Result.Ok(line) -> println("read {line}")
         Result.Err(_) -> println("read failed")
+    remove("file_struct_drop.txt").realise(0)
     return Result.Ok(0)
