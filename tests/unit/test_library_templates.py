@@ -724,7 +724,9 @@ def test_serialize_perk_impl_record_shape():
     assert record["perk"] == "Doubler"
     assert record["source"].startswith("extend i32 with Doubler:")
     assert record["source"].endswith("\n")
-    assert record["methods"] == [{"name": "doubled", "symbol": "i32_doubled"}]
+    # The signature rides on every method record since schema 7 (#537).
+    assert record["methods"] == [{"name": "doubled", "params": [], "return_type": "i32",
+                                  "symbol": "i32_doubled"}]
 
 
 def test_perk_impl_round_trip():

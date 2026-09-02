@@ -183,6 +183,19 @@ All notable changes to Sushi Lang will be documented in this file.
   socket's partial write says what the peer's window took, and `write_bytes`, which
   writes everything, cannot.
 
+### Tooling
+- **`--lib-info` lists a library's perks.** The report named a public perk and nothing
+  under it, printed an implementation's methods as bare names, and printed a generic-target
+  implementation (`extend Box@(T) with Show`) nowhere -- so since the io contracts became
+  shipped perks, the one report a consumer reads hid them (#537). Every perk method is now
+  a manifest record with its signature and receiver mode (templates schema 7; a
+  version-6 binary library is refused and rebuilt), the `Perks` section prints each
+  contract's methods -- `fn read(poke self, u8[] buf) i32 | IoError` -- and `Perk
+  Implementations` lists the concrete implementations and the generic-target templates in
+  one section, each method with the same signature line. The Python fallback and the
+  `slib-info` tool change together, and `--docs` prints a perk method's block under its
+  signature, which the record could not carry before.
+
 ### Fixed
 - **A late instantiation gets its generic-target templates.** A type named only inside a
   generic body -- `let Box@(T) b` in `outer@(T)`, or the return of a generic it calls --

@@ -38,9 +38,16 @@ def test_a_version_5_binary_library_is_refused():
     assert exc.value.code == "CE3512"
 
 
+def test_a_version_6_binary_library_is_refused():
+    """Version 7 gives a perk record its method signatures (#537)."""
+    with pytest.raises(LibraryError) as exc:
+        _check_library_templates_version(_metadata("binary", 6), "old.slib")
+    assert exc.value.code == "CE3512"
+
+
 def test_the_current_schema_passes():
     _check_library_templates_version(_metadata("binary", TEMPLATES_SCHEMA_VERSION), "new.slib")
-    assert TEMPLATES_SCHEMA_VERSION == 6
+    assert TEMPLATES_SCHEMA_VERSION == 7
 
 
 def test_a_source_library_is_never_gated():

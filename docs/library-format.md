@@ -289,7 +289,7 @@ is the authority, and the index is a cache of it.
     # a template's own doc block stands OUTSIDE its source slice, so the record is the
     # only place it can travel.
     "templates": {                     # Instantiable cross-library templates
-        "version": 6,                  # Templates schema version. 5 (#494): every
+        "version": 7,                  # Templates schema version. 5 (#494): every
                                        #   closure record is one per (unit, name),
                                        #   and a source-shipped template carries
                                        #   `bindings`. A binary .slib with an older
@@ -298,9 +298,13 @@ is the authority, and the index is a cache of it.
                                        #   template to another unit's body silently.
                                        #   6 (#543): every public perk ships, and a
                                        #   generic-target perk implementation ships
-                                       #   as a template (`generic_perk_impls`). The
-                                       #   one constant is `TEMPLATES_SCHEMA_VERSION`
-                                       #   in `compiler/pipeline.py`
+                                       #   as a template (`generic_perk_impls`).
+                                       #   7 (#537): every perk method record carries
+                                       #   its signature and receiver mode, on the
+                                       #   contract and on both kinds of
+                                       #   implementation. The one constant is
+                                       #   `TEMPLATES_SCHEMA_VERSION` in
+                                       #   `compiler/pipeline.py`
 
         # Generic functions (incl. variadic packs), as re-parsable source
         # slices; monomorphized at the consumer's call sites. Public ones plus
@@ -335,10 +339,18 @@ is the authority, and the index is a cache of it.
 
         # Perk DEFINITIONS: every PUBLIC perk (it is API, whether or not a constraint
         # names it -- #543), plus any perk an exported template names in a constraint
-        # or implements. There is no methods array here, so a perk method's own block
-        # travels only inside `source`.
+        # or implements. Each method is a record (v7, #537): its signature, its
+        # receiver mode when the contract declares `peek self` / `poke self`, and its
+        # own block -- so `--lib-info` prints a contract as the methods that satisfy it.
+        #
+        #   METHOD = {
+        #       "name": str,
+        #       **SIG,
+        #       "self_mode": str,      # "peek" | "poke", only when declared
+        #       "doc": DOC             # If documented
+        #   }
         "perks": [
-            {"name": str, "unit": str, "source": str, "doc": DOC}
+            {"name": str, "unit": str, "source": str, "methods": [METHOD], "doc": DOC}
         ],
 
         # Concrete perk IMPLEMENTATIONS of those perks (v3). Bodies live in
@@ -350,7 +362,7 @@ is the authority, and the index is a cache of it.
                 "perk": str,
                 "unit": str,           # The unit that declared it
                 "source": str,         # The whole `extend T with P:` block
-                "methods": [{"name": str, "symbol": str, "doc": DOC}],
+                "methods": [{**METHOD, "symbol": str}],   # the symbol to link
                 "doc": DOC             # If documented
             }
         ],
@@ -368,6 +380,8 @@ is the authority, and the index is a cache of it.
                 "perk": str,
                 "unit": str,           # The unit that declared it
                 "source": str,         # The whole `extend Box@(T) with P:` block
+                "methods": [METHOD],   # Written in the target's parameters; no symbol,
+                                       #   because there is no copy to link
                 "doc": DOC             # If documented
             }
         ],

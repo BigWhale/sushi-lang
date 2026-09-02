@@ -99,14 +99,16 @@ def _surface(type_str: str) -> str:
     return display_type_name(type_str)
 
 
-def _render_params(params: list) -> str:
+def _render_params(params: list, self_mode: str | None = None) -> str:
     """One parameter list, as a signature reads it.
 
     `nom` is the one mode a TYPE cannot spell, so the record's own `mode` field is the
     only place it can come from. `peek` and `poke` ride on the type itself, so the type
-    string already carries them and printing the mode again would double it.
+    string already carries them and printing the mode again would double it. A perk
+    method's receiver mode is the record's own field for the same reason, and it prints
+    first, where the declaration wrote it: `(poke self, i32 width)`.
     """
-    rendered = []
+    rendered = [f"{self_mode} self"] if self_mode else []
     for param in params:
         mode = "nom " if param.get("mode") == "nom" else ""
         rendered.append(f"{mode}{_surface(param['type'])} {param['name']}")
@@ -133,7 +135,7 @@ def _render_signature(func: dict, p: Palette) -> str:
     tags were stored and never rendered.
     """
     generic = _render_type_params(func.get('type_params'))
-    params = _render_params(func.get('params') or [])
+    params = _render_params(func.get('params') or [], func.get('self_mode'))
     name = f"{p.bold}{func['name']}{p.reset}"
     line = f"fn {name}{generic}({params}) {_surface(func['return_type'])}"
     # The default error type is StdError and a signature that takes it does not say so,
@@ -374,6 +376,29 @@ class _Records:
         self._pending = printed
 
 
+def _render_impl_target(impl: dict) -> str:
+    """An implementation's target: `Gadget`, or `Box@(T)` for a generic-target template.
+
+    A template record carries the target's BASE name and its parameters as written,
+    so the header is rebuilt here rather than parsed out of the source slice.
+    """
+    target = _surface(impl['type'])
+    type_args = impl.get('type_args') or []
+    return f"{target}@({', '.join(type_args)})" if type_args else target
+
+
+def _print_methods(owner: dict, records: '_Records', opts: '_Report') -> None:
+    """The method records of a perk or an implementation, one signature per line.
+
+    ONE printer for the contract and its implementations, so a method prints the same
+    way wherever it stands; each method is a record of its own for rule 2's spacing.
+    """
+    for method in owner.get('methods') or []:
+        records.open()
+        print(f"    {_render_signature(method, opts.p)}")
+        records.close(_print_doc(method, "      ", opts))
+
+
 def print_library_info(library_path: Path, show_docs: bool = False,
                        color: str = "auto") -> int:
     """Print formatted metadata from a .slib library file."""
@@ -496,8 +521,9 @@ def print_library_info(library_path: Path, show_docs: bool = False,
 
     _print_generic_named(templates, 'generic_enums', "Generic Enums", "enum", opts)
 
-    # A perk reaches the manifest only when an exported generic's constraint names it,
-    # so this section lists the contracts a consumer can actually be asked to satisfy.
+    # Every public perk ships, plus any perk an exported template names (#543), so this
+    # section is the contracts a consumer can be asked to satisfy -- each with the
+    # method signatures that satisfying it means (#537).
     perks = templates.get('perks', [])
     if _section("Perks", perks, opts.p):
         records = _Records()
@@ -505,19 +531,20 @@ def print_library_info(library_path: Path, show_docs: bool = False,
             records.open()
             print(f"  perk {perk['name']}:")
             records.close(_print_doc(perk, "    ", opts))
+            _print_methods(perk, records, opts)
         print()
 
-    impls = templates.get('perk_impls', [])
+    # Which types satisfy which contract: the concrete implementations, then the
+    # generic-target templates, in ONE section -- a reader asking "who implements Show"
+    # wants one list, and `extend Box@(T) with Show` answers for every `Box` (#537).
+    impls = (templates.get('perk_impls') or []) + (templates.get('generic_perk_impls') or [])
     if _section("Perk Implementations", impls, opts.p):
         records = _Records()
         for impl in impls:
             records.open()
-            print(f"  extend {_surface(impl['type'])} with {impl['perk']}:")
+            print(f"  extend {_render_impl_target(impl)} with {impl['perk']}:")
             records.close(_print_doc(impl, "    ", opts))
-            for method in impl.get('methods') or []:
-                records.open()
-                print(f"    fn {method['name']}")
-                records.close(_print_doc(method, "      ", opts))
+            _print_methods(impl, records, opts)
         print()
 
     foreign = metadata.get('foreign_extensions', [])

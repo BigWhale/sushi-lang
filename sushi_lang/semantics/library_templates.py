@@ -287,6 +287,22 @@ def impl_method_symbol(type_name: str, method_name: str) -> str:
     return f"{sanitize_extension_receiver(type_name)}_{method_name}"
 
 
+def method_record(method) -> dict:
+    """The record of one perk method: its name, its signature, its receiver mode, its block.
+
+    ONE builder for the contract's `PerkMethodSignature` and an implementation's
+    `FuncDef` alike, so `--lib-info` prints a contract method exactly as it prints the
+    implementation of it (#537). `self_mode` is present only when the method declares
+    `peek self` / `poke self`: a type string cannot spell the receiver's mode, and a
+    record that spelled the default would claim the author wrote it.
+    """
+    record = {"name": method.name, **signature_record(method)}
+    self_mode = getattr(method, "self_mode", None)
+    if self_mode is not None:
+        record["self_mode"] = self_mode
+    return with_doc(record, method)
+
+
 def serialize_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
     """Produce the manifest record for one concrete perk IMPLEMENTATION."""
     from sushi_lang.semantics.passes.collect.perks import _get_type_name
@@ -296,11 +312,10 @@ def serialize_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
         "type": type_name,
         "perk": impl.perk_name,
         "source": slice_decl_source(impl, source_text),
-        # The method records are where a perk method's own block lands. A perk
-        # DEFINITION has no such array, so its methods' blocks travel only inside the
-        # source slice (documentation.md section 8, R3).
+        # A concrete copy is in the bitcode, so each method carries the symbol the
+        # consumer declares and links, beside the signature every method record has.
         "methods": [
-            with_doc({"name": m.name, "symbol": impl_method_symbol(type_name, m.name)}, m)
+            {**method_record(m), "symbol": impl_method_symbol(type_name, m.name)}
             for m in impl.methods
         ],
     }, impl)
@@ -321,6 +336,9 @@ def serialize_generic_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict
         "type_args": [str(a) for a in target.type_args],
         "perk": impl.perk_name,
         "source": slice_decl_source(impl, source_text),
+        # No symbol: there is no copy to link. The signatures are written in the
+        # target's type parameters, exactly as the template's source spells them.
+        "methods": [method_record(m) for m in impl.methods],
     }, impl)
 
 
@@ -340,10 +358,15 @@ def deserialize_perk_impl(record: dict) -> "ExtendWithDef":
 
 
 def serialize_perk(perk: "PerkDef", source_text: str) -> dict:
-    """Produce the manifest record for a single perk DEFINITION (the contract)."""
+    """Produce the manifest record for a single perk DEFINITION (the contract).
+
+    The methods travel as records (#537): a contract is what a consumer can be asked to
+    satisfy, and `--lib-info` prints each method's signature and block from here.
+    """
     return with_doc({
         "name": perk.name,
         "source": slice_decl_source(perk, source_text),
+        "methods": [method_record(m) for m in perk.methods],
     }, perk)
 
 
