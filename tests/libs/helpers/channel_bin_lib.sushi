@@ -1,0 +1,15 @@
+# A BINARY library whose functions declare an error channel (#541). The manifest
+# carries `error_type` beside `return_type`; the consumer must read both.
+public enum MyErr:
+    Bad
+    Worse(i32)
+
+public fn risky(i32 x) i32 | MyErr:
+    if (x < 0):
+        return Result.Err(MyErr.Bad)
+    return Result.Ok(x)
+
+public fn spelled(i32 x) Result@(i32, MyErr):
+    if (x > 100):
+        return Result.Err(MyErr.Worse(x))
+    return Result.Ok(x)

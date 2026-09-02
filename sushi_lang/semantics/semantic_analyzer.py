@@ -826,63 +826,16 @@ class SemanticAnalyzer:
             )
 
     def _register_library_functions(self) -> None:
-        """Register functions from loaded libraries into the function table."""
-        if self.funcs is None:
+        """Register the loaded libraries' public functions into the function table.
+
+        The registry's `_parse_functions` is the ONE reader of a manifest signature. A
+        second builder lived here and read `return_type` alone, so a binary library's
+        `| E` was typed StdError at every consumer (#541).
+        """
+        if self.funcs is None or self.library_registry is None:
             return
-
-        if self.library_registry is not None:
-            for func_name, func_sig in self.library_registry.get_all_functions().items():
-                if func_name not in self.funcs.by_name:
-                    self.funcs.by_name[func_name] = func_sig
-                    self.funcs.order.append(func_name)
-            return
-
-        if self.library_linker is None:
-            return
-
-        from sushi_lang.semantics.param_modes import ParamMode
-        from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
-        from sushi_lang.semantics.type_resolution import parse_type_string
-
-        for _lib_name, manifest in self.library_linker.loaded_libraries.items():
-            for func_info in manifest.get("public_functions", []):
-                func_name = func_info["name"]
-                if func_name in self.funcs.by_name:
-                    continue
-
-                params = []
-                for idx, p in enumerate(func_info.get("params", [])):
-                    param_type = parse_type_string(
-                        p["type"],
-                        self.structs.by_name if self.structs else {},
-                        self.enums.by_name if self.enums else {}
-                    )
-                    params.append(Param(
-                        name=p["name"],
-                        ty=param_type,
-                        name_span=None,
-                        type_span=None,
-                        index=idx,
-                        is_nom=p.get("mode") == ParamMode.NOM.value,
-                    ))
-
-                ret_type_str = func_info.get("return_type", "~")
-                ret_type = parse_type_string(
-                    ret_type_str,
-                    self.structs.by_name if self.structs else {},
-                    self.enums.by_name if self.enums else {}
-                )
-
-                func_sig = FuncSig(
-                    name=func_name,
-                    loc=None,
-                    name_span=None,
-                    ret_type=ret_type,
-                    ret_span=None,
-                    params=params,
-                    is_public=True,
-                )
-
+        for func_name, func_sig in self.library_registry.get_all_functions().items():
+            if func_name not in self.funcs.by_name:
                 self.funcs.by_name[func_name] = func_sig
                 self.funcs.order.append(func_name)
 

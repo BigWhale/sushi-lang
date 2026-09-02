@@ -897,77 +897,28 @@ class LLVMCodegen:
                 self.functions.emit_extension_method_decl(synthetic_ext)
 
     def _declare_library_functions(self) -> None:
-        """Declare library function prototypes for external library functions."""
+        """Declare every loaded library's functions from the registry's signatures.
 
-        if self.library_registry is not None:
-            self._declare_library_functions_from_registry()
-            return
-
-        if self.library_linker is None:
-            return
-
-        from sushi_lang.semantics.type_resolution import parse_type_string
-
-        for _lib_name, manifest in self.library_linker.loaded_libraries.items():
-            for func_info in manifest.get("public_functions", []):
-                func_name = func_info["name"]
-                if func_name in self.funcs:
-                    continue
-
-                param_types = []
-                for p in func_info.get("params", []):
-                    param_type = parse_type_string(
-                        p["type"],
-                        self.struct_table.by_name if self.struct_table else {},
-                        self.enum_table.by_name if self.enum_table else {}
-                    )
-                    param_types.append(self.types.ll_type(param_type))
-
-                ret_type_str = func_info.get("return_type", "~")
-                ret_type = parse_type_string(
-                    ret_type_str,
-                    self.struct_table.by_name if self.struct_table else {},
-                    self.enum_table.by_name if self.enum_table else {}
-                )
-
-                from sushi_lang.backend.generics.result_builder import intern_result
-                std_error = self.enum_table.by_name.get("StdError") if self.enum_table else None
-                result_type = intern_result(self, ret_type, std_error if std_error else ret_type)
-                ll_ret = self.types.ll_type(result_type)
-
-                fnty = ir.FunctionType(ll_ret, param_types)
-                # The PRODUCER named the symbol in its own bitcode. A source library
-                # recompiles here and derives its own; a binary one links, so its
-                # symbol can only be read (`docs/design/unit-namespaces.md` section 9).
-                llvm_fn = ir.Function(
-                    self.module, fnty,
-                    name=func_info.get("link_symbol") or func_name)
-                llvm_fn.linkage = 'external'
-
-                for i, p in enumerate(func_info.get("params", [])):
-                    if i < len(llvm_fn.args):
-                        llvm_fn.args[i].name = p["name"]
-
-                self.funcs.declare(func_name, llvm_fn)
-                self.function_return_types.declare(func_name, result_type)
-
-    def _declare_library_functions_from_registry(self) -> None:
-        """Declare library functions using pre-parsed FuncSig from registry.
-
-        A PUBLIC record declares under its bare name, as before. A PRIVATE record
-        declares under ITS unit -- two library units may each ship a `helper`
-        (#494) -- and also under its LINK SYMBOL, which is the callee a template
-        body's bindings rewrite produced (D4).
+        The registry is the ONE reader of a manifest signature; a second builder here
+        read `return_type` alone and declared every `| E` as StdError (#541). A PUBLIC
+        record declares under its bare name. A PRIVATE record declares under ITS unit
+        -- two library units may each ship a `helper` (#494) -- and also under its LINK
+        SYMBOL, which is the callee a template body's bindings rewrite produced (D4).
         """
+        if self.library_registry is None:
+            return
 
         def _declare_one(func_sig, name: str, unit: str | None):
             from sushi_lang.backend.generics.result_builder import intern_result
+            from sushi_lang.semantics.generics.results import signature_result_arms
 
             param_types = [self.types.ll_type(p.ty) for p in func_sig.params]
             std_error = self.enum_table.by_name.get("StdError") if self.enum_table else None
-            result_type = intern_result(
-                self, func_sig.ret_type,
-                std_error if std_error else func_sig.ret_type)
+            # The typecheck pass's derivation, so the call and the prototype agree on the
+            # channel: `| E` is the Err arm, and an explicit Result is not wrapped twice
+            # (#541).
+            arms = signature_result_arms(func_sig.ret_type, func_sig.err_type, std_error)
+            result_type = intern_result(self, *arms) if arms is not None else func_sig.ret_type
             ll_ret = self.types.ll_type(result_type)
 
             symbol = getattr(func_sig, "link_symbol", None) or name

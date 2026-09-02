@@ -184,6 +184,18 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **A binary `.slib` keeps a function's error channel.** The manifest wrote
+  `error_type` beside `return_type` and the consumer never read it: two `FuncSig`
+  builders read the return alone, so `fn risky(i32 x) i32 | MyErr` was typed
+  `Result@(i32, StdError)` at every consumer and `risky(4)??` inside a `| MyErr`
+  function was CE2511 (#541). The registry's `_parse_functions` is now the one reader
+  of a manifest signature and reads the channel; the analyzer's and the backend's
+  fallback builders are gone. The typecheck pass and the backend derive a call's
+  `Result` from a signature through one function, `signature_result_arms`, so an
+  explicit `Result@(i32, MyErr)` return is not wrapped again on the binary path either
+  -- it used to arrive as `Result@(Result@(i32, MyErr), StdError)`. A manifest type
+  string that names an instantiation the consumer has not interned (`Box<i32>`,
+  `Result<i32, MyErr>`) now reads back as the generic reference it was written from.
 - **`??` over a named `Result` or `Maybe` local spends it.** `let Result@(string, E) r =
   make()` then `let string got = r??` gave `got` the buffer and left `r` registered to
   free it as well: one buffer, two frees, and the printed value was garbage (#548). The

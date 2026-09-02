@@ -207,9 +207,15 @@ is the authority, and the index is a cache of it.
     #       "error_type": str          # If the declaration says `| E`
     #   }
     #
-    # Every `type` and `return_type` is the INTERNAL identity spelling, `List<i32>` and
-    # not `List@(i32)`: a consumer reads these back with `parse_type_string`, so this is
-    # a wire format. Rendering `@(...)` is the report's job.
+    # Every `type`, `return_type` and `error_type` is the INTERNAL identity spelling,
+    # `List<i32>` and not `List@(i32)`: a consumer reads these back with
+    # `parse_type_string`, so this is a wire format. Rendering `@(...)` is the report's
+    # job. The consumer's ONE reader is `LibraryRegistry._parse_functions`: it reads all
+    # three keys into the signature, so a `| E` is the call's Err arm at the consumer
+    # (#541), and a spelling that names an instantiation the consumer has not interned
+    # (`Box<i32>`, an explicit `Result<i32, MyErr>` return) reads back as the generic
+    # reference the producer wrote it from -- so the instantiate pass collects it and a
+    # Result is never wrapped twice.
 
     "public_functions": [
         {

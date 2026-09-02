@@ -315,9 +315,15 @@ of the container three times as the cross-library-generics feature grew:
 ### 5.1 Concrete functions
 
 A non-generic `public fn` becomes a `public_functions` record: `name`, `params`
-(`name`+`type` strings), `return_type` (also a string — types are serialized via
-`str(ty)` and re-parsed with `parse_type_string` at the consumer, not pickled). Two
-checks gate it, both raising and aborting the `.slib` write (no partial artifact):
+(`name`+`type` strings), `return_type` and, when the declaration spells `| E`,
+`error_type` (all strings — types are serialized via `str(ty)` and re-parsed with
+`parse_type_string` at the consumer, not pickled). The consumer reads the record in ONE
+place, `LibraryRegistry._parse_functions`, and the typecheck pass and the backend derive
+the call's `Result` from that signature through one function, `signature_result_arms`:
+the spelled channel is the Err arm, an explicit `Result@(T, E)` return is not wrapped
+again. Until #541 two more builders read `return_type` alone, so a binary library's
+`| E` was `StdError` at every consumer and `??` answered CE2511. Two checks gate the
+record, both raising and aborting the `.slib` write (no partial artifact):
 
 - **CE0116** — a v1 native `...T` variadic function cannot appear here. The registry
   gives the reason as a serialization gap: the variadic flag is not written into the

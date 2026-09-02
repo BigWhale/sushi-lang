@@ -1,0 +1,20 @@
+# The Err arm of a BINARY library function is the library's own enum, whichever way
+# the signature spells the channel (`| MyErr` or `Result@(i32, MyErr)`), and its
+# payload travels to the consumer (#541).
+# EXPECT_STDOUT_EXACT: "bad\nworse 200\n7\n"
+use <lib/channel_bin_lib>
+
+fn show(Result@(i32, MyErr) r) i32:
+    match r:
+        Result.Ok(n) -> println("{n}")
+        Result.Err(e) ->
+            match e:
+                MyErr.Bad -> println("bad")
+                MyErr.Worse(n) -> println("worse {n}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 a = show(risky(-1)).realise(1)
+    let i32 b = show(spelled(200)).realise(1)
+    let i32 c = show(spelled(7)).realise(1)
+    return Result.Ok(a + b + c)
