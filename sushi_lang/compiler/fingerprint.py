@@ -259,6 +259,11 @@ def _hash_ast_structure(hasher: hashlib._Hash, ast: Program) -> None:
         ret = str(ext.ret) if ext.ret else "~"
         hasher.update(f"{ext.target_type}::{ext.name}({params})->{ret}".encode())
 
+    # The monomorphized copies of a GENERIC-target implementation are appended to the
+    # declaring unit's list before this runs, so a new instantiation anywhere in the
+    # program changes that unit's signature list and flips its key. The BODY needs no
+    # digest here for the same reason: it comes from the template, whose source is in
+    # the declaring unit's own source hash.
     hasher.update(b"PERK_IMPLS:")
     for perk_impl in ast.perk_impls:
         for method in sorted(perk_impl.methods, key=lambda m: m.name):

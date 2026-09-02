@@ -1,0 +1,23 @@
+# The point of implementing a perk on a generic target: the instantiation satisfies the
+# CONTRACT, so a function that asks for the perk takes it.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "boxed 42\n"
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "boxed {self.item}"
+
+fn render@(S: Show)(S thing) string:
+    return Result.Ok(thing.show())
+
+fn main() i32:
+    let Box@(i32) n = Box(42)
+    println(render(n).realise("failed"))
+    return Result.Ok(0)

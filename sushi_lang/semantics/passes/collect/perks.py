@@ -39,6 +39,40 @@ class PerkTable:
 
 
 @dataclass
+class GenericPerkImpl:
+    """A perk implementation on a GENERIC target: `extend Box@(T) with Show`.
+
+    A TEMPLATE, kept beside `GenericExtensionMethod` and read the same way. The
+    implementation cannot be registered as it stands: the table is keyed by the
+    instantiation the target names, and `Box@(T)` names none. One copy per
+    instantiation of the base name is registered instead, after monomorphization.
+
+    Every type in the methods' signatures is written in `TypeParameter`s, exactly as a
+    generic extension method's is, so one substitution answers the whole signature.
+    """
+    base_type_name: str                    # "Box"
+    type_params: Tuple[str, ...]           # ("T",) -- the names the target declares
+    impl: ExtendWithDef                    # the template, signatures already converted
+    unit_name: Optional[str] = None
+    filename: Optional[str] = None
+
+
+@dataclass
+class GenericPerkImplTable:
+    """The generic-target perk implementations, by the base name of their target."""
+    by_base: Dict[str, List[GenericPerkImpl]] = field(default_factory=dict)
+
+    def add(self, template: GenericPerkImpl) -> None:
+        self.by_base.setdefault(template.base_type_name, []).append(template)
+
+    def templates(self, base_type_name: str) -> List[GenericPerkImpl]:
+        return self.by_base.get(base_type_name, [])
+
+    def __bool__(self) -> bool:
+        return bool(self.by_base)
+
+
+@dataclass
 class PerkImplementationTable:
     """Tracks which types implement which perks."""
     implementations: Dict[Tuple[str, str], ExtendWithDef] = field(default_factory=dict)
@@ -174,6 +208,7 @@ class PerkCollector:
         perks: PerkTable,
         perk_impls: PerkImplementationTable,
         known_types: Optional[Set[Type]] = None,
+        generic_perk_impls: Optional[GenericPerkImplTable] = None,
     ) -> None:
         """Initialize perk collector."""
         self.r = reporter
@@ -185,6 +220,11 @@ class PerkCollector:
         self.current_unit_file: Optional[str] = None
         self.perks = perks
         self.perk_impls = perk_impls
+        # The generic-target templates. One copy per instantiation is registered in
+        # `perk_impls` after monomorphization; nothing here can be keyed by a target
+        # that names a type parameter.
+        self.generic_perk_impls = (generic_perk_impls if generic_perk_impls is not None
+                                   else GenericPerkImplTable())
         # Which unit is being collected, which units came from a source library, and
         # which unit registered each impl. Together they let a consumer impl replace a
         # library one silently -- the rule a binary library already follows
@@ -208,12 +248,25 @@ class PerkCollector:
                     self._collect_perk_def(perk)
 
     def collect_implementations(self, root: Program) -> None:
-        """Collect all perk implementations from program AST."""
+        """Collect all perk implementations from program AST.
+
+        A GENERIC target is re-filed out of `perk_impls` and into
+        `generic_perk_impls`, for the same reason a generic extension is: every later
+        walk over `perk_impls` -- the typecheck pass, the backend's declaration and
+        definition loops, the fingerprint -- assumes a concrete `self`.
+        """
         perk_impls = getattr(root, "perk_impls", None)
         if isinstance(perk_impls, list):
+            moved = []
             for impl in perk_impls:
                 if isinstance(impl, ExtendWithDef):
-                    self._collect_perk_impl(impl)
+                    if self._collect_perk_impl(impl):
+                        moved.append(impl)
+            if moved:
+                moved_ids = {id(i) for i in moved}
+                root.perk_impls[:] = [i for i in perk_impls
+                                      if id(i) not in moved_ids]
+                root.generic_perk_impls.extend(moved)
 
     # `Drop`'s contract is fixed, and both halves of it are checked: the RECEIVER must be
     # `poke self`, because a destructor writes, and the return must be blank, because a
@@ -357,11 +410,59 @@ class PerkCollector:
                 return True
         return False
 
-    def _collect_perk_impl(self, impl: ExtendWithDef) -> None:
-        """Collect perk implementation and register in implementation table."""
+    def _register_generic_template(self, impl: ExtendWithDef,
+                                   target_type: Optional[Type]) -> bool:
+        """Register a GENERIC-target implementation as a template. True when it is one.
+
+        The signature of every method is rewritten in `TypeParameter`s over the names
+        the target declares, exactly as `_collect_extension_def` does for a generic
+        extension method, so one substitution answers the whole signature later.
+        """
+        from sushi_lang.semantics.generics.extension_targets import (
+            classify_extension_target)
+        from sushi_lang.semantics.generics.type_display import display_type
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.passes.collect.functions import deep_type_params
+
+        if not isinstance(target_type, GenericTypeRef):
+            return False
+        shape = classify_extension_target(target_type, self._is_declared_type)
+        if shape.is_mixed:
+            er.emit_with(self.r, ERR.CE2098,
+                         getattr(impl, "target_type_span", None)
+                         or getattr(impl, "perk_name_span", None),
+                         target=display_type(target_type)) \
+                .help("name every type parameter, or make every argument concrete -- "
+                      "there is no partial specialization").emit()
+            return True
+        if not shape.param_names:
+            return False
+
+        for method in getattr(impl, "methods", []) or []:
+            method.ret = deep_type_params(method.ret, shape.param_names)
+            method.err_type = deep_type_params(
+                getattr(method, "err_type", None), shape.param_names)
+            for param in method.params:
+                param.ty = deep_type_params(param.ty, shape.param_names)
+
+        self.generic_perk_impls.add(GenericPerkImpl(
+            base_type_name=target_type.base_name,
+            type_params=shape.param_names,
+            impl=impl,
+            unit_name=self.current_unit_name,
+            filename=self.current_unit_file,
+        ))
+        return True
+
+    def _collect_perk_impl(self, impl: ExtendWithDef) -> bool:
+        """Collect one perk implementation. Answers True when it is a TEMPLATE.
+
+        A template is re-filed by the caller: its target names a type parameter, so it
+        registers nothing here and one copy per instantiation is registered later.
+        """
         perk_name = getattr(impl, "perk_name", None)
         if not isinstance(perk_name, str):
-            return
+            return False
 
         # A `??` has no error channel in a BARE perk-impl body (CE0131, #398). A
         # declared `| E` IS the channel (ruling R1), so the reject does not apply
@@ -379,19 +480,19 @@ class PerkCollector:
         if reject_reference_in(self.r, target_type,
                                getattr(impl, "target_type_span", None)
                                or getattr(impl, "loc", None), ERR.CE2420):
-            return
+            return False
 
         type_name = _get_type_name(target_type)
         if type_name is None:
-            return
+            return False
 
         if not self.perks.get(perk_name):
             er.emit(self.r, ERR.CE4003, perk_name_span, perk=perk_name)
-            return
+            return False
 
         if perk_name == self.DROP_PERK and self._reject_bad_drop_target(
                 impl, target_type, type_name, perk_name_span):
-            return
+            return False
 
         # Ruling 3: a private perk keeps its CONTRACT, so another unit may not implement
         # it. The method it provides stays callable, which is the rest of the ruling.
@@ -399,7 +500,10 @@ class PerkCollector:
                 self.r, self.visibility, perk_name, perk_name_span,
                 action="implement", current_unit=self.current_unit_name,
                 filename=self.current_unit_file):
-            return
+            return False
+
+        if self._register_generic_template(impl, target_type):
+            return True
 
         if not self.perk_impls.register(impl, type_name,
                                         unit_name=self.current_unit_name):
@@ -409,8 +513,9 @@ class PerkCollector:
             if not shadows_library:
                 er.emit(self.r, ERR.CE4002, getattr(impl, "loc", None),
                         type=type_name, perk=perk_name)
-                return
+                return False
             previous = self.perk_impls.replace(impl, type_name,
                                                unit_name=self.current_unit_name)
             if previous is not None:
                 self.shadowed_impls.append(previous)
+        return False

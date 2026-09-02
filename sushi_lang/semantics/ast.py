@@ -95,7 +95,11 @@ class Program(Node):
     functions: List["FuncDef"]
     extensions: List["ExtendDef"]           # Non-generic extensions only
     generic_extensions: List["ExtendDef"]   # Generic extensions only (e.g., extend Box<T>)
-    perk_impls: List["ExtendWithDef"]
+    perk_impls: List["ExtendWithDef"]          # Non-generic perk implementations only
+    # Perk implementations on a GENERIC target (`extend Box@(T) with Show`). Templates,
+    # moved here by the collector for the same reason `generic_extensions` exists: every
+    # later walk over `perk_impls` assumes a concrete `self`.
+    generic_perk_impls: List["ExtendWithDef"] = None
     externals: List["ExternalBlock"] = None
     doc: Optional["DocBlock"] = None            # the unit block: first item, attached to nothing
     orphan_docs: List["DocBlock"] = None        # every block that documents nothing
@@ -110,6 +114,8 @@ class Program(Node):
             self.externals = []
         if self.orphan_docs is None:
             self.orphan_docs = []
+        if self.generic_perk_impls is None:
+            self.generic_perk_impls = []
 
 @dataclass(slots=True)
 class Param:

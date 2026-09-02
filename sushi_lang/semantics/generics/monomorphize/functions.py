@@ -316,6 +316,28 @@ class FunctionMonomorphizer:
         self.monomorphizer.pending_instantiations = saved if saved is not None else set()
         return found
 
+    def collect_from_perk_method_body(self, target_type: Type,
+                                      method) -> Set[Tuple[str, Tuple[Type, ...]]]:
+        """The same walk, for one monomorphized perk-implementation method.
+
+        A perk method carries no target of its own -- the `extend X with P` header does
+        -- so the receiver's type is handed in rather than read off the node.
+        """
+        var_types: Dict[str, Type] = {"self": target_type}
+        for param in method.params:
+            if param.ty is not None:
+                var_types[param.name] = param.ty
+
+        saved = getattr(self.monomorphizer, 'pending_instantiations', None)
+        self.monomorphizer.pending_instantiations = set()
+        saved_unit = self._asking_unit
+        self._asking_unit = None
+        self._collect_block_instantiations(method.body, {}, var_types)
+        self._asking_unit = saved_unit
+        found = self.monomorphizer.pending_instantiations
+        self.monomorphizer.pending_instantiations = saved if saved is not None else set()
+        return found
+
     def _collect_block_instantiations(
         self,
         body: 'Block',

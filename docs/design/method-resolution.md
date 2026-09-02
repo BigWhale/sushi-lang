@@ -182,6 +182,23 @@ registered for every instantiation of `Box`: it answered a `Box@(string)` receiv
 a `CE0000` as soon as the body touched the type. A perk implementation on the same target had
 always scoped correctly -- one question, two answer sites, which is the #239 class exactly.
 
+**A PERK IMPLEMENTATION reads the same table.** `extend Box@(T) with Show` is a template
+and `extend Box@(i32) with Show` is a constraint, exactly as above, and a partially
+concrete target is the same CE2098. The template is re-filed out of `Program.perk_impls`
+and into `Program.generic_perk_impls` -- the same move a generic extension makes, and for
+the same reason: the typecheck pass, the backend's declaration and definition loops and
+the unit fingerprint all walk `perk_impls` assuming a concrete `self`. One copy per
+instantiation the program names is registered in the perk-impl table under the
+instantiation's interned name and appended to the DECLARING unit's AST, so it is an
+ordinary implementation from there on.
+
+**The instantiation runs before the functions are monomorphized**, and that order is
+load-bearing: a `@(S: Show)` constraint is checked while a generic function is
+monomorphized, so `Box@(i32)` has to already say it implements `Show` or the call is
+CE4006 for a type that does. `Drop` is the one perk a generic target may not implement
+(CE4013): its key would have to be read before the `derive` and `effects` passes, which
+run earlier still.
+
 **Why the overlap is rejected rather than resolved by most-specific-wins.** Under
 specialization, whether the template's body is dead code would depend on which instantiations
 exist ELSEWHERE in the program: with only `Box@(string)` live the template method is compiled

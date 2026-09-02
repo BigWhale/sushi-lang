@@ -354,8 +354,6 @@ class SemanticAnalyzer:
             elif base_name in self.generic_structs.by_name:
                 struct_instantiations.add((base_name, _resolve_args(type_args)))
 
-        monomorphizer.monomorphize_all_functions(func_instantiations, compilation_order)
-
         concrete_enums = monomorphizer.monomorphize_all(self.generic_enums.by_name, enum_instantiations)
 
         # A name may already be interned on demand, so keep the first entry rather than
@@ -372,6 +370,17 @@ class SemanticAnalyzer:
             self.structs.by_name[struct_name] = struct_type
             self.structs.order.append(struct_name)
 
+        # A perk implementation on a GENERIC target is instantiated BEFORE the functions
+        # are, and that order is load-bearing: a `@(S: Show)` constraint is checked while
+        # a generic function is monomorphized, so `Box@(i32)` has to already say it
+        # implements `Show` or the call is CE4006 for a type that does.
+        perk_impl_fn_instantiations: set = set()
+        self._monomorphize_generic_perk_impls(
+            monomorphizer, compilation_order, struct_instantiations, concrete_structs,
+            enum_instantiations, concrete_enums, perk_impl_fn_instantiations)
+
+        monomorphizer.monomorphize_all_functions(func_instantiations, compilation_order)
+
         # monomorphize (cont.): extensions on generic targets, BEFORE resolve and derive. A
         # generic call in a substituted body has its argument types only now -- they come
         # from `self` (#392) -- and what the second function round below interns must still
@@ -386,9 +395,10 @@ class SemanticAnalyzer:
             substitutor=monomorphizer.substitutor,
         )
 
-        extension_fn_instantiations = set()
+        extension_fn_instantiations = set(perk_impl_fn_instantiations)
         for extend_def in concrete_extension_defs.values():
             extension_fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
+
         if extension_fn_instantiations:
             monomorphizer.monomorphize_all_functions(extension_fn_instantiations, compilation_order)
 
@@ -565,6 +575,47 @@ class SemanticAnalyzer:
             fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
         if fn_instantiations:
             monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
+
+    def _monomorphize_generic_perk_impls(self, monomorphizer, compilation_order,
+                                         struct_instantiations, concrete_structs,
+                                         enum_instantiations, concrete_enums,
+                                         fn_instantiations) -> None:
+        """Instantiate every generic-target perk implementation the program names.
+
+        The copy goes home to the unit that DECLARED the template, which is the same
+        rule a monomorphized generic function follows (#495): its methods are emitted
+        with that unit's symbol prefix, and a second unit's copy of one name would be a
+        second definition of one symbol.
+        """
+        from sushi_lang.semantics.generics.extensions import monomorphize_all_perk_impls
+
+        templates = getattr(self.tables, "generic_perk_impls", None)
+        if not templates:
+            return
+
+        copies = monomorphize_all_perk_impls(
+            templates, struct_instantiations, concrete_structs,
+            enum_instantiations, concrete_enums,
+            substitutor=monomorphizer.substitutor)
+        if not copies:
+            return
+
+        units_by_name = {u.name: u for u in compilation_order if u.ast is not None}
+        entry = next((u for u in compilation_order
+                      if u.ast is not None and getattr(u, "is_entry", False)), None)
+        if entry is None:
+            entry = next((u for u in compilation_order if u.ast is not None), None)
+
+        for (type_name, _perk_name), (template, impl) in copies.items():
+            if not self.perk_impls.register(impl, type_name,
+                                            unit_name=template.unit_name):
+                continue
+            home = units_by_name.get(template.unit_name) or entry
+            if home is not None:
+                home.ast.perk_impls.append(impl)
+            for method in impl.methods:
+                fn_instantiations |= monomorphizer.collect_from_perk_method_body(
+                    impl.target_type, method)
 
     def _intern_late_type_instantiations(self, monomorphizer, extend_defs) -> None:
         """Intern the type instantiations a call-site-solved copy names (risk 1).

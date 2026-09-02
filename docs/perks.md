@@ -89,6 +89,41 @@ extend Point with Displayable:
 - Can implement multiple perks for the same type
 - Can access struct fields via `self`
 
+### A generic type may implement a perk
+
+The target may name a type parameter, and then every instantiation the program uses gets
+its own copy of the implementation:
+
+```sushi
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "boxed {self.item}"
+
+fn render@(S: Show)(S thing) string:
+    return Result.Ok(thing.show())
+
+fn main() i32:
+    let Box@(i32) n = Box(7)
+    println(render(n).realise("failed"))
+    return Result.Ok(0)
+```
+
+A concrete type argument is a **constraint** rather than a parameter name, the same rule
+an extension target follows: `extend Box@(i32) with Show` applies to `Box@(i32)` and to
+nothing else, and a partially concrete target such as `extend Pair@(i32, U) with Show` is
+**CE2098** -- there is no partial specialization. An instantiation the program never
+names costs nothing: no copy is made.
+
+`Drop` is the one perk a generic target may not implement (**CE4013**). Let the generic's
+owning FIELDS carry the ownership instead -- a wrapper holding an owning handle needs no
+`Drop` of its own, because destroying its fields destroys the handle.
+
 ## Generic Constraints
 
 Perks enable type constraints on generic types:

@@ -1,0 +1,31 @@
+# A generic-target implementation carries the perk's error channel, and the substituted
+# body may use ?? like any other channel body (ruling R1).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "8\nrefused\n"
+
+enum StepError:
+    Zero
+
+perk Step:
+    fn step(i32 by) i32 | StepError
+
+struct Cell@(T):
+    T item
+    i32 n
+
+extend Cell@(T) with Step:
+    fn step(i32 by) i32 | StepError:
+        if (by == 0):
+            return Result.Err(StepError.Zero)
+        return self.n + by
+
+fn main() i32:
+    let Cell@(string) c = Cell("towel", 5)
+    match c.step(3):
+        Result.Ok(v) -> println("{v}")
+        Result.Err(_) -> println("refused")
+    match c.step(0):
+        Result.Ok(v) -> println("{v}")
+        Result.Err(_) -> println("refused")
+    return Result.Ok(0)
