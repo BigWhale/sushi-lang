@@ -4,7 +4,7 @@ Arrays hold many values of the *same* type. But often you want to bundle togethe
 of *different* types that belong to one another — a person's name and age, a config's host
 and port. And sometimes you want a value that is one of several distinct shapes — a status
 that's either "idle" or "travelling somewhere". Sushi gives you **structs** for the first
-and **enums** for the second. If you've used Rust, these will feel like home; if you come
+and **enums** for the second. Both are ordinary named types with no runtime cost; if you come
 from Python, think dataclasses and (much stronger) enums; from Java, classes-without-methods
 and sealed types.
 

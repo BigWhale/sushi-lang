@@ -74,7 +74,7 @@ def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None
 def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None:
     """Validate a cast expression and check if the cast is valid."""
     # An integer literal (or negated literal) cast directly to an integer type
-    # materializes at the TARGET width (Rust `as` semantics), so it is exempt
+    # materializes at the TARGET width, so it is exempt
     # from the bare-literal i32 range check (CE2070). Mark it before recursing.
     from sushi_lang.semantics.ast import IntLit, UnaryOp
     from sushi_lang.semantics.typesys import BuiltinType

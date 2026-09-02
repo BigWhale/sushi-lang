@@ -103,7 +103,7 @@ def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool =
     field_type = struct_type.get_field_type(expr.member)
 
     # Special handling for dynamic array fields: use GEP to get pointer to field
-    # This enables method calls like c.numbers.push(10) to work (Rust-style)
+    # This enables method calls like c.numbers.push(10) to work
     if isinstance(field_type, DynamicArrayType):
         struct_alloca = try_get_struct_alloca(codegen, expr.receiver)
 

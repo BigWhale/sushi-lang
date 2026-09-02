@@ -103,8 +103,9 @@ error (`CE2405`).
 **A plain call argument does NOT transfer.** A parameter is a borrow unless it says otherwise, so
 `f(x)` leaves `x` yours. See [Function Arguments](#function-arguments) for the four modes.
 
-Everything else **copies**: primitives, and *plain-data* composites built only from those. This is
-Rust's `Copy` tier, derived automatically from a type's shape rather than opted into.
+Everything else **copies**: primitives, and *plain-data* composites built only from those. The
+class is derived from the type's SHAPE, so there is nothing to opt into and no way for a type to
+lie about what it owns.
 
 **One exception, tracked per binding, not per type.** A `string` bound directly from a string
 literal (`let string s = "hi"`) owns nothing -- it points into read-only program data with the
@@ -707,7 +708,7 @@ fn main() i32:
 The borrow lasts to the end of the block that declared it. Two things are checked while it is live:
 
 1. **Mutating, freeing, or rebinding the owner is `CE2412`**, reported at the *use* of the borrowed
-   binding that follows the change (not at the change itself -- this is non-lexical, like Rust):
+   binding that follows the change (not at the change itself -- the borrow is non-lexical):
 
 ```sushi
 struct Wrapper:

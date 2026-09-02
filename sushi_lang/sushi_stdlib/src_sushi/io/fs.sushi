@@ -172,8 +172,9 @@ Every method is a plain borrow except close(). A file's position lives in
 the KERNEL, not in this struct, so a read and a write need no mutable
 receiver; only close(), which writes -1 into the binding, does.
 
-Reads and writes are UNBUFFERED: each one is a system call. That is Rust's
-rule too, and the buffered reader is the layer above.
+Reads and writes are UNBUFFERED: each one is a system call. A handle that buffered would
+have to flush at a point nobody wrote, and a destructor cannot report the failure of that
+flush -- so buffering is the layer above, in <io/buf>, which a caller opts into.
 :##
 public struct File:
     ##: The descriptor, or -1 once close() has run. :##
@@ -380,10 +381,11 @@ extend File with Writer:
     Does nothing, successfully.
 
     A descriptor is not buffered: a write has already reached the kernel by the time write()
-    returns, so there is nothing here to flush. The call is kept because a caller that moves
-    to the buffered writer should not have to add it back, and because Rust keeps it for the
-    same reason. Getting bytes onto the DISK is fsync(), a much stronger promise, and not
-    what flush() ever meant.
+    returns, so there is nothing here to flush. The method is on the contract because a
+    contract carries ONE signature: a function written against Writer must keep compiling
+    when the handle it is handed is swapped for a BufWriter, where the call drains a real
+    buffer. Getting bytes onto the DISK is fsync(), a much stronger promise, and not what
+    flush() ever meant.
 
     - Returns: Nothing.
     - Errors: IoError, never in practice.

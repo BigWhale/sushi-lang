@@ -22,7 +22,8 @@ with `T[]`, `List@(T)`, `Own@(T)`, and capturing closures. After this change:
 - `.clone()` becomes the **single, explicit** way to copy an owning value — newly auto-derived for
   structs and enums (the machinery already exists as the implicit `emit_value_clone`).
 - Plain-data composites (primitives, strings, and composites of only those) keep **copy**
-  semantics. This is Rust's `Copy` tier, derived automatically instead of opted into.
+  semantics. The class is derived from a type's SHAPE, so there is nothing to opt into and
+  no way for a type to lie about what it owns.
 
 **Why.** The current split is memory-safe but inconsistent: refactoring `f(list)` into
 `f(WrapperStruct)` silently turns a move into a hidden O(n) deep copy — exactly the invisible cost

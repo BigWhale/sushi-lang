@@ -261,7 +261,7 @@ def _emit_element_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
 
     # The value FIRST, then the element address: a dynamic array can reallocate while
     # the value is emitted, which would leave an address taken earlier pointing into
-    # the freed buffer. Rust orders `a[i] = v` the same way.
+    # the freed buffer.
     val = codegen.expressions.emit_expr(stmt.value)
 
     # The element type is the stamp the typecheck pass put on the target while inferring it. The

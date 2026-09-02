@@ -153,7 +153,7 @@ console handles are `File` CONSTANTS, and a `poke self` method on a constant is
 
 So a function written `@(R: Reader)` takes a `File` or a `TcpStream` and does not take a
 `BufReader@(File)`. Call the buffered methods directly instead. The two ways out, neither
-taken yet, are a second perk for the buffered direction (Rust's `BufRead` beside `Read`) or
+taken yet, are a second perk for the buffered direction or
 receiver modes on a contract that a constant can still satisfy.
 
 ## Cost

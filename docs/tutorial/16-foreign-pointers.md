@@ -45,7 +45,7 @@ error handling, **not** RAII or null-checking. The `free` is still your job — 
 is restored by hand, in `give_back`, or not at all.
 
 !!! note "Holding is the safe half"
-    This is the same insight Rust's FFI is built on: *holding* a raw pointer is harmless —
+    The insight the quarantine rests on: *holding* a raw pointer is harmless —
     only creating and using it are dangerous. Sushi gates creation behind `unsafe external`
     and doesn't offer dereferencing at all, so a `ptr` sitting in a variable, a struct
     field, a `Result`, or a plain `ptr[]` array threatens nobody.
@@ -86,7 +86,7 @@ towel surrendered, 42 bytes returned
 
 A `Towel` knows things its raw pointer never could — its size, here — and the
 `surrender()` extension method gives the handle's cleanup a name and a place. This is the
-Rust *newtype* idiom, compiler-encouraged: wrap the foreign thing once, then program
+*newtype* idiom, and here the compiler asks for it: wrap the foreign thing once, then program
 against the wrapper forever.
 
 ## Two fences: `public` and the unit gate

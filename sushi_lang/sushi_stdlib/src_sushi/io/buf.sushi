@@ -16,7 +16,7 @@ implementation must match its contract's receiver exactly (CE4004). Widening the
 contracts to `poke self` is not available either: the console handles are File CONSTANTS
 (ruling R15), and a `poke self` method on a constant is CE2400 -- so `stdout.write(...)`
 would stop compiling. The two ways out, neither taken here, are a second perk for the
-buffered direction (Rust's BufRead beside Read) or receiver modes on a contract that a
+buffered direction, or receiver modes on a contract that a
 constant can still satisfy.
 
 Limitations: fill() is part of the surface because an extension method carries no

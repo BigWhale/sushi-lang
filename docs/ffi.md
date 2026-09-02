@@ -262,7 +262,7 @@ public fn close_buffer(Handle h) ~:
     return Result.Ok(~)
 ```
 
-The wrapper-struct escape hatch is deliberate (the Rust newtype idiom): a `ptr`
+The wrapper-struct escape hatch is deliberate: a `ptr`
 riding inside a named struct is self-documenting, gives extension methods a
 receiver to attach to (`h.close()`), and is inert in other units anyway - the
 foreign namespace it came from is not visible there. Private functions are

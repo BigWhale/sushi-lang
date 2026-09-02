@@ -7,7 +7,7 @@ already showed the simplest case: a `...T` parameter that gathers trailing argum
 part: **parameter packs**, which accept arguments of *different* types and stay completely
 type-checked and zero-cost.
 
-If you've met C++ variadic templates or Rust's macros-that-pretend-to-be-variadic, packs are
+If you've met C++ variadic templates, packs are
 Sushi's take on the idea — but ordinary, typed, and (as always) compiled away to nothing.
 
 ## A quick recap: homogeneous `...T`

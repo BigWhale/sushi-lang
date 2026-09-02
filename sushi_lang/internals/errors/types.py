@@ -288,7 +288,7 @@ _add(ErrorMessage("CE2076", Severity.ERROR,
 # Compile-time overflow (Ruling 1 of docs/design/compile-time-evaluation.md)
 _add(ErrorMessage("CE2077", Severity.ERROR,
     "operator '{op}' gives {value}, which is out of range for {type}",
-    Category.TYPE, "An expression whose value the compiler reads is computed at the declared width, and a result that leaves the type is reported. Sushi follows Rust here: C is the only language that truncates in silence, and truncation made the evaluator disagree with the machine -- a u8 constant of '200 + 100' held 300, so a widening cast read 300 while the program printed 44. The overflow-checked operators are + - * / % and unary minus; & | ^ ~ << >> are width-defined and never report, because the bits that leave the width are lost by design. The escape is a wider type, or an explicit 'as' cast when the bit pattern is what you want. Run time does not change: two locals still wrap."))
+    Category.TYPE, "An expression whose value the compiler reads is computed at the declared width, and a result that leaves the type is reported. C is the only language that truncates in silence, and truncation made the evaluator disagree with the machine -- a u8 constant of '200 + 100' held 300, so a widening cast read 300 while the program printed 44. The overflow-checked operators are + - * / % and unary minus; & | ^ ~ << >> are width-defined and never report, because the bits that leave the width are lost by design. The escape is a wider type, or an explicit 'as' cast when the bit pattern is what you want. Run time does not change: two locals still wrap."))
 
 # Named struct constructor errors (CE2080-CE2089)
 _add(ErrorMessage("CE2080", Severity.ERROR,
