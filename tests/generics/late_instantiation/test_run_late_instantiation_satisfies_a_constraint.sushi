@@ -1,0 +1,32 @@
+# A constraint on a LATE instantiation: `show_it@(S: Show)` is called inside a generic
+# body with a `Box@(T)` that exists only after substitution. A generic-target perk
+# implementation applies to every instantiation by construction, so the constraint
+# holds whatever order the copies are cut in (#555).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "box\n"
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "box"
+
+fn show_it@(S: Show)(S s) string:
+    return Result.Ok(s.show())
+
+fn wrap@(T)(nom T v) Box@(T):
+    return Result.Ok(Box(v))
+
+fn outer@(T)(nom T v) string:
+    let Box@(T) b = wrap(nom v)??
+    return Result.Ok(show_it(b)??)
+
+fn main() i32:
+    println(outer(nom "towel").realise("?"))
+    return Result.Ok(0)

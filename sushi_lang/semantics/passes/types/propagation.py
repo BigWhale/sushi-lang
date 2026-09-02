@@ -110,7 +110,7 @@ def _propagate_array_element_type(validator: 'TypeValidator', value_expr: 'Expr'
 def _propagate_to_enum_args(validator: 'TypeValidator', node: Expr,
                             enum_type: EnumType) -> None:
     """Recursively propagate types to enum constructor arguments."""
-    if not node.args:
+    if not getattr(node, "args", None):
         return
 
     variant_name = None
@@ -164,15 +164,23 @@ def _propagate_to_struct_args(validator: 'TypeValidator', node: Expr,
 
 def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
                                  enum_type: EnumType) -> None:
-    """Propagate generic enum type (Maybe, Either, user-defined) to constructor."""
-    if not isinstance(node, (EnumConstructor, DotCall)):
+    """Propagate generic enum type (Maybe, Either, user-defined) to constructor.
+
+    Three spellings construct a variant: `EnumConstructor`, the `DotCall`
+    `Maybe.None()`, and the bare `Maybe.None`, which parses as a field read on the
+    type NAME. The bare one took no stamp, so a generic enum's payload-free variant
+    reached the borrow pass and the backend as a read of an unknown owner (#545).
+    """
+    from sushi_lang.semantics.ast import MemberAccess
+
+    if not isinstance(node, (EnumConstructor, DotCall, MemberAccess)):
         return
 
     enum_name = None
     if isinstance(node, EnumConstructor):
         enum_name = node.enum_name
-    elif isinstance(node, DotCall) and isinstance(node.receiver, Name):
-        enum_name = node.receiver.id
+    else:
+        enum_name = _enum_receiver_name(validator, node.receiver)
 
     if not (enum_name and isinstance(enum_type, EnumType)):
         return
@@ -190,6 +198,28 @@ def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
     # this enum's payload types.
     elif enum_name == enum_type.name:
         _propagate_to_enum_args(validator, node, enum_type)
+
+
+def _enum_receiver_name(validator: 'TypeValidator', receiver: Expr) -> Optional[str]:
+    """The enum a variant spelling's receiver names: bare, or behind a namespace.
+
+    `Maybe.None()`, the bare `Maybe.None`, and both behind an alias -- `geo.Slot.Filled(x)`
+    reaches this phase as a `MemberAccess` receiver, because the fold that leaves `Slot`
+    runs during validation, after propagation. Reading the bare shape alone left the
+    qualified spelling of a GENERIC enum with no stamp, and the backend reported it as a
+    compiler bug (CE0113). Local-wins (#296): a local named after the enum is a value.
+    """
+    from sushi_lang.semantics.ast import MemberAccess
+
+    if isinstance(receiver, Name):
+        if receiver.id in validator.variable_types:
+            return None
+        return receiver.id
+    if isinstance(receiver, MemberAccess):
+        binding = validator.resolve_namespaced(receiver.receiver, receiver.member)
+        if binding is not None and binding.kind == "enum":
+            return binding.name
+    return None
 
 
 def _static_receiver_type_name(validator: 'TypeValidator', node: Expr) -> Optional[str]:

@@ -16,12 +16,16 @@ class ConstraintValidator:
         self,
         perk_table: PerkTable,
         perk_impl_table: PerkImplementationTable,
-        reporter: Reporter
+        reporter: Reporter,
+        generic_perk_impls=None,
     ):
         """Initialize constraint validator."""
         self.perk_table = perk_table
         self.perk_impl_table = perk_impl_table
         self.reporter = reporter
+        # The generic-target implementation templates (`GenericPerkImplTable`), when the
+        # caller has them: a template answers for an instantiation whose copy is not cut yet.
+        self.generic_perk_impls = generic_perk_impls
 
     def validate_constraint(
         self,
@@ -32,12 +36,30 @@ class ConstraintValidator:
         """Check if a type satisfies a single perk constraint."""
         type_name = self._get_type_name(type_arg)
 
-        if not self.perk_impl_table.implements(type_name, constraint_name):
+        if not (self.perk_impl_table.implements(type_name, constraint_name)
+                or self._template_implements(type_arg, constraint_name)):
             er.emit(self.reporter, er.ERR.CE4006, span,
                    type=display_type(type_arg), perk=constraint_name)
             return False
 
         return True
+
+    def _template_implements(self, type_arg: Type, constraint_name: str) -> bool:
+        """Does a GENERIC-target implementation cover this instantiation (#555)?
+
+        `extend Box@(T) with Show` applies to every `Box@(...)` by construction, and the
+        copy for a LATE instantiation is cut only after the functions are monomorphized
+        -- so the table cannot answer yet, while the template already can. Without this
+        the answer depended on the order the copies were cut in.
+        """
+        templates = self.generic_perk_impls
+        base = getattr(type_arg, "generic_base", None)
+        args = getattr(type_arg, "generic_args", None)
+        if templates is None or not base or not args:
+            return False
+        return any(template.impl.perk_name == constraint_name
+                   and len(template.type_params) == len(args)
+                   for template in templates.templates(base))
 
     def validate_all_constraints(
         self,

@@ -102,13 +102,17 @@ class ExpressionEmitter:
                 if isinstance(expr.receiver, Name):
                     receiver_name = expr.receiver.id
                     # Local-wins (#296): `Color.v` on a local named Color is a field read.
-                    if (receiver_name in self.codegen.enum_table.by_name
-                            and self.codegen.memory.find_semantic_type(receiver_name) is None):
-                        from sushi_lang.backend.expressions import enums
-                        enum_type = self.codegen.enum_table.by_name[receiver_name]
-                        return enums.emit_enum_constructor_from_method_call(
-                            self.codegen, enum_type, expr.member, []
-                        )
+                    if self.codegen.memory.find_semantic_type(receiver_name) is None:
+                        from sushi_lang.semantics.typesys import EnumType
+                        # A GENERIC enum's bare variant carries its interned instance as
+                        # a stamp: the table holds `Maybe<string>`, never `Maybe` (#545).
+                        enum_type = (getattr(expr, 'resolved_enum_type', None)
+                                     or self.codegen.enum_table.by_name.get(receiver_name))
+                        if isinstance(enum_type, EnumType):
+                            from sushi_lang.backend.expressions import enums
+                            return enums.emit_enum_constructor_from_method_call(
+                                self.codegen, enum_type, expr.member, []
+                            )
 
                 from sushi_lang.backend.expressions import structs
                 return structs.emit_member_access(self.codegen, expr, to_i1)

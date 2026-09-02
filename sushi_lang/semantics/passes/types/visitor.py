@@ -463,30 +463,9 @@ class ExpressionValidator(RecursiveVisitor):
         # here as well walked the receiver twice and reported every diagnostic in it
         # twice (#201).
 
-        if isinstance(node.receiver, Name):
-            receiver_name = node.receiver.id
-            # Local-wins (#296): a local named after an enum shadows it, so the call is
-            # a method call on the local, never a variant construction.
-            if (receiver_name not in self.type_validator.variable_types and
-                (receiver_name in self.type_validator.enum_table.by_name or
-                 receiver_name in self.type_validator.generic_enum_table.by_name)):
-                from sushi_lang.semantics.ast import EnumConstructor
-                temp_constructor = EnumConstructor(
-                    enum_name=receiver_name,
-                    variant_name=node.method,
-                    args=node.args,
-                    enum_name_span=node.receiver.loc,
-                    loc=node.loc
-                )
-
-                if hasattr(node, 'resolved_enum_type') and node.resolved_enum_type is not None:
-                    temp_constructor.resolved_enum_type = node.resolved_enum_type
-
-                self.type_validator._validate_enum_constructor(temp_constructor)
-
-                if hasattr(temp_constructor, 'resolved_enum_type'):
-                    node.resolved_enum_type = temp_constructor.resolved_enum_type
-                return
+        if (isinstance(node.receiver, Name)
+                and self._validate_variant_spelling(node, node.method, node.args)):
+            return
 
         # obj.handler(): indirect call through a fn-typed struct field (a same-named
         # method wins over the field -- see resolve_fn_field_call). The backend reads
@@ -579,6 +558,48 @@ class ExpressionValidator(RecursiveVisitor):
     def visit_enumconstructor(self, node: EnumConstructor) -> None:
         """Validate enum constructor call (including Result.Ok() and Result.Err())."""
         self.type_validator._validate_enum_constructor(node)
+
+    def visit_memberaccess(self, node: MemberAccess) -> None:
+        """A field read -- or the bare spelling of a payload-free variant (#545)."""
+        from sushi_lang.semantics.passes.types.calls.namespaced import fold_namespaced_enum
+        fold_namespaced_enum(self.type_validator, node)
+        if (isinstance(node.receiver, Name)
+                and self._validate_variant_spelling(node, node.member, [])):
+            return
+        self.visit(node.receiver)
+
+    def _validate_variant_spelling(self, node, variant_name: str, args: list) -> bool:
+        """Validate `Enum.Variant(...)` or the bare `Enum.Variant` as the constructor it is.
+
+        Both parse as an operation on a type NAME -- a call, or a field read -- and both
+        construct the same value, so one path checks them. The bare spelling used to
+        take neither path: an undeclared variant compiled, and a GENERIC enum's variant
+        carried no stamp for the borrow pass and the backend to read (#545).
+
+        Local-wins (#296): a local named after the enum shadows it, so the node is a
+        method call or a field read on the local, never a variant construction.
+        """
+        tv = self.type_validator
+        receiver_name = node.receiver.id
+        if receiver_name in tv.variable_types:
+            return False
+        if (receiver_name not in tv.enum_table.by_name
+                and receiver_name not in tv.generic_enum_table.by_name):
+            return False
+
+        from sushi_lang.semantics.ast import EnumConstructor
+        constructor = EnumConstructor(
+            enum_name=receiver_name,
+            variant_name=variant_name,
+            args=args,
+            enum_name_span=node.receiver.loc,
+            loc=node.loc,
+        )
+        constructor.resolved_enum_type = getattr(node, 'resolved_enum_type', None)
+        tv._validate_enum_constructor(constructor)
+        if constructor.resolved_enum_type is not None:
+            node.resolved_enum_type = constructor.resolved_enum_type
+        return True
 
     def visit_tryexpr(self, node: TryExpr) -> None:
         """Validate try expression (?? operator)."""
@@ -735,6 +756,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if self.type_validator.namespace_of(node.receiver) is not None:
             return infer_namespaced_member(self.type_validator, node)
 
+        if isinstance(node.receiver, Name):
+            variant_type = self._bare_variant_type(node)
+            if variant_type is not None:
+                return variant_type
+
         receiver_type = self.type_validator.infer_expression_type(node.receiver)
 
         if receiver_type is None:
@@ -750,6 +776,20 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                     return resolved_type
 
         return None
+
+    def _bare_variant_type(self, node: MemberAccess) -> Optional[Type]:
+        """The enum a bare `Enum.Variant` constructs, or None when the receiver is a value.
+
+        The two answers `visit_dotcall` gives the parenthesized spelling: a plain enum
+        is its table entry, and a generic one is whatever propagation stamped (#545).
+        """
+        tv = self.type_validator
+        receiver_name = node.receiver.id
+        if receiver_name in tv.variable_types:
+            return None
+        if node.resolved_enum_type is not None:
+            return node.resolved_enum_type
+        return tv.enum_table.by_name.get(receiver_name)
 
     def visit_name(self, node: Name) -> Optional[Type]:
         """Infer name expression type."""

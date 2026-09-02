@@ -725,6 +725,7 @@ class MemberAccess(Node):
     receiver: "Expr"    # The struct expression (p in p.x)
     member: str
     namespace_ref: Optional["NamespaceRef"] = None  # a name read through an alias
+    resolved_enum_type: Optional["Type"] = None  # a bare `Maybe.None`: the interned instance (#545)
 
 @dataclass(slots=True)
 class EnumConstructor(Node):

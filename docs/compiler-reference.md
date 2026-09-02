@@ -107,7 +107,10 @@ consumer's compiler and a later one may reject it. A consumer outside that range
 **CE3503**, and `--ignore-compiler-version` overrides the check for the whole build.
 
 The plain report is the API surface: one line per symbol, plus a parameter's `nom` mode
-beside its type, which is the one mode a type cannot spell for itself.
+beside its type, which is the one mode a type cannot spell for itself. A perk prints with
+each method's signature, receiver mode included (`fn read(poke self, u8[] buf) i32 |
+IoError`), and `Perk Implementations` lists every type that implements it, a generic-target
+template (`extend Box@(T) with Show`) beside the concrete ones.
 
 `--docs` prints each symbol's documentation block under its signature. It is opt-in
 because prose is what makes a report long -- a library of forty documented functions runs

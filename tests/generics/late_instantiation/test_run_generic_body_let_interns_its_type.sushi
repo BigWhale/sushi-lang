@@ -1,0 +1,26 @@
+# A `let` in a generic body names an instantiation nothing else names, and no generic
+# function's signature interns it on the way: `Box@(string)` exists only once
+# `outer@(string)` is substituted. The copy's own annotations intern it, and the late
+# instantiation gets its templates (#555).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "box towel\n"
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "box"
+
+fn outer@(T)(nom T v) string:
+    let Box@(T) b = Box(v)
+    return Result.Ok("{b.show()} {b.item}")
+
+fn main() i32:
+    println(outer(nom "towel").realise("?"))
+    return Result.Ok(0)

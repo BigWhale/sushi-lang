@@ -183,7 +183,64 @@ All notable changes to Sushi Lang will be documented in this file.
   socket's partial write says what the peer's window took, and `write_bytes`, which
   writes everything, cannot.
 
+### Tooling
+- **`--lib-info` lists a library's perks.** The report named a public perk and nothing
+  under it, printed an implementation's methods as bare names, and printed a generic-target
+  implementation (`extend Box@(T) with Show`) nowhere -- so since the io contracts became
+  shipped perks, the one report a consumer reads hid them (#537). Every perk method is now
+  a manifest record with its signature and receiver mode (templates schema 7; a
+  version-6 binary library is refused and rebuilt), the `Perks` section prints each
+  contract's methods -- `fn read(poke self, u8[] buf) i32 | IoError` -- and `Perk
+  Implementations` lists the concrete implementations and the generic-target templates in
+  one section, each method with the same signature line. The Python fallback and the
+  `slib-info` tool change together, and `--docs` prints a perk method's block under its
+  signature, which the record could not carry before.
+
 ### Fixed
+- **A generic enum's constructor works behind an alias.** `slot.Slot.Filled("x")` with
+  `use "slot" as slot` reached the backend as a CE0113 compiler bug -- "semantic
+  analysis should have set resolved_enum_type" -- and so did the bare `slot.Slot.Empty`.
+  Propagation stamps a generic enum's constructor with the instantiation its position
+  declares, and it read the receiver as a bare name only; the fold that turns the alias
+  into `Slot` runs later, during validation. Propagation now reads the enum's name
+  through the alias for itself, so both qualified spellings take the type of a `let`, a
+  return, a struct argument, a call argument and a rebind exactly as the bare ones do.
+  Found under #545.
+- **A late instantiation gets its generic-target templates.** A type named only inside a
+  generic body -- `let Box@(T) b` in `outer@(T)`, or the return of a generic it calls --
+  exists only once that body is substituted, after the extension and perk-implementation
+  copies were cut, so `b.show()` and `b.label()` were CE2008 on a `Box@(string)` that
+  plainly existed (found under #555). Three gaps in the same path closed with it: a copy's
+  body walk bound no `let` local, so a generic called with one was never collected
+  (CE2061); a `let` annotation's instantiation lived in the substitutor's cache and was
+  never interned (CE2008 on the type itself); and a `@(S: Show)` constraint on a late type
+  depended on the order the copies were cut in. Every instantiation the tables hold with
+  no copy yet is cut after the functions, to a fixpoint, and the constraint check reads
+  the templates beside the registered copies.
+- **A generic call's substituted signature reaches the instantiation collector.**
+  `match buf_reader(nom f, 4096): Result.Ok(nom r) -> r.into_inner()` was CE2008
+  "undefined function" while the `let BufReader@(File) r = ...` form compiled (#549), and
+  `wrap(nom "x").show()` over `fn wrap@(T)(nom T v) Box@(T)` with `extend Box@(T) with
+  Show` was the same CE2008 (#555). The instantiate pass recorded a generic call's
+  `Result` wrapper and nothing else, through a substitution that rewrote a top-level type
+  parameter and left `Box@(T)` untouched -- so an instantiation named only by a generic's
+  return or parameter never reached the set the generic-target extension and
+  perk-implementation copies are cut from. The pass now walks the whole substituted
+  signature, and a `match` over a generic call types its arm bindings from it (the
+  typecheck pass's inferrer has no monomorphized copy to read yet), so a generic called
+  with such a binding is collected too.
+- **A bare `Maybe.None` on a generic enum constructs the value.** A payload-free variant
+  spelled without parentheses parses as a field read on the type name, and only the
+  parenthesized spelling reached the typecheck pass. On a MONOMORPHIZED generic enum
+  the bare spelling then carried no type -- the borrow pass looked `Maybe` up by its
+  bare name where the table holds `Maybe<string>`, read the initializer as a borrow, and
+  moving the binding was CE2411 (#545); a program that never moved it reached the
+  backend and was a CE0056 internal error. The hole was wider than the report: a bare
+  variant of a PLAIN enum skipped the variant check, so `Shape.Nope` compiled. The bare
+  spelling now takes the same path as `Maybe.None()`: propagation stamps the interned
+  instance on it, validation checks the variant (CE2045), and the borrow pass and the
+  backend read the stamp. Every position that hands a value its type is covered -- a
+  `let`, a `return`, a constructor argument, a call argument, a rebind.
 - **An empty `from([])` takes its element type from the position, everywhere.** As a
   `.realise()` default and as a bare extension's `return` it reached the backend with no
   element type and was CE0000, a compiler crash on ordinary syntax (#544). Three

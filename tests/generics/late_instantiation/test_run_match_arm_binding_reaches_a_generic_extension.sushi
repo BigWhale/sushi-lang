@@ -1,0 +1,22 @@
+# A `match` arm binding's type comes from a generic function's SUBSTITUTED return type,
+# and nothing else in the program names `Wrap@(i32)`. The generic-target extension has
+# to be cut for it all the same; it was CE2008 "undefined function" (#549).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7\n"
+
+struct Wrap@(T):
+    T item
+
+extend Wrap@(T) inner() T:
+    return self.item
+
+fn wrap@(T)(nom T v) Wrap@(T):
+    return Result.Ok(Wrap(v))
+
+fn main() i32:
+    match wrap(nom 7):
+        Result.Ok(w) -> println("{w.inner()}")
+        Result.Err(_) -> println("no wrap")
+    return Result.Ok(0)

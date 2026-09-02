@@ -1017,6 +1017,12 @@ let Status s2 = Status.Running(42)
 let Status s3 = Status.Error("Failed")
 ```
 
+A variant with no payload may also be written without the parentheses: `Status.Idle` is
+`Status.Idle()`. The two spellings are one construction, and the same checks apply to
+both -- an undeclared variant is CE2045, and the value takes the type of its position.
+That holds for a generic enum too: `let Maybe@(string) m = Maybe.None` constructs a
+`Maybe@(string)`, and the binding owns it exactly as `Maybe.None()` would.
+
 ### Pattern Matching
 
 Required to access enum data:

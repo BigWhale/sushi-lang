@@ -328,6 +328,9 @@ for the few things that do not travel in it.
 
 This is useful for:
 - Checking what functions a library exports, and what each one is for
+- Reading a library's contracts: every public perk prints with its method signatures, and
+  `Perk Implementations` lists which types satisfy each one -- a concrete implementation
+  and a generic-target template (`extend Box@(T) with Show`) alike
 - Verifying platform compatibility
 - Understanding library dependencies
 

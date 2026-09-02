@@ -1,0 +1,16 @@
+# A payload-free variant of a MONOMORPHIZED generic enum, spelled without parentheses,
+# constructs the value and owns it, exactly as `Maybe.None()` does. It used to be read
+# as a borrow, so moving the binding that held it was CE2411 (#545).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "false\n"
+
+fn none_of() Maybe@(string):
+    let Maybe@(string) m = Maybe.None
+    return Result.Ok(m)
+
+fn main() i32:
+    let Maybe@(string) m = none_of().realise(Maybe.Some("wrong"))
+    println("{m.is_some()}")
+    return Result.Ok(0)

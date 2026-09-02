@@ -341,6 +341,20 @@ Detect which generic instantiations are needed.
 3. When `.push()` is called on `List@(i32)`, record `List@(i32).push`
 4. Build complete set of required instantiations
 
+### A generic call's substituted signature
+
+A call to `fn wrap@(T)(nom T v) Box@(T)` with a string names `Box@(string)`, and the program
+may name that instantiation nowhere else: a `match` arm binds the payload, or the value is
+passed straight on. The generic-target extension and perk-implementation copies are cut from
+the set this pass collects, so the pass records the SUBSTITUTED signature of every generic
+call it resolves -- the return, the `Result` the declaration wraps it in, and the parameters
+-- through the same type walk a concrete declaration gets (#549, #555).
+
+The typecheck pass's inferrer types a generic call through its monomorphized copy, which does
+not exist yet, so it answers nothing for one here. A `match` over a generic call therefore
+types its arm bindings from that substituted signature, and a generic called with such a
+binding is collected like any other (#549).
+
 ### Example
 
 ```sushi
@@ -373,6 +387,21 @@ Generate concrete types from generic definitions.
 2. Substitute type parameters (`T` → `i32`)
 3. Create specialized struct/function
 4. Add to AST as concrete definition
+
+### A late instantiation
+
+A generic BODY names types the collector never saw: `let Box@(T) b` inside `outer@(T)` is
+a `Box@(string)` only once `outer@(string)` is substituted. A copy binds its `let` locals
+while it walks its body for nested generic calls, so a generic called with one is collected
+like one called with a parameter, and it interns every type its `let` annotations name,
+exactly as it interns its signature's.
+
+The generic-target extension and perk-implementation copies are first cut from the
+collector's set, before the functions are monomorphized. Every instantiation interned after
+that -- the tables are the authority on what exists -- gets its copies afterwards, and a
+copy's body can instantiate more functions, so this runs to a fixpoint (#555). A perk
+constraint on such a type reads the templates as well as the registered copies, so its
+answer does not depend on the order the copies were cut in.
 
 ### Example
 

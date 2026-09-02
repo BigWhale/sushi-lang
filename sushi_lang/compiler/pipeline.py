@@ -77,7 +77,7 @@ def _check_library_compiler_version(metadata: dict, lib_path: str,
 
 # The templates schema this compiler writes and reads. ONE constant for the producer
 # (`backend/library_manifest.py`) and the consumer gate below.
-TEMPLATES_SCHEMA_VERSION = 6
+TEMPLATES_SCHEMA_VERSION = 7
 
 
 def _check_library_templates_version(metadata: dict, lib_path: str) -> None:
@@ -89,8 +89,10 @@ def _check_library_templates_version(metadata: dict, lib_path: str) -> None:
     an old library is refused and must be rebuilt -- decision B of the epic. Version 6
     ships every public perk and every generic-target perk implementation template
     (#543); a version-5 library has neither, so a contract it implements would be
-    CE2008 at the consumer. A SOURCE library recompiles from its units and reads none
-    of this.
+    CE2008 at the consumer. Version 7 gives every perk method record its signature and
+    receiver mode, on the contract and on both kinds of implementation (#537); a
+    version-6 library's report would list its contracts with no methods. A SOURCE
+    library recompiles from its units and reads none of this.
     """
     from sushi_lang.backend.library_errors import LibraryError
 

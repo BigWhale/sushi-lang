@@ -99,6 +99,7 @@ class InstantiationCollector:
         )
 
         expression_scanner.scan_block = function_collector._collect_from_block
+        expression_scanner.collect_type = function_collector._collect_from_type
         return function_collector
 
     def run(self, program: "Program") -> Tuple[Set[Tuple[str, Tuple["Type", ...]]], Set[Tuple[str, Tuple["Type", ...]]]]:

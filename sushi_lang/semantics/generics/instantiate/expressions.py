@@ -38,6 +38,11 @@ class ExpressionScanner:
         # the unit-test paths that drive the scanner directly (a block-body lambda is a
         # `let` RHS, which those paths do not construct).
         self.scan_block = None
+        # Callback to collect the instantiations a TYPE names. Wired by the
+        # InstantiationCollector to its FunctionCollector._collect_from_type, which
+        # walks arrays and named types too; the scanner's own GenericTypeRef-only walk
+        # is the fallback on the unit-test paths that drive the scanner directly.
+        self.collect_type = self._collect_from_type
         self._resolver = TypeResolver(
             type_inferrer.struct_table or {},
             type_inferrer.enum_table or {}
@@ -275,13 +280,35 @@ class ExpressionScanner:
                     ("Result", (DynamicArrayType(BuiltinType.STRING), net_error)))
             return
 
-        if generic_func is None:
-            generic_func = (self.generic_funcs or {}).get(function_name)
-        if generic_func is None:
+        resolved = self.resolve_generic_call(call, generic_func)
+        if resolved is None:
+            # Not a generic call, or its type arguments cannot be inferred here. No
+            # diagnostic: the typecheck pass reports the real one (CE2060, CE2062).
             return
+        generic_func, type_args = resolved
 
-        # Explicit `@(...)` type args (issue #137) override inference. If the arity
-        # is wrong we collect nothing here and let the typecheck pass report CE2062.
+        # D2: identity is (declaring_unit, name, type_args). The declaring unit
+        # comes from the definition the ladder resolved for THIS unit (#495).
+        self.function_instantiations.add(
+            (getattr(generic_func, "unit_name", None), function_name, type_args))
+        self._collect_substituted_signature(generic_func, type_args)
+
+    def resolve_generic_call(self, call, generic_func=None):
+        """The generic declaration a call names and its type arguments, or None.
+
+        A qualified call hands its declaration in; a bare one reads the unit's view.
+        Explicit `@(...)` type args (issue #137) override inference; a wrong arity
+        answers None and leaves CE2062 to the typecheck pass.
+        """
+        from sushi_lang.semantics.ast import Call, Name
+
+        if not isinstance(call, Call) or not isinstance(call.callee, Name):
+            return None
+        if generic_func is None:
+            generic_func = (self.generic_funcs or {}).get(call.callee.id)
+        if generic_func is None:
+            return None
+
         explicit = call.type_args
         if explicit:
             from sushi_lang.semantics.generics.explicit_type_args import (
@@ -289,7 +316,7 @@ class ExpressionScanner:
                 check_explicit_type_arg_arity,
             )
             if check_explicit_type_arg_arity(generic_func, len(explicit)) is not None:
-                return
+                return None
             type_args = resolve_explicit_type_args(
                 explicit,
                 self.type_inferrer.struct_table,
@@ -298,26 +325,89 @@ class ExpressionScanner:
         else:
             type_args = self._infer_type_args_from_call(call, generic_func)
 
-        if type_args is not None:
-            # D2: identity is (declaring_unit, name, type_args). The declaring unit
-            # comes from the definition the ladder resolved for THIS unit (#495).
-            self.function_instantiations.add(
-                (getattr(generic_func, "unit_name", None), function_name, type_args))
+        if type_args is None:
+            return None
+        return generic_func, type_args
 
-            # IMPORTANT: Also detect Result<T, E> instantiation for the return type
-            # All Sushi functions implicitly return Result<T, E> where T is the declared return type
-            # and E is StdError by default (unless explicitly specified)
-            if generic_func.ret is not None:
-                ret_type = self.type_inferrer.substitute_type_simple(
-                    generic_func.ret, generic_func.type_params, type_args
-                )
-                if ret_type is not None:
-                    std_error = self.type_inferrer.enum_table.get("StdError")
-                    if std_error:
-                        self.instantiations.add(("Result", (ret_type, std_error)))
+    def generic_call_type(self, expr):
+        """What a generic call yields, as this pass can know it (#549).
 
-            # Note: We don't emit errors here if inference fails
-            # Type validation will catch that in the typecheck pass
+        The typecheck pass types a generic call through its monomorphized copy, which
+        does not exist yet, so the shared inferrer answers None for one here -- and a
+        `match` over such a call bound its payloads with no type at all. The type
+        arguments are in hand, so the substituted signature answers: the return, in the
+        Result the declaration wraps it in.
+        """
+        resolved = self.resolve_generic_call(expr)
+        if resolved is None:
+            return None
+        generic_func, type_args = resolved
+        substitution = self._substitution_of(generic_func, type_args)
+        if substitution is None or generic_func.ret is None:
+            return None
+        return self._substituted_result(generic_func, substitution)
+
+    @staticmethod
+    def _substitution_of(generic_func, type_args) -> dict | None:
+        """Type parameter name -> type argument. A pack fans out and binds nothing here."""
+        from sushi_lang.semantics.generics.types import TypePack
+
+        params = [tp for tp in generic_func.type_params if not getattr(tp, "is_pack", False)]
+        args = [arg for arg in type_args if not isinstance(arg, TypePack)]
+        if len(params) != len(args):
+            return None
+        return {(tp.name if hasattr(tp, "name") else str(tp)): arg
+                for tp, arg in zip(params, args, strict=True)}
+
+    @staticmethod
+    def _substituted_result(generic_func, substitution):
+        """The Result a substituted signature answers: `ret` as written, or `Result<ret, E>`."""
+        from sushi_lang.semantics.generics.types import substitute_type_params
+        from sushi_lang.semantics.typesys import UnknownType
+
+        ret = substitute_type_params(generic_func.ret, substitution)
+        if isinstance(ret, GenericTypeRef) and ret.base_name == "Result":
+            return ret
+        err = generic_func.err_type
+        err = (substitute_type_params(err, substitution) if err is not None
+               else UnknownType("StdError"))
+        return GenericTypeRef(base_name="Result", type_args=(ret, err))
+
+    def _collect_substituted_signature(self, generic_func, type_args) -> None:
+        """The instantiations a generic call's SUBSTITUTED signature names (#549, #555).
+
+        `fn wrap@(T)(nom T v) Box@(T)` called with a string answers `Box@(string)`, and
+        the program may name that instantiation nowhere else: a `match` arm binds the
+        payload, or the value is passed straight on. The generic-target extension and
+        perk-implementation copies are cut from the instantiations collected here, so a
+        signature type that never reached this set had no method (CE2008). The walk is
+        the one a concrete declaration gets: the return, the Result it answers, the
+        parameters. Only the wrapper used to be recorded, through a substitution that
+        rewrote a top-level type parameter and left `Box@(T)` untouched.
+
+        The Result wrapper is recorded with StdError -- the call site types a generic's
+        channel that way today (#538) -- and with the declared channel too, which is what
+        the monomorphizer interns for the concrete copy.
+        """
+        from sushi_lang.semantics.generics.types import substitute_type_params
+        from sushi_lang.semantics.typesys import UnknownType
+
+        substitution = self._substitution_of(generic_func, type_args)
+        if substitution is None:
+            return
+
+        if generic_func.ret is not None:
+            ret = substitute_type_params(generic_func.ret, substitution)
+            self.collect_type(ret)
+            wrapped = self._substituted_result(generic_func, substitution)
+            self.collect_type(wrapped)
+            if wrapped is not ret:
+                self.collect_type(GenericTypeRef(
+                    base_name="Result", type_args=(ret, UnknownType("StdError"))))
+
+        for param in generic_func.params:
+            if param.ty is not None and not getattr(param, "is_pack", False):
+                self.collect_type(substitute_type_params(param.ty, substitution))
 
     def _infer_arg_type(self, arg_expr):
         """Infer a generic call argument's type through the typecheck pass's real inferrer."""
@@ -444,6 +534,7 @@ class ExpressionScanner:
 
         self.function_instantiations.add(
             (getattr(generic_func, "unit_name", None), name, tuple(type_args)))
+        self._collect_substituted_signature(generic_func, tuple(type_args))
 
     def _collect_from_type(self, ty: "Type") -> None:
         """Collect generic instantiations from a type annotation."""

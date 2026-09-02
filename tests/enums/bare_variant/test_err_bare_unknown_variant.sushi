@@ -1,0 +1,12 @@
+# The bare spelling is checked like the parenthesized one: a variant the enum does not
+# declare is CE2045. It used to bypass the typecheck pass and compile (#545).
+# EXPECT_ERROR_CODE: CE2045
+
+enum Shape:
+    Circle(i32)
+    Empty
+
+fn main() i32:
+    let Shape s = Shape.Nope
+    println("{s.is_some()}")
+    return Result.Ok(0)

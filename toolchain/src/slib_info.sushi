@@ -351,7 +351,11 @@ fn open_record(bool pending) bool:
 
 fn render_params(MsgValue f) string:
     let MsgValue ps = ml_get(f, "params")??
-    let string out = ""
+    # A perk method's receiver mode is the record's own field too, and it prints first,
+    # where the declaration wrote it: `(poke self, i32 width)`. Absent, it prints nothing.
+    let string out = ml_get_str(f, "self_mode")??
+    if (out != ""):
+        out := "{out} self"
     let i32 n = ml_len(ps)??
     let i32 i = 0
     while (i < n):
@@ -364,7 +368,7 @@ fn render_params(MsgValue f) string:
         let string mode = ""
         if (declared == "nom"):
             mode := "nom "
-        if (i == 0):
+        if (out == ""):
             out := "{mode}{t} {pn}"
         else:
             out := "{out}, {mode}{t} {pn}"
@@ -587,9 +591,26 @@ fn print_generic_named(MsgValue meta, string key, string title, string keyword,
     println("")
     return Result.Ok(~)
 
-# print_perks: the contracts a consumer can be asked to satisfy. A perk reaches the
-# manifest only when an exported generic's constraint names it, so this section is
-# exactly the set that can appear in a signature above.
+# print_methods: the method records of a perk or an implementation, one signature per
+# line. ONE printer for the contract and its implementations, so a method prints the
+# same way wherever it stands; each method is a record of its own for rule 2's spacing.
+fn print_methods(MsgValue owner, bool pending, Opts o) bool:
+    let bool p = pending
+    let MsgValue methods = ml_get(owner, "methods")??
+    let i32 nm = ml_len(methods)??
+    let i32 j = 0
+    while (j < nm):
+        let MsgValue m = ml_at(methods, j)??
+        p := open_record(p)??
+        let string sig = render_signature(m, o)??
+        println("    {sig}")
+        p := print_doc(m, "      ", o)??
+        j := j + 1
+    return Result.Ok(p)
+
+# print_perks: the contracts a consumer can be asked to satisfy -- every public perk,
+# plus any perk an exported template names -- each with the method signatures that
+# satisfying it means.
 fn print_perks(MsgValue meta, Opts o) ~:
     let MsgValue templates = ml_get(meta, "templates")??
     let MsgValue perks = ml_get(templates, "perks")??
@@ -604,39 +625,63 @@ fn print_perks(MsgValue meta, Opts o) ~:
         let string name = ml_get_str(r, "name")??
         println("  perk {name}:")
         pending := print_doc(r, "    ", o)??
+        pending := print_methods(r, pending, o)??
         i := i + 1
     println("")
     return Result.Ok(~)
 
-# print_perk_impls: which types satisfy which contract. Each method carries its own
-# block, which is the one thing an implementation record adds over a perk definition.
-fn print_perk_impls(MsgValue meta, Opts o) ~:
-    let MsgValue templates = ml_get(meta, "templates")??
-    let MsgValue impls = ml_get(templates, "perk_impls")??
+# render_impl_target: an implementation's target -- `Gadget`, or `Box@(T)` for a
+# generic-target template, whose record carries the base name and the parameters as
+# written, so the header is rebuilt here and never parsed out of the source slice.
+fn render_impl_target(MsgValue r) string:
+    let string target = to_surface(ml_get_str(r, "type")??)??
+    let MsgValue targs = ml_get(r, "type_args")??
+    let i32 n = ml_len(targs)??
+    if (n == 0):
+        return Result.Ok(target)
+    let string body = ""
+    let i32 i = 0
+    while (i < n):
+        let MsgValue a = ml_at(targs, i)??
+        let string s = ml_str(a)??
+        if (i == 0):
+            body := "{s}"
+        else:
+            body := "{body}, {s}"
+        i := i + 1
+    return Result.Ok("{target}@({body})")
+
+# print_impl_records: one list of implementation records, concrete or template.
+fn print_impl_records(MsgValue impls, bool pending, Opts o) bool:
+    let bool p = pending
     let i32 n = ml_len(impls)??
-    if (not section("Perk Implementations", n, o)??):
-        return Result.Ok(~)
-    let bool pending = false
     let i32 i = 0
     while (i < n):
         let MsgValue r = ml_at(impls, i)??
-        pending := open_record(pending)??
-        let string target = to_surface(ml_get_str(r, "type")??)??
+        p := open_record(p)??
+        let string target = render_impl_target(r)??
         # `perk` is a reserved word, so the contract's NAME cannot be bound to it.
         let string contract = ml_get_str(r, "perk")??
         println("  extend {target} with {contract}:")
-        pending := print_doc(r, "    ", o)??
-        let MsgValue methods = ml_get(r, "methods")??
-        let i32 nm = ml_len(methods)??
-        let i32 j = 0
-        while (j < nm):
-            let MsgValue m = ml_at(methods, j)??
-            pending := open_record(pending)??
-            let string mname = ml_get_str(m, "name")??
-            println("    fn {mname}")
-            pending := print_doc(m, "      ", o)??
-            j := j + 1
+        p := print_doc(r, "    ", o)??
+        p := print_methods(r, p, o)??
         i := i + 1
+    return Result.Ok(p)
+
+# print_perk_impls: which types satisfy which contract -- the concrete implementations,
+# then the generic-target templates, in ONE section: a reader asking "who implements
+# Show" wants one list, and `extend Box@(T) with Show` answers for every `Box`.
+fn print_perk_impls(MsgValue meta, Opts o) ~:
+    let MsgValue templates = ml_get(meta, "templates")??
+    let MsgValue impls = ml_get(templates, "perk_impls")??
+    let MsgValue generic = ml_get(templates, "generic_perk_impls")??
+    let i32 concrete_n = ml_len(impls)??
+    let i32 generic_n = ml_len(generic)??
+    if (not section("Perk Implementations", concrete_n + generic_n, o)??):
+        return Result.Ok(~)
+    let bool pending = false
+    pending := print_impl_records(impls, pending, o)??
+    pending := print_impl_records(generic, pending, o)??
     println("")
     return Result.Ok(~)
 

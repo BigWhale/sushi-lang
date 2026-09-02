@@ -151,7 +151,7 @@ def test_the_perk_implementation_section_exists(report, which):
             "  extend i32 with Doubler:\n"
             "    The i32 side of the doubler contract.\n"
             "\n"
-            "    fn doubled\n"
+            "    fn doubled() i32\n"
             "      Twice the receiver, by multiplication.\n") in report[which]
 
 

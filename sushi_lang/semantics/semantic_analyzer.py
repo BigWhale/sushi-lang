@@ -315,7 +315,8 @@ class SemanticAnalyzer:
         constraint_validator = ConstraintValidator(
             perk_table=self.perks,
             perk_impl_table=self.perk_impls,
-            reporter=self.reporter
+            reporter=self.reporter,
+            generic_perk_impls=getattr(self.tables, "generic_perk_impls", None),
         )
 
         monomorphizer = Monomorphizer(
@@ -406,6 +407,13 @@ class SemanticAnalyzer:
 
         if extension_fn_instantiations:
             monomorphizer.monomorphize_all_functions(extension_fn_instantiations, compilation_order)
+
+        # monomorphize (cont.): a LATE instantiation -- one the instantiate pass never
+        # saw, interned while a generic body was substituted -- gets its generic-target
+        # extension and perk-implementation copies exactly as an early one did (#555).
+        self._cut_templates_for_late_instantiations(
+            monomorphizer, compilation_order, concrete_extension_defs,
+            struct_instantiations, enum_instantiations)
 
         # resolve: AFTER monomorphization, so every struct/enum exists in the tables.
         from sushi_lang.semantics.passes.resolve import (
@@ -628,6 +636,58 @@ class SemanticAnalyzer:
                 fn_instantiations |= monomorphizer.collect_from_perk_method_body(
                     impl.target_type, method)
 
+    def _cut_templates_for_late_instantiations(self, monomorphizer, compilation_order,
+                                               concrete_extension_defs,
+                                               struct_instantiations,
+                                               enum_instantiations) -> None:
+        """Cut the template copies for every instantiation interned AFTER the collector ran.
+
+        The generic-target extension and perk-implementation copies are cut from the
+        instantiations the instantiate pass collected. A type a generic BODY names --
+        `let Box@(T) b` in `outer@(T)`, or the return of a generic it calls -- is
+        interned only while that body is substituted, so `Box<string>` existed and had
+        no `show()` (#555). The tables are the authority on what exists: every interned
+        instantiation with no copy yet gets one here. A copy's body can instantiate more
+        functions and those can intern more types, so this runs to a fixpoint; the bound
+        exists so a pathological program cannot spin, and reaching it drops an
+        instantiation, which surfaces as the ordinary CE2008, never as a hang.
+        """
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        from sushi_lang.semantics.generics.extensions import monomorphize_all_extension_methods
+
+        cut = {instantiation_key(base, args) for base, args in struct_instantiations}
+        cut |= {instantiation_key(base, args) for base, args in enum_instantiations}
+
+        def late(table) -> dict:
+            return {name: ty for name, ty in table.by_name.items()
+                    if getattr(ty, "generic_base", None) and getattr(ty, "generic_args", None)
+                    and name not in cut}
+
+        for _round in range(self.MAX_ARRAY_EXPANSION_ROUNDS):
+            late_structs = late(self.structs)
+            late_enums = late(self.enums)
+            if not late_structs and not late_enums:
+                return
+            cut.update(late_structs)
+            cut.update(late_enums)
+            struct_insts = {(ty.generic_base, ty.generic_args) for ty in late_structs.values()}
+            enum_insts = {(ty.generic_base, ty.generic_args) for ty in late_enums.values()}
+
+            fn_instantiations: set = set()
+            self._monomorphize_generic_perk_impls(
+                monomorphizer, compilation_order, struct_insts, late_structs,
+                enum_insts, late_enums, fn_instantiations)
+            copies = monomorphize_all_extension_methods(
+                self.generic_extensions.by_type, struct_insts, late_structs,
+                enum_insts, late_enums, substitutor=monomorphizer.substitutor)
+            for key, extend_def in copies.items():
+                if key in concrete_extension_defs:
+                    continue
+                concrete_extension_defs[key] = extend_def
+                fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
+            if fn_instantiations:
+                monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
+
     def _intern_late_type_instantiations(self, monomorphizer, extend_defs) -> None:
         """Intern the type instantiations a call-site-solved copy names (risk 1).
 
@@ -636,31 +696,15 @@ class SemanticAnalyzer:
         `finite-types` and `derive` have run. Every fully-concrete GenericTypeRef in
         the copies' signatures and `let` annotations goes through the late interner.
         """
-        from sushi_lang.semantics.ast import Block, Let
+        from sushi_lang.semantics.generics.monomorphize.functions import let_annotations
 
         types: list = []
-
-        def visit_statements(block) -> None:
-            if not isinstance(block, Block):
-                return
-            for stmt in block.statements:
-                if isinstance(stmt, Let) and getattr(stmt, "ty", None) is not None:
-                    types.append(stmt.ty)
-                for attr in ("body", "then_block", "else_block", "block"):
-                    visit_statements(getattr(stmt, attr, None))
-                for arms in (getattr(stmt, "arms", None) or ()):
-                    if isinstance(arms, tuple):
-                        for part in arms:
-                            visit_statements(part)
-                    else:
-                        visit_statements(getattr(arms, "body", None))
-
         for extend_def in extend_defs:
             types.append(extend_def.ret)
             types.append(getattr(extend_def, "err_type", None))
             for param in extend_def.params:
                 types.append(param.ty)
-            visit_statements(extend_def.body)
+            types.extend(let_annotations(extend_def.body))
 
         self._intern_generic_type_refs(monomorphizer, types)
 

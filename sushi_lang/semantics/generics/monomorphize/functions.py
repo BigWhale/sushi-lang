@@ -1,6 +1,6 @@
 """Generic function monomorphization."""
 from __future__ import annotations
-from typing import Dict, Tuple, Set, Optional, TYPE_CHECKING
+from typing import Dict, Iterator, Tuple, Set, Optional, TYPE_CHECKING
 import copy
 
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
@@ -10,6 +10,39 @@ from sushi_lang.semantics.typesys import Type
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Block, Call, ExtendDef, FuncDef
     from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
+
+
+def let_annotations(block) -> Iterator[Type]:
+    """Every `let` annotation in a block, nested blocks included.
+
+    ONE statement walk for the two readers of a monomorphized body's local types: the
+    function monomorphizer interns what a copy's `let`s name, and the analyzer's late
+    seam does the same for an extension copy (#555). A `foreach` item's declared type
+    is a local's annotation too.
+    """
+    from sushi_lang.semantics.ast import Block, Let, If, While, Foreach, Match, Lambda
+
+    if not isinstance(block, Block):
+        return
+    for stmt in block.statements:
+        if isinstance(stmt, Let):
+            if stmt.ty is not None:
+                yield stmt.ty
+            if isinstance(stmt.value, Lambda) and stmt.value.is_block_body:
+                yield from let_annotations(stmt.value.body)
+        elif isinstance(stmt, If):
+            for _cond, arm in stmt.arms:
+                yield from let_annotations(arm)
+            yield from let_annotations(stmt.else_block)
+        elif isinstance(stmt, While):
+            yield from let_annotations(stmt.body)
+        elif isinstance(stmt, Foreach):
+            if stmt.item_type is not None:
+                yield stmt.item_type
+            yield from let_annotations(stmt.body)
+        elif isinstance(stmt, Match):
+            for arm in stmt.arms:
+                yield from let_annotations(arm.body)
 
 
 class FunctionMonomorphizer:
@@ -225,6 +258,12 @@ class FunctionMonomorphizer:
             self._extract_type_instantiations(concrete_func.ret, signature_instantiations)
             for param in concrete_func.params:
                 self._extract_type_instantiations(param.ty, signature_instantiations)
+            # The body's own annotations too: `let Box@(T) b` in the copy is a
+            # `Box<string>` the substitutor built, and nothing else may name it (#555).
+            # Unrecorded, it lived in the substitutor's cache alone, and every use of
+            # the local was CE2008 on a type that was never interned.
+            for annotation in let_annotations(concrete_func.body):
+                self._extract_type_instantiations(annotation, signature_instantiations)
 
             for base_name, sig_type_args in signature_instantiations:
                 if base_name in self.monomorphizer.generic_enums:
@@ -352,6 +391,13 @@ class FunctionMonomorphizer:
                 self._collect_from_expr(stmt.value, substitution, var_types)
                 if isinstance(stmt.value, Lambda) and stmt.value.is_block_body:
                     self._collect_block_instantiations(stmt.value.body, substitution, var_types)
+                # A local is in scope for the calls after it, and a generic called with
+                # one needs its type as a parameter's is needed (#555). Only the
+                # parameters were bound, so `show_it(b)` over a `let Box@(T) b` was
+                # never collected and the copy was CE2061.
+                if stmt.ty is not None:
+                    var_types[stmt.name] = self.monomorphizer.substitutor.substitute_type(
+                        stmt.ty, substitution)
             elif isinstance(stmt, ExprStmt):
                 self._collect_from_expr(stmt.expr, substitution, var_types)
             elif isinstance(stmt, Return) and stmt.value:
