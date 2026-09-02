@@ -127,7 +127,8 @@ won't let a stray `break` slip through.
   progress.
 - `foreach(x in source):` iterates; ranges give you `start..end` (exclusive), `start..=end`
   (inclusive), and automatic descending order.
-- `.iter()` lets `foreach` walk an array.
+- `.iter()` lets `foreach` walk an array. Anything else becomes walkable by carrying a
+  `next()` that answers `Maybe@(T)` -- the loop calls it until it answers `None`.
 - `break` leaves a loop early; `continue` jumps to the next iteration.
 
 We've been calling `println` and `from` without thinking about it. Time to write our own

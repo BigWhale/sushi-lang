@@ -1,0 +1,25 @@
+# The subtle exit path: the `??` on the binder is GENERATED code, and when it fires it
+# leaves the function with a live Lines -- owning a BufReader, owning a File. A directory
+# descriptor opens and then refuses to be read, which is the cheapest real read failure.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "read failed\n"
+use <io/fs>
+use <io/buf>
+
+fn run(string path) i32 | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 64)??
+    let i32 seen = 0
+    foreach(line?? in r.lines()):
+        println("[{line}]")
+        seen := seen + 1
+    return Result.Ok(seen)
+
+fn main() i32:
+    match run("/tmp"):
+        Result.Ok(n) -> println("read {n} lines")
+        Result.Err(_) -> println("read failed")
+    return Result.Ok(0)

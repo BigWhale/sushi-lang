@@ -1,0 +1,30 @@
+# The whole point of the phase: `foreach(line?? in r.lines())`. The loop ends at
+# Maybe.None, the Lines owns the BufReader which owns the File, and one drop closes the
+# descriptor -- so the leak and descriptor gates are the assertion, not the printing.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "[alpha]\n[]\n[gamma]\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn setup(string path) ~ | IoError:
+    let File w = open(path, FileMode.Write())??
+    w.write("alpha\n\ngamma\n")??
+    w.close()??
+    return Result.Ok(~)
+
+fn run(string path) ~ | IoError:
+    setup(path)??
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8)??
+    foreach(line?? in r.lines()):
+        println("[{line}]")
+    return Result.Ok(~)
+
+fn main() i32:
+    match run("/tmp/sushi_lines_normal.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

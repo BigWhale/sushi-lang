@@ -1018,41 +1018,25 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             # no EnumType, so every consumer reading the stamp fell through -- the backend
             # to a layout heuristic that answered `Maybe<i32>` and then mis-typed the
             # payload (#387).
+            #
+            # ONE ladder, shared with the validation half and with the `foreach` protocol
+            # (`resolve_method`). Inference stays silent -- report=False -- because the
+            # validation half owns CE2063. A `T[]` template and a method-generic template
+            # both answer at the CALL SITE, so inference may be the first call site that
+            # instantiates one.
             if inferred_type is None:
-                perk_method = self.type_validator.perk_impl_table.get_method(actual_type, node.method)
-                if perk_method is not None and perk_method.ret is not None:
-                    # A channel perk method (`| E`, ruling R1) yields its interned
-                    # Result here too -- one reader for what a method call yields.
-                    from sushi_lang.semantics.passes.types.calls.methods import (
-                        extension_call_result_type)
+                from sushi_lang.semantics.passes.types.calls.methods import (
+                    RESOLUTION_REPORTED, extension_call_result_type, resolve_method)
+                resolved = resolve_method(self.type_validator, actual_type, node.method,
+                                          call=node, report=False)
+                if resolved is not None and resolved is not RESOLUTION_REPORTED:
+                    # A channel method (`| E`, ruling R1) yields its interned Result at
+                    # every call site -- one reader for what a method call yields, and
+                    # the same one whether a perk or an extension answered. A perk method
+                    # spells its bare return `ret` and an ExtensionMethod spells it
+                    # `ret_type`, which is why the reader takes the method and not a type.
                     inferred_type = extension_call_result_type(
-                        self.type_validator, perk_method)
-
-            if inferred_type is None:
-                method = self.type_validator.extension_table.get_method(actual_type, node.method)
-                if method is None and isinstance(actual_type, DynamicArrayType):
-                    # A `T[]` template instantiates at the call site, and inference may
-                    # be that first call site -- same lazy path the validation half uses.
-                    from sushi_lang.semantics.passes.types.calls.methods import (
-                        instantiate_array_extension)
-                    method = instantiate_array_extension(
-                        self.type_validator, actual_type, node.method)
-                if method is None:
-                    # A method-generic template (`name@(U)`) likewise answers at the
-                    # call site; inference stays silent (report=False) -- the
-                    # validation half owns CE2063.
-                    from sushi_lang.semantics.passes.types.calls.methods import (
-                        RESOLUTION_REPORTED, resolve_method_generic_extension)
-                    resolved = resolve_method_generic_extension(
-                        self.type_validator, actual_type, node, report=False)
-                    if resolved is not None and resolved is not RESOLUTION_REPORTED:
-                        method = resolved
-                if method is not None:
-                    # A channel method (`| E`) yields its interned Result at every
-                    # call site -- one reader for what an extension call yields.
-                    from sushi_lang.semantics.passes.types.calls.methods import (
-                        extension_call_result_type)
-                    inferred_type = extension_call_result_type(self.type_validator, method)
+                        self.type_validator, resolved.method)
 
             if inferred_type is not None:
                 node.inferred_return_type = inferred_type

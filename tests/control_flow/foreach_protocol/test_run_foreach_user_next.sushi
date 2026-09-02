@@ -1,0 +1,25 @@
+# A foreach walks anything whose next() answers Maybe@(T). There is no Iterator type to
+# implement and no perk to name: the loop calls next() until it answers None, so the
+# protocol is the METHOD and nothing else (HANDLES.md ruling R21).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n2\n1\ndone\n"
+
+struct Countdown:
+    i32 at
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.at <= 0):
+        let Maybe@(i32) ended = Maybe.None()
+        return ended
+    let i32 now = self.at
+    self.at := self.at - 1
+    let Maybe@(i32) got = Maybe.Some(now)
+    return got
+
+fn main() i32:
+    let Countdown c = Countdown(3)
+    foreach(n in c):
+        println(n)
+    println("done")
+    return Result.Ok(0)

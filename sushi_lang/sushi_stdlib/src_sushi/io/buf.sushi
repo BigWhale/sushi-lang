@@ -204,6 +204,73 @@ extend BufReader@(R) into_inner(nom self) R:
     return nom self.inner
 
 ##:
+A line iterator over a buffered reader, which it OWNS.
+
+next() answers Maybe@(Result@(string, IoError)): the outer Maybe says whether the input
+has more, and the inner Result says whether reading it worked. The two are never the
+same answer -- a blank line is Some(Ok("")) and the end is None.
+
+The stop is STICKY. A read failure reaches the caller once, as Some(Err(e)), and every
+call after it answers None. Nothing retries and nothing is skipped, so a loop over this
+iterator cannot spin on a descriptor that keeps failing.
+:##
+public struct Lines@(R):
+    ##: The reader being walked. This value owns it, and the handle under it. :##
+    BufReader@(R) reader
+    ##: Whether the end or a failure has already been answered once. :##
+    bool stopped
+
+##:
+Turns the reader into a line iterator, TAKING the reader.
+
+The iterator owns the reader from here, and the reader owns the handle, so one drop
+closes the descriptor. A later mention of the reader is refused while compiling.
+
+- Returns: The iterator.
+
+- Example:
+  ```sushi no_run
+  use <io/fs>
+
+  fn show(string path) ~ | IoError:
+      let File f = open(path, FileMode.Read())??
+      let BufReader@(File) r = buf_reader(nom f, 8192)??
+      foreach(line?? in r.lines()):
+          println(line)
+      return Result.Ok(~)
+
+  fn main() i32:
+      match show("data.txt"):
+          Result.Ok(_) -> return Result.Ok(0)
+          Result.Err(_) -> return Result.Ok(1)
+  ```
+:##
+extend BufReader@(R) lines(nom self) Lines@(R):
+    return Lines(self, false)
+
+##:
+Answers the next line, or nothing when the input has ended.
+
+- Returns: Some(Ok(line)) for a line, Some(Err(e)) for the ONE failure, None at the end.
+:##
+extend Lines@(R) next(poke self) Maybe@(Result@(string, IoError)):
+    if (self.stopped):
+        let Maybe@(Result@(string, IoError)) ended = Maybe.None()
+        return ended
+    match self.reader.read_line():
+        Result.Ok(Maybe.Some(nom line)) ->
+            let Maybe@(Result@(string, IoError)) got = Maybe.Some(Result.Ok(nom line))
+            return got
+        Result.Ok(Maybe.None) ->
+            self.stopped := true
+            let Maybe@(Result@(string, IoError)) done = Maybe.None()
+            return done
+        Result.Err(e) ->
+            self.stopped := true
+            let Maybe@(Result@(string, IoError)) failed = Maybe.Some(Result.Err(e))
+            return failed
+
+##:
 A writer that collects bytes and hands them over a window at a time.
 
 Bytes go into a buffer and reach the handle when the buffer has filled, when flush() is

@@ -144,26 +144,6 @@ class StructEnumBuiltinInferrer:
 
 
 @dataclass
-class FileMethodInferrer:
-    """Type inferrer for the ONE method `File` still gets from the compiler.
-
-    Every other file method is an ordinary extension in `<io/fs>` now. `lines()` stays
-    because what line iteration BECOMES is an open question -- ruling R13 sends it to
-    Phase 7 with its name, its return type and its missing error channel all undecided --
-    and leaving the sentinel iterator exactly as it was is the cheapest way to answer it
-    later without a migration in between.
-    """
-    method_name: str
-    validator: 'TypeValidator'
-
-    def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.sushi_stdlib.src.io.files import is_builtin_file_method, get_builtin_file_method_return_type
-        if is_builtin_file_method(self.method_name):
-            return get_builtin_file_method_return_type(self.method_name)
-        return None
-
-
-@dataclass
 class ResultMethodInferrer:
     """Type inferrer for Result<T, E> methods."""
     receiver_type: EnumType
@@ -373,15 +353,6 @@ def check_primitive_methods(receiver_type, method_name, validator):
     if validator.perk_impl_table.get_method(receiver_type, method_name) is not None:
         return None
     return PrimitiveMethodInferrer(receiver_type, method_name, validator)
-
-
-@METHOD_TYPE_REGISTRY.register_checker
-def check_file_methods(receiver_type, method_name, validator):
-    # Keyed on the File STRUCT, the way List@(T)'s builtin methods are keyed. `stdin`
-    # is a File too now, so there is one receiver here where there used to be four.
-    if isinstance(receiver_type, StructType) and receiver_type.name == "File":
-        return FileMethodInferrer(method_name, validator)
-    return None
 
 
 # Registration ORDER is load-bearing. BEFORE the container checkers, because

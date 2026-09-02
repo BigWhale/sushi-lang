@@ -97,38 +97,6 @@ def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, 
     return None
 
 
-def try_emit_file_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit the ONE method the compiler still owns on a File: `lines()`.
-
-    Keyed on the File STRUCT and on its `fd` field, not on a builtin type: `stdin` is an
-    ordinary File constant now, so the stdin-against-file split this used to carry is
-    gone and there is one receiver. Ruling R13 keeps `lines()` here until Phase 7 decides
-    what line iteration becomes.
-    """
-    from sushi_lang.backend.expressions.calls.stdlib import emit_stdlib_file_call
-    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
-
-    from sushi_lang.semantics.typesys import deref_type
-
-    receiver = expr.receiver
-    # `deref_type` because a `poke` match binding is a ReferenceType over the struct, and
-    # a reference to a File is still a File as far as its methods are concerned.
-    semantic_type = deref_type(infer_expr_semantic_type(codegen, receiver))
-    if not isinstance(semantic_type, StructType) or semantic_type.name != "File":
-        return None
-
-    from sushi_lang.sushi_stdlib.src.io.files import is_builtin_file_method
-    if not is_builtin_file_method(expr.method):
-        return None
-
-    handle = codegen.expressions.emit_expr(receiver)
-    fd = codegen.builder.extract_value(handle, 0, name="file_fd")
-
-    require_stdlib_unit(codegen, "io/files", f"File.{expr.method}()", expr.loc)
-
-    return emit_stdlib_file_call(codegen, fd, expr.method, expr.args, to_i1)
-
-
 def try_emit_array_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                            receiver_value: ir.Value, receiver_type: ir.Type, semantic_type: 'Type', to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as array method. Returns None if not an array method."""

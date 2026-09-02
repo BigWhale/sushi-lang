@@ -626,6 +626,57 @@ foreach(i32 element in array.iter()):
     println(element)
 ```
 
+**Two things are walkable.** An ITERATOR -- what `.iter()` answers on an array or a
+`List@(T)`, what `.keys()` / `.values()` / `.entries()` answer on a `HashMap`, and what a
+range is. Or **any type carrying `next()` answering `Maybe@(T)`**: the loop calls it until
+it answers `None`, and that is the whole protocol. There is no type to implement and no
+perk to name, so a struct becomes walkable by gaining one method.
+
+<!-- docs-sweep: skip (a fragment: the narrative owns the struct) -->
+```sushi
+extend Countdown next(poke self) Maybe@(i32):    # this makes a Countdown walkable
+    ...
+
+foreach(n in c):                                 # calls c.next() until it answers None
+    println(n)
+```
+
+The protocol carries **no error channel**. A `next()` declaring `| E` answers a `Result`
+rather than a `Maybe` and is not walkable; a FALLIBLE iterator puts the failure in its
+ITEM instead, answering `Maybe@(Result@(T, E))`. The outer `Maybe` says whether there is
+more and the inner `Result` says whether reading it worked, and the two are never the same
+answer.
+
+The item is then an ordinary value, so every tool the language already has works on it --
+a `match` that skips a failure, `.realise(default)` that substitutes one, a `break`. And
+`??` **on the binder** is the short form for the common case, leaving the function on the
+first failure exactly as `??` does in any other position:
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn show(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    foreach(line?? in r.lines()):        # the first read failure leaves show()
+        println(line)
+    return Result.Ok(~)
+
+fn main() i32:
+    match show("/etc/hosts"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+```
+
+A `??` binder over an item that is not a `Result` has nothing to unwrap and is
+**CE2517**. An iterable that is neither an iterator nor a type with `next()` is
+**CE2033**. A reference binding (`foreach(poke r in ...)`) takes no `??` marker: it points
+INTO storage, and there is nothing to unwrap there.
+
+`foreach` CONSUMES its iterable, and a protocol iterator is destroyed when the loop ends --
+by `break` and by `return` as well as at the end of the input.
+
 ## Arrays
 
 See [Standard Library](standard-library.md) for complete array API.

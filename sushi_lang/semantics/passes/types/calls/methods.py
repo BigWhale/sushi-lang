@@ -1,5 +1,6 @@
 """Method call validation."""
 from __future__ import annotations
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
@@ -81,6 +82,67 @@ def _queue_extension_instantiation(validator: 'TypeValidator', template, target_
 # Returned by resolve_method_generic_extension when it found the template but the
 # call cannot use it (CE2063 already reported): the caller must not add CE2008 on top.
 RESOLUTION_REPORTED = object()
+
+
+@dataclass(frozen=True)
+class ResolvedMethod:
+    """A user-written method a receiver answers to, and which table answered."""
+    method: object
+    is_perk: bool
+
+
+def resolve_extension_method(validator: 'TypeValidator', receiver_type,
+                             method_name: str, call=None, report: bool = True):
+    """The three EXTENSION rungs, in the order every caller reads them.
+
+    The extension table, then a `T[]` template instantiated at this call site, then a
+    method-generic template solved from the arguments. Returns None, the method, or
+    RESOLUTION_REPORTED when the last rung emitted CE2063 and the caller must not add
+    CE2008 on top.
+
+    A caller with no call NODE -- the `foreach` protocol asks for a nullary `next()` --
+    passes `call=None`, and the method-generic rung is skipped: it solves its type
+    arguments from the call's own arguments, and there are none to read.
+    """
+    method = validator.extension_table.get_method(receiver_type, method_name)
+
+    if method is None and isinstance(receiver_type, DynamicArrayType):
+        method = instantiate_array_extension(validator, receiver_type, method_name)
+
+    if method is None and call is not None:
+        resolved = resolve_method_generic_extension(validator, receiver_type, call,
+                                                   report=report)
+        if resolved is RESOLUTION_REPORTED:
+            return RESOLUTION_REPORTED
+        method = resolved
+
+    return method
+
+
+def resolve_method(validator: 'TypeValidator', receiver_type, method_name: str,
+                   call=None, report: bool = True):
+    """The whole ladder for a USER-written method: a perk implementation, then extensions.
+
+    A perk implementation is the sanctioned override and wins
+    (`docs/design/method-resolution.md`), so it is asked first. Built-in methods are NOT
+    on this ladder: each family resolves its own before the ladder is reached, and that
+    order is pinned by `tests/unit/test_method_resolution_family_order.py`.
+
+    Returns a `ResolvedMethod`, None, or RESOLUTION_REPORTED. Three callers read it --
+    the validation half, the inference half, and the `foreach` protocol -- and the point
+    of one function is that a fourth cannot drift.
+    """
+    perk_method = validator.perk_impl_table.get_method(receiver_type, method_name)
+    if perk_method is not None:
+        return ResolvedMethod(method=perk_method, is_perk=True)
+
+    method = resolve_extension_method(validator, receiver_type, method_name,
+                                      call=call, report=report)
+    if method is RESOLUTION_REPORTED:
+        return RESOLUTION_REPORTED
+    if method is None:
+        return None
+    return ResolvedMethod(method=method, is_perk=False)
 
 
 def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
@@ -442,15 +504,6 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             validate_builtin_string_method_with_validator(call, receiver_type, validator.reporter, validator)
             return
 
-    # `lines()` is all the compiler still answers for on a File; every other method is
-    # an ordinary extension in <io/fs>. Ruling R13 keeps it until Phase 7 decides what
-    # line iteration becomes.
-    if isinstance(receiver_type, StructType) and receiver_type.name == "File":
-        from sushi_lang.sushi_stdlib.src.io.files import is_builtin_file_method, validate_builtin_file_method_with_validator
-        if is_builtin_file_method(call.method):
-            validate_builtin_file_method_with_validator(call, validator.reporter, validator)
-            return
-
     if isinstance(receiver_type, EnumType) and receiver_type.name.startswith("Result<"):
         from sushi_lang.semantics.generics.results import is_builtin_result_method, validate_result_method_with_validator
         if is_builtin_result_method(call.method):
@@ -586,16 +639,9 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     # here, by base name -- it repeated the lookup above verbatim, so it could only ever find
     # None again, and under #393 asking by base name is the wrong question anyway: a concrete
     # target answers its own instantiation and no other.
-    method = validator.extension_table.get_method(receiver_type, call.method)
-
-    if method is None and isinstance(receiver_type, DynamicArrayType):
-        method = instantiate_array_extension(validator, receiver_type, call.method)
-
-    if method is None:
-        resolved = resolve_method_generic_extension(validator, receiver_type, call)
-        if resolved is RESOLUTION_REPORTED:
-            return
-        method = resolved
+    method = resolve_extension_method(validator, receiver_type, call.method, call=call)
+    if method is RESOLUTION_REPORTED:
+        return
 
     if method is None:
         if _reject_unhandled_channel_chain(validator, call, receiver_type):

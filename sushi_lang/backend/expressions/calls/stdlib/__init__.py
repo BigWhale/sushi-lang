@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 from sushi_lang.backend.expressions.calls.stdlib.io import (
-    emit_stdlib_stdio_call,
-    emit_stdlib_file_call,
     emit_files_function,
 )
 from sushi_lang.backend.expressions.calls.stdlib.strings import emit_stdlib_string_call
@@ -16,8 +14,6 @@ from sushi_lang.backend.expressions.calls.stdlib.process import emit_process_fun
 from sushi_lang.backend.expressions.calls.stdlib.net import emit_net_function
 
 __all__ = [
-    "emit_stdlib_stdio_call",
-    "emit_stdlib_file_call",
     "emit_files_function",
     "emit_stdlib_string_call",
     "emit_stdlib_primitive_call",

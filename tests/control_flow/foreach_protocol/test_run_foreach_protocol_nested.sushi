@@ -1,0 +1,27 @@
+# Two protocol loops, one inside the other. Each holds its own iterator, so the inner
+# loop's next() cannot move the outer loop's cursor -- the hidden slot is per loop and
+# not per program.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2:2\n2:1\n1:2\n1:1\ndone\n"
+
+struct Countdown:
+    i32 at
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.at <= 0):
+        let Maybe@(i32) ended = Maybe.None()
+        return ended
+    let i32 now = self.at
+    self.at := self.at - 1
+    let Maybe@(i32) got = Maybe.Some(now)
+    return got
+
+fn main() i32:
+    let Countdown outer = Countdown(2)
+    foreach(a in outer):
+        let Countdown inner = Countdown(2)
+        foreach(b in inner):
+            println("{a}:{b}")
+    println("done")
+    return Result.Ok(0)

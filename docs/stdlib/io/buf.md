@@ -1,6 +1,8 @@
 # io/buf
 
 `BufReader@(R)` and `BufWriter@(W)`: one system call per WINDOW instead of one per line.
+Line ITERATION lives here too, and only here -- a `File` keeps no line loop, because an
+unbuffered handle yielding lines is one system call per line.
 
 ## Import
 
@@ -18,8 +20,9 @@ satisfies `Writer`. A `File` and a `TcpStream` are buffered by the same code.
 
 | type | constructor | reads / writes | ends with |
 |---|---|---|---|
-| `BufReader@(R)` | `buf_reader(nom src, i32 cap)` | `read_line`, `read`, `read_bytes`, `read_all`, `fill` | `into_inner` |
+| `BufReader@(R)` | `buf_reader(nom src, i32 cap)` | `read_line`, `read`, `read_bytes`, `read_all`, `fill` | `lines`, `into_inner` |
 | `BufWriter@(W)` | `buf_writer(nom dst, i32 cap)` | `write`, `write_bytes`, `write_line`, `flush` | `finish`, `into_inner` |
+| `Lines@(R)` | `r.lines()` | `next` | -- |
 
 Both constructors TAKE the handle: the buffer owns it, closes it when the buffer is
 destroyed, and `into_inner()` is how a caller gets it back.
@@ -28,22 +31,18 @@ destroyed, and `into_inner()` is how a caller gets it back.
 use <io/fs>
 use <io/buf>
 
-fn count_lines(string path) i32 | IoError:
+fn longest_line(string path) i32 | IoError:
     let File f = open(path, FileMode.Read())??
     let BufReader@(File) r = buf_reader(nom f, 8192)??
-    let i32 n = 0
-    let bool done = false
-    while (not done):
-        match r.read_line()??:
-            Maybe.Some(_) ->
-                n := n + 1
-            Maybe.None ->
-                done := true
-    return Result.Ok(n)
+    let i32 longest = 0
+    foreach(line?? in r.lines()):
+        if (line.len() > longest):
+            longest := line.len()
+    return Result.Ok(longest)
 
 fn main() i32:
-    match count_lines("/etc/hosts"):
-        Result.Ok(n) -> println("lines {n}")
+    match longest_line("/etc/hosts"):
+        Result.Ok(n) -> println("longest line {n}")
         Result.Err(_) -> println("could not read it")
     return Result.Ok(0)
 ```
@@ -87,6 +86,67 @@ compiling.
 
 Whatever was buffered and not read is DISCARDED, so the handle comes back positioned where
 the last refill left the kernel and not where the cursor was.
+
+### `lines() -> Lines@(R)`
+
+Turns the reader into a line iterator, TAKING the reader. The iterator owns the reader and
+the reader owns the handle, so one drop closes the descriptor. A later mention of the
+reader is **CE2435**.
+
+`Lines@(R)` carries `next()`, which answers `Maybe@(Result@(string, IoError))` -- and that
+makes it walkable by `foreach`, with no `Iterator` type and no perk in sight
+(`docs/language-reference.md`, For-Each Loops).
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn show(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    foreach(line?? in r.lines()):
+        println(line)
+    return Result.Ok(~)
+    # The Lines drops here: it destroys the BufReader, which closes the File.
+
+fn main() i32:
+    match show("/etc/hosts"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+```
+
+### `Lines@(R).next() -> Maybe@(Result@(string, IoError))`
+
+The outer `Maybe` says whether the input has more; the inner `Result` says whether reading
+it worked. They are never the same answer: a blank line is `Some(Ok(""))` and the end is
+`None`.
+
+**The stop is STICKY.** A read failure reaches the caller once, as `Some(Err(e))`, and
+every call after it answers `None`. Nothing retries and nothing is skipped, so a loop over
+this iterator cannot spin on a descriptor that keeps failing.
+
+The `??` on the binder is the short form -- the first failure leaves the function. Without
+it the item is the plain `Result`, and a body that wants to report a failure and carry on
+writes the `match` itself:
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn show(string path) ~ | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    foreach(item in r.lines()):
+        match item:
+            Result.Ok(line) -> println(line)
+            Result.Err(_) -> println("<unreadable>")
+    return Result.Ok(~)
+
+fn main() i32:
+    match show("/etc/hosts"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+```
 
 ## Writing
 

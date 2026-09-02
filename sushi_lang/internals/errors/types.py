@@ -138,8 +138,8 @@ _add(ErrorMessage("CE2039", Severity.ERROR,
     Category.TYPE, "The error value inside Err() must match the function's error type."))
 
 _add(ErrorMessage("CE2033", Severity.ERROR,
-    "foreach requires an iterator, got '{got}'",
-    Category.TYPE, "The expression in foreach must be an iterator (e.g., from calling .iter() on an array)."))
+    "foreach needs something to walk, and '{got}' is neither an iterator nor a type with next()",
+    Category.TYPE, "Two things are walkable. An ITERATOR, which is what .iter() on an array or a List answers, what .keys() / .values() / .entries() answer on a HashMap, and what a range is. Or any type carrying a method 'next()' that answers Maybe@(T): the loop calls it until it answers None, and that is the whole protocol -- there is no type to implement and no perk to name (HANDLES.md ruling R21). So the fix is one of three: call .iter() on the container, give this type a next(), or check the spelling of the next() it has. Three spellings are refused, each because the loop must be able to call the method repeatedly and read a stop out of its answer: a next() answering a bare T rather than a Maybe@(T) cannot say when to stop; one declaring '| E' answers a Result and not a Maybe; one taking arguments has nothing to be handed; and a 'nom self' receiver answers once and spends the iterator. A fallible iterator puts the failure IN the item instead: Maybe@(Result@(T, E))."))
 
 _add(ErrorMessage("CE2034", Severity.ERROR,
     "foreach item type mismatch: expected '{expected}', got '{got}'",

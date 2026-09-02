@@ -395,6 +395,18 @@ class Foreach(Stmt):
     item_type_span: Optional[Span] = None
     item_borrow: Optional[str] = None       # None | "peek" | "poke"
     item_borrow_span: Optional[Span] = None
+    # The `??` binder (`foreach(line?? in it)`). The AST builder renamed the loop's own
+    # binding to a hidden name and prepended `let <T> <name> = <hidden>??` to the body;
+    # this points at that Let so the typecheck pass can fill in its type once the item
+    # type is known. Nothing downstream needs a rule of its own: the unwrap is the
+    # ordinary TryExpr and the binding the ordinary Let.
+    item_try_let: "Optional[Let]" = None
+    item_try_span: Optional[Span] = None
+    # A `next()` protocol iterator (HANDLES.md ruling R21): the synthetic
+    # `<hidden>.next()` call the typecheck pass built and stamped, and the hidden local
+    # the iterator lives in. Both None for an `Iterator@(T)`, which is the buffer walk.
+    protocol_next: "Optional[MethodCall]" = None
+    protocol_iter_name: Optional[str] = None
 
 @dataclass(slots=True)
 class Expand(Stmt):

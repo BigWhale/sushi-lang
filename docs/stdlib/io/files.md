@@ -138,12 +138,16 @@ callable on a `TcpStream` too, which is what `<io/contracts>` is for.
 | `is_open` | `() bool` -- false once `close()` has run | `File` |
 | `is_terminal` | `() bool` -- true only for a terminal | `File` |
 | `close` | `(nom self) ~ \| IoError` -- CONSUMES the handle | `File` |
-| `lines` | `() Iterator@(string)` -- still a compiler builtin | `File` |
 
 A `File` closes itself when its owner leaves scope, so `close()` is only needed where the
 failure has to be SEEN. Every method is a plain borrow except `close()`, which CONSUMES
 the handle: a file's position lives in the kernel, not in the struct, so a read and a
 write need no mutable receiver.
+
+**A `File` keeps no line loop.** There is no `File.lines()`: an unbuffered handle
+yielding lines is one system call per line, which is the cost the buffer exists to
+remove. `readln()` is the one-line unbuffered read and can serve in a pinch;
+[`BufReader.lines()`](buf.md) is what a loop wants.
 
 ### read and read_all
 

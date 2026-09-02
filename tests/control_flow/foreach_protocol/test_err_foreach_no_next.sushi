@@ -1,0 +1,13 @@
+# A struct with no next() is not iterable, and the diagnostic has to say what is missing
+# now that .iter() is no longer the only answer.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2033
+
+struct Plain:
+    i32 at
+
+fn main() i32:
+    let Plain p = Plain(3)
+    foreach(n in p):
+        println(n)
+    return Result.Ok(0)

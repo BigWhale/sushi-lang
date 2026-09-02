@@ -36,7 +36,7 @@ def emit_continue(codegen: 'LLVMCodegen') -> None:
 def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     """Emit foreach loop with iterator protocol."""
     from llvmlite import ir
-    from sushi_lang.semantics.typesys import IteratorType, BuiltinType
+    from sushi_lang.semantics.typesys import IteratorType
 
     builder, func = require_both_initialized(codegen)
     if node.item_type is None:
@@ -48,14 +48,19 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
         _emit_range_foreach(codegen, node, node.iterable)
         return
 
+    # A `next()` protocol iterator (HANDLES.md ruling R21). Chosen statically, on the
+    # stamp the typecheck pass left: every other arm walks contiguous storage, and this
+    # one calls a method per iteration.
+    if node.protocol_next is not None:
+        _emit_protocol_foreach(codegen, node)
+        return
+
     iterator_value = codegen.expressions.emit_expr(node.iterable)
     iterator_type = IteratorType(element_type=node.item_type)
     iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)
 
     iterator_slot = codegen.builder.alloca(iterator_struct_type, name="__iter")
     codegen.builder.store(iterator_value, iterator_slot)
-
-    is_string_iterator = (node.item_type == BuiltinType.STRING)
 
     zero = ir.Constant(codegen.types.i32, 0)
 
@@ -81,147 +86,84 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
 
     if is_hashmap_keys_or_values:
         _emit_hashmap_foreach(codegen, node, iterator_slot, zero, hashmap_type, hashmap_method)
-    elif is_string_iterator:
-        _emit_string_iterator_foreach(codegen, node, iterator_slot, zero)
     else:
         _emit_array_foreach(codegen, node, iterator_slot, zero)
 
 
-def _is_lines_iterator(codegen: 'LLVMCodegen', node: 'Foreach') -> bool:
-    """Is this `foreach` walking a `File.lines()` iterator rather than a buffer?
+def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
+    """Emit `foreach(item in it)` where `it` carries `next()` answering `Maybe@(T)`.
 
-    Decided STATICALLY, which is possible because `Iterator@(T)` is not a nameable type
-    (CE2001): an iterator cannot be stored in a local, so it only ever appears here, in
-    the loop that consumes it. The HashMap arm above reads its own shape the same way.
+    The iterator lives in a local of its own for the loop's lifetime, because `next()`
+    moves a cursor: re-evaluating `node.iterable` per iteration would restart it. That
+    local is registered through `register_owning_value`, the COMPLETE registry router,
+    and NOT through `create_local`'s default -- a `Lines@(File)` owns a `BufReader@(File)`
+    owning a `File`, and `register_local_cleanup` alone does not know a dynamic array, a
+    `List@(T)` or an `Own@(T)` (#382). Every iterator before this phase was a non-owning
+    cursor over somebody else's buffer, which is why this is the first arm that has to
+    destroy one.
 
-    It used to be a RUN-TIME test on the `length == -1` sentinel, with both loops emitted
-    every time. That was already wasteful on an ordinary array walk, and once the lazy
-    arm called a stdlib function rather than inlining libc, it broke outright: every
-    program iterating a `string[]` referenced `sushi_io_files_fd_readln` and failed to
-    link unless it happened to import <io/files>.
-
-    The sentinel itself stays exactly as it was -- ruling R13 leaves everything about
-    `lines()` for Phase 7 to decide.
+    The call itself is `node.protocol_next`, built and stamped by the typecheck pass, so
+    it is emitted through the ordinary method-call dispatcher: the receiver mode, the
+    symbol and the return type are all resolved once, there, and not a second time here.
     """
-    from sushi_lang.semantics.ast import DotCall, MethodCall
-    from sushi_lang.semantics.typesys import StructType, deref_type
+    from sushi_lang.backend.constants.error_codes import MAYBE_SOME_TAG
+    from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check
     from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
 
-    if not isinstance(node.iterable, (DotCall, MethodCall)):
-        return False
-    if node.iterable.method != "lines":
-        return False
-    receiver_type = deref_type(infer_expr_semantic_type(codegen, node.iterable.receiver))
-    return isinstance(receiver_type, StructType) and receiver_type.name == "File"
+    iter_name = node.protocol_iter_name
+    assert iter_name is not None, "the typecheck pass names the iterator slot"
 
+    iterator_value = codegen.expressions.emit_expr(node.iterable)
+    iterator_type = infer_expr_semantic_type(codegen, node.iterable)
 
-def _emit_string_iterator_foreach(codegen: 'LLVMCodegen', node: 'Foreach', iterator_slot: 'ir.Value', zero: 'ir.Constant') -> None:
-    """Emit foreach over an iterator of strings: a `File.lines()` cursor, or a buffer."""
-    if not _is_lines_iterator(codegen, node):
-        _emit_array_foreach(codegen, node, iterator_slot, zero)
-        return
+    cond_bb = codegen.func.append_basic_block(name="foreach.next_cond")
+    body_bb = codegen.func.append_basic_block(name="foreach.next_body")
+    end_bb = codegen.func.append_basic_block(name="foreach.next_end")
 
-    lines_loop_bb = codegen.func.append_basic_block(name="foreach.lines_loop")
-    end_bb = codegen.func.append_basic_block(name="foreach.end")
-    codegen.builder.branch(lines_loop_bb)
+    # The iterator's scope is the loop's, so the slot goes in a scope of its own that
+    # closes after the end block: `break` and `return` both leave through the loop-exit
+    # cleanup, which walks exactly these scopes.
+    codegen.memory.push_scope()
+    iter_slot = codegen.memory.create_local(
+        iter_name, iterator_value.type, iterator_value, iterator_type,
+        register_cleanup=False)
+    if iterator_type is not None:
+        codegen.memory.register_owning_value(iter_name, iterator_type, iter_slot)
+    codegen.variable_types[iter_name] = iterator_type
 
-    _emit_stdin_lines_foreach(codegen, node, iterator_slot, zero, lines_loop_bb, end_bb)
+    codegen.builder.branch(cond_bb)
+    codegen.builder.position_at_end(cond_bb)
 
-    # The statement after the loop goes here. The array arm used to leave the builder
-    # positioned at the end block for us; the lazy arm alone has to say so.
-    codegen.builder.position_at_end(end_bb)
+    answer = codegen.expressions.emit_expr(node.protocol_next)
+    has_next = emit_enum_tag_check(codegen, answer, MAYBE_SOME_TAG, "has_next")
+    codegen.builder.cbranch(has_next, body_bb, end_bb)
 
-
-def _emit_stdin_lines_foreach(
-    codegen: 'LLVMCodegen',
-    node: 'Foreach',
-    iterator_slot: 'ir.Value',
-    zero: 'ir.Constant',
-    stdin_loop_bb: 'ir.Block',
-    end_bb: 'ir.Block'
-) -> None:
-    """Emit the lazy arm of `foreach`: a `File.lines()` iterator, read a line at a time.
-
-    The sentinel is `length == -1`, which the caller has already branched on. The data
-    slot holds a heap cell carrying the DESCRIPTOR, and one call to `fd_readln` per
-    iteration answers the next line; an empty answer is end of file and ends the loop.
-
-    This used to fork on a SECOND sentinel -- a null data slot meant stdin and reached
-    libc `fgets` on the stdio handle, a non-null one meant a file and reached a different
-    `fgets` -- and joined the two lines with a phi. `stdin` is an ordinary File over
-    descriptor 0 now, so both arms and the phi are gone. Ruling R13 leaves everything
-    else about `lines()` for Phase 7.
-    """
-    from llvmlite import ir
-    from sushi_lang.backend import gep_utils
-    from sushi_lang.backend.functions import declare_stdlib_function
-    from sushi_lang.sushi_stdlib.src.libc_declarations import declare_free
-    from sushi_lang.sushi_stdlib.src.type_definitions import (
-        get_maybe_type, get_result_type, get_string_type, get_unit_enum_type,
-    )
-
-    codegen.builder.position_at_end(stdin_loop_bb)
-    stdin_cond_bb = codegen.func.append_basic_block(name="foreach.lines_cond")
-    stdin_body_bb = codegen.func.append_basic_block(name="foreach.lines_body")
-
-    codegen.builder.branch(stdin_cond_bb)
-    codegen.builder.position_at_end(stdin_cond_bb)
-
-    cell_ptr_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 2, "fd_cell_ptr")
-    cell = codegen.builder.load(cell_ptr_ptr, name="fd_cell")
-    fd = codegen.builder.load(
-        codegen.builder.bitcast(cell, codegen.types.i32.as_pointer(), name="fd_slot"),
-        name="line_fd")
-
-    string_ty = get_string_type()
-    maybe_ty = get_maybe_type(string_ty)
-    result_ty = get_result_type(maybe_ty, get_unit_enum_type())
-    readln = declare_stdlib_function(codegen.module, "sushi_io_files_fd_readln",
-                                     result_ty, [codegen.types.i32])
-    answer = codegen.builder.call(readln, [fd], name="line_result")
-
-    # The END of the loop is the Maybe's None tag, and NOT an empty string: a blank line
-    # is `Some("")` and used to truncate the file here. A read failure also stops the
-    # loop, because `foreach` has nowhere to put a Result -- an `Iterator@(string)`
-    # yields a bare string, which is the hole R13 records.
-    payload = codegen.builder.alloca(result_ty.elements[1], name="line_payload")
-    codegen.builder.store(codegen.builder.extract_value(answer, 1), payload)
-    maybe_value = codegen.builder.load(
-        codegen.builder.bitcast(payload, maybe_ty.as_pointer(), name="line_maybe_ptr"),
-        name="line_maybe")
-
-    line_payload = codegen.builder.alloca(maybe_ty.elements[1], name="line_some_payload")
-    codegen.builder.store(codegen.builder.extract_value(maybe_value, 1), line_payload)
-    line_value = codegen.builder.load(
-        codegen.builder.bitcast(line_payload, string_ty.as_pointer(),
-                                name="line_str_ptr"),
-        name="line")
-
-    failed = codegen.builder.icmp_signed(
-        "!=", codegen.builder.extract_value(answer, 0), ir.Constant(codegen.types.i32, 0),
-        name="line_failed")
-    at_end = codegen.builder.icmp_signed(
-        "!=", codegen.builder.extract_value(maybe_value, 0),
-        ir.Constant(codegen.types.i32, 0), name="line_none")
-
-    done_bb = codegen.func.append_basic_block(name="foreach.lines_done")
-    codegen.builder.cbranch(codegen.builder.or_(failed, at_end, name="line_done"),
-                            done_bb, stdin_body_bb)
-
-    # The descriptor cell `sushi_file_lines` allocated is this loop's to release: the
-    # iterator has no destructor, so every `lines()` used to leak sixteen bytes.
-    codegen.builder.position_at_end(done_bb)
-    codegen.builder.call(declare_free(codegen.module),
-                         [codegen.builder.bitcast(cell, codegen.types.i8.as_pointer(),
-                                                  name="fd_cell_bytes")])
-    codegen.builder.branch(end_bb)
-
-    codegen.builder.position_at_end(stdin_body_bb)
-    codegen.loop_stack.append((stdin_cond_bb, end_bb, codegen.memory._scope_depth + 1))
+    codegen.builder.position_at_end(body_bb)
+    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory._scope_depth + 1))
     codegen.memory.push_scope()
 
-    element_ll_type = codegen.types.ll_type(node.item_type)
-    codegen.memory.create_local(node.item_name, element_ll_type, line_value, node.item_type)
+    # The payload is read HERE and not in the condition block: on the last iteration the
+    # answer is a None, whose payload bytes are zeroed and mean nothing.
+    item_ll_type = codegen.types.ll_type(node.item_type)
+    _is_some, item_value = codegen.functions._extract_value_from_result_enum(
+        answer, item_ll_type, node.item_type)
+
+    # The item is the Maybe's payload, and the Maybe is a temporary nobody else frees --
+    # so this binding OWNS what it holds, unlike an array item, which aliases the
+    # container's buffer and is registered with no cleanup at all.
+    #
+    # The `??` binder is the exception, and the accounting is what decides it: the
+    # generated `??` SPENDS the item. On the Ok path the payload becomes the `let`'s,
+    # on the Err path it becomes the caller's, and there is no third path -- so a second
+    # owner here is a double free rather than insurance. (A hand-written `??` over a
+    # NAMED Result local double-frees for exactly this reason today, which is a
+    # pre-existing defect and not this arm's; §6 files it.)
+    item_owns = node.item_try_let is None
+    item_slot = codegen.memory.create_local(
+        node.item_name, item_ll_type, item_value, node.item_type,
+        register_cleanup=False)
+    if item_owns and node.item_type is not None:
+        codegen.memory.register_owning_value(node.item_name, node.item_type, item_slot)
 
     _emit_block(codegen, node.body)
 
@@ -229,7 +171,11 @@ def _emit_stdin_lines_foreach(
     codegen.loop_stack.pop()
 
     if codegen.builder.block.terminator is None:
-        codegen.builder.branch(stdin_cond_bb)
+        codegen.builder.branch(cond_bb)
+
+    codegen.builder.position_at_end(end_bb)
+    codegen.memory.pop_scope()
+    codegen.variable_types.pop(iter_name, None)
 
 
 def _emit_array_foreach(codegen: 'LLVMCodegen', node: 'Foreach', iterator_slot: 'ir.Value', zero: 'ir.Constant') -> None:

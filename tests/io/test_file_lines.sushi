@@ -1,47 +1,39 @@
-# EXPECT_STDOUT_EXACT: "Reading ...\nWheeeee\nLine 1: First line\nLine 2: Second line\nLine 3: Third line\nRead 3 lines total\n"
-# EXPECT_RUNTIME_EXIT: 0
+# Read a file line by line and count. The lines come off a BufReader now -- File keeps no
+# line loop, because an unbuffered handle yielding lines is one system call per line, and
+# removing that cost is the whole reason the buffer exists.
 # TEST_TYPE: runtime
-# EXPECTED_OUTPUT: Line 1: First line
-# EXPECTED_OUTPUT: Line 2: Second line
-# EXPECTED_OUTPUT: Line 3: Third line
-# EXPECTED_OUTPUT: Read 3 lines total
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "Reading ...\nLine 1: First line\nLine 2: Second line\nLine 3: Third line\nRead 3 lines total\n"
 
 use <io/fs>
-use <io/files>
-use <collections/strings>
+use <io/buf>
+
+fn write_lines(string path) ~ | IoError:
+    let File out = open(path, FileMode.Write())??
+    out.writeln("First line")??
+    out.writeln("Second line")??
+    out.writeln("Third line")??
+    return Result.Ok(~)
+
+fn count_lines(string path) i32 | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 4096)??
+    let i32 count = 0
+    foreach(line?? in r.lines()):
+        count := count + 1
+        println("Line {count}: {line}")
+    return Result.Ok(count)
+
+fn run(string path) ~ | IoError:
+    write_lines(path)??
+    println("Reading ...")
+    let i32 total = count_lines(path)??
+    println("Read {total} lines total")
+    return Result.Ok(~)
 
 fn main() i32:
-    # Write test file with multiple lines
-    let Result@(File, IoError) write_result = open("test_lines_output.txt", FileMode.Write())
-    match nom write_result:
-        Result.Ok(nom out) ->
-            out.writeln("First line")
-            out.writeln("Second line")
-            out.writeln("Third line")
-            out.close()
-        Result.Err(_) ->
-            stderr.write("Error: cannot create test file\n")
-            return Result.Err(StdError.Error)
-
-    println("Reading ...")
-    # Read file line by line using lines() iterator
-    let Result@(File, IoError) read_result = open("test_lines_output.txt", FileMode.Read())
-    match nom read_result:
-        Result.Ok(nom f) ->
-            println("Wheeeee")
-            let i32 count = 1
-
-            foreach(line in f.lines()):
-                println("Line {count}: {line}")
-                count := count + 1
-
-            f.close()
-
-            let i32 total = count - 1
-            println("Read {total} lines total")
-            return Result.Ok(0)
-        Result.Err(_) ->
-            stderr.write("Error: cannot read test file\n")
-            return Result.Err(StdError.Error)
-
-    return Result.Ok(0)
+    match run("test_lines_output.txt"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)

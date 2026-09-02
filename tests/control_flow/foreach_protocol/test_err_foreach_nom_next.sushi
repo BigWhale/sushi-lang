@@ -1,0 +1,18 @@
+# A consuming next() answers ONCE: the first call would spend the loop's own iterator and
+# the second would read a value that has been given away. So `nom self` makes a type
+# unwalkable rather than walkable once, and CE2033 says so.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2033
+
+struct Once:
+    i32 at
+
+extend Once next(nom self) Maybe@(i32):
+    let Maybe@(i32) got = Maybe.Some(self.at)
+    return got
+
+fn main() i32:
+    let Once o = Once(3)
+    foreach(n in o):
+        println(n)
+    return Result.Ok(0)

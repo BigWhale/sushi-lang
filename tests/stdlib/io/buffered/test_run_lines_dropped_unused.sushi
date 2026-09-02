@@ -1,0 +1,31 @@
+# Three owning levels deep, and nothing iterates it: a Lines owns a BufReader owns a
+# File. The scope exit destroys all three in one go, so the descriptor closes exactly
+# once. Phase 2 measured two levels; this is the third.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "stopped: false\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn setup(string path) ~ | IoError:
+    let File w = open(path, FileMode.Write())??
+    w.write("alpha\nbeta\n")??
+    w.close()??
+    return Result.Ok(~)
+
+fn run(string path) ~ | IoError:
+    setup(path)??
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8)??
+    let Lines@(File) it = r.lines()
+    println("stopped: {it.stopped}")
+    return Result.Ok(~)
+    # it drops here: the Lines, then its BufReader, then the File.
+
+fn main() i32:
+    match run("/tmp/sushi_lines_dropped.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

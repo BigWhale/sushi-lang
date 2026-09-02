@@ -1,26 +1,29 @@
+# The whole stdin path at once: read to EOF, count as you go, and prove that a blank line
+# in the middle is a line rather than the end (a Some("") and not a None, ruling R22).
 # TEST_TYPE: runtime
-# STDIN_INPUT: "One\nTwo\nThree\nFour\n"
-# EXPECT_STDOUT_EXACT: "=== stdin.lines() Demo ===\nReading lines from stdin until EOF...\n\nLine 1: One\nLine 2: Two\nLine 3: Three\nLine 4: Four\n\nTotal lines read: 4\n"
+# STDIN_INPUT: "One\nTwo\n\nFour\n"
+# EXPECT_STDOUT_EXACT: "=== stdin lines ===\nReading lines from stdin until EOF...\n\nLine 1: One\nLine 2: Two\nLine 3: \nLine 4: Four\n\nTotal lines read: 4\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Comprehensive demonstration of stdin.lines() iterator
+# EXPECT_NO_LEAKS: true
 
 use <io/fs>
+use <io/buf>
+
+fn show() ~ | IoError:
+    stdout.write("=== stdin lines ===\n")??
+    stdout.write("Reading lines from stdin until EOF...\n\n")??
+
+    let BufReader@(File) r = buf_reader(nom stdin, 8192)??
+    let i32 count = 0
+    foreach(line?? in r.lines()):
+        count := count + 1
+        println("Line {count}: {line}")
+
+    println("")
+    println("Total lines read: {count}")
+    return Result.Ok(~)
 
 fn main() i32:
-    stdout.write("=== stdin.lines() Demo ===\n")
-    stdout.write("Reading lines from stdin until EOF...\n\n")
-
-    let i32 count = 0
-
-    foreach(line in stdin.lines()):
-        count := count + 1
-        stdout.write("Line ")
-        print(count)
-        stdout.write(": ")
-        stdout.write(line)
-        stdout.write("\n")
-
-    stdout.write("\nTotal lines read: ")
-    println(count)
-
-    return Result.Ok(0)
+    match show():
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)

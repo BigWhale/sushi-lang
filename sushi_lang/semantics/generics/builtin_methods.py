@@ -72,12 +72,6 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str) -> bool:
             from sushi_lang.semantics.generics.list import is_builtin_list_method
             if is_builtin_list_method(method_name):
                 return True
-        elif receiver_type.name == "File":
-            # `lines()` and nothing else: every other File method is an extension in
-            # <io/fs> now. Ruling R13 keeps this one until Phase 7.
-            from sushi_lang.sushi_stdlib.src.io.files import is_builtin_file_method
-            if is_builtin_file_method(method_name):
-                return True
         # A container still carries the auto-derived hash (the derive pass's registration has no
         # container exclusion), and codegen's auto-derived step precedes the extension
         # fallback -- so an extension of that name would be dead there too.

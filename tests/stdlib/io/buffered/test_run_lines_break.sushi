@@ -1,0 +1,33 @@
+# Leaving the loop with `break` abandons the iterator mid-stream. The Lines value is the
+# loop's own, so the break path has to destroy it -- and no iterator before this phase
+# owned anything, which is why the exit paths get a test each.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "[alpha]\nstopped\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn setup(string path) ~ | IoError:
+    let File w = open(path, FileMode.Write())??
+    w.write("alpha\nbeta\ngamma\n")??
+    w.close()??
+    return Result.Ok(~)
+
+fn run(string path) ~ | IoError:
+    setup(path)??
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = buf_reader(nom f, 8)??
+    foreach(line?? in r.lines()):
+        if (line == "beta"):
+            println("stopped")
+            break
+        println("[{line}]")
+    return Result.Ok(~)
+
+fn main() i32:
+    match run("/tmp/sushi_lines_break.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

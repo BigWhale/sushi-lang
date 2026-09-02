@@ -268,10 +268,6 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if result is not None:
         return result
 
-    result = intrinsics.try_emit_file_method(codegen, expr, to_i1)
-    if result is not None:
-        return result
-
     # 5. Result<T, E> and Maybe<T> methods (is_ok, is_some, realise, expect, ...).
     #    One handler, not two: `realise` and `expect` are in both method sets, and trying the
     #    families in sequence emitted the receiver once per attempt (#199).
