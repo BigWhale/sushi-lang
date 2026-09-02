@@ -162,10 +162,11 @@ fn File.read(i32 max) string | IoError
 fn File.read_all() string | IoError
 ```
 
-`read()`'s bound counts BYTES, so a multi-byte character can be split across two calls,
-and an EMPTY answer is the end of input -- a SHORT answer is not, because a pipe hands
-over whatever has arrived so far. `read_all()` holds the whole answer in memory at once;
-a large file wants `read()` in a loop, or [`BufReader`](buf.md).
+`read()`'s bound counts BYTES, so a multi-byte character can be split across two calls --
+a caller that must not cut one reads bytes with `read_bytes()`, accumulates them, and
+converts once. An EMPTY answer is the end of input -- a SHORT answer is not, because a
+pipe hands over whatever has arrived so far. `read_all()` holds the whole answer in memory
+at once; a large file wants `read()` in a loop, or [`BufReader`](buf.md).
 
 **Example:** the whole file, in a helper that carries the channel.
 

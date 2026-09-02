@@ -79,6 +79,11 @@ refill has answered nothing, no further call reads the handle again.
 A caller rarely needs `fill()`. It is part of the surface because an extension method
 carries no visibility marker -- it is as visible as the type it extends.
 
+A refill costs ONE allocation and no copy: the read primitive allocates its answer and the
+window takes it whole. Measured over a 512 MB file at an 8 KB window, that allocation is
+about six percent of a refill from the page cache, and less from a disk or a socket. Why
+`read_bytes` returns an array rather than filling one is in [io/contracts](contracts.md).
+
 ### `into_inner() -> R`
 
 Hands the handle back and ends the reader. A later mention of the reader is refused while

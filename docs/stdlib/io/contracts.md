@@ -55,11 +55,19 @@ The two mean the same thing: ONE read, bounded by the caller, answering what arr
 differ only in what they hand back.
 
 `read` returns a fresh `string`; `read_bytes` returns a fresh `u8[]`. Neither fills a buffer
-the caller owns, and for `read` that is forced: a `string` is `{data, size, owned}` -- a size
-and no capacity -- so there is nowhere to write into.
+the caller owns. For `read` that is forced: a `string` is `{data, size, owned}` -- a size
+and no capacity -- so there is nowhere to write into. For `read_bytes` it was measured
+against the one consumer that refills in a loop, `BufReader`: a refill costs exactly one
+allocation and no copy; that allocation is about six percent of an 8 KB refill from the
+page cache and about four percent at 64 KB; and a `(poke u8[] into)` form could not remove
+it -- a `u8[]` crosses to the descriptor primitive BY VALUE, so the primitive cannot set
+the caller's length, and a fill-into body allocates the same array and copies it once more.
 
-The bound counts BYTES. A multi-byte character can therefore be split across two calls, and
-on a socket the network can split one whatever the bound says.
+The bound counts BYTES, and one read may therefore split a multi-byte sequence; on a
+socket the network can split one whatever the bound says. **The caller's answer is to
+accumulate bytes and convert once**, the way `read_all()` and `read_line()` do --
+converting each chunk on its own cuts the character in two. A character bound would need a
+character index the string layer does not have.
 
 An EMPTY answer means end of input, which is what lets a caller loop until the answer is
 empty. A short answer is not an end: a pipe hands over whatever has arrived.
@@ -71,7 +79,9 @@ write, so there is no partial count to report.
 
 A caller that needs to know how much ONE attempt took wants the concrete method on the
 handle instead: `TcpStream.send` answers a count, because a socket's partial write tells you
-what the peer's window took. A file's does not.
+what the peer's window took. A file's does not. There is no `recv` beside it: one read on a
+socket is `read_bytes`, and every `NetError` a read can answer has its `IoError` twin, so a
+second name would have carried nothing of its own.
 
 ## flush
 

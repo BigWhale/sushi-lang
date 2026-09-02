@@ -321,8 +321,8 @@ extend File with Reader:
     ##:
     Reads what one read gives, as text.
 
-    The bound counts BYTES, so a multi-byte character can be split across two calls. That
-    is today's answer and not the last one.
+    The bound counts BYTES, so a multi-byte character can be split across two calls. A
+    caller that must not cut one reads bytes, accumulates them, and converts once.
 
     - Parameter max: The most bytes to take in this one read.
     - Returns: The text that arrived, empty at end of file.

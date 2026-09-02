@@ -1,0 +1,42 @@
+# The Reader bound counts BYTES, so one read may split a multi-byte sequence. The caller's
+# answer is to accumulate BYTES and convert once, the way read_all() and read_line() do;
+# converting each chunk on its own would cut the character in two. The euro sign is three
+# bytes, so a bound of two lands inside it.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "first: 2\nsecond: 2\ntext: €!\n"
+use <io/files>
+use <io/fs>
+use <io/contracts>
+
+fn write_probe(string path) ~ | IoError:
+    let File w = open(path, FileMode.Write())??
+    w.write("€!")??
+    return Result.Ok(~)
+
+fn read_split@(R: Reader)(R src) string | IoError:
+    let u8[] all = from([])
+    let u8[] first = src.read_bytes(2)??
+    println("first: {first.len()}")
+    all.extend(first)
+    let u8[] second = src.read_bytes(2)??
+    println("second: {second.len()}")
+    all.extend(second)
+    return Result.Ok(all.to_string())
+
+fn main() i32:
+    match write_probe("split_sequence_probe.txt"):
+        Result.Ok(_) -> ~
+        Result.Err(_) ->
+            println("write failed")
+            return Result.Ok(1)
+    match open("split_sequence_probe.txt", FileMode.Read()):
+        Result.Ok(r) ->
+            match read_split(r):
+                Result.Ok(text) -> println("text: {text}")
+                Result.Err(_) -> println("read failed")
+        Result.Err(_) -> println("open failed")
+    remove("split_sequence_probe.txt").realise(0)
+    return Result.Ok(0)

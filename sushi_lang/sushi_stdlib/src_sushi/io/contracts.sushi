@@ -22,12 +22,17 @@ parameter, so there is no generic Reader@(T).
 A handle bytes can be read from.
 
 read() answers text and read_bytes() answers bytes. They take the same bound and differ
-only in what they hand back. A string carries a size and no capacity, so a text read has
-nowhere to write into and must allocate -- which is why read() returns rather than filling
-a buffer the caller owns.
+only in what they hand back. Both RETURN a fresh value rather than filling a buffer the
+caller owns. For read() that is forced: a string carries a size and no capacity, so a text
+read has nowhere to write into. For read_bytes() it was measured: the one allocation a
+returned array costs is a few percent of the read itself, and a fill-into form could not
+remove it, because a u8[] crosses to the descriptor primitive by value and the primitive
+cannot set the caller's length.
 
-The bound counts BYTES. It will count characters once the string layer can index them; the
-two are the same number until then.
+The bound counts BYTES, and one read may therefore split a multi-byte sequence. The
+caller's answer is to accumulate bytes and convert once, the way read_all() and
+read_line() do; converting each chunk on its own cuts the character in two. A character
+bound would need a character index the string layer does not have.
 
 An EMPTY answer means end of input, which is what lets a caller loop until the answer is
 empty. A short answer is not an end: a pipe hands over whatever has arrived.

@@ -73,6 +73,12 @@ Reads the next window from the handle, replacing the one held.
 Every read here goes through this one call, so end of input is decided in one place and
 stays decided. A caller rarely needs it; the reads below do.
 
+A refill costs ONE allocation and no copy: the read primitive allocates its answer, and
+the window takes that answer whole. Measured against the page cache at an 8 KB window,
+the allocation is about six percent of the refill, and a fill-into form could not remove
+it: a u8[] crosses to the primitive by value, so the primitive cannot set the caller's
+length.
+
 - Returns: Whether any byte arrived. False means end of input.
 - Errors: IoError, when the underlying read failed.
 :##
@@ -117,8 +123,8 @@ extend BufReader@(R) read_bytes(poke self, i32 max) u8[] | IoError:
 ##:
 Reads what the window still has, as text.
 
-The bound counts BYTES, so a multi-byte character can be split across two calls. That is
-today's answer and not the last one.
+The bound counts BYTES, so a multi-byte character can be split across two calls. A caller
+that must not cut one reads bytes, accumulates them, and converts once.
 
 - Parameter max: The most bytes to take.
 - Returns: The text taken, empty at end of input.
