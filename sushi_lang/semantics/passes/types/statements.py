@@ -1,7 +1,7 @@
 """Statement validation for type validation."""
 from __future__ import annotations
 from itertools import count
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
@@ -31,14 +31,9 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
         er.emit(validator.reporter, er.ERR.CE2032, stmt.type_span)
         return
 
-    # A reference-typed `let` parses by grammar accident and would produce an
-    # unchecked alias (issue #252) -- reject it until local borrow bindings are a
-    # designed, checked feature.
     from sushi_lang.semantics.typesys import ReferenceType
     if isinstance(stmt.ty, ReferenceType):
-        mode = "peek" if stmt.ty.is_peek() else "poke"
-        er.emit(validator.reporter, er.ERR.CE2413, stmt.type_span,
-                mode=mode, ty=display_type(stmt.ty.referenced_type))
+        validate_let_reference(validator, stmt)
         return
 
     from .resolution import resolve_variable_type
@@ -101,6 +96,80 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
             # because those methods return the unwrapped type
             if not isinstance(stmt.value, (MethodCall, DotCall)):
                 er.emit(validator.reporter, er.ERR.CE2505, stmt.value.loc)
+
+
+def _is_own_type(validator: 'TypeValidator', ty) -> bool:
+    """Is `ty` an `Own@(T)`, in either spelling the passes keep?"""
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    if isinstance(ty, GenericTypeRef):
+        return ty.base_name == "Own"
+    name = getattr(ty, "name", None)
+    return isinstance(name, str) and name.startswith("Own<")
+
+
+def place_root(validator: 'TypeValidator', expr) -> Optional[Name]:
+    """The name at the root of a PLACE, or None when `expr` names no storage.
+
+    A `let poke` / `let peek` binds a pointer, so its initializer must have an address a
+    frame keeps: a bare name, a member or index chain off one, or an `Own@(T).get()` on
+    one (the payload's heap cell). A call result, a `??`, a literal or a constructor is a
+    temporary, and binding a pointer into one is CE2404 -- the rule a `poke self` call
+    answers to as well.
+    """
+    while True:
+        if isinstance(expr, Name):
+            return expr
+        if isinstance(expr, MemberAccess):
+            expr = expr.receiver
+            continue
+        if isinstance(expr, IndexAccess):
+            expr = expr.array
+            continue
+        if (isinstance(expr, (MethodCall, DotCall)) and expr.method == "get"
+                and not expr.args
+                and _is_own_type(validator, validator.infer_expression_type(expr.receiver))):
+            expr = expr.receiver
+            continue
+        return None
+
+
+def validate_let_reference(validator: 'TypeValidator', stmt: Let) -> None:
+    """`let poke T x = <place>` / `let peek T x = <place>`: a checked borrow binding (#409).
+
+    The declared type is the reference, the initializer is the place it points into, and
+    the binding is recorded with its full `ReferenceType` so that every later reader -- the
+    borrow pass's write gates, the backend's dereference -- answers by construction. The
+    owner's freeze, the one-`poke` rule and the consuming-use refusal are the borrow
+    pass's; here the place is checked to HAVE an address, and a constant is refused
+    because it has none (CE2400) where a unit variable has one.
+    """
+    from sushi_lang.semantics.typesys import ReferenceType
+    from .resolution import resolve_variable_type
+    from .propagation import propagate_types_to_value
+
+    mode = "poke" if stmt.ty.is_poke() else "peek"
+    root = place_root(validator, stmt.value)
+    if root is None:
+        er.emit_with(validator.reporter, er.ERR.CE2404, stmt.value.loc, expr=stmt.name) \
+            .help(f"a `let {mode}` binds a PLACE: a local, a field, an element, or an "
+                  f"Own's payload (`o.get()`); bind a call result by value, with "
+                  f"`let T {stmt.name} = ...`") \
+            .emit()
+        return
+    if root.id not in validator.variable_types:
+        sig = validator.const_sig(root.id)
+        if sig is not None and not sig.is_var:
+            er.emit(validator.reporter, er.ERR.CE2400, root.loc, name=root.id)
+            return
+
+    referent = resolve_variable_type(validator, stmt.ty.referenced_type, stmt.type_span)
+    ref_type = ReferenceType(referenced_type=referent, mutability=stmt.ty.mutability)
+    stmt.ty = ref_type
+    validator.variable_types[stmt.name] = ref_type
+
+    propagate_types_to_value(validator, stmt.value, referent)
+    validate_assignment_compatibility(validator, referent, stmt.value, stmt.type_span,
+                                      stmt.value.loc)
 
 
 def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:

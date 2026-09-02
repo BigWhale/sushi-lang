@@ -26,6 +26,17 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
 
     codegen.variable_types[stmt.name] = stmt.ty
 
+    from sushi_lang.semantics.typesys import ReferenceType
+    if isinstance(stmt.ty, ReferenceType):
+        # `let poke T x = <place>` (#409): the slot holds a POINTER into storage the owner
+        # keeps, exactly as a reference parameter's does, and is never registered for
+        # cleanup -- the owner frees the pointee.
+        from sushi_lang.backend.expressions.borrow import emit_place_address
+        place_ptr = emit_place_address(codegen, stmt.value)
+        codegen.memory.create_local(stmt.name, place_ptr.type, place_ptr, stmt.ty,
+                                    register_cleanup=False)
+        return
+
     if isinstance(stmt.ty, DynamicArrayType):
         from sushi_lang.backend.statements import initialization
         initialization.initialize_dynamic_array(codegen, stmt.name, stmt.ty, stmt.value)

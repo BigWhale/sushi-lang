@@ -1,0 +1,14 @@
+# The owner is FROZEN while the binding lives (CE2412's machinery): rebinding the Own
+# frees the cell the binding points into, so the binding's later use is refused.
+# EXPECT_ERROR_CODE: CE2412
+
+struct Holder:
+    i32 n
+
+fn main() i32:
+    let Own@(Holder) o = Own.alloc(Holder(1))
+    let poke Holder h = o.get()
+    o := Own.alloc(Holder(2))
+    h.n := 3
+    println("{o.get().n}")
+    return Result.Ok(0)

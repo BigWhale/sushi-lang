@@ -713,15 +713,18 @@ Enforce memory safety rules for references.
 
 ### Rules
 
-1. **No reference-typed `let` bindings (CE2413, issue #252)**
+1. **A reference-typed `let` is a checked borrow binding (#409; CE2413 retired)**
 
 ```sushi
 let i32 x = 42
-# let peek i32 r = peek x  # ERROR CE2413: a let binding cannot have a reference type
+let poke i32 r = x       # a pointer into x's slot, block-scoped
+r := r + 1               # x is 43
 ```
 
-A borrow is created at a USE site (`f(peek x)`); a local borrow BINDING is not a
-checked feature yet, so the form is rejected rather than compiled as an unchecked
+`bind_let_reference` (`passes/borrow/bindings.py`) registers the binding with its full
+`ReferenceType`, freezes the owner (CE2412 on a later mutation), and refuses a second
+`poke` of the same owner (CE2403) or a `peek`/`poke` mix (CE2407). Before #409 the form
+was rejected as CE2413 rather than compiled as an unchecked
 alias.
 
 2. **Cannot move/rebind while borrowed**
@@ -787,8 +790,8 @@ fn main() i32:
 
 The borrow lasts to the end of the block that declared it. Mutating, freeing, or rebinding `w`
 while `borrowed` is still live is **CE2412**; handing `borrowed` itself to a by-value sink is
-**CE2411**. This is what makes rule 1's rejection (`let peek T x = ...`, CE2413) unnecessary as a
-checked-borrow mechanism: an ordinary `let T x = <borrowed source>` is already tracked.
+**CE2411**. A value binding and a reference binding (rule 1) are tracked the same way; the
+reference binding adds the WRITE path -- a store through it reaches the owner.
 
 ### Borrow Tracking
 

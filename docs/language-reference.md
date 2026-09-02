@@ -255,6 +255,36 @@ x := 30     # OK
 # y := 5    # CE1002: assignment to undeclared variable 'y'
 ```
 
+### Reference bindings
+
+A `let` may bind a **reference** into storage another variable owns, with the mode on the
+declaration: `let poke T x = <place>` writes through, `let peek T x = <place>` reads
+through. The place is a local, a field or element of one, a unit variable, or an
+`Own@(T)`'s payload (`o.get()`); it is written bare, and a call result or a `??` is a
+temporary with no address to bind (**CE2404**). The binding is block-scoped, and while it
+lives the owner is frozen: mutating, rebinding or moving the owner and then using the
+binding is **CE2412**.
+
+```sushi
+struct Holder:
+    i32 n
+    i32[] items
+
+fn main() i32:
+    let Own@(Holder) o = Own.alloc(Holder(1, from([])))
+    let poke Holder h = o.get()    # a pointer into the Own's cell, no copy
+    h.items.push(9)                # reaches the payload
+    h.n := 42
+    println("{o.get().n} {o.get().items.len()}")   # 42 1
+    return Result.Ok(0)
+```
+
+One `poke` binding of an owner at a time (**CE2403**); a `peek` beside a live `poke`, or
+the reverse, is **CE2407**; a write through a `peek` binding is **CE2408**; a `poke`
+binding out of a `peek` parameter is **CE2408** too. Consuming the binding stays
+**CE2411** -- it names storage the owner still frees -- and `.clone()` is the escape. A
+constant has no address to bind (**CE2400**); a unit variable has one.
+
 ### Scope
 
 Variables are block-scoped:

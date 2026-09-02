@@ -58,9 +58,13 @@ _add(ErrorMessage("CE2408", Severity.ERROR,
     "cannot modify '{name}' through peek reference (read-only)",
     Category.BORROW, "peek references are read-only. Use poke for mutable access."))
 
-_add(ErrorMessage("CE2413", Severity.ERROR,
-    "a 'let' binding cannot have a reference type ('{mode} {ty}')",
-    Category.BORROW, "A reference-typed `let` (`let peek T x = ...`) parses but has no checked semantics: the binding would be an alias the borrow checker does not track, so two `poke` bindings of one variable would compile silently (issue #252). Borrow at a USE site instead: pass `peek x` / `poke x` to a reference parameter, or take an independent value with `.clone()`. Checked local borrow bindings are a possible future feature; until they are designed, the form is rejected."))
+# CE2413 ("a 'let' binding cannot have a reference type") was RETIRED when #409 landed the
+# checked reference-typed `let`: `let poke T x = <place>` and `let peek T x = <place>` are
+# block-scoped borrow bindings now, with the owner frozen while the binding lives (CE2412),
+# one `poke` at a time (CE2403, CE2407), a write through a `peek` refused (CE2408), and a
+# consuming use refused (CE2411). What the code guarded against -- two untracked `poke`
+# aliases of one variable (#252) -- is CE2403 today. A registered code nothing can reach
+# misinforms the registry's own promise, so it is gone rather than kept.
 
 _add(ErrorMessage("CE2412", Severity.ERROR,
     "cannot mutate '{owner}' while '{name}' borrows from it",

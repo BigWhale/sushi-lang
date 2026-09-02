@@ -120,6 +120,75 @@ class BindingScope:
         self._frozen.append((owner, state.name))
 
 
+def _own_payload_receiver(expr: Expr) -> Optional[Expr]:
+    """`o.get()` on an Own binds the PAYLOAD; the place it is a place of is `o`."""
+    from sushi_lang.semantics.ast import DotCall, MethodCall
+    if isinstance(expr, (MethodCall, DotCall)) and expr.method == "get" and not expr.args:
+        return expr.receiver
+    return None
+
+
+def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
+    """`let poke T x = <place>` / `let peek T x = <place>`: a checked borrow binding (#409).
+
+    Block-scoped like a `let`-borrow and a REFERENCE like a `poke` pattern binding: the
+    state carries the full `ReferenceType`, so the write gates answer by construction (a
+    write through a `peek` binding is CE2408, consuming the binding is CE2411), and the
+    owner is frozen while the binding lives (CE2412's machinery, released at block exit).
+    Two rules are this binding's own: one `poke` binding of an owner at a time (CE2403),
+    and a `peek` beside a live `poke`, or the reverse, is CE2407 -- the same two codes an
+    argument list answers, at the binding instead of the statement.
+    """
+    from .expressions import check_expr
+    from .writes import check_owner_not_borrowed, reject_readonly_write
+
+    check_expr(checker, stmt.value)
+    is_poke = stmt.ty.is_poke()
+    place = _own_payload_receiver(stmt.value) or stmt.value
+    owner = root_owner(place)
+    state = BorrowState(name=stmt.name, var_type=stmt.ty, bound_at_span=stmt.loc,
+                        declared_at_span=stmt.loc,
+                        declared_branch_depth=checker.branch_depth)
+    checker.borrow_state[stmt.name] = state
+
+    owner_state = checker.borrow_state.get(owner) if owner else None
+    if owner_state is None:
+        return  # a constant was refused upstream (CE2400); nothing here to freeze
+
+    if is_poke:
+        if _pokes_through_a_peek(state, owner_state):
+            _reject_poke_through_peek(checker, owner, owner_state, stmt.loc)
+            return
+        if reject_readonly_write(checker, owner, stmt.loc, "take a `poke` binding",
+                                 receiver=place):
+            return
+
+    for bound_name, bound_span in list(owner_state.binding_borrows):
+        bound = checker.borrow_state.get(bound_name)
+        if bound is None or not isinstance(bound.var_type, ReferenceType):
+            continue
+        # The same table as `acquire_borrow`: poke beside poke is CE2403, a mix is CE2407,
+        # and two `peek` bindings share.
+        if bound.var_type.is_poke():
+            code = er.ERR.CE2403 if is_poke else er.ERR.CE2407
+        elif is_poke:
+            code = er.ERR.CE2407
+        else:
+            continue
+        checker.err.emit_with(code, stmt.loc, name=owner) \
+            .note(f"'{bound_name}' binds it here", bound_span).emit()
+        return
+
+    if is_poke:
+        # A writer invalidates every value binding read out of the owner, exactly as
+        # `f(poke x)` does (#242).
+        check_owner_not_borrowed(checker, owner, stmt.loc, "take `poke`")
+
+    state.borrows_from = owner
+    owner_state.binding_borrows.append((stmt.name, stmt.loc))
+    checker._scope_binding_borrows[-1].append((owner, stmt.name))
+
+
 def _pokes_through_a_peek(state: BorrowState, owner_state: BorrowState) -> bool:
     """Would this `poke` binding write the caller's container through a `peek`?"""
     return (isinstance(state.var_type, ReferenceType) and state.var_type.is_poke()

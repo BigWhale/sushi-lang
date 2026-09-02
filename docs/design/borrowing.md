@@ -38,17 +38,19 @@ Four rules follow from that one sentence, and everything below is one of them:
 ## 2. Where a reference type may appear
 
 The grammar's `?type` rule is recursive and universal, so `peek T` / `poke T` parses in
-every type position. Semantics defines **two**:
+every type position. Semantics defines **three**:
 
 - a function **parameter** — `fn f(peek T x)`;
 - a **parameter inside a function type** — `fn(peek i32) -> i32`, and the lambda
-  `|peek i32 x|` that satisfies it.
+  `|peek i32 x|` that satisfies it;
+- a **`let` binding** — `let poke T x = <place>` / `let peek T x = <place>` (#409, built
+  2026-09-03): a block-scoped borrow binding, mechanism 3b below.
 
-Every other position is a registered rejection at the declaration: CE2413 (`let`), CE2415
+Every other position is a registered rejection at the declaration: CE2415
 (struct field), CE2416 (enum payload), CE2417 (return type), CE2418 (nested reference),
 CE2419 (generic type argument), CE2420 (extension or perk-impl target), CE5003 (FFI
 signature), CE0114 (variadic element). One walk — `contains_reference` in
-`semantics/type_predicates.py` — backs the six CE24xx codes. Its carve-out for
+`semantics/type_predicates.py` — backs the five CE24xx codes. Its carve-out for
 `FunctionType.param_types` is load-bearing: it keeps the second supported position legal
 wherever a function type appears. The position table and the reason for each rejection are
 in `ownership-conventions.md` §8.5.
@@ -89,8 +91,20 @@ full `ReferenceType` in the borrow state, which is what makes the write gate ans
 **3 — the `let` binding of a read** inherits BORROWED provenance: a field read
 (`h.inner`), an index (`rows[i]`) and a container get-out (`c.get(0)??`, `own.get()`) all
 borrow. The owner is frozen until the end of the block that declares the binding
-(**CE2412**). A reference-typed `let` (`let peek T x = ...`) is **CE2413** — it parses,
-but it would be an alias the checker does not track.
+(**CE2412**).
+
+**3b — the reference-typed `let`** (#409) binds a POINTER into a place the owner keeps:
+`let poke T x = <place>` writes through, `let peek T x = <place>` reads through. The place
+is a name, a member or index chain off one, or an `Own@(T).get()` (the payload's cell);
+a temporary is **CE2404**, a constant **CE2400**. The state carries the full
+`ReferenceType`, so the write gates answer by construction (CE2408 through a `peek`
+binding or out of a `peek` owner; CE2411 on a consuming use), the owner is frozen exactly
+as in mechanism 3, and the binding is released at block exit. Two rules are its own:
+one `poke` binding of an owner at a time (**CE2403**), and a `peek` beside a live `poke`,
+or the reverse, is **CE2407** — the two codes `acquire_borrow` gives an argument list,
+here at the binding instead of the statement. `bind_let_reference` in
+`passes/borrow/bindings.py` is the one seam. CE2413, which refused the form while it was
+untracked, is retired.
 
 **4 — the pattern value binding** is compiled as a private copy, so a write through it
 could never reach the owner. A rebind of the binding itself (`n := 99`) stays legal: it
@@ -261,7 +275,6 @@ designed:
 
 - **Lifetimes.** Nothing relates a borrow to the value it names, which is why a borrow
   cannot be returned (CE2417) or stored in data (CE2415, CE2416, CE2419).
-- **A checked reference-typed `let`** (CE2413).
 - **A reference binding in a nested match pattern** (CE2424). A TAKING binding is legal
   there: nothing points into the scrutinee, so the temporary-copy hazard does not apply.
 - **A `nom` binding inside `Own(...)`** (CE2434), and a per-slot take of one payload out of

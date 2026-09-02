@@ -1,0 +1,16 @@
+# `let poke` over a plain local aliases its slot: a rebind through the binding is a
+# write to the local, and `let peek` is the read-only twin. Each binding lives to the end
+# of its block, so the two bind different locals here.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n7\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let i32 x = 41
+    let i32 y = 7
+    let poke i32 a = x
+    a := a + 1
+    println("{x}")
+    let peek i32 p = y
+    println("{p}")
+    return Result.Ok(0)

@@ -731,22 +731,28 @@ fn main() i32:
    or a direct field read -- `.clone()` is the escape (see
    [Reading Through a Borrow, Without Consuming](#reading-through-a-borrow-without-consuming)).
 
-**A `let` cannot instead declare a reference *type*.** `let peek T x = ...` parses but is rejected
-with `CE2413`: the binding above already behaves like a checked borrow without any new syntax, so a
-first-class reference-typed local would be a second, overlapping way to say the same thing.
+**A `let` may also declare a reference *type*** (#409): `let poke T x = <place>` binds a
+pointer INTO the owner's storage, so a write through it reaches the owner -- the zero-copy
+mutation path a bare `Own@(T)` local had none of -- and `let peek T x = <place>` is the
+read-only twin. The binding is block-scoped and freezes its owner exactly as the implicit
+borrow above does (`CE2412`); one `poke` binding of an owner at a time (`CE2403`), a `peek`
+beside a live `poke` is `CE2407`, a write through a `peek` binding is `CE2408`, and
+consuming the binding is `CE2411` as before. The place must have an address: a call
+result is `CE2404`, a constant is `CE2400`.
 
 ```sushi
 struct Wrapper:
-    string inner
+    i32[] items
 
 fn main() i32:
-    let Wrapper w = Wrapper(inner: "hi")
+    let Own@(Wrapper) w = Own.alloc(Wrapper(from([])))
 
-    # ERROR CE2413: a 'let' binding cannot have a reference type ('peek string')
-    # let peek string x = w.inner
+    if (true):
+        let poke Wrapper inner = w.get()   # a pointer into the cell
+        inner.items.push(4)                # reaches the Own's payload
 
-    let string x = w.inner  # write the plain value type instead
-    println(x)
+    let peek Wrapper view = w.get()        # read-only; `inner`'s block has ended
+    println("{view.items.len()}")          # 1
     return Result.Ok(0)
 ```
 

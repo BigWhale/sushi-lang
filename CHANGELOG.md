@@ -5,6 +5,16 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **A reference-typed `let` is a checked borrow binding.** `let poke Holder h = o.get()`
+  binds a POINTER into the Own's payload, so `h.items.push(9)` and `h.n := 42` reach the
+  heap cell with no copy -- the zero-copy mutation path a bare `Own@(T)` local had none
+  of (#409). `let peek T x = <place>` is the read-only twin. The place is a local, a
+  member or index chain off one, a unit variable, or an `Own@(T).get()`; a call result is
+  CE2404 and a constant CE2400. The binding is block-scoped and freezes its owner (CE2412
+  on a later mutation), one `poke` binding of an owner at a time (CE2403), a `peek` beside
+  a live `poke` is CE2407, a write through a `peek` binding is CE2408, and consuming the
+  binding stays CE2411. CE2413, which refused the form while it was untracked, is
+  retired.
 - **Unit-level storage: the `var` declaration.** `var i32 counter = 0` at the top of a
   unit is storage in the data segment -- one per program, initialized from a constant
   expression before `main`, never destroyed at exit -- where a `const` is a value the

@@ -1,0 +1,9 @@
+# `let peek` is read-only: a rebind through it is CE2408, as through a peek parameter.
+# EXPECT_ERROR_CODE: CE2408
+
+fn main() i32:
+    let i32 x = 42
+    let peek i32 p = x
+    p := 1
+    println("{x}")
+    return Result.Ok(0)

@@ -43,6 +43,34 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
         raise_internal_error("CE0100", expr=type(expr.expr).__name__)
 
 
+def emit_place_address(codegen: 'LLVMCodegen', expr) -> ir.Value:
+    """The address of a PLACE: what a `let poke` / `let peek` binding stores (#409).
+
+    A name is its slot (or the pointer a reference slot holds, or a unit variable's
+    global); a member chain is a GEP; an index is the bounds-checked element pointer; an
+    `Own@(T).get()` is the payload's heap cell. The typecheck pass refused every other
+    shape (CE2404), so there is no fallback here.
+    """
+    from sushi_lang.semantics.ast import DotCall, IndexAccess, MemberAccess, MethodCall, Name
+
+    if isinstance(expr, Name):
+        return emit_borrow(codegen, Borrow(expr=expr, mutability="poke", loc=expr.loc))
+    if isinstance(expr, MemberAccess):
+        from sushi_lang.backend.expressions.names import namespaced_storage
+        storage = namespaced_storage(codegen, expr)
+        if storage is not None:
+            return storage[1]
+        return emit_member_access_borrow(codegen, expr)
+    if isinstance(expr, IndexAccess):
+        from sushi_lang.backend.types.arrays.indexing import emit_element_pointer
+        return emit_element_pointer(codegen, expr)
+    if isinstance(expr, (MethodCall, DotCall)) and expr.method == "get" and not expr.args:
+        # `o.get()`: the Own is `{T*}` by value, and its one field is the cell.
+        own_value = codegen.expressions.emit_expr(expr.receiver)
+        return codegen.builder.extract_value(own_value, 0, name="own_payload_ptr")
+    raise_internal_error("CE0100", expr=type(expr).__name__)
+
+
 def emit_member_access_borrow(codegen: 'LLVMCodegen', expr) -> ir.Value:
     """Emit borrow of struct field access using GEP."""
     from sushi_lang.backend.expressions.structs import infer_struct_type, try_get_struct_alloca

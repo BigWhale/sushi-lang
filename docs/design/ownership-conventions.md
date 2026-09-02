@@ -542,9 +542,11 @@ conflate:
 - **#252** is a distinct, later request: a first-class *reference-typed* local binding
   (`let peek T x = ...`) as its own kind of value. That is NOT what #242 needed and is NOT what §8
   implements — §8's binding still declares an ordinary value type `T`; it is tracked as a borrow by
-  provenance, not by a reference type. #252 was assessed and **rejected** as **CE2413**: the form
-  parses but would add a second, overlapping way to say the same thing the implicit binding already
-  says, with no additional checked semantics today.
+  provenance, not by a reference type. #252 was first **rejected** as **CE2413** (the form parsed
+  but would have been an untracked alias), and then built as #409 on 2026-09-03: `let poke T x =
+  <place>` is a checked, block-scoped POINTER binding with the mode on the declaration -- the
+  zero-copy mutation path into an `Own@(T)` payload that §8's value binding cannot be. CE2413 is
+  retired; `docs/design/borrowing.md` mechanism 3b is the record.
 
 So this decision does not "depend on #252" the way an earlier note claimed — the prerequisite #242
 needed was a `let` that can *borrow* rather than copy-or-error, and that is exactly what §8's binding
@@ -556,15 +558,15 @@ CE2411, both escape with `.clone()` — which is exactly what Rust requires
 ## 8.5 Where a reference type may appear (decided, R4)
 
 The grammar's `?type` rule is recursive and universal, so `peek T` / `poke T` parses in EVERY
-type position. Semantics defines **two**, and rejects the other six at the declaration until each
-is designed. A borrow is a promise about a lifetime, and every rejected position is one where
+type position. Semantics defines **three**, and rejects the other positions at the declaration until
+each is designed. A borrow is a promise about a lifetime, and every rejected position is one where
 nothing relates the borrow to the value it names.
 
 | position | status | code |
 |---|---|---|
 | function parameter — `fn f(peek T x)` | **supported** — the position the whole subsystem is built for | — |
 | parameter inside a function type — `fn(peek i32) -> i32`, and the lambda `\|peek i32 x\|` that satisfies it | **supported** (promoted to tested support by R4; it had worked untested) | — |
-| `let` binding — `let peek T x = ...` | rejected | CE2413 (#252) |
+| `let` binding — `let poke T x = <place>` / `let peek T x = <place>` | **supported** (#409, 2026-09-03) — a block-scoped borrow binding; `borrowing.md` mechanism 3b | — |
 | struct field | rejected | CE2415 (#315) |
 | enum variant payload | rejected | CE2416 (#316) |
 | return type | rejected | CE2417 (#314) |
@@ -697,7 +699,8 @@ it is CE2408, on a binding CE2414, on a temporary CE2404, on a constant CE2400.
 signature and the impl must match (CE4004); the receiver stays a borrow for consuming
 purposes (CE2411, `.clone()` escapes); and the parameter is CE2425 anywhere but first in
 an extension/perk method. This followed the order #252 → CE2413 and #253 → CE2414 set:
-reject the unchecked form first, then ship the feature.
+reject the unchecked form first, then ship the feature -- and #409 shipped the `let` half
+in 2026-09-03, retiring CE2413.
 
 **Reads are unaffected, and one of them became expressible.** A field read, a read-only
 method under the receiver, `.clone()` of an owning field, and `.clone()` of the whole

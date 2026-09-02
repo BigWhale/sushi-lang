@@ -1,0 +1,17 @@
+# Consuming the binding stays CE2411: it names storage the Own still owns and frees.
+# `.clone()` is the escape.
+# EXPECT_ERROR_CODE: CE2411
+
+struct Holder:
+    i32 n
+    i32[] items
+
+fn eat(nom Holder h) ~:
+    println("{h.n}")
+    return Result.Ok(~)
+
+fn main() i32:
+    let Own@(Holder) o = Own.alloc(Holder(1, from([])))
+    let poke Holder h = o.get()
+    eat(nom h)
+    return Result.Ok(0)
