@@ -258,6 +258,17 @@ All notable changes to Sushi Lang will be documented in this file.
   is gone -- `.realise()` and `.clone()` answer the UNWRAPPED type, so neither ever
   reaches the diagnostic. Ruling 5's assignment row in
   `docs/design/ufcs-combinators.md` was already CE2505; the compiler agrees with it.
+- **A generic call's result is inferable as a generic function's argument.** The
+  typecheck pass types a call through the callee's concrete signature, and a generic
+  callee has none until its instance is built, so `show_it(wrap(nom "towel").realise(Box("none")))`
+  was CE2060 "cannot infer type arguments" while the same value bound by a `let` or a
+  `match` arm inferred (#556). A generic call is typed from its SUBSTITUTED signature
+  now -- one derivation, shared with the instantiate pass, which already read it for a
+  `match` scrutinee -- so `.realise()`, `??` and any method chained on a generic call
+  carry a type into the outer call site. A `Result` whose payload names an instance the
+  monomorphize pass has not built yet is handed back and kept OUT of the enum table,
+  beside the abstract-payload rule, so an early answer cannot park an unresolved
+  payload under a name whose resolved form arrives later.
 - **A local or a constant named `PI`, `E` or `TAU` is what it says.** The three math
   constants were asked before every local and every constant, in the scope pass, the
   inference visitor and the back end, so `let i32 PI = 3` printed 3.14159 and a unit's

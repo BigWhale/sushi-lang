@@ -1,0 +1,27 @@
+# A generic call unwrapped with `.realise(default)`, straight into another generic's
+# argument. The type argument comes from the inner call's SUBSTITUTED signature; the
+# shared inferrer answered nothing for a generic call, so `S` was unsolved and the call
+# site was CE2060 (#556).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "box\n"
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "box"
+
+fn wrap@(T)(nom T v) Box@(T):
+    return Result.Ok(Box(v))
+
+fn show_it@(S: Show)(S s) string:
+    return Result.Ok(s.show())
+
+fn main() i32:
+    println(show_it(wrap(nom "towel").realise(Box("none"))).realise("?"))
+    return Result.Ok(0)

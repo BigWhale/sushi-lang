@@ -332,46 +332,16 @@ class ExpressionScanner:
     def generic_call_type(self, expr):
         """What a generic call yields, as this pass can know it (#549).
 
-        The typecheck pass types a generic call through its monomorphized copy, which
-        does not exist yet, so the shared inferrer answers None for one here -- and a
-        `match` over such a call bound its payloads with no type at all. The type
-        arguments are in hand, so the substituted signature answers: the return, in the
-        Result the declaration wraps it in.
+        The shared inferrer answers this for a bare generic call now (#556), so what is
+        left here is the call this pass resolves through its OWN table of generic
+        declarations.
         """
+        from sushi_lang.semantics.generics.types import substituted_call_result
+
         resolved = self.resolve_generic_call(expr)
         if resolved is None:
             return None
-        generic_func, type_args = resolved
-        substitution = self._substitution_of(generic_func, type_args)
-        if substitution is None or generic_func.ret is None:
-            return None
-        return self._substituted_result(generic_func, substitution)
-
-    @staticmethod
-    def _substitution_of(generic_func, type_args) -> dict | None:
-        """Type parameter name -> type argument. A pack fans out and binds nothing here."""
-        from sushi_lang.semantics.generics.types import TypePack
-
-        params = [tp for tp in generic_func.type_params if not getattr(tp, "is_pack", False)]
-        args = [arg for arg in type_args if not isinstance(arg, TypePack)]
-        if len(params) != len(args):
-            return None
-        return {(tp.name if hasattr(tp, "name") else str(tp)): arg
-                for tp, arg in zip(params, args, strict=True)}
-
-    @staticmethod
-    def _substituted_result(generic_func, substitution):
-        """The Result a substituted signature answers: `ret` as written, or `Result<ret, E>`."""
-        from sushi_lang.semantics.generics.types import substitute_type_params
-        from sushi_lang.semantics.typesys import UnknownType
-
-        ret = substitute_type_params(generic_func.ret, substitution)
-        if isinstance(ret, GenericTypeRef) and ret.base_name == "Result":
-            return ret
-        err = generic_func.err_type
-        err = (substitute_type_params(err, substitution) if err is not None
-               else UnknownType("StdError"))
-        return GenericTypeRef(base_name="Result", type_args=(ret, err))
+        return substituted_call_result(*resolved)
 
     def _collect_substituted_signature(self, generic_func, type_args) -> None:
         """The instantiations a generic call's SUBSTITUTED signature names (#549, #555).
@@ -389,17 +359,18 @@ class ExpressionScanner:
         channel that way today (#538) -- and with the declared channel too, which is what
         the monomorphizer interns for the concrete copy.
         """
-        from sushi_lang.semantics.generics.types import substitute_type_params
+        from sushi_lang.semantics.generics.types import (
+            substitute_type_params, substituted_call_result, type_param_substitution)
         from sushi_lang.semantics.typesys import UnknownType
 
-        substitution = self._substitution_of(generic_func, type_args)
+        substitution = type_param_substitution(generic_func, type_args)
         if substitution is None:
             return
 
         if generic_func.ret is not None:
             ret = substitute_type_params(generic_func.ret, substitution)
             self.collect_type(ret)
-            wrapped = self._substituted_result(generic_func, substitution)
+            wrapped = substituted_call_result(generic_func, type_args)
             self.collect_type(wrapped)
             if wrapped is not ret:
                 self.collect_type(GenericTypeRef(
