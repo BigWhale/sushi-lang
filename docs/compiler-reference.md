@@ -553,18 +553,18 @@ fn main() i32:
 
 **Fix:** Use correct type: `r.realise(0)`.
 
-#### CE2002: Assigning Result Without Handling
+#### CE2505: Assigning Result Without Handling
 
-Assigning a `Result`-returning call directly to a non-`Result` variable is a type
-mismatch:
+Assigning a `Result`-returning call directly to a non-`Result` variable is refused, and
+the code names the fix:
 
-<!-- docs-sweep: error CE2002 -->
+<!-- docs-sweep: error CE2505 -->
 ```sushi
 fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    # ERROR CE2002: type mismatch: cannot assign Result@(i32, StdError) to i32
+    # ERROR CE2505: cannot assign Result@(T) to non-Result variable without handling
     let i32 x = get_value()
 
     return Result.Ok(0)

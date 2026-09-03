@@ -248,6 +248,13 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A `match` arm's inline body takes a rebind.** `Maybe.Some(v) -> kept := v` was
+  CE6001 "unexpected token ':='" while the same line under an indented arm compiled: the
+  inline body accepted a call, a `print`, a `return`, a `break`, a `continue` and a bare
+  expression, and a rebind is none of those (#552). It takes one now, so
+  `Result.Ok(nom rows) -> kept := rows` -- a move out of a temporary the match owns --
+  is a one-line arm. The target is any place a rebind takes: a name, a field, an array
+  slot. A `let` still needs the block form.
 - **An unhandled `Result` in a `let` answers CE2505, once.** The general CE2002 ("type
   mismatch: cannot assign X to Y") was asked first and names no fix, so a call
   right-hand side printed both codes at one location and a channel method

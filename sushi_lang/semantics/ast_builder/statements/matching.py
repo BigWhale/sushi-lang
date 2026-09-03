@@ -70,7 +70,11 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
             elif child.data == "match_arm_inline":
                 inline_child = child.children[0]
                 if isinstance(inline_child, Tree):
-                    if inline_child.data in ("return_stmt", "print_stmt", "println_stmt", "call_stmt", "break_stmt", "continue_stmt"):
+                    # Every statement alternative of `match_arm_inline` is named
+                    # `<something>_stmt`, so the statement parser answers for all of
+                    # them and the grammar stays the only list. A bare expression is
+                    # the one alternative that is not a statement.
+                    if inline_child.data.endswith("_stmt"):
                         stmt = ast_builder.stmt_parser.parse_stmt(inline_child)
                         body = Block(statements=[stmt], loc=span_of(child))
                     elif inline_child.data in _EXPR_NODES or contains_expr_like(inline_child):

@@ -1088,6 +1088,21 @@ match value:
     _ -> println("Other")
 ```
 
+### Arm Bodies
+
+An arm body is one statement on the arrow, or an indented block of statements. The
+inline form takes the statements a block takes -- a call, a `print` or `println`, a
+`return`, a `break`, a `continue`, and a REBIND -- plus a bare expression.
+
+```sushi
+let i32 kept = 0
+match m:
+    Maybe.Some(v) -> kept := v          # a rebind of an outer local
+    Maybe.None -> ~
+```
+
+A `let` needs the block form: a local declared on the arrow has no line to read it.
+
 ### Nested Patterns
 
 ```sushi

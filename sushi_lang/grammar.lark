@@ -98,7 +98,10 @@ match_stmt: MATCH NOM? expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
 match_arm: (pattern | literal_pattern | wildcard_pattern) "->" (match_arm_inline | block)
 literal_pattern: "-" (INT | HEX_INT | BIN_INT | OCT_INT) -> neg_literal_pattern
                | (INT | HEX_INT | BIN_INT | OCT_INT)
-match_arm_inline: (return_stmt | print_stmt | println_stmt | call_stmt | break_stmt | continue_stmt | expr _NEWLINE)
+# A one-statement arm on the arrow. Every alternative here is a STATEMENT the
+# block form already takes, plus a bare expression -- a rebind was the one missing
+# and it is the shape a move out of a temporary wants (#552).
+match_arm_inline: (return_stmt | print_stmt | println_stmt | call_stmt | rebind_stmt | break_stmt | continue_stmt | expr _NEWLINE)
 pattern: [NAME "."] NAME "." NAME ["(" [pattern_list] ")"]
 pattern_list: pattern_item ("," pattern_item)*
 pattern_item: pattern | NAME | wildcard_pattern | own_pattern

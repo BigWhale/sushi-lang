@@ -1,0 +1,19 @@
+# `Result.Ok(nom xs) -> kept := xs` is the shape the enhancement was asked for: a move
+# out of a temporary the match owns, in a one-statement arm (#552). The array is bound
+# by the outer local afterwards and freed once.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3 rows\n"
+# EXPECT_NO_LEAKS: true
+
+fn make_rows() i32[]:
+    let i32[] rows = from([1, 2, 3])
+    return Result.Ok(rows)
+
+fn main() i32:
+    let i32[] kept = from([])
+    match make_rows():
+        Result.Ok(nom rows) -> kept := rows
+        Result.Err(_) -> ~
+    println("{kept.len()} rows")
+    return Result.Ok(0)
