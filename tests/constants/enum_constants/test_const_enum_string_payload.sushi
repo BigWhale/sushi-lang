@@ -1,0 +1,26 @@
+# A string payload is a fat pointer into read-only bytes: the pointer word, the size and
+# the owned byte all land in the payload, so the value reads back whole.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "word Mostly Harmless 15\nnumber 42\n"
+
+use <collections/strings>
+
+enum Token:
+    End
+    Word(string)
+    Number(i32)
+
+const Token GREETING = Token.Word("Mostly Harmless")
+const Token ANSWER = Token.Number(42)
+
+fn show(Token t) ~:
+    match t:
+        Token.End -> println("end")
+        Token.Word(w) -> println("word {w} {w.len()}")
+        Token.Number(n) -> println("number {n}")
+    return Result.Ok(~)
+
+fn main() i32:
+    show(GREETING)
+    show(ANSWER)
+    return Result.Ok(0)

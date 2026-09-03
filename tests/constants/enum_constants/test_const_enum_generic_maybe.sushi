@@ -1,0 +1,19 @@
+# A GENERIC enum's variant is constructed against the constant's declared type: the
+# interned instance is looked up by the declared spelling, and the tag by the variant.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "none\nsome 7\nfalse true\n"
+
+const Maybe@(i32) NOTHING = Maybe.None
+const Maybe@(i32) SEVEN = Maybe.Some(7)
+
+fn show(Maybe@(i32) m) ~:
+    match m:
+        Maybe.None -> println("none")
+        Maybe.Some(v) -> println("some {v}")
+    return Result.Ok(~)
+
+fn main() i32:
+    show(NOTHING)
+    show(SEVEN)
+    println("{NOTHING.is_some()} {SEVEN.is_some()}")
+    return Result.Ok(0)

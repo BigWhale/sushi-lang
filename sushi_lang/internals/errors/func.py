@@ -45,7 +45,7 @@ _add(ErrorMessage("CE0107", Severity.ERROR,
 # Constant expression evaluation errors
 _add(ErrorMessage("CE0108", Severity.ERROR,
     "expression is not a compile-time constant (type: {expr_type})",
-    Category.FUNC, "Constant declarations must use compile-time evaluable expressions. Function calls, method calls, and variable references are not allowed."))
+    Category.FUNC, "Constant declarations must use compile-time evaluable expressions: literals, other constants, operators, casts, interpolation, and a struct or enum variant built from constants. Function calls, method calls, and variable references are not allowed."))
 
 _add(ErrorMessage("CE0109", Severity.ERROR,
     "circular constant dependency detected: {chain}",

@@ -1,0 +1,15 @@
+# The parenthesized spelling of a payload-free variant constructs the same tag.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "red\n"
+
+enum Colour:
+    Red
+    Green
+
+const Colour FAVOURITE = Colour.Red()
+
+fn main() i32:
+    match FAVOURITE:
+        Colour.Red -> println("red")
+        Colour.Green -> println("green")
+    return Result.Ok(0)

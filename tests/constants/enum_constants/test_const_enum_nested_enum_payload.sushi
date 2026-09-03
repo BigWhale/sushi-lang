@@ -1,0 +1,23 @@
+# A payload whose type is another enum: the inner tag and the inner payload are written
+# inside the outer payload.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "b 9\n"
+
+enum Inner:
+    A
+    B(i32)
+
+enum Outer:
+    Empty
+    Wrap(Inner)
+
+const Outer O = Outer.Wrap(Inner.B(9))
+
+fn main() i32:
+    match O:
+        Outer.Empty -> println("empty")
+        Outer.Wrap(inner) ->
+            match inner:
+                Inner.A -> println("a")
+                Inner.B(n) -> println("b {n}")
+    return Result.Ok(0)

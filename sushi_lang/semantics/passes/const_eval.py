@@ -11,12 +11,12 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
     Call, ConstDef, DotCall, DynamicArrayFrom, DynamicArrayNew, Expr, IntLit, FloatLit,
     BoolLit, StringLit, ArrayLiteral, BinaryOp, UnaryOp, Name, CastExpr, IndexAccess,
-    InterpolatedString
+    InterpolatedString, MemberAccess
 )
 from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 from sushi_lang.semantics.integer_width import (
     fits_integer_type, integer_bit_width, wrap_to_integer_type)
-from sushi_lang.semantics.typesys import Type, BuiltinType
+from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
 from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.passes.collect import ConstantTable
 from sushi_lang.semantics.generics.type_display import display_type
@@ -61,11 +61,14 @@ class ConstantValue:
     """Compile-time constant value with type information.
 
     A LIST value is an aggregate, and `semantic_type` says which kind: a `StructType`
-    makes it the fields in declaration order, anything else makes it array elements.
-    Every reader of an aggregate asks the type first, never the shape of the list.
+    makes it the fields in declaration order, an `EnumType` makes it the payload of
+    `variant` in declaration order (empty for a payload-free variant), and anything else
+    makes it array elements. Every reader of an aggregate asks the type first, never the
+    shape of the list.
     """
     value: Union[int, float, bool, str, List['ConstantValue']]  # Python value
-    semantic_type: Type  # Sushi type (i32, f64, bool, string, a struct, ...)
+    semantic_type: Type  # Sushi type (i32, f64, bool, string, a struct, an enum, ...)
+    variant: Optional[str] = None  # the variant an EnumType value constructs
 
 
 def allocates_nothing(expr: Expr) -> bool:
@@ -90,7 +93,7 @@ class ConstantEvaluator:
     def __init__(self, reporter: Reporter, const_table: ConstantTable,
                  ast_constants: 'UnitKeyedSymbols[ConstDef]',
                  unit_name: Optional[str] = None, scope: object = None,
-                 struct_table: object = None):
+                 struct_table: object = None, enum_table: object = None):
         """Initialize the evaluator.
 
         `unit_name` is the unit whose constant expression is being evaluated. Two units
@@ -103,10 +106,12 @@ class ConstantEvaluator:
         self.ast_constants = ast_constants
         self.unit_name = unit_name
         self.scope = scope
-        # The authority for a struct's field ORDER and field TYPES. A caller that reads
-        # only an integer -- an array size, a run count -- passes none, and a struct
-        # construction stays CE0108 there, which is what those positions want anyway.
+        # The authorities for a struct's field ORDER and field TYPES, and for an enum's
+        # variants and their payload types. A caller that reads only an integer -- an
+        # array size, a run count -- passes neither, and a construction stays CE0108
+        # there, which is what those positions want anyway.
         self.struct_table = struct_table
+        self.enum_table = enum_table
         self.evaluation_stack: List[str] = []  # For cycle detection
         # The FIRST operation that left its type, for a caller whose reporter is silent.
         self.overflow: Optional[ConstOverflow] = None
@@ -144,27 +149,29 @@ class ConstantEvaluator:
             return self._evaluate_interpolation(expr, span)
 
         elif isinstance(expr, Call):
-            return self._evaluate_struct_construction(expr, span)
+            return self._evaluate_struct_construction(expr, expected_type, span)
+
+        elif isinstance(expr, (DotCall, MemberAccess)):
+            return self._evaluate_enum_construction(expr, expected_type, span)
 
         else:
             er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
             return None
 
-    def _evaluate_struct_construction(self, expr: Call,
+    def _evaluate_struct_construction(self, expr: Call, expected_type: Type,
                                      span: Optional[Span]) -> Optional[ConstantValue]:
         """A struct built entirely from constants is itself a constant.
 
         Only a name the struct table knows reaches the aggregate path, so an ordinary
         function call is still CE0108 -- flat, and one level down inside a field
         argument, because each argument goes back through `evaluate`. The declared type
-        is NOT consulted for the fields: a named type is looked up and never rebuilt
+        is consulted for ONE thing, which instance a generic name means; it is never
+        consulted for the fields: a named type is looked up and never rebuilt
         (`docs/design/type-identity.md`), and the table is the sole authority for the
         field order and the field types a literal argument is typed against.
-
-        The ENUM half of the limitation is deliberately not lifted; an `EnumConstructor`
-        is its own node and never arrives here.
         """
-        struct_type = self._struct_named_by(expr.callee)
+        struct_type = self._named_type(expr.callee, expected_type, self.struct_table,
+                                       StructType)
         arguments = None if struct_type is None else self._arguments_in_field_order(
             expr, struct_type.fields)
         if arguments is None:
@@ -180,18 +187,62 @@ class ConstantEvaluator:
             field_values.append(value)
         return ConstantValue(field_values, struct_type)
 
-    def _struct_named_by(self, callee: Expr):
-        """The `StructType` a constructor call names, or None if it names anything else.
+    def _evaluate_enum_construction(self, expr: Union[DotCall, MemberAccess],
+                                    expected_type: Type,
+                                    span: Optional[Span]) -> Optional[ConstantValue]:
+        """A variant built entirely from constants is itself a constant (#551).
 
-        A qualified constructor (`geo.Vec(...)`) parses to a `DotCall` and never reaches
-        here, so it stays CE0108 rather than answering a wrong type.
+        Both spellings arrive: `Sign.Plus(...)` parses as a `DotCall` on the type NAME
+        and the bare `Sign.Plus` as a `MemberAccess` on it. Only a name the enum table
+        knows starts the variant path, so a method call or a field read on anything
+        else stays CE0108. A GENERIC enum is found through the DECLARED type:
+        `Maybe.None` names no table entry, and the interned `Maybe<i32>` the declaration
+        resolved to is the one whose tag and payload types apply.
+
+        A variant the enum does not declare, or a payload count that does not fit, is
+        the typecheck pass's to name (CE2045, CE2050): this answers None in SILENCE, and
+        `validate_constant` runs the body's validator when nothing was reported.
         """
-        from sushi_lang.semantics.typesys import StructType
-
-        if self.struct_table is None or not isinstance(callee, Name):
+        enum_type = self._named_type(expr.receiver, expected_type, self.enum_table,
+                                     EnumType)
+        if enum_type is None:
+            er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
             return None
-        struct_type = self.struct_table.by_name.get(callee.id)
-        return struct_type if isinstance(struct_type, StructType) else None
+
+        if isinstance(expr, DotCall):
+            variant_name, arguments = expr.method, list(expr.args)
+        else:
+            variant_name, arguments = expr.member, []
+        variant = enum_type.get_variant(variant_name)
+        if variant is None or len(arguments) != len(variant.associated_types):
+            return None
+
+        payload: List[ConstantValue] = []
+        for argument, field_type in zip(arguments, variant.associated_types, strict=True):
+            value = self.evaluate(argument, field_type, argument.loc or span)
+            if value is None:
+                return None  # the recursion reported it
+            payload.append(value)
+        return ConstantValue(payload, enum_type, variant=variant_name)
+
+    def _named_type(self, receiver: Expr, expected_type: Type, table: object, kind: type):
+        """The `StructType` or `EnumType` a constructor's receiver names, or None.
+
+        A plain type is its table entry. A generic one has no entry under its bare
+        name -- the table holds the interned instances -- so the DECLARED type answers
+        when its base is the name written: `const Maybe@(i32) X = Maybe.Some(7)` builds
+        a `Maybe<i32>`. A qualified receiver (`geo.Vec(...)`, `geo.Sign.Plus`) is a
+        `MemberAccess` and never a `Name`, so it stays CE0108 rather than answering a
+        wrong type.
+        """
+        if table is None or not isinstance(receiver, Name):
+            return None
+        plain = table.by_name.get(receiver.id)
+        if isinstance(plain, kind):
+            return plain
+        if isinstance(expected_type, kind) and expected_type.generic_base == receiver.id:
+            return expected_type
+        return None
 
     def _arguments_in_field_order(self, expr: Call, fields) -> Optional[List[Expr]]:
         """The call's arguments in DECLARATION order, or None if they do not fit.

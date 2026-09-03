@@ -1,0 +1,29 @@
+# A payload argument is a constant EXPRESSION: another constant, an operator over two
+# of them, and a cast reach the same evaluator the scalar constants use. A constant of
+# an enum type may name another one.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "circle 10\nsquare 96 5\ncircle 10\n"
+
+enum Shape:
+    Circle(i32)
+    Square(i32, u8)
+
+const i32 RADIUS = 5
+const i32 WIDTH = 12
+const i32 HEIGHT = 8
+
+const Shape C = Shape.Circle(RADIUS * 2)
+const Shape Q = Shape.Square(WIDTH * HEIGHT, 5 as u8)
+const Shape ALIAS = C
+
+fn show(Shape s) ~:
+    match s:
+        Shape.Circle(r) -> println("circle {r}")
+        Shape.Square(area, depth) -> println("square {area} {depth}")
+    return Result.Ok(~)
+
+fn main() i32:
+    show(C)
+    show(Q)
+    show(ALIAS)
+    return Result.Ok(0)

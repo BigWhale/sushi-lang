@@ -1,0 +1,12 @@
+# A variant the enum does not declare is the mistake a body makes, and it reads the
+# same code in a constant.
+# EXPECT_ERROR_CODE: CE2045
+
+enum Sign:
+    Plus
+    Minus
+
+const Sign S = Sign.Nope
+
+fn main() i32:
+    return Result.Ok(0)

@@ -1,0 +1,19 @@
+# A struct constant whose field is an enum: the struct half recurses into the enum half.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1 write\n"
+
+enum Mode:
+    Read
+    Write
+
+struct Handle:
+    i32 fd
+    Mode mode
+
+const Handle OUT = Handle(fd: 1, mode: Mode.Write)
+
+fn main() i32:
+    match OUT.mode:
+        Mode.Read -> println("{OUT.fd} read")
+        Mode.Write -> println("{OUT.fd} write")
+    return Result.Ok(0)

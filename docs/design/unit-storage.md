@@ -43,7 +43,8 @@ honest:
 ## The initializer
 
 The initializer is a constant expression, evaluated by the same evaluator a `const` uses:
-a literal, a constant, an operator, `as`, an interpolation, a struct built from constants.
+a literal, a constant, an operator, `as`, an interpolation, a struct or an enum variant
+built from constants.
 There is no run-before-`main` initializer (Go's), because that brings initialization ORDER
 with it. Two consequences:
 
@@ -55,9 +56,12 @@ with it. Two consequences:
   spot. `from([1, 2])` does not either: the elements need a buffer. Both are CE0108. One
   predicate, `allocates_nothing` in `passes/const_eval.py`, is read by the typecheck pass
   and the backend alike, so the two cannot disagree about what qualifies.
-- A `var` whose type is an enum waits on #551 (a constant cannot construct an enum), so
-  the `var Maybe@(HashMap@(K, V)) cache = Maybe.None` shape the ruling names is not
-  writable yet. `var List@(T)` covers the cache case until then.
+- **An enum variant qualifies** (#551): a payload-free variant is a tag over a zero
+  payload, so `var Maybe@(HashMap@(K, V)) cache = Maybe.None` is the cache-filled-on-
+  first-use shape the ruling names, and the first call rebinds it with
+  `cache := Maybe.Some(map)`. The variant is built against the DECLARED type -- the
+  interned `Maybe<HashMap<K, V>>`, not the bare `Maybe` -- which is why the declaration
+  is resolved before the initializer is read.
 
 ## The borrow checker: one storage class beside "local"
 
