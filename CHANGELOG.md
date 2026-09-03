@@ -248,6 +248,26 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A local or a constant named `PI`, `E` or `TAU` is what it says.** The three math
+  constants were asked before every local and every constant, in the scope pass, the
+  inference visitor and the back end, so `let i32 PI = 3` printed 3.14159 and a unit's
+  own `const f64 E = 1.5` read as 2.71828, with no `use <math>` needed (#560). A stdlib
+  constant is a name the module brings now, at the rung of the name ladder a flat import
+  occupies: a unit that did not import `<math>` has no `PI` (CE1001), a unit's own
+  declaration wins, `use <math> as m` keeps them behind the dot, and a `const`
+  initializer folds `PI / 2.0`. The registry constant carries its value, and one
+  scope-aware lookup answers every reader.
+- **A constant reaches another unit.** A `const` initializer could not name another
+  unit's constant (CE1002), a qualified constant, constructor or variant (CE0108), or a
+  qualified type (CE2001 with a help line naming an import the unit already had) (#561).
+  All of it works now, flat and behind an alias: `const sh.Shape SMALL = sh.UNIT`,
+  `const i32 D = sh.SIZE * 2`, `const sh.Point O = sh.Point(y: 0, x: 0)`,
+  `const sh.Shape T = sh.Shape.Circle(2)`, and a `var` initializer alike. A private
+  constant is CE3005 as in a body, a call behind the alias stays CE0108, and the other
+  unit's initializer is folded in its own scope, so a name inside it never reads as this
+  unit's. Two declarations of one name are two constants and no longer a false cycle
+  (CE0109). A named struct construction behind an alias used to land positionally in a
+  body too, because the builder dropped the names on the method-call parse; it keeps them.
 - **A generic enum's constructor works behind an alias.** `slot.Slot.Filled("x")` with
   `use "slot" as slot` reached the backend as a CE0113 compiler bug -- "semantic
   analysis should have set resolved_enum_type" -- and so did the bare `slot.Slot.Empty`.

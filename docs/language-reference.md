@@ -1777,6 +1777,15 @@ declared further down the file. Indexing an array constant with a constant index
 and every bound is checked while compiling -- a constant cannot trap. Past the end is
 **CE2012** and a negative index is **CE2056**, the codes an index in a body gets.
 
+The other constant may belong to another unit. A flat `use "shapes"` brings its public
+constants bare, and `use "shapes" as sh` puts them behind the dot, in the declared type
+and in the initializer alike: `const sh.Shape SMALL = sh.UNIT`, `const i32 D = sh.SIZE * 2`,
+`const sh.Point O = sh.Point(0, 0)`, `const sh.Shape T = sh.Shape.Circle(2)`. A private
+constant is **CE3005** here as in a body. The other unit's initializer is read in ITS
+scope: a name inside it means what it meant where it was written. A standard-library
+constant is a constant too -- with `use <math>`, `const f64 HALF = PI / 2.0` folds -- and
+a unit's own declaration of the same name wins over it.
+
 ```sushi
 const i32[3] PRIMES = [2, 3, 5]
 const i32 SMALLEST = PRIMES[0]      # 2
