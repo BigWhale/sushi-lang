@@ -16,11 +16,25 @@ if TYPE_CHECKING:
 
 
 def validate_assignment_compatibility(validator: 'TypeValidator', declared_type: Optional[Type], value_expr: Expr, declared_span: Optional[Span], value_span: Optional[Span]) -> None:
-    """Validate that value expression type matches declared type (CE2002)."""
+    """Validate the value, then that its type matches the declared one (CE2002)."""
     if declared_type is None:
         return  # Can't validate without declared type
 
     validator.validate_expression(value_expr)
+    reject_incompatible_assignment(validator, declared_type, value_expr,
+                                   declared_span, value_span)
+
+
+def reject_incompatible_assignment(validator: 'TypeValidator', declared_type: Optional[Type], value_expr: Expr, declared_span: Optional[Span], value_span: Optional[Span]) -> None:
+    """CE2002 alone: the value has been validated already.
+
+    Split from the validation because a caller can have a better code for the SAME
+    binding and still owes the value its own diagnostics -- an unhandled `Result` is
+    CE2505, and the call that produced it may hold a wrong argument the reader needs
+    to see (#535).
+    """
+    if declared_type is None:
+        return
 
     if isinstance(declared_type, ArrayType) and isinstance(value_expr, ArrayLiteral):
         if reject_array_size_mismatch(validator, declared_type, value_expr, value_span):

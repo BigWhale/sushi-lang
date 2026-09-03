@@ -248,6 +248,16 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **An unhandled `Result` in a `let` answers CE2505, once.** The general CE2002 ("type
+  mismatch: cannot assign X to Y") was asked first and names no fix, so a call
+  right-hand side printed both codes at one location and a channel method
+  (`let i32 x = c.read_one()`) printed only the unhelpful one (#535). The Result
+  question is asked before the compatibility question now, and it reads every
+  right-hand side the same way: a `Result` constructor, a call, an extension or perk
+  method with an unhandled `| E` channel. The exclusion that skipped every method call
+  is gone -- `.realise()` and `.clone()` answer the UNWRAPPED type, so neither ever
+  reaches the diagnostic. Ruling 5's assignment row in
+  `docs/design/ufcs-combinators.md` was already CE2505; the compiler agrees with it.
 - **A local or a constant named `PI`, `E` or `TAU` is what it says.** The three math
   constants were asked before every local and every constant, in the scope pass, the
   inference visitor and the back end, so `let i32 PI = 3` printed 3.14159 and a unit's

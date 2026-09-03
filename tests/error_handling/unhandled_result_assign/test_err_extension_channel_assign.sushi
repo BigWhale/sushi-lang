@@ -1,0 +1,17 @@
+# An EXTENSION channel method's Result bound to the bare type. Ruling 5's assignment row
+# says CE2505, the code that names the fix; the general CE2002 used to answer because the
+# specific arm excluded every method call (#535).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2505
+enum OddError:
+    TooOdd
+
+extend i32 half_checked() i32 | OddError:
+    if (self % 2 == 1):
+        return Result.Err(OddError.TooOdd)
+    return self / 2
+
+fn main() i32:
+    let i32 half = 8.half_checked()
+    println("{half}")
+    return Result.Ok(0)

@@ -1,10 +1,10 @@
 # Ruling 5, the assignment row: an unhandled channel is a Result, and binding one to
 # the bare type is refused. The perk arm answers what the extension arm answers, which
 # is what this test pins -- the gate is receiver-kind blind.
-# The CODE is CE2002 and the matrix says CE2505: #535 owns that drift, and this
-# expectation moves with it.
+# The code is CE2505, the one ruling 5's matrix names: #535 moved the assignment row
+# off the general CE2002.
 # TEST_TYPE: error
-# EXPECT_ERROR_CODE: CE2002
+# EXPECT_ERROR_CODE: CE2505
 enum SourceError:
     Closed
 

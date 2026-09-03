@@ -9,7 +9,8 @@ from sushi_lang.semantics.ast import Let, Return, Rebind, If, While, Foreach, En
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
-from .compatibility import validate_assignment_compatibility, types_compatible
+from .compatibility import (validate_assignment_compatibility,
+                            reject_incompatible_assignment, types_compatible)
 from .expressions import validate_boolean_condition
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -47,55 +48,63 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
         if resolved_type != stmt.ty:
             stmt.ty = resolved_type
 
-    # A bare Result constructor infers as None, so the inference-based check below never
-    # fires on it and it used to reach codegen as a CE0113 (#48). CE2505 here instead.
-    if stmt.value is not None:
-        is_result_ctor = (
-            (isinstance(stmt.value, EnumConstructor) and stmt.value.enum_name == "Result")
-            or (isinstance(stmt.value, DotCall)
-                and isinstance(stmt.value.receiver, Name)
-                and stmt.value.receiver.id == "Result")
-        )
-        lhs_is_result = (
-            (isinstance(resolved_type, EnumType) and resolved_type.name.startswith("Result<"))
-            or (isinstance(stmt.ty, GenericTypeRef) and stmt.ty.base_name == "Result")
-            or (isinstance(stmt.ty, EnumType) and stmt.ty.name.startswith("Result<"))
-        )
-        if is_result_ctor and not lhs_is_result:
-            er.emit(validator.reporter, er.ERR.CE2505, stmt.value.loc)
-            return
-
     if stmt.value:
         from .propagation import propagate_types_to_value
         propagate_types_to_value(validator, stmt.value, resolved_type)
 
-    # Validate assignment compatibility (CE2002)
     if stmt.value:
-        validate_assignment_compatibility(validator, stmt.ty, stmt.value, stmt.type_span, stmt.value.loc)
+        # The value's own diagnostics first: an unhandled Result must not hide a wrong
+        # argument in the very call that produced it. Then the Result question BEFORE
+        # the general one, because CE2505 names the fix and CE2002 does not (#535).
+        validator.validate_expression(stmt.value)
+        if not reject_unhandled_result(validator, stmt, resolved_type):
+            reject_incompatible_assignment(validator, stmt.ty, stmt.value,
+                                           stmt.type_span, stmt.value.loc)
 
-    # Validate Result@(T) handling
-    # If RHS is a function call that returns Result<T>, LHS must also be Result<T>
-    # (unless RHS is already .realise() or other handling method)
-    if stmt.value:
-        rhs_type = validator.infer_expression_type(stmt.value)
 
-        # A declared `Result<T, E>` either resolves to its interned enum or stays a
-        # GenericTypeRef, so both spellings are checked or CE2505 misfires.
-        lhs_is_result = (
-            (isinstance(resolved_type, EnumType) and resolved_type.name.startswith("Result<"))
-            or (isinstance(stmt.ty, GenericTypeRef) and stmt.ty.base_name == "Result")
-            or (isinstance(stmt.ty, EnumType) and stmt.ty.name.startswith("Result<"))
-        )
+def _declares_a_result(stmt: Let, resolved_type) -> bool:
+    """Does the `let` declare a `Result`, in either spelling the passes keep?
 
-        if (rhs_type is not None and
-            isinstance(rhs_type, EnumType) and
-            rhs_type.name.startswith("Result<") and
-            not lhs_is_result):
+    A declared `Result@(T, E)` either resolves to its interned enum or stays a
+    `GenericTypeRef`, so both are read or CE2505 misfires on a legal binding.
+    """
+    from sushi_lang.semantics.generics.results import is_result_enum
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    return (
+        is_result_enum(resolved_type)
+        or is_result_enum(stmt.ty)
+        or (isinstance(stmt.ty, GenericTypeRef) and stmt.ty.base_name == "Result")
+    )
 
-            # Allow if RHS is already a method call (like .realise() or .clone())
-            # because those methods return the unwrapped type
-            if not isinstance(stmt.value, (MethodCall, DotCall)):
-                er.emit(validator.reporter, er.ERR.CE2505, stmt.value.loc)
+
+def reject_unhandled_result(validator: 'TypeValidator', stmt: Let, resolved_type) -> bool:
+    """CE2505 when a `let` binds an unhandled `Result` to a non-Result type (#535).
+
+    Asked BEFORE the general compatibility question. CE2002 refuses the same binding and
+    names no fix, so the two printed together at one location for a call and CE2002 alone
+    answered for a channel method -- the one shape the help text is written for.
+
+    ONE emit, two spellings of the same right-hand side: a `Result` constructor infers as
+    None and is read from its own shape (it used to reach codegen as CE0113, #48), and
+    everything else is asked what it yields. A method call is included, because
+    `.realise()` and `.clone()` answer the UNWRAPPED type and never reach the emit.
+    """
+    if _declares_a_result(stmt, resolved_type):
+        return False
+
+    is_result_ctor = (
+        (isinstance(stmt.value, EnumConstructor) and stmt.value.enum_name == "Result")
+        or (isinstance(stmt.value, DotCall)
+            and isinstance(stmt.value.receiver, Name)
+            and stmt.value.receiver.id == "Result")
+    )
+    if not is_result_ctor:
+        from sushi_lang.semantics.generics.results import is_result_enum
+        if not is_result_enum(validator.infer_expression_type(stmt.value)):
+            return False
+
+    er.emit(validator.reporter, er.ERR.CE2505, stmt.value.loc)
+    return True
 
 
 def _is_own_type(validator: 'TypeValidator', ty) -> bool:
