@@ -63,8 +63,7 @@ def reject_array_size_mismatch(validator: 'TypeValidator', declared_type: ArrayT
     """
     runs = array_runs.read_runs(
         literal.elements,
-        array_runs.const_int_reader(validator.const_table, validator.ast_constants,
-                                    validator.current_unit_name),
+        array_runs.const_int_reader(validator.constant_evaluator()),
         Reporter())
     if runs is None:
         return True  # a bad count. CE2017 said so; a size report would pile on.

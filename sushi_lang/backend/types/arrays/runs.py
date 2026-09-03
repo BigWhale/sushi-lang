@@ -70,8 +70,7 @@ def read_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement']):
 
     return array_runs.read_runs(
         elements,
-        array_runs.const_int_reader(codegen.const_table, codegen.ast_constants,
-                                    codegen.emitting_unit),
+        array_runs.const_int_reader(codegen.constant_evaluator()),
         Reporter())
 
 

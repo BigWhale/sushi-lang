@@ -34,8 +34,7 @@ def validate_array_literal(validator: 'TypeValidator', expr: ArrayLiteral) -> No
     # call is here to SPEAK, and every caller that needs the runs reads them itself.
     array_runs.read_runs(
         expr.elements,
-        array_runs.const_int_reader(validator.const_table, validator.ast_constants,
-                                    validator.current_unit_name),
+        array_runs.const_int_reader(validator.constant_evaluator()),
         validator.reporter)
 
     # Check type consistency of all elements (CE2013). A range element compares as the i32
@@ -409,12 +408,9 @@ def reject_overflowing_operation(validator: 'TypeValidator', expr: Expr,
     the node that computed it: the inner operation of `(200 + 100) / 2` reports once,
     and a constant that overflows is reported where it is declared and not at every use.
     """
-    from sushi_lang.internals.report import Reporter
-    from sushi_lang.semantics.passes.const_eval import ConstantEvaluator, emit_overflow
+    from sushi_lang.semantics.passes.const_eval import emit_overflow
 
-    evaluator = ConstantEvaluator(Reporter(), validator.const_table,
-                                  validator.ast_constants,
-                                  validator.current_unit_name, validator.scope)
+    evaluator = validator.constant_evaluator()
     evaluator.evaluate(expr, result_type, expr.loc)
 
     overflow = evaluator.overflow
@@ -430,13 +426,7 @@ def _provable_shift_count(validator: 'TypeValidator', count: Expr) -> Optional[i
     the answer is wanted here, never the evaluator's complaint about not finding
     one.
     """
-    from sushi_lang.internals.report import Reporter
-    from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
-
-    evaluator = ConstantEvaluator(Reporter(), validator.const_table,
-                                  validator.ast_constants,
-                                  validator.current_unit_name, validator.scope)
-    value = evaluator.evaluate(count, BuiltinType.I64, None)
+    value = validator.constant_evaluator().evaluate(count, BuiltinType.I64, None)
     if value is None or not isinstance(value.value, int) or isinstance(value.value, bool):
         return None
     return value.value

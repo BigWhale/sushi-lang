@@ -1,0 +1,20 @@
+# The unit every constant in this batch reaches: a public enum, a public struct,
+# a public constant of each, a private constant, a public function, and one
+# constant that reads an import of ITS OWN (`WIDTH` is `base`'s).
+use "helpers/base"
+
+public enum Shape:
+    Dot
+    Circle(i32)
+
+public struct Point:
+    i32 x
+    i32 y
+
+public const Shape UNIT = Shape.Circle(1)
+public const i32 SIZE = 4
+public const i32 BIG = WIDTH * 2
+const i32 SECRET = 7
+
+public fn area() i32:
+    return Result.Ok(SIZE * SIZE)

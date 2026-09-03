@@ -1,0 +1,10 @@
+# The visibility fence stands inside a constant initializer as it does in a body:
+# a private constant behind the alias is CE3005, not folded (#561).
+# EXPECT_ERROR_CODE: CE3005
+use "helpers/shapes" as sh
+
+const i32 LEAK = sh.SECRET
+
+fn main() i32:
+    println("{LEAK}")
+    return Result.Ok(0)

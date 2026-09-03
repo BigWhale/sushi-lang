@@ -1,0 +1,12 @@
+# Unit-level storage is a declaration of this unit like any other, so a `var`
+# named `TAU` is this unit's storage and the rebind reaches it (#560).
+# EXPECT_STDOUT_EXACT: "1 2\n"
+use <math>
+
+var i32 TAU = 1
+
+fn main() i32:
+    let i32 before = TAU
+    TAU := TAU + 1
+    println("{before} {TAU}")
+    return Result.Ok(0)

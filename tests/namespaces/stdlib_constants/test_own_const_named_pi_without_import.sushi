@@ -1,0 +1,8 @@
+# No `use <math>` at all, so `PI` can only be this unit's constant, at the type it
+# was declared with: an i32 3, not an f64 3.14159 (#560).
+# EXPECT_STDOUT_EXACT: "3\n"
+const i32 PI = 3
+
+fn main() i32:
+    println("{PI}")
+    return Result.Ok(0)

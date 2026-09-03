@@ -28,6 +28,11 @@ All functions are implemented with LLVM intrinsics for optimal performance.
 - `E` — 2.718281828459045 (`f64`)
 - `TAU` — 6.283185307179586 (`f64`)
 
+The three are names `use <math>` brings, like the functions: a unit that did not import
+the module has no `PI` (CE1001), `use <math> as m` puts them behind the dot (`m.PI`), and
+a unit's own `const f64 E`, a local `PI` or a `var TAU` wins over the module's. A `const`
+initializer folds them like any other constant.
+
 ## Polymorphic Functions: abs, min, max
 
 These three functions adapt to the type of their arguments.

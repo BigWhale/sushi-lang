@@ -1,0 +1,10 @@
+# The same fence for the flat spelling: an import brings the public names, and a
+# private one is refused where it is written (#561).
+# EXPECT_ERROR_CODE: CE3005
+use "helpers/shapes"
+
+const i32 LEAK = SECRET
+
+fn main() i32:
+    println("{LEAK}")
+    return Result.Ok(0)

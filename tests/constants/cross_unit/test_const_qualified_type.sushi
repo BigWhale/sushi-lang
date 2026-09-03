@@ -1,0 +1,16 @@
+# The declared type of a constant is a written-name position like a `let`'s, so
+# it takes the dot (#561, face 3). Before this the resolve pass dropped the
+# qualifier and the scope gate refused the bare name it left behind.
+# EXPECT_STDOUT_EXACT: "1\n"
+use "helpers/shapes" as sh
+
+const sh.Shape SMALL = sh.UNIT
+
+fn radius(sh.Shape s) i32:
+    match s:
+        sh.Shape.Dot -> return Result.Ok(0)
+        sh.Shape.Circle(r) -> return Result.Ok(r)
+
+fn main() i32:
+    println("{radius(SMALL).realise(-1)}")
+    return Result.Ok(0)

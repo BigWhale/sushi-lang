@@ -62,10 +62,7 @@ def validate_constant(self, const: ConstDef) -> None:
                                               const.type_span, assignment_span(const))
             return
 
-    from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
-    evaluator = ConstantEvaluator(self.reporter, self.const_table, self.ast_constants,
-                                  self.current_unit_name, self.scope, self.struct_table,
-                                  self.enum_table)
+    evaluator = self.constant_evaluator(self.reporter)
     reported = len(self.reporter.items)
     const_value = evaluator.evaluate(const.value, const.ty, const.loc)
 

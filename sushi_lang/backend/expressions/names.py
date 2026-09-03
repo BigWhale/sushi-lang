@@ -50,15 +50,14 @@ def namespaced_storage(codegen: 'LLVMCodegen', expr) -> Optional[tuple]:
     return ref.name, slot, sig.const_type
 
 
-def emit_name(codegen: 'LLVMCodegen', expr: Name, to_i1: bool) -> ir.Value:
-    """Emit variable or constant reference."""
-    if expr.id in {'PI', 'E', 'TAU'}:
-        from sushi_lang.sushi_stdlib.src import math as math_module
-        if math_module.is_builtin_math_constant(expr.id):
-            _, value = math_module.get_builtin_math_constant_value(expr.id)
-            f64_value = ir.Constant(ir.DoubleType(), value)
-            return codegen.utils.as_i1(f64_value) if to_i1 else f64_value
+def emit_stdlib_constant(codegen: 'LLVMCodegen', record, to_i1: bool) -> ir.Value:
+    """A registry constant as the immediate its record carries. The ONE emitter."""
+    value = ir.Constant(codegen.types.ll_type(record.get_return_type()), record.value)
+    return codegen.utils.as_i1(value) if to_i1 else value
 
+
+def emit_name(codegen: 'LLVMCodegen', expr: Name, to_i1: bool) -> ir.Value:
+    """Emit variable or constant reference: section 8's ladder, as the front end walked it."""
     slot = resolve_name_slot(codegen, expr.id)
     if slot is not None:
         # load_with_reference_handling dereferences a peek/poke parameter, whose slot
@@ -67,6 +66,13 @@ def emit_name(codegen: 'LLVMCodegen', expr: Name, to_i1: bool) -> ir.Value:
         from sushi_lang.backend.expressions import type_utils
         v = type_utils.load_with_reference_handling(codegen, expr.id, slot)
         return codegen.utils.as_i1(v) if to_i1 else v
+
+    # Below every local and every declared constant, and only in a unit whose scope
+    # holds the module: the rung the typecheck pass typed the name at (#560).
+    from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
+    stdlib_const = lookup_stdlib_constant(expr.id, codegen.scope)
+    if stdlib_const is not None:
+        return emit_stdlib_constant(codegen, stdlib_const, to_i1)
 
     # Neither a local nor a constant: a bare reference to a top-level function is a
     # first-class function value -> a non-capturing fat pointer {thunk, null, null}.
@@ -87,12 +93,12 @@ def emit_namespaced_value(codegen: 'LLVMCodegen', ref, to_i1: bool) -> ir.Value:
     """
     origin, name = ref.origin, ref.name
     if ref.producer == "stdlib":
-        from sushi_lang.sushi_stdlib.src import math as math_module
-        if math_module.is_builtin_math_constant(name):
-            _, value = math_module.get_builtin_math_constant_value(name)
-            f64_value = ir.Constant(ir.DoubleType(), value)
-            return codegen.utils.as_i1(f64_value) if to_i1 else f64_value
-        raise_internal_error("CE0055", name=f"{origin}.{name}")
+        from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
+        module = get_stdlib_registry().get_module(origin)
+        record = module.constants.get(name) if module is not None else None
+        if record is None:
+            raise_internal_error("CE0055", name=f"{origin}.{name}")
+        return emit_stdlib_constant(codegen, record, to_i1)
 
     slot = codegen.constants.lookup(name, origin)
     if slot is None:

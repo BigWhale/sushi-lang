@@ -52,6 +52,9 @@ class StdlibFunction:
     validator: Optional[Callable] = None
     params: Optional[List] = None  # None=polymorphic, []=no args, [Type,...]=typed args
     is_variadic: bool = False  # True if the last param is a native '...T' collecting variadic
+    # A constant's folded value, read once at discovery. The front end folds it and the
+    # back end emits it from here, so no reader has to know which module declared it.
+    value: Optional[object] = None
 
 
 @dataclass
@@ -304,22 +307,36 @@ class StdlibRegistry:
         checker: Callable[[str], bool],
         py_module: any
     ) -> None:
-        """Discover constants (e.g., PI, E, TAU in math module)."""
+        """Discover a module's constants: the names its checker accepts, with their values.
+
+        The value getter is the second half of the protocol, and it is required: a
+        constant the registry cannot fold is a name every reader would have to special-
+        case, which is the bug #560 was (`tests/unit/test_stdlib_constants_take_the_ladder.py`).
+        """
+        from sushi_lang.semantics.typesys import BuiltinType
+
         common_constants = ["PI", "E", "TAU"]
 
         constant_getter_name = f"get_builtin_{module_name}_constant_value"
-        getattr(py_module, constant_getter_name, None)
+        getter = getattr(py_module, constant_getter_name, None)
+        if getter is None:
+            raise RuntimeError(
+                f"stdlib registry: module '{module.path}' declares constants and is "
+                f"missing {constant_getter_name}"
+            )
 
         for name in common_constants:
             if checker(name):
-                from sushi_lang.semantics.typesys import BuiltinType
+                type_name, value = getter(name)
+                const_type = BuiltinType(type_name)
 
                 func = StdlibFunction(
                     name=name,
                     module_path=module.path,
                     is_constant=True,
-                    get_return_type=lambda: BuiltinType.F64,
-                    validator=None  # Constants don't need validation
+                    get_return_type=lambda ty=const_type: ty,
+                    validator=None,  # a constant takes no arguments to check
+                    value=value,
                 )
                 module.constants[name] = func
                 self._function_lookup[(module.path, name)] = func
@@ -357,3 +374,26 @@ def get_stdlib_registry() -> StdlibRegistry:
         _global_registry = StdlibRegistry()
         _global_registry.discover_modules()
     return _global_registry
+
+
+def lookup_stdlib_constant(name: str, scope: object) -> Optional[StdlibFunction]:
+    """The registry constant a BARE name reaches in `scope`, or None.
+
+    Section 8's ladder, its last rung for a value: a stdlib constant is a name a flat
+    `use <module>` brings, so it answers only after a local, this unit's own declaration
+    and every imported unit's, and only in a unit whose scope holds the module. A reader
+    with no scope -- a scratch validator, a table built by hand -- sees every module,
+    which is what `UnitScope.unrestricted()` means. Every reader of a bare name -- the
+    scope pass, the inference visitor, the constant evaluator, the back end -- asks THIS
+    and nothing module-specific, so a shadowed builtin cannot recur (#560).
+    """
+    registry = get_stdlib_registry()
+    everything = scope is None or getattr(scope, "everything", True)
+    module_paths = (registry.get_all_modules() if everything
+                    else getattr(scope, "modules", ()))
+    for module_path in module_paths:
+        module = registry.get_module(module_path)
+        record = module.constants.get(name) if module is not None else None
+        if record is not None:
+            return record
+    return None

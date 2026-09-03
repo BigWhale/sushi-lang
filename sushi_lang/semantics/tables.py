@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from sushi_lang.semantics.namespaces import NamespaceTable
 from sushi_lang.semantics.visibility import VisibilityTable
 from sushi_lang.semantics.passes.collect import (
     ConstantTable,
@@ -43,6 +44,10 @@ class SymbolTables:
     # Who declared what, and whether it says `public`. The kinds whose own table carries
     # no unit and no marker -- a struct, an enum, a perk -- are answered from here.
     visibility: VisibilityTable = field(default_factory=VisibilityTable)
+    # What each unit may write, bare and behind a dot: one table per unit, filled by the
+    # `namespaces` pass. Here because a reader in one unit folds another unit's constant
+    # in THAT unit's scope (#561), so every unit's table has to be reachable from any.
+    namespaces: dict[str, NamespaceTable] = field(default_factory=dict)
     # A name a linked library declares and keeps: name -> (library, kind) (#469). Not a
     # table of callables -- no signature travels with a kept name, so it holds what the
     # CE3005 gate needs and nothing more.

@@ -605,6 +605,42 @@ read while the unit's own AST is built (Known Limitation 14, and it is already w
 constant next door is a value and not a size), and an alias is bound long after that. The
 diagnostic is the existing `CE2099`.
 
+### 5.4 A constant declaration is two written-name positions (#561)
+
+A `const` (and a `var`) writes a type and an initializer, and both take the dot:
+
+<!-- docs-sweep: skip (two units) -->
+```sushi
+use "shapes" as sh
+
+const sh.Shape SMALL = sh.UNIT               # a type, and a constant
+const i32 DOUBLE = sh.SIZE * 2               # a constant in an expression
+const sh.Point ORIGIN = sh.Point(y: 0, x: 0) # a struct constructor, named or positional
+const sh.Shape TINY = sh.Shape.Circle(2)     # a variant, with or without a payload
+```
+
+A flat `use "shapes"` brings the same names bare. Three things stood in the way, and each
+was a second copy of a rule the body path already had:
+
+| Face | What stood | What stands |
+|---|---|---|
+| a flat foreign constant was `CE1002` | the typecheck pass rebuilt a table of `ConstDef`s PER UNIT, beside the program-wide `ConstantTable`; the evaluator found the signature and not the declaration | the record carries its declaration (`ConstSig.decl`); the second table is gone |
+| a qualified name was `CE0108` | the evaluator had no arm for a `MemberAccess` or `DotCall` whose receiver names a namespace | the evaluator asks the namespace seam, folds `sh.Shape.Circle(2)` to `Shape.Circle(2)` as the body does, reads a struct through the stand-in `Call` the body uses, and stamps the node for the back end |
+| a qualified type was `CE2001` with the import help | the `resolve` pass rewrote the declaration's `UnknownType("Shape", namespace="sh")` into the bare `EnumType` before the typecheck pass read the qualifier | the pass resolves the RECORD's type; the declaration keeps the written type until `validate_constant` rules on it, as a `let` does |
+
+**A foreign initializer is read in the scope of the unit that wrote it.** `shapes` may
+declare `public const i32 BIG = WIDTH * 2` with `WIDTH` from an import of its own; a
+consumer folding `BIG` must see `shapes`' `WIDTH` and never its own. The evaluator
+switches unit for the fold (`ConstantEvaluator._in_unit`), which is why it takes every
+unit's namespace table (`SymbolTables.namespaces`) and not one scope. The cycle check
+keys by declaration for the same reason: this unit's `SIZE = sh.SIZE * 2` is two
+constants, not a cycle.
+
+One more fold rides on this: `sh.Point(y: 0, x: 0)` parses as a METHOD CALL on `sh`, and
+the builder dropped the field names on that path, so a named construction behind an
+alias landed positionally, in a body as in a constant. The names are carried now and the
+reordered arguments are written back onto the node.
+
 ## 6. Ruling 5: scope is per unit, and it is not transitive
 
 A unit sees its own declarations, plus what its own `use` statements bring. Nothing else.
@@ -746,6 +782,16 @@ unqualified name, and it is short:
 | 1 | a local variable or a parameter — the existing scope rules, unchanged |
 | 2 | a declaration of this unit |
 | 3 | a name a flat `use` of this unit brought in — one candidate resolves, two or more is `CE3012` |
+
+Row 3 holds a registry stdlib module's CONSTANT as it holds its functions. `PI`, `E` and
+`TAU` used to sit ABOVE the ladder -- the scope pass, the inference visitor and the back
+end each asked the math module before any table -- so `let i32 PI = 3` printed 3.14159
+and a unit's own `const f64 E` read as 2.71828, with no `use <math>` in sight (#560). One
+scope-aware lookup answers them now (`stdlib_registry.lookup_stdlib_constant`), at row 3:
+a unit that did not import `<math>` has no `PI`, a unit's own `E` wins, and a `const`
+initializer folds `PI / 2.0` like any other constant.
+`tests/unit/test_stdlib_constants_take_the_ladder.py` keeps the module's hooks readable
+by the registry alone.
 
 Row 2 beating row 3 is the rule the compiler already follows and the linker already agrees
 with: a private function has internal linkage, so the consumer's call binds to the

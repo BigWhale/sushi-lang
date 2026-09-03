@@ -1,0 +1,13 @@
+# A constant behind an alias is a value a `const` and a `var` initializer may
+# fold (#561, face 2). The alias puts nothing in the flat scope, so a bare `SIZE`
+# here would be CE1001; the dot is the whole address.
+# EXPECT_STDOUT_EXACT: "8 12 4\n"
+use "helpers/shapes" as sh
+
+const i32 DOUBLE = sh.SIZE * 2
+const i32 TRIPLE = sh.SIZE + DOUBLE
+var i32 counter = sh.SIZE
+
+fn main() i32:
+    println("{DOUBLE} {TRIPLE} {counter}")
+    return Result.Ok(0)

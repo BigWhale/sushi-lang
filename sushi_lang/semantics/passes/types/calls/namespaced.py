@@ -92,6 +92,11 @@ def _validate_struct_construction(validator: 'TypeValidator', node: 'DotCall',
     stand_in = Call(callee=Name(id=binding.name, loc=node.loc), args=node.args,
                     field_names=node.field_names, loc=node.loc)
     validate_struct_constructor(validator, stand_in)
+    # A named construction is put in declaration order on the stand-in, as the bare
+    # form is on its own node. The node is what every later reader emits from, so
+    # the order comes back with it, and the names are spent.
+    node.args = stand_in.args
+    node.field_names = stand_in.field_names
     node.resolved_struct_type = validator.struct_table.by_name.get(binding.name)
     _stamp(node, binding)
 
@@ -218,12 +223,7 @@ def fold_namespaced_static(validator: 'TypeValidator', node) -> bool:
 
 def _stamp(node, binding: 'Binding', *, name: Optional[str] = None) -> None:
     """Record what the qualified name resolved to. The back end reads this."""
-    from sushi_lang.semantics.namespaces import NamespaceRef
-    node.namespace_ref = NamespaceRef(
-        producer=binding.provider.namespace_kind,
-        origin=binding.provider.origin,
-        name=name or binding.name,
-        kind=binding.kind)
+    node.namespace_ref = binding.ref(name=name)
 
 
 def _stamp_param_modes(node, func_sig) -> None:

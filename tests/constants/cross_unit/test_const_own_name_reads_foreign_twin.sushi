@@ -1,0 +1,11 @@
+# This unit's SIZE is built from the other unit's SIZE. Two declarations of one
+# name are two constants, not a cycle: CE0109 must key the chain by declaration
+# and not by name (#561).
+# EXPECT_STDOUT_EXACT: "8 4\n"
+use "helpers/shapes" as sh
+
+const i32 SIZE = sh.SIZE * 2
+
+fn main() i32:
+    println("{SIZE} {sh.SIZE}")
+    return Result.Ok(0)

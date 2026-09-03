@@ -3,23 +3,32 @@ from __future__ import annotations
 import math
 import operator
 from dataclasses import dataclass
-from typing import Callable, List, Mapping, Optional, Union
+from contextlib import contextmanager
+from typing import Callable, Iterator, List, Mapping, Optional, Tuple, Union, TYPE_CHECKING
 
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
-    Call, ConstDef, DotCall, DynamicArrayFrom, DynamicArrayNew, Expr, IntLit, FloatLit,
+    Call, DotCall, DynamicArrayFrom, DynamicArrayNew, Expr, IntLit, FloatLit,
     BoolLit, StringLit, ArrayLiteral, BinaryOp, UnaryOp, Name, CastExpr, IndexAccess,
     InterpolatedString, MemberAccess
 )
-from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 from sushi_lang.semantics.integer_width import (
     fits_integer_type, integer_bit_width, wrap_to_integer_type)
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
 from sushi_lang.semantics import array_runs
+from sushi_lang.semantics.namespaces import NamespaceRef, NamespaceTable, UnitScope
 from sushi_lang.semantics.passes.collect import ConstantTable
+from sushi_lang.semantics.passes.collect.constants import ConstSig
 from sushi_lang.semantics.generics.type_display import display_type
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.stdlib_registry import StdlibFunction
+
+# Which unit's namespace table answers for a unit name. None for a unit the reader does
+# not know, which means an unrestricted scope and no alias -- the scratch reader's view.
+NamespacesOf = Callable[[Optional[str]], Optional[NamespaceTable]]
 
 # The exact arithmetic of an overflow-checked operator. Unary minus is the fourth one
 # and is applied where it is read, because it has no right operand.
@@ -91,30 +100,61 @@ class ConstantEvaluator:
     """Compile-time constant expression evaluator."""
 
     def __init__(self, reporter: Reporter, const_table: ConstantTable,
-                 ast_constants: 'UnitKeyedSymbols[ConstDef]',
-                 unit_name: Optional[str] = None, scope: object = None,
+                 unit_name: Optional[str] = None,
+                 namespaces_of: Optional[NamespacesOf] = None,
                  struct_table: object = None, enum_table: object = None):
         """Initialize the evaluator.
 
         `unit_name` is the unit whose constant expression is being evaluated. Two units
         may each declare a private `SCRATCH`, so a name is only an answer once the asking
-        unit is known (`docs/design/unit-namespaces.md` section 9). `scope` is the rest
-        of that answer: which OTHER units' constants this one may read at all (section 6).
+        unit is known (`docs/design/unit-namespaces.md` section 9). `namespaces_of` is
+        the rest of that answer, for EVERY unit and not only this one: what a unit may
+        write bare (its scope, section 6) and behind a dot (its aliases, section 5). A
+        foreign constant's initializer is read in the scope of the unit that WROTE it,
+        so folding one switches unit (#561); a reader that passes None sees every name
+        and no alias, which is the scratch reader's view.
         """
         self.reporter = reporter
         self.const_table = const_table
-        self.ast_constants = ast_constants
+        self.namespaces_of = namespaces_of
         self.unit_name = unit_name
-        self.scope = scope
+        self.namespaces = self._namespaces_for(unit_name)
         # The authorities for a struct's field ORDER and field TYPES, and for an enum's
         # variants and their payload types. A caller that reads only an integer -- an
         # array size, a run count -- passes neither, and a construction stays CE0108
         # there, which is what those positions want anyway.
         self.struct_table = struct_table
         self.enum_table = enum_table
-        self.evaluation_stack: List[str] = []  # For cycle detection
+        # For cycle detection. Keyed by DECLARATION, not by name: this unit's SIZE may be
+        # built from another unit's SIZE, and that is two constants and not a cycle.
+        self.evaluation_stack: List[Tuple[Optional[str], str]] = []
         # The FIRST operation that left its type, for a caller whose reporter is silent.
         self.overflow: Optional[ConstOverflow] = None
+
+    @property
+    def scope(self) -> UnitScope:
+        """What the unit being read may write bare (section 6)."""
+        return (self.namespaces.scope if self.namespaces is not None
+                else UnitScope.unrestricted())
+
+    def silent(self) -> "ConstantEvaluator":
+        """A twin that reports nothing, for a reader that only wants the answer."""
+        return ConstantEvaluator(Reporter(), self.const_table, self.unit_name,
+                                 self.namespaces_of, self.struct_table, self.enum_table)
+
+    def _namespaces_for(self, unit_name: Optional[str]) -> Optional[NamespaceTable]:
+        return None if self.namespaces_of is None else self.namespaces_of(unit_name)
+
+    @contextmanager
+    def _in_unit(self, unit_name: Optional[str]) -> Iterator[None]:
+        """Read as `unit_name` would: its scope and its aliases, for one initializer."""
+        saved = (self.unit_name, self.namespaces)
+        self.unit_name = unit_name
+        self.namespaces = self._namespaces_for(unit_name)
+        try:
+            yield
+        finally:
+            self.unit_name, self.namespaces = saved
 
     def evaluate(self, expr: Expr, expected_type: Type, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate an expression to a compile-time constant."""
@@ -151,12 +191,107 @@ class ConstantEvaluator:
         elif isinstance(expr, Call):
             return self._evaluate_struct_construction(expr, expected_type, span)
 
-        elif isinstance(expr, (DotCall, MemberAccess)):
-            return self._evaluate_enum_construction(expr, expected_type, span)
+        elif isinstance(expr, MemberAccess):
+            return self._evaluate_member_access(expr, expected_type, span)
+
+        elif isinstance(expr, DotCall):
+            return self._evaluate_dot_call(expr, expected_type, span)
 
         else:
             er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
             return None
+
+    def _evaluate_member_access(self, expr: MemberAccess, expected_type: Type,
+                                span: Optional[Span]) -> Optional[ConstantValue]:
+        """`Enum.Variant`, or a constant behind an alias: `sh.SIZE`, `m.PI`.
+
+        The qualifier is read first, the way every written-name position reads it
+        (`unit-namespaces.md` section 5): a leading alias on the receiver folds away
+        and leaves the bare variant, and an alias on the whole name is a constant of the
+        unit or module it names. A member that is not a constant -- a type, a function
+        written without its parentheses -- is no value; the body's validator owns that
+        diagnostic, so this answers None and says nothing.
+        """
+        self._fold_qualified_enum(expr)
+        ref = self._qualified(expr)
+        if ref is None:
+            return self._evaluate_enum_construction(expr, expected_type, span)
+        if ref.kind == "constant":
+            return self._evaluate_constant_ref(ref, span)
+        return None
+
+    def _evaluate_dot_call(self, expr: DotCall, expected_type: Type,
+                           span: Optional[Span]) -> Optional[ConstantValue]:
+        """`Enum.Variant(...)`, or a struct constructor behind an alias: `sh.Point(0, 0)`.
+
+        A struct behind the dot is read through a stand-in `Call`, the device the
+        typecheck pass uses for the same node, so the construction is measured by the
+        bare form's rules. Anything else the alias reaches with parentheses is a call,
+        and a call is not a constant: CE0108, the code the bare `f()` answers.
+        """
+        self._fold_qualified_enum(expr)
+        ref = self._qualified(expr)
+        if ref is None:
+            return self._evaluate_enum_construction(expr, expected_type, span)
+        if ref.kind == "struct":
+            stand_in = Call(callee=Name(id=ref.name, loc=expr.loc), args=expr.args,
+                            field_names=expr.field_names, loc=expr.loc)
+            return self._evaluate_struct_construction(stand_in, expected_type, span)
+        er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
+        return None
+
+    def _qualified(self, node: Union[DotCall, MemberAccess]) -> Optional[NamespaceRef]:
+        """What `alias.name` denotes when the receiver names a namespace, else None.
+
+        The stamp answers first: the typecheck pass leaves one on every qualified node
+        it resolved, and the back end's evaluator has no table and reads that alone.
+        Without one, the unit's own namespace table answers and the node is stamped for
+        every reader after this one. A constant initializer binds no local, so nothing
+        can shadow the alias here.
+        """
+        ref = getattr(node, "namespace_ref", None)
+        if ref is not None:
+            return ref
+        receiver = node.receiver
+        if (self.namespaces is None or not isinstance(receiver, Name)
+                or not self.namespaces.is_namespace(receiver.id)):
+            return None
+        name = node.member if isinstance(node, MemberAccess) else node.method
+        binding = self.namespaces.lookup(receiver.id, name)
+        if binding is None:
+            return None
+        node.namespace_ref = binding.ref()
+        return node.namespace_ref
+
+    def _fold_qualified_enum(self, node: Union[DotCall, MemberAccess]) -> None:
+        """`sh.Shape.Circle(2)` becomes `Shape.Circle(2)`, in place.
+
+        The fold the typecheck pass applies in a body (`calls/namespaced.py`): a type is
+        one per program, so once the alias is gone the bare name is the whole address
+        and every reader after this one -- the body's validator, the back end -- sees
+        the bare form it already knows.
+        """
+        inner = node.receiver
+        if not isinstance(inner, MemberAccess):
+            return
+        ref = self._qualified(inner)
+        if ref is not None and ref.kind == "enum":
+            node.receiver = Name(id=ref.name, loc=inner.loc)
+
+    def _evaluate_constant_ref(self, ref: NamespaceRef,
+                               span: Optional[Span]) -> Optional[ConstantValue]:
+        """The constant an alias reaches: a registry module's, or a unit's own."""
+        if ref.producer == "stdlib":
+            from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
+            module = get_stdlib_registry().get_module(ref.origin)
+            record = module.constants.get(ref.name) if module is not None else None
+            return None if record is None else self._stdlib_value(record)
+        sig = self.const_table.lookup(ref.name, ref.origin)
+        return None if sig is None else self._fold_constant(sig, span)
+
+    def _stdlib_value(self, record: 'StdlibFunction') -> ConstantValue:
+        """A registry constant folds from the value its record carries (#560)."""
+        return ConstantValue(record.value, record.get_return_type())
 
     def _evaluate_struct_construction(self, expr: Call, expected_type: Type,
                                      span: Optional[Span]) -> Optional[ConstantValue]:
@@ -231,9 +366,8 @@ class ConstantEvaluator:
         A plain type is its table entry. A generic one has no entry under its bare
         name -- the table holds the interned instances -- so the DECLARED type answers
         when its base is the name written: `const Maybe@(i32) X = Maybe.Some(7)` builds
-        a `Maybe<i32>`. A qualified receiver (`geo.Vec(...)`, `geo.Sign.Plus`) is a
-        `MemberAccess` and never a `Name`, so it stays CE0108 rather than answering a
-        wrong type.
+        a `Maybe<i32>`. A qualified receiver (`geo.Vec(...)`, `geo.Sign.Plus`) never
+        arrives here: the alias is folded away before this is asked (#561).
         """
         if table is None or not isinstance(receiver, Name):
             return None
@@ -419,8 +553,7 @@ class ConstantEvaluator:
         # never reaches the same literal twice.
         runs = array_runs.read_runs(
             expr.elements,
-            array_runs.const_int_reader(self.const_table, self.ast_constants,
-                                        self.unit_name),
+            array_runs.const_int_reader(self.silent()),
             self.reporter)
         if runs is None:
             return None
@@ -450,34 +583,50 @@ class ConstantEvaluator:
         return ConstantValue(element_values, expected_type)
 
     def _evaluate_name(self, expr: Name, span: Optional[Span]) -> Optional[ConstantValue]:
-        """Evaluate name reference (constant lookup)."""
+        """A bare name: a constant this unit may write, else a stdlib constant in scope."""
         const_name = expr.id
-
-        if const_name in self.evaluation_stack:
-            chain = " -> ".join(self.evaluation_stack + [const_name])
-            er.emit(self.reporter, er.ERR.CE0109, span, chain=chain)
-            return None
 
         const_sig = self.const_table.lookup(const_name, self.unit_name, self.scope)
         if const_sig is None:
+            # Below every declared constant: a stdlib constant a flat `use <module>`
+            # brought is a constant too, and it folds from the value its record
+            # carries (#560).
+            from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
+            stdlib_const = lookup_stdlib_constant(const_name, self.scope)
+            if stdlib_const is not None:
+                return self._stdlib_value(stdlib_const)
             er.emit(self.reporter, er.ERR.CE1002, span, name=const_name)
             return None
-        if const_sig.is_var:
+        return self._fold_constant(const_sig, span)
+
+    def _fold_constant(self, sig: ConstSig, span: Optional[Span]) -> Optional[ConstantValue]:
+        """The value of a declared constant, read as the unit that declared it.
+
+        The initializer is folded in the DECLARING unit's scope and with its aliases: a
+        name inside it means what it meant where it was written, so this unit's own
+        `WIDTH` never stands in for one the other unit imported (#561).
+        """
+        if sig.is_var:
             # Storage has a run-time value, so neither a constant nor another variable
             # can fold it in -- and no initialization order exists to say otherwise.
             er.emit(self.reporter, er.ERR.CE0108, span,
-                    expr_type=f"unit variable '{const_name}'")
+                    expr_type=f"unit variable '{sig.name}'")
             return None
 
-        const_def = self.ast_constants.lookup(const_name, self.unit_name, self.scope)
-        if const_def is None:
-            er.emit(self.reporter, er.ERR.CE1002, span, name=const_name)
+        key = (sig.unit_name, sig.name)
+        if key in self.evaluation_stack:
+            chain = " -> ".join(name for _unit, name in self.evaluation_stack + [key])
+            er.emit(self.reporter, er.ERR.CE0109, span, chain=chain)
             return None
 
-        self.evaluation_stack.append(const_name)
-        result = self.evaluate(const_def.value, const_sig.const_type, const_sig.loc)
+        if sig.decl is None:
+            er.emit(self.reporter, er.ERR.CE1002, span, name=sig.name)
+            return None
+
+        self.evaluation_stack.append(key)
+        with self._in_unit(sig.unit_name):
+            result = self.evaluate(sig.decl.value, sig.const_type, sig.loc)
         self.evaluation_stack.pop()
-
         return result
 
     def _evaluate_cast(self, expr: CastExpr, span: Optional[Span]) -> Optional[ConstantValue]:

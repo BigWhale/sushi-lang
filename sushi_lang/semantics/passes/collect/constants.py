@@ -26,6 +26,10 @@ class ConstSig:
     # One table holds both kinds because every reader that resolves a NAME treats them
     # alike; the six sites that assume `.rodata` ask this flag (unit-storage.md).
     is_var: bool = False
+    # The declaration itself, for the initializer the evaluator folds. ONE record holds
+    # the signature and the AST: a second table of declarations, rebuilt per unit, is
+    # how a constant stopped reaching another unit (#561).
+    decl: Optional[ConstDef] = None
     # Note: value is validated later in type checking pass
 
 
@@ -124,6 +128,7 @@ class ConstantCollector:
             unit_name=self.current_unit_name,
             is_public=getattr(const, "is_public", True),
             is_var=isinstance(const, VarDef),
+            decl=const,
         )
 
         prev = self.constants.by_name.get(name)

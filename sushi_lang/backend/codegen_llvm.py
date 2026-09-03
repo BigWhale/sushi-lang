@@ -106,11 +106,12 @@ class LLVMCodegen:
         # name alone cannot locate a caret, and the reporter's default file is the unit
         # the compiler was pointed at (#501).
         self.emitting_unit_file: Optional[str] = None
-        # What each unit may write with no qualifier, handed over by the semantic
+        # What each unit may write, bare and behind a dot, handed over by the semantic
         # analyser. The back end resolves a bare callee through the SAME ladder the
         # typecheck pass walked, or two units declaring one name would bind the call to
-        # whichever the flat view happened to hold (`unit-namespaces.md` section 6).
-        self.unit_scopes: Dict[str, Any] = {}
+        # whichever the flat view happened to hold (`unit-namespaces.md` section 6); and
+        # a constant's initializer is folded as the unit that wrote it reads (#561).
+        self.unit_namespaces: Dict[str, Any] = {}
         self.perk_impl_table = perk_impl_table or PerkImplementationTable()
         self.const_table = const_table or ConstantTable()
         from sushi_lang.semantics.passes.collect import ExternalTable
@@ -200,13 +201,15 @@ class LLVMCodegen:
 
         self.current_function_ast: Optional['FuncDef'] = None
 
-        self.ast_constants: UnitKeyedSymbols[ConstDef] = UnitKeyedSymbols()
-
         # Recursive-destructor state, declared here rather than conjured on at first use:
         # `_dtor_inprogress` is the stack of type keys being inlined, so a re-entry means
         # the type is self-referential and gets a call to its out-of-line destructor.
         self._dtor_inprogress: list[str] = []
         self._dtor_funcs: Dict[str, ir.Function] = {}
+
+    def namespaces_of(self, unit_name: Optional[str]):
+        """The namespace table of `unit_name`, or None for a unit the analyser never saw."""
+        return self.unit_namespaces.get(unit_name)
 
     def scope_of(self, unit_name: Optional[str]):
         """What `unit_name` may write with no qualifier, or an unrestricted scope.
@@ -216,8 +219,20 @@ class LLVMCodegen:
         not whichever unit's bodies are being emitted.
         """
         from sushi_lang.semantics.namespaces import UnitScope
-        found = self.unit_scopes.get(unit_name)
-        return found if found is not None else UnitScope.unrestricted()
+        found = self.namespaces_of(unit_name)
+        return found.scope if found is not None else UnitScope.unrestricted()
+
+    def constant_evaluator(self, unit_name: Optional[str] = None):
+        """A silent evaluator reading as `unit_name` -- the emitting unit by default.
+
+        Silent because the typecheck pass has already reported anything wrong with the
+        expression; the back end only wants the value.
+        """
+        from sushi_lang.internals.report import Reporter
+        from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+        return ConstantEvaluator(Reporter(), self.const_table,
+                                 unit_name or self.emitting_unit, self.namespaces_of,
+                                 self.struct_table, self.enum_table)
 
     @property
     def scope(self):
@@ -591,7 +606,6 @@ class LLVMCodegen:
         saved_module = self.module
         saved_funcs = self.funcs.copy()
         saved_constants = self.constants.copy()
-        saved_ast_constants = self.ast_constants.copy()
         # The lifecycle caches hold ir.Function handles, which belong to ONE module. A
         # cached handle carried into the next unit's module emits a call with no
         # declaration there ('use of undefined value @__sushi_dtor_...'). First hit by
@@ -606,7 +620,6 @@ class LLVMCodegen:
         self.module = ir.Module(name=f"unit_{target_unit.name}", context=self.llvm_context)
         self.funcs = UnitKeyedSymbols()
         self.constants = UnitKeyedSymbols()
-        self.ast_constants = UnitKeyedSymbols()
         self._malloc_func = None
         self._free_func = None
         self._realloc_func = None
@@ -625,12 +638,6 @@ class LLVMCodegen:
 
         self.runtime.declare_externs()
         self.declare_user_externs()
-
-        for unit in all_units:
-            if unit.ast is None:
-                continue
-            for const in unit.ast.constants:
-                self.ast_constants.declare(const.name, const, unit=unit.name)
 
         for unit in all_units:
             if unit.ast is None:
@@ -707,7 +714,6 @@ class LLVMCodegen:
         self.module = saved_module
         self.funcs = saved_funcs
         self.constants = saved_constants
-        self.ast_constants = saved_ast_constants
         self._malloc_func = None
         self._free_func = None
         self._realloc_func = None
@@ -805,9 +811,6 @@ class LLVMCodegen:
         for unit in units:
             if unit.ast is None:
                 continue
-
-            for const in unit.ast.constants:
-                self.ast_constants.declare(const.name, const, unit=unit.name)
 
             for const in unit.ast.constants:
                 self._emit_global_constant(const, unit.name)
@@ -1062,16 +1065,7 @@ class LLVMCodegen:
     def _evaluate_constant_expression(self, expr, expected_type=None,
                                       unit_name=None) -> Optional["ConstantValue"]:
         """Evaluate a constant expression at compile time, as a value not an initializer."""
-        from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
-        from sushi_lang.internals.report import Reporter
-
-        # A silent reporter: the typecheck pass has already reported anything wrong with this.
-        silent_reporter = Reporter()
-        evaluating_unit = unit_name or self.emitting_unit
-        evaluator = ConstantEvaluator(silent_reporter, self.const_table, self.ast_constants,
-                                      evaluating_unit, self.scope_of(evaluating_unit),
-                                      self.struct_table, self.enum_table)
-        return evaluator.evaluate(expr, expected_type, None)
+        return self.constant_evaluator(unit_name).evaluate(expr, expected_type, None)
 
     def _materialize_constant(self, value, data_name: str) -> Optional[ir.Constant]:
         """An evaluated constant as an LLVM initializer.

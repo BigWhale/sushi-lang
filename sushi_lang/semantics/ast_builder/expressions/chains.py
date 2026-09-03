@@ -122,12 +122,14 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
 
                 if method_name_tok:
                     args, field_names = calls.extract_call_args(call_node, ast_builder)
-                    # Note: field_names for DotCall (method calls) are ignored for now
-                    # Named parameters for method calls are not yet supported
+                    # Carried, not read here: `sh.Point(y: 2, x: 1)` parses as a
+                    # method call on `sh`, and only a pass with the namespace table can
+                    # tell that it is a named struct construction (#561).
                     result_expr = DotCall(
                         receiver=result_expr,
                         method=str(method_name_tok),
                         args=args,
+                        field_names=field_names,
                         loc=span_of(t)
                     )
                 else:

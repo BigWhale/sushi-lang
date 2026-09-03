@@ -173,6 +173,7 @@ class SemanticAnalyzer:
                                            if id(i) not in dropped]
 
         self.tables = global_tables
+        self.namespaces = global_tables.namespaces
         self.constants = global_tables.constants
         self.structs = global_tables.structs
         self.enums = global_tables.enums
@@ -420,11 +421,7 @@ class SemanticAnalyzer:
             resolve_constant_types, resolve_struct_field_types, resolve_enum_variant_types)
         resolve_struct_field_types(self.structs, self.enums)
         resolve_enum_variant_types(self.structs, self.enums)
-        resolve_constant_types(
-            self.constants,
-            [const for unit in compilation_order if unit.ast is not None
-             for const in (unit.ast.constants or [])],
-            self.structs, self.enums)
+        resolve_constant_types(self.constants, self.structs, self.enums)
 
         # finite-types: reject types that contain themselves by value (CE2095). Must precede
         # derive, whose topological sort would report a cycle as an internal error, and must

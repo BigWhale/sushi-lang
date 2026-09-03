@@ -1,0 +1,11 @@
+# A struct constructor behind an alias, positional and named, is a constant
+# construction like the bare form (#561, face 2).
+# EXPECT_STDOUT_EXACT: "0 0 1 2\n"
+use "helpers/shapes" as sh
+
+const sh.Point ORIGIN = sh.Point(0, 0)
+const sh.Point CORNER = sh.Point(y: 2, x: 1)
+
+fn main() i32:
+    println("{ORIGIN.x} {ORIGIN.y} {CORNER.x} {CORNER.y}")
+    return Result.Ok(0)

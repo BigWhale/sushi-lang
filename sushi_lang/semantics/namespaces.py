@@ -143,6 +143,17 @@ class Binding:
     provider: "Provider"
     record: Any = None
 
+    def ref(self, *, name: Optional[str] = None) -> "NamespaceRef":
+        """The stamp a node carries once this binding answered it. The ONE constructor.
+
+        `name` overrides the declared one for a generic whose monomorphized instance is
+        what the alias then points at.
+        """
+        return NamespaceRef(producer=self.provider.namespace_kind,
+                            origin=self.provider.origin,
+                            name=name or self.name,
+                            kind=self.kind)
+
 
 class Provider:
     """What a namespace binds to. One `lookup`, one `members`, one `origin`.
