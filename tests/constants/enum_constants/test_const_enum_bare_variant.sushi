@@ -1,0 +1,20 @@
+# A payload-free variant is a tag, and the bare spelling `Enum.Variant` constructs it in
+# a constant as it does in a body. The constant is matched like any enum value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "plus\nminus\n"
+
+enum Sign:
+    Plus
+    Minus
+
+const Sign DEFAULT = Sign.Plus
+const Sign OTHER = Sign.Minus
+
+fn main() i32:
+    match DEFAULT:
+        Sign.Plus -> println("plus")
+        Sign.Minus -> println("minus")
+    match OTHER:
+        Sign.Plus -> println("plus")
+        Sign.Minus -> println("minus")
+    return Result.Ok(0)

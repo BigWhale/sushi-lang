@@ -1,0 +1,22 @@
+# A Result@(T, E) is an interned enum like Maybe@(T), so a constant of one follows the
+# same rule: Ok and Err both construct against the declared type, and the constant is
+# read like any Result -- matched, tested, and unwrapped with ??.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "err\ntrue false 43\n"
+
+enum MyError:
+    Boom
+
+const Result@(i32, MyError) VALUE = Result.Ok(42)
+const Result@(i32, MyError) FAILED = Result.Err(MyError.Boom)
+
+fn unwrap_value() i32 | MyError:
+    let i32 v = VALUE??
+    return Result.Ok(v + 1)
+
+fn main() i32:
+    match FAILED:
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(_) -> println("err")
+    println("{VALUE.is_ok()} {FAILED.is_ok()} {unwrap_value().realise(-1)}")
+    return Result.Ok(0)

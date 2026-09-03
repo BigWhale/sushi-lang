@@ -41,16 +41,18 @@ def validate_constant(self, const: ConstDef) -> None:
         self.err.emit(er.ERR.CE2015, const.type_span, name=const.name)
         return
 
+    # The declaration takes the type a `let` would: a `List@(T)` or a `Maybe@(T)`
+    # spelling is interned here, and the record every reader of the name consults
+    # follows the declaration. A generic enum's variant is evaluated against it (#551).
+    from .resolution import resolve_variable_type
+    resolved = resolve_variable_type(self, const.ty, const.type_span)
+    if resolved is not None and resolved != const.ty:
+        const.ty = resolved
+        sig = self.const_sig(const.name)
+        if sig is not None:
+            sig.const_type = resolved
+
     if is_var:
-        # Storage takes the type a `let` would: a `List@(T)` spelling is interned here,
-        # and the record every reader of the name consults follows the declaration.
-        from .resolution import resolve_variable_type
-        resolved = resolve_variable_type(self, const.ty, const.type_span)
-        if resolved is not None and resolved != const.ty:
-            const.ty = resolved
-            sig = self.const_sig(const.name)
-            if sig is not None:
-                sig.const_type = resolved
         from sushi_lang.semantics.passes.const_eval import allocates_nothing
         if allocates_nothing(const.value):
             # An empty container is the descriptor `{0, 0, null}` -- no evaluation,
@@ -62,12 +64,17 @@ def validate_constant(self, const: ConstDef) -> None:
 
     from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
     evaluator = ConstantEvaluator(self.reporter, self.const_table, self.ast_constants,
-                                  self.current_unit_name, self.scope, self.struct_table)
+                                  self.current_unit_name, self.scope, self.struct_table,
+                                  self.enum_table)
+    reported = len(self.reporter.items)
     const_value = evaluator.evaluate(const.value, const.ty, const.loc)
 
-    if const_value is None:
-        return
+    if const_value is None and len(self.reporter.items) != reported:
+        return  # the evaluator named the mistake
 
+    # A value is checked against the declared type below. A SILENT None is a variant
+    # spelling whose mistake the body's validator owns (CE2045, CE2050), and it speaks
+    # here, with the body's code.
     propagate_types_to_value(self, const.value, const.ty)
 
     validate_assignment_compatibility(self, const.ty, const.value, const.type_span,

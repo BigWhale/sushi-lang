@@ -1,0 +1,15 @@
+# The lift reaches a variant constructor and nothing else. A function call in a payload
+# argument is still CE0108.
+# EXPECT_ERROR_CODE: CE0108
+
+enum Shape:
+    Dot
+    Circle(i32)
+
+fn pick() i32:
+    return Result.Ok(1)
+
+const Shape S = Shape.Circle(pick())
+
+fn main() i32:
+    return Result.Ok(0)

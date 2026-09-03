@@ -95,7 +95,7 @@ def const_value_to_llvm(value: 'ConstantValue', types) -> Optional[ir.Constant]:
     may not name an LLVM type (IR.md Phase 0). A string returns None: its bytes need a
     module to live in, so `_materialize_constant` finishes one.
     """
-    from sushi_lang.semantics.typesys import BuiltinType, StructType
+    from sushi_lang.semantics.typesys import BuiltinType, StructType, EnumType
 
     if value.semantic_type == BuiltinType.BOOL:
         return ir.Constant(types.i8, 1 if value.value else 0)
@@ -128,6 +128,10 @@ def const_value_to_llvm(value: 'ConstantValue', types) -> Optional[ir.Constant]:
         if any(c is None for c in field_constants):
             return None
         return ir.Constant(types.ll_type(value.semantic_type), field_constants)
+    elif isinstance(value.semantic_type, EnumType):
+        # No module here either, so a string payload answers None like a bare string.
+        from sushi_lang.backend.constants.enum_initializers import enum_initializer
+        return enum_initializer(value, types, None, "")
     elif isinstance(value.value, list):
         element_constants = [const_value_to_llvm(elem, types) for elem in value.value]
         if any(c is None for c in element_constants):

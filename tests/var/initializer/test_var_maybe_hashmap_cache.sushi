@@ -1,0 +1,26 @@
+# The cache-filled-on-first-use shape the ruling on #546 names: `HashMap.new()` mallocs
+# and is no constant initializer, so the storage starts as `Maybe.None` and the first
+# call replaces it. No leak directive: the map is live at exit, by design.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "filled\n42\ncached\n42\n"
+
+use <collections/hashmap>
+
+var Maybe@(HashMap@(string, i32)) cache = Maybe.None
+
+fn lookup(string key) i32:
+    match cache:
+        Maybe.None ->
+            let HashMap@(string, i32) fresh = HashMap.new()
+            fresh.insert("answer", 42)
+            cache := Maybe.Some(fresh)
+            println("filled")
+        Maybe.Some(_) -> println("cached")
+    match cache:
+        Maybe.Some(m) -> return Result.Ok(m.get(key).realise(-1))
+        Maybe.None -> return Result.Ok(-1)
+
+fn main() i32:
+    println(lookup("answer").realise(-2))
+    println(lookup("answer").realise(-2))
+    return Result.Ok(0)

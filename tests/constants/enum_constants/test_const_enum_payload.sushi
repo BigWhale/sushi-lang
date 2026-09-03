@@ -1,0 +1,27 @@
+# A payload-carrying variant is a tag plus its constant payloads, laid out at the same
+# offsets a run-time construction uses. Mixed widths in one variant, and a second
+# variant narrower than the widest, both read back what was written.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true 200 -5 2.5\n3 -4\nempty\n"
+
+enum Reading:
+    Empty
+    Sample(bool, u8, i64, f64)
+    Pair(i32, i32)
+
+const Reading S = Reading.Sample(true, 200, -5, 2.5)
+const Reading P = Reading.Pair(3, -4)
+const Reading EMPTY = Reading.Empty
+
+fn show(Reading r) ~:
+    match r:
+        Reading.Empty -> println("empty")
+        Reading.Sample(ok, level, delta, ratio) -> println("{ok} {level} {delta} {ratio}")
+        Reading.Pair(a, b) -> println("{a} {b}")
+    return Result.Ok(~)
+
+fn main() i32:
+    show(S)
+    show(P)
+    show(EMPTY)
+    return Result.Ok(0)

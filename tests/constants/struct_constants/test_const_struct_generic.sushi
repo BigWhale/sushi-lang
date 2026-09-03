@@ -1,0 +1,15 @@
+# A GENERIC struct's construction is a constant against the declared type: the table
+# holds the interned instance and not the bare name, so the declaration says which one
+# `Pair(...)` builds. The same rule a generic enum's variant follows (#551).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3 true\n"
+
+struct Pair@(T, U):
+    T first
+    U second
+
+const Pair@(i32, bool) P = Pair(3, true)
+
+fn main() i32:
+    println("{P.first} {P.second}")
+    return Result.Ok(0)

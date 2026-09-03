@@ -1070,7 +1070,7 @@ class LLVMCodegen:
         evaluating_unit = unit_name or self.emitting_unit
         evaluator = ConstantEvaluator(silent_reporter, self.const_table, self.ast_constants,
                                       evaluating_unit, self.scope_of(evaluating_unit),
-                                      self.struct_table)
+                                      self.struct_table, self.enum_table)
         return evaluator.evaluate(expr, expected_type, None)
 
     def _materialize_constant(self, value, data_name: str) -> Optional[ir.Constant]:
@@ -1088,7 +1088,7 @@ class LLVMCodegen:
         # An aggregate asks its TYPE which kind it is, never the shape of the list: a
         # struct's fields have types of their own, so `ArrayType(elements[0].type, ...)`
         # would build a homogeneous array out of them and mis-type the initializer.
-        from sushi_lang.semantics.typesys import StructType
+        from sushi_lang.semantics.typesys import StructType, EnumType
 
         if isinstance(value.semantic_type, StructType):
             fields = [self._materialize_constant(field, f"{data_name}.{i}")
@@ -1096,6 +1096,11 @@ class LLVMCodegen:
             if any(f is None for f in fields):
                 return None
             return ir.Constant(self.types.ll_type(value.semantic_type), fields)
+
+        if isinstance(value.semantic_type, EnumType):
+            from sushi_lang.backend.constants.enum_initializers import enum_initializer
+            return enum_initializer(value, self.types, self._constant_string_value,
+                                    data_name)
 
         if isinstance(value.value, list):
             elements = [self._materialize_constant(element, f"{data_name}.{i}")

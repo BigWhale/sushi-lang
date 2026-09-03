@@ -1,0 +1,11 @@
+# A payload of the wrong type reads the body's code.
+# EXPECT_ERROR_CODE: CE2049
+
+enum Shape:
+    Dot
+    Circle(i32)
+
+const Shape S = Shape.Circle("five")
+
+fn main() i32:
+    return Result.Ok(0)

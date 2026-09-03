@@ -1,0 +1,20 @@
+# A payload whose type is a struct: the argument is a constant construction, so the
+# evaluator recurses, and the struct's fields land at their offsets inside the payload.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3 4 7\n"
+
+struct Point:
+    i32 x
+    i32 y
+
+enum Shape:
+    Nothing
+    At(Point, i32)
+
+const Shape S = Shape.At(Point(3, 4), 7)
+
+fn main() i32:
+    match S:
+        Shape.Nothing -> println("nothing")
+        Shape.At(p, r) -> println("{p.x} {p.y} {r}")
+    return Result.Ok(0)

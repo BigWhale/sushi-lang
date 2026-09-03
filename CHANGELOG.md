@@ -5,6 +5,18 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **A constant may construct an enum variant.** `const Sign DEFAULT = Sign.Plus`,
+  `Shape.Circle(5)` and `Maybe.None` against a declared `Maybe@(T)` are constants now,
+  in `.rodata` like a struct constant: a payload-free variant is its tag over a zero
+  payload, and a payload-carrying one is the tag plus its constant payloads -- a string,
+  a struct or another enum included -- written at the offsets a run-time construction
+  uses (#551). A generic struct or enum is built against the DECLARED type, so
+  `const Pair@(i32, bool) P = Pair(3, true)` is a constant too, and so is a
+  `Result@(T, E)`, which is an interned enum like `Maybe@(T)`. A unit variable takes
+  the same initializer, which makes `var Maybe@(HashMap@(K, V)) cache = Maybe.None` the
+  cache-filled-on-first-use shape the `var` ruling named. A variant the enum does not
+  declare, a payload count that does not fit and a payload of the wrong type read the
+  body's codes (CE2045, CE2050, CE2049); a function call in a payload stays CE0108.
 - **A reference-typed `let` is a checked borrow binding.** `let poke Holder h = o.get()`
   binds a POINTER into the Own's payload, so `h.items.push(9)` and `h.n := 42` reach the
   heap cell with no copy -- the zero-copy mutation path a bare `Own@(T)` local had none

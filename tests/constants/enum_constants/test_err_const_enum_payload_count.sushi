@@ -1,0 +1,11 @@
+# A payload count that does not fit the variant reads the body's code.
+# EXPECT_ERROR_CODE: CE2050
+
+enum Shape:
+    Dot
+    Circle(i32)
+
+const Shape S = Shape.Circle()
+
+fn main() i32:
+    return Result.Ok(0)

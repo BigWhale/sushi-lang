@@ -1729,11 +1729,49 @@ OUT.fd := 7          # CE2096: cannot assign to a field of constant 'OUT'
 OUT.release()        # CE2400: cannot borrow 'OUT': only a local variable can be borrowed
 ```
 
-Enum construction in a constant is still refused (CE0108).
+### Enum Constants
+
+An enum variant is a constant when every payload argument is. A payload-free variant is a
+tag, in either spelling; a payload-carrying one is the tag plus its constant payloads,
+laid out exactly as a run-time construction lays them out. A payload may be a struct, a
+string or another enum, and a generic enum's variant is built against the declared type:
+
+```sushi
+enum Sign:
+    Plus
+    Minus
+
+enum Shape:
+    Dot
+    Circle(i32)
+    Labelled(string, i32)
+
+const Sign DEFAULT = Sign.Plus                       # a tag; `Sign.Plus()` is the same
+const Shape UNIT = Shape.Circle(1)
+const Shape NAMED = Shape.Labelled("unit", 1)
+const Maybe@(i32) NOTHING = Maybe.None               # the interned Maybe@(i32)
+
+fn main() i32:
+    match UNIT:
+        Shape.Dot -> println("dot")
+        Shape.Circle(r) -> println("circle {r}")     # circle 1
+        Shape.Labelled(name, r) -> println("{name} {r}")
+    return Result.Ok(0)
+```
+
+A variant the enum does not declare, a payload count that does not fit and a payload of
+the wrong type read the codes a body gets -- **CE2045**, **CE2050** and **CE2049** -- and
+a function call in a payload is **CE0108**, as it is in a struct field. A `Result@(T, E)`
+is an interned enum like `Maybe@(T)`, so `const Result@(i32, E) V = Result.Ok(42)` is a
+constant by the same rule. A generic struct follows the same rule as a generic enum: `const Pair@(i32, bool) P = Pair(3, true)` builds
+the instance the declaration names. A unit variable of an enum type takes the same
+initializer, which is what lets storage start as `Maybe.None` and be filled on first use
+(see the Unit Variables section).
 
 ### Restrictions
 
-A constant is built from literals, other constants, operators and `as`. Referring to another
+A constant is built from literals, other constants, operators, `as`, and a struct or an
+enum variant whose every argument is a constant. Referring to another
 constant is allowed and the order of declaration does not matter, so a constant may name one
 declared further down the file. Indexing an array constant with a constant index works too,
 and every bound is checked while compiling -- a constant cannot trap. Past the end is
@@ -1746,10 +1784,10 @@ const bool IS_TWO = SMALLEST == 2   # bool and string compare for equality
 ```
 
 Constants cannot use:
-- Function calls and method calls. A STRUCT construction is not a function call and is
-  allowed -- see [Struct Constants](#struct-constants)
+- Function calls and method calls. A struct construction and an enum variant are not
+  calls and are allowed -- see [Struct Constants](#struct-constants) and
+  [Enum Constants](#enum-constants)
 - Local variables (only other constants)
-- Enum construction
 - Dynamic arrays
 - A compile-time loop, so a generated table has to be spelled out element by element
 
