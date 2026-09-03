@@ -460,6 +460,13 @@ class ConstantEvaluator:
 
         const_sig = self.const_table.lookup(const_name, self.unit_name, self.scope)
         if const_sig is None:
+            # Below every declared constant: a stdlib constant a flat `use <module>`
+            # brought is a constant too, and it folds from the value its record
+            # carries (#560).
+            from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
+            stdlib_const = lookup_stdlib_constant(const_name, self.scope)
+            if stdlib_const is not None:
+                return ConstantValue(stdlib_const.value, stdlib_const.get_return_type())
             er.emit(self.reporter, er.ERR.CE1002, span, name=const_name)
             return None
         if const_sig.is_var:

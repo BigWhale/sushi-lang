@@ -1,0 +1,10 @@
+# Section 8, row 1: a local wins over everything, a stdlib constant included. The
+# local is READ here, so the program is also free of CW1001 (#560).
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_STDERR_EMPTY
+use <math>
+
+fn main() i32:
+    let i32 PI = 3
+    println("{PI}")
+    return Result.Ok(0)

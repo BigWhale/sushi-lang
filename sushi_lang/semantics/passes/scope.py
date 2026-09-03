@@ -116,11 +116,6 @@ class ScopeAnalyzer:
         current_scope = self.scopes[-1]
         current_scope[name] = VariableInfo(name=name, declared_at=span)
 
-    def _is_math_constant(self, name: str) -> bool:
-        """Check if name is a built-in math module constant."""
-        from sushi_lang.sushi_stdlib.src import math as math_module
-        return math_module.is_builtin_math_constant(name)
-
     def _is_bound_local(self, name: str) -> bool:
         """True if `name` is currently a variable in any active scope."""
         return any(name in scope for scope in self.scopes)
@@ -139,8 +134,6 @@ class ScopeAnalyzer:
 
     def _names_a_non_local(self, name: str) -> bool:
         """True if `name` resolves to something that is not a variable at all."""
-        if self._is_math_constant(name):
-            return True
         # Local-wins: a bound local shadows an enum name, a constant and a function
         # name alike (#296) -- the same rule the EnumConstructor arm applies.
         if self._is_bound_local(name):
@@ -155,6 +148,12 @@ class ScopeAnalyzer:
         # CE2008, which says which unit declares it.
         if self.constants.lookup(name, self.namespaces.scope.unit,
                                  self.namespaces.scope) is not None:
+            return True
+        # A stdlib constant is a name a flat `use <module>` brought, and it stands
+        # BELOW every declaration above (#560): the module has to be in scope, and a
+        # local, a constant or a variable of that name is what the name means here.
+        from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
+        if lookup_stdlib_constant(name, self.namespaces.scope) is not None:
             return True
         return name in self.function_names
 

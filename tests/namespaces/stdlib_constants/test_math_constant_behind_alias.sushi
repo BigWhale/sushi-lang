@@ -1,0 +1,10 @@
+# An aliased import puts nothing in the flat scope: `E` is free for this unit's
+# own constant while the standard library's stays reachable behind the dot.
+# EXPECT_STDOUT_EXACT: "1.5 2.71828\n"
+use <math> as m
+
+const f64 E = 1.5
+
+fn main() i32:
+    println("{E} {m.E}")
+    return Result.Ok(0)

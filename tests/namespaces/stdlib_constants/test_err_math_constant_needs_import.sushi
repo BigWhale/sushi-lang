@@ -1,0 +1,7 @@
+# A stdlib constant is a name `<math>` brings, and a unit that did not import the
+# module has no such name (section 6). It is CE1001 like any undeclared name, not
+# a builtin that resolves everywhere (#560).
+# EXPECT_ERROR_CODE: CE1001
+fn main() i32:
+    println("{PI}")
+    return Result.Ok(0)

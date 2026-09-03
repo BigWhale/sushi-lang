@@ -1,0 +1,11 @@
+# A unit's own declaration wins over a flat stdlib import (unit-namespaces.md
+# section 8, row 2 over row 3), and a stdlib CONSTANT is no exception: `E` here
+# is this unit's 1.5 and never the standard library's 2.71828 (#560).
+# EXPECT_STDOUT_EXACT: "1.5\n"
+use <math>
+
+const f64 E = 1.5
+
+fn main() i32:
+    println("{E}")
+    return Result.Ok(0)

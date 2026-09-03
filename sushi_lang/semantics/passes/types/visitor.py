@@ -793,12 +793,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return tv.enum_table.by_name.get(receiver_name)
 
     def visit_name(self, node: Name) -> Optional[Type]:
-        """Infer name expression type."""
-        if node.id in {'PI', 'E', 'TAU'}:
-            from sushi_lang.sushi_stdlib.src import math as math_module
-            if math_module.is_builtin_math_constant(node.id):
-                return BuiltinType.F64
-
+        """Infer name expression type: section 8's ladder, top to bottom."""
         var_type = self.type_validator.variable_types.get(node.id)
         if var_type is not None:
             from sushi_lang.semantics.typesys import ReferenceType
@@ -817,6 +812,14 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             return resolve_unknown_type(const_sig.const_type,
                                         self.type_validator.struct_table.by_name,
                                         self.type_validator.enum_table.by_name)
+
+        # A stdlib constant a flat `use <module>` brought: below every declaration of
+        # this program and above a function value, at the rung the back end reads it
+        # (#560). It used to be asked FIRST, so `let i32 PI = 3` typed as an f64.
+        from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
+        stdlib_const = lookup_stdlib_constant(node.id, self.type_validator.scope)
+        if stdlib_const is not None:
+            return self._materialize_stdlib_return_type(stdlib_const.get_return_type())
 
         fn_value_type = function_value_type_of(self.type_validator, node.id)
         if fn_value_type is not None:

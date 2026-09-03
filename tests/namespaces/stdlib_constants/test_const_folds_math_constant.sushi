@@ -1,0 +1,11 @@
+# A stdlib constant is a constant: a `const` initializer folds it like any other
+# constant it can name, and the value lands in .rodata at compile time (#560).
+# EXPECT_STDOUT_EXACT: "1.5708 12.5664\n"
+use <math>
+
+const f64 QUARTER_TURN = PI / 2.0
+const f64 TWO_TURNS = TAU * 2.0
+
+fn main() i32:
+    println("{QUARTER_TURN} {TWO_TURNS}")
+    return Result.Ok(0)
