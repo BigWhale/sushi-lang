@@ -65,9 +65,9 @@ class ASTBuilder:
         table = ConstantTable()
         for known in self.unit_constants.by_name.values():
             table.declare(known.name, ConstSig(name=known.name, loc=known.loc,
-                                               const_type=known.ty))
+                                               const_type=known.ty, decl=known))
 
-        evaluated = ConstantEvaluator(Reporter(), table, self.unit_constants).evaluate(
+        evaluated = ConstantEvaluator(Reporter(), table).evaluate(
             const_def.value, const_def.ty, const_def.loc)
         if evaluated is None or not isinstance(evaluated.value, int) or isinstance(evaluated.value, bool):
             return None

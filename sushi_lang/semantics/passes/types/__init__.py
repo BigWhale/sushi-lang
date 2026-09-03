@@ -16,7 +16,6 @@ from sushi_lang.semantics.ast import (
     If, Expr
 )
 from sushi_lang.semantics.typesys import Type, BuiltinType
-from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 from sushi_lang.semantics.passes.types.visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
 
 from .compatibility import types_compatible
@@ -118,10 +117,6 @@ class TypeValidator:
         self.in_synthesized_body = False
         self.variable_types: Dict[str, Type] = {}
         self.destroyed_arrays: List[set[str]] = []
-        # `run` fills these from the program. A validator built to infer one type --
-        # the monomorphizer and the instantiator both build one -- never runs, and it
-        # reads no constant, so an empty map is the truth and not a fallback.
-        self.ast_constants: UnitKeyedSymbols[ConstDef] = UnitKeyedSymbols()
 
         self.statement_validator = StatementValidator(self)
         self.expression_validator = ExpressionValidator(self)
@@ -129,10 +124,6 @@ class TypeValidator:
 
     def run(self, program: Program) -> None:
         """Entry point for type validation."""
-        self.ast_constants = UnitKeyedSymbols()
-        for const in program.constants:
-            self.ast_constants.declare(const.name, const, unit=self.current_unit_name)
-
         # Whole-unit, and BEFORE the per-declaration walk: it is the only way a public
         # generic is reached, since the loop below skips one.
         check_public_signatures(self, program)
@@ -196,6 +187,19 @@ class TypeValidator:
     def scope(self):
         """What this unit may write with no qualifier (section 6)."""
         return self.namespaces.scope
+
+    def namespaces_of(self, unit_name: Optional[str]):
+        """Any unit's namespace table, for a reader that folds another unit's constant (#561)."""
+        if unit_name == self.current_unit_name:
+            return self.namespaces
+        return self.tables.namespaces.get(unit_name)
+
+    def constant_evaluator(self, reporter: Optional[Reporter] = None):
+        """The evaluator for this unit's constant expressions. Silent with no reporter."""
+        from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+        return ConstantEvaluator(reporter if reporter is not None else Reporter(),
+                                 self.const_table, self.current_unit_name,
+                                 self.namespaces_of, self.struct_table, self.enum_table)
 
     def validate_expression(self, expr: Expr) -> Optional[Type]:
         """Validate an expression and its subexpressions using the Visitor Pattern."""

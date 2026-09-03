@@ -1,0 +1,10 @@
+# A function call is not a constant, behind an alias exactly as bare: CE0108,
+# the code the bare `area()` answers (#561).
+# EXPECT_ERROR_CODE: CE0108
+use "helpers/shapes" as sh
+
+const i32 SQUARE = sh.area()
+
+fn main() i32:
+    println("{SQUARE}")
+    return Result.Ok(0)

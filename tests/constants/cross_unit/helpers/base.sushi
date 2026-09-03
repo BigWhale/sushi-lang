@@ -1,0 +1,3 @@
+# The unit behind `shapes`: a constant that `shapes` folds into one of its own,
+# and that no test imports for itself.
+public const i32 WIDTH = 4

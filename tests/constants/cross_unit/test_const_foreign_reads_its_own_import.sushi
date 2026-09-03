@@ -1,0 +1,14 @@
+# `BIG` is `shapes`' constant and its initializer names `WIDTH`, which `shapes`
+# imports and this unit does not. A foreign initializer is read in the scope of
+# the unit that WROTE it, so this unit's own WIDTH of 100 never leaks into it and
+# the answer is 8, not 200 (#561).
+# EXPECT_STDOUT_EXACT: "8 8\n"
+use "helpers/shapes"
+
+const i32 WIDTH = 100
+const i32 FLAT = BIG
+const i32 ALSO = BIG + WIDTH - WIDTH
+
+fn main() i32:
+    println("{FLAT} {ALSO}")
+    return Result.Ok(0)

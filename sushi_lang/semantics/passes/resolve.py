@@ -77,9 +77,9 @@ def resolve_enum_variant_types(
             object.__setattr__(enum_type, 'variants', tuple(resolved_variants))
 
 
-def resolve_constant_types(constants, const_defs, struct_table: StructTable,
+def resolve_constant_types(constants, struct_table: StructTable,
                            enum_table: EnumTable) -> None:
-    """Resolve a constant's DECLARED type, so every reader sees the table entry.
+    """Resolve a constant's DECLARED type on its RECORD, so every reader sees the table entry.
 
     A constant's type is written by the AST builder before any table exists, so
     `const Handle OUT = ...` collects as `UnknownType("Handle")`. That was invisible
@@ -87,9 +87,11 @@ def resolve_constant_types(constants, const_defs, struct_table: StructTable,
     once, because an extension method resolves on the receiver's type and an
     `UnknownType` matches nothing.
 
-    Resolving HERE and not at the read sites is what keeps it one seam: the signature
-    and the declaration are both updated, so the typecheck pass, the borrow pass and the
-    backend all read a resolved type without any of them remembering to ask.
+    The DECLARATION keeps the type as written. `sh.Shape` is a qualified name and the
+    typecheck pass has to see the qualifier to rule on it (`validate_type_name`); the
+    resolved type is written back there, the way a `let`'s is, once the name has been
+    checked in the unit that wrote it (#561). Every reader after that pass -- the
+    borrow pass, the back end -- sees the resolved type on both.
     """
     type_lookup = _type_lookup(struct_table, enum_table)
 
@@ -102,9 +104,6 @@ def resolve_constant_types(constants, const_defs, struct_table: StructTable,
         for unit_sigs in constants.by_unit.values():
             for sig in unit_sigs.values():
                 sig.const_type = resolved(sig.const_type)
-
-    for const_def in const_defs:
-        const_def.ty = resolved(const_def.ty)
 
 
 def _resolve_type(ty: Type, type_lookup: Dict[str, Type]) -> Type:

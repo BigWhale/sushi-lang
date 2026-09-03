@@ -30,6 +30,7 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import ArrayElement, Expr, IntLit, RangeExpr
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
     from sushi_lang.semantics.ranges import RangePlan
 
 # Reads an expression the compiler must know the value of, or None when it cannot.
@@ -138,20 +139,20 @@ def require_readable_length(runs: Sequence[Run], reporter: Reporter) -> Optional
     return expanded_length(runs)
 
 
-def const_int_reader(const_table, ast_constants,
-                    unit_name: Optional[str] = None) -> ReadInt:
+def const_int_reader(evaluator: "ConstantEvaluator") -> ReadInt:
     """A count reader backed by the constant evaluator. Always silent.
 
     CE2017 is the diagnostic a bad count gets, and `read_runs` is what raises it. A reader
-    that spoke as well would put CE0108 beside CE2017 for one mistake.
+    that spoke as well would put CE0108 beside CE2017 for one mistake. The evaluator
+    handed in knows the unit whose literal is read, so a count that names another
+    unit's constant resolves as that unit's scope says (#561).
     """
+    silent = evaluator.silent()
+
     def read(expr: Expr) -> Optional[int]:
-        from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
         from sushi_lang.semantics.typesys import BuiltinType
 
-        evaluated = ConstantEvaluator(
-            Reporter(), const_table, ast_constants, unit_name,
-        ).evaluate(expr, BuiltinType.I32, expr.loc)
+        evaluated = silent.evaluate(expr, BuiltinType.I32, expr.loc)
         if evaluated is None or isinstance(evaluated.value, bool):
             return None
         return evaluated.value if isinstance(evaluated.value, int) else None

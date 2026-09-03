@@ -434,9 +434,9 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
     if external_table is not None:
         cg.external_table = external_table
     # Section 8's ladder, as the back end has to walk it: a bare callee is resolved
-    # through the same per-unit scope the typecheck pass accepted it under.
-    cg.unit_scopes = {name: table.scope
-                      for name, table in getattr(analyzer, 'namespaces', {}).items()}
+    # through the same per-unit scope the typecheck pass accepted it under, and a
+    # constant's initializer through the aliases of the unit that wrote it (#561).
+    cg.unit_namespaces = dict(getattr(analyzer, 'namespaces', {}))
 
     effective_cwd = get_effective_cwd()
     if args.out:
@@ -578,9 +578,9 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
     if external_table is not None:
         cg.external_table = external_table
     # Section 8's ladder, as the back end has to walk it: a bare callee is resolved
-    # through the same per-unit scope the typecheck pass accepted it under.
-    cg.unit_scopes = {name: table.scope
-                      for name, table in getattr(analyzer, 'namespaces', {}).items()}
+    # through the same per-unit scope the typecheck pass accepted it under, and a
+    # constant's initializer through the aliases of the unit that wrote it (#561).
+    cg.unit_namespaces = dict(getattr(analyzer, 'namespaces', {}))
     cg.main_expects_args = analyzer.main_expects_args
     cg.monomorphized_extensions = monomorphized_extensions
     cg.library_linker = library_linker

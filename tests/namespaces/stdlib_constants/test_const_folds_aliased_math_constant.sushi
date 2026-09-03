@@ -1,0 +1,10 @@
+# A stdlib constant behind an alias is a constant a `const` initializer folds,
+# the same arm that folds a unit's constant behind one (#560, #561).
+# EXPECT_STDOUT_EXACT: "6.28319\n"
+use <math> as m
+
+const f64 TURN = m.PI * 2.0
+
+fn main() i32:
+    println("{TURN}")
+    return Result.Ok(0)
