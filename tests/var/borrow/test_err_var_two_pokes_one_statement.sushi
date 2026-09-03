@@ -1,0 +1,13 @@
+# One `poke` at a time, for a unit variable as for a local (CE2403).
+# EXPECT_ERROR_CODE: CE2403
+
+var i32 counter = 0
+
+fn both(poke i32 a, poke i32 b) ~:
+    a := a + 1
+    b := b + 1
+    return Result.Ok(~)
+
+fn main() i32:
+    both(poke counter, poke counter)
+    return Result.Ok(0)

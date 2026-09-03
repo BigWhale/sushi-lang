@@ -1,0 +1,22 @@
+# An empty container is a legal initializer (it allocates nothing), and a mutating
+# method on the variable writes through its address. No leak directive: a unit
+# variable is never destroyed at exit, so the buffers are live when the program ends.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0 0\n2 1\n4 5 9\n"
+
+var i32[] table = from([])
+var List@(i32) items = List.new()
+
+fn fill() ~:
+    table.push(4)
+    table.push(5)
+    items.push(9)
+    return Result.Ok(~)
+
+fn main() i32:
+    println("{table.len()} {items.len()}")
+    fill()
+    println("{table.len()} {items.len()}")
+    let i32 third = items.get(0).realise(0)
+    println("{table[0]} {table[1]} {third}")
+    return Result.Ok(0)

@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Tuple
 
+from sushi_lang.semantics.ast import VarDef
+
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program
 
@@ -78,7 +80,7 @@ def declarations(program: 'Program') -> Iterator[Declaration]:
     Nor is a body-first block, which the builders lift onto the declaration around it.
     """
     for const in program.constants:
-        yield "constant", const
+        yield ("variable" if isinstance(const, VarDef) else "constant"), const
     for struct in program.structs:
         yield "struct", struct
         for field in struct.fields:
@@ -172,7 +174,8 @@ def signature_types(program: 'Program') -> Iterator[TypeSite]:
     and CE5009 -- which does care -- keeps its own body walk.
     """
     for const in program.constants:
-        yield TypeSite("constant", "type", const, getattr(const, "ty", None),
+        yield TypeSite("variable" if isinstance(const, VarDef) else "constant",
+                       "type", const, getattr(const, "ty", None),
                        getattr(const, "type_span", None) or const.loc)
 
     for struct in program.structs:

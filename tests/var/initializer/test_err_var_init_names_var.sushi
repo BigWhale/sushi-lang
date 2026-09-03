@@ -1,0 +1,10 @@
+# One unit variable cannot initialize another: the value is read at run time, and
+# there is no initialization order to define.
+# EXPECT_ERROR_CODE: CE0108
+
+var i32 a = 1
+var i32 b = a
+
+fn main() i32:
+    println("{b}")
+    return Result.Ok(0)

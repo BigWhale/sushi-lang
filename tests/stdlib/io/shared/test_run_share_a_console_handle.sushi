@@ -11,7 +11,7 @@ use <io/fs>
 fn main() i32:
     if (true):
         match stdout.share():
-            Result.Ok(out) -> out.writeln("Mostly Harmless")
+            Result.Ok(nom out) -> out.writeln("Mostly Harmless")
             Result.Err(_) -> println("share failed")
     println("still here")
     return Result.Ok(0)

@@ -1,0 +1,9 @@
+# A constant has no address to bind to (CE2400); a unit variable has one.
+# EXPECT_ERROR_CODE: CE2400
+
+const i32 LIMIT = 10
+
+fn main() i32:
+    let poke i32 n = LIMIT
+    n := 1
+    return Result.Ok(0)

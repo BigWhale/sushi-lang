@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Set
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
-from sushi_lang.semantics.ast import ConstDef, Program
+from sushi_lang.semantics.ast import ConstDef, Program, VarDef
 from sushi_lang.semantics.typesys import Type
 
 
@@ -22,6 +22,10 @@ class ConstSig:
     filename: Optional[str] = None  # The file it was declared in (#473)
     unit_name: Optional[str] = None  # The unit that declared it, for the visibility gate
     is_public: bool = True           # Every constant is public until the default flips
+    # A `var`: storage with an address, rebindable and borrowable, never moved out of.
+    # One table holds both kinds because every reader that resolves a NAME treats them
+    # alike; the six sites that assume `.rodata` ask this flag (unit-storage.md).
+    is_var: bool = False
     # Note: value is validated later in type checking pass
 
 
@@ -119,6 +123,7 @@ class ConstantCollector:
             filename=self.current_unit_file,
             unit_name=self.current_unit_name,
             is_public=getattr(const, "is_public", True),
+            is_var=isinstance(const, VarDef),
         )
 
         prev = self.constants.by_name.get(name)

@@ -1,0 +1,18 @@
+# A rebind drops the OLD value of a unit variable, so a `Drop` type runs its `drop()`
+# once, at the rebind. The value held at exit is never destroyed: no second line.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "dropped 1\nend\n"
+
+struct Tracker:
+    i32 id
+
+extend Tracker with Drop:
+    fn drop(poke self) ~:
+        println("dropped {self.id}")
+
+var Tracker current = Tracker(1)
+
+fn main() i32:
+    current := Tracker(2)
+    println("end")
+    return Result.Ok(0)

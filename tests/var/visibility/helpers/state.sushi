@@ -1,0 +1,13 @@
+# The unit under test: one public variable, one private one, and the accessors the
+# private one is reached through.
+
+public var i32 shared = 100
+
+var i32 hidden = 7
+
+public fn hidden_value() i32:
+    return Result.Ok(hidden)
+
+public fn set_hidden(i32 v) ~:
+    hidden := v
+    return Result.Ok(~)

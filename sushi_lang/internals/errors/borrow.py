@@ -9,6 +9,10 @@ from sushi_lang.internals.errors.registry import (
 )
 
 
+_add(ErrorMessage("CE2436", Severity.ERROR,
+    "cannot move '{name}': it is a unit variable, storage the program keeps for its whole run; borrow it instead, or take an independent value",
+    Category.BORROW, "A `var` declaration is storage in the data segment: one per program, initialized before `main`, never destroyed at exit (docs/design/unit-storage.md). Moving its value out -- a `nom` argument, a `let` bound straight from it, a `return` of it, a `nom self` method such as `close()` -- would give a callee or a binding the right to free storage nothing re-initializes, so the same rule that fences `main`'s argv view (CE2410) fences a `var`. A plain value copies out freely; only a type that owns a resource is refused. Pass it as a borrow (`f(v)`, `peek v`, `poke v`), or take an independent value: `.clone()` for a plain owner, `.share()` for a handle. A REBIND is the one way to change what the variable holds, and it frees the old value."))
+
 _add(ErrorMessage("CE2410", Severity.ERROR,
     "cannot move '{name}': it is a borrowed view of the process arguments (main's string[] args); borrow it instead with 'peek string[]'",
     Category.BORROW, "main's `string[] args` aliases the process argv, which the runtime owns and frees. Moving it by value (passing it to a by-value parameter, rebinding, or storing it) would make the callee free argv and double-free. Take it by reference with `peek string[]`."))
@@ -54,9 +58,13 @@ _add(ErrorMessage("CE2408", Severity.ERROR,
     "cannot modify '{name}' through peek reference (read-only)",
     Category.BORROW, "peek references are read-only. Use poke for mutable access."))
 
-_add(ErrorMessage("CE2413", Severity.ERROR,
-    "a 'let' binding cannot have a reference type ('{mode} {ty}')",
-    Category.BORROW, "A reference-typed `let` (`let peek T x = ...`) parses but has no checked semantics: the binding would be an alias the borrow checker does not track, so two `poke` bindings of one variable would compile silently (issue #252). Borrow at a USE site instead: pass `peek x` / `poke x` to a reference parameter, or take an independent value with `.clone()`. Checked local borrow bindings are a possible future feature; until they are designed, the form is rejected."))
+# CE2413 ("a 'let' binding cannot have a reference type") was RETIRED when #409 landed the
+# checked reference-typed `let`: `let poke T x = <place>` and `let peek T x = <place>` are
+# block-scoped borrow bindings now, with the owner frozen while the binding lives (CE2412),
+# one `poke` at a time (CE2403, CE2407), a write through a `peek` refused (CE2408), and a
+# consuming use refused (CE2411). What the code guarded against -- two untracked `poke`
+# aliases of one variable (#252) -- is CE2403 today. A registered code nothing can reach
+# misinforms the registry's own promise, so it is gone rather than kept.
 
 _add(ErrorMessage("CE2412", Severity.ERROR,
     "cannot mutate '{owner}' while '{name}' borrows from it",

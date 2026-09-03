@@ -97,7 +97,7 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
 # twolib_bin backs tests/libs/multi_unit, the #494 shape: two units, each with a
 # private `helper`, shipped as one binary manifest. twolib_src is its source twin
 # and takes the default.
-BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib", "const_lib",
+BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib", "const_lib", "var_bin_lib",
                        "mangle_closure_lib", "twolib_bin", "channel_bin_lib",
                        "generic_perk_bin_lib"}
 

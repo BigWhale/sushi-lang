@@ -129,6 +129,14 @@ class ScopeAnalyzer:
         """True if `name` names a namespace here and is not shadowed by a local."""
         return self.namespaces.is_namespace(name) and not self._is_bound_local(name)
 
+    def _is_unit_variable(self, name: str) -> bool:
+        """True if `name` is a `var` this unit can write, and no local shadows it."""
+        if self._is_bound_local(name):
+            return False
+        sig = self.constants.lookup(name, self.namespaces.scope.unit,
+                                    self.namespaces.scope)
+        return sig is not None and sig.is_var
+
     def _names_a_non_local(self, name: str) -> bool:
         """True if `name` resolves to something that is not a variable at all."""
         if self._is_math_constant(name):
@@ -159,7 +167,9 @@ class ScopeAnalyzer:
                 return
 
         if is_rebind:
-            self.err.emit(er.ERR.CE1002, usage_span, name=name)
+            # A unit variable is storage a rebind reaches; the typecheck pass types it.
+            if not self._is_unit_variable(name):
+                self.err.emit(er.ERR.CE1002, usage_span, name=name)
             return
         diagnostic = er.emit_with(self.reporter, er.ERR.CE1001, usage_span, name=name)
         help_line = self._declared_elsewhere(name)
@@ -206,6 +216,8 @@ class ScopeAnalyzer:
                 self._record_capture(name, i, usage_span)
                 return
 
+        if self._is_unit_variable(name):
+            return  # storage with an address: borrowable like a local (unit-storage.md)
         if self._names_a_non_local(name) or self._is_namespace(name):
             self.err.emit(er.ERR.CE2400, usage_span, name=name)
         else:
@@ -385,7 +397,8 @@ class ScopeAnalyzer:
             from sushi_lang.semantics.ast import DotCall as _DotCall, MethodCall as _MethodCall
             while isinstance(root, (_DotCall, _MethodCall)):
                 root = root.receiver
-            if isinstance(root, Name) and self._names_a_non_local(root.id):
+            if (isinstance(root, Name) and self._names_a_non_local(root.id)
+                    and not self._is_unit_variable(root.id)):
                 self.err.emit(er.ERR.CE2400, stmt.item_borrow_span or stmt.loc,
                               name=root.id)
 
@@ -574,9 +587,12 @@ class ScopeAnalyzer:
                 base = expr.expr
                 while isinstance(base, MemberAccess):
                     base = base.receiver
-                if isinstance(base, Name):
+                if (isinstance(base, Name)
+                        and not (base is not expr.expr and self._is_namespace(base.id))):
                     self._borrow_variable(base.id, base.loc)
                 else:
+                    # `poke geo.count` reads a namespace: the MemberAccess arm resolves
+                    # it, and the typecheck pass says whether the member has an address.
                     # Not a place at all (a call result, a literal). The borrow pass rejects it as
                     # CE2404; here it is just an ordinary expression to walk.
                     self._check_expression(expr.expr)

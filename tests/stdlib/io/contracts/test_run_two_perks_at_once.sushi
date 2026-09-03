@@ -9,7 +9,7 @@ use <io/files>
 use <io/fs>
 use <io/contracts>
 
-fn copy_text@(R: Reader, W: Writer)(R src, W dst) ~ | IoError:
+fn copy_text@(R: Reader, W: Writer)(poke R src, poke W dst) ~ | IoError:
     let string all = src.read(64)??
     dst.write(all)??
     dst.flush()??
@@ -17,23 +17,23 @@ fn copy_text@(R: Reader, W: Writer)(R src, W dst) ~ | IoError:
 
 fn main() i32:
     match open("contract_two_probe_a.txt", FileMode.Write()):
-        Result.Ok(w) -> w.write("Mostly Harmless")
+        Result.Ok(nom w) -> w.write("Mostly Harmless")
         Result.Err(_) ->
             println("open a failed")
             return Result.Ok(1)
 
     match open("contract_two_probe_a.txt", FileMode.Read()):
-        Result.Ok(src) ->
+        Result.Ok(nom src) ->
             match open("contract_two_probe_b.txt", FileMode.Write()):
-                Result.Ok(dst) ->
-                    match copy_text(src, dst):
+                Result.Ok(nom dst) ->
+                    match copy_text(poke src, poke dst):
                         Result.Ok(_) -> println("copied")
                         Result.Err(_) -> println("copy failed")
                 Result.Err(_) -> println("open b failed")
         Result.Err(_) -> println("reopen a failed")
 
     match open("contract_two_probe_b.txt", FileMode.Read()):
-        Result.Ok(r) ->
+        Result.Ok(nom r) ->
             let string back = r.read_all().realise("")
             println("{back}")
         Result.Err(_) -> println("read b failed")

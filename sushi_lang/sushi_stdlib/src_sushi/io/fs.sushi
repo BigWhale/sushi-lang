@@ -168,9 +168,10 @@ name descriptors the program did not open -- 0, 1 and 2 -- so dropping one
 must not close it. A string carries the same bit for the same reason: a
 literal frees to a no-op.
 
-Every method is a plain borrow except close(). A file's position lives in
-the KERNEL, not in this struct, so a read and a write need no mutable
-receiver; only close(), which writes -1 into the binding, does.
+The contract methods -- read, write, flush, seek and the conveniences over
+them -- take `poke self`, the receiver every Reader and Writer declares so that
+a BUFFERED handle can implement them (its cursor moves). A File's own position
+lives in the KERNEL, so the mode costs it nothing; close() takes the handle.
 
 Reads and writes are UNBUFFERED: each one is a system call. A handle that buffered would
 have to flush at a point nobody wrote, and a destructor cannot report the failure of that
@@ -192,17 +193,19 @@ public const i32 STDERR_FD = 2
 ##:
 Standard input, as a File the program does not own.
 
-It is a constant, so it lives in read-only memory: closing it is refused
-while compiling, and the descriptor cannot be taken out from under the rest
-of the program by accident.
+It is a unit variable (`var`), so it has an address: the contract methods take
+`poke self`, and `stdin.read(...)` reaches it. Closing it is still refused
+while compiling -- storage the program keeps is never moved out of (CE2436) --
+and a rebind (`stdin := f`) is the one way to put the console somewhere else
+for a run.
 :##
-public const File stdin = File(fd: STDIN_FD, owned: false)
+public var File stdin = File(fd: STDIN_FD, owned: false)
 
 ##: Standard output, on the same terms as stdin. :##
-public const File stdout = File(fd: STDOUT_FD, owned: false)
+public var File stdout = File(fd: STDOUT_FD, owned: false)
 
 ##: Standard error, on the same terms as stdin. :##
-public const File stderr = File(fd: STDERR_FD, owned: false)
+public var File stderr = File(fd: STDERR_FD, owned: false)
 
 ##:
 Closes the file when its owner leaves scope, if this handle owns it.
@@ -328,7 +331,7 @@ extend File with Reader:
     - Returns: The text that arrived, empty at end of file.
     - Errors: IoError, when the read failed.
     :##
-    fn read(i32 max) string | IoError:
+    fn read(poke self, i32 max) string | IoError:
         let u8[] chunk = self.read_bytes(max)??
         return chunk.to_string()
 
@@ -342,7 +345,7 @@ extend File with Reader:
     - Returns: The bytes that arrived, empty at end of file.
     - Errors: IoError, when the read failed.
     :##
-    fn read_bytes(i32 max) u8[] | IoError:
+    fn read_bytes(poke self, i32 max) u8[] | IoError:
         match fd_read(self.fd, max):
             Result.Ok(nom chunk) -> return chunk
             Result.Err(e) -> return Result.Err(e.to_io())
@@ -360,7 +363,7 @@ extend File with Writer:
     - Returns: Nothing.
     - Errors: IoError, when the write failed.
     :##
-    fn write(string data) ~ | IoError:
+    fn write(poke self, string data) ~ | IoError:
         match fd_write_str(self.fd, data):
             Result.Ok(_) -> return ~
             Result.Err(e) -> return Result.Err(e.to_io())
@@ -372,7 +375,7 @@ extend File with Writer:
     - Returns: Nothing.
     - Errors: IoError, when the write failed.
     :##
-    fn write_bytes(u8[] data) ~ | IoError:
+    fn write_bytes(poke self, u8[] data) ~ | IoError:
         match fd_write(self.fd, data):
             Result.Ok(_) -> return ~
             Result.Err(e) -> return Result.Err(e.to_io())
@@ -390,7 +393,7 @@ extend File with Writer:
     - Returns: Nothing.
     - Errors: IoError, never in practice.
     :##
-    fn flush() ~ | IoError:
+    fn flush(poke self) ~ | IoError:
         return ~
 
 ##:
@@ -406,7 +409,7 @@ extend File with Seek:
     - Returns: The new position, in bytes from the start.
     - Errors: IoError, when the descriptor cannot seek -- a pipe cannot.
     :##
-    fn seek(i64 offset, SeekFrom origin) i64 | IoError:
+    fn seek(poke self, i64 offset, SeekFrom origin) i64 | IoError:
         match fd_seek(self.fd, offset, origin.whence()):
             Result.Ok(at) -> return at
             Result.Err(e) -> return Result.Err(e.to_io())
@@ -420,7 +423,7 @@ buffered reader.
 - Returns: Everything from the current position to the end.
 - Errors: IoError, when a read failed.
 :##
-extend File read_all() string | IoError:
+extend File read_all(poke self) string | IoError:
     let u8[] all = from([])
     let bool done = false
     while (not done):
@@ -455,7 +458,7 @@ Reads one byte, as text.
 - Returns: One character, or an empty string at end of file.
 - Errors: IoError, when the read failed.
 :##
-extend File readch() string | IoError:
+extend File readch(poke self) string | IoError:
     let u8[] one = self.read_bytes(1)??
     return one.to_string()
 
@@ -469,7 +472,7 @@ and a file descriptor takes the second write for nothing.
 - Returns: Nothing.
 - Errors: IoError, when a write failed.
 :##
-extend File writeln(string data) ~ | IoError:
+extend File writeln(poke self, string data) ~ | IoError:
     self.write(data)??
     self.write("\n")??
     return ~
@@ -480,7 +483,7 @@ The current file position, in bytes from the start.
 - Returns: The position.
 - Errors: IoError, when the descriptor cannot seek.
 :##
-extend File tell() i64 | IoError:
+extend File tell(poke self) i64 | IoError:
     return self.seek(0 as i64, SeekFrom.Current)??
 
 ##:

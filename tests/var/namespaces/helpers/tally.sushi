@@ -1,0 +1,11 @@
+# A unit whose variables are reached behind an alias.
+
+public struct Pair:
+    i32 a
+    i32 b
+
+public var i32 count = 0
+
+public var Pair pair = Pair(1, 2)
+
+public const i32 STEP = 10

@@ -1,0 +1,10 @@
+# A `let` bound straight from an owning unit variable would be a move, and a unit
+# variable is never moved out of. Borrow it, or clone it.
+# EXPECT_ERROR_CODE: CE2436
+
+var i32[] table = from([])
+
+fn main() i32:
+    let i32[] mine = table
+    println("{mine.len()}")
+    return Result.Ok(0)

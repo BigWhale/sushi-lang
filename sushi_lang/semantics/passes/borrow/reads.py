@@ -165,7 +165,7 @@ def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
 
 
 def constant_type(checker: 'BorrowChecker', name: str) -> Optional[Type]:
-    """The declared type of a CONSTANT, for a bare name that is no local.
+    """The declared type of a CONSTANT or a unit variable, for a bare name that is no local.
 
     A constant lives in `.rodata` and can never be moved out of, so an index into one
     is a read through an owner like any other. Without its type the read answered "no
@@ -178,6 +178,21 @@ def constant_type(checker: 'BorrowChecker', name: str) -> Optional[Type]:
         return None
     sig = constants.lookup(name, checker.unit_name, checker.scope)
     return getattr(sig, "const_type", None)
+
+
+def unit_variables(checker: 'BorrowChecker'):
+    """Every `var` this function can name, `(name, ConstSig)` -- the unit's own first.
+
+    A unit variable is storage no function owns, so it gets a `BorrowState` at function
+    entry (`is_unit_var`) rather than at a `let`: borrowable, freezable by a `let`-borrow
+    out of it, and never moved out of (docs/design/unit-storage.md).
+    """
+    tables = getattr(checker, "tables", None)
+    constants = getattr(tables, "constants", None) if tables is not None else None
+    if constants is None:
+        return []
+    visible = {**constants.by_name, **constants.by_unit.get(checker.unit_name, {})}
+    return [(name, sig) for name, sig in visible.items() if sig.is_var]
 
 
 def _field_type(checker: 'BorrowChecker', expr: MemberAccess) -> Optional[Type]:

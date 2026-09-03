@@ -1,0 +1,16 @@
+# A binary library's public variable reaches the consumer through the manifest's
+# `link_symbol`: the consumer declares the storage, the library's bitcode defines it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n12\n42\n"
+# EXPECT_NO_LEAKS
+
+use <lib/var_bin_lib>
+
+fn main() i32:
+    hit()
+    hit()
+    println("{hits}")
+    hits := hits + 10
+    println("{hits}")
+    println("{secret_plus(2).realise(0)}")
+    return Result.Ok(0)

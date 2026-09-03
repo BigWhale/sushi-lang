@@ -1,0 +1,8 @@
+# The write side of the same fence: another unit cannot rebind a private variable.
+# EXPECT_ERROR_CODE: CE3005
+
+use "helpers/state"
+
+fn main() i32:
+    hidden := 1
+    return Result.Ok(0)

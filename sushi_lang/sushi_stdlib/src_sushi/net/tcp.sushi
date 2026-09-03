@@ -122,7 +122,7 @@ extend TcpStream with Reader:
     - Returns: The text that arrived, empty when the peer closed.
     - Errors: IoError, when the read failed.
     :##
-    fn read(i32 max) string | IoError:
+    fn read(poke self, i32 max) string | IoError:
         let u8[] chunk = self.read_bytes(max)??
         return chunk.to_string()
 
@@ -136,7 +136,7 @@ extend TcpStream with Reader:
     - Returns: The bytes that arrived, empty when the peer closed.
     - Errors: IoError, when the read failed.
     :##
-    fn read_bytes(i32 max) u8[] | IoError:
+    fn read_bytes(poke self, i32 max) u8[] | IoError:
         match sock_recv(self.fd, max):
             Result.Ok(nom chunk) -> return chunk
             Result.Err(e) -> return Result.Err(e.to_io())
@@ -152,7 +152,7 @@ extend TcpStream with Writer:
     - Returns: Nothing.
     - Errors: IoError, when a write failed before the text was gone.
     :##
-    fn write(string data) ~ | IoError:
+    fn write(poke self, string data) ~ | IoError:
         # A socket has no send_str primitive, so the text is copied into bytes here. A file
         # avoids that with fd_write_str, which hands write(2) the string's own fat pointer.
         # One allocation against one syscall is not worth a new generator yet.
@@ -167,7 +167,7 @@ extend TcpStream with Writer:
     - Returns: Nothing.
     - Errors: IoError, when a write failed before the buffer was gone.
     :##
-    fn write_bytes(u8[] data) ~ | IoError:
+    fn write_bytes(poke self, u8[] data) ~ | IoError:
         match self.send_all(data):
             Result.Ok(_) -> return ~
             Result.Err(e) -> return Result.Err(e.to_io())
@@ -181,7 +181,7 @@ extend TcpStream with Writer:
     - Returns: Nothing.
     - Errors: IoError, never in practice.
     :##
-    fn flush() ~ | IoError:
+    fn flush(poke self) ~ | IoError:
         return ~
 
 ##:

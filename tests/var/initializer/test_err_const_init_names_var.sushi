@@ -1,0 +1,10 @@
+# A constant is folded while compiling; a unit variable has a run-time value. So a
+# constant cannot read one.
+# EXPECT_ERROR_CODE: CE0108
+
+var i32 counter = 3
+const i32 START = counter
+
+fn main() i32:
+    println("{START}")
+    return Result.Ok(0)

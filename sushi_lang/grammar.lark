@@ -1,9 +1,12 @@
 ?start: program
 
 program: (_NEWLINE | DOC_BLOCK | toplevel)+
-toplevel: use_stmt | const_def | struct_def | enum_def | perk_def | function_def | extend_stmt | external_block
+toplevel: use_stmt | const_def | var_def | struct_def | enum_def | perk_def | function_def | extend_stmt | external_block
 
 const_def: PUBLIC? CONST type NAME "=" expr _NEWLINE
+# Unit-level storage (docs/design/unit-storage.md): the same shape as a constant, and
+# a different kind. A `const` has no address; a `var` has one.
+var_def: PUBLIC? VAR type NAME "=" expr _NEWLINE
 use_stmt: USE (stdlib_import | lib_import | user_import) [AS NAME] _NEWLINE
 stdlib_import: LT use_path GT
 lib_import: LT "lib" "/" use_path GT
@@ -244,6 +247,7 @@ named_arg: NAME ":" expr
 # Tokens
 #
 CONST: "const"
+VAR.2: /var\b/
 STRUCT: "struct"
 ENUM: "enum"
 PERK.2: /perk\b/

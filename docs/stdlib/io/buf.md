@@ -16,7 +16,10 @@ The module is bundled Sushi source, merged as a compilation unit when imported. 
 ## Overview
 
 `BufReader@(R)` wraps anything that satisfies `Reader`, `BufWriter@(W)` anything that
-satisfies `Writer`. A `File` and a `TcpStream` are buffered by the same code.
+satisfies `Writer`. A `File` and a `TcpStream` are buffered by the same code. Both
+buffered types satisfy the contract they wrap: a `BufReader@(File)` is a `Reader` and a
+`BufWriter@(File)` is a `Writer`, so a generic written over the contract takes the
+buffered handle and the plain one alike.
 
 | type | constructor | reads / writes | ends with |
 |---|---|---|---|
@@ -205,21 +208,48 @@ what `finish()` is for -- it is the same drain with the failure still visible.
 
 Forgetting `finish()` does not lose the bytes. It loses the answer to "did they arrive?".
 
-## Neither type implements Reader or Writer
+## Both types implement their contract
 
-This is a refusal rather than an omission, and it is worth stating plainly because the names
-are the contracts' names.
+`BufReader@(R)` implements `Reader` and `BufWriter@(W)` implements `Writer`. This used to
+be refused: a buffered read MOVES the cursor, so its receiver had to be `poke self`, and
+a perk implementation must match its contract's receiver exactly (**CE4004**), while the
+contracts declared a read-only receiver -- which they could not widen, because the
+console handles were `File` CONSTANTS and a `poke self` method on a constant is
+**CE2400**.
 
-A buffered read MOVES the cursor, so its receiver has to be `poke self`. A perk
-implementation must match its contract's receiver exactly (**CE4004**), and the contracts
-declare a read-only receiver. Widening them to `poke self` is not available either: the
-console handles are `File` CONSTANTS, and a `poke self` method on a constant is
-**CE2400** -- so `stdout.write(...)` would stop compiling.
+The ruling on #546 took both moves the mainstream answers agree on: every contract
+method takes `poke self` (Rust's `&mut self`, Go's pointer receiver), and the console
+handles became unit variables (`public var File stdout`, Go's `os.Stdout`), so
+`stdout.write(...)` kept its spelling. A generic over a contract now takes its handle
+`poke`:
 
-So a function written `@(R: Reader)` takes a `File` or a `TcpStream` and does not take a
-`BufReader@(File)`. Call the buffered methods directly instead. The two ways out, neither
-taken yet, are a second perk for the buffered direction or
-receiver modes on a contract that a constant can still satisfy.
+```sushi
+use <io/fs>
+use <io/buf>
+use <io/contracts>
+
+fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
+    dst.write(line)??
+    dst.write("\n")??
+    dst.flush()??
+    return Result.Ok(~)
+
+fn run() ~ | IoError:
+    emit(poke stdout, "to the console")??
+    let BufWriter@(File) w = buf_writer(nom File(fd: STDOUT_FD, owned: false), 4096)??
+    emit(poke w, "through a buffer")??
+    w.finish()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
+```
+
+The extra verbs only a buffer can offer -- `read_line`, `read_all`, `lines`, `fill`,
+`write_line` -- stay concrete methods of the buffered type. A contract for that direction
+(Rust's `BufRead`) is a separate, later question.
 
 ## Cost
 

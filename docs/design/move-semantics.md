@@ -164,8 +164,8 @@ That feature landed, but not in the shape this section anticipated: rather than 
 (`ownership-conventions.md` §8), tracked with a real lifetime (**CE2412** on mutating the owner
 while the binding is live) and a real consuming-use check (**CE2411**, `.clone()` as the escape).
 The explicit reference-typed-`let` syntax this section imagined was itself proposed later as #252,
-assessed against the now-shipped implicit mechanism, and rejected as **CE2413** — it would have been
-a second, overlapping way to say the same thing. See `ownership-conventions.md` §8.4 for the
+first rejected as **CE2413** against the implicit mechanism, and then built as #409 (2026-09-03):
+`let poke T x = <place>` is the WRITE path the implicit binding cannot be. See `ownership-conventions.md` §8.4 for the
 untangled numbering (#242 is this section's issue; #252 is the syntax that was rejected). The
 sequencing this section worried about — "gated on the same missing feature" — is therefore unblocked:
 the gate opened, just via a different mechanism than the one anticipated below. The rest of this
@@ -370,10 +370,10 @@ locations** of the relational diagnostic; value tests use `EXPECT_STDOUT_EXACT`.
 - **CW warning or hard error on `MemberAccess` deep copies** — **done**, and superseded by a better
   answer than either option this bullet considered. See §3.1: neither a warning nor an error was
   needed, because the read stopped copying (or erroring) and started borrowing.
-- **`let`-borrow bindings** (`let peek T x = s.field`) — **landed, in a different shape.** Not the
-  explicit reference-typed syntax this bullet named (that syntax was assessed later, as #252, and
-  rejected as CE2413) — instead, every `let` reading through an owner implicitly borrows. See
-  `docs/design/ownership-conventions.md` §8.
+- **`let`-borrow bindings** (`let peek T x = s.field`) — **landed, twice.** First every `let`
+  reading through an owner implicitly borrows (§8 of `docs/design/ownership-conventions.md`);
+  then #409 (2026-09-03) added the explicit reference-typed spelling, `let poke T x = <place>` /
+  `let peek T x = <place>`, as a checked pointer binding (`borrowing.md` mechanism 3b).
 - **`Own@(T).clone()`** — shipped. `Own@(T)` has a `.clone()` (`backend/generics/own.py`), the
   explicit escape from CE2411 for an `Own@(T).get()` deref.
 

@@ -1,0 +1,9 @@
+# The binary library keeps `secret`. The manifest names it, so the answer is "not
+# yours" (CE3005) and not "no such name".
+# EXPECT_ERROR_CODE: CE3005
+
+use <lib/var_bin_lib>
+
+fn main() i32:
+    println("{secret}")
+    return Result.Ok(0)

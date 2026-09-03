@@ -14,28 +14,37 @@ use <io/fs>
 
 `print` and `println` are statements and need no import at all.
 
-`stdin`, `stdout` and `stderr` are ordinary **`File` constants** over descriptors 0, 1
-and 2, declared in [`<io/fs>`](fs.md) -- so they carry the whole `File` surface, and a
-function that takes a `File` takes either a file or the console:
+`stdin`, `stdout` and `stderr` are ordinary **`File` unit variables** over descriptors 0,
+1 and 2, declared `public var` in [`<io/fs>`](fs.md) -- so they carry the whole `File`
+surface, and a function that takes a `poke File` takes either a file or the console:
 
 ```sushi
 use <io/fs>
 
-fn banner(File out) ~ | IoError:
+fn banner(poke File out) ~ | IoError:
     out.writeln("Mostly Harmless")??
     return Result.Ok(~)
 
 fn main() i32:
-    match banner(stdout):
+    match banner(poke stdout):
         Result.Ok(_) -> return Result.Ok(0)
         Result.Err(_) -> return Result.Ok(1)
 ```
 
-Two consequences worth knowing:
+The parameter is `poke` because every write and every read is a `poke self` method (the
+contracts in [`<io/contracts>`](contracts.md) declare them so, for the buffered handles'
+sake), and a write through a plain borrow is **CE2422**.
 
-- **The console cannot be closed.** A constant lives in read-only memory, so
-  `stdout.close()` is **CE2400** -- refused while compiling, because `close()` CONSUMES
-  its handle and a constant has no owner to hand it away from.
+Three consequences worth knowing:
+
+- **The console cannot be closed.** A unit variable is storage the program keeps and is
+  never moved out of, so `stdout.close()` -- a `nom self` method -- is **CE2436**, refused
+  while compiling.
+- **The console can be redirected.** `stdout := open("run.log", FileMode.Write())??`
+  drops the console handle (it owns nothing, so nothing closes) and every later
+  `stdout.write(...)` lands in the file; `stdout := File(fd: STDOUT_FD, owned: false)`
+  puts the terminal back. `println` reaches descriptor 1 directly and never sees the
+  variable.
 - **The three are not typed apart.** One `File` type means `stdin.write("x")` compiles;
   it fails at run time with `EBADF`. The type used to forbid it. That is the price of a
   single handle type, and it is what makes a buffered writer over the console possible
@@ -529,7 +538,7 @@ use <io/fs>
 use <io/buf>
 
 fn emit_many(i32 count) ~ | IoError:
-    let BufWriter@(File) out = buf_writer(nom stdout, 8192)??
+    let BufWriter@(File) out = buf_writer(nom stdout.share()??, 8192)??
     foreach(i in 0..count):
         out.write_line("line {i}")??
     out.finish()??               # the ONE drain, and its failure is seen
@@ -542,8 +551,11 @@ fn main() i32:
         Result.Err(_) -> return Result.Ok(1)
 ```
 
-`nom stdout` hands the constant over, and the writer holds it for good -- but descriptor
-1 survives, because a console handle carries `owned: false` and its drop closes nothing.
+A `BufWriter` takes a handle it OWNS, and the console handle is a unit variable that is
+never moved out of (`nom stdout` is **CE2436**) -- so `stdout.share()` hands the writer a
+second descriptor over the same terminal, and dropping the writer closes that one only.
+`File(fd: STDOUT_FD, owned: false)` is the other spelling: a fresh handle that closes
+nothing.
 
 Note what changes with the buffer: ordering against `stderr` is no longer free, because
 `stderr` still writes immediately while the buffered `stdout` waits for its drain. That

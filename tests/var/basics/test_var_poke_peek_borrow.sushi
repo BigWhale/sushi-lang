@@ -1,0 +1,21 @@
+# A unit variable is borrowable like a local: `poke` hands its address to a writer
+# and `peek` to a reader. A constant has no address to hand over (CE2400).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "10\n11\n"
+# EXPECT_NO_LEAKS
+
+var i32 counter = 10
+
+fn bump(poke i32 n) ~:
+    n := n + 1
+    return Result.Ok(~)
+
+fn show(peek i32 n) ~:
+    println("{n}")
+    return Result.Ok(~)
+
+fn main() i32:
+    show(peek counter)
+    bump(poke counter)
+    show(peek counter)
+    return Result.Ok(0)

@@ -1,0 +1,12 @@
+# One `poke` binding of an owner at a time (CE2403): two live `let poke` bindings of
+# one variable would be two writers with no order between them (issue #252, #409).
+# EXPECT_ERROR_CODE: CE2403
+
+fn main() i32:
+    let i32 x = 42
+    let poke i32 a = x
+    let poke i32 b = x
+    a := 1
+    b := 2
+    println("{x}")
+    return Result.Ok(0)

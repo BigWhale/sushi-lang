@@ -1,0 +1,11 @@
+# A unit variable is a declaration like any other: the doc-completeness lint asks it
+# for a block and reports CW7002 when there is none.
+# COMPILER_FLAGS: --warn-missing-docs
+# EXPECT_ERROR_CODE: CW7002
+
+##: The unit block. :##
+
+var i32 counter = 0
+
+fn main() i32:
+    return Result.Ok(0)

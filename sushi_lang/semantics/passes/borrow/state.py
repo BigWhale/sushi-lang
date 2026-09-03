@@ -46,6 +46,7 @@ class BorrowState:
     is_destroyed: bool = False          # released by an explicit `.destroy()`
     declared_branch_depth: int = 0      # checker.branch_depth at declaration (#414)
     is_argv_view: bool = False          # main's `string[] args`; moving it frees argv
+    is_unit_var: bool = False           # a `var`: borrowable, never moved out of (CE2436)
     is_borrowed_binding: bool = False
     is_let_borrow: bool = False
     is_borrow_param: bool = False

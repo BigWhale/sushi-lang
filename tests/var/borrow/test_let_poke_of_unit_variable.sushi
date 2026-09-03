@@ -1,0 +1,13 @@
+# A `let poke` may bind a unit variable: the binding points at the storage, and the
+# write reaches it (the same binding over a constant is CE2400).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_NO_LEAKS
+
+var i32 counter = 0
+
+fn main() i32:
+    let poke i32 c = counter
+    c := 7
+    println("{counter}")
+    return Result.Ok(0)

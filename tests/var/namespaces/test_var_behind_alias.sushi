@@ -1,0 +1,20 @@
+# `t.count` follows a constant behind an alias, with the storage kept as the target:
+# a read, a rebind, a `poke` and a field write all reach the one variable.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0 1\n14 9\n"
+# EXPECT_NO_LEAKS
+
+use "helpers/tally" as t
+
+fn bump(poke i32 n) ~:
+    n := n + 1
+    return Result.Ok(~)
+
+fn main() i32:
+    println("{t.count} {t.pair.a}")
+    t.count := 3
+    bump(poke t.count)
+    t.count := t.count + t.STEP
+    t.pair.a := 9
+    println("{t.count} {t.pair.a}")
+    return Result.Ok(0)

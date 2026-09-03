@@ -1,0 +1,19 @@
+# A string unit variable starts as a literal (owns no heap) and takes an owned string
+# on rebind. The second rebind frees the first owned value, exactly as a local's
+# rebind does. No leak directive: the last value is never freed, by design.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly\nMostly Harmless\nMostly Harmless!\n"
+
+var string name = "Mostly"
+
+fn extend_name(string suffix) ~:
+    name := "{name}{suffix}"
+    return Result.Ok(~)
+
+fn main() i32:
+    println(name)
+    extend_name(" Harmless")
+    println(name)
+    extend_name("!")
+    println(name)
+    return Result.Ok(0)

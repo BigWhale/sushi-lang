@@ -45,7 +45,7 @@ public perk Reader:
     - Returns: The text that arrived, empty at end of input.
     - Errors: IoError, when the read failed.
     :##
-    fn read(i32 max) string | IoError
+    fn read(poke self, i32 max) string | IoError
 
     ##:
     Reads what one read gives, as bytes.
@@ -54,7 +54,7 @@ public perk Reader:
     - Returns: The bytes that arrived, empty at end of input.
     - Errors: IoError, when the read failed.
     :##
-    fn read_bytes(i32 max) u8[] | IoError
+    fn read_bytes(poke self, i32 max) u8[] | IoError
 
 ##:
 A handle bytes can be written to.
@@ -72,7 +72,7 @@ public perk Writer:
     - Returns: Nothing.
     - Errors: IoError, when the write failed.
     :##
-    fn write(string data) ~ | IoError
+    fn write(poke self, string data) ~ | IoError
 
     ##:
     Writes bytes, and does not stop until every one has gone.
@@ -81,7 +81,7 @@ public perk Writer:
     - Returns: Nothing.
     - Errors: IoError, when the write failed.
     :##
-    fn write_bytes(u8[] data) ~ | IoError
+    fn write_bytes(poke self, u8[] data) ~ | IoError
 
     ##:
     Makes sure what was written has left this layer.
@@ -92,7 +92,7 @@ public perk Writer:
     - Returns: Nothing.
     - Errors: IoError, when the flush failed.
     :##
-    fn flush() ~ | IoError
+    fn flush(poke self) ~ | IoError
 
 ##:
 A handle whose read and write position can be moved.
@@ -109,4 +109,4 @@ public perk Seek:
     - Returns: The new position, in bytes from the start.
     - Errors: IoError, when the handle cannot seek -- a pipe cannot.
     :##
-    fn seek(i64 offset, SeekFrom origin) i64 | IoError
+    fn seek(poke self, i64 offset, SeekFrom origin) i64 | IoError

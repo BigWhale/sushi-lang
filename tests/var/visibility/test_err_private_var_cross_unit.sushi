@@ -1,0 +1,9 @@
+# A unit variable is private by default, like the five marked kinds: reading another
+# unit's unmarked one is CE3005.
+# EXPECT_ERROR_CODE: CE3005
+
+use "helpers/state"
+
+fn main() i32:
+    println("{hidden}")
+    return Result.Ok(0)

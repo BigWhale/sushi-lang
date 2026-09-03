@@ -16,11 +16,13 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
     from sushi_lang.semantics.typesys import ReferenceType
 
     if isinstance(expr.expr, Name):
-        # Original logic: borrow a variable. Only a local is borrowable, and
-        # find_local_slot raises CE0055 itself if the name is not one -- which is exactly
-        # what the `except KeyError` here used to re-raise by hand.
+        # A local's slot, or the global backing a unit variable (unit-storage.md); a
+        # constant never reaches here (CE2400 in the scope pass).
+        from sushi_lang.backend.expressions.names import resolve_name_slot
         var_name = expr.expr.id
-        slot = codegen.memory.find_local_slot(var_name)
+        slot = resolve_name_slot(codegen, var_name)
+        if slot is None:
+            raise_internal_error("CE0055", name=var_name)
 
         if hasattr(codegen, 'variable_types') and var_name in codegen.variable_types:
             semantic_type = codegen.variable_types[var_name]
@@ -30,11 +32,43 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
         return slot  # Return the pointer directly (zero-cost)
 
     elif isinstance(expr.expr, MemberAccess):
+        from sushi_lang.backend.expressions.names import namespaced_storage
+        storage = namespaced_storage(codegen, expr.expr)
+        if storage is not None:
+            return storage[1]  # `poke geo.count`: the variable's own address
         return emit_member_access_borrow(codegen, expr.expr)
 
     else:
         # Should never reach here (borrow checker validates this)
         raise_internal_error("CE0100", expr=type(expr.expr).__name__)
+
+
+def emit_place_address(codegen: 'LLVMCodegen', expr) -> ir.Value:
+    """The address of a PLACE: what a `let poke` / `let peek` binding stores (#409).
+
+    A name is its slot (or the pointer a reference slot holds, or a unit variable's
+    global); a member chain is a GEP; an index is the bounds-checked element pointer; an
+    `Own@(T).get()` is the payload's heap cell. The typecheck pass refused every other
+    shape (CE2404), so there is no fallback here.
+    """
+    from sushi_lang.semantics.ast import DotCall, IndexAccess, MemberAccess, MethodCall, Name
+
+    if isinstance(expr, Name):
+        return emit_borrow(codegen, Borrow(expr=expr, mutability="poke", loc=expr.loc))
+    if isinstance(expr, MemberAccess):
+        from sushi_lang.backend.expressions.names import namespaced_storage
+        storage = namespaced_storage(codegen, expr)
+        if storage is not None:
+            return storage[1]
+        return emit_member_access_borrow(codegen, expr)
+    if isinstance(expr, IndexAccess):
+        from sushi_lang.backend.types.arrays.indexing import emit_element_pointer
+        return emit_element_pointer(codegen, expr)
+    if isinstance(expr, (MethodCall, DotCall)) and expr.method == "get" and not expr.args:
+        # `o.get()`: the Own is `{T*}` by value, and its one field is the cell.
+        own_value = codegen.expressions.emit_expr(expr.receiver)
+        return codegen.builder.extract_value(own_value, 0, name="own_payload_ptr")
+    raise_internal_error("CE0100", expr=type(expr).__name__)
 
 
 def emit_member_access_borrow(codegen: 'LLVMCodegen', expr) -> ir.Value:

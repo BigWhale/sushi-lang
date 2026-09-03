@@ -1,8 +1,8 @@
-"""Constant definition parsing."""
+"""Constant and unit-variable definition parsing."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree
-from sushi_lang.semantics.ast import ConstDef
+from sushi_lang.semantics.ast import ConstDef, VarDef
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_name, ice, read_public)
@@ -16,6 +16,15 @@ if TYPE_CHECKING:
 
 def parse_constdef(t: Tree, ast_builder: 'ASTBuilder') -> ConstDef:
     """Parse const_def: CONST type NAME "=" expr"""
+    return _parse_valued_decl(t, ast_builder, ConstDef, "constant")
+
+
+def parse_vardef(t: Tree, ast_builder: 'ASTBuilder') -> VarDef:
+    """Parse var_def: VAR type NAME "=" expr -- the same shape, a different kind."""
+    return _parse_valued_decl(t, ast_builder, VarDef, "variable")
+
+
+def _parse_valued_decl(t: Tree, ast_builder: 'ASTBuilder', node_cls, kind: str):
 
     type_node = None
     for child in t.children:
@@ -41,11 +50,11 @@ def parse_constdef(t: Tree, ast_builder: 'ASTBuilder') -> ConstDef:
 
     marked, public_span = read_public(t.children)
 
-    return ConstDef(
+    return node_cls(
         name=str(name_tok),
         ty=const_type,
         value=value,
-        is_public=declared_public("constant", marked),
+        is_public=declared_public(kind, marked),
         loc=span_of(t),
         name_span=span_of(name_tok),
         type_span=span_of(type_node),

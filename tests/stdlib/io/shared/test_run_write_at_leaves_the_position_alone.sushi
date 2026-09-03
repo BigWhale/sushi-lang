@@ -26,7 +26,7 @@ fn main() i32:
             return Result.Ok(1)
 
     match open("write_at_probe.txt", FileMode.Read()):
-        Result.Ok(r) ->
+        Result.Ok(nom r) ->
             let string text = r.read_all().realise("")
             println("{text}")
         Result.Err(_) -> println("reopen failed")

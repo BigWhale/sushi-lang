@@ -48,7 +48,7 @@ _PTR_RULE_POSITIONS = frozenset({"return", "error", "parameter"})
 # extension is as visible as its target type, so asking whether the target is private
 # after asking whether it is public would answer itself.
 _LEAK_RULE_KINDS = frozenset({
-    "constant", "struct", "enum", "function", "extension", "perk method",
+    "constant", "variable", "struct", "enum", "function", "extension", "perk method",
     "perk implementation",
 })
 _LEAK_RULE_POSITIONS = frozenset({
@@ -60,6 +60,7 @@ _LEAK_RULE_POSITIONS = frozenset({
 # reading an error wants the thing they wrote, so an extension is a method here.
 _KIND_WORD = {
     "extension": "extension method",
+    "variable": "unit variable",
 }
 
 # A position that belongs to an inner node needs the inner word, because that is what the

@@ -1,0 +1,20 @@
+# #409: a checked `let poke` binding is a pointer INTO an Own's payload, so a write
+# through it reaches the heap cell -- the zero-copy mutation path a bare Own@(T) local
+# had none of. The owner is read again only after the binding's last use.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1 0\n42 2\n"
+# EXPECT_NO_LEAKS
+
+struct Holder:
+    i32 n
+    i32[] items
+
+fn main() i32:
+    let Own@(Holder) o = Own.alloc(Holder(1, from([])))
+    println("{o.get().n} {o.get().items.len()}")
+    let poke Holder h = o.get()
+    h.items.push(9)
+    h.items.push(8)
+    h.n := 42
+    println("{o.get().n} {o.get().items.len()}")
+    return Result.Ok(0)

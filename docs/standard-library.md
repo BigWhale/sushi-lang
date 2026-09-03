@@ -174,7 +174,7 @@ match open("output.txt", FileMode.Write()):
         println("Failed to open")
 
 # Buffered, when the loop is long: one system call per window, not per line
-let BufWriter@(File) out = buf_writer(nom stdout, 8192)??
+let BufWriter@(File) out = buf_writer(nom stdout.share()??, 8192)??
 out.write_line("Mostly Harmless")??
 out.finish()??
 ```
@@ -229,7 +229,7 @@ out.finish()??
 **Console I/O:**
 - `println()`, `print()` - Output with/without newline
 - `stdin.readln()` - One line, or `Maybe.None` at end of input
-- `stdin`, `stdout`, `stderr` - `File` constants over descriptors 0, 1 and 2
+- `stdin`, `stdout`, `stderr` - `File` unit variables (`public var`) over descriptors 0, 1 and 2
 
 **File I/O:**
 - `open()` - Open files with Read/Write/Append modes

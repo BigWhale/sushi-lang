@@ -30,6 +30,7 @@ from sushi_lang.semantics.ownership import ConsumingUse, Provenance
 from sushi_lang.semantics.typesys import ForeignPtrType, ReferenceType
 
 from .bindings import (
+    bind_let_reference,
     BindingScope,
     register_pattern_bindings,
     reject_partial_take,
@@ -113,6 +114,11 @@ def _branch(checker: 'BorrowChecker'):
 
 def _check_let(checker: 'BorrowChecker', stmt: Let) -> None:
     """`let T x = v`: declare the binding, then give it its initializer's provenance."""
+    if isinstance(stmt.ty, ReferenceType):
+        # `let poke T x = <place>` (#409): a borrow binding, not a value.
+        bind_let_reference(checker, stmt)
+        clear_borrows(checker)
+        return
     checker.borrow_state[stmt.name] = BorrowState(
         name=stmt.name, var_type=stmt.ty, declared_at_span=stmt.loc,
         declared_branch_depth=checker.branch_depth,

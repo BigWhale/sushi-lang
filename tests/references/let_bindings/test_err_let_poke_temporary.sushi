@@ -1,0 +1,14 @@
+# A `let poke` needs a PLACE -- a local, a field, an element, an Own's payload. A call
+# result is a temporary with no stable address (CE2404).
+# EXPECT_ERROR_CODE: CE2404
+
+struct Holder:
+    i32 n
+
+fn make() Holder:
+    return Result.Ok(Holder(1))
+
+fn main() i32:
+    let poke Holder h = make().realise(Holder(0))
+    h.n := 2
+    return Result.Ok(0)

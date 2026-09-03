@@ -484,6 +484,24 @@ fn print_constants(MsgValue meta, Opts o) ~:
     println("")
     return Result.Ok(~)
 
+fn print_variables(MsgValue meta, Opts o) ~:
+    let MsgValue vars = ml_get(meta, "public_variables")??
+    let i32 n = ml_len(vars)??
+    if (not section("Public Variables", n, o)??):
+        return Result.Ok(~)
+    let bool pending = false
+    let i32 i = 0
+    while (i < n):
+        let MsgValue v = ml_at(vars, i)??
+        pending := open_record(pending)??
+        let string t = to_surface(ml_get_str(v, "type")??)??
+        let string name = ml_get_str(v, "name")??
+        println("  var {t} {name}")
+        pending := print_doc(v, "    ", o)??
+        i := i + 1
+    println("")
+    return Result.Ok(~)
+
 # render_named_type_params: the `@(T, U)` suffix of a generic struct or enum record.
 fn render_named_type_params(MsgValue rec) string:
     if (not ml_get_bool(rec, "is_generic")??):
@@ -778,6 +796,7 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     print_functions(meta, o)??
     print_generic_functions(meta, o)??
     print_constants(meta, o)??
+    print_variables(meta, o)??
     print_structs(meta, o)??
     print_generic_named(meta, "generic_structs", "Generic Structs", "struct", o)??
     print_enums(meta, o)??

@@ -168,6 +168,11 @@ def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
 
     decision = classify(provenance,
                         checker.types.type_class_of_source(state, state.var_type))
+    if state.is_unit_var:
+        # Storage the program keeps is never moved out of; a plain value copies.
+        if decision is Ownership.MOVE:
+            checker.err.emit(er.ERR.CE2436, use_span, name=name)
+        return
     if decision is Ownership.MOVE:
         # The same value cannot be borrowed and handed away in ONE statement (CE2401).
         # Here because the counters are live: the call arm registers every argument's
@@ -226,6 +231,12 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
     ty = src_state.var_type if src_state is not None else stmt.ty
 
     decision = classify(provenance, checker.types.type_class_of_source(src_state, ty))
+    if src_state is not None and src_state.is_unit_var:
+        # The `let` twin of the rule in `consume_named`: a binding straight from an
+        # owning unit variable would be a move, and there is none (CE2436).
+        if decision is Ownership.MOVE:
+            checker.err.emit(er.ERR.CE2436, expr.loc, name=expr.id)
+        return
     if decision is Ownership.MOVE:
         src_state.is_moved = True
         src_state.moved_at_span = src_state.moved_at_span or expr.loc

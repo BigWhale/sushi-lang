@@ -24,6 +24,8 @@ from sushi_lang.semantics.visibility import (
 EVERY_KIND = '''\
 const i32 ANSWER = 42
 
+var i32 counter = 0
+
 struct Point:
     i32 x
 

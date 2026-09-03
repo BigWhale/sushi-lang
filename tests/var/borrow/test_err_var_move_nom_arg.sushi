@@ -1,0 +1,13 @@
+# A unit variable is never moved out of: it owns its storage for the whole program,
+# so handing it to a `nom` parameter is refused the way `main`'s argv view is.
+# EXPECT_ERROR_CODE: CE2436
+
+var i32[] table = from([])
+
+fn eat(nom i32[] xs) ~:
+    println("{xs.len()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    eat(nom table)
+    return Result.Ok(0)

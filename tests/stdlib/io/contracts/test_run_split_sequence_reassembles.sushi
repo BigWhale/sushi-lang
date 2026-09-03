@@ -16,7 +16,7 @@ fn write_probe(string path) ~ | IoError:
     w.write("€!")??
     return Result.Ok(~)
 
-fn read_split@(R: Reader)(R src) string | IoError:
+fn read_split@(R: Reader)(poke R src) string | IoError:
     let u8[] all = from([])
     let u8[] first = src.read_bytes(2)??
     println("first: {first.len()}")
@@ -33,8 +33,8 @@ fn main() i32:
             println("write failed")
             return Result.Ok(1)
     match open("split_sequence_probe.txt", FileMode.Read()):
-        Result.Ok(r) ->
-            match read_split(r):
+        Result.Ok(nom r) ->
+            match read_split(poke r):
                 Result.Ok(text) -> println("text: {text}")
                 Result.Err(_) -> println("read failed")
         Result.Err(_) -> println("open failed")

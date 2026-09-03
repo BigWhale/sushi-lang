@@ -47,9 +47,12 @@ Three things follow from that, and each surprises somebody:
   the failure of that flush -- so buffering is a separate type that a caller opts into,
   [`BufReader` and `BufWriter`](buf.md).
 
-Every method is a plain borrow except `close()`, which takes the handle. A file's
-position lives in the KERNEL, not in the struct, so reading and writing need no mutable
-receiver.
+The contract methods -- `read`, `write`, `flush`, `seek`, and the conveniences over
+them (`read_all`, `readch`, `writeln`, `tell`) -- take `poke self`: the receiver every
+`Reader` and `Writer` declares, so that a BUFFERED handle can implement them. A file's
+own position lives in the KERNEL, so the mode costs it nothing, but it does mean the
+handle you write through must be writable storage: a `let` local, a `poke` parameter or
+a `nom`/`poke` match binding -- never a bare borrow. `close()` takes the handle.
 
 `stdin`, `stdout` and `stderr` are `File` values too -- see [Console I/O](console.md).
 
@@ -124,13 +127,13 @@ callable on a `TcpStream` too, which is what `<io/contracts>` is for.
 
 | method | signature | provider |
 |---|---|---|
-| `read` | `(i32 max) string \| IoError` -- one read, as text | `Reader` |
-| `read_bytes` | `(i32 max) u8[] \| IoError` -- one read, as bytes | `Reader` |
-| `write` | `(string data) ~ \| IoError` -- every byte, or an error | `Writer` |
-| `write_bytes` | `(u8[] data) ~ \| IoError` | `Writer` |
-| `flush` | `() ~ \| IoError` -- a successful no-op on a descriptor | `Writer` |
-| `seek` | `(i64 offset, SeekFrom origin) i64 \| IoError` -- answers the NEW position | `Seek` |
-| `read_all` | `() string \| IoError` -- the whole file, from the current position | `File` |
+| `read` | `(poke self, i32 max) string \| IoError` -- one read, as text | `Reader` |
+| `read_bytes` | `(poke self, i32 max) u8[] \| IoError` -- one read, as bytes | `Reader` |
+| `write` | `(poke self, string data) ~ \| IoError` -- every byte, or an error | `Writer` |
+| `write_bytes` | `(poke self, u8[] data) ~ \| IoError` | `Writer` |
+| `flush` | `(poke self) ~ \| IoError` -- a successful no-op on a descriptor | `Writer` |
+| `seek` | `(poke self, i64 offset, SeekFrom origin) i64 \| IoError` -- answers the NEW position | `Seek` |
+| `read_all` | `(poke self) string \| IoError` -- the whole file, from the current position | `File` |
 | `readln` | `() Maybe@(string) \| IoError` -- one line, newline stripped; `None` at the end | `File` |
 | `readch` | `() string \| IoError` -- one byte, as text | `File` |
 | `writeln` | `(string data) ~ \| IoError` | `File` |
@@ -417,7 +420,7 @@ use <io/fs>
 
 fn main() i32:
     match stdout.share():
-        Result.Ok(out) -> out.writeln("Mostly Harmless")
+        Result.Ok(nom out) -> out.writeln("Mostly Harmless")
         Result.Err(_) -> println("no second handle")
     return Result.Ok(0)
 ```

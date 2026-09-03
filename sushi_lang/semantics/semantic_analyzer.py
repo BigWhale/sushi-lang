@@ -963,6 +963,11 @@ class SemanticAnalyzer:
             for record in manifest.get("public_constants", []) or []:
                 self._register_one_library_constant(
                     host_unit, lib_name, record, published=True)
+            # A unit variable's record carries the symbol of the storage the library
+            # defines; the consumer's backend declares it under that name.
+            for record in manifest.get("public_variables", []) or []:
+                self._register_one_library_constant(
+                    host_unit, lib_name, record, published=True)
             for record in templates.get("constants", []) or []:
                 self._register_one_library_constant(
                     host_unit, lib_name, record, published=False)
@@ -1011,7 +1016,10 @@ class SemanticAnalyzer:
 
         self.constants.by_name[const_name] = sig
         self.constants.order.append(const_name)
-        host_unit.ast.constants.append(const_defs[0])
+        decl = const_defs[0]
+        if record.get("link_symbol") and hasattr(decl, "link_symbol"):
+            decl.link_symbol = record["link_symbol"]
+        host_unit.ast.constants.append(decl)
 
     def _register_library_private_types(self) -> None:
         """Register the private structs and enums the export closure ships.

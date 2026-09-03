@@ -12,7 +12,7 @@ use <io/contracts>
 
 fn main() i32:
     match open("contract_chunk_probe.txt", FileMode.Write()):
-        Result.Ok(w) ->
+        Result.Ok(nom w) ->
             let i32 written = 0
             while (written < 5000):
                 w.write("x")
@@ -22,13 +22,13 @@ fn main() i32:
             return Result.Ok(1)
 
     match open("contract_chunk_probe.txt", FileMode.Read()):
-        Result.Ok(r) ->
+        Result.Ok(nom r) ->
             let string one = r.read(100).realise("")
             println("one read: {one.len()}")
         Result.Err(_) -> println("reopen failed")
 
     match open("contract_chunk_probe.txt", FileMode.Read()):
-        Result.Ok(r) ->
+        Result.Ok(nom r) ->
             let string all = r.read_all().realise("")
             println("whole file: {all.len()}")
         Result.Err(_) -> println("reopen failed")

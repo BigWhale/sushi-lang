@@ -1,0 +1,11 @@
+# A `peek` binding and a `poke` binding of one owner cannot both be live (CE2407): the
+# reader would see the writer's changes with no order between them.
+# EXPECT_ERROR_CODE: CE2407
+
+fn main() i32:
+    let i32 x = 42
+    let peek i32 p = x
+    let poke i32 a = x
+    a := 1
+    println("{p}")
+    return Result.Ok(0)
