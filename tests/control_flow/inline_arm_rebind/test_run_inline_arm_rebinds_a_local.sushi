@@ -1,0 +1,15 @@
+# The one-statement arm, written on the arrow. A rebind is a STATEMENT and the inline
+# body took only expressions, so `kept := v` was CE6001 while the same line in an
+# indented block compiled (#552).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n"
+
+fn main() i32:
+    let i32 kept = 0
+    let Maybe@(i32) m = Maybe.Some(3)
+    match m:
+        Maybe.Some(v) -> kept := v
+        Maybe.None -> ~
+    println("{kept}")
+    return Result.Ok(0)
