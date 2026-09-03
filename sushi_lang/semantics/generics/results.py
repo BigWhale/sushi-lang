@@ -201,6 +201,22 @@ def _differs_only_in_nested_resolution(stored, rebuilt, structs, enums) -> bool:
     return True
 
 
+def _names_an_unbuilt_instance(ty: Type, structs: dict, enums: dict) -> bool:
+    """Does a payload still spell a generic instance the monomorphize pass has not built?
+
+    Asked AFTER `resolve_type_recursively`, which turns every reference whose instance
+    exists into that instance. What survives as a `GenericTypeRef` therefore names one
+    that does not exist yet. The walk stops at a declaration: what a built type holds is
+    its own declaration's business.
+    """
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.type_walk import walk_named_types
+
+    return any(isinstance(inner, GenericTypeRef)
+               for inner in walk_named_types(ty, structs, enums,
+                                             through_declarations=False))
+
+
 def signature_result_arms(ret_type: Optional[Type], err_type: Optional[Type],
                           std_error: Optional[Type]) -> Optional[tuple[Type, Type]]:
     """The Ok and Err arm a call to a signature yields, or None when there is nothing to intern.
@@ -256,9 +272,15 @@ def ensure_result_type_in_table(
 
     # An abstract Result, whose payloads still name an enclosing template's type params, is
     # not a real type: hand it back but keep it OUT of the table. Interning it strands the
-    # topological sort on a type never interned, misreported as CE2052.
+    # topological sort on a type never interned, misreported as CE2052. A PROVISIONAL one
+    # is the same answer for the same reason (#556): the walk above leaves a
+    # `GenericTypeRef` exactly when the instance it names has not been built yet, so
+    # storing the Result over one parks an unresolved payload under a name whose resolved
+    # form arrives later -- the two-depths collision this seam exists to prevent.
     if (is_abstract_type(ok_type, structs, enums)
-            or is_abstract_type(err_type, structs, enums)):
+            or is_abstract_type(err_type, structs, enums)
+            or _names_an_unbuilt_instance(ok_type, structs, enums)
+            or _names_an_unbuilt_instance(err_type, structs, enums)):
         return EnumType(
             name=result_enum_name,
             variants=variants,

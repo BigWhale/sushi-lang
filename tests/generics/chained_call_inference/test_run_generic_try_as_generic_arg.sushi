@@ -1,0 +1,20 @@
+# The same shape through `??` rather than `.realise()`: the inner generic call is typed
+# from its substituted signature and the `??` unwraps that, so the outer generic solves
+# its parameter (#556).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "carried 7\n"
+
+fn wrap@(T)(nom T v) T:
+    return Result.Ok(v)
+
+fn carry@(U)(nom U v) string:
+    return Result.Ok("carried {v}")
+
+fn run() string:
+    let string said = carry(nom wrap(nom 7)??)??
+    return Result.Ok(said)
+
+fn main() i32:
+    println(run().realise("?"))
+    return Result.Ok(0)

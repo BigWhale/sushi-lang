@@ -58,21 +58,18 @@ def validate_generic_function_call(
                 got=len(explicit),
             )
             return
-        type_args = resolve_explicit_type_args(
-            explicit, validator.struct_table, validator.enum_table
-        )
-    else:
-        type_args = _infer_type_args_from_call_site(validator, call, generic_func)
-        if type_args is None:
-            if not name_is_contested(validator, "function", function_name):
-                er.emit(
-                    validator.reporter,
-                    er.ERR.CE2060,
-                    call.callee.loc,
-                    name=function_name,
-                    reason="could not infer type arguments from call site"
-                )
-            return
+
+    type_args = call_type_args(validator, call, generic_func)
+    if type_args is None:
+        if not name_is_contested(validator, "function", function_name):
+            er.emit(
+                validator.reporter,
+                er.ERR.CE2060,
+                call.callee.loc,
+                name=function_name,
+                reason="could not infer type arguments from call site"
+            )
+        return
 
     # Per-element perk-constraint check for a constrained type-pack (CE2090).
     _validate_pack_element_constraints(validator, call, generic_func, type_args)
@@ -109,6 +106,42 @@ def validate_generic_function_call(
     func_sig = validator.func_table.lookup(mangled_name, home_unit)
 
     validate_call_arguments(validator, call, func_sig)
+
+
+def call_type_args(validator: 'TypeValidator', call: Call, generic_func) -> Optional[tuple]:
+    """The type arguments a generic call site names -- explicit, or inferred. Silent.
+
+    ONE reader, because the validating half and the inferring half must agree: the symbol
+    the call is rewritten to and the type its result is stamped with are both read off
+    these arguments. A wrong explicit arity answers None here and CE2062 there.
+    """
+    explicit = call.type_args
+    if explicit:
+        if check_explicit_type_arg_arity(generic_func, len(explicit)) is not None:
+            return None
+        return resolve_explicit_type_args(
+            explicit, validator.struct_table, validator.enum_table
+        )
+    return _infer_type_args_from_call_site(validator, call, generic_func)
+
+
+def generic_call_result_type(validator: 'TypeValidator', call: Call, generic_func):
+    """What a call to a generic function yields, before its instance exists (#556).
+
+    A call is normally typed through the callee's concrete signature, and a generic
+    callee has none until the monomorphize pass builds one under a mangled symbol. The
+    inferrer runs before that symbol is chosen -- a generic call sitting in another
+    generic call's ARGUMENT is typed while the outer call solves its own parameters --
+    and answering nothing there left the argument untyped, so the outer call was CE2060
+    however the value was spelled. The substituted signature answers instead, the same
+    derivation the instantiate pass reads for a `match` scrutinee (#549).
+    """
+    from sushi_lang.semantics.generics.types import substituted_call_result
+
+    type_args = call_type_args(validator, call, generic_func)
+    if type_args is None:
+        return None
+    return substituted_call_result(generic_func, type_args)
 
 
 def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected_ty):

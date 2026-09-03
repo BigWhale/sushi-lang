@@ -1,0 +1,15 @@
+# The two shapes the method-call exclusion was written for. Both unwrap, so neither is a
+# Result at the binding and neither may be refused once the exclusion is gone (#535).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42 towel\n"
+
+fn tag(i32 n) i32:
+    return Result.Ok(n)
+
+fn main() i32:
+    let i32 x = tag(42).realise(0)
+    let string s = "towel"
+    let string t = s.clone()
+    println("{x} {t}")
+    return Result.Ok(0)

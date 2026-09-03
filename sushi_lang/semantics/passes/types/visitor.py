@@ -960,6 +960,19 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if func_sig is not None:
             return self.result_type_of(func_sig)
 
+        # A GENERIC callee has no concrete signature yet: its instance is named by the
+        # mangled symbol the validating half computes, and inference runs before that --
+        # while a generic call sits in another generic call's ARGUMENT. The substituted
+        # signature answers, and the Result it names is resolved by LOOKUP, never
+        # interned early (#556).
+        generic_func = self.type_validator.generic_sig(function_name)
+        if generic_func is not None:
+            from sushi_lang.semantics.passes.types.calls.generics import (
+                generic_call_result_type)
+            substituted = generic_call_result_type(self.type_validator, node, generic_func)
+            if substituted is not None:
+                return self._resolve_generic_to_semantic_type(substituted)
+
         # The registry is the single source of truth the backend reads too, so reading it
         # here keeps the two from drifting. The hardcoded copies this replaced had gone
         # stale: they looked up a one-arg "Result<i32>" that is never registered.
