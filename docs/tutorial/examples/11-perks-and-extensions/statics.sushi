@@ -1,0 +1,18 @@
+struct Vec:
+    i32 x
+    i32 y
+
+extend Vec static at(i32 x, i32 y) Vec:
+    return Vec(x, y)
+
+extend Vec static origin() Vec:
+    return Vec(0, 0)
+
+extend Vec length_squared() i32:
+    return self.x * self.x + self.y * self.y
+
+fn main() i32:
+    let Vec start = Vec.origin()
+    let Vec point = Vec.at(3, 4)
+    println("from ({start.x}, {start.y}) the distance squared is {point.length_squared()}")
+    return Result.Ok(0)

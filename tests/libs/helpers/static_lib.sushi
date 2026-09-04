@@ -1,0 +1,11 @@
+# A library that ships a static method. An extension carries no visibility marker of
+# its own: it is as visible as its target type (visibility.md Ruling 2), so a public
+# struct is the whole of the export.
+public struct Crate:
+    i32 weight
+
+extend Crate static empty() Crate:
+    return Crate(0)
+
+extend Crate static weighing(i32 weight) Crate:
+    return Crate(weight)

@@ -1,0 +1,11 @@
+# The enum spelling of the same mistake, kept symmetric: a name behind an enum's dot
+# is a variant or a static, and CE2045 now names both.
+# EXPECT_ERROR_CODE: CE2045
+enum Shape:
+    Circle
+
+fn main() i32:
+    let Shape s = Shape.build()
+    match s:
+        Shape.Circle -> println("circle")
+    return Result.Ok(0)

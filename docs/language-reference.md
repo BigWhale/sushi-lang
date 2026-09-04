@@ -1390,6 +1390,73 @@ spelled constructor. Array targets take a concrete element (`extend i32[]`) or a
 name that binds a type parameter (`extend T[]`). The design record is
 `docs/design/ufcs-combinators.md`.
 
+### Static methods
+
+A `static` marker before the method name declares a method with **no receiver**. It is
+called on the TYPE name, not on a value, and it is how a type carries its own
+constructor.
+
+```sushi
+struct Vec:
+    i32 x
+    i32 y
+
+extend Vec static at(i32 x, i32 y) Vec:
+    return Vec(x, y)
+
+extend Vec static origin() Vec:
+    return Vec(0, 0)
+
+fn main() i32:
+    let Vec v = Vec.at(3, 4)
+    println("{v.x} {v.y}")
+    return Result.Ok(0)
+```
+
+A name behind a type's dot is a **member** of that type: a variant, or a static method,
+never both. A local of the same name wins over the type, as it always has.
+
+Everything but the receiver is unchanged. The parameters take the ordinary four modes
+and BORROW unless marked `nom`; an owning return belongs to the caller; `| E` opts into
+the error channel exactly as on an instance method; and the declaration carries no
+visibility marker, because a static is as visible as its target type.
+
+`new` is a legal static name — `extend Box static new(i32 n) Box:` — which a free
+function cannot have (`CE6001`).
+
+A static has **no `self`**, and the two places that could name one are one refusal:
+a receiver mode in the signature (`extend Vec static at(poke self)`) and a mention of
+`self` in the body are both `CE0134`. A `static` inside a perk implementation is
+`CE4014`: a perk has no `Self`, so a contract cannot hold a constructor.
+
+The target may be a struct, an enum, a primitive (`extend f64 static of_int(i32 v)
+f64:`) or a generic type; an ARRAY target is `CE2104`, because an array type has no
+spelling in an expression position and the declaration could never be called. On a
+generic target the type argument comes from the declared type at the call site, because
+there is no receiver to read it from:
+
+```sushi
+struct Cage@(T):
+    T item
+
+extend Cage@(T) static holding(T item) Cage@(T):
+    return Cage(item)
+
+let Cage@(i32) a = Cage.holding(9)
+```
+
+A generic static in a position that declares no type — a bare
+`println("{Cage.holding(9).item}")` — is `CE2060`: there is no receiver and no
+annotation, so nothing says which instantiation was meant. Bind the result first.
+
+A name has one home, so a static beside an instance method of the same name on one type
+is `CE0101`, and a static spelling a VARIANT of the enum it extends is `CE2103`. A type
+whose dot holds no such member is `CE2102`.
+
+`List.new()`, `List.with_capacity()`, `HashMap.new()`, `Own.alloc()` and
+`f64.from_bits()` are the built-in statics — the same rule, on types the compiler
+declares. The design record is `docs/design/method-resolution.md`.
+
 A **perk method** takes the same error channel, and the perk states it in the contract:
 `fn read(poke u8[] into) i32 | IoError`. Every implementation repeats the channel
 exactly; a channel one side declares and the other does not, and two channels over
@@ -1487,6 +1554,7 @@ Reserved keywords:
 - `public` - Visibility marker (`fn`, `const`, `var`, `struct`, `enum`, `perk`)
 - `use` - Module import
 - `extend` - Extension method
+- `static` - A method with no receiver, called on the type name
 - `self` - Extension method receiver
 
 ## String Literals

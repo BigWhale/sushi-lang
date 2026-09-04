@@ -1,0 +1,10 @@
+# A SOURCE .slib ships the declaration as text, so a static exports through it the way
+# every other extension method does (#542, phase 5).
+# EXPECT_STDOUT_EXACT: "0 42\n"
+use <lib/static_lib>
+
+fn main() i32:
+    let Crate a = Crate.empty()
+    let Crate b = Crate.weighing(42)
+    println("{a.weight} {b.weight}")
+    return Result.Ok(0)

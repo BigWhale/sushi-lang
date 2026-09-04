@@ -42,7 +42,7 @@ from sushi_lang.semantics.visibility import (
 )
 
 from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
-                    reject_try_in_body)
+                    reject_self_in_body, reject_try_in_body)
 from sushi_lang.semantics.generics.extension_targets import classify_extension_target
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -350,6 +350,18 @@ class GenericFunctionTable:
         return self.by_name.get(name)
 
 
+def _target_base_name(target_type: Optional[Type]) -> Optional[str]:
+    """The declared NAME an extension target names, before instantiation.
+
+    `Shape` for a bare name and for a resolved enum or struct, `Shape` for
+    `Shape@(T)`, None for a builtin or an array target -- neither has variants.
+    """
+    if isinstance(target_type, GenericTypeRef):
+        return target_type.base_name
+    name = getattr(target_type, "name", None)
+    return name if isinstance(name, str) else None
+
+
 @dataclass
 class ExtensionMethod:
     """A collected extension method signature."""
@@ -366,6 +378,10 @@ class ExtensionMethod:
     unit_name: Optional[str] = None  # The unit that declared it
     err_type: Optional[Type] = None  # `| E`: the method returns Result@(ret, E) (ruling 1)
     err_span: Optional[Span] = None
+    # A `static` method has no receiver and is called on the type name (#542). The flag
+    # is what keeps the two callable shapes apart: an instance call may not reach a
+    # static, and a type-name call may not reach an instance method.
+    is_static: bool = False
 
 
 @dataclass
@@ -408,6 +424,7 @@ class GenericExtensionMethod:
     # Method-level type parameters (`name@(U)`): SEPARATE from the receiver-derived
     # `type_params`, whose CE0096 strict zip stays untouched. Solved at the call site.
     method_type_params: Tuple[str, ...] = ()
+    is_static: bool = False          # no receiver, called on the type name (#542)
 
 
 @dataclass
@@ -878,6 +895,31 @@ class FunctionCollector:
                 er.emit(self.r, ERR.CE0115, p.name_span, context="an extension method")
                 break
 
+        # A static method has no receiver, so neither position may name one (CE0134,
+        # #542): a receiver MODE in the signature, or a `self` in the body. One fault,
+        # one code, and the caret sits on whichever was written.
+        is_static = bool(getattr(ext, "is_static", False))
+        if is_static:
+            if getattr(ext, "self_mode", None) is not None:
+                er.emit_with(self.r, ERR.CE0134,
+                             getattr(ext, "self_mode_span", None) or name_span,
+                             name=name) \
+                    .help("a static is called on the type name; drop the receiver, "
+                          "or drop the `static` marker to get an instance method") \
+                    .emit()
+            reject_self_in_body(self.r, body, name)
+            if self._reject_variant_collision(target_type, name, name_span):
+                return
+            # An array type has no spelling in an expression position, so a static on
+            # one could never be called (CE2104). An unreachable declaration is a
+            # diagnostic, exactly as CE2097 rules for a colliding built-in.
+            if isinstance(target_type, (ArrayType, DynamicArrayType)):
+                er.emit_with(self.r, ERR.CE2104,
+                             target_type_span or name_span) \
+                    .help("write a free function, or a static on a struct that holds "
+                          "the array").emit()
+                return
+
         # A `??` has no error channel in a BARE extension body (CE0131, #398). A
         # declared `| E` IS the channel (ruling 1), so the reject does not apply there.
         err_ty: Optional[Type] = getattr(ext, "err_type", None)
@@ -952,6 +994,7 @@ class FunctionCollector:
                 err_type=convert_unknown_to_typeparam(err_ty),
                 err_span=err_span,
                 method_type_params=method_type_params,
+                is_static=is_static,
             )
 
             if self._reject_overlapping_target(generic_method, target_type, name_span):
@@ -988,6 +1031,7 @@ class FunctionCollector:
                 unit_name=self.current_unit_name,
                 err_type=err_ty,
                 err_span=err_span,
+                is_static=is_static,
             )
 
             if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
@@ -1081,6 +1125,7 @@ class FunctionCollector:
             err_type=convert(err_ty),
             err_span=err_span,
             method_type_params=method_type_params,
+            is_static=bool(getattr(ext, "is_static", False)),
         ))
         return None
 
@@ -1137,11 +1182,38 @@ class FunctionCollector:
             err_type=convert(err_ty),
             err_span=err_span,
             method_type_params=method_type_params,
+            is_static=bool(getattr(ext, "is_static", False)),
         ))
         # The declaration itself must not be walked as a concrete extension: stash the
         # receiver so the drain can rebuild the target, and let collect_extensions
         # re-file the node under generic_extensions.
         ext.target_type = resolved_type
+
+    def _reject_variant_collision(self, target_type: Optional[Type], name: str,
+                                  name_span: Optional[Span]) -> bool:
+        """CE2103: a static may not spell a variant of the enum it extends (#542, Q1).
+
+        One namespace sits behind a type's dot, and a variant always wins at the call
+        site, so a static of that name would be compiled and never called. The base
+        name is what is looked up: `extend Shape@(T) static Circle()` is the same
+        collision one instantiation down.
+        """
+        base = _target_base_name(target_type)
+        if base is None:
+            return False
+        enum_ty = self.enums.by_name.get(base) or self.generic_enums.by_name.get(base)
+        if enum_ty is None:
+            return False
+        if not any(v.name == name for v in enum_ty.variants):
+            return False
+        er.emit_with(self.r, ERR.CE2103, name_span, method=name, enum=base) \
+            .note("the variant is declared here",
+                  self.enums.spans.get(base) or self.generic_enums.spans.get(base),
+                  filename=(self.enums.files.get(base)
+                            or self.generic_enums.files.get(base))) \
+            .help("a name behind a type's dot is a variant or a static, never both -- "
+                  "rename the static").emit()
+        return True
 
     def _emit_duplicate_extension(self, name_text, name_span,
                                   other_unit, other_span, other_filename) -> None:

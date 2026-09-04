@@ -1,0 +1,16 @@
+# A static's parameters read the ordinary declared modes: `nom` at both ends, and the
+# owning return is the caller's. No receiver is involved either way.
+# EXPECT_STDOUT_EXACT: "mostly harmless\n"
+# EXPECT_NO_LEAKS
+struct Label:
+    string text
+
+extend Label static wrap(nom string text) Label:
+    return Label(text)
+
+fn main() i32:
+    let string base = "mostly"
+    let string s = "{base} harmless"
+    let Label l = Label.wrap(nom s)
+    println(l.text)
+    return Result.Ok(0)

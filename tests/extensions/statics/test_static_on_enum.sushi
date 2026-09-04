@@ -1,0 +1,17 @@
+# One namespace behind a type's dot (ruling Q1): an enum's dot holds its variants AND
+# its statics, and a name is exactly one of them.
+# EXPECT_STDOUT_EXACT: "plus\n"
+enum Sign:
+    Plus
+    Minus
+
+extend Sign static of_i32(i32 v) Sign:
+    if (v < 0):
+        return Sign.Minus
+    return Sign.Plus
+
+fn main() i32:
+    match Sign.of_i32(3):
+        Sign.Plus -> println("plus")
+        Sign.Minus -> println("minus")
+    return Result.Ok(0)

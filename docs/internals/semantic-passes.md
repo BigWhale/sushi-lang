@@ -60,6 +60,11 @@ Collect global definitions before analyzing function bodies.
 3. **Generic Types**: Register struct and enum definitions
 4. **Symbol Table**: Build initial global scope
 5. **Visibility**: Record who declared what, and whether it says `public`
+6. **Extension methods**, instance and STATIC alike, with `is_static` carried on the
+   collected signature (`docs/design/method-resolution.md`). The two refusals a static
+   brings are structural and so are decided here: a receiver named in the signature or
+   the body is `CE0134`, and a static spelling a variant of the enum it extends is
+   `CE2103`. A `static` inside a perk implementation is `CE4014`, in the perk collector.
 
 ### A unit is collected after the units it depends on
 

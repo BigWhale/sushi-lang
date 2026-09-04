@@ -1,0 +1,13 @@
+# The narrower half: a static whose RETURN does not name the type it is declared on has
+# no position to read its type arguments from at all -- a method carries no call-site
+# `@(...)` slot (Known Limitation 7) -- so the help names the signature change.
+# EXPECT_ERROR_CODE: CE2060
+struct Cage@(T):
+    T item
+
+extend Cage@(T) static describing(T item) i32:
+    return 1
+
+fn main() i32:
+    println("{Cage.describing(9)}")
+    return Result.Ok(0)

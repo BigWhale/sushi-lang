@@ -1,0 +1,10 @@
+# The diagnostic half of #542: `Box` IS declared, so "undeclared identifier" was wrong
+# about the one thing it named. The fault is the position, and it says so (CE2102).
+# EXPECT_ERROR_CODE: CE2102
+struct Box:
+    i32 x
+
+fn main() i32:
+    let Box b = Box.build()
+    println("{b.x}")
+    return Result.Ok(0)

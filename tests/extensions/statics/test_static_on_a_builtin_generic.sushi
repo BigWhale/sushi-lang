@@ -1,0 +1,16 @@
+# A built-in generic is an ordinary extension target (ruling R2's reasoning), so a
+# static on `List@(i32)` sits beside the built-in `List.new` rather than colliding with
+# it: the built-in statics are named in one table the general path defers to.
+# EXPECT_STDOUT_EXACT: "1 7\n"
+# EXPECT_NO_LEAKS
+extend List@(i32) static of_one(i32 v) List@(i32):
+    let List@(i32) out = List.new()
+    out.push(v)
+    return out
+
+fn main() i32:
+    let List@(i32) l = List.of_one(7)
+    let i32 head = l.get(0).realise(0)
+    println("{l.len()} {head}")
+    l.free()
+    return Result.Ok(0)

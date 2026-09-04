@@ -82,7 +82,11 @@ class ExpressionEmitter:
                     if isinstance(_fn_field_ty, FunctionType):
                         from sushi_lang.backend.expressions import calls
                         return calls.emit_fn_field_call(self.codegen, expr, _fn_field_ty, to_i1)
-                if isinstance(expr.receiver, Name):
+                # A STATIC on an enum is no variant (#542, ruling Q1). The stamp is
+                # what says so, and it is read before the enum-name arm below for the
+                # same reason the typecheck pass asks the static first.
+                if isinstance(expr.receiver, Name) and not getattr(
+                        expr, "callee_is_static", False):
                     receiver_name = expr.receiver.id
                     # Local-wins (#296): a local named after an enum shadows it.
                     if (receiver_name in self.codegen.enum_table.by_name

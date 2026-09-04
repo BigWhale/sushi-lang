@@ -1,0 +1,17 @@
+# A perk has no `Self` (HANDLES.md R7), so a contract cannot hold a constructor and an
+# implementation may not declare one (CE4014).
+# EXPECT_ERROR_CODE: CE4014
+perk Named:
+    fn name() string
+
+struct Vec:
+    i32 x
+
+extend Vec with Named:
+    static fn name() string:
+        return "vec"
+
+fn main() i32:
+    let Vec v = Vec(1)
+    println("{v.x}")
+    return Result.Ok(0)

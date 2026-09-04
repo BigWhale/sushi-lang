@@ -1,0 +1,13 @@
+# One namespace behind a type's dot (ruling Q1): a variant and a static of one name on
+# one enum is a refusal, relational, because the variant would always win (CE2103).
+# EXPECT_ERROR_CODE: CE2103
+enum Shape:
+    Circle
+
+extend Shape static Circle() Shape:
+    return Shape.Circle
+
+fn main() i32:
+    match Shape.Circle:
+        Shape.Circle -> println("circle")
+    return Result.Ok(0)

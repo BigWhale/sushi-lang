@@ -1,0 +1,10 @@
+# A static on a BUILTIN target is legal (ruling R2): an extension on a primitive
+# already was, so the receiver-less form falls out with no extra rule.
+# EXPECT_STDOUT_EXACT: "42\n"
+extend f64 static of_int(i32 v) f64:
+    return v as f64
+
+fn main() i32:
+    let f64 x = f64.of_int(42)
+    println("{x}")
+    return Result.Ok(0)

@@ -1,0 +1,13 @@
+# A static method has no receiver, so a receiver MODE in its signature is one fault
+# with one code (CE0134).
+# EXPECT_ERROR_CODE: CE0134
+struct Vec:
+    i32 x
+
+extend Vec static at(poke self) Vec:
+    return Vec(1)
+
+fn main() i32:
+    let Vec v = Vec.at()
+    println("{v.x}")
+    return Result.Ok(0)

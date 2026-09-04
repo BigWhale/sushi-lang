@@ -5,7 +5,8 @@ from lark import Tree
 from sushi_lang.semantics.ast import ExtendDef
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.declarations.docs import lift_body_doc
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, find_tree_recursive, ice
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
+    first_method_name, first_token, first_tree, find_tree_recursive, ice)
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -36,9 +37,14 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
     if not suffix:
         ice(t, "missing extend_def suffix")
 
-    name_tok = first_name(suffix.children)
+    # `method_name` widened the declaration slot the call site always had, so `new`
+    # and `extend` are writable method names now (ruling R3).
+    name_tree = first_tree(suffix.children, "method_name")
+    name_tok = first_method_name(name_tree.children) if name_tree else None
     if name_tok is None:
         ice(suffix, "missing method NAME")
+
+    static_tok = first_token(suffix.children, "STATIC")
 
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_params, strip_self_param
     from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
@@ -80,4 +86,6 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
         err_type=err_type,
         err_span=span_of(err_type_node) if err_type_node is not None else None,
         doc=lift_body_doc(body, ast_builder),
+        is_static=static_tok is not None,
+        static_span=span_of(static_tok) if static_tok is not None else None,
     )

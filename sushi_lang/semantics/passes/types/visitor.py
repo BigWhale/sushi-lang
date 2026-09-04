@@ -471,6 +471,14 @@ class ExpressionValidator(RecursiveVisitor):
         # here as well walked the receiver twice and reported every diagnostic in it
         # twice (#201).
 
+        # A name behind a type's dot is a MEMBER of that type (#542, ruling Q1): a
+        # static method, or -- on an enum -- a variant. The static is asked first
+        # because the variant path OWNS the enum's refusal (CE2045), and it steps
+        # aside for a name that is neither.
+        from sushi_lang.semantics.passes.types.calls.statics import validate_static_call
+        if validate_static_call(self.type_validator, node):
+            return
+
         if (isinstance(node.receiver, Name)
                 and self._validate_variant_spelling(node, node.method, node.args)):
             return
@@ -1128,6 +1136,13 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             ty = BuiltinType.F64 if node.receiver.id == "f64" else BuiltinType.F32
             node.inferred_return_type = ty
             return ty
+
+        # A static answers before the enum-name arm, for the reason the validation
+        # half states: the two share one namespace and the static is the narrower ask.
+        from sushi_lang.semantics.passes.types.calls.statics import infer_static_call
+        static_ty = infer_static_call(self.type_validator, node)
+        if static_ty is not None:
+            return static_ty
 
         if (isinstance(node.receiver, Name)
                 and node.receiver.id not in self.type_validator.variable_types):

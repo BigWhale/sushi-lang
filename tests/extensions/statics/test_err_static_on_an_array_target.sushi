@@ -1,0 +1,10 @@
+# An array type has no spelling in an expression position, so `i32[].two()` is not
+# writable at all: the declaration would compile and never be callable, which is the
+# hazard CE2097 refuses for a colliding built-in (CE2104).
+# EXPECT_ERROR_CODE: CE2104
+extend i32[] static two() i32[]:
+    return from([1, 2])
+
+fn main() i32:
+    println("unreachable")
+    return Result.Ok(0)

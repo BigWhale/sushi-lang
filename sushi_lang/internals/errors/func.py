@@ -130,3 +130,7 @@ _add(ErrorMessage("CE0130", Severity.ERROR,
 _add(ErrorMessage("CE0133", Severity.ERROR,
     "method '{name}' declares {found}, but perk '{perk}' requires {expected}",
     Category.FUNC, "The '| E' channel is part of a perk method's signature (HANDLES.md ruling R1), so a contract that declares one and an implementation that omits it are the same mismatch read from opposite ends, as are two channels over different error types. Relational: the primary sits at the implementation and a note at the contract method. Before the channel existed this code refused every '| E' on a perk-implementation method, because the declared channel was otherwise silently DROPPED and the body's returns validated against a signature nobody had. A fallible perk contract -- a Reader or a Writer -- is what the channel was needed for."))
+
+_add(ErrorMessage("CE0134", Severity.ERROR,
+    "static method '{name}' has no receiver",
+    Category.FUNC, "A `static` extension method is called on the TYPE name (`Vec.at(3, 4)`), so nothing was called ON: there is no receiver to declare a mode for and none to read in the body. ONE code for TWO positions, because it is one fault -- a receiver mode in the signature (`extend Vec static at(poke self)`) and a mention of `self` in the body -- and the caret sits on whichever one was written. Drop the `static` marker to get an instance method, whose `self` is implicit, or take the value as an ordinary parameter."))

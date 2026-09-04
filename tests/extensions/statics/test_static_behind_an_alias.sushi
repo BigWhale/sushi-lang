@@ -1,0 +1,9 @@
+# The alias fold is not per-type (#506): it asks whether the namespace holds a TYPE,
+# so a user static folds through it with nothing added.
+# EXPECT_STDOUT_EXACT: "0 0\n"
+use "helpers/geo" as geo
+
+fn main() i32:
+    let geo.Vec v = geo.Vec.origin()
+    println("{v.x} {v.y}")
+    return Result.Ok(0)

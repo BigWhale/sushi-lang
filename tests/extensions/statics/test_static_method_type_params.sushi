@@ -1,0 +1,14 @@
+# Method-level `@(U)` on a static is solved from the arguments, like every other
+# method-level parameter -- there is no call-site `@(...)` slot on a method.
+# EXPECT_STDOUT_EXACT: "12\n"
+struct Counter:
+    i32 n
+
+extend Counter static counting@(U)(U[] items) Counter:
+    return Counter(items.len() * 4)
+
+fn main() i32:
+    let string[] words = from(["a", "b", "c"])
+    let Counter c = Counter.counting(words)
+    println("{c.n}")
+    return Result.Ok(0)

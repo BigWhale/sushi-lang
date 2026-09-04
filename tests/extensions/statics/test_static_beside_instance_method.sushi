@@ -1,0 +1,16 @@
+# A static and an instance method live on one type under DIFFERENT names, and each
+# reads its own receiver rule: the instance method has `self`, the static has none.
+# EXPECT_STDOUT_EXACT: "5 25\n"
+struct Cell:
+    i32 n
+
+extend Cell static of(i32 n) Cell:
+    return Cell(n)
+
+extend Cell squared() i32:
+    return self.n * self.n
+
+fn main() i32:
+    let Cell c = Cell.of(5)
+    println("{c.n} {c.squared()}")
+    return Result.Ok(0)

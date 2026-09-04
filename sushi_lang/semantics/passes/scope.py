@@ -132,6 +132,18 @@ class ScopeAnalyzer:
                                     self.namespaces.scope)
         return sig is not None and sig.is_var
 
+    def _names_a_type(self, name: str) -> bool:
+        """True if `name` denotes a type here, and no local shadows it (#296)."""
+        if self._is_bound_local(name):
+            return False
+        from sushi_lang.semantics import statics
+        return statics.names_a_type(
+            name,
+            structs=self.structs.by_name.keys(),
+            enums=self.enums.by_name.keys(),
+            generic_structs=self.generic_structs.by_name.keys(),
+            generic_enums=self.generic_enums.by_name.keys())
+
     def _names_a_non_local(self, name: str) -> bool:
         """True if `name` resolves to something that is not a variable at all."""
         # Local-wins: a bound local shadows an enum name, a constant and a function
@@ -532,11 +544,12 @@ class ScopeAnalyzer:
                         self._check_expression(expr.receiver)
                     elif self._is_namespace(receiver_name):
                         pass
-                    elif receiver_name in self.enums.by_name or receiver_name in self.generic_enums.by_name:
-                        pass
-                    elif receiver_name in self.generic_structs.by_name:
-                        pass
-                    elif receiver_name in ("f64", "f32") and expr.method == "from_bits":
+                    elif self._names_a_type(receiver_name):
+                        # A TYPE name in a receiver position: the call is a variant
+                        # construction or a static method (#542, ruling Q1). Whether
+                        # this type has one is the typecheck pass's answer (CE2102 /
+                        # CE2045) -- "undeclared identifier" was wrong about the one
+                        # thing it named, because the fault is the POSITION.
                         pass
                     else:
                         self._check_expression(expr.receiver)

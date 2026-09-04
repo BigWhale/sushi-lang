@@ -5,6 +5,32 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **A static method: a name behind the TYPE's dot.** `extend Vec static at(i32 x, i32 y)
+  Vec:` declares a method with NO receiver, called on the type name -- `Vec.at(3, 4)` --
+  which is how a user type carries its own constructor (#542). A name behind a type's dot
+  is a MEMBER of that type: a variant, or a static method, never both; a local of the same
+  name still wins first. Everything but the receiver is an ordinary extension method: the
+  four parameter modes, the owning return, the `| E` channel, and no visibility marker,
+  because a static is as visible as its target type. `new` is a legal static name and is
+  still not a legal free-function name. A struct, an enum, a primitive (`extend f64 static
+  of_int(i32 v) f64:`), a built-in generic and a generic target are all legal -- on a
+  generic target the type argument comes from the declared type at the call site, because
+  there is no receiver to read it from -- and the call folds through an alias
+  (`geo.Vec.origin()`) with nothing added. `List.new`, `List.with_capacity`,
+  `HashMap.new`, `Own.alloc` and `f64/f32.from_bits` are static methods under the same
+  rule, named in one table. `static` is now a reserved word, so `v.static()` and a method
+  named `static` are no longer writable. New refusals: **CE0134** a static naming a
+  receiver, in the signature or in the body (one fault, two positions); **CE2102** a type
+  whose dot holds no such member, which replaced a CE1001 "use of undeclared identifier"
+  for a struct that IS declared -- the fault was the position, not the name; **CE2103** a
+  static spelling a VARIANT of the enum it extends, relational, because the variant would
+  always win; **CE2104** a static on an ARRAY target, which no expression could ever call;
+  **CE2060** a generic static in a position that declares no type, which used to reach
+  the backend as an ICE;
+  **CE4014** a static inside a perk implementation, because a perk has no `Self`. A static
+  beside an instance method of one name on one type stays CE0101, and CE2045 grew a help
+  line naming both members an enum's dot can hold. A SOURCE `.slib` exports a static; a
+  BINARY one exports no extension method at all, as before.
 - **A constant may construct an enum variant.** `const Sign DEFAULT = Sign.Plus`,
   `Shape.Circle(5)` and `Maybe.None` against a declared `Maybe@(T)` are constants now,
   in `.rodata` like a struct constant: a payload-free variant is its tag over a zero

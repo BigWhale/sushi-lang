@@ -465,6 +465,10 @@ class SemanticAnalyzer:
                 # private copy -- a write was lost (#253's shape) and a consuming
                 # receiver was freed twice, in the method and again at the call site.
                 self_mode=getattr(extend_def, "self_mode", None),
+                # And whether there is a receiver at all (#542): without it the call
+                # site resolves a static as an instance method and CE2102 refuses the
+                # very declaration that answers it.
+                is_static=getattr(extend_def, "is_static", False),
             )
             self.extensions.add_method(extension_method)
 

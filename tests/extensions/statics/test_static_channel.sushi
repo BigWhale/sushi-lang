@@ -1,0 +1,22 @@
+# The opt-in `| E` channel rides a static exactly as it rides an instance method: the
+# body may spell `Result.Err(...)`, the success returns bare, and `??` is legal.
+# EXPECT_STDOUT_EXACT: "4\nodd\n"
+enum OddError:
+    TooOdd
+
+struct Half:
+    i32 n
+
+extend Half static of(i32 v) Half | OddError:
+    if (v % 2 == 1):
+        return Result.Err(OddError.TooOdd)
+    return Half(v / 2)
+
+fn main() i32:
+    match Half.of(8):
+        Result.Ok(h) -> println("{h.n}")
+        Result.Err(_) -> println("odd")
+    match Half.of(7):
+        Result.Ok(h) -> println("{h.n}")
+        Result.Err(_) -> println("odd")
+    return Result.Ok(0)

@@ -36,6 +36,7 @@ class CalleeKind(Enum):
 
     FUNCTION = "function"        # a named function: user, library, or monomorphized generic
     METHOD = "method"            # an extension or perk method (the receiver included)
+    STATIC_METHOD = "static_method"  # `Vec.at(3, 4)`: a method with NO receiver (#542)
     STDLIB = "stdlib"            # a stdlib function from the registry
     FFI_EXTERN = "ffi_extern"    # a bodyless `unsafe external "C"` declaration
     INDIRECT = "indirect"        # a call through a function value (a closure or a fn reference)

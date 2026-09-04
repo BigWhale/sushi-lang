@@ -60,7 +60,8 @@ def instantiate_array_extension(validator: 'TypeValidator',
         name_span=template.name_span, ret_span=template.ret_span,
         self_mode=template.self_mode, filename=template.filename,
         unit_name=template.unit_name,
-        err_type=err, err_span=getattr(template, "err_span", None))
+        err_type=err, err_span=getattr(template, "err_span", None),
+        is_static=bool(getattr(template, "is_static", False)))
     validator.extension_table.add_method(concrete)
     _queue_extension_instantiation(validator, template, receiver_type, (element,), ())
     return concrete
@@ -92,7 +93,8 @@ class ResolvedMethod:
 
 
 def resolve_extension_method(validator: 'TypeValidator', receiver_type,
-                             method_name: str, call=None, report: bool = True):
+                             method_name: str, call=None, report: bool = True,
+                             static: bool = False):
     """The three EXTENSION rungs, in the order every caller reads them.
 
     The extension table, then a `T[]` template instantiated at this call site, then a
@@ -103,6 +105,12 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
     A caller with no call NODE -- the `foreach` protocol asks for a nullary `next()` --
     passes `call=None`, and the method-generic rung is skipped: it solves its type
     arguments from the call's own arguments, and there are none to read.
+
+    `static` says which of the two callable shapes is being asked for (#542). The two
+    share one table, keyed on (type, name), so ONE filter at the end keeps them apart:
+    an instance call may not reach a static, and a call on the type name may not reach
+    an instance method. Without it a static was called with a receiver it never
+    declared.
     """
     method = validator.extension_table.get_method(receiver_type, method_name)
 
@@ -116,11 +124,14 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
             return RESOLUTION_REPORTED
         method = resolved
 
+    if method is not None and bool(getattr(method, "is_static", False)) != static:
+        return None
+
     return method
 
 
 def resolve_method(validator: 'TypeValidator', receiver_type, method_name: str,
-                   call=None, report: bool = True):
+                   call=None, report: bool = True, static: bool = False):
     """The whole ladder for a USER-written method: a perk implementation, then extensions.
 
     A perk implementation is the sanctioned override and wins
@@ -128,16 +139,20 @@ def resolve_method(validator: 'TypeValidator', receiver_type, method_name: str,
     on this ladder: each family resolves its own before the ladder is reached, and that
     order is pinned by `tests/unit/test_method_resolution_family_order.py`.
 
-    Returns a `ResolvedMethod`, None, or RESOLUTION_REPORTED. Three callers read it --
-    the validation half, the inference half, and the `foreach` protocol -- and the point
-    of one function is that a fourth cannot drift.
+    Returns a `ResolvedMethod`, None, or RESOLUTION_REPORTED. Four callers read it --
+    the validation half, the inference half, the `foreach` protocol and the static path
+    -- and the point of one function is that a fifth cannot drift.
+
+    `static` skips the perk rung outright: a perk holds no static (CE4014), so a
+    contract can never answer a call written on the type name.
     """
-    perk_method = validator.perk_impl_table.get_method(receiver_type, method_name)
-    if perk_method is not None:
-        return ResolvedMethod(method=perk_method, is_perk=True)
+    if not static:
+        perk_method = validator.perk_impl_table.get_method(receiver_type, method_name)
+        if perk_method is not None:
+            return ResolvedMethod(method=perk_method, is_perk=True)
 
     method = resolve_extension_method(validator, receiver_type, method_name,
-                                      call=call, report=report)
+                                      call=call, report=report, static=static)
     if method is RESOLUTION_REPORTED:
         return RESOLUTION_REPORTED
     if method is None:
@@ -279,7 +294,8 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
         name_span=template.name_span, ret_span=template.ret_span,
         self_mode=template.self_mode, filename=template.filename,
         unit_name=template.unit_name,
-        err_type=err, err_span=getattr(template, "err_span", None))
+        err_type=err, err_span=getattr(template, "err_span", None),
+        is_static=bool(getattr(template, "is_static", False)))
 
     call.callee_method_type_args = margs
 

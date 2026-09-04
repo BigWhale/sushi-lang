@@ -204,6 +204,12 @@ def fold_namespaced_static(validator: 'TypeValidator', node) -> bool:
     names a namespace holding the TYPE folds away, and what is left is the bare
     static call every rule below already measures. The type is one per program
     (Ruling 6), so the name is the whole address, exactly as the enum fold above.
+
+    A USER struct or enum folds through it unchanged (#542): the fold was never
+    per-type, and the only reason it read `"type"` alone is that a built-in generic was
+    the only thing a static could be declared on. The stamp is normalized to `"type"`,
+    because what this position knows is that the name is a TYPE -- the declaration's
+    own kind would send the back end to the struct-CONSTRUCTION arm instead.
     """
     from sushi_lang.semantics.ast import MemberAccess, Name
 
@@ -211,19 +217,20 @@ def fold_namespaced_static(validator: 'TypeValidator', node) -> bool:
     if not isinstance(receiver, MemberAccess):
         return False
     binding = validator.resolve_namespaced(receiver.receiver, receiver.member)
-    if binding is None or binding.kind != "type":
+    if binding is None or binding.kind not in ("type", "struct", "enum"):
         return False
 
     node.receiver = Name(id=binding.name, loc=receiver.loc)
     # The stamp is what tells the scope gate the name arrived QUALIFIED: the
     # folded node is otherwise the bare shape the gate refuses (A-strict).
-    _stamp(node, binding)
+    _stamp(node, binding, kind="type")
     return True
 
 
-def _stamp(node, binding: 'Binding', *, name: Optional[str] = None) -> None:
+def _stamp(node, binding: 'Binding', *, name: Optional[str] = None,
+           kind: Optional[str] = None) -> None:
     """Record what the qualified name resolved to. The back end reads this."""
-    node.namespace_ref = binding.ref(name=name)
+    node.namespace_ref = binding.ref(name=name, kind=kind)
 
 
 def _stamp_param_modes(node, func_sig) -> None:
