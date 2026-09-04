@@ -1,0 +1,14 @@
+# A static is not a member of a VALUE: the two callable shapes share one table and are
+# kept apart by one filter, so an instance call reaches no static (CE2008).
+# EXPECT_ERROR_CODE: CE2008
+struct Vec:
+    i32 x
+
+extend Vec static at(i32 x) Vec:
+    return Vec(x)
+
+fn main() i32:
+    let Vec v = Vec.at(1)
+    let Vec w = v.at(2)
+    println("{w.x}")
+    return Result.Ok(0)

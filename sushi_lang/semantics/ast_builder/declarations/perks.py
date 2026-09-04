@@ -1,6 +1,6 @@
 """Perk definition and implementation parsing."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 from lark import Tree, Token
 from sushi_lang.semantics.ast import PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
@@ -26,13 +26,24 @@ def parse_impl_methods(children: List, ast_builder: 'ASTBuilder') -> List[FuncDe
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_funcdef
 
     methods: List[FuncDef] = []
+    # A `static` marker rides the block, not the shared `function_def`, so it arrives
+    # as a SIBLING token standing just before the method it was written on. Pairing it
+    # here is the only place source order still says which method that is; the refusal
+    # itself is the perk pass's (CE4014, ruling R1).
+    pending_static: Optional[Token] = None
     for child in children:
+        if isinstance(child, Token) and child.type == "STATIC":
+            pending_static = child
+            continue
         if isinstance(child, Tree) and child.data == "function_def":
             method = parse_funcdef(child, ast_builder)
             if method.public_span is not None:
                 raise SyntaxDiagnostic("CE6103", span=method.public_span) \
                     .help("an implementation is as visible as its target type; "
                           "mark the type instead")
+            if pending_static is not None:
+                method.static_span = span_of(pending_static)
+                pending_static = None
             methods.append(method)
     return methods
 

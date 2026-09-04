@@ -260,6 +260,14 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if result is not None:
         return result
 
+    # A USER static (#542), ahead of every receiver-shaped arm. It is stamp-driven, so
+    # it cannot misfire; and it must precede both the enum-constructor arm -- a static
+    # on an enum is no variant -- and `emit_receiver_value`, because a type NAME is not
+    # a value and emitting it is a CE0055.
+    result = _try_emit_static_call(codegen, expr, to_i1)
+    if result is not None:
+        return result
+
     result = intrinsics.try_emit_enum_constructor(codegen, expr)
     if result is not None:
         return result
@@ -413,6 +421,46 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params, strict=True)]
     result_value = codegen.builder.call(llvm_fn, casted)
 
+    return codegen.utils.as_i1(result_value) if to_i1 else result_value
+
+
+def _try_emit_static_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                          to_i1: bool) -> ir.Value | None:
+    """Emit `Type.name(args)` for a user static method (#542).
+
+    Nothing is looked up by shape: the typecheck pass stamped that the callee IS a
+    static and which type it was written on, and this arm reads the stamps. No
+    receiver crosses -- the declaration has no `self` parameter -- so the argument
+    list is the whole call.
+    """
+    if not getattr(expr, "callee_is_static", False):
+        return None
+
+    from sushi_lang.semantics.generics.name_mangling import extension_symbol
+
+    target = getattr(expr, "callee_static_target", None)
+    if target is None:
+        raise_internal_error("CE0055", name=f"static {expr.method}")
+
+    func_name = extension_symbol(
+        str(target), expr.method,
+        getattr(expr, "callee_method_type_args", None) or ())
+    llvm_fn = codegen.funcs.get(func_name)
+    if llvm_fn is None:
+        llvm_fn = codegen.module.globals.get(func_name)
+    if llvm_fn is None:
+        raise KeyError(f"Static method not found: {func_name}")
+
+    args = [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    settle_method_call_arguments(codegen, expr, args)
+
+    params = list(llvm_fn.args)
+    if len(args) != len(params):
+        raise_internal_error("CE0026", expected=len(params), got=len(args))
+
+    casted = [codegen.utils.cast_for_param(v, p.type)
+              for v, p in zip(args, params, strict=True)]
+    result_value = codegen.builder.call(llvm_fn, casted)
     return codegen.utils.as_i1(result_value) if to_i1 else result_value
 
 

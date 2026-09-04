@@ -64,8 +64,14 @@ def validate_variant_exists(
         # A contested name is the winner's enum, not this unit's (D2). CE2045 would name
         # a variant the user did write, against an enum they did not.
         if not name_is_contested(validator, "enum", enum_type.name):
-            er.emit(validator.reporter, er.ERR.CE2045, constructor.variant_name_span or constructor.loc,
-                   variant=variant_name, enum=enum_type.name)
+            # One namespace behind a type's dot (#542, ruling Q1): the name could have
+            # been either member, so the help names both.
+            er.emit_with(validator.reporter, er.ERR.CE2045,
+                         constructor.variant_name_span or constructor.loc,
+                         variant=variant_name, enum=enum_type.name) \
+                .help("a name behind an enum's dot is a variant or a static method: "
+                      f"add the variant, or declare 'extend {enum_type.name} static "
+                      f"{variant_name}(...)'").emit()
         return None
 
     return variant

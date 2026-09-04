@@ -1,0 +1,21 @@
+# A static's owning return is the CALLER's, exactly as a function's is: no receiver is
+# involved, so nothing about the ownership changes.
+# EXPECT_STDOUT_EXACT: "3 mostly harmless\n"
+# EXPECT_NO_LEAKS
+struct Log:
+    List@(string) lines
+
+extend Log static of_three(nom string tail) Log:
+    let List@(string) out = List.new()
+    out.push("mostly")
+    out.push("harmless")
+    out.push(tail)
+    return Log(out)
+
+fn main() i32:
+    let string bang = "!"
+    let Log l = Log.of_three(nom bang)
+    let string first = l.lines.get(0).realise('?')
+    let string second = l.lines.get(1).realise('?')
+    println("{l.lines.len()} {first} {second}")
+    return Result.Ok(0)

@@ -1,0 +1,12 @@
+# The second position of the same fault: the body has no `self` to read (CE0134).
+# EXPECT_ERROR_CODE: CE0134
+struct Vec:
+    i32 x
+
+extend Vec static at() Vec:
+    return Vec(self.x)
+
+fn main() i32:
+    let Vec v = Vec.at()
+    println("{v.x}")
+    return Result.Ok(0)

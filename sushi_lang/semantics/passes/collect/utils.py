@@ -123,3 +123,34 @@ def reject_try_in_body(reporter, body: Any, context: str) -> None:
                 walk(getattr(node, f.name))
 
     walk(body)
+
+
+def reject_self_in_body(reporter, body: Any, name: str) -> None:
+    """Reject every mention of `self` in a STATIC method body (CE0134, #542).
+
+    The second position of one fault: a static is called on the type name, so there is
+    no receiver to read. Structural, so the collect pass owns it, and a lambda inside
+    the body is walked too -- it has no receiver either.
+    """
+    import dataclasses
+
+    from sushi_lang.internals import errors as er
+    from sushi_lang.semantics.ast import Name, Node
+
+    def walk(node: Any) -> None:
+        if isinstance(node, Name):
+            if node.id == "self":
+                er.emit_with(reporter, er.ERR.CE0134,
+                             getattr(node, "loc", None), name=name) \
+                    .help("a static has no receiver: take what it needs as a "
+                          "parameter, or drop the `static` marker").emit()
+            return
+        if isinstance(node, (list, tuple)):
+            for item in node:
+                walk(item)
+            return
+        if isinstance(node, Node):
+            for f in dataclasses.fields(node):
+                walk(getattr(node, f.name))
+
+    walk(body)

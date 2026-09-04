@@ -184,7 +184,7 @@ _add(ErrorMessage("CE2044", Severity.ERROR,
 
 _add(ErrorMessage("CE2045", Severity.ERROR,
     "enum variant '{variant}' not found in enum '{enum}'",
-    Category.TYPE, "The specified variant does not exist in the enum type."))
+    Category.TYPE, "The specified variant does not exist in the enum type. Since #542 an enum's dot holds TWO kinds of member -- a variant, and a static method -- so the help names both escapes: add the variant, or declare the name as a static. It is still one namespace: a variant and a static of one name on one enum is CE2103, because the variant would always win."))
 
 _add(ErrorMessage("CE2046", Severity.ERROR,
     "duplicate enum '{name}'",
@@ -371,3 +371,15 @@ _add(ErrorMessage("CE2063", Severity.ERROR,
 _add(ErrorMessage("CE2064", Severity.ERROR,
     "method type parameter '{name}' shadows a type parameter of the extension target",
     Category.TYPE, "The receiver target's bare names (`extend Box@(T)`, `extend T[]`) and the method's own `@(...)` list share one namespace inside the body, so a repeated name would make `T` mean two types in one signature. Rename the method-level parameter. The rule mirrors CE2097's spirit: a declaration that could only ever mislead is refused where it is written."))
+
+_add(ErrorMessage("CE2102", Severity.ERROR,
+    "'{type}' has no static method '{method}'",
+    Category.TYPE, "A name behind a type's dot is a MEMBER of that type (#542, ruling Q1): a variant, or a static method. This type declares neither of that name. Before statics existed the struct spelling answered CE1001 'use of undeclared identifier' for a type that IS declared -- wrong about the one thing it named, because the fault is the POSITION and not the name. Declare the method as `extend {type} static {method}(...)`, or call an instance method on a value of the type."))
+
+_add(ErrorMessage("CE2103", Severity.ERROR,
+    "static method '{method}' collides with a variant of enum '{enum}'",
+    Category.TYPE, "One namespace sits behind a type's dot (#542, ruling Q1): a name there is a variant or a static method, never both. A variant always wins at the call site, so a static of that name is compiled and then never called -- the hazard CE2097 refuses for a built-in. Relational: the primary sits at the static declaration and a note at the variant. Rename the static."))
+
+_add(ErrorMessage("CE2104", Severity.ERROR,
+    "a static method cannot be declared on an array target",
+    Category.TYPE, "A static is called on the TYPE name, and an array type has no spelling in an expression position: `i32[].two()` is a parse error, and there is no form that would reach `extend i32[] static two()` or `extend T[] static two()`. The declaration would compile and never be callable, which is the hazard CE2097 refuses for a colliding built-in -- if the situation cannot possibly do what the user wrote, it is an error and not a warning. Write a free function, or a static on a struct that holds the array."))

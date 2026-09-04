@@ -1,0 +1,15 @@
+# A static on a GENERIC target is a template like any other method: one copy per
+# instantiation, and the type argument comes from the declared type at the call site --
+# a static has no receiver to read it from.
+# EXPECT_STDOUT_EXACT: "9 true\n"
+struct Cage@(T):
+    T item
+
+extend Cage@(T) static holding(T item) Cage@(T):
+    return Cage(item)
+
+fn main() i32:
+    let Cage@(i32) a = Cage.holding(9)
+    let Cage@(bool) b = Cage.holding(true)
+    println("{a.item} {b.item}")
+    return Result.Ok(0)

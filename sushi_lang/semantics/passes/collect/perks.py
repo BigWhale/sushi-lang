@@ -365,6 +365,21 @@ class PerkCollector:
             diag.emit()
             return
 
+    def _reject_static_in_impl(self, impl: ExtendWithDef, perk_name: str) -> bool:
+        """CE4014: a perk implementation may not declare a static method (#542, R1)."""
+        refused = False
+        for method in getattr(impl, "methods", []) or []:
+            span = getattr(method, "static_span", None)
+            if span is None:
+                continue
+            er.emit_with(self.r, ERR.CE4014, span,
+                         perk=perk_name, method=getattr(method, "name", "?")) \
+                .help("declare it as a plain extension method on the type "
+                      "('extend T static name(...)'); a perk contracts instance "
+                      "methods only").emit()
+            refused = True
+        return refused
+
     def _is_declared_type(self, name: str) -> bool:
         """Does this bare name in a target's argument position name a TYPE?"""
         return (name in self.perks.by_name
@@ -462,6 +477,12 @@ class PerkCollector:
         for method in getattr(impl, "methods", []) or []:
             if getattr(method, "err_type", None) is None:
                 reject_try_in_body(self.r, getattr(method, "body", None), "a perk method")
+
+        # A perk has no `Self` (HANDLES.md R7), so a contract cannot hold a
+        # constructor. The grammar admits the marker here only so this diagnostic can
+        # point at it (#542, ruling R1).
+        if self._reject_static_in_impl(impl, perk_name):
+            return False
 
         perk_name_span: Optional[Span] = getattr(impl, "perk_name_span", None) or getattr(impl, "loc", None)
         target_type: Optional[Type] = getattr(impl, "target_type", None)

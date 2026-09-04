@@ -1,0 +1,14 @@
+# Local-wins (#296) is the rule a static inherits, not a rule it adds: a local named
+# after the type shadows it, so the dot reads the local's own method.
+# EXPECT_STDOUT_EXACT: "40 7\n"
+struct Tag:
+    i32 n
+
+extend Tag static of(i32 n) Tag:
+    return Tag(n * 10)
+
+fn main() i32:
+    let Tag outer = Tag.of(4)
+    let i32 Tag = 7
+    println("{outer.n} {Tag.to_str()}")
+    return Result.Ok(0)

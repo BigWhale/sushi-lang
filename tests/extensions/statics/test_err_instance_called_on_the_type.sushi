@@ -1,0 +1,13 @@
+# The mirror of it: an instance method is not a member of the TYPE, and CE2102 names
+# the escape rather than saying the type is undeclared.
+# EXPECT_ERROR_CODE: CE2102
+struct Vec:
+    i32 x
+
+extend Vec doubled() i32:
+    return self.x * 2
+
+fn main() i32:
+    let i32 n = Vec.doubled()
+    println("{n}")
+    return Result.Ok(0)

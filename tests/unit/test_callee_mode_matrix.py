@@ -22,6 +22,7 @@ from sushi_lang.semantics.param_modes import (
 DECLARING_KINDS = [
     CalleeKind.FUNCTION,
     CalleeKind.METHOD,
+    CalleeKind.STATIC_METHOD,
     CalleeKind.STDLIB,
     CalleeKind.FFI_EXTERN,
     CalleeKind.INDIRECT,
@@ -225,3 +226,41 @@ def test_the_receiver_declaration_parses_to_the_mode_it_spells():
         program, _tree = parse_to_ast(src)
         ext = program.extensions[0]
         assert receiver_mode(ext.self_mode) is mode, marker
+
+
+# 6. A STATIC method declares parameters and no receiver (#542, ruling R4)
+
+STATIC_DECLARATION = """\
+struct Box:
+    i32 n
+
+extend Box static wrap({marker}string text) Box:
+    return Box(text.len())
+"""
+
+
+@pytest.mark.parametrize("mode,marker", [
+    (ParamMode.BORROW, ""),
+    (ParamMode.NOM, "nom "),
+    (ParamMode.PEEK, "peek "),
+    (ParamMode.POKE, "poke "),
+])
+def test_a_static_reads_the_same_declared_modes(mode, marker):
+    """A static's parameters are ordinary parameters: the marker is the whole answer."""
+    program, _tree = parse_to_ast(STATIC_DECLARATION.format(marker=marker))
+    ext = program.extensions[0]
+    assert ext.is_static
+    assert declared_modes(ext.params) == (mode,)
+    assert modes_for(ext.params, CalleeKind.STATIC_METHOD) == (mode,)
+
+
+def test_a_static_declares_no_receiver():
+    """`self_mode` is None on a static, and CE0134 refuses one that writes it."""
+    program, _tree = parse_to_ast(STATIC_DECLARATION.format(marker=""))
+    assert program.extensions[0].self_mode is None
+
+
+def test_a_static_kind_reinterprets_nothing():
+    """It is a DECLARING kind: no position of it consumes by construction."""
+    borrowed = [_param(ParamMode.BORROW)]
+    assert modes_for(borrowed, CalleeKind.STATIC_METHOD) == (ParamMode.BORROW,)

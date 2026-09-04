@@ -143,16 +143,19 @@ class Binding:
     provider: "Provider"
     record: Any = None
 
-    def ref(self, *, name: Optional[str] = None) -> "NamespaceRef":
+    def ref(self, *, name: Optional[str] = None,
+            kind: Optional[str] = None) -> "NamespaceRef":
         """The stamp a node carries once this binding answered it. The ONE constructor.
 
         `name` overrides the declared one for a generic whose monomorphized instance is
-        what the alias then points at.
+        what the alias then points at. `kind` overrides it for the one reader that
+        knows the POSITION better than the declaration does: the static fold, where a
+        struct and an enum both arrive as the type a name was written on (#542).
         """
         return NamespaceRef(producer=self.provider.namespace_kind,
                             origin=self.provider.origin,
                             name=name or self.name,
-                            kind=self.kind)
+                            kind=kind or self.kind)
 
 
 class Provider:

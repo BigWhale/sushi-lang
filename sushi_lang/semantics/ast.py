@@ -196,6 +196,9 @@ class FuncDef(Node):
     # The unit that DECLARED the generic this instance came from, so two units'
     # instances of one generic stay distinct (#495). Set by generics/synthesis.py.
     home_unit: Optional[str] = None
+    # Where a `static` marker was written on a perk-implementation method. The
+    # grammar admits it in that position only so the perk pass can refuse it (CE4014).
+    static_span: Optional[Span] = None
 
 
 @dataclass(slots=True)
@@ -286,6 +289,10 @@ class ExtendDef(Node):
     # order; part of the emitted symbol's identity. () or None on every other node.
     method_type_args: Optional[tuple] = None
     doc: Optional[DocBlock] = None
+    # A `static` method has NO receiver (#542): no implicit `self`, and the call is
+    # written on the type name. The span is what CE0134 points at.
+    is_static: bool = False
+    static_span: Optional[Span] = None
 
 @dataclass(slots=True)
 class PerkMethodSignature:
@@ -736,6 +743,13 @@ class DotCall(Node):
     # The SOLVED method-level type arguments of a method-generic extension call; see
     # MethodCall.
     callee_method_type_args: Optional[Tuple] = None
+    # True when the callee is a STATIC method (#542): no receiver crosses, and the
+    # backend emits the symbol with the argument list alone. Stamped by the typecheck
+    # pass, exactly as the receiver mode beside it is.
+    callee_is_static: bool = False
+    # The type a static call was written on, interned. The backend needs it to spell
+    # the symbol, and the receiver `Name` is not a value it could infer one from.
+    callee_static_target: Optional["Type"] = None
 
 
 @dataclass(slots=True)

@@ -124,7 +124,9 @@ class FunctionDeclarations:
         param_types = []
         param_names = []
 
-        if ext.target_type:
+        # A STATIC method has no receiver (#542): the parameter list is the arguments
+        # alone, and `receiver_mode` must never be reached for one.
+        if ext.target_type and not getattr(ext, "is_static", False):
             from sushi_lang.semantics.param_modes import receiver_mode
             self_ll = self.codegen.types.ll_type(ext.target_type)
             if receiver_mode(getattr(ext, "self_mode", None)).by_pointer:

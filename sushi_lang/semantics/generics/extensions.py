@@ -89,6 +89,10 @@ def monomorphize_extension_method(
         # write reached a private copy, and a `nom self` receiver registered as a borrow
         # so a field take out of it answered CE2411 (ruling R28).
         self_mode=getattr(generic_method, "self_mode", None),
+        # Whether there IS a receiver at all (#542) -- the same reasoning: a copy that
+        # lost the flag would be declared with a `self` parameter its body never
+        # names, and every call site would be one argument short.
+        is_static=bool(getattr(generic_method, "is_static", False)),
     )
 
 

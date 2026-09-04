@@ -1,0 +1,13 @@
+# `new` is the idiomatic static name (ruling R3), so the DECLARATION admits it too --
+# the call site always parsed it, and `extend Box new()` used to be CE6001.
+# EXPECT_STDOUT_EXACT: "7\n"
+struct Box:
+    i32 n
+
+extend Box static new(i32 n) Box:
+    return Box(n)
+
+fn main() i32:
+    let Box b = Box.new(7)
+    println("{b.n}")
+    return Result.Ok(0)

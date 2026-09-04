@@ -127,6 +127,7 @@ def test_a_nom_parameter_makes_a_different_function_type():
 UNMARKED_MEANS = {
     CalleeKind.FUNCTION: ParamMode.BORROW,
     CalleeKind.METHOD: ParamMode.BORROW,
+    CalleeKind.STATIC_METHOD: ParamMode.BORROW,
     CalleeKind.STDLIB: ParamMode.BORROW,
     CalleeKind.FFI_EXTERN: ParamMode.BORROW,
     CalleeKind.INDIRECT: ParamMode.BORROW,

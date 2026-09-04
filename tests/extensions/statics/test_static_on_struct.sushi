@@ -1,0 +1,14 @@
+# A `static` marker before the method name declares a receiver-less method, and the
+# call is written on the TYPE name (#542, ruling Q2).
+# EXPECT_STDOUT_EXACT: "3 4\n"
+struct Vec:
+    i32 x
+    i32 y
+
+extend Vec static at(i32 x, i32 y) Vec:
+    return Vec(x, y)
+
+fn main() i32:
+    let Vec v = Vec.at(3, 4)
+    println("{v.x} {v.y}")
+    return Result.Ok(0)

@@ -62,3 +62,7 @@ _add(ErrorMessage("CE4012", Severity.ERROR,
 # under the interned name, so the key a concrete receiver resolves to is the key the
 # implementation is filed under. The rule had nothing left to refuse and the code was
 # retired. `extend BufWriter@(W) with Drop` is what needed it.
+
+_add(ErrorMessage("CE4014", Severity.ERROR,
+    "perk '{perk}' cannot hold the static method '{method}'",
+    Category.PERK, "HANDLES.md ruling R7: a perk has no `Self`, so a contract cannot say 'returns one of me' and a constructor has no signature to declare there. #542 ruling R1 keeps the refusal a COMPILER error rather than a parse error: the grammar admits the marker in the implementation position precisely so this diagnostic can point at it and say why. Declare the static as a plain extension method on the type (`extend Vec static at(...)`) -- it is as visible as the type either way -- and leave the perk to the instance methods it can contract."))

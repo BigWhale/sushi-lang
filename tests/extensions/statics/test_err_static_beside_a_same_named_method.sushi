@@ -1,0 +1,16 @@
+# A name has exactly one home: a static and an instance method of one name on one type
+# is the duplicate-extension refusal it always was (CE0101).
+# EXPECT_ERROR_CODE: CE0101
+struct Cell:
+    i32 n
+
+extend Cell of(i32 n) i32:
+    return self.n + n
+
+extend Cell static of(i32 n) Cell:
+    return Cell(n)
+
+fn main() i32:
+    let Cell c = Cell.of(1)
+    println("{c.n}")
+    return Result.Ok(0)
