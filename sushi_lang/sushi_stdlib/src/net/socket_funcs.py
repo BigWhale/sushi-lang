@@ -1,4 +1,4 @@
-"""The <net/socket> semantic interface: names, return types, arity.
+"""The <net/socket> semantic interface: one table, and the three discovery names.
 
 No IR lives here. The StdlibRegistry discovers a module by looking for these
 three names, built from the module path's last segment, so <net/socket> needs
@@ -8,6 +8,12 @@ validate_socket_function_call.
 Every function answers Result@(T, NetError). The prefix names the transport:
 sock_* works on any descriptor this module produced, tcp_* wants a stream
 socket, udp_* a datagram one, and dns_* resolves a name.
+
+SOCKET_SIGNATURES is the ONE spelling of what each primitive takes and answers
+(#550). The registry's parameter specs, the arity check, the return type, the
+Result the instantiate pass interns and the back end's emission all read it, so
+a new primitive is one row here and nothing else. `tests/unit/
+test_stdlib_signature_tables.py` is the gate.
 """
 from typing import Dict, List
 
@@ -17,89 +23,60 @@ from sushi_lang.semantics.typesys import (
     Type,
     UnknownType,
 )
+from sushi_lang.sushi_stdlib.src.signatures import (
+    Signature,
+    cstr,
+    params_of,
+    validate_arity,
+)
+
+I32 = BuiltinType.I32
+BYTES = DynamicArrayType(BuiltinType.U8)
+STRINGS = DynamicArrayType(BuiltinType.STRING)
+NET = "NetError"
 
 
-SOCKET_FUNCTIONS: List[str] = [
-    "sock_tcp_connect",
-    "sock_tcp_listen",
-    "sock_tcp_accept",
-    "sock_send",
-    "sock_recv",
-    "sock_close",
-    "sock_dup",
-    "sock_local_port",
-    "sock_peer_ip",
-    "sock_peer_port",
-    "sock_set_recv_timeout",
-    "sock_set_send_timeout",
-    "sock_dns_resolve",
-    "sock_udp_bind",
-    "sock_udp_send_to",
-    "sock_udp_recv_from",
-]
-
-# Sushi name -> the Ok type of its Result. The Err type is always NetError.
-_OK_TYPES: Dict[str, Type] = {
-    "sock_tcp_connect": BuiltinType.I32,
-    "sock_tcp_listen": BuiltinType.I32,
-    "sock_tcp_accept": BuiltinType.I32,
-    "sock_send": BuiltinType.I32,
-    "sock_recv": DynamicArrayType(BuiltinType.U8),
-    "sock_close": BuiltinType.I32,
-    "sock_dup": BuiltinType.I32,
-    "sock_local_port": BuiltinType.I32,
-    "sock_peer_ip": BuiltinType.STRING,
-    "sock_peer_port": BuiltinType.I32,
-    "sock_set_recv_timeout": BuiltinType.I32,
-    "sock_set_send_timeout": BuiltinType.I32,
-    "sock_dns_resolve": DynamicArrayType(BuiltinType.STRING),
-    "sock_udp_bind": BuiltinType.I32,
-    "sock_udp_send_to": BuiltinType.I32,
-    "sock_udp_recv_from": UnknownType("Datagram"),
+SOCKET_SIGNATURES: Dict[str, Signature] = {
+    # A host name and a port: the host is a C string at the boundary.
+    "sock_tcp_connect":      Signature(params_of(cstr(), I32), ok=I32, error=NET),
+    "sock_tcp_listen":       Signature(params_of(cstr(), I32, I32), ok=I32, error=NET),
+    "sock_udp_bind":         Signature(params_of(cstr(), I32), ok=I32, error=NET),
+    "sock_dns_resolve":      Signature(params_of(cstr()), ok=STRINGS, error=NET),
+    # One descriptor in, a descriptor or a number out.
+    "sock_tcp_accept":       Signature(params_of(I32), ok=I32, error=NET),
+    "sock_close":            Signature(params_of(I32), ok=I32, error=NET),
+    "sock_dup":              Signature(params_of(I32), ok=I32, error=NET),
+    "sock_local_port":       Signature(params_of(I32), ok=I32, error=NET),
+    "sock_peer_port":        Signature(params_of(I32), ok=I32, error=NET),
+    "sock_peer_ip":          Signature(params_of(I32), ok=BuiltinType.STRING, error=NET),
+    # A descriptor and a count, or a descriptor and bytes.
+    "sock_recv":             Signature(params_of(I32, I32), ok=BYTES, error=NET),
+    "sock_send":             Signature(params_of(I32, BYTES), ok=I32, error=NET),
+    "sock_set_recv_timeout": Signature(params_of(I32, I32), ok=I32, error=NET),
+    "sock_set_send_timeout": Signature(params_of(I32, I32), ok=I32, error=NET),
+    # The datagram pair: send names its peer, receive answers who sent it.
+    "sock_udp_send_to":      Signature(params_of(I32, BYTES, cstr(), I32),
+                                       ok=I32, error=NET),
+    "sock_udp_recv_from":    Signature(params_of(I32, I32),
+                                       ok=UnknownType("Datagram"), error=NET),
 }
 
-# Sushi name -> how many arguments it takes.
-_ARITY: Dict[str, int] = {
-    "sock_tcp_connect": 2,
-    "sock_tcp_listen": 3,
-    "sock_tcp_accept": 1,
-    "sock_send": 2,
-    "sock_recv": 2,
-    "sock_close": 1,
-    "sock_dup": 1,
-    "sock_local_port": 1,
-    "sock_peer_ip": 1,
-    "sock_peer_port": 1,
-    "sock_set_recv_timeout": 2,
-    "sock_set_send_timeout": 2,
-    "sock_dns_resolve": 1,
-    "sock_udp_bind": 2,
-    "sock_udp_send_to": 4,
-    "sock_udp_recv_from": 2,
-}
+SOCKET_FUNCTIONS: List[str] = list(SOCKET_SIGNATURES)
 
 
 def is_builtin_socket_function(name: str) -> bool:
     """Whether a bare name is one of the <net/socket> primitives."""
-    return name in SOCKET_FUNCTIONS
+    return name in SOCKET_SIGNATURES
 
 
 def get_builtin_socket_function_return_type(func_name: str) -> Type:
     """The declared return type: Result@(T, NetError) for every primitive."""
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-    from sushi_lang.semantics.typesys import UnknownType
-
-    ok_type = _OK_TYPES.get(func_name)
-    if ok_type is None:
+    sig = SOCKET_SIGNATURES.get(func_name)
+    if sig is None:
         raise ValueError(f"Unknown socket function: {func_name}")
-    return GenericTypeRef("Result", (ok_type, UnknownType("NetError")))
+    return sig.return_type()
 
 
 def validate_socket_function_call(func_name: str, args: list, reporter, loc) -> None:
-    """Check the argument count against the declared arity."""
-    from sushi_lang.internals import errors as er
-
-    expected = _ARITY.get(func_name)
-    if expected is not None and len(args) != expected:
-        er.emit(reporter, er.ERR.CE2009, loc,
-                name=func_name, expected=expected, got=len(args))
+    """Check the argument count against the row's own length."""
+    validate_arity(func_name, SOCKET_SIGNATURES, args, reporter, loc)

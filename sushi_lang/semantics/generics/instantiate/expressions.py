@@ -211,73 +211,7 @@ class ExpressionScanner:
             if env_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, env_error)))
             return
-        elif function_name in {'getenv', 'fd_readln'}:
-            # `fd_readln` answers `Result@(Maybe@(string), FileError)`, and the Maybe is
-            # the half nothing else in the program names: the Result interns through its
-            # own seam, but a payload enum has to be asked for here or the match on the
-            # answer sees an unresolved `Maybe@(string)` (CE2048).
-            self.instantiations.add(("Maybe", (BuiltinType.STRING,)))
-            return
-        elif function_name in {'file_size', 'mtime', 'ctime'}:
-            file_error = self.type_inferrer.enum_table.get("FileError")
-            if file_error:
-                self.instantiations.add(("Result", (BuiltinType.I64, file_error)))
-            return
-        elif function_name == 'mode':
-            file_error = self.type_inferrer.enum_table.get("FileError")
-            if file_error:
-                self.instantiations.add(("Result", (BuiltinType.I32, file_error)))
-            return
-        elif function_name == 'is_symlink':
-            file_error = self.type_inferrer.enum_table.get("FileError")
-            if file_error:
-                self.instantiations.add(("Result", (BuiltinType.BOOL, file_error)))
-            return
-        elif function_name in {'remove', 'rename', 'copy', 'mkdir', 'rmdir'}:
-            file_error = self.type_inferrer.enum_table.get("FileError")
-            if file_error:
-                self.instantiations.add(("Result", (BuiltinType.I32, file_error)))
-            return
-        elif function_name == 'read_dir':
-            from sushi_lang.semantics.typesys import DynamicArrayType
-            file_error = self.type_inferrer.enum_table.get("FileError")
-            if file_error:
-                self.instantiations.add(
-                    ("Result", (DynamicArrayType(BuiltinType.STRING), file_error)))
-            return
-        elif function_name in {'sock_tcp_connect', 'sock_tcp_listen', 'sock_tcp_accept',
-                               'sock_send', 'sock_close', 'sock_dup', 'sock_local_port',
-                               'sock_peer_port', 'sock_set_recv_timeout',
-                               'sock_set_send_timeout', 'sock_udp_bind',
-                               'sock_udp_send_to'}:
-            net_error = self.type_inferrer.enum_table.get("NetError")
-            if net_error:
-                self.instantiations.add(("Result", (BuiltinType.I32, net_error)))
-            return
-        elif function_name == 'sock_peer_ip':
-            net_error = self.type_inferrer.enum_table.get("NetError")
-            if net_error:
-                self.instantiations.add(("Result", (BuiltinType.STRING, net_error)))
-            return
-        elif function_name == 'sock_recv':
-            from sushi_lang.semantics.typesys import DynamicArrayType
-            net_error = self.type_inferrer.enum_table.get("NetError")
-            if net_error:
-                self.instantiations.add(
-                    ("Result", (DynamicArrayType(BuiltinType.U8), net_error)))
-            return
-        elif function_name == 'sock_udp_recv_from':
-            net_error = self.type_inferrer.enum_table.get("NetError")
-            datagram = self.type_inferrer.struct_table.get("Datagram")
-            if net_error and datagram:
-                self.instantiations.add(("Result", (datagram, net_error)))
-            return
-        elif function_name == 'sock_dns_resolve':
-            from sushi_lang.semantics.typesys import DynamicArrayType
-            net_error = self.type_inferrer.enum_table.get("NetError")
-            if net_error:
-                self.instantiations.add(
-                    ("Result", (DynamicArrayType(BuiltinType.STRING), net_error)))
+        elif self._scan_registry_signature(function_name):
             return
 
         resolved = self.resolve_generic_call(call, generic_func)
@@ -292,6 +226,51 @@ class ExpressionScanner:
         self.function_instantiations.add(
             (getattr(generic_func, "unit_name", None), function_name, type_args))
         self._collect_substituted_signature(generic_func, type_args)
+
+    def _scan_registry_signature(self, function_name: str) -> bool:
+        """Intern the Result a registry primitive answers, from its own row (#550).
+
+        `<io/files>` and `<net/socket>` each keep one signature table, so the payload
+        and the error enum are read rather than spelled here per function. A payload
+        that is itself a generic -- `fd_readln` answers `Result@(Maybe@(string), E)` --
+        is interned too: the Result goes through its own seam, but a payload enum has
+        to be asked for here or the match on the answer sees an unresolved
+        `Maybe@(string)` (CE2048).
+
+        Returns True when the name is a registry primitive, so the caller stops.
+        """
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
+        from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
+
+        sig = FILES_SIGNATURES.get(function_name) or SOCKET_SIGNATURES.get(function_name)
+        if sig is None:
+            return False
+        if sig.ok is None:
+            return True  # a bare answer: no Result to intern
+
+        payload = sig.ok
+        if isinstance(payload, GenericTypeRef):
+            inner = self._resolve_payload_arg(payload.type_args)
+            if inner is not None:
+                self.instantiations.add((payload.base_name, inner))
+        elif isinstance(payload, UnknownType):
+            named = (self.type_inferrer.struct_table.get(payload.name)
+                     or self.type_inferrer.enum_table.get(payload.name))
+            if named is None:
+                return True
+            payload = named
+
+        error = self.type_inferrer.enum_table.get(sig.error) if sig.error else None
+        if error is not None and not isinstance(payload, GenericTypeRef):
+            self.instantiations.add(("Result", (payload, error)))
+        return True
+
+    @staticmethod
+    def _resolve_payload_arg(type_args) -> tuple | None:
+        """A generic payload's own arguments, or None when one does not resolve."""
+        return tuple(type_args) if type_args else None
 
     def resolve_generic_call(self, call, generic_func=None):
         """The generic declaration a call names and its type arguments, or None.

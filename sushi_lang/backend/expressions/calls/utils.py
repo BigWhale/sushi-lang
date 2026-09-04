@@ -123,13 +123,29 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
 
 def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional[EnumType]:
     """The Result/Maybe enum a direct stdlib-module call returns, or None."""
-    from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType
+    from sushi_lang.semantics.typesys import BuiltinType
     from sushi_lang.backend.generics.result_builder import intern_result
 
     enums = codegen.enum_table.by_name
     if func_name == 'getenv':
         return enums.get('Maybe<string>')
 
+    # `<io/files>` and `<net/socket>` keep their rows in ONE table each, beside their
+    # generators (#550): the Ok payload and the error enum are read, never respelled.
+    from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
+    from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
+
+    row = FILES_SIGNATURES.get(func_name) or SOCKET_SIGNATURES.get(func_name)
+    if row is not None:
+        if row.ok is None:
+            return None  # a bare answer carries no Result
+        err_enum = enums.get(row.error) if row.error else None
+        ok_type = _named_ok(codegen, row.ok)
+        if err_enum is None or ok_type is None:
+            return None
+        return intern_result(codegen, ok_type, err_enum)
+
+    # The modules that have no table yet: time, sys/env, sys/process.
     result_specs = {
         'sleep': (BuiltinType.I32, 'StdError'),
         'msleep': (BuiltinType.I32, 'StdError'),
@@ -138,34 +154,8 @@ def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional
         'now': (BuiltinType.I64, 'StdError'),
         'monotonic_ns': (BuiltinType.I64, 'StdError'),
         'setenv': (BuiltinType.I32, 'EnvError'),
-        'file_size': (BuiltinType.I64, 'FileError'),
-        'remove': (BuiltinType.I32, 'FileError'),
-        'rename': (BuiltinType.I32, 'FileError'),
-        'copy': (BuiltinType.I32, 'FileError'),
-        'mkdir': (BuiltinType.I32, 'FileError'),
-        'rmdir': (BuiltinType.I32, 'FileError'),
-        'read_dir': (DynamicArrayType(BuiltinType.STRING), 'FileError'),
-        'mtime': (BuiltinType.I64, 'FileError'),
-        'ctime': (BuiltinType.I64, 'FileError'),
-        'mode': (BuiltinType.I32, 'FileError'),
-        'is_symlink': (BuiltinType.BOOL, 'FileError'),
         'chdir': (BuiltinType.I32, 'ProcessError'),
         'getcwd': (BuiltinType.STRING, 'ProcessError'),
-        'sock_tcp_connect': (BuiltinType.I32, 'NetError'),
-        'sock_tcp_listen': (BuiltinType.I32, 'NetError'),
-        'sock_tcp_accept': (BuiltinType.I32, 'NetError'),
-        'sock_send': (BuiltinType.I32, 'NetError'),
-        'sock_recv': (DynamicArrayType(BuiltinType.U8), 'NetError'),
-        'sock_dns_resolve': (DynamicArrayType(BuiltinType.STRING), 'NetError'),
-        'sock_udp_bind': (BuiltinType.I32, 'NetError'),
-        'sock_udp_send_to': (BuiltinType.I32, 'NetError'),
-        'sock_close': (BuiltinType.I32, 'NetError'),
-        'sock_dup': (BuiltinType.I32, 'NetError'),
-        'sock_local_port': (BuiltinType.I32, 'NetError'),
-        'sock_peer_ip': (BuiltinType.STRING, 'NetError'),
-        'sock_peer_port': (BuiltinType.I32, 'NetError'),
-        'sock_set_recv_timeout': (BuiltinType.I32, 'NetError'),
-        'sock_set_send_timeout': (BuiltinType.I32, 'NetError'),
     }
     spec = result_specs.get(func_name)
     if spec is None:
@@ -174,17 +164,36 @@ def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional
             err_enum = enums.get('ProcessError')
             if out_struct is not None and err_enum is not None:
                 return intern_result(codegen, out_struct, err_enum)
-        if func_name == 'sock_udp_recv_from':
-            datagram = codegen.struct_table.by_name.get('Datagram')
-            err_enum = enums.get('NetError')
-            if datagram is not None and err_enum is not None:
-                return intern_result(codegen, datagram, err_enum)
         return None
     ok_type, err_name = spec
     err_enum = enums.get(err_name)
     if err_enum is None:
         return None
     return intern_result(codegen, ok_type, err_enum)
+
+
+def _named_ok(codegen: 'LLVMCodegen', ok):
+    """A row's Ok payload as a type the enum table can intern, or None.
+
+    A row names a type it cannot build: a struct or an enum by NAME
+    (`UnknownType("Datagram")`), or a generic instance (`fd_readln` answers
+    `Result@(Maybe@(string), E)`). Both are LOOKED UP here and never rebuilt, which is
+    `docs/design/type-identity.md`'s rule -- handing `intern_result` an unresolved name
+    is the bypass CE0126 refuses. A payload the tables do not hold yet answers None,
+    and the caller then has no Result to report.
+    """
+    from sushi_lang.semantics.generics.type_display import display_type
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.typesys import UnknownType
+
+    if isinstance(ok, UnknownType):
+        return (codegen.struct_table.by_name.get(ok.name)
+                or codegen.enum_table.by_name.get(ok.name))
+    if isinstance(ok, GenericTypeRef):
+        interned = f"{ok.base_name}<{', '.join(display_type(a) for a in ok.type_args)}>"
+        return (codegen.enum_table.by_name.get(interned)
+                or codegen.struct_table.by_name.get(interned))
+    return ok
 
 
 def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_value: ir.Value, prefix: str) -> Optional[EnumType]:
