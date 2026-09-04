@@ -446,6 +446,24 @@ All notable changes to Sushi Lang will be documented in this file.
 - **Monomorphization keeps a receiver's mode.** A `poke self` method on a generic
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
+### Changed
+- **One signature table per stdlib layer, and every reader takes its row from it.** The
+  `<net/socket>` function list was spelled in four Python places beside its own name
+  list -- the registry's parameter specs, the backend's Ok type and error enum, the
+  interned `Result` the instantiate pass asks for, and the emission special cases -- and
+  `<io/files>` spelled its own names in three if/elif chains inside one file. A name
+  missing from one of them answered CE2008 for a function the compiler can emit (#550).
+  `SOCKET_SIGNATURES` and `FILES_SIGNATURES` are now the one spelling of what each
+  primitive takes and answers, beside their generators, and the arity, the return type,
+  the registry spec, the interned Result and the whole of code emission are derived from
+  them. A parameter carries its Sushi type AND whether it crosses as a C string, because
+  one type crosses two ways: `fd_open` takes a PATH and `fd_write_str` a string VALUE.
+  The backend gained one seam that turns a row into an LLVM signature and emits the call,
+  so the two layer emitters are a table lookup and a symbol prefix -- 372 lines net came
+  out. `tests/unit/test_stdlib_signature_tables.py` is the gate: 250 checks that every
+  name in a table has a row in every reader. `<time>`, `<sys/env>`, `<sys/process>` and
+  `<random>` keep their own shape and are the follow-up.
+
 ### Testing
 - **The docs sweep compiles the FILES too, and there are 109 of them.** A third
   collector, `--only files`: nothing compiled a `.sushi` file under `docs/` before it,

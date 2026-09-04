@@ -1,122 +1,97 @@
-"""File utility functions for io/files module."""
-from sushi_lang.semantics.typesys import Type, BuiltinType
+"""The <io/files> semantic interface: one table, and the three discovery names.
+
+No IR lives here. FILES_SIGNATURES is the ONE spelling of what each function takes
+and answers (#550): the registry's parameter specs, the arity check, the return type,
+the Result the instantiate pass interns and the back end's emission all read it, so a
+new primitive is one row here and nothing else. The return type and the arity used to
+be two if/elif chains over the same names, in this file, beside the name list.
+`tests/unit/test_stdlib_signature_tables.py` is the gate.
+
+Two halves. The PATH utilities take a path and answer about the file system. The
+DESCRIPTOR layer takes an fd, which is what makes it the layer a `File` struct is
+written on top of -- the shape `<net/socket>` gives `net/tcp.sushi`. Inside that,
+`fd_pread`/`fd_pwrite` take the offset as an ARGUMENT so the descriptor's position
+never moves, while the sequential half moves it and is the wrong answer for two
+readers of one descriptor (HANDLES.md, Phases 4 and 5).
+"""
+from typing import Dict, List
+
+from sushi_lang.semantics.generics.types import GenericTypeRef
+from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Type
+from sushi_lang.sushi_stdlib.src.signatures import (
+    Signature,
+    cstr,
+    params_of,
+    validate_arity,
+)
+
+BOOL, I32, I64, STRING = (BuiltinType.BOOL, BuiltinType.I32, BuiltinType.I64,
+                          BuiltinType.STRING)
+BYTES = DynamicArrayType(BuiltinType.U8)
+STRINGS = DynamicArrayType(BuiltinType.STRING)
+MAYBE_STRING = GenericTypeRef("Maybe", (BuiltinType.STRING,))
+FILE = "FileError"
 
 
-FILE_UTILITY_FUNCTIONS = [
-    "exists", "is_file", "is_dir", "file_size",
-    "remove", "rename", "copy", "mkdir", "rmdir", "read_dir",
-    "mtime", "ctime", "mode", "is_symlink",
-    # The DESCRIPTOR layer (HANDLES.md, Phase 4). These take an fd rather than a path,
-    # which is what makes them the layer a `File` struct is written on top of -- the
-    # same shape `<net/socket>` gives `net/tcp.sushi`. `fd_pread`/`fd_pwrite` take the
-    # offset as an argument, so the descriptor's file position never moves.
-    "fd_open", "fd_pread", "fd_pwrite", "fd_dup", "fd_close",
-    # The SEQUENTIAL half (HANDLES.md, Phase 5). These move the descriptor's own
-    # file position, which is what makes them the layer `File` is written on, and
-    # what makes them the wrong answer for two readers of one descriptor.
-    "fd_read", "fd_write", "fd_write_str", "fd_readln", "fd_seek", "fd_isatty",
-]
+FILES_SIGNATURES: Dict[str, Signature] = {
+    # The PATH utilities. Asking whether a path exists cannot fail in a way a caller
+    # can act on, so the three predicates answer a BARE bool.
+    "exists":       Signature(params_of(cstr()), bare=BOOL),
+    "is_file":      Signature(params_of(cstr()), bare=BOOL),
+    "is_dir":       Signature(params_of(cstr()), bare=BOOL),
+    "file_size":    Signature(params_of(cstr()), ok=I64, error=FILE),
+    "remove":       Signature(params_of(cstr()), ok=I32, error=FILE),
+    "rmdir":        Signature(params_of(cstr()), ok=I32, error=FILE),
+    "rename":       Signature(params_of(cstr(), cstr()), ok=I32, error=FILE),
+    "copy":         Signature(params_of(cstr(), cstr()), ok=I32, error=FILE),
+    "mkdir":        Signature(params_of(cstr(), I32), ok=I32, error=FILE),
+    "read_dir":     Signature(params_of(cstr()), ok=STRINGS, error=FILE),
+    "mtime":        Signature(params_of(cstr()), ok=I64, error=FILE),
+    "ctime":        Signature(params_of(cstr()), ok=I64, error=FILE),
+    "mode":         Signature(params_of(cstr()), ok=I32, error=FILE),
+    "is_symlink":   Signature(params_of(cstr()), ok=BOOL, error=FILE),
+    # The DESCRIPTOR layer, positional half. A descriptor is a bare i32, and an offset
+    # is i64 because `off_t` is 64-bit on both supported platforms (probe P6).
+    "fd_open":      Signature(params_of(cstr(), I32, I32), ok=I32, error=FILE),
+    "fd_pread":     Signature(params_of(I32, I64, I32), ok=BYTES, error=FILE),
+    "fd_pwrite":    Signature(params_of(I32, I64, BYTES), ok=I32, error=FILE),
+    "fd_dup":       Signature(params_of(I32), ok=I32, error=FILE),
+    "fd_close":     Signature(params_of(I32), ok=I32, error=FILE),
+    # The sequential half. A `string` crosses as its fat pointer here -- `fd_write_str`
+    # takes a string VALUE, not a path, so it is not marshalled to `i8*`.
+    "fd_read":      Signature(params_of(I32, I32), ok=BYTES, error=FILE),
+    "fd_write":     Signature(params_of(I32, BYTES), ok=I32, error=FILE),
+    "fd_write_str": Signature(params_of(I32, STRING), ok=I32, error=FILE),
+    # A blank line is Some("") and end of file is None; an empty string can no longer
+    # mean both (HANDLES.md, ruling R22).
+    "fd_readln":    Signature(params_of(I32), ok=MAYBE_STRING, error=FILE),
+    "fd_seek":      Signature(params_of(I32, I64, I32), ok=I64, error=FILE),
+    # A BARE bool: asking whether a descriptor is a terminal cannot fail in a way a
+    # caller can act on, so there is no error arm to make it carry.
+    "fd_isatty":    Signature(params_of(I32), bare=BOOL),
+}
+
+FILE_UTILITY_FUNCTIONS: List[str] = list(FILES_SIGNATURES)
 
 
 def is_builtin_files_function(name: str) -> bool:
     """Check if a function name is a built-in files utility function."""
-    return name in FILE_UTILITY_FUNCTIONS
+    return name in FILES_SIGNATURES
 
 
 def get_builtin_files_function_return_type(func_name: str) -> Type:
-    """Get the return type of a built-in files utility function."""
-
-    if func_name in ["exists", "is_file", "is_dir"]:
-        return BuiltinType.BOOL
-    elif func_name in ["mtime", "ctime"]:
-        from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Result", (BuiltinType.I64, UnknownType("FileError")))
-    elif func_name == "mode":
-        from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Result", (BuiltinType.I32, UnknownType("FileError")))
-    elif func_name == "is_symlink":
-        from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Result", (BuiltinType.BOOL, UnknownType("FileError")))
-    elif func_name == "file_size":
-        # Return Result<i64, FileError> - FileError enum is defined in predefined_enums
-        # For now, we need to fetch FileError from the global enum table during compilation
-        # But since this is type inference, we'll use a placeholder approach
-        # The actual FileError will be resolved during code generation
-        from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Result", (BuiltinType.I64, UnknownType("FileError")))
-    elif func_name in ["fd_pread", "fd_read"]:
-        from sushi_lang.semantics.typesys import UnknownType, DynamicArrayType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Result", (DynamicArrayType(BuiltinType.U8),
-                                         UnknownType("FileError")))
-    elif func_name == "fd_readln":
-        # A blank line is Some("") and end of file is None; an empty string can no
-        # longer mean both (HANDLES.md, ruling R22).
-        from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Result", (GenericTypeRef("Maybe", (BuiltinType.STRING,)),
-                                         UnknownType("FileError")))
-    elif func_name == "fd_seek":
-        from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Result", (BuiltinType.I64, UnknownType("FileError")))
-    elif func_name == "fd_isatty":
-        # A BARE bool. Asking whether a descriptor is a terminal cannot fail in a way a
-        # caller can act on, so there is no error arm to make it carry.
-        return BuiltinType.BOOL
-    elif func_name in ["fd_open", "fd_pwrite", "fd_dup", "fd_close",
-                       "fd_write", "fd_write_str"]:
-        from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Result", (BuiltinType.I32, UnknownType("FileError")))
-    elif func_name in ["remove", "rename", "copy", "mkdir", "rmdir"]:
-        from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Result", (BuiltinType.I32, UnknownType("FileError")))
-    elif func_name == "read_dir":
-        from sushi_lang.semantics.typesys import UnknownType, DynamicArrayType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Result", (DynamicArrayType(BuiltinType.STRING),
-                                         UnknownType("FileError")))
-    else:
+    """The declared return type, from the row: a Result, or a bare value."""
+    sig = FILES_SIGNATURES.get(func_name)
+    if sig is None:
         raise ValueError(f"Unknown files utility function: {func_name}")
+    return sig.return_type()
 
 
 def validate_files_function_call(func_name: str, args: list, reporter, loc) -> None:
-    """Validate a files utility function call."""
-    from sushi_lang.internals import errors as er
+    """Check the argument count against the row's own length (CE2009).
 
-    # CE2009, the arity code. This used to emit CE0004, which is registered as
-    # "duplicate struct '{name}'" and takes no `func`/`expected`/`got` -- so the
-    # message was about the wrong thing and none of the parameters reached it.
-    if func_name in ["exists", "is_file", "is_dir", "file_size", "remove", "rmdir",
-                     "read_dir", "mtime", "ctime", "mode", "is_symlink"]:
-        if len(args) != 1:
-            er.emit(reporter, er.ERR.CE2009, loc,
-                   name=func_name, expected=1, got=len(args))
-            return
-    elif func_name in ["fd_dup", "fd_close", "fd_readln", "fd_isatty"]:
-        if len(args) != 1:
-            er.emit(reporter, er.ERR.CE2009, loc,
-                   name=func_name, expected=1, got=len(args))
-            return
-    elif func_name in ["fd_read", "fd_write", "fd_write_str"]:
-        if len(args) != 2:
-            er.emit(reporter, er.ERR.CE2009, loc,
-                   name=func_name, expected=2, got=len(args))
-            return
-    elif func_name in ["fd_open", "fd_pread", "fd_pwrite", "fd_seek"]:
-        if len(args) != 3:
-            er.emit(reporter, er.ERR.CE2009, loc,
-                   name=func_name, expected=3, got=len(args))
-            return
-    elif func_name in ["rename", "copy", "mkdir"]:
-        if len(args) != 2:
-            er.emit(reporter, er.ERR.CE2009, loc,
-                   name=func_name, expected=2, got=len(args))
-            return
-
+    This used to emit CE0004, which is registered as "duplicate struct '{name}'" and
+    takes no `func`/`expected`/`got` -- so the message was about the wrong thing and
+    none of the parameters reached it.
+    """
+    validate_arity(func_name, FILES_SIGNATURES, args, reporter, loc)

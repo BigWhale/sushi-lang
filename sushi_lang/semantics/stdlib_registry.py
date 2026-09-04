@@ -116,40 +116,14 @@ def _get_param_specs():
     specs[("random", "rand_range")] = [I32, I32]
     specs[("random", "srand")] = [U64]
 
-    for fn in ("exists", "is_file", "is_dir", "file_size", "remove", "rmdir",
-               "read_dir", "mtime", "ctime", "mode", "is_symlink"):
-        specs[("files", fn)] = [STRING]
-    for fn in ("rename", "copy"):
-        specs[("files", fn)] = [STRING, STRING]
-    specs[("files", "mkdir")] = [STRING, I32]
-    # The descriptor layer (HANDLES.md, Phase 4). A path is a `string` and is marshalled
-    # by the call site; a descriptor is a bare i32, and an offset is i64 because `off_t`
-    # is 64-bit on both supported platforms (probe P6).
-    specs[("files", "fd_open")] = [STRING, I32, I32]
-    specs[("files", "fd_pread")] = [I32, I64, I32]
-    specs[("files", "fd_pwrite")] = [I32, I64, DynamicArrayType(BuiltinType.U8)]
-    for fn in ("fd_dup", "fd_close", "fd_readln", "fd_isatty"):
-        specs[("files", fn)] = [I32]
-    # The sequential half (HANDLES.md, Phase 5). These move the descriptor's own file
-    # position; a string crosses as its fat pointer, with no `to_bytes()` copy in front.
-    specs[("files", "fd_read")] = [I32, I32]
-    specs[("files", "fd_write")] = [I32, DynamicArrayType(BuiltinType.U8)]
-    specs[("files", "fd_write_str")] = [I32, STRING]
-    specs[("files", "fd_seek")] = [I32, I64, I32]
+    # `<io/files>` and `<net/socket>` keep their parameter types in ONE table each,
+    # beside their generators, and every reader takes its row from there (#550).
+    from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
+    from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
+    from sushi_lang.sushi_stdlib.src.signatures import param_specs
 
-    BYTE_ARRAY = DynamicArrayType(BuiltinType.U8)
-    specs[("socket", "sock_dns_resolve")] = [STRING]
-    specs[("socket", "sock_udp_bind")] = [STRING, I32]
-    specs[("socket", "sock_udp_send_to")] = [I32, BYTE_ARRAY, STRING, I32]
-    specs[("socket", "sock_udp_recv_from")] = [I32, I32]
-    specs[("socket", "sock_tcp_connect")] = [STRING, I32]
-    specs[("socket", "sock_tcp_listen")] = [STRING, I32, I32]
-    specs[("socket", "sock_send")] = [I32, BYTE_ARRAY]
-    for fn in ("sock_close", "sock_dup", "sock_local_port", "sock_tcp_accept",
-               "sock_peer_ip", "sock_peer_port"):
-        specs[("socket", fn)] = [I32]
-    for fn in ("sock_recv", "sock_set_recv_timeout", "sock_set_send_timeout"):
-        specs[("socket", fn)] = [I32, I32]
+    specs.update(param_specs("files", FILES_SIGNATURES))
+    specs.update(param_specs("socket", SOCKET_SIGNATURES))
 
     _param_specs_cache = specs
     return _param_specs_cache
