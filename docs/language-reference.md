@@ -1445,6 +1445,10 @@ extend Cage@(T) static holding(T item) Cage@(T):
 let Cage@(i32) a = Cage.holding(9)
 ```
 
+A generic static in a position that declares no type — a bare
+`println("{Cage.holding(9).item}")` — is `CE2060`: there is no receiver and no
+annotation, so nothing says which instantiation was meant. Bind the result first.
+
 A name has one home, so a static beside an instance method of the same name on one type
 is `CE0101`, and a static spelling a VARIANT of the enum it extends is `CE2103`. A type
 whose dot holds no such member is `CE2102`.

@@ -25,6 +25,8 @@ All notable changes to Sushi Lang will be documented in this file.
   for a struct that IS declared -- the fault was the position, not the name; **CE2103** a
   static spelling a VARIANT of the enum it extends, relational, because the variant would
   always win; **CE2104** a static on an ARRAY target, which no expression could ever call;
+  **CE2060** a generic static in a position that declares no type, which used to reach
+  the backend as an ICE;
   **CE4014** a static inside a perk implementation, because a perk has no `Self`. A static
   beside an instance method of one name on one type stays CE0101, and CE2045 grew a help
   line naming both members an enum's dot can hold. A SOURCE `.slib` exports a static; a

@@ -182,7 +182,32 @@ extend T[] static two() T[]:
     return from([])
 """
 
+UNSTAMPED_GENERIC = """\
+struct Cage@(T):
+    T item
+
+extend Cage@(T) static holding(T item) Cage@(T):
+    return Cage(item)
+
+fn main() i32:
+    println("{Cage.holding(9).item}")
+    return Result.Ok(0)
+"""
+
+UNSTAMPED_GENERIC_FOREIGN_RETURN = """\
+struct Cage@(T):
+    T item
+
+extend Cage@(T) static describing(T item) i32:
+    return 1
+
+fn main() i32:
+    println("{Cage.describing(9)}")
+    return Result.Ok(0)
+"""
+
 REFUSALS = {
+    "CE2060": (UNSTAMPED_GENERIC, UNSTAMPED_GENERIC_FOREIGN_RETURN),
     "CE0134": (RECEIVER_MODE, SELF_IN_BODY),
     "CE2104": (ARRAY_TARGET, ARRAY_TEMPLATE_TARGET),
     "CE4014": (IN_PERK_IMPL,),
@@ -220,3 +245,23 @@ fn main() i32:
 def test_a_static_beside_an_instance_method_is_accepted(analyze):
     """Different names, one type: both shapes coexist and neither is refused."""
     assert _codes(analyze, ACCEPTED) == set()
+
+
+UNSTAMPED_VARIANT = """\
+fn make() i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    println("{make().realise(-1)}")
+    return Result.Ok(0)
+"""
+
+
+def test_a_variant_in_an_unstamped_position_is_untouched(analyze):
+    """CE2060 fires only when the base name declares a static of THAT name.
+
+    `Result.Ok(0)` in a return is a generic enum with the stamp supplied by the
+    surrounding statement; reading it as a static with no instantiation would refuse
+    every one of the corpus's 6,559 sites.
+    """
+    assert _codes(analyze, UNSTAMPED_VARIANT) == set()

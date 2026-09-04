@@ -89,7 +89,7 @@ def validate_static_call(validator: 'TypeValidator', call) -> bool:
 
     target = static_target_type(validator, call)
     if target is None:
-        return False
+        return _refuse_unstamped_generic(validator, call)
 
     resolved = resolve_method(validator, target, call.method, call=call,
                               report=True, static=True)
@@ -145,6 +145,63 @@ def infer_static_call(validator: 'TypeValidator', call) -> Optional[Type]:
     if inferred is not None:
         call.inferred_return_type = inferred
     return inferred
+
+
+def _refuse_unstamped_generic(validator: 'TypeValidator', call) -> bool:
+    """CE2060: a GENERIC static with no instantiation to read (#542).
+
+    A static's type argument comes from the propagation stamp at the binding site,
+    because there is no receiver to read it from. In a position that stamps nothing --
+    a bare `println(Box.describing(9))` -- there is no answer, and saying so is the
+    documented rule for a generic whose arguments have no source.
+
+    The test is deliberately narrow: it fires only when the base name declares a
+    static of THIS name. Otherwise the node is a variant construction whose stamp the
+    surrounding statement supplies (`Result.Ok(0)` in a return), or a plain unknown,
+    and both belong to the paths below.
+    """
+    receiver = call.receiver
+    if not isinstance(receiver, Name):
+        return False
+    base = receiver.id
+    if (base not in validator.generic_struct_table.by_name
+            and base not in validator.generic_enum_table.by_name):
+        return False
+    declarations = validator.generic_extension_table.declarations(base, call.method)
+    if not any(getattr(d, "is_static", False) for d in declarations):
+        return False
+
+    diag = er.emit_with(validator.reporter, er.ERR.CE2060, call.loc,
+                        name=f"{base}.{call.method}",
+                        reason="a static reads its type arguments from the declared "
+                               "type at the call site, and this position declares none")
+    if _returns_the_target(declarations, base):
+        diag.help(f"bind the result to a declared type: "
+                  f"'let {base}@(...) x = {base}.{call.method}(...)'")
+    else:
+        # The return does not name the target, so no binding could stamp it and a
+        # method has no call-site `@(...)` slot at all (Known Limitation 7). The
+        # signature is what has to change.
+        diag.help(f"a static whose return does not name '{base}' has no position to "
+                  f"read its type arguments from -- make it a generic free function "
+                  f"('fn {call.method}@(T)(...)'), which takes explicit type "
+                  f"arguments")
+    diag.emit()
+    return True
+
+
+def _returns_the_target(declarations, base: str) -> bool:
+    """Whether any declaration of this static returns the type it is declared on."""
+    for declaration in declarations:
+        ret = getattr(declaration, "ret_type", None)
+        if ret is None:
+            continue
+        if getattr(ret, "base_name", None) == base or getattr(ret, "name", None) == base:
+            return True
+        name = getattr(ret, "name", None)
+        if isinstance(name, str) and name.startswith(f"{base}<"):
+            return True
+    return False
 
 
 def _refuse_missing_static(validator: 'TypeValidator', call, target: Type) -> bool:

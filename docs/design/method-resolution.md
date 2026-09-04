@@ -306,6 +306,17 @@ An ARRAY target is **CE2104**. An array type has no spelling in an expression po
 compile and never be callable. That is CE2097's hazard, and the answer is the same one:
 if the situation cannot possibly do what the user wrote, it is an error.
 
+A generic static in a position that stamps NOTHING is **CE2060**: there is no receiver
+and no annotation, so nothing says which instantiation was meant. Binding the result
+answers it when the return names the target (`let Cage@(i32) a = Cage.holding(9)`);
+when the return does NOT name the target the signature is what has to change, because
+a method carries no call-site `@(...)` slot at all (Known Limitation 7). The test is
+narrow on purpose -- it fires only when the base name declares a static of that name --
+because a generic ENUM in an unstamped position is a variant construction whose stamp
+the surrounding statement supplies, and `Result.Ok(0)` is 6,559 of those. Before the
+check, both shapes reached the backend as a CE0055 ICE; the built-in twin
+(`println("{List.new().len()}")`) still does, and is #570.
+
 ```sushi
 struct Cage@(T):
     T item

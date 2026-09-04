@@ -1,0 +1,13 @@
+# A static reads its type arguments from the declared type at the call site, because
+# there is no receiver to read them from. A position that declares none has no answer,
+# and saying so is CE2060 -- it used to reach the backend as a CE0055 ICE.
+# EXPECT_ERROR_CODE: CE2060
+struct Cage@(T):
+    T item
+
+extend Cage@(T) static holding(T item) Cage@(T):
+    return Cage(item)
+
+fn main() i32:
+    println("{Cage.holding(9).item}")
+    return Result.Ok(0)
