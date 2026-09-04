@@ -1,0 +1,10 @@
+# A generic function is a function: its parameters have no call-site names either.
+# EXPECT_ERROR_CODE: CE6104
+
+fn pick@(T)(T first, T second) T:
+    return Result.Ok(first)
+
+fn main() i32:
+    let i32 v = pick(second: 2, first: 1).realise(0)
+    println("{v}")
+    return Result.Ok(0)

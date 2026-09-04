@@ -37,15 +37,15 @@ Output:
 ```
 Name: Arthur Dent
 The answer: 42
-Has a towel: 1
+Has a towel: true
 Recalculated (wrongly): 54
 That is better: 42
 ```
 
 Two things to notice. We used `{name}` inside the string to splice a variable's value
 into the text — that's **string interpolation**, and it only works in double-quoted
-strings. And `has_towel`, a `bool`, printed as `1` rather than `true`: booleans display as
-`1` (true) and `0` (false).
+strings. And `has_towel`, a `bool`, printed as the word `true`: a boolean displays as
+`true` or `false` in every position.
 
 !!! note "`:=` only reassigns existing variables"
     If you write `score := 10` without ever having declared `score` with `let`, the

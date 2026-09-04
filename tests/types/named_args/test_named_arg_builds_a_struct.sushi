@@ -1,0 +1,30 @@
+# What the rule keeps: a struct construction takes its field names, bare, nested,
+# generic, and behind an alias.
+# EXPECT_STDOUT_EXACT: "1 2\n3 4\n5 six\n7 8\n"
+use "helpers/named_geo" as geo
+
+struct P:
+    i32 x
+    i32 y
+
+struct Line:
+    P start
+    i32 length
+
+struct Pair@(T, U):
+    T first
+    U second
+
+fn main() i32:
+    let P p = P(y: 2, x: 1)
+    println("{p.x} {p.y}")
+
+    let Line l = Line(length: 4, start: P(x: 3, y: 0))
+    println("{l.start.x} {l.length}")
+
+    let Pair@(i32, string) pair = Pair(second: "six", first: 5)
+    println("{pair.first} {pair.second}")
+
+    let geo.Vec v = geo.Vec(y: 8, x: 7)
+    println("{v.x} {v.y}")
+    return Result.Ok(0)

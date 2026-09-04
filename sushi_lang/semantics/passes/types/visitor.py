@@ -12,6 +12,7 @@ from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicAr
 from sushi_lang.semantics.type_predicates import is_string_convertible
 from sushi_lang.semantics.passes.types.visibility import (
     reject_ambiguous_name, reject_private_kept, reject_private_name)
+from sushi_lang.semantics.passes.types.utils import reject_named_args
 from sushi_lang.semantics.ast import (
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
@@ -417,13 +418,20 @@ class ExpressionValidator(RecursiveVisitor):
     def visit_call(self, node: Call) -> None:
         """Validate function call."""
         self.type_validator._validate_function_call(node)
+        reject_named_args(self.type_validator, node)
 
     def visit_methodcall(self, node: MethodCall) -> None:
         """Validate method call."""
         self.type_validator._validate_method_call(node)
+        reject_named_args(self.type_validator, node)
 
     def visit_dotcall(self, node: DotCall) -> None:
         """Validate dot-call expression - resolve to enum constructor or method call."""
+        self._dispatch_dotcall(node)
+        reject_named_args(self.type_validator, node)
+
+    def _dispatch_dotcall(self, node: DotCall) -> None:
+        """Send `X.Y(args)` to the rules of whatever X.Y turns out to name."""
         from sushi_lang.semantics.passes.types.calls.namespaced import (
             fold_namespaced_enum, fold_namespaced_static, validate_namespaced_call)
 

@@ -1,0 +1,9 @@
+# A function behind a `use ... as` alias is measured by the bare form's rules, so the
+# names are refused there too. The struct beside it stays legal.
+# EXPECT_ERROR_CODE: CE6104
+use "helpers/named_geo" as geo
+
+fn main() i32:
+    let i32 d = geo.diff(b: 1, a: 9).realise(0)
+    println("{d}")
+    return Result.Ok(0)

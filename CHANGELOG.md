@@ -248,6 +248,17 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A named argument is refused where it names nothing.** `p.shifted(dx: 5)` compiled and
+  the compiler read the arguments by position, so `p.moved(dy: 5)` against
+  `(i32 dx, i32 dy)` wrote the wrong slot on a program the compiler accepted (#563). A
+  name in an argument list names a FIELD, and a struct construction is the only
+  declaration that gives a name to each position, so every other callee answers CE6104: a
+  function, a method, a built-in method, a stdlib function, a generic function, an
+  indirect call through a function value, an enum variant and a call behind a `use ... as`
+  alias. The rule is read once, after the call is validated, because only then is the
+  callee known -- a struct construction SPENDS its names, and names still on the node
+  belong to a callee with no field names to match. The AST builder dropped a method call's
+  names entirely; it carries them now, to be refused.
 - **A `match` arm's inline body takes a rebind.** `Maybe.Some(v) -> kept := v` was
   CE6001 "unexpected token ':='" while the same line under an indented arm compiled: the
   inline body accepted a call, a `print`, a `return`, a `break`, a `continue` and a bare

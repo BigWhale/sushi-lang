@@ -1,0 +1,8 @@
+# A stdlib function is a function: the same rule and the same code.
+# EXPECT_ERROR_CODE: CE6104
+use <math>
+
+fn main() i32:
+    let f64 root = sqrt(value: 16.0)
+    println("{root}")
+    return Result.Ok(0)

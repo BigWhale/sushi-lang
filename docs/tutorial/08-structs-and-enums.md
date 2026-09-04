@@ -28,10 +28,10 @@ like a variable declaration). To build an instance, call the struct's name like 
 and pass values **in field-declaration order**: `Person("Arthur Dent", 30, true)`. Once you
 have a value, you read its fields with dot notation: `arthur.name`, `arthur.age`.
 
-!!! note "Booleans print as `0` and `1`"
-    If you interpolate a `bool` directly — `{arthur.has_towel}` — it prints as `0` or `1`,
-    not `false` or `true`. That's why the example uses `if (arthur.has_towel):` and prints
-    a sentence instead. Keep it in mind when you format output.
+!!! note "Booleans print as `true` and `false`"
+    An interpolated `bool` — `{arthur.has_towel}` — prints as `true` or `false`. The same
+    two words come out of `print` and `println`. The example asks the question with
+    `if (arthur.has_towel):` because a sentence reads better than a bare word.
 
 ## Named arguments
 
@@ -60,6 +60,12 @@ other arguments.
     You can construct positionally *or* by name, but you cannot mix the two in a single
     constructor call. Pick one style per call. (Named arguments cost nothing at runtime —
     the compiler resolves them to positions while building your program.)
+
+!!! note "Names build a struct, and nothing else"
+    A name in an argument list names a **field**, so a struct construction is the only
+    place that takes one. A function, a method and an enum variant take their arguments
+    in declaration order, and a name written there is `CE6104`. Write
+    `p.shifted(5, 0)`, not `p.shifted(dx: 5, dy: 0)`.
 
 ## Enums: one of several shapes
 
@@ -105,7 +111,8 @@ toolbox extends that far.
 - A `struct` groups named, typed fields into one type; build it positionally
   (`Point(10, 20)`) and read fields with dot notation (`p.x`).
 - Named arguments (`Point(y: 20, x: 10)`) are order-independent and self-documenting, but
-  you can't mix named and positional in one call.
+  you can't mix named and positional in one call, and only a struct construction takes
+  them.
 - An `enum` is a value that's exactly one of several variants; variants can carry data
   (`Shape.Circle(f64)`), and you construct them as `Shape.Circle(2.0)`.
 - `match` is how you read an enum's data back out.

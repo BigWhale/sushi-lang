@@ -1,0 +1,13 @@
+# An enum payload is positional and has no field names.
+# EXPECT_ERROR_CODE: CE6104
+
+enum Shape:
+    Circle(i32)
+    Rect(i32, i32)
+
+fn main() i32:
+    let Shape s = Shape.Rect(w: 3, h: 4)
+    match s:
+        Shape.Circle(_) -> println("circle")
+        Shape.Rect(a, b) -> println("{a} {b}")
+    return Result.Ok(0)

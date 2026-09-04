@@ -1,0 +1,8 @@
+# The unit an alias binds: one public struct to construct by name, and one public
+# function to call.
+public struct Vec:
+    i32 x
+    i32 y
+
+public fn diff(i32 a, i32 b) i32:
+    return Result.Ok(a - b)

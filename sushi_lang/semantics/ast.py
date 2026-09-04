@@ -693,6 +693,9 @@ class MethodCall(Node):
     # The SOLVED method-level type arguments of a method-generic extension call
     # (`name@(U)`); the backend composes them into the callee symbol.
     callee_method_type_args: Optional[Tuple] = None
+    # The names a call was written with. A method has no field names, so these are
+    # carried only to be refused (CE6104); the builder used to drop them (#563).
+    field_names: Optional[List[str]] = None
 
 
 @dataclass(slots=True)

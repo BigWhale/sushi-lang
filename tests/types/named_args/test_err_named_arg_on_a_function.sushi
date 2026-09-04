@@ -1,0 +1,11 @@
+# A named argument names a struct FIELD. A function parameter has no such name at the
+# call site, so the compiler read `b: 1, a: 9` by position and gave 1 - 9 (#563).
+# EXPECT_ERROR_CODE: CE6104
+
+fn diff(i32 a, i32 b) i32:
+    return Result.Ok(a - b)
+
+fn main() i32:
+    let i32 d = diff(b: 1, a: 9).realise(0)
+    println("{d}")
+    return Result.Ok(0)
