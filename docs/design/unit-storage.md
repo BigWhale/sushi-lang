@@ -128,7 +128,11 @@ with its `link_symbol`, and the consumer declares it.
 - **`static`**: in Sushi "static" already means a function called on a TYPE name
   (`List.new()`, `f64.from_bits(b)`; `Static(ty, name)` in `docs/design/ir.md`), "static
   dispatch" is everywhere, and in C `static` means internal linkage, close to the
-  opposite of an exported unit-level value.
+  opposite of an exported unit-level value. **That reservation was spent** (#542): the
+  word is now the surface marker for a receiver-less method -- `extend Vec static
+  at(i32 x, i32 y) Vec:` -- so it means exactly what it already meant internally, and
+  Sushi has no static STORAGE at all. The record is
+  `docs/design/method-resolution.md`.
 - **`let` at the top level**: `let` names a block-scoped binding with RAII drop, and one
   word would carry two lifetimes.
 - **`global`**: the runner-up. `var` is the Go, Zig, Swift, Nim and Pascal word for

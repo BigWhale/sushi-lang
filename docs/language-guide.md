@@ -933,6 +933,36 @@ fn main() i32:
 3. The call `x.squared()` is transformed at compile-time into `squared(x)`
 4. This transformation is zero-cost - there's no runtime overhead
 
+**Static methods -- a method with no receiver**: put `static` before the method name and
+the method is called on the TYPE, not on a value. This is how a type carries its own
+constructor.
+
+```sushi
+struct Vec:
+    i32 x
+    i32 y
+
+extend Vec static at(i32 x, i32 y) Vec:
+    return Vec(x, y)
+
+extend Vec length_squared() i32:
+    return self.x * self.x + self.y * self.y
+
+fn main() i32:
+    let Vec v = Vec.at(3, 4)
+    println("{v.length_squared()}")
+    return Result.Ok(0)
+```
+
+`Vec.at(3, 4)` reads like `List.new()` and `HashMap.new()`, and it is the same rule: a
+name behind a type's dot is a member of that type. A static has no `self` -- naming one
+in the signature or in the body is CE0134 -- and everything else about it is an ordinary
+method: the parameter modes, the owning return, the `| E` channel, and no visibility
+marker of its own.
+
+`new` is a legal static name (`extend Box static new(i32 n) Box:`), which is one thing a
+free function cannot be called.
+
 **No `??` in a BARE extension body**: by default an extension method returns a bare
 value, not a `Result@(T, E)` (a `Result.Ok(...)` return is CE2091). A bare body has no
 error channel, so `??` has nothing to propagate into and is rejected with CE0131.

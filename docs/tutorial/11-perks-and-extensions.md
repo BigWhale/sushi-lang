@@ -42,6 +42,36 @@ Output:
     pure sugar — there's no vtable lookup, no boxing, nothing dynamic. It reads like a method
     call and runs like a function call.
 
+## Static methods: a constructor on the type
+
+Every extension method so far took a receiver. A **static** method takes none: write
+`static` before the name, and the method is called on the *type* instead of on a value.
+
+```sushi
+--8<-- "docs/tutorial/examples/11-perks-and-extensions/statics.sushi"
+```
+
+Output:
+
+```
+from (0, 0) the distance squared is 25
+```
+
+`Vec.at(3, 4)` reads exactly like `List.new()` and `HashMap.new()`, which you have been
+using since chapter 7 — those are static methods too, on types the compiler declares.
+
+Two things to keep in mind:
+
+- A static has **no `self`**. There is nothing it was called on, so naming a receiver in
+  the signature or reaching for `self` in the body is an error (`CE0134`). Take what the
+  method needs as an ordinary parameter.
+- A name behind a type's dot is **one** thing: a variant, or a static method. On an enum
+  that means a static may not spell one of the variants, and on any type a static may not
+  share a name with an instance method.
+
+`new` is a fine name for one — `extend Box static new(i32 n) Box:` — and it is the one
+name a *free* function cannot have.
+
 ## Perks: defining a contract
 
 A **perk** is a named set of method signatures. A type that provides those methods can
@@ -141,6 +171,8 @@ compile time, which is what makes the whole thing zero-cost.
 
 - **Extension methods** (`extend Type method() Ret:`) add methods to any type, including
   primitives, using `self` for the receiver, and return **bare** values (no `Result`).
+- **Static methods** (`extend Type static name() Ret:`) have no receiver and are called on
+  the type: `Vec.at(3, 4)`. That is what `List.new()` has always been.
 - **UFCS** means `x.method(args)` is compiled to `method(x, args)` — sugar with no runtime
   cost.
 - A **perk** is a contract of method signatures; types opt in with `extend Type with Perk:`.

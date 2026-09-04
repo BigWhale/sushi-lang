@@ -240,6 +240,162 @@ not a typo. Resolution still runs first — a method found on the wrapper itself
 (`.realise`) is rung 1 as always. The decision record is
 [ufcs-combinators.md](ufcs-combinators.md).
 
+## The static method: a name behind the TYPE's dot
+
+A separate question again, and the constructor half of method resolution. Status:
+**decided**, issue #542.
+
+> **A name behind a type's dot is a MEMBER of that type: a variant, or a static method.
+> Never both. A local of the same name wins first.**
+
+One namespace, reached with a dot. Rust reaches the same place with `::`; Sushi does not
+need a second path operator, because "a name has exactly one home" already says it.
+
+### The spelling
+
+A `static` marker before the method name. It is read AFTER the target type, so a generic
+target, a namespaced target and a method-level type parameter all fall out with no
+lookahead.
+
+```sushi
+struct Vec:
+    i32 x
+    i32 y
+
+extend Vec static at(i32 x, i32 y) Vec:
+    return Vec(x, y)
+
+let Vec v = Vec.at(3, 4)
+```
+
+`static` is a reserved word. It is not re-admitted in `method_name`, so `v.static()` and
+a method named `static` are not writable.
+
+### What a static IS, and is not
+
+| | a static | an instance method |
+|---|---|---|
+| receiver | **none** -- no implicit `self`, and no mode to declare | implicit `self`, borrowed unless marked |
+| call site | on the TYPE name: `Vec.at(3, 4)` | on a value: `v.sum()` |
+| parameters | ordinary, and the modes are the ordinary four | the same, plus the receiver's |
+| return | ordinary; `\| E` opts into the channel exactly as elsewhere | the same |
+| visibility | none of its own -- as visible as its target type | the same |
+| in a perk | **never** -- a perk has no `Self` (CE4014) | that is what a perk contracts |
+
+Everything in the right column that is not about the receiver is unchanged. A static's
+parameters BORROW unless marked `nom`; its owning return is the caller's; its `| E`
+channel wraps a bare success at the return seam. The one thing it lacks is a receiver,
+and the two positions that could name one are one fault with one code:
+
+- a receiver MODE in the signature -- `extend Vec static at(poke self)`,
+- a mention of `self` in the body.
+
+Both are **CE0134**, tier 2, with the caret on whichever was written.
+
+### Which targets
+
+Every target an extension may name, **except an array**. A struct, an enum, a
+**primitive** (`extend f64 static of_int(i32 v) f64:`), a built-in generic
+(`extend List@(i32) static of_one(i32 v) List@(i32):`) and a **generic** target, which
+is a template like any other: one copy per instantiation, and the type argument comes
+from the PROPAGATION STAMP at the binding site, because there is no receiver to read it
+from.
+
+An ARRAY target is **CE2104**. An array type has no spelling in an expression position
+-- `i32[].two()` is a parse error, and no form reaches it -- so the declaration would
+compile and never be callable. That is CE2097's hazard, and the answer is the same one:
+if the situation cannot possibly do what the user wrote, it is an error.
+
+```sushi
+struct Cage@(T):
+    T item
+
+extend Cage@(T) static holding(T item) Cage@(T):
+    return Cage(item)
+
+let Cage@(i32) a = Cage.holding(9)      # T from the declared type
+```
+
+That stamp is the reason a static is not only ergonomics. A free function whose `T`
+names only the RETURN cannot be inferred (CE2060) and has to spell `box_new@(i32)()`; a
+static reads the binding site instead. It is also why `new` is available as a static's
+name and not as a free function's (CE6001).
+
+### The two collisions
+
+A name has exactly one home, so both are refused where they are written:
+
+| written | refusal |
+|---|---|
+| a static and an instance method of one name on one type | **CE0101**, the duplicate-extension rule it always was |
+| a static and a VARIANT of one name on one enum | **CE2103**, relational -- the variant would always win, which is CE2097's hazard |
+
+CE2045 grew a second half for the same reason: a name behind an enum's dot could have
+been either member, so its help names both escapes.
+
+### The built-in statics are static methods
+
+`List.new`, `List.with_capacity`, `HashMap.new`, `Own.alloc`, `f64.from_bits` and
+`f32.from_bits` are static methods on their types -- one rule, not two. They are NAMED
+in one table (`semantics/statics.py:BUILTIN_STATICS`) and each is still emitted by its
+container's own narrow handler, because a container static has no `ExtendDef` to resolve
+and so has nothing yet to converge onto. The general path DEFERS to that table rather
+than refusing what it cannot find; #553's lesson is why the narrow handlers stay until a
+test proves the general path covers them.
+
+### The seams
+
+| question | where |
+|---|---|
+| does this name denote a TYPE, of any kind | `semantics/statics.py:names_a_type` -- the scope pass and the typecheck pass both ask it |
+| which type does this receiver name, and does it declare that static | `passes/types/calls/statics.py` -- the validation half and the inference half both read it |
+| instance or static (they share one table) | ONE filter at the end of `resolve_extension_method`; `resolve_method(..., static=True)` skips the perk rung outright |
+| what modes do the arguments cross in | `CalleeKind.STATIC_METHOD` -- a new kind, not a widened `METHOD`, because a receiver-less callee asks a different question. Gate: `tests/unit/test_callee_mode_matrix.py` |
+| the alias fold | `fold_namespaced_static`, unchanged in shape: it asks whether the namespace holds a type, so `geo.Vec.origin()` folds like `hm.HashMap.new()` (#506) |
+
+The refusal for a type whose dot holds no such member is **CE2102**. It replaced a
+CE1001 "use of undeclared identifier 'Box'" for a struct declared three lines above: the
+fault was the POSITION, not the name, and the fix is in the scope pass, which now lets a
+type name through in a receiver position and leaves the answer to the pass that has the
+method tables.
+
+### Prior art
+
+| | the term | how it is spelled |
+|---|---|---|
+| **Rust** | associated function | no marker; a method is one that takes `self`. `::` is a different operator from `.` |
+| **Swift** | type method | `static func origin() -> Vec` |
+| **C++** | static member function | `static Vec origin();` |
+| **Java, C#, Dart, PHP, JavaScript** | static method | `static Vec origin()` |
+| **Python** | static / class method | `@staticmethod`, `@classmethod` |
+| **Ruby, Objective-C, Smalltalk** | class method | `def self.origin` |
+| **Kotlin, Scala** | companion object member -- no statics | `companion object { fun origin() }` |
+| **Go, Zig** | no term -- a package or namespace function | `bufio.NewReader(f)` |
+
+Sushi says **static method**, which is what most of that table says.
+`docs/design/unit-storage.md` had already reserved the word: `var` took unit-level
+storage precisely so that "static" could keep meaning a function called on a type name.
+Sushi has no static STORAGE.
+
+Java's statics *hide* rather than override, a long-standing confusion. It cannot occur
+here: Sushi has no inheritance.
+
+The Rust route -- no marker, distinguish by an explicit `self` in the parameter list --
+was priced at ~416 declarations in the corpus and rejected. The Go route -- no functions
+behind a dot at all -- would have turned each of the 230 `List.new()` sites into
+`list_new@(i32)()`, and it leaves variants behind the dot regardless: `Type.Variant`
+outnumbers a static call 22 to 1 (10,469 to 479).
+
+### What a static does NOT do
+
+- **No `::`.** A second path operator to disambiguate what a dot already means is a
+  bigger change than the feature, and on a struct the dot is not ambiguous at all.
+- **No static in a perk.** No `Self` (HANDLES.md R7). CE4014.
+- **No overloading.** A name has one home; both collisions above are refusals.
+- **No export through a BINARY `.slib`.** A binary library ships no extension method at
+  all today, instance or static, so this is a pre-existing limit and not a static one. A
+  SOURCE `.slib` ships the declaration as text and a static exports through it.
+
 ## A perk method and an extension method differ in one thing
 
 > **The target type comes from a different place. Nothing else separates them.**
