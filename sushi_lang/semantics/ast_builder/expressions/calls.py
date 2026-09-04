@@ -108,13 +108,13 @@ def method_call_from_parts(receiver: Expr, method_call_node: Tree, ast_builder: 
 
     args, field_names = extract_call_args(method_call_node, ast_builder)
 
-    # Named arguments are not supported for method calls
-    # If field_names is not None, validation will catch this later in semantic analysis
-    # For now, we just ignore field_names for method calls
-
+    # Carried, not read here: a method takes no field name, and the typecheck pass is
+    # where a call knows what its callee is. Dropped here, the names reached nothing
+    # and the arguments went in by position (#563).
     return MethodCall(
         receiver=receiver,
         method=str(method_name_tok),
         args=args,
+        field_names=field_names,
         loc=span_of(method_call_node)
     )

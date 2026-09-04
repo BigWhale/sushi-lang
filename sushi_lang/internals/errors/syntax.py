@@ -75,3 +75,16 @@ _add(ErrorMessage("CE6102", Severity.ERROR,
     "explicit type arguments are only supported on direct function calls",
     Category.SYNTAX, "The `@(...)` type-argument list may appear only on a call to a named "
                      "free function, not on a method call or an indirect call."))
+
+_add(ErrorMessage("CE6104", Severity.ERROR,
+    "the named argument '{name}:' is only supported in a struct construction",
+    Category.SYNTAX, "A named argument names a FIELD, and a struct declaration is the only "
+                     "declaration that gives a name to each position at the call site. A "
+                     "function parameter, a method parameter and an enum payload have no "
+                     "such name, so the compiler read the arguments by position and "
+                     "ignored the labels: `p.moved(dy: 5)` against `(i32 dx, i32 dy)` "
+                     "wrote the wrong slot on a program the compiler accepted (#563). The "
+                     "grammar takes `name: value` in every argument list, because the "
+                     "parser cannot know what the callee is; the rule is refused where the "
+                     "callee is known, which is the typecheck pass, as CE6102 is. Write "
+                     "the arguments in declaration order."))

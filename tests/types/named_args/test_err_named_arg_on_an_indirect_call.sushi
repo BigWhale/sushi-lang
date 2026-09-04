@@ -1,0 +1,11 @@
+# A call through a function VALUE has no declaration to read a name from.
+# EXPECT_ERROR_CODE: CE6104
+
+fn diff(i32 a, i32 b) i32:
+    return Result.Ok(a - b)
+
+fn main() i32:
+    let fn(i32, i32) -> i32 f = diff
+    let i32 d = f(b: 1, a: 9).realise(0)
+    println("{d}")
+    return Result.Ok(0)

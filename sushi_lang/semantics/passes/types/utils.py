@@ -262,6 +262,23 @@ def reject_spread_args(validator: 'TypeValidator', args: List) -> bool:
     return found
 
 
+def reject_named_args(validator: 'TypeValidator', node) -> None:
+    """Refuse a named argument on a call that is not a struct construction (CE6104).
+
+    One rule, read after the call is validated, because only then is the callee known.
+    A struct construction SPENDS its names -- the field matcher puts the arguments in
+    declaration order and clears them -- so names that are still here belong to a
+    callee that has no field names to match (#563).
+    """
+    names = getattr(node, "field_names", None)
+    if not names:
+        return
+    er.emit_with(validator.reporter, er.ERR.CE6104, node.loc, name=names[0]) \
+        .help("pass the arguments in declaration order") \
+        .emit()
+    node.field_names = None
+
+
 def mark_array_destroyed(validator: 'TypeValidator', name: str) -> None:
     """Mark a dynamic array as destroyed in the current scope."""
     if validator.destroyed_arrays:

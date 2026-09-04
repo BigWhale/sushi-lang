@@ -61,6 +61,9 @@ def _validate_named_struct_constructor(
     )
 
     if reordered_args is None:
+        # The names are spent even when they do not fit: the field matcher has already
+        # said what is wrong with them, and CE6104 must not report them a second time.
+        call.field_names = None
         for arg in actual_args:
             validator.validate_expression(arg)
         return

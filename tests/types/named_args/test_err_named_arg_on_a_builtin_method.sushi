@@ -1,0 +1,8 @@
+# A built-in method of a dynamic array takes its arguments by position.
+# EXPECT_ERROR_CODE: CE6104
+
+fn main() i32:
+    let i32[] arr = from([1, 2, 3])
+    let i32 v = arr.get(index: 0).realise(0)
+    println("{v}")
+    return Result.Ok(0)

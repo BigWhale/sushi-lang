@@ -1,0 +1,16 @@
+# The shape of #563: an extension method took the names by position and wrote the
+# wrong slot on a program the compiler accepted.
+# EXPECT_ERROR_CODE: CE6104
+
+struct P:
+    i32 x
+    i32 y
+
+extend P shifted(i32 dx, i32 dy) P:
+    return P(self.x + dx, self.y + dy)
+
+fn main() i32:
+    let P p = P(1, 2)
+    let P q = p.shifted(dy: 5, dx: 0)
+    println("{q.x} {q.y}")
+    return Result.Ok(0)

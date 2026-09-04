@@ -992,6 +992,9 @@ let Person p2 = Person(age: 42, active: true, name: "Arthur")  # Order doesn't m
 - All fields must be provided (no partial construction)
 - Cannot mix positional and named arguments (all-or-nothing)
 - Named parameters are resolved at compile-time (zero-cost abstraction)
+- A name in an argument list names a FIELD, so a struct construction is the only place
+  that takes one. A function call, a method call and an enum variant construction read
+  their arguments by position, and a name written there is `CE6104`
 
 ### Field Access
 
