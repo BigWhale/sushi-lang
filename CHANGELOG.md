@@ -447,6 +447,23 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Testing
+- **The docs sweep compiles the FILES too, and there are 109 of them.** A third
+  collector, `--only files`: nothing compiled a `.sushi` file under `docs/` before it,
+  because one collector reads fences out of Markdown and the other compiles fences OUT OF
+  a file (#547). Three files had been broken for two phases of the handles epic before
+  anybody noticed. Two rules make the whole corpus pass with no marker on a single file: a
+  file with no `fn main(` at the start of a line is a LIBRARY and is built as one
+  (`--lib`), so "no main" is a category and never drift, and every library of a directory
+  is built BEFORE that directory's programs into a temporary directory the programs get on
+  `SUSHI_LIB_PATH` -- which is what checks the tutorial's `use <lib/guidelib>` page end to
+  end, against the library the page ships. A file is compiled and never run, exit 1 is a
+  PASS as everywhere else in the sweep, and the escape hatch is the same vocabulary in a
+  comment of the file's leading block (`# docs-sweep: skip (reason)`,
+  `# docs-sweep: error CExxxx`). Every page's `--8<--` snippet include is checked and
+  COUNTED, so a page naming a file that is not on disk fails and the summary says the
+  check ran. Output and cache go to a temporary directory, so a sweep leaves the tree
+  clean. The attribute vocabulary now has ONE reader that the fence and the file both
+  call.
 - **A release no longer waits for the cross-platform suite, and one gate decides for
   every job.** `pyproject.toml` and `uv.lock` are inside the workflow's code filter and
   have to be -- a dependency, a ruff rule, `requires-python` and the hatch packaging

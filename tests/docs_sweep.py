@@ -1,9 +1,9 @@
-"""Compile the Sushi in the documentation -- the Markdown pages, and the doc blocks.
+"""Compile the Sushi in the documentation -- the pages, the doc blocks, and the files.
 
-Two collectors, one outcome vocabulary. This is a tool to run BY HAND, periodically or
-after a docs edit, and it is deliberately not a CI job.
+THREE collectors, one outcome vocabulary. This is a tool to run BY HAND, periodically
+or after a docs edit, and it is deliberately not a CI job.
 
-Usage: python tests/docs_sweep.py [--only {all,docs,examples}] [--jobs N] [--verbose]
+Usage: python tests/docs_sweep.py [--only {all,docs,examples,files}] [--jobs N] [--verbose]
 
 ## The pages (`--only docs`)
 
@@ -56,6 +56,40 @@ private declaration, which the generated file cannot call, and a unit that decla
 
 Output is not asserted. An example is documentation, and an expected-output mechanism
 would make it a test. `docs/design/documentation.md` section 10 is the authority.
+
+## The files (`--only files`)
+
+Every `.sushi` FILE under `docs/` -- 109 of them, and the tutorial's `--8<--` includes
+among them (#547). Neither collector above compiles a file: one reads fences out of
+Markdown, the other compiles fences OUT OF a file. Three files were broken for two
+phases of the handles epic before anybody noticed.
+
+The file is compiled, never run: what a page promises about its OUTPUT is the reader's
+to check, and running an example that opens a socket is not this tool's business.
+
+Two rules keep the corpus honest without a marker on a single file:
+
+- a file with no `fn main(` at the start of a line is a LIBRARY, and is built as one
+  (`--lib --lib-version 0.0.0`). "No main" is then a category, never drift, and the
+  library is genuinely gated instead of skipped
+- every library of a directory is built BEFORE that directory's programs, into a
+  temporary directory the programs get on `SUSHI_LIB_PATH`. So the tutorial's
+  `use <lib/guidelib>` page is checked end to end, against the library it ships
+
+The directive is the escape hatch for what neither rule covers. A `.sushi` file cannot
+carry an HTML comment, so it carries the same words in a comment of its own, and only
+in the LEADING comment block -- the attachment rule a doc block already obeys:
+
+    # docs-sweep: skip (reason)      do not compile; the reason is printed
+    # docs-sweep: error CExxxx       must exit 2 and name every code given
+
+Nothing is written beside the file: the output and the incremental cache both go to a
+temporary directory (`--cache-dir`).
+
+This collector also checks every page's `--8<--` snippet include, and FAILS one whose
+target is not on disk. A page that includes a file nobody compiled was the reported
+hole; a page that includes a file that is not there ships a broken snippet. Each
+include is counted, so the summary says the check ran.
 """
 from __future__ import annotations
 
@@ -84,6 +118,15 @@ ERROR_MARK = re.compile(r"<!--\s*docs-sweep:\s*error\s+(?P<codes>CE\d{4}(?:\s+CE
 # the built copy of `docs/`, and sweeping a build output would report every page twice.
 SUSHI_ROOTS = ("docs", "editor-support", "sushi_lang", "tests", "toolchain")
 SKIP_DIRS = {"__sushi_cache__", ".git", "node_modules", ".venv", "venv", "build", "dist"}
+
+# The FILE directive (#547): a `.sushi` file cannot carry an HTML comment, and a
+# comment of its own is what it has. The same words as a fence, in `#` instead of `<!--`.
+FILE_MARK = re.compile(r"^#\s*docs-sweep:\s*(?P<attr>.+?)\s*$")
+# A `main` DECLARATION, at the start of a line: half the corpus names `fn main()` in
+# its prose, and a file that only talks about one is a library.
+MAIN_DECL = re.compile(r"^fn\s+main\s*\(", re.M)
+# A mkdocs snippet include, the way the tutorial pulls its examples in.
+INCLUDE_MARK = re.compile(r'--8<--\s*"(?P<target>[^"]+)"')
 
 SKIP_ATTR = re.compile(r"^skip\s*(?:\((?P<reason>[^)]*)\))?$")
 ERROR_ATTR = re.compile(r"^error\s+(?P<codes>CE\d{4}(?:\s+CE\d{4})*)$")
@@ -210,27 +253,34 @@ def compile_block(block: Block, tmpdir: str) -> tuple[Block, str, str]:
 
 # -- the doc blocks -------------------------------------------------------------
 
+def read_attr(rest: str, written: str) -> Attrs:
+    """The attribute vocabulary itself, shared by every collector that carries one.
+
+    A fence spells it in its info string and a FILE spells it in a `docs-sweep:`
+    comment, but the words mean one thing, so they are read in one place.
+    """
+    if not rest:
+        return Attrs("run", written=written)
+    if rest == "no_run":
+        return Attrs("no_run", written=written)
+    skip = SKIP_ATTR.match(rest)
+    if skip is not None:
+        return Attrs("skip", reason=skip.group("reason") or "no reason given",
+                     written=written)
+    error = ERROR_ATTR.match(rest)
+    if error is not None:
+        return Attrs("error", codes=tuple(error.group("codes").split()), written=written)
+    # A typo of `no_run` must be visible. An unrecognised attribute is its own outcome
+    # rather than a silent skip, which is the failure mode this whole feature removes.
+    return Attrs("unknown", written=written)
+
+
 def parse_attrs(info: str) -> Attrs:
     """One fence info string, read into what the runner must do with the fence."""
     words = info.split(None, 1)
     if not words or words[0] != "sushi":
         return Attrs("ignore", written=info)
-    rest = words[1].strip() if len(words) > 1 else ""
-
-    if not rest:
-        return Attrs("run", written=info)
-    if rest == "no_run":
-        return Attrs("no_run", written=info)
-    skip = SKIP_ATTR.match(rest)
-    if skip is not None:
-        return Attrs("skip", reason=skip.group("reason") or "no reason given",
-                     written=info)
-    error = ERROR_ATTR.match(rest)
-    if error is not None:
-        return Attrs("error", codes=tuple(error.group("codes").split()), written=info)
-    # A typo of `no_run` must be visible. An unrecognised attribute is its own outcome
-    # rather than a silent skip, which is the failure mode this whole feature removes.
-    return Attrs("unknown", written=info)
+    return read_attr(words[1].strip() if len(words) > 1 else "", info)
 
 
 def wrap_example(code: str, unit_import: str, index: int) -> str:
@@ -438,13 +488,171 @@ def run_example(example: Example, tmproot: Path) -> tuple[Example, str, str]:
     return example, "PASS", ""
 
 
+# -- the files (`--only files`) -------------------------------------------------
+
+@dataclass
+class DocFile:
+    path: Path           # absolute
+    file: str            # repo-relative where it can be made, else the name
+    attrs: Attrs
+    is_library: bool
+
+
+def parse_file_attrs(text: str) -> Attrs:
+    """The `# docs-sweep:` directive of a file, read from its LEADING comment block.
+
+    The attachment rule doc blocks already obey: the block is the run of comment
+    lines at the top of the file, and the first line that is not one ends it. A
+    directive further down is a note to a reader, not an instruction to this tool.
+    """
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not stripped.startswith("#"):
+            break
+        mark = FILE_MARK.match(stripped)
+        if mark is not None:
+            return read_attr(mark.group("attr").strip(), stripped)
+    return Attrs("run", written="")
+
+
+def doc_file_at(path: Path) -> DocFile:
+    """One `.sushi` file, read into what the sweep must do with it."""
+    path = Path(path)
+    text = path.read_text(encoding="utf-8", errors="replace")
+    try:
+        name = str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        name = path.name
+    # No `main` is a CATEGORY and never drift: the file is a library, and it is built
+    # as one. The declaration has to be at the start of a line -- half the corpus
+    # names `fn main()` in its prose.
+    return DocFile(path=path, file=name, attrs=parse_file_attrs(text),
+                   is_library=MAIN_DECL.search(text) is None)
+
+
+def snippet_includes() -> list[tuple[str, int, str, bool]]:
+    """Every `--8<--` snippet on every page: where it is, what it names, and whether
+    that target is on disk.
+
+    The other half of #547: a page that includes a file nobody compiled was the
+    reported hole, and a page that includes a file that is not THERE ships a broken
+    snippet to the reader. Both are answered by the corpus of files, so both are here.
+    Each include is COUNTED and not only reported on failure -- a check that is silent
+    when it passes is invisible, which is the failure mode this whole tool removes.
+    """
+    found: list[tuple[str, int, str, bool]] = []
+    for page in sorted((PROJECT_ROOT / "docs").rglob("*.md")):
+        text = page.read_text(encoding="utf-8", errors="replace")
+        for number, line in enumerate(text.splitlines(), start=1):
+            mark = INCLUDE_MARK.search(line)
+            if mark is None:
+                continue
+            target = mark.group("target")
+            found.append((str(page.relative_to(PROJECT_ROOT)), number, target,
+                          (PROJECT_ROOT / target).exists()))
+    return found
+
+
+def missing_includes() -> list[tuple[str, int, str]]:
+    """Only the includes whose target is not on disk."""
+    return [(page, number, target)
+            for page, number, target, exists in snippet_includes() if not exists]
+
+
+def doc_files() -> list[DocFile]:
+    """Every `.sushi` file under `docs/` (#547)."""
+    found: list[DocFile] = []
+    for path in sorted((PROJECT_ROOT / "docs").rglob("*.sushi")):
+        if not any(part in SKIP_DIRS for part in path.parts):
+            found.append(doc_file_at(path))
+    return found
+
+
+def _lib_dir(tmproot: Path, owner: Path, made: dict[Path, Path]) -> Path:
+    """Where the libraries of one directory are built, one directory per source dir.
+
+    Per directory and not one shared pile, so two libraries of one name -- a thing a
+    documentation corpus is free to hold -- cannot shadow each other.
+    """
+    dest = made.get(owner)
+    if dest is None:
+        dest = tmproot / "libs" / f"{len(made)}_{owner.name}"
+        dest.mkdir(parents=True, exist_ok=True)
+        made[owner] = dest
+    return dest
+
+
+def compile_doc_file(doc: DocFile, tmproot: Path, lib_dir: Path) -> tuple[DocFile, str, str]:
+    """Returns (doc, outcome, detail). A library is built with `--lib` into lib_dir."""
+    if doc.attrs.mode == "skip":
+        return doc, "SKIP", doc.attrs.reason
+    if doc.attrs.mode == "unknown":
+        return doc, "FAIL", f"unknown docs-sweep attribute: `{doc.attrs.written}`"
+
+    if doc.is_library:
+        out = lib_dir / f"{doc.path.stem}.slib"
+        extra: tuple[str, ...] = ("--lib", "--lib-version", "0.0.0")
+    else:
+        out = tmproot / "bin" / f"{doc.path.stem}_{abs(hash(doc.file)) % 10**6}"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        extra = ()
+    # Its own cache, because the collector writes nothing beside the file it reads.
+    extra = (*extra, "--cache-dir", str(tmproot / "cache"))
+
+    try:
+        proc = _sushic(doc.path, out, extra=extra, lib_path=lib_dir)
+    except subprocess.TimeoutExpired:
+        return doc, "FAIL", f"compile timed out after {COMPILE_TIMEOUT}s"
+
+    if doc.attrs.codes:
+        missing = [code for code in doc.attrs.codes if code not in proc.stderr]
+        if proc.returncode == 2 and not missing:
+            return doc, "EXPECTED-ERROR", ", ".join(doc.attrs.codes)
+        return doc, "FAIL", (f"exit {proc.returncode}, missing "
+                             f"{missing or list(doc.attrs.codes)}: {first_error(proc.stderr)}")
+
+    if proc.returncode not in (0, 1):  # exit 1 is a warning, not a failure
+        return doc, "FAIL", f"exit {proc.returncode}: {first_error(proc.stderr)}"
+    return doc, "PASS", "built as a library" if doc.is_library else ""
+
+
+def run_doc_files(docs: list[DocFile], tmproot: Path,
+                  jobs: int = 1) -> list[tuple[DocFile, str, str]]:
+    """Every library of a directory before that directory's programs.
+
+    The tutorial teaches `use <lib/guidelib>` against a library it also ships, so the
+    story is only checked end to end if the `.slib` exists when the consumer compiles.
+    The libraries go where `SUSHI_LIB_PATH` points the consumer.
+    """
+    tmproot = Path(tmproot)
+    tmproot.mkdir(parents=True, exist_ok=True)
+    made: dict[Path, Path] = {}
+    dirs = {doc.path.parent: _lib_dir(tmproot, doc.path.parent, made) for doc in docs}
+
+    results: list[tuple[DocFile, str, str]] = []
+    for doc in (d for d in docs if d.is_library):
+        results.append(compile_doc_file(doc, tmproot, dirs[doc.path.parent]))
+
+    programs = [d for d in docs if not d.is_library]
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        results.extend(pool.map(
+            lambda d: compile_doc_file(d, tmproot, dirs[d.path.parent]), programs))
+    return results
+
+
 # -- the driver -----------------------------------------------------------------
 
-def _sushic(src: Path, out: Path) -> subprocess.CompletedProcess:
+def _sushic(src: Path, out: Path, *, extra: tuple[str, ...] = (),
+            lib_path: Path | None = None) -> subprocess.CompletedProcess:
+    env = {**os.environ, "NO_COLOR": "1"}
+    if lib_path is not None:
+        env["SUSHI_LIB_PATH"] = str(lib_path)
     return subprocess.run(
-        ["./sushic", "-o", str(out), str(src)],
+        ["./sushic", *extra, "-o", str(out), str(src)],
         capture_output=True, text=True, cwd=PROJECT_ROOT,
-        env={**os.environ, "NO_COLOR": "1"}, timeout=COMPILE_TIMEOUT,
+        env=env, timeout=COMPILE_TIMEOUT,
     )
 
 
@@ -496,10 +704,20 @@ def sweep_examples(tmpdir: str, jobs: int, verbose: bool) -> Tally:
     return tally
 
 
+def sweep_files(tmpdir: str, jobs: int, verbose: bool) -> Tally:
+    tally = Tally()
+    for page, number, target, exists in snippet_includes():
+        detail = f"--8<-- `{target}`" + ("" if exists else ", which is not on disk")
+        tally.record("PASS" if exists else "FAIL", f"{page}:{number}", detail, verbose)
+    for doc, outcome, detail in run_doc_files(doc_files(), Path(tmpdir) / "files", jobs):
+        tally.record(outcome, doc.file, detail, verbose)
+    return tally
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--only", choices=("all", "docs", "examples"), default="all",
-                        help="which collector to run (default: both)")
+    parser.add_argument("--only", choices=("all", "docs", "examples", "files"),
+                        default="all", help="which collector to run (default: all three)")
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 4)
     parser.add_argument("--verbose", action="store_true",
                         help="list every block, not only the failures")
@@ -513,6 +731,9 @@ def main() -> int:
         if args.only in ("all", "examples"):
             tallies.append(("doc examples",
                             sweep_examples(tmpdir, args.jobs, args.verbose)))
+        if args.only in ("all", "files"):
+            tallies.append(("files and snippet includes under docs/",
+                            sweep_files(tmpdir, args.jobs, args.verbose)))
 
     print()
     for noun, tally in tallies:
@@ -524,7 +745,9 @@ def main() -> int:
               "fence: `<!-- docs-sweep: error CExxxx -->` for a deliberate diagnostic, "
               "`<!-- docs-sweep: skip (reason) -->` to exclude. In a doc block, put "
               "the same words on the fence itself: ```sushi error CExxxx, "
-              "```sushi skip (reason), or ```sushi no_run to compile without running:")
+              "```sushi skip (reason), or ```sushi no_run to compile without running. "
+              "In a `.sushi` FILE, the same words in a comment of its leading block: "
+              "`# docs-sweep: error CExxxx`, `# docs-sweep: skip (reason)`:")
         for line in failures:
             print(f"  {line}")
         return 1
