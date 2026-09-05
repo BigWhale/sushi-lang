@@ -6,6 +6,7 @@
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "wrote one\nsink closing\nok\n"
 use <io/fs>
+use <io/contracts>
 
 struct Sink@(T):
     File out

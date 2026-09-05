@@ -4,6 +4,8 @@
 
 # Tests ProcessError enum variants
 
+use <sys/process>
+
 fn spawn_process(string cmd) i32 | ProcessError:
     if (cmd == "bad"):
         return Result.Err(ProcessError.SpawnFailed)

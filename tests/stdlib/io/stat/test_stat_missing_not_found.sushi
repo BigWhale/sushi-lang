@@ -3,6 +3,7 @@
 # EXPECT_NO_LEAKS: true
 
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     let string missing = "/tmp/sushi_stat_missing_path"

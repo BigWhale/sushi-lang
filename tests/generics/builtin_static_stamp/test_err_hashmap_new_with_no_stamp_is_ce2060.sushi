@@ -1,0 +1,9 @@
+# The HashMap twin of the List refusal (#570): `HashMap.new()` off a bare receiver
+# position reaches no stamp, and the two type parameters are both named.
+# EXPECT_ERROR_CODE: CE2060
+# EXPECT_STDERR_CONTAINS: 'K' and 'V'
+use <collections/hashmap>
+
+fn main() i32:
+    println("{HashMap.new().len()}")
+    return Result.Ok(0)

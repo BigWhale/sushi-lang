@@ -296,6 +296,14 @@ A binding holds the PROVIDER and never the written path: `_inject_library_source
 renames a library's units and leaves `UseStatement.path` alone, so an alias built from
 the path would break the moment a library unit imported its sibling.
 
+A stdlib provider also lists the PREDEFINED enums homed at its module (#574, Ruling 3).
+No unit declares `FileMode`, so no declaration record can say who may write it; the
+`collect` pass stamps each of the nine with its home (`EnumType.home_module`, the table
+is `passes/collect/enums.py:PREDEFINED_ENUM_HOMES`), `homed_enums` reads the stamp for
+the provider, and the typecheck pass's type-position gate (`reject_out_of_scope_type`)
+reads it to refuse the bare name where the home is not imported -- the `HashMap` rule.
+`StdError` carries no home and stays global.
+
 Three rules:
 
 - `CE3014` -- a `use` below a declaration. The span comes from the AST builder, because
@@ -401,6 +409,15 @@ a `Box@(string)` only once `outer@(string)` is substituted. A copy binds its `le
 while it walks its body for nested generic calls, so a generic called with one is collected
 like one called with a parameter, and it interns every type its `let` annotations name,
 exactly as it interns its signature's.
+
+A substituted type that is itself an instance -- the `Box<string>` a `Box@(B)` field
+becomes under `B := string`, a `Maybe<string>` payload, a `Pair<i32, string>` return --
+is published to its table when it is BUILT (`TypeMonomorphizer._publish`, #577). The
+collector sees what the program spells; the substitutor is the one place every producer
+passes, so publishing there is the worklist, and the analyzer reads the reached
+instances back as instantiations for the copies below. An abstract instance, a
+method-level `U` still unbound while a generic-target template is cut per receiver, is
+not published.
 
 The generic-target extension and perk-implementation copies are first cut from the
 collector's set, before the functions are monomorphized. Every instantiation interned after

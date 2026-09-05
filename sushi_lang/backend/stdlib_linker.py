@@ -107,6 +107,7 @@ class StdlibLinker:
         "io/fs",
         "io/path",
         "net/dns",
+        "net/error",
         "net/ip",
         "net/tcp",
         "net/udp",

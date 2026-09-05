@@ -5,6 +5,8 @@
 # Tests IoError enum variants, including the Os(i32) payload arm: IoError is the ONE
 # channel every io contract method answers (HANDLES.md, rulings R4 and R20).
 
+use <io/contracts>
+
 fn do_io(string op) i32 | IoError:
     if (op == "read"):
         return Result.Err(IoError.NotFound)

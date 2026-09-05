@@ -3,6 +3,7 @@
 # EXPECT_NO_LEAKS: true
 
 use <net/socket>
+use <net/error>
 
 fn main() i32:
     match sock_close(-1):

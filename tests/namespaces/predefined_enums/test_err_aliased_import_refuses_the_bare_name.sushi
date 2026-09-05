@@ -1,0 +1,9 @@
+# Behind an aliased import the bare name is refused exactly as `HashMap` is behind
+# `use <collections/hashmap> as hm` (#574; #506, decision A-strict): `use <io/fs> as fs`
+# puts `FileMode` behind the dot and nothing into the flat scope.
+# EXPECT_ERROR_CODE: CE2001
+use <io/fs> as fs
+
+fn main() i32:
+    let FileMode mode = fs.FileMode.Read()
+    return Result.Ok(0)

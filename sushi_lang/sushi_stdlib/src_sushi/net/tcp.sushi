@@ -23,6 +23,7 @@ recv_exact() is the loop for a caller that needs a count.
 
 use <collections/strings>
 use <io/contracts>
+use <net/error>
 use <net/socket>
 
 ##:
@@ -85,26 +86,6 @@ fn close_socket(poke i32 fd) ~ | NetError:
     fd := -1
     sock_close(held)??
     return Result.Ok(~)
-
-##:
-Turns a socket error into the one channel the io contracts answer.
-
-Every NetError variant with no twin in IoError belongs to a connect, a bind or a resolve,
-so nothing a contract method can answer is lost here. A stream that is already connected
-cannot report AddressInUse.
-
-- Returns: The IoError that says the same thing.
-:##
-extend NetError to_io() IoError:
-    match self:
-        NetError.ConnectionReset -> return IoError.ConnectionReset
-        NetError.TimedOut -> return IoError.TimedOut
-        NetError.Closed -> return IoError.Closed
-        NetError.PermissionDenied -> return IoError.PermissionDenied
-        NetError.TooManyOpen -> return IoError.TooManyOpen
-        NetError.InvalidAddress -> return IoError.InvalidInput
-        NetError.Interrupted -> return IoError.Interrupted
-        _ -> return IoError.Other
 
 ##:
 Reads bytes from the stream. The same contract a File satisfies, so one generic serves

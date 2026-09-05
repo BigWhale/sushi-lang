@@ -83,6 +83,18 @@ class UnitScope:
         return (self.everything or name not in GATED_GENERIC_NAMES
                 or name in self.generics)
 
+    def holds_home(self, module_path: Optional[str]) -> bool:
+        """May a predefined enum HOMED at `module_path` be written here bare (#574)?
+
+        The home is a source module (a unit, `<io/fs>`) or a registry module
+        (`<math>`), so both memberships are read; the home unit itself may always
+        write its own. No home at all is `StdError`, in scope everywhere.
+        """
+        return (self.everything or module_path is None
+                or module_path == self.unit
+                or module_path in self.units
+                or module_path in self.modules)
+
     def resolve(self, name: str, by_unit: Mapping[str, Mapping[str, V]],
                 flat: Mapping[str, V]) -> Optional[V]:
         """Section 8's ladder, rows 2 and 3, over any unit-keyed table.
@@ -237,23 +249,32 @@ class UnitNamespace(Provider):
 
 
 class StdlibNamespace(Provider):
-    """A registry stdlib module. Already keyed by `(module, name)` -- section 1.4."""
+    """A registry stdlib module. Already keyed by `(module, name)` -- section 1.4.
+
+    `types` carries the predefined enums HOMED at the module (#574): `<math>` brings
+    `MathError`, so `m.MathError` is a member exactly as `m.sqrt` is.
+    """
 
     namespace_kind = "stdlib"
 
-    def __init__(self, module_path: str, module: Any) -> None:
+    def __init__(self, module_path: str, module: Any,
+                 types: Optional[Mapping[str, str]] = None) -> None:
         self.origin = module_path
         self._module = module
+        self._types = types or {}
 
     def lookup(self, name: str) -> Optional[Binding]:
         func = self._module.functions.get(name)
         if func is not None:
             return Binding("function", name, self, func)
         const = self._module.constants.get(name)
-        return None if const is None else Binding("constant", name, self, const)
+        if const is not None:
+            return Binding("constant", name, self, const)
+        kind = self._types.get(name)
+        return None if kind is None else Binding(kind, name, self)
 
     def members(self) -> Iterable[str]:
-        return (*self._module.functions, *self._module.constants)
+        return (*self._module.functions, *self._module.constants, *self._types)
 
 
 class GenericNamespace(Provider):
@@ -353,6 +374,19 @@ def suggest_member(members: Iterable[str], written: str) -> Optional[str]:
     from difflib import get_close_matches
     matches = get_close_matches(written, tuple(members), n=1)
     return matches[0] if matches else None
+
+
+def homed_enums(module_path: str, enum_table: Any) -> Dict[str, str]:
+    """The predefined enums whose HOME is `module_path`, as namespace members (#574).
+
+    Read off the stamp every synthesized enum carries (`EnumType.home_module`), so the
+    table in `passes/collect/enums.py` is the one authority: a provider for `<io/fs>`
+    lists `FileMode` and `FileError` because the stamp says so, and nothing here names
+    an enum.
+    """
+    by_name = getattr(enum_table, "by_name", None) or {}
+    return {name: "enum" for name, enum in by_name.items()
+            if getattr(enum, "home_module", None) == module_path}
 
 
 def import_help(origin: str, *, stdlib: bool = False) -> str:

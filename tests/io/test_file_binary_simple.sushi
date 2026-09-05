@@ -7,6 +7,7 @@
 
 use <io/files>
 use <io/fs>
+use <io/contracts>
 
 fn main() i32:
     # Write binary data to file

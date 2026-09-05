@@ -3,6 +3,7 @@
 # TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2411
 use <io/fs>
+use <io/contracts>
 
 struct Inner:
     File out

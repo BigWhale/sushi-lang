@@ -3,6 +3,7 @@
 # EXPECT_ERROR_CODE: CE2435
 # EXPECT_STDERR_CONTAINS: 'close' consumed it
 use <net/tcp>
+use <net/error>
 
 fn shut_then_ask() ~ | NetError:
     let TcpListener listener = listen("127.0.0.1", 0, 1)??

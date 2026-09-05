@@ -1,0 +1,51 @@
+# The flat import brings the bare name, one home per enum: `FileMode` and `FileError`
+# from `<io/fs>`, `IoError` and `SeekFrom` from `<io/contracts>`, `NetError` from the new
+# `<net/error>`, `ProcessError` from `<sys/process>`, `EnvError` from `<sys/env>` and
+# `MathError` from `<math>` (#574, Ruling 3).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "8\n"
+use <io/fs>
+use <io/contracts>
+use <net/error>
+use <sys/process>
+use <sys/env>
+use <math>
+
+fn main() i32:
+    let FileMode a = FileMode.Read()
+    let FileError b = FileError.NotFound
+    let IoError c = IoError.TimedOut
+    let SeekFrom d = SeekFrom.Start
+    let NetError e = NetError.TimedOut
+    let ProcessError f = ProcessError.SpawnFailed
+    let EnvError g = EnvError.NotFound
+    let MathError h = MathError.Overflow
+    let i32 count = 0
+    match a:
+        FileMode.Read -> count := count + 1
+        _ -> count := count
+    match b:
+        FileError.NotFound -> count := count + 1
+        _ -> count := count
+    match c:
+        IoError.TimedOut -> count := count + 1
+        _ -> count := count
+    match d:
+        SeekFrom.Start -> count := count + 1
+        _ -> count := count
+    match e:
+        NetError.TimedOut -> count := count + 1
+        _ -> count := count
+    match f:
+        ProcessError.SpawnFailed -> count := count + 1
+        _ -> count := count
+    match g:
+        EnvError.NotFound -> count := count + 1
+        _ -> count := count
+    match h:
+        MathError.Overflow -> count := count + 1
+        _ -> count := count
+    println("{count}")
+    return Result.Ok(0)

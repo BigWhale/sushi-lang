@@ -10,6 +10,9 @@ System environment variable access and manipulation.
 use <sys/env>
 ```
 
+The import brings `EnvError`, the module's error enum: the bare name needs it, and
+`use <sys/env> as env` puts it behind the dot (`env.EnvError.NotFound`).
+
 ## Overview
 
 The env module provides functions for reading and modifying environment variables. It uses POSIX `getenv()` and `setenv()` functions for Unix portability across macOS, Linux, and other Unix-like systems.

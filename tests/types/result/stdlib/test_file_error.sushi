@@ -4,6 +4,8 @@
 
 # Tests FileError enum variants
 
+use <io/fs>
+
 fn open_file(string path) i32 | FileError:
     if (path == "missing"):
         return Result.Err(FileError.NotFound)

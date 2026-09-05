@@ -7,6 +7,7 @@
 # EXPECT_STDOUT_EXACT: "[abcd]\nok\n"
 use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 fn run(string path) ~ | IoError:
     let File wf = open(path, FileMode.Write())??

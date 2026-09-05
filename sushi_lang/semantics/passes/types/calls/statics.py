@@ -281,17 +281,30 @@ def _refuse_unstamped_generic(validator: 'TypeValidator', call) -> bool:
     if (base not in validator.generic_struct_table.by_name
             and base not in validator.generic_enum_table.by_name):
         return False
-    declarations = validator.generic_extension_table.declarations(base, call.method)
-    if not any(getattr(d, "is_static", False) for d in declarations):
-        return False
+    # A BUILT-IN static (`List.new()`, `HashMap.new()`, `Own.alloc(v)`) is the same
+    # fault in the same position (#570): its narrow emitter reads the stamp alone, so an
+    # unstamped one reached the backend as a bare `List` name and answered CE0055, an
+    # internal error blaming the compiler for the program's mistake. `static_target_type`
+    # steps aside for one before it reads the stamp, so the stamp is read here.
+    builtin = is_builtin_static(base, call.method)
+    if builtin:
+        if _stamped_instantiation(call, base) is not None:
+            return False
+        declarations = ()
+    else:
+        declarations = validator.generic_extension_table.declarations(base, call.method)
+        if not any(getattr(d, "is_static", False) for d in declarations):
+            return False
 
     unsolved = _unreached_type_params(validator, call, base)
     spelled = _spell_names(unsolved)
+    reason = ("the built-in static reads its type from the binding alone, and this "
+              "position declares no type"
+              if builtin else
+              f"no argument names {spelled}, and this position declares no type")
     diag = er.emit_with(validator.reporter, er.ERR.CE2060, call.loc,
-                        name=f"{base}.{call.method}",
-                        reason=f"no argument names {spelled}, and this position "
-                               f"declares no type")
-    if _returns_the_target(declarations, base):
+                        name=f"{base}.{call.method}", reason=reason)
+    if builtin or _returns_the_target(declarations, base):
         diag.help(f"bind the result to a declared type "
                   f"('let {base}@(...) x = {base}.{call.method}(...)'), or name "
                   f"{spelled} in a parameter so the argument solves it")

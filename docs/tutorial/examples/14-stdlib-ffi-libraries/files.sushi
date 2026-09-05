@@ -1,5 +1,6 @@
 use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 # A handle owns its descriptor: it closes itself when its owner leaves scope,
 # and every read and write answers the same IoError channel.

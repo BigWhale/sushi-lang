@@ -10,6 +10,9 @@ Mathematical functions for numeric types.
 use <math>
 ```
 
+The import brings `MathError`, the module's error enum: the bare name needs it, and
+`use <math> as m` puts it behind the dot (`m.MathError.DivisionByZero`).
+
 ## Overview
 
 The math module provides mathematical operations for numeric types. All functions are

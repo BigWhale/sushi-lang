@@ -115,6 +115,7 @@ fn main() i32:
         "io/buf.md",
         """use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 fn peek_first(string path) string | IoError:
     let File f = open(path, FileMode.Read())??
@@ -220,6 +221,7 @@ fn main() i32:
         "net/tcp",
         "net/tcp.md",
         """use <net/tcp>
+use <net/error>
 
 fn run() ~ | NetError:
     let TcpListener l = listen("127.0.0.1", 0, 8)??
@@ -238,6 +240,7 @@ fn main() i32:
         "net/udp",
         "net/udp.md",
         """use <net/udp>
+use <net/error>
 
 fn run() ~ | NetError:
     let UdpSocket s = bind("127.0.0.1", 0)??

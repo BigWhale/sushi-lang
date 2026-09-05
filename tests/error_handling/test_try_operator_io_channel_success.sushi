@@ -6,6 +6,7 @@
 use <io/files>
 use <io/fs>
 use <collections/strings>
+use <io/contracts>
 
 fn write_test_file() ~:
     # Use pattern matching to handle the Result from open()

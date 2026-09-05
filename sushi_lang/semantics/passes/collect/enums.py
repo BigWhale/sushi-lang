@@ -51,6 +51,29 @@ class GenericEnumTable:
     files: Dict[str, Optional[str]] = field(default_factory=dict)
 
 
+# The HOME of every predefined enum (#574, Ruling 3). No unit declares these -- they are
+# synthesized below -- and `docs/design/unit-namespaces.md` section 4 says a name no import
+# brings can sit in no namespace. So each is given a module: the import GATES the bare
+# name, as `<collections/hashmap>` gates `HashMap` (#506), and the alias holds it
+# (`fs.FileMode`). `StdError` is the implicit Result arm and stays global.
+#
+# `SeekFrom` is homed at `<io/contracts>` and not at `<io/fs>`: `Seek.seek(SeekFrom)` is
+# declared there, and `<io/fs>` imports `<io/contracts>` to implement the contracts, so
+# the other way round would be a cycle. `NetError` gets `<net/error>`, a module created
+# for it. `IoError` is `<io/contracts>`'s because every contract method answers it.
+PREDEFINED_ENUM_HOMES: dict[str, Optional[str]] = {
+    "FileMode": "io/fs",
+    "SeekFrom": "io/contracts",
+    "FileError": "io/fs",
+    "IoError": "io/contracts",
+    "NetError": "net/error",
+    "StdError": None,
+    "ProcessError": "sys/process",
+    "EnvError": "sys/env",
+    "MathError": "math",
+}
+
+
 class EnumCollector:
     """Collector for enum definitions."""
 
@@ -85,10 +108,21 @@ class EnumCollector:
                 if isinstance(enum, EnumDef):
                     self._collect_enum_def(enum)
 
+    def _register_predefined(self, enum: EnumType) -> None:
+        """One of the nine synthesized enums: in the table, in order, a known type."""
+        self.enums.by_name[enum.name] = enum
+        self.enums.order.append(enum.name)
+        self.known_types.add(enum)
+
     def register_predefined_enums(self) -> None:
-        """Register predefined enums for file operations and error handling."""
+        """Register predefined enums for file operations and error handling.
+
+        Each carries its HOME module (`PREDEFINED_ENUM_HOMES`), the stamp the
+        `namespaces` pass reads: the import gates the bare name and the alias holds it.
+        """
         file_mode_enum = EnumType(
             name="FileMode",
+            home_module=PREDEFINED_ENUM_HOMES["FileMode"],
             variants=(
                 EnumVariantInfo(name="Read", associated_types=()),      # Text read mode ("r")
                 EnumVariantInfo(name="Write", associated_types=()),     # Text write mode ("w")
@@ -98,24 +132,22 @@ class EnumCollector:
                 EnumVariantInfo(name="AppendB", associated_types=()),   # Binary append mode ("ab")
             )
         )
-        self.enums.by_name["FileMode"] = file_mode_enum
-        self.enums.order.append("FileMode")
-        self.known_types.add(file_mode_enum)
+        self._register_predefined(file_mode_enum)
 
         seek_from_enum = EnumType(
             name="SeekFrom",
+            home_module=PREDEFINED_ENUM_HOMES["SeekFrom"],
             variants=(
                 EnumVariantInfo(name="Start", associated_types=()),     # SEEK_SET (0)
                 EnumVariantInfo(name="Current", associated_types=()),   # SEEK_CUR (1)
                 EnumVariantInfo(name="End", associated_types=()),       # SEEK_END (2)
             )
         )
-        self.enums.by_name["SeekFrom"] = seek_from_enum
-        self.enums.order.append("SeekFrom")
-        self.known_types.add(seek_from_enum)
+        self._register_predefined(seek_from_enum)
 
         file_error_enum = EnumType(
             name="FileError",
+            home_module=PREDEFINED_ENUM_HOMES["FileError"],
             variants=(
                 EnumVariantInfo(name="NotFound", associated_types=()),          # ENOENT - File does not exist
                 EnumVariantInfo(name="PermissionDenied", associated_types=()),  # EACCES, EPERM - Insufficient permissions
@@ -128,9 +160,7 @@ class EnumCollector:
                 EnumVariantInfo(name="Other", associated_types=()),             # Any other error
             )
         )
-        self.enums.by_name["FileError"] = file_error_enum
-        self.enums.order.append("FileError")
-        self.known_types.add(file_error_enum)
+        self._register_predefined(file_error_enum)
 
         # NetError - the <net/socket> errors. The variant ORDER is the ABI: the
         # index is the runtime tag that errno_to_net_error_table stores into a
@@ -139,6 +169,7 @@ class EnumCollector:
         # code, whose sign even flips between the platforms.
         net_error_enum = EnumType(
             name="NetError",
+            home_module=PREDEFINED_ENUM_HOMES["NetError"],
             variants=(
                 EnumVariantInfo(name="ConnectionRefused", associated_types=()),    # ECONNREFUSED
                 EnumVariantInfo(name="ConnectionReset", associated_types=()),      # ECONNRESET, ECONNABORTED
@@ -157,19 +188,16 @@ class EnumCollector:
                 EnumVariantInfo(name="Other", associated_types=()),                # Any other error
             )
         )
-        self.enums.by_name["NetError"] = net_error_enum
-        self.enums.order.append("NetError")
-        self.known_types.add(net_error_enum)
+        self._register_predefined(net_error_enum)
 
         std_error_enum = EnumType(
             name="StdError",
+            home_module=PREDEFINED_ENUM_HOMES["StdError"],
             variants=(
                 EnumVariantInfo(name="Error", associated_types=()),  # Generic error
             )
         )
-        self.enums.by_name["StdError"] = std_error_enum
-        self.enums.order.append("StdError")
-        self.known_types.add(std_error_enum)
+        self._register_predefined(std_error_enum)
 
         # IoError - the ONE channel every io contract method answers (HANDLES.md, rulings
         # R4 and R20). A perk contract carries one signature and there is no Self type, so
@@ -185,6 +213,7 @@ class EnumCollector:
         # has written.
         io_error_enum = EnumType(
             name="IoError",
+            home_module=PREDEFINED_ENUM_HOMES["IoError"],
             variants=(
                 EnumVariantInfo(name="NotFound", associated_types=()),          # ENOENT
                 EnumVariantInfo(name="PermissionDenied", associated_types=()),  # EACCES, EPERM
@@ -202,36 +231,33 @@ class EnumCollector:
                 EnumVariantInfo(name="Other", associated_types=()),             # anything else
             )
         )
-        self.enums.by_name["IoError"] = io_error_enum
-        self.enums.order.append("IoError")
-        self.known_types.add(io_error_enum)
+        self._register_predefined(io_error_enum)
 
         process_error_enum = EnumType(
             name="ProcessError",
+            home_module=PREDEFINED_ENUM_HOMES["ProcessError"],
             variants=(
                 EnumVariantInfo(name="SpawnFailed", associated_types=()),     # Failed to spawn process
                 EnumVariantInfo(name="ExitFailure", associated_types=()),     # Process exited with error
                 EnumVariantInfo(name="SignalReceived", associated_types=()),  # Process received signal
             )
         )
-        self.enums.by_name["ProcessError"] = process_error_enum
-        self.enums.order.append("ProcessError")
-        self.known_types.add(process_error_enum)
+        self._register_predefined(process_error_enum)
 
         env_error_enum = EnumType(
             name="EnvError",
+            home_module=PREDEFINED_ENUM_HOMES["EnvError"],
             variants=(
                 EnumVariantInfo(name="NotFound", associated_types=()),          # Environment variable not found
                 EnumVariantInfo(name="InvalidValue", associated_types=()),      # Invalid value
                 EnumVariantInfo(name="PermissionDenied", associated_types=()),  # Insufficient permissions
             )
         )
-        self.enums.by_name["EnvError"] = env_error_enum
-        self.enums.order.append("EnvError")
-        self.known_types.add(env_error_enum)
+        self._register_predefined(env_error_enum)
 
         math_error_enum = EnumType(
             name="MathError",
+            home_module=PREDEFINED_ENUM_HOMES["MathError"],
             variants=(
                 EnumVariantInfo(name="DivisionByZero", associated_types=()),  # Division by zero
                 EnumVariantInfo(name="Overflow", associated_types=()),        # Arithmetic overflow
@@ -239,9 +265,7 @@ class EnumCollector:
                 EnumVariantInfo(name="InvalidInput", associated_types=()),    # Invalid input to math function
             )
         )
-        self.enums.by_name["MathError"] = math_error_enum
-        self.enums.order.append("MathError")
-        self.known_types.add(math_error_enum)
+        self._register_predefined(math_error_enum)
 
     def _reject_library_clash(self, name: str, name_span: Optional[Span]) -> bool:
         """CE3011 when a library already took this name. True when it was refused."""

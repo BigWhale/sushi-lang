@@ -18,6 +18,7 @@ deprecated IPv4-compatible form prints as hex.
 :##
 
 use <collections/strings>
+use <net/error>
 
 ##:
 One internet address, of either family.

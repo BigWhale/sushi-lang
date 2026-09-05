@@ -16,6 +16,7 @@ There is no reverse lookup and no SRV.
 
 use <net/socket>
 use <net/ip>
+use <net/error>
 
 ##:
 Resolves a host name, or a numeric address, into typed addresses.

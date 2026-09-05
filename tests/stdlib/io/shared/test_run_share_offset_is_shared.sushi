@@ -9,6 +9,7 @@
 # EXPECT_STDOUT_EXACT: "first: Mostly |\nsecond: Harmless|\n"
 use <io/files>
 use <io/fs>
+use <io/contracts>
 
 fn probe(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??

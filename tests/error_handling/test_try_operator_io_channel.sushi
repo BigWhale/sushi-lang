@@ -5,6 +5,7 @@
 
 use <io/files>
 use <io/fs>
+use <io/contracts>
 
 fn read_first_line(string path) string | IoError:
     # Use ?? to unwrap the Result from open()
