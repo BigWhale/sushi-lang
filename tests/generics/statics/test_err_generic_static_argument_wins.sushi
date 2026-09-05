@@ -1,0 +1,14 @@
+# Arguments FIRST: the argument says i32, the declared type says bool, and the solved
+# instantiation is the argument's -- so the binding is the ordinary type mismatch, not a
+# silent re-solve from the stamp (#573).
+# EXPECT_ERROR_CODE: CE2002
+struct Cage@(T):
+    T item
+
+extend Cage@(T) static holding(T item) Cage@(T):
+    return Cage(item)
+
+fn main() i32:
+    let Cage@(bool) c = Cage.holding(9)
+    println("{c.item}")
+    return Result.Ok(0)

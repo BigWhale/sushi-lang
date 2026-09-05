@@ -244,7 +244,16 @@ _add(ErrorMessage("CE2057", Severity.ERROR,
 # Generic function call errors (CE2060-CE2069)
 _add(ErrorMessage("CE2060", Severity.ERROR,
     "cannot infer type arguments for generic function '{name}': {reason}",
-    Category.TYPE, "Type inference failed for generic function call. Type parameters could not be determined from argument types."))
+    Category.TYPE,
+    "Type inference failed for a generic call. A generic FREE function solves its type "
+    "parameters from its arguments, and a parameter named only in the return has no "
+    "source -- spell the type arguments (`f@(i32)()`). A generic STATIC solves them in "
+    "two steps, as one resolution (#573): from the arguments, for every target type "
+    "parameter a parameter names, then from the declared type at the binding site for "
+    "the rest. A parameter neither step reaches is this error, and the text names both "
+    "sources and the parameter. History: from #542 to #573 a static read the stamp "
+    "alone, which left a `| E` static unwritable -- a Result-valued call is never "
+    "stamped."))
 
 _add(ErrorMessage("CE2061", Severity.ERROR,
     "monomorphized function '{mangled}' not found for '{name}' with type arguments {type_args}",

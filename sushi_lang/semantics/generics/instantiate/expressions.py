@@ -72,6 +72,7 @@ class ExpressionScanner:
                 self.scan_expression(expr.receiver)
             for arg in expr.args:
                 self.scan_expression(arg)
+            self._scan_static_call(expr)
 
         elif isinstance(expr, BinaryOp):
             self.scan_expression(expr.left)
@@ -122,6 +123,7 @@ class ExpressionScanner:
             self.scan_expression(expr.receiver)
             for arg in expr.args:
                 self.scan_expression(arg)
+            self._scan_static_call(expr)
 
         elif isinstance(expr, DynamicArrayFrom):
             self.scan_expression(expr.elements)
@@ -156,6 +158,44 @@ class ExpressionScanner:
 
             if return_type is not None and isinstance(return_type, GenericTypeRef):
                 self._collect_from_type(return_type)
+
+    def _scan_static_call(self, call) -> None:
+        """A `<generic>.static(args)` call names the instantiation its ARGUMENTS solve (#573).
+
+        Through the same solver the typecheck pass resolves with, so what is collected here
+        is what that pass looks up. A type parameter the arguments leave unsolved is the
+        stamp's, and the declared type at the binding site is collected on its own; a call
+        the arguments cannot solve is collected by nothing, and the typecheck pass says so
+        (CE2060). The arguments were scanned before this, so a nested generic call has
+        already been collected.
+        """
+        from sushi_lang.semantics.ast import Name
+        from sushi_lang.semantics.statics import solve_target_type_args, static_template
+
+        receiver = call.receiver
+        validator = self.type_validator
+        if validator is None or not isinstance(receiver, Name):
+            return
+        base = receiver.id
+        if base in self.type_inferrer.variable_types:
+            return
+        if (base not in validator.generic_struct_table.by_name
+                and base not in validator.generic_enum_table.by_name):
+            return
+        template = static_template(validator.generic_extension_table, base, call.method)
+        if template is None:
+            return
+
+        arg_types = [self._infer_arg_type(arg) for arg in call.args]
+        type_args, _unsolved = solve_target_type_args(template, arg_types, None)
+        if type_args is None:
+            return
+        resolved = self._resolver.resolve_type_args(tuple(type_args))
+        if self._resolver.contains_unresolvable_in_tuple(resolved):
+            return
+        self.instantiations.add((base, resolved))
+        for arg in resolved:
+            self.collect_type(arg)
 
     def _scan_namespaced_call(self, call) -> bool:
         """`alias.f(args)` where the alias names a unit declaring a generic `f`.
