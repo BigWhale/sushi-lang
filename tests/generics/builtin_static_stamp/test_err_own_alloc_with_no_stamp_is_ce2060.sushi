@@ -1,0 +1,8 @@
+# The Own twin (#570): `Own.alloc(5).get()` has no binding to read its type from. The
+# built-in static has no template an argument could solve, so the binding is the fix.
+# EXPECT_ERROR_CODE: CE2060
+# EXPECT_STDERR_CONTAINS: let Own@(...) x = Own.alloc(...)
+
+fn main() i32:
+    println("{Own.alloc(5).get()}")
+    return Result.Ok(0)

@@ -1,0 +1,9 @@
+# `List.new()` in a position that stamps no type is the same fault as a user generic
+# static there (#570; #542, #573): CE2060 with the binding named as the fix, and no
+# internal error blaming the compiler.
+# EXPECT_ERROR_CODE: CE2060
+# EXPECT_STDERR_CONTAINS: let List@(...) x = List.new(...)
+
+fn main() i32:
+    println("{List.new().len()}")
+    return Result.Ok(0)

@@ -1,0 +1,38 @@
+# The refusal is for the UNSTAMPED position only: every stamped one -- a `let`, a return,
+# a struct field, a function argument, a container insert, an extension's bare return --
+# binds as before (#570).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "0 0 5 1 0 0 3 1\n"
+use <collections/hashmap>
+
+struct Holder:
+    List@(i32) items
+
+fn make() List@(string):
+    return Result.Ok(List.new())
+
+fn count(List@(i32) xs) i32:
+    return Result.Ok(xs.len())
+
+fn keys(HashMap@(i32, string) m) i32:
+    return Result.Ok(m.len())
+
+extend i32 boxed() Own@(i32):
+    return Own.alloc(self)
+
+fn main() i32:
+    let List@(i32) l = List.new()
+    let HashMap@(i32, string) m = HashMap.new()
+    let Own@(i32) o = Own.alloc(5)
+    let Holder h = Holder(List.new())
+    h.items.push(1)
+    let List@(string) made = make().realise(List.new())
+    let i32 a = count(List.new()).realise(9)
+    let i32 b = keys(HashMap.new()).realise(9)
+    let Own@(i32) three = 3.boxed()
+    let List@(List@(i32)) outer = List.new()
+    outer.push(List.new())
+    println("{l.len()} {m.len()} {o.get()} {h.items.len()} {a} {b} {three.get()} {outer.len()}")
+    return Result.Ok(made.len())
