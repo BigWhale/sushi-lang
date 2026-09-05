@@ -54,7 +54,7 @@ fn ml_str(MsgValue v) string:
 
 # ml_get: the value under a string key, Nil when the key is absent.
 fn ml_get(MsgValue m, string key) MsgValue:
-    let Maybe@(MsgValue) found = mp_map_get(m, key)??
+    let Maybe@(MsgValue) found = map_get(m, key)??
     match found:
         Maybe.Some(v) ->
             return Result.Ok(v.clone())
@@ -853,11 +853,11 @@ fn print_usage_error(string message) ~:
     return Result.Ok(~)
 
 fn report(string path, Opts o) i32:
-    match slib_read_metadata(path):
+    match read_metadata(path):
         Result.Ok(meta) ->
-            match slib_sizes(path):
-                Result.Ok(sizes) ->
-                    print_report(meta, sizes, o)??
+            match sizes(path):
+                Result.Ok(lengths) ->
+                    print_report(meta, lengths, o)??
                     return Result.Ok(0)
                 Result.Err(e2) ->
                     print_read_error(path, e2)??

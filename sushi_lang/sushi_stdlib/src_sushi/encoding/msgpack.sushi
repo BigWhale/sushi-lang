@@ -195,16 +195,16 @@ fn mp_decode_value(peek u8[] buf, poke MpCursor cur) MsgValue | MpError:
         _ ->
             return Result.Err(MpError.Unsupported(t))
 
-# mp_decode: decode one whole buffer as exactly one value.
-public fn mp_decode(u8[] buf) MsgValue | MpError:
+# decode: decode one whole buffer as exactly one value.
+public fn decode(u8[] buf) MsgValue | MpError:
     let MpCursor cur = MpCursor(0)
     let MsgValue v = mp_decode_value(peek buf, poke cur)??
     if (cur.pos < buf.len()):
         return Result.Err(MpError.Trailing(cur.pos))
     return Result.Ok(v)
 
-# mp_map_get: scan a Map in wire order for a string key; clone the value out.
-public fn mp_map_get(MsgValue m, string key) Maybe@(MsgValue):
+# map_get: scan a Map in wire order for a string key; clone the value out.
+public fn map_get(MsgValue m, string key) Maybe@(MsgValue):
     match m:
         MsgValue.Map(keys, vals) ->
             let i32 i = 0
@@ -220,9 +220,9 @@ public fn mp_map_get(MsgValue m, string key) Maybe@(MsgValue):
         _ ->
             return Result.Ok(Maybe.None())
 
-# mp_show: render a value on one line. Deterministic: floats print their raw
+# show: render a value on one line. Deterministic: floats print their raw
 # IEEE-754 bits, strings print unescaped between plain double quotes.
-public fn mp_show(MsgValue v) string:
+public fn show(MsgValue v) string:
     match v:
         MsgValue.Nil() ->
             return Result.Ok("nil")
@@ -253,7 +253,7 @@ public fn mp_show(MsgValue v) string:
             let string arr_body = ""
             let i32 j = 0
             while (j < items.len()):
-                let string shown = mp_show(items[j])??
+                let string shown = show(items[j])??
                 if (j == 0):
                     arr_body := shown
                 else:
@@ -266,8 +266,8 @@ public fn mp_show(MsgValue v) string:
             let string map_body = ""
             let i32 k = 0
             while (k < keys.len()):
-                let string ks = mp_show(keys[k])??
-                let string vs = mp_show(vals[k])??
+                let string ks = show(keys[k])??
+                let string vs = show(vals[k])??
                 if (k == 0):
                     map_body := "{ks}:{vs}"
                 else:

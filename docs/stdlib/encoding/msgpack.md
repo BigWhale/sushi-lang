@@ -61,9 +61,9 @@ Decode the whole buffer as one value. Trailing bytes after the root value give
 use <encoding/msgpack>
 
 fn show_or_err(u8[] buf) string:
-    match mp_decode(buf):
+    match decode(buf):
         Result.Ok(v) ->
-            return Result.Ok(mp_show(v)??)
+            return Result.Ok(show(v)??)
         Result.Err(_) ->
             return Result.Ok("decode error")
 
@@ -83,16 +83,16 @@ the tree stays intact. A missing key, a non-string key match, or a non-map argum
 use <encoding/msgpack>
 
 fn lookup(MsgValue m, string key) string:
-    let Maybe@(MsgValue) found = mp_map_get(m, key)??
+    let Maybe@(MsgValue) found = map_get(m, key)??
     match found:
         Maybe.Some(v) ->
-            return Result.Ok(mp_show(v)??)
+            return Result.Ok(show(v)??)
         Maybe.None() ->
             return Result.Ok("missing")
 
 fn main() i32:
     let u8[] buf = from([0x81, 0xa1, 0x6b, 0x2a])
-    match mp_decode(buf):
+    match decode(buf):
         Result.Ok(m) ->
             println(lookup(m, "k").realise("error"))    # 42
         Result.Err(_) ->
@@ -124,9 +124,9 @@ Floats render through `.to_bits()` so the output never depends on float formatti
 use <encoding/msgpack>
 
 fn classify(u8[] buf) string:
-    match mp_decode(buf):
+    match decode(buf):
         Result.Ok(v) ->
-            return Result.Ok(mp_show(v)??)
+            return Result.Ok(show(v)??)
         Result.Err(e) ->
             match e:
                 MpError.Truncated(off) ->

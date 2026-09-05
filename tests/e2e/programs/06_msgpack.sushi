@@ -3,9 +3,9 @@ use <toolchain/slib>
 
 fn check_decode() bool:
     let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
-    match mp_decode(buf):
+    match decode(buf):
         Result.Ok(v) ->
-            let string shown = mp_show(v)??
+            let string shown = show(v)??
             let string want = '{"a":1,"b":[2]}'
             return Result.Ok(shown == want)
         Result.Err(_) ->
@@ -13,7 +13,7 @@ fn check_decode() bool:
     return Result.Ok(false)
 
 fn check_missing() bool:
-    match slib_read_metadata("e2e_missing_gone.slib"):
+    match read_metadata("e2e_missing_gone.slib"):
         Result.Ok(_) ->
             return Result.Ok(false)
         Result.Err(e) ->

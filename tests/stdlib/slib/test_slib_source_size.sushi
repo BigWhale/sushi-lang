@@ -1,4 +1,4 @@
-# slib_sizes reports the byte length of both payload sections in one pass.
+# sizes reports the byte length of both payload sections in one pass.
 # The fixture carries a 1-byte metadata blob, a 5-byte source section, and
 # records 12345 (0x3039 little-endian) as the bitcode length with no bitcode
 # bytes after it.
@@ -58,7 +58,7 @@ fn run_test() i32:
     if (write_fixture("test_slib_sizes.slib", fixture)?? != 0):
         println("cannot write fixture")
         return Result.Ok(1)
-    match slib_sizes("test_slib_sizes.slib"):
+    match sizes("test_slib_sizes.slib"):
         Result.Ok(sizes) ->
             println("{sizes.source} {sizes.bitcode}")
         Result.Err(_) ->

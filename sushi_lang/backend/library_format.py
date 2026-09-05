@@ -166,7 +166,7 @@ class LibraryFormat:
 
         The `--lib-info` report states how big each section is, and nothing more, so it
         never pays to hold a whole library in memory. The bitcode LENGTH FIELD is what
-        it reports -- the Sushi reader `slib_sizes` reads that same field and stops, and
+        it reports -- the Sushi reader `sizes` reads that same field and stops, and
         the two must agree byte for byte.
         """
         path = str(library_path)

@@ -56,9 +56,9 @@ fn show_err(SlibError e) string:
     return Result.Ok("unknown")
 
 fn check(string path) ~:
-    match slib_read_metadata(path):
+    match read_metadata(path):
         Result.Ok(meta) ->
-            println(mp_show(meta)??)
+            println(show(meta)??)
         Result.Err(e) ->
             println(show_err(e)??)
     return Result.Ok(~)

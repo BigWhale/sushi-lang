@@ -8,9 +8,9 @@
 use <encoding/msgpack>
 
 fn check(u8[] buf) ~:
-    match mp_decode(buf):
+    match decode(buf):
         Result.Ok(v) ->
-            println(mp_show(v)??)
+            println(show(v)??)
         Result.Err(e) ->
             match e:
                 MpError.Truncated(off) ->
