@@ -70,6 +70,10 @@ def initialize_dynamic_array(
     else:
         val = codegen.expressions.emit_expr(constructor_expr)
 
+        # A field read yields a GEP, correct by nature (array-representation.md), and a
+        # `let` off one takes the descriptor here. Reached, and kept on that evidence
+        # (#553): `tests/memory/test_field_array_copy_at_let.sushi`,
+        # `tests/references/test_let_borrow_escapes.sushi`.
         if isinstance(val.type, ir.PointerType) and codegen.types.is_dynamic_array_type(val.type.pointee):
             val = codegen.builder.load(val, name=f"{name}_init_value")
 

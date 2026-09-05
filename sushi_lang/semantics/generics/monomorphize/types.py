@@ -78,13 +78,19 @@ class TypeMonomorphizer:
             )
             return EnumType(name=f"{generic.name}<error>", variants=())
 
-        self.monomorphizer._validate_type_constraints(generic.type_params, type_args)
+        concrete_name = self._generate_concrete_name(generic.name, type_args)
+
+        # A refused instantiation is built nowhere (#579, Ruling 4): not cached, not
+        # published, so no template copy is ever cut for it. The shell keeps the caller
+        # total; the analyzer stops before anything reads it.
+        if not self.monomorphizer._validate_type_constraints(
+                generic.type_params, type_args, key=concrete_name,
+                template_file=self.monomorphizer.template_file("enum", generic.name)):
+            return EnumType(name=f"{generic.name}<error>", variants=())
 
         substitution: Dict[str, Type] = {}
         for param, arg in zip(generic.type_params, type_args, strict=False):
             substitution[param.name] = arg
-
-        concrete_name = self._generate_concrete_name(generic.name, type_args)
 
         published = self._published(self.monomorphizer.enum_table, concrete_name)
         if published is not None:
@@ -169,13 +175,19 @@ class TypeMonomorphizer:
             )
             return StructType(name=f"{generic.name}<error>", fields=())
 
-        self.monomorphizer._validate_type_constraints(generic.type_params, type_args)
+        concrete_name = self._generate_concrete_name(generic.name, type_args)
+
+        # A refused instantiation is built nowhere (#579, Ruling 4): not cached, not
+        # published, so no template copy is ever cut for it. The shell keeps the caller
+        # total; the analyzer stops before anything reads it.
+        if not self.monomorphizer._validate_type_constraints(
+                generic.type_params, type_args, key=concrete_name,
+                template_file=self.monomorphizer.template_file("struct", generic.name)):
+            return StructType(name=f"{generic.name}<error>", fields=())
 
         substitution: Dict[str, Type] = {}
         for param, arg in zip(generic.type_params, type_args, strict=False):
             substitution[param.name] = arg
-
-        concrete_name = self._generate_concrete_name(generic.name, type_args)
 
         published = self._published(self.monomorphizer.struct_table, concrete_name)
         if published is not None:

@@ -54,13 +54,6 @@ class TypeInference:
             element_name = self.map_llvm_to_language_type(element_type)
             result = f"{element_name}[]"
 
-        elif isinstance(llvm_type, ir.PointerType) and self.is_dynamic_array_type(llvm_type.pointee):
-            pointee = llvm_type.pointee
-            data_field = pointee.elements[2]  # T*
-            element_type = data_field.pointee
-            element_name = self.map_llvm_to_language_type(element_type)
-            result = f"{element_name}[]"
-
         if result is not None:
             self._llvm_to_lang_type_cache[llvm_type] = result
             return result

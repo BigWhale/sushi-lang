@@ -290,6 +290,8 @@ class SemanticAnalyzer:
         for unit in compilation_order:
             if unit.ast is not None:
                 instantiation_collector.namespaces = self.namespaces.get(unit.name)
+                instantiation_collector.current_file = (
+                    str(unit.file_path) if getattr(unit, "file_path", None) else None)
                 # The collector resolves a generic the way the unit's own body does:
                 # its own declaration first, then what its imports brought (#495).
                 unit_scope = getattr(instantiation_collector.namespaces, "scope", None)
@@ -297,6 +299,7 @@ class SemanticAnalyzer:
                     unit.name, unit_scope)
                 instantiation_collector.run(unit.ast)
         instantiation_collector.namespaces = None
+        instantiation_collector.current_file = None
         instantiation_collector.generic_funcs = self.generic_funcs.by_name
         # A BINARY library's signatures name instantiations too, and no unit walk sees
         # them (#543): `fn make_box(i32 v) Box@(i32)` is a manifest record here.
@@ -330,6 +333,7 @@ class SemanticAnalyzer:
             enum_table=self.enums,
             struct_table=self.structs,
             tables=self.tables,
+            sites=instantiation_collector.sites,
         )
 
         # The late-interning seam (risk 1 of the UFCS epic): when the per-unit
@@ -422,6 +426,13 @@ class SemanticAnalyzer:
         self._cut_templates_for_late_instantiations(
             monomorphizer, compilation_order, concrete_extension_defs,
             struct_instantiations, enum_instantiations)
+
+        # A constraint violation STOPS the whole-program analysis here (#579, Ruling 4),
+        # as CE2095 does below. CE4006 stands at the type that named the refused
+        # instantiation, no copy was cut for it, and the per-unit passes would only
+        # read the same fault back as a CE2008 from inside a template body.
+        if monomorphizer.constraint_violations:
+            return
 
         # resolve: AFTER monomorphization, so every struct/enum exists in the tables.
         from sushi_lang.semantics.passes.resolve import (

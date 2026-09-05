@@ -70,12 +70,28 @@ class FunctionMonomorphizer:
             return table.lookup(func_name, unit_name)
         return table.get(func_name)
 
+    def _constraints_hold(self, generic, params, args, all_args=None) -> bool:
+        """The constraint check for one function instantiation, at the call that named it.
+
+        `args` are the arguments the `params` bind -- the leading ones, on a pack --
+        and `all_args` names the instantiation for the site lookup.
+        """
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        named = tuple(all_args if all_args is not None else args)
+        return self.monomorphizer._validate_type_constraints(
+            params, args,
+            key=("fn", instantiation_key(generic.name, named)),
+            template_file=getattr(generic, "filename", None))
+
     def build_substitution(
         self,
         generic: 'GenericFuncDef',
         type_args: Tuple[Type, ...]
-    ) -> Dict[str, "Type | TypePack"]:
-        """Build the type-parameter -> binding substitution map for a generic."""
+    ) -> "Dict[str, Type | TypePack] | None":
+        """Build the type-parameter -> binding substitution map for a generic.
+
+        None when a constraint refused the instantiation (#579): no copy is cut.
+        """
         tps = list(generic.type_params)
 
         pack_indices = [i for i, tp in enumerate(tps) if getattr(tp, 'is_pack', False)]
@@ -87,7 +103,8 @@ class FunctionMonomorphizer:
                     f"{len(generic.type_params)} args, got {len(type_args)}"
                 )
 
-            self.monomorphizer._validate_type_constraints(generic.type_params, type_args)
+            if not self._constraints_hold(generic, generic.type_params, type_args):
+                return None
 
             substitution: Dict[str, "Type | TypePack"] = {}
             for param, arg in zip(generic.type_params, type_args, strict=False):
@@ -117,7 +134,8 @@ class FunctionMonomorphizer:
         leading_params = tps[:k]
         leading_args = type_args[:k]
 
-        self.monomorphizer._validate_type_constraints(leading_params, leading_args)
+        if not self._constraints_hold(generic, leading_params, leading_args, type_args):
+            return None
 
         substitution = {}
         for param, arg in zip(leading_params, leading_args, strict=False):
@@ -140,6 +158,8 @@ class FunctionMonomorphizer:
             return self.monomorphizer.func_cache[cache_key]
 
         substitution = self.build_substitution(generic, type_args)
+        if substitution is None:
+            return None
 
         # Substitute in parameter types. A pack-typed value-parameter fans out
         # into N concrete params (one per pack element, possibly zero); a normal
@@ -239,6 +259,8 @@ class FunctionMonomorphizer:
                 continue
 
             concrete_func = self.monomorphize_function(generic_func, type_args)
+            if concrete_func is None:
+                continue
 
             # Extract enum/struct instantiations from the function signature
             # This ensures that Result<T>, Maybe<T>, and other generic return/param types

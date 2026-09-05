@@ -31,15 +31,28 @@ class ConstraintValidator:
         self,
         type_arg: Type,
         constraint_name: str,
-        span: Optional['Span']
+        span: Optional['Span'],
+        filename: Optional[str] = None,
+        note: Optional[tuple] = None,
     ) -> bool:
-        """Check if a type satisfies a single perk constraint."""
+        """Check if a type satisfies a single perk constraint.
+
+        `span` and `filename` are the site that NAMES the refused instantiation, and
+        `note` is `(span, filename)` of the constraint it violates (#579): the caret goes
+        on the user's type, and the note on the `@(T: Loud)` that refused it, which may
+        stand in another file -- a stdlib template's.
+        """
         type_name = self._get_type_name(type_arg)
 
         if not (self.perk_impl_table.implements(type_name, constraint_name)
                 or self._template_implements(type_arg, constraint_name)):
-            er.emit(self.reporter, er.ERR.CE4006, span,
-                   type=display_type(type_arg), perk=constraint_name)
+            diagnostic = er.emit_with(self.reporter, er.ERR.CE4006, span, filename=filename,
+                                      type=display_type(type_arg), perk=constraint_name)
+            note_span, note_file = note if note is not None else (None, None)
+            if note_span is not None:
+                diagnostic = diagnostic.note(
+                    f"the constraint '{constraint_name}' is declared here", note_span, note_file)
+            diagnostic.emit()
             return False
 
         return True
@@ -65,7 +78,9 @@ class ConstraintValidator:
         self,
         bounded_param: BoundedTypeParam,
         type_arg: Type,
-        span: Optional['Span']
+        span: Optional['Span'],
+        filename: Optional[str] = None,
+        note: Optional[tuple] = None,
     ) -> bool:
         """Validate all constraints on a type parameter."""
         if not bounded_param.constraints or len(bounded_param.constraints) == 0:
@@ -73,7 +88,7 @@ class ConstraintValidator:
 
         all_valid = True
         for constraint in bounded_param.constraints:
-            if not self.validate_constraint(type_arg, constraint, span):
+            if not self.validate_constraint(type_arg, constraint, span, filename, note):
                 all_valid = False
 
         return all_valid

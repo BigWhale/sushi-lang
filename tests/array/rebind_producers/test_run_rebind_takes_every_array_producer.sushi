@@ -1,0 +1,36 @@
+# A rebind (`x := ...`) takes the descriptor BY VALUE from every producer of a `T[]`: a
+# string's `to_bytes()` and `split()`, a `clone()`, a `from([...])`, a field read, a
+# function's return, a slice. The load-if-pointer branch the rebind used to carry was
+# reached by none of these (#553); this pins that none of them needs it.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "5 2 3 4 2 3 2\n"
+use <collections/strings>
+
+struct Holder:
+    i32[] items
+
+fn make() i32[]:
+    return Result.Ok(from([7, 8, 9]))
+
+fn main() i32:
+    let string text = "hello"
+    let u8[] bytes = from([1])
+    bytes := text.to_bytes()
+    let string[] words = from(["a"])
+    words := "x y".split(" ")
+    let i32[] nums = from([1])
+    let i32[] src = from([4, 5, 6])
+    nums := src.clone()
+    let i32[] lit = from([0])
+    lit := from([1, 2, 3, 4])
+    let Holder h = Holder(from([1, 2]))
+    let i32[] view = from([0])
+    view := h.items.clone()
+    let i32[] made = from([0])
+    made := make().realise(from([]))
+    let i32[] part = from([0])
+    part := lit.s(1, 3)
+    println("{bytes.len()} {words.len()} {nums.len()} {lit.len()} {view.len()} {made.len()} {part.len()}")
+    return Result.Ok(0)

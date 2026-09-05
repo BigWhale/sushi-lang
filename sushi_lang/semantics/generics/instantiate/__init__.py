@@ -1,6 +1,6 @@
 """The instantiate pass: collect every generic instantiation the program asks for."""
 from __future__ import annotations
-from typing import Set, Tuple, TYPE_CHECKING
+from typing import Optional, Set, Tuple, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
@@ -57,6 +57,13 @@ class InstantiationCollector:
 
     visited_types: Set[str] = field(default_factory=set)
 
+    # The FIRST site that names each instantiation, keyed by its interned name (a type)
+    # or by ("fn", interned name) for a generic function: `(span, filename)`. A
+    # constraint violation is reported there (#579), because the instantiation set
+    # itself carries no location. The analyzer sets `current_file` per unit.
+    sites: dict = field(default_factory=dict)
+    current_file: Optional[str] = None
+
     def _generic_enums_by_name(self) -> dict:
         """The generic enum templates, keyed by name. Empty when the tables are absent."""
         tables = self.tables
@@ -89,6 +96,8 @@ class InstantiationCollector:
             type_validator=type_validator,
             namespaces=self.namespaces,
             generic_enums=self._generic_enums_by_name(),
+            sites=self.sites,
+            file_of=lambda: self.current_file,
         )
 
         function_collector = FunctionCollector(
@@ -96,6 +105,8 @@ class InstantiationCollector:
             instantiations=self.instantiations,
             variable_types=self.variable_types,
             visited_types=self.visited_types,
+            sites=self.sites,
+            file_of=lambda: self.current_file,
         )
 
         expression_scanner.scan_block = function_collector._collect_from_block

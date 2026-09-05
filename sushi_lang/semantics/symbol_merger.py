@@ -65,16 +65,21 @@ class SymbolTableMerger:
 
     @staticmethod
     def _merge_by_name(unit_table, global_table) -> None:
-        """Merge a name-keyed table into the global one (all symbols global)."""
-        unit_spans = getattr(unit_table, "spans", None)
-        global_spans = getattr(global_table, "spans", None)
+        """Merge a name-keyed table into the global one (all symbols global).
+
+        The side-cars ride along: `spans`, and `files` -- a diagnostic that points at a
+        template declared in another unit needs the file as well as the span (#579).
+        """
+        side_cars = [(getattr(unit_table, attr, None), getattr(global_table, attr, None))
+                     for attr in ("spans", "files")]
 
         for name, value in unit_table.by_name.items():
             if name not in global_table.by_name:
                 global_table.by_name[name] = value
                 global_table.order.append(name)
-                if unit_spans is not None and global_spans is not None and name in unit_spans:
-                    global_spans[name] = unit_spans[name]
+                for unit_side, global_side in side_cars:
+                    if unit_side is not None and global_side is not None and name in unit_side:
+                        global_side[name] = unit_side[name]
 
     @staticmethod
     def _merge_by_type(unit_table, global_table) -> None:
