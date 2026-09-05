@@ -146,7 +146,10 @@ class LLVMUtils:
         # (docs/design/array-representation.md), so a parameter wanting the descriptor got
         # the address and answered CE0017 -- an INTERNAL code for an ordinary program. The
         # pointee must match the destination EXACTLY, so this can only ever load what the
-        # parameter already asked for.
+        # parameter already asked for. Reached, and kept on that evidence (#553): a
+        # `poke self` method's array field handed to a parameter
+        # (`tests/perks/method_arguments/`), and the buffered handles
+        # (`tests/stdlib/io/buffered/`, `tests/stdlib/io/contracts/buffered/`).
         if isinstance(v.type, ir.PointerType) and v.type.pointee == dst:
             return self.codegen.builder.load(v, name="param_by_value")
 

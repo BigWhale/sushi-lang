@@ -130,13 +130,10 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     else:
         raise_internal_error("CE0022", type=f"Unsupported rebind target: {type(stmt.target)}")
 
+    # The descriptor BY VALUE, from every producer (docs/design/array-representation.md):
+    # the load-if-pointer branch that stood here was reached by nothing once the two
+    # producers that answered an address were fixed (cf12c73f), measured again for #553.
     val = codegen.expressions.emit_expr(stmt.value)
-
-    # Fix for method calls returning dynamic arrays: If val is a pointer to a dynamic array struct
-    # (from methods like to_bytes() which return stack-allocated structs), load the struct value
-    # This must be done BEFORE the reference check
-    if isinstance(val.type, ir.PointerType) and codegen.types.is_dynamic_array_type(val.type.pointee):
-        val = codegen.builder.load(val, name=f"{var_name}_rebind_value")
 
     if isinstance(semantic_type, ReferenceType):
         # A `poke` rebind stores THROUGH the pointer, so ownership applies at both ends:
