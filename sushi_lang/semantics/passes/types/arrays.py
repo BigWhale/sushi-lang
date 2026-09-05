@@ -277,6 +277,13 @@ def _validate_bulk_copy(call: MethodCall, array_type: Any, reporter: Any, valida
         return
 
     if name not in ("s", "ss"):
+        # The source takes the receiver's element type before it is read, the stamp a
+        # `let u8[]` and a user function's `u8[]` parameter already give a `from([...])`
+        # literal (#544). Compared unstamped, the literal defaulted to `i32[]` and a
+        # correct call was CE2023 (#576).
+        if validator is not None:
+            from .propagation import propagate_types_to_value
+            propagate_types_to_value(validator, call.args[0], array_type)
         source_type = validator.infer_expression_type(call.args[0]) if validator else None
         if source_type is not None:
             source_type = deref_type(source_type)
