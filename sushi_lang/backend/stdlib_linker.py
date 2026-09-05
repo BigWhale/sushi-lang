@@ -104,6 +104,7 @@ class StdlibLinker:
         "encoding/msgpack",
         "io/buf",
         "io/contracts",
+        "io/error",
         "io/fs",
         "io/path",
         "net/dns",

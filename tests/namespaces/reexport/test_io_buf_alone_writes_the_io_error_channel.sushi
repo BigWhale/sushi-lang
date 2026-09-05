@@ -1,0 +1,14 @@
+# `use <io/buf>` alone writes `| IoError`: the buffered layer re-exports `<io/contracts>`
+# as `<io/fs>` does, so a unit that only buffers spells its channel with one import
+# (#586). `File` stays `<io/fs>`'s, which is why this program constructs none.
+# EXPECT_STDOUT_EXACT: "7\n"
+use <io/buf>
+
+fn count(i32 n) i32 | IoError:
+    if (n < 0):
+        return Result.Err(IoError.InvalidInput)
+    return Result.Ok(n)
+
+fn main() i32:
+    println("{count(7).realise(0)}")
+    return Result.Ok(0)

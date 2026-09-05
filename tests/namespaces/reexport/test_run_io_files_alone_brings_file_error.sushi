@@ -1,0 +1,20 @@
+# A registry module re-exports too: `<io/files>` hands on `<io/error>`, so `FileError`,
+# the enum its path utilities answer, is a bare name after `use <io/files>` alone (#586).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "not found\n"
+use <io/files>
+
+fn try_remove(string path) ~ | FileError:
+    remove(path)??
+    return Result.Ok(~)
+
+fn main() i32:
+    let FileError seen = FileError.Other
+    match try_remove("/nonexistent_586_reexport"):
+        Result.Ok(_) -> println("removed")
+        Result.Err(e) -> seen := e
+    match seen:
+        FileError.NotFound -> println("not found")
+        _ -> println("other")
+    return Result.Ok(0)

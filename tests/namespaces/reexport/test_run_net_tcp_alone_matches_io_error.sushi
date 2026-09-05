@@ -1,0 +1,36 @@
+# `use <net/tcp>` alone names `IoError`, the channel its contract methods answer, and
+# `NetError`, the channel its constructors answer: `<net/tcp>` re-exports `<net/error>`
+# and `<io/contracts>` (#586). A read on a stream the peer closed answers through the
+# `IoError` arm, so the match below is on a value a read produced.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "refused\nread: empty\n"
+use <net/tcp>
+
+fn drain(poke TcpStream s) string | IoError:
+    return Result.Ok(s.read(64)??)
+
+fn main() i32:
+    match connect("127.0.0.1", 1):
+        Result.Ok(_) -> println("connected")
+        Result.Err(NetError.ConnectionRefused) -> println("refused")
+        Result.Err(_) -> println("other")
+    let TcpListener server = listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
+    let i32 port = server.local_port().realise(0)
+    match connect("127.0.0.1", port):
+        Result.Ok(nom client) ->
+            match server.accept():
+                Result.Ok(nom session) ->
+                    client.close()
+                    match drain(poke session):
+                        Result.Ok(got) ->
+                            if (got.len() == 0):
+                                println("read: empty")
+                            else:
+                                println("read: {got}")
+                        Result.Err(IoError.Closed) -> println("read: closed")
+                        Result.Err(_) -> println("read: other")
+                Result.Err(_) -> println("accept failed")
+        Result.Err(_) -> println("connect failed")
+    return Result.Ok(0)

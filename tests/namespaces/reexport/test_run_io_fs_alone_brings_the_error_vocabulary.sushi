@@ -1,0 +1,28 @@
+# `use <io/fs>` alone writes `| IoError`, matches `IoError.NotFound`, and names
+# `SeekFrom.Start` and `FileError.NotFound`: `<io/fs>` re-exports `<io/contracts>`, which
+# re-exports `<io/error>`, the home of both error enums (#586, the stdlib application).
+# Until #586 every one of those names needed its own `use <io/contracts>` line.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "not found\nstart\nfile not found\n"
+use <io/fs>
+
+fn read_it(string path) string | IoError:
+    let File f = open(path, FileMode.Read())??
+    return Result.Ok(f.read_all()??)
+
+fn main() i32:
+    match read_it("/nonexistent_586_reexport"):
+        Result.Ok(_) -> println("read")
+        Result.Err(IoError.NotFound) -> println("not found")
+        Result.Err(_) -> println("other")
+    let SeekFrom origin = SeekFrom.Start
+    match origin:
+        SeekFrom.Start -> println("start")
+        _ -> println("elsewhere")
+    let FileError fe = FileError.NotFound
+    match fe:
+        FileError.NotFound -> println("file not found")
+        _ -> println("other")
+    return Result.Ok(0)

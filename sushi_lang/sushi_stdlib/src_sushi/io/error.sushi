@@ -1,0 +1,38 @@
+##:
+io/error -- IoError and FileError, the error vocabulary of the io modules.
+
+Both are predefined enums: the compiler synthesizes them, and this module is their HOME
+(#574, #586). No program writes `use <io/error>` for them: `<io/contracts>` re-exports
+this module and `<io/fs>` and `<io/buf>` re-export `<io/contracts>`, so `use <io/fs>`
+alone brings `IoError` and `FileError` beside `File`, and `use <io/fs> as fs` puts them
+behind the dot (`fs.IoError.NotFound`). `<io/files>` hands `FileError` on the same way.
+
+IoError is the ONE channel every io contract method answers -- a read, a write, a seek,
+`open()` and `close()`. FileError is what the path utilities (`stat`, `walk`, `mkdir_all`,
+`remove_all`) and the `fd_*` primitives answer. The conversion between the two runs
+inside the stdlib and never at a call site.
+
+The variant ORDER of each is the ABI: the index is the tag the descriptor layer stores
+into a Result payload, so a variant is only ever appended.
+:##
+
+##:
+Turns a file-system error into the one channel the io contracts answer.
+
+Every FileError variant with no twin in IoError belongs to an open rather than to a read or
+a write, so nothing a contract method can answer is lost here. IOError has already thrown
+its errno away, so it collapses to Other rather than pretending to carry a number.
+
+- Returns: The IoError that says the same thing.
+:##
+extend FileError to_io() IoError:
+    match self:
+        FileError.NotFound -> return IoError.NotFound
+        FileError.PermissionDenied -> return IoError.PermissionDenied
+        FileError.AlreadyExists -> return IoError.AlreadyExists
+        FileError.IsDirectory -> return IoError.IsDirectory
+        FileError.DiskFull -> return IoError.DiskFull
+        FileError.TooManyOpen -> return IoError.TooManyOpen
+        FileError.InvalidPath -> return IoError.InvalidInput
+        FileError.IOError -> return IoError.Other
+        FileError.Other -> return IoError.Other

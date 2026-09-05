@@ -16,6 +16,7 @@ from typing import NamedTuple
 import pytest
 
 from sushi_lang.compiler.loader import load_unit_recursively
+from sushi_lang.compiler.pipeline import _inject_source_stdlib_units
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 from sushi_lang.semantics.ast import Let
@@ -107,6 +108,9 @@ def _analyze_program_of(tmp_path, units: dict[str, str], main: str = "main") -> 
     get_stdlib_registry()
     manager = UnitManager(root_path=tmp_path, reporter=reporter)
     assert load_unit_recursively(manager, main, set(), reporter), reporter.items
+    # A source stdlib module's re-exports are read off its AST, so the module has to
+    # be a unit here as it is in the compiler.
+    assert _inject_source_stdlib_units(manager, reporter), reporter.items
     manager.get_compilation_order()
     analyzer = SemanticAnalyzer(reporter, filename=main, unit_manager=manager)
     try:

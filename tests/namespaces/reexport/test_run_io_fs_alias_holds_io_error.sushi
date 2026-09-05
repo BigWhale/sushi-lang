@@ -1,0 +1,22 @@
+# `use <io/fs> as fs` puts what `<io/fs>` re-exports behind the same dot as its own
+# names: `fs.IoError`, `fs.SeekFrom` and `fs.FileError` beside `fs.FileMode` (#586).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "not found\nend\n"
+use <io/fs> as fs
+
+fn read_it(string path) string | fs.IoError:
+    let fs.File f = fs.open(path, fs.FileMode.Read())??
+    return Result.Ok(f.read_all()??)
+
+fn main() i32:
+    match read_it("/nonexistent_586_reexport"):
+        Result.Ok(_) -> println("read")
+        Result.Err(fs.IoError.NotFound) -> println("not found")
+        Result.Err(_) -> println("other")
+    let fs.SeekFrom origin = fs.SeekFrom.End
+    match origin:
+        fs.SeekFrom.End -> println("end")
+        _ -> println("elsewhere")
+    return Result.Ok(0)

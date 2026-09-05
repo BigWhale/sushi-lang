@@ -12,7 +12,7 @@ files only and does not follow a directory symlink, so a linked tree stays
 unvisited and a loop cannot form.
 :##
 
-use <io/contracts>
+public use <io/contracts>
 use <io/files>
 use <io/path>
 
@@ -273,27 +273,6 @@ extend SeekFrom whence() i32:
         SeekFrom.Start -> return 0
         SeekFrom.Current -> return 1
         SeekFrom.End -> return 2
-
-##:
-Turns a file-system error into the one channel the io contracts answer.
-
-Every FileError variant with no twin in IoError belongs to an open rather than to a read or
-a write, so nothing a contract method can answer is lost here. IOError has already thrown
-its errno away, so it collapses to Other rather than pretending to carry a number.
-
-- Returns: The IoError that says the same thing.
-:##
-extend FileError to_io() IoError:
-    match self:
-        FileError.NotFound -> return IoError.NotFound
-        FileError.PermissionDenied -> return IoError.PermissionDenied
-        FileError.AlreadyExists -> return IoError.AlreadyExists
-        FileError.IsDirectory -> return IoError.IsDirectory
-        FileError.DiskFull -> return IoError.DiskFull
-        FileError.TooManyOpen -> return IoError.TooManyOpen
-        FileError.InvalidPath -> return IoError.InvalidInput
-        FileError.IOError -> return IoError.Other
-        FileError.Other -> return IoError.Other
 
 ##:
 Opens a file and takes ownership of its descriptor.

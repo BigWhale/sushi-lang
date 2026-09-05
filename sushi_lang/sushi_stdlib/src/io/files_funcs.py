@@ -25,6 +25,11 @@ from sushi_lang.sushi_stdlib.src.signatures import (
     validate_arity,
 )
 
+# What `use <io/files>` hands on beside its own functions (`StdlibModule.reexports`,
+# `docs/design/unit-namespaces.md` section 8.1): the home of `FileError`, which every
+# path utility and `fd_*` primitive answers.
+REEXPORTS = ("io/error",)
+
 BOOL, I32, I64, STRING = (BuiltinType.BOOL, BuiltinType.I32, BuiltinType.I64,
                           BuiltinType.STRING)
 BYTES = DynamicArrayType(BuiltinType.U8)

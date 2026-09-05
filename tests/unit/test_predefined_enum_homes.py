@@ -50,8 +50,9 @@ def test_every_home_is_a_stdlib_module():
 
 def test_a_home_lists_its_enums_as_members():
     table = _synthesized()
-    assert homed_enums("io/fs", table) == {"FileMode": "enum", "FileError": "enum"}
-    assert homed_enums("io/contracts", table) == {"SeekFrom": "enum", "IoError": "enum"}
+    assert homed_enums("io/fs", table) == {"FileMode": "enum"}
+    assert homed_enums("io/contracts", table) == {"SeekFrom": "enum"}
+    assert homed_enums("io/error", table) == {"FileError": "enum", "IoError": "enum"}
     assert homed_enums("net/error", table) == {"NetError": "enum"}
     assert homed_enums("math", table) == {"MathError": "enum"}
     assert homed_enums("collections/hashmap", table) == {}

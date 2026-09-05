@@ -64,8 +64,8 @@ class GenericEnumTable:
 PREDEFINED_ENUM_HOMES: dict[str, Optional[str]] = {
     "FileMode": "io/fs",
     "SeekFrom": "io/contracts",
-    "FileError": "io/fs",
-    "IoError": "io/contracts",
+    "FileError": "io/error",
+    "IoError": "io/error",
     "NetError": "net/error",
     "StdError": None,
     "ProcessError": "sys/process",
