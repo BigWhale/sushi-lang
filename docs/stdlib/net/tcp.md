@@ -49,11 +49,11 @@ fn main() i32:
 
 ## Constructors
 
-### `tcp_listen(string host, i32 port, i32 backlog) -> Result@(TcpListener, NetError)`
+### `listen(string host, i32 port, i32 backlog) -> Result@(TcpListener, NetError)`
 
 Bind a listening socket. Port 0 asks the kernel to choose; `l.local_port()` reads it back.
 
-### `tcp_connect(string host, i32 port) -> Result@(TcpStream, NetError)`
+### `connect(string host, i32 port) -> Result@(TcpStream, NetError)`
 
 Connect to a host and port. There is no connect timeout — an unreachable address waits for the kernel.
 

@@ -890,7 +890,7 @@ A **library**-level description is not this feature's business. `nori.toml`
   well-formedness and a size cap. There is no key set and no schema, and every consumer reads
   it through `.get()`. An added optional key is not a format change.
 - `sushi_lib_version` stays at `"2.0"`. A reader that does not know the key ignores it.
-- `slib.sushi` needs no change. `slib_read_metadata` returns the whole `MsgValue` tree, so
+- `slib.sushi` needs no change. `read_metadata` returns the whole `MsgValue` tree, so
   the self-hosted reader reaches a new key without being taught about it.
 
 ### What does change in Sushi
@@ -905,7 +905,7 @@ known keys, and it needs work:
 
   An earlier draft of this bullet also said a `Map` cannot be walked at all. That is true
   of the `ml_*` helpers -- `ml_len` and `ml_at` are `Arr`-only -- and not of the language.
-  `MsgValue.Map(MsgValue[], MsgValue[])` destructures in a `match`, and `mp_map_get` in the
+  `MsgValue.Map(MsgValue[], MsgValue[])` destructures in a `match`, and `map_get` in the
   stdlib does exactly that. Phase 3 reads `unit_docs` by key the same way.
 - **A multi-line `body` needs a line splitter**, and its indent has to match Python's byte
   for byte. §9 carries that obligation.

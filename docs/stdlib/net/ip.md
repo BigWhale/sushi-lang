@@ -65,7 +65,7 @@ The questions an address answers about itself. Each answers a plain `bool`.
 
 `is_private` covers 10/8, 172.16/12 and 192.168/16 for IPv4, and fc00::/7 for IPv6.
 
-### `ip_v4_loopback()`, `ip_v4_any()`, `ip_v6_loopback()`, `ip_v6_any()`
+### `v4_loopback()`, `v4_any()`, `v6_loopback()`, `v6_any()`
 
 The four addresses worth having by name: `127.0.0.1`, `0.0.0.0`, `::1` and `::`.
 

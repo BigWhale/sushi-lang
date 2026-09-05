@@ -47,4 +47,4 @@ The order of the answers is the resolver's and is not stable between calls, so d
 ## See also
 
 - [IP addresses](ip.md) — what the answers are
-- [TCP](tcp.md) — `tcp_connect` resolves a name for you
+- [TCP](tcp.md) — `connect` resolves a name for you

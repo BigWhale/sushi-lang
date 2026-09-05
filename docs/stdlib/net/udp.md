@@ -18,7 +18,7 @@ A datagram socket has no peer of its own, so every send names its destination an
 
 **One binding owns a socket.** `s.close()` ends it and writes `-1` back; the receiver is `poke self` here, because a `UdpSocket` does not implement `Drop` yet — so the guarded second close stays reachable, which is not true of `<net/tcp>`'s handles.
 
-`udp_bind` is the one free function; everything with a receiver is an extension method with the `| NetError` channel.
+`bind` is the one free function; everything with a receiver is an extension method with the `| NetError` channel.
 
 ## Types
 
@@ -38,7 +38,7 @@ public struct Datagram:
 
 ## Constructor
 
-### `udp_bind(string host, i32 port) -> Result@(UdpSocket, NetError)`
+### `bind(string host, i32 port) -> Result@(UdpSocket, NetError)`
 
 Bind a datagram socket. Port 0 asks the kernel to choose; `s.local_port()` reads it back.
 

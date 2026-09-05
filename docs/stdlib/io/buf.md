@@ -23,12 +23,15 @@ buffered handle and the plain one alike.
 
 | type | constructor | reads / writes | ends with |
 |---|---|---|---|
-| `BufReader@(R)` | `buf_reader(nom src, i32 cap)` | `read_line`, `read`, `read_bytes`, `read_all`, `fill` | `lines`, `into_inner` |
-| `BufWriter@(W)` | `buf_writer(nom dst, i32 cap)` | `write`, `write_bytes`, `write_line`, `flush` | `finish`, `into_inner` |
+| `BufReader@(R)` | `BufReader.new(nom src, i32 cap)` | `read_line`, `read`, `read_bytes`, `read_all`, `fill` | `lines`, `into_inner` |
+| `BufWriter@(W)` | `BufWriter.new(nom dst, i32 cap)` | `write`, `write_bytes`, `write_line`, `flush` | `finish`, `into_inner` |
 | `Lines@(R)` | `r.lines()` | `next` | -- |
 
-Both constructors TAKE the handle: the buffer owns it, closes it when the buffer is
-destroyed, and `into_inner()` is how a caller gets it back.
+Both constructors are statics named `new`, and both TAKE the handle: the buffer owns
+it, closes it when the buffer is destroyed, and `into_inner()` is how a caller gets it
+back. `R` and `W` come from the handle argument, so `match BufReader.new(nom f, 8192):`
+needs no annotation. A type that is not a `Reader` is refused at the type: the struct
+is declared `BufReader@(R: Reader)`, and `BufWriter@(W: Writer)` likewise (CE4006).
 
 ```sushi
 use <io/fs>
