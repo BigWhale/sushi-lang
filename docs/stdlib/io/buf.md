@@ -36,7 +36,7 @@ use <io/buf>
 
 fn longest_line(string path) i32 | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    let BufReader@(File) r = BufReader.new(nom f, 8192)??
     let i32 longest = 0
     foreach(line?? in r.lines()):
         if (line.len() > longest):
@@ -111,7 +111,7 @@ use <io/buf>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    let BufReader@(File) r = BufReader.new(nom f, 8192)??
     foreach(line?? in r.lines()):
         println(line)
     return Result.Ok(~)
@@ -143,7 +143,7 @@ use <io/buf>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    let BufReader@(File) r = BufReader.new(nom f, 8192)??
     foreach(item in r.lines()):
         match item:
             Result.Ok(line) -> println(line)
@@ -182,7 +182,7 @@ use <io/buf>
 
 fn write_report(string path) ~ | IoError:
     let File f = open(path, FileMode.Write())??
-    let BufWriter@(File) w = buf_writer(nom f, 8192)??
+    let BufWriter@(File) w = BufWriter.new(nom f, 8192)??
     w.write_line("Mostly Harmless")??
     w.write_line("")??
     w.write("no newline after this one")??
@@ -236,7 +236,7 @@ fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
 
 fn run() ~ | IoError:
     emit(poke stdout, "to the console")??
-    let BufWriter@(File) w = buf_writer(nom File(fd: STDOUT_FD, owned: false), 4096)??
+    let BufWriter@(File) w = BufWriter.new(nom File(fd: STDOUT_FD, owned: false), 4096)??
     emit(poke w, "through a buffer")??
     w.finish()??
     return Result.Ok(~)

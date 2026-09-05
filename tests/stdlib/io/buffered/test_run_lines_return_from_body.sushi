@@ -17,7 +17,7 @@ fn setup(string path) ~ | IoError:
 fn find(string path, string want) bool | IoError:
     setup(path)??
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 8)??
+    let BufReader@(File) r = BufReader.new(nom f, 8)??
     foreach(line?? in r.lines()):
         if (line == want):
             return Result.Ok(true)

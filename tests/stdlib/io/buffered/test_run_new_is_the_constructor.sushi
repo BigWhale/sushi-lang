@@ -1,0 +1,36 @@
+# The buffered types are built by a static named new, the shape the handles epic planned
+# and could not write until #573: BufReader.new(nom f, cap) and BufWriter.new(nom f, cap).
+# R comes from the handle argument, so a match over the Result declares nothing (#571).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nSo long\n"
+# EXPECT_NO_LEAKS: true
+use <io/fs>
+use <io/buf>
+
+const string PATH = "test_buf_new_constructor.txt"
+
+fn write_lines() ~ | IoError:
+    let File f = open(PATH, FileMode.Write())??
+    let BufWriter@(File) w = BufWriter.new(nom f, 8)??
+    w.write_line("Mostly Harmless")??
+    w.write_line("So long")??
+    w.finish()??
+    return Result.Ok(~)
+
+fn read_lines() ~ | IoError:
+    let File f = open(PATH, FileMode.Read())??
+    match BufReader.new(nom f, 8):
+        Result.Ok(nom r) ->
+            foreach(line?? in r.lines()):
+                println(line)
+        Result.Err(e) ->
+            return Result.Err(e)
+    return Result.Ok(~)
+
+fn main() i32:
+    if (not write_lines().is_ok()):
+        println("write failed")
+        return Result.Ok(1)
+    if (not read_lines().is_ok()):
+        println("read failed")
+        return Result.Ok(1)
+    return Result.Ok(0)

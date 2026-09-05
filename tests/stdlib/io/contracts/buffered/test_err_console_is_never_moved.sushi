@@ -7,7 +7,7 @@ use <io/fs>
 use <io/buf>
 
 fn run() ~ | IoError:
-    let BufWriter@(File) w = buf_writer(nom stdout, 64)??
+    let BufWriter@(File) w = BufWriter.new(nom stdout, 64)??
     w.finish()??
     return Result.Ok(~)
 

@@ -19,8 +19,8 @@ offer -- read_line(), read_all(), lines(), fill() -- stay concrete methods; a co
 that direction (Rust's BufRead) is a separate, later question.
 
 Limitations: fill() is part of the surface because an extension method carries no
-visibility marker -- it is as visible as the type it extends. buf_reader() and
-buf_writer() answer IoError and never fail today; the channel is there so the call
+visibility marker -- it is as visible as the type it extends. BufReader.new() and
+BufWriter.new() answer IoError and never fail today; the channel is there so the call
 composes with the handle it wraps. write() copies the string's bytes twice, once into
 to_bytes() and once into the buffer.
 :##
@@ -35,7 +35,7 @@ The window is the last read, held as bytes with a cursor into it. A read takes w
 window still has; only an exhausted window costs a system call. End of input is sticky:
 once a refill has answered nothing, no further call reads the handle again.
 :##
-public struct BufReader@(R):
+public struct BufReader@(R: Reader):
     ##: The handle being read. This value owns it. :##
     R inner
     ##: The last refill, held whole. :##
@@ -59,12 +59,12 @@ into_inner() is how a caller gets it back.
 - Errors: IoError, never today. The channel is here so the call composes with the
   handle it wraps.
 :##
-public fn buf_reader@(R: Reader)(nom R src, i32 cap) BufReader@(R) | IoError:
+extend BufReader@(R) static new(nom R src, i32 cap) BufReader@(R) | IoError:
     let i32 size = cap
     if (size < 1):
         size := 8192
     let u8[] empty = from([])
-    return Result.Ok(BufReader(src, empty, 0, size, false))
+    return BufReader(src, empty, 0, size, false)
 
 ##:
 Reads the next window from the handle, replacing the one held.
@@ -247,7 +247,7 @@ closes the descriptor. A later mention of the reader is refused while compiling.
 
   fn show(string path) ~ | IoError:
       let File f = open(path, FileMode.Read())??
-      let BufReader@(File) r = buf_reader(nom f, 8192)??
+      let BufReader@(File) r = BufReader.new(nom f, 8192)??
       foreach(line?? in r.lines()):
           println(line)
       return Result.Ok(~)
@@ -290,7 +290,7 @@ Bytes go into a buffer and reach the handle when the buffer has filled, when flu
 called, or when the writer is destroyed. The buffered write is what makes writing a
 line at a time cheap: one system call per window rather than one per line.
 :##
-public struct BufWriter@(W):
+public struct BufWriter@(W: Writer):
     ##: The handle being written. This value owns it. :##
     W sink
     ##: The bytes waiting to go. :##
@@ -311,12 +311,12 @@ into_inner() is how a caller gets it back.
 - Errors: IoError, never today. The channel is here so the call composes with the
   handle it wraps.
 :##
-public fn buf_writer@(W: Writer)(nom W dst, i32 cap) BufWriter@(W) | IoError:
+extend BufWriter@(W) static new(nom W dst, i32 cap) BufWriter@(W) | IoError:
     let i32 size = cap
     if (size < 1):
         size := 8192
     let u8[] empty = from([])
-    return Result.Ok(BufWriter(dst, empty, size))
+    return BufWriter(dst, empty, size)
 
 ##:
 A BufWriter is a Writer: the three contract methods fill and drain the buffer.

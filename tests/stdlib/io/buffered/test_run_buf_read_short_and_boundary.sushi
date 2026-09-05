@@ -15,7 +15,7 @@ fn run(string path) ~ | IoError:
     w.write("alpha-beta-gamma-delta")??
     w.close()??
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 8)??
+    let BufReader@(File) r = BufReader.new(nom f, 8)??
     println("[{r.read(5)??}]")
     println("[{r.read(64)??}]")
     println("[{r.read_all()??}]")

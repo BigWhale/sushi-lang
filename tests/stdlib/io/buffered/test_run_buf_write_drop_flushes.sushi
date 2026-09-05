@@ -10,7 +10,7 @@ use <io/buf>
 
 fn leave_unflushed(string path) ~ | IoError:
     let File wf = open(path, FileMode.Write())??
-    let BufWriter@(File) w = buf_writer(nom wf, 8192)??
+    let BufWriter@(File) w = BufWriter.new(nom wf, 8192)??
     w.write("unflushed")??
     return Result.Ok(~)
 

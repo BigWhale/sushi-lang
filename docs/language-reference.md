@@ -698,7 +698,7 @@ use <io/buf>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    let BufReader@(File) r = BufReader.new(nom f, 8192)??
     foreach(line?? in r.lines()):        # the first read failure leaves show()
         println(line)
     return Result.Ok(~)
@@ -1152,7 +1152,7 @@ match open("out.log", FileMode.Write()):
     Result.Err(e) -> report(e)
 
 match open("out.log", FileMode.Write()):
-    Result.Ok(nom f) -> buf_writer(nom f, 4096)      # takes it, and says so
+    Result.Ok(nom f) -> BufWriter.new(nom f, 4096)      # takes it, and says so
     Result.Err(e) -> report(e)
 ```
 

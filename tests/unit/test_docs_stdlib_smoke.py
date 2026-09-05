@@ -108,7 +108,7 @@ fn main() i32:
 """,
     ),
     # <io/buf> is the buffered layer over the contracts. The program takes the error path
-    # -- the file does not exist -- and still names buf_reader(), read_line() and
+    # -- the file does not exist -- and still names BufReader.new(), read_line() and
     # into_inner(), which is what ties the case to the documented surface.
     Case(
         "io/buf",
@@ -118,7 +118,7 @@ use <io/buf>
 
 fn peek_first(string path) string | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 4096)??
+    let BufReader@(File) r = BufReader.new(nom f, 4096)??
     let string line = r.read_line()??.realise("")
     let File back = r.into_inner()
     back.close()??

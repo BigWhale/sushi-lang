@@ -1,4 +1,4 @@
-# The shape the issue reports: `buf_reader` answers `BufReader@(File)`, the arm takes the
+# The shape the issue reports: `BufReader.new` answers `BufReader@(File)`, the arm takes the
 # payload, and `into_inner` is the stdlib's generic-target extension on it (#549).
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
@@ -11,7 +11,7 @@ use <io/buf>
 
 fn run() ~ | IoError:
     let File f = open("/dev/null", FileMode.Read())??
-    match buf_reader(nom f, 4096):
+    match BufReader.new(nom f, 4096):
         Result.Ok(nom r) ->
             let File back = r.into_inner()
             println("{back.is_open()}")

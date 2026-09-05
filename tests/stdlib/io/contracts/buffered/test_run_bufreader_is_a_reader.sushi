@@ -20,7 +20,7 @@ fn run() ~ | IoError:
     let File plain = open(PATH, FileMode.Read())??
     let string a = first_text(poke plain)??
     stdout.write("plain: {a}\n")??
-    let BufReader@(File) r = buf_reader(nom open(PATH, FileMode.Read())??, 64)??
+    let BufReader@(File) r = BufReader.new(nom open(PATH, FileMode.Read())??, 64)??
     let string b = first_text(poke r)??
     stdout.write("buffered: {b}\n")??
     return Result.Ok(~)

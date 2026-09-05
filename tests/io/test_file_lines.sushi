@@ -19,7 +19,7 @@ fn write_lines(string path) ~ | IoError:
 
 fn count_lines(string path) i32 | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 4096)??
+    let BufReader@(File) r = BufReader.new(nom f, 4096)??
     let i32 count = 0
     foreach(line?? in r.lines()):
         count := count + 1

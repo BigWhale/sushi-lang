@@ -9,11 +9,11 @@ fn file_entry(string path, string entry) ~ | IoError:
     return Result.Ok(~)
     # f drops here, and the descriptor closes.
 
-# Buffering is a type you opt into. buf_reader TAKES the handle, so the
+# Buffering is a type you opt into. BufReader.new TAKES the handle, so the
 # unbuffered File cannot be used behind the reader's back.
 fn read_entry(string path) string | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 4096)??
+    let BufReader@(File) r = BufReader.new(nom f, 4096)??
     # The scrutinee is a temporary the match OWNS, so `nom` may take the line
     # out of it instead of borrowing it.
     match r.read_line()??:
