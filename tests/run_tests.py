@@ -48,8 +48,10 @@ def default_jobs() -> int:
         jobs = 0
 
     if jobs < 1:
+        # stderr: this runs before --json is read, and --json stdout is a report
+        # the badge job parses.
         print(f"Ignoring {JOBS_ENV_VAR}={raw!r}: expected a positive integer. "
-              f"Using {DEFAULT_JOBS}.")
+              f"Using {DEFAULT_JOBS}.", file=sys.stderr)
         return DEFAULT_JOBS
 
     return jobs
