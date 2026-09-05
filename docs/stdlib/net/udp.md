@@ -57,8 +57,8 @@ use <net/udp>
 use <collections/strings>
 
 fn exchange() ~ | NetError:
-    let UdpSocket a = udp_bind("127.0.0.1", 0)??
-    let UdpSocket b = udp_bind("127.0.0.1", 0)??
+    let UdpSocket a = bind("127.0.0.1", 0)??
+    let UdpSocket b = bind("127.0.0.1", 0)??
     b.set_timeouts(5000, 5000)??
 
     let i32 port_b = b.local_port()??

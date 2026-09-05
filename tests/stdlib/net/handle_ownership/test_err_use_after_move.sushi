@@ -9,7 +9,7 @@ fn adopt(nom TcpListener listener) ~:
     return Result.Ok(~)
 
 fn main() i32:
-    let TcpListener listener = tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
+    let TcpListener listener = listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
     adopt(nom listener)
     println("{listener.fd}")
     return Result.Ok(0)

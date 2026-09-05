@@ -5,7 +5,7 @@
 use <net/ip>
 
 fn describe(string text) ~:
-    let IpAddr a = parse_ip(text).realise(ip_v4_any()??)
+    let IpAddr a = parse_ip(text).realise(v4_any()??)
     if (a.is_v4_mapped()):
         println("{text} mapped")
     elif (a.is_loopback()):

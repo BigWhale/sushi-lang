@@ -1,0 +1,23 @@
+# The four addresses <net/ip> has by name lose their ip_ prefix: v4_any(), v4_loopback(),
+# v6_any() and v6_loopback() (#571). The v4_loopback, v6_any and v6_loopback names had no
+# call anywhere until this test.
+# EXPECT_STDOUT_EXACT: "0.0.0.0\n127.0.0.1\n::\n::1\ntrue true true true\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/ip>
+
+fn show_all() ~:
+    let IpAddr a = v4_any()??
+    let IpAddr b = v4_loopback()??
+    let IpAddr c = v6_any()??
+    let IpAddr d = v6_loopback()??
+    println(a.text())
+    println(b.text())
+    println(c.text())
+    println(d.text())
+    println("{a.is_unspecified()} {b.is_loopback()} {c.is_unspecified()} {d.is_loopback()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    show_all()
+    return Result.Ok(0)

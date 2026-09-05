@@ -222,7 +222,7 @@ fn main() i32:
         """use <net/tcp>
 
 fn run() ~ | NetError:
-    let TcpListener l = tcp_listen("127.0.0.1", 0, 8)??
+    let TcpListener l = listen("127.0.0.1", 0, 8)??
     let i32 port = l.local_port()??
     println("port {port}")
     l.close()??
@@ -240,7 +240,7 @@ fn main() i32:
         """use <net/udp>
 
 fn run() ~ | NetError:
-    let UdpSocket s = udp_bind("127.0.0.1", 0)??
+    let UdpSocket s = bind("127.0.0.1", 0)??
     let i32 port = s.local_port()??
     println("port {port}")
     s.close()??

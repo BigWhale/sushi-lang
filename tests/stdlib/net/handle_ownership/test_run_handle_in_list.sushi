@@ -9,8 +9,8 @@ use <net/tcp>
 fn main() i32:
     if (true):
         let List@(TcpListener) servers = List.new()
-        servers.push(tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1)))
-        servers.push(tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1)))
+        servers.push(listen("127.0.0.1", 0, 1).realise(TcpListener(-1)))
+        servers.push(listen("127.0.0.1", 0, 1).realise(TcpListener(-1)))
         println("{servers.len()}")
     println("done")
     return Result.Ok(0)

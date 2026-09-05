@@ -1,0 +1,7 @@
+# udp_bind is deleted, not aliased: bind is the only name (#571).
+# EXPECT_ERROR_CODE: CE2008
+use <net/udp>
+
+fn main() i32:
+    let UdpSocket s = udp_bind("127.0.0.1", 0).realise(UdpSocket(-1))
+    return Result.Ok(0)

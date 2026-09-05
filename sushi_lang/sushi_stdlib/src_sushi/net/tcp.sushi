@@ -15,7 +15,7 @@ close() stays, for the caller who has to SEE that the close failed -- a
 destructor cannot answer a Result. It writes -1 into the binding, so the drop
 that follows is a no-op and the descriptor is released exactly once.
 
-Limitations: blocking sockets only, so tcp_connect has no timeout of its own
+Limitations: blocking sockets only, so connect has no timeout of its own
 and an unreachable address waits for the kernel to give up. read_bytes() answers
 whatever one read gave, which may be less than the maximum asked for;
 recv_exact() is the loop for a caller that needs a count.
@@ -212,7 +212,7 @@ answers nothing waits for the kernel.
 - Returns: The connected stream.
 - Errors: NetError, when no answer for the host accepted a connection.
 :##
-public fn tcp_connect(string host, i32 port) TcpStream | NetError:
+public fn connect(string host, i32 port) TcpStream | NetError:
     let i32 fd = sock_tcp_connect(host, port)??
     return Result.Ok(TcpStream(fd))
 
@@ -229,7 +229,7 @@ port whose last connection is still closing binds again at once.
 - Returns: The listening socket.
 - Errors: NetError, when the address cannot be bound.
 :##
-public fn tcp_listen(string host, i32 port, i32 backlog) TcpListener | NetError:
+public fn listen(string host, i32 port, i32 backlog) TcpListener | NetError:
     let i32 fd = sock_tcp_listen(host, port, backlog)??
     return Result.Ok(TcpListener(fd))
 

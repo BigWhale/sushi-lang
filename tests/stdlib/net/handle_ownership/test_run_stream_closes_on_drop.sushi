@@ -7,14 +7,14 @@
 use <net/tcp>
 
 fn main() i32:
-    let TcpListener server = tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
+    let TcpListener server = listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
     let i32 port = server.local_port().realise(0)
     if (port == 0):
         println("no port")
         return Result.Ok(1)
 
     if (true):
-        match tcp_connect("127.0.0.1", port):
+        match connect("127.0.0.1", port):
             Result.Ok(_) -> println("connected")
             Result.Err(_) -> println("connect failed")
 

@@ -38,7 +38,7 @@ and .local_port() reads back what it chose.
 - Returns: The bound socket.
 - Errors: NetError, when the address cannot be bound.
 :##
-public fn udp_bind(string host, i32 port) UdpSocket | NetError:
+public fn bind(string host, i32 port) UdpSocket | NetError:
     let i32 fd = sock_udp_bind(host, port)??
     return Result.Ok(UdpSocket(fd))
 

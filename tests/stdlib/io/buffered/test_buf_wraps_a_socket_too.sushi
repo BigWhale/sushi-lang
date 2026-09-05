@@ -24,7 +24,7 @@ fn over_file(string path) ~ | IoError:
     return Result.Ok(~)
 
 fn over_socket(string host) ~ | IoError:
-    match tcp_connect(host, 9):
+    match connect(host, 9):
         Result.Ok(nom s) ->
             let BufReader@(TcpStream) r = buf_reader(nom s, 64)??
             println(r.read_line()??.realise(""))
@@ -34,7 +34,7 @@ fn over_socket(string host) ~ | IoError:
                 Result.Err(_) -> println("close failed")
         Result.Err(_) ->
             println("no socket")
-    match tcp_connect(host, 9):
+    match connect(host, 9):
         Result.Ok(nom s2) ->
             let BufWriter@(TcpStream) w = buf_writer(nom s2, 64)??
             w.write_line("y")??
