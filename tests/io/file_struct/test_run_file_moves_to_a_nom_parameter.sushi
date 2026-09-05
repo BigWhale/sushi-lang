@@ -8,6 +8,7 @@
 # EXPECT_STDOUT_EXACT: "callee wrote\ndone\n"
 use <io/files>
 use <io/fs>
+use <io/contracts>
 
 fn eat(nom File f) ~ | IoError:
     f.writeln("Mostly Harmless")??

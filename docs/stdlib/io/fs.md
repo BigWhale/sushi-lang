@@ -27,6 +27,34 @@ handles are in [Console I/O](console.md), and the buffered layer above the handl
 
 ## Types
 
+The import brings two predefined enums beside the struct: `FileMode` and `FileError` are
+homed here, so `use <io/fs>` is what lets a unit write either name bare, and
+`use <io/fs> as fs` puts them behind the dot (`fs.FileMode.Read()`). `IoError`, the
+channel `open()` and every method answer, is [`<io/contracts>`](contracts.md)'s.
+
+### `FileMode`
+
+```sushi
+public enum FileMode:
+    Read      Write      Append
+    ReadB     WriteB     AppendB
+```
+
+The mode `open()` takes. The `B` forms are the binary modes.
+
+### `FileError`
+
+```sushi
+public enum FileError:
+    NotFound          PermissionDenied    AlreadyExists
+    IsDirectory       DiskFull            TooManyOpen
+    InvalidPath       IOError             Other
+```
+
+What the path utilities (`stat`, `walk`, `mkdir_all`, `remove_all`) and the `fd_*`
+primitives answer. A handle method answers `IoError` instead; `to_io()` converts inside
+the stdlib.
+
 ### `File`
 
 ```sushi

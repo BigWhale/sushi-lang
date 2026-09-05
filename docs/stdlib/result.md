@@ -45,7 +45,18 @@ fn foo() Result@(i32, MyError):
 
 ## Standard Error Enums
 
-Sushi provides six built-in error types:
+Sushi provides built-in error types. Each but `StdError` has a HOME module, and the import
+is what brings the bare name into a unit (`docs/design/unit-namespaces.md`, #574):
+
+| enum | import |
+|---|---|
+| `StdError` | none -- the implicit Result arm is in scope everywhere |
+| `MathError` | `use <math>` |
+| `FileError`, `FileMode` | `use <io/fs>` |
+| `IoError`, `SeekFrom` | `use <io/contracts>` |
+| `NetError` | `use <net/error>` |
+| `ProcessError` | `use <sys/process>` |
+| `EnvError` | `use <sys/env>` |
 
 ### StdError
 

@@ -53,6 +53,13 @@ def reject_out_of_scope_type(validator: 'TypeValidator', name: str,
                             import_help(module, stdlib=True) if module else None)
         return True
 
+    # A predefined enum is gated by its HOME module's import (#574, Ruling 3), the same
+    # rule as the generic above: the stamp says which import, and the help names it.
+    home = getattr(validator.enum_table.by_name.get(name), "home_module", None)
+    if home is not None and not scope.holds_home(home):
+        _reject_unreachable(validator, name, loc, import_help(home, stdlib=True))
+        return True
+
     table = getattr(validator, "visibility", None)
     if table is None:
         return False

@@ -1,0 +1,19 @@
+# `StdError` is the implicit Result arm and stays in scope with no import at all (#574,
+# Ruling 3: every predefined enum but StdError gets a home).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "error\n"
+
+fn fail() i32:
+    return Result.Err(StdError.Error)
+
+fn main() i32:
+    let StdError e = StdError.Error
+    match fail():
+        Result.Ok(_) -> println("ok")
+        Result.Err(got) ->
+            match got:
+                StdError.Error -> println("error")
+    match e:
+        StdError.Error -> return Result.Ok(0)

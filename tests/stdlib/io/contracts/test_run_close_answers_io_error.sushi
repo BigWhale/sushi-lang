@@ -7,6 +7,7 @@
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\nclosed\n"
 use <io/files>
 use <io/fs>
+use <io/contracts>
 
 fn read_then_close(string path) string | IoError:
     match open(path, FileMode.Read()):

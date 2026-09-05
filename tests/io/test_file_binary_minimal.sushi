@@ -9,6 +9,7 @@
 
 use <io/files>
 use <io/fs>
+use <io/contracts>
 
 fn main() i32:
     # Create byte array

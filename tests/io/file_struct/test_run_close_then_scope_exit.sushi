@@ -7,6 +7,7 @@
 # EXPECT_STDOUT_EXACT: "closed\ndone\n"
 use <io/files>
 use <io/fs>
+use <io/contracts>
 
 fn write_and_close(string path) ~ | IoError:
     let File f = open(path, FileMode.Write())??

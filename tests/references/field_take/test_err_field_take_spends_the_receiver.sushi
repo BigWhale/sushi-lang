@@ -4,6 +4,7 @@
 # TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2405
 use <io/fs>
+use <io/contracts>
 
 struct Sink:
     File out

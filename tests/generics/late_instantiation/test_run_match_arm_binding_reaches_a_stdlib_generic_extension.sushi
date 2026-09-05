@@ -8,6 +8,7 @@
 
 use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 fn run() ~ | IoError:
     let File f = open("/dev/null", FileMode.Read())??

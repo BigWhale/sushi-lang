@@ -6,6 +6,7 @@
 
 use <io/fs>
 use <io/files>
+use <io/contracts>
 
 fn main() i32:
     # Try to open a file that doesn't exist - using wildcard to catch any error

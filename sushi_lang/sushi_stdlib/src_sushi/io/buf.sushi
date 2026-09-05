@@ -244,6 +244,7 @@ closes the descriptor. A later mention of the reader is refused while compiling.
 - Example:
   ```sushi no_run
   use <io/fs>
+  use <io/contracts>
 
   fn show(string path) ~ | IoError:
       let File f = open(path, FileMode.Read())??

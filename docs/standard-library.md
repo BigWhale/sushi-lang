@@ -30,7 +30,8 @@ Complete reference for Sushi's standard library modules and types.
 
 ### Networking
 
-- [Socket primitives](stdlib/net/socket.md) - the raw BSD calls, and `NetError`
+- [Socket primitives](stdlib/net/socket.md) - the raw BSD calls
+- [Net errors](stdlib/net/error.md) - `NetError`, the error vocabulary of the net modules
 - [TCP](stdlib/net/tcp.md) - `TcpStream` and `TcpListener`
 - [UDP](stdlib/net/udp.md) - `UdpSocket`, send_to and recv_from
 - [DNS](stdlib/net/dns.md) - a host name resolved into typed addresses
@@ -239,6 +240,8 @@ out.finish()??
   a `File` closes itself when its owner leaves scope
 - Every read, write, seek, `open()` and `close()` answers `IoError`; the path utilities
   and the `fd_*` primitives keep `FileError`
+- `FileMode` and `FileError` come with `use <io/fs>`, `IoError` and `SeekFrom` with
+  `use <io/contracts>`: a predefined enum's import brings its name (#574)
 
 **Buffered I/O** (`use <io/buf>`):
 - `BufReader.new(nom src, cap)` / `BufWriter.new(nom dst, cap)` - one system call per WINDOW

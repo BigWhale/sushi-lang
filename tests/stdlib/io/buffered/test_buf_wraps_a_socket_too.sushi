@@ -10,6 +10,7 @@
 use <io/fs>
 use <io/buf>
 use <net/tcp>
+use <io/contracts>
 
 fn over_file(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??

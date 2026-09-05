@@ -73,14 +73,16 @@ fn foo() Result@(i32, MyError):
 
 ### Standard Error Enums
 
-Sushi provides six built-in error types for common error conditions:
+Sushi provides built-in error types for common error conditions. Each but `StdError` has
+a HOME module, and the import brings the bare name (`use <math>` for `MathError`):
 
-- **StdError** - Generic fallback (`StdError.Error`)
-- **MathError** - Mathematical errors (`DivisionByZero`, `Overflow`, `Underflow`, `InvalidInput`)
-- **FileError** - File system errors (`NotFound`, `PermissionDenied`, `AlreadyExists`, `InvalidPath`, `IoError`)
-- **IoError** - I/O operation errors (`Read`, `Write`, `Flush`)
-- **ProcessError** - Process management (`Spawn`, `Exit`, `Signal`)
-- **EnvError** - Environment variables (`NotFound`, `InvalidValue`, `PermissionDenied`)
+- **StdError** - Generic fallback (`StdError.Error`); in scope everywhere, no import
+- **MathError** (`<math>`) - Mathematical errors (`DivisionByZero`, `Overflow`, `Underflow`, `InvalidInput`)
+- **FileError** (`<io/fs>`) - Path and descriptor errors (`NotFound`, `PermissionDenied`, `AlreadyExists`, `IsDirectory`, `DiskFull`, `TooManyOpen`, `InvalidPath`, `IOError`, `Other`)
+- **IoError** (`<io/contracts>`) - What every read, write, seek, `open()` and `close()` answers (`NotFound`, `TimedOut`, `Closed`, `WouldBlock`, `Os(i32)`, ...)
+- **NetError** (`<net/error>`) - Connect, bind and resolve errors (`ConnectionRefused`, `TimedOut`, `ResolveFailed`, ...)
+- **ProcessError** (`<sys/process>`) - Process management (`SpawnFailed`, `ExitFailure`, `SignalReceived`)
+- **EnvError** (`<sys/env>`) - Environment variables (`NotFound`, `InvalidValue`, `PermissionDenied`)
 
 See [Result@(T, E) API Reference](stdlib/result.md) for complete details.
 
@@ -347,6 +349,7 @@ Functions can return `Result@(Maybe@(T), E)` for three states:
 
 ```sushi
 use <io/fs>
+use <io/contracts>
 
 fn load_optional_config() Maybe@(string) | IoError:
     match open("config.txt", FileMode.Read()):
@@ -489,6 +492,7 @@ short form for "leave the function on the first failure":
 ```sushi
 use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -513,6 +517,7 @@ failure and carry on:
 ```sushi
 use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??

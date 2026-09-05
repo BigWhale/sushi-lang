@@ -3,6 +3,8 @@
 # EXPECT_RUNTIME_EXIT: 0
 
 
+use <math>
+
 fn maybe_divide(i32 a, i32 b) i32 | MathError:
   if (b == 0):
     return Result.Err(MathError.DivisionByZero)

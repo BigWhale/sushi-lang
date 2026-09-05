@@ -374,7 +374,7 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 | An extension method, a perk implementation | A method is found on the receiver's **type**, not through a scoped bound (`docs/design/method-resolution.md`). `v.length()` needs no namespace, and making it need one would make method resolution depend on the calling unit. This is `visibility.md` Ruling 2, restated |
 | An enum variant | A variant follows its enum (`visibility.md` section 2), so it is reached *through* the enum: `my_math.Sign.Plus`, never `my_math.Plus` |
 | `print`, `println` | These are grammar forms (`print_stmt`, `println_stmt`, `grammar.lark:69`), not symbols. Syntax is never namespaced |
-| `string`, `file`, `List`, `Result`, `Maybe`, `Own` | In scope with no import. Nothing brought them, so no namespace holds them |
+| `string`, `List`, `Result`, `Maybe`, `Own`, `StdError` | In scope with no import. Nothing brought them, so no namespace holds them |
 | A private declaration of another unit | Not a visibility carve-out — see Ruling 2's second seam. It is a member, and naming it is `CE3005` |
 | A static call on a type NOBODY imports — `List.new()`, `f64.from_bits(b)` | `List`, `f64` and `f32` are in scope with no import, so no namespace can ever hold them. `HashMap` is different: the import gates the name, so its static obeys the alias like the type does — `hm.HashMap.new()`, and the bare form behind an aliased import is refused exactly as the bare type is (#506, decision A-strict; the fold is `fold_namespaced_static`, section 5) |
 
@@ -386,6 +386,7 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 | Sushi-source modules, injected as ordinary units | `<collections/iter>`, `<compression/zlib>`, `<encoding/msgpack>`, `<toolchain/slib>` | **yes** — a user unit in every respect |
 | A built-in generic that the import activates | `<collections/hashmap>` (`generics/active_generics.py:3`) | **yes** — `hm.HashMap@(i32, string)`. The import brings the name, so the namespace holds it. `active_generics` retires whole — see 4.3.1 |
 | A method interface: the import enables methods on a type and brings **no name** | `<collections/strings>` | pointless, and said so — see below |
+| A predefined enum the import brings (#574, Ruling 3) | `FileMode`, `FileError` → `<io/fs>`; `IoError`, `SeekFrom` → `<io/contracts>`; `NetError` → `<net/error>`; `ProcessError` → `<sys/process>`; `EnvError` → `<sys/env>`; `MathError` → `<math>` | **yes** — `fs.FileMode.Read()`. No unit declares one, so the synthesis stamps each with its HOME (`EnumType.home_module`, the table is `passes/collect/enums.py:PREDEFINED_ENUM_HOMES`); the `namespaces` pass reads the stamp to list it as a member of the home's provider, and the type-position gate (`reject_out_of_scope_type`) reads it to refuse the bare name where the home is not imported, the `HashMap` rule. `StdError` is the implicit Result arm and stays global. `SeekFrom` is `<io/contracts>`'s because `Seek.seek` takes it and `<io/fs>` imports `<io/contracts>`; the other way round is a cycle |
 
 `use <io/fs>` does not bring `stdin` into scope: `stdin` is always a name
 (`passes/types/visitor.py:703`), and what the import enables is `read_line()` on it. An

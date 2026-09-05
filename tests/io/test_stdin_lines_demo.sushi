@@ -8,6 +8,7 @@
 
 use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 fn show() ~ | IoError:
     stdout.write("=== stdin lines ===\n")??

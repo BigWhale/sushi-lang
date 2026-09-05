@@ -2,6 +2,7 @@
 # EXPECT_STDOUT_EXACT: "already exists\n"
 
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match mkdir("/tmp", 0o755):

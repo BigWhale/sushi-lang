@@ -4,6 +4,7 @@
 # EXPECT_ERROR_CODE: CE2435
 # EXPECT_STDERR_CONTAINS: 'close' consumed it
 use <io/fs>
+use <io/contracts>
 
 fn probe(string path) string | IoError:
     let File f = open(path, FileMode.Read())??

@@ -4,6 +4,8 @@
 
 # Tests EnvError enum variants
 
+use <sys/env>
+
 fn get_env_var(string name) string | EnvError:
     if (name == "MISSING"):
         return Result.Err(EnvError.NotFound)

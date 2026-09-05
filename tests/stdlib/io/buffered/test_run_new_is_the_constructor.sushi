@@ -5,6 +5,7 @@
 # EXPECT_NO_LEAKS: true
 use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 const string PATH = "test_buf_new_constructor.txt"
 

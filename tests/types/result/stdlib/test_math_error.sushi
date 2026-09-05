@@ -4,6 +4,8 @@
 
 # Tests MathError enum variants
 
+use <math>
+
 fn divide(i32 a, i32 b) i32 | MathError:
     if (b == 0):
         return Result.Err(MathError.DivisionByZero)

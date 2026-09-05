@@ -1,0 +1,9 @@
+# The import GATES the bare name, as `<collections/hashmap>` gates `HashMap` (#574,
+# Ruling 3; #506): `FileMode` with no `use <io/fs>` is not a type here, and the help
+# names the import.
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: use <io/fs>
+
+fn main() i32:
+    let FileMode mode = FileMode.Read()
+    return Result.Ok(0)

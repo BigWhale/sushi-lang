@@ -10,6 +10,9 @@ System process control and information functions.
 use <sys/process>
 ```
 
+The import brings `ProcessError`, the module's error enum: the bare name needs it, and
+`use <sys/process> as proc` puts it behind the dot (`proc.ProcessError.SpawnFailed`).
+
 ## Overview
 
 The process module provides functions for controlling and querying process state. It uses POSIX functions for Unix portability across macOS, Linux, and other Unix-like systems.

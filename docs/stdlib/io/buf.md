@@ -36,6 +36,7 @@ is declared `BufReader@(R: Reader)`, and `BufWriter@(W: Writer)` likewise (CE400
 ```sushi
 use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 fn longest_line(string path) i32 | IoError:
     let File f = open(path, FileMode.Read())??
@@ -111,6 +112,7 @@ makes it walkable by `foreach`, with no `Iterator` type and no perk in sight
 ```sushi
 use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -143,6 +145,7 @@ writes the `match` itself:
 ```sushi
 use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -182,6 +185,7 @@ as the call returns.
 ```sushi
 use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 fn write_report(string path) ~ | IoError:
     let File f = open(path, FileMode.Write())??

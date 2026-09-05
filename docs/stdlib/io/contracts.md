@@ -14,6 +14,12 @@ The module declares three perks and nothing else -- no struct, no function, no c
 consumer writes `@(R: Reader)` and takes a `File`, a `TcpStream`, or anything later that
 satisfies the contract.
 
+It is also the HOME of two predefined enums: `IoError`, the one channel every contract
+method answers, and `SeekFrom`, the origin `Seek.seek` takes. `use <io/contracts>` is what
+brings either bare name into a unit -- `<io/fs>` alone does not, scope is per unit and
+not transitive -- and `use <io/contracts> as io` puts them behind the dot
+(`io.IoError.NotFound`).
+
 | perk | methods | who implements it |
 |---|---|---|
 | `Reader` | `read`, `read_bytes` | `File`, `TcpStream`, `BufReader@(R)` |

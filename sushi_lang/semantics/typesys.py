@@ -366,6 +366,11 @@ class EnumType:
     variants: tuple[EnumVariantInfo, ...]       # Immutable sequence of variants
     generic_base: Optional[str] = None  # Base name before monomorphization (e.g., "Maybe" for "Maybe<i32>")
     generic_args: Optional[tuple["Type", ...]] = None  # Type arguments used (e.g., (BuiltinType.I32,))
+    # The stdlib module a PREDEFINED enum belongs to (#574, Ruling 3). No unit declares
+    # `FileMode`, so no declaration record can say who may write the name; the stamp is
+    # what the `namespaces` pass reads to gate the bare name behind `use <io/fs>` and to
+    # hold it behind the alias. None on every enum a unit declares, and on `StdError`.
+    home_module: Optional[str] = None
 
     def __str__(self) -> str:
         return self.name

@@ -3,6 +3,7 @@
 # EXPECT_NO_LEAKS: true
 
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match read_dir("/tmp/sushi_read_dir_missing"):

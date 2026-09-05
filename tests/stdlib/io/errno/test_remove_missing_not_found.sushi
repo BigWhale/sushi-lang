@@ -2,6 +2,7 @@
 # EXPECT_STDOUT_EXACT: "not found\n"
 
 use <io/files>
+use <io/fs>
 
 fn main() i32:
     match remove("/tmp/sushi_errno_missing_file.txt"):

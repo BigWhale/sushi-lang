@@ -9,6 +9,7 @@
 
 use <io/fs>
 use <io/buf>
+use <io/contracts>
 
 fn write_lines(string path) ~ | IoError:
     let File out = open(path, FileMode.Write())??

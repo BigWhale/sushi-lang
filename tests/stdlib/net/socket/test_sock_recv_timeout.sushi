@@ -7,6 +7,7 @@
 # TIMEOUT_SECONDS: 20
 
 use <net/socket>
+use <net/error>
 
 fn main() i32:
     let i32 lfd = sock_tcp_listen("127.0.0.1", 0, 8).realise(-1)

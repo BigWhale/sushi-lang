@@ -29,6 +29,7 @@ from sushi_lang.semantics.namespaces import (
     StdlibNamespace,
     UnitNamespace,
     UnitScope,
+    homed_enums,
 )
 
 # The kinds a namespace holds that a qualified form cannot reach yet. They are members
@@ -226,13 +227,19 @@ def _imported_unit(path: str, host: Any, units: Dict[str, Any]) -> str:
     return candidate if candidate in units else path
 
 
-def _unit_provider(unit_name: str, tables: Any) -> UnitNamespace:
-    """A compilation unit's own declarations, from the collect pass's tables."""
+def _unit_provider(unit_name: str, tables: Any,
+                   homed: Optional[Dict[str, str]] = None) -> UnitNamespace:
+    """A compilation unit's own declarations, from the collect pass's tables.
+
+    `homed` is the predefined enums a STDLIB unit is the home of (#574): no unit
+    declares `FileMode`, so the visibility table has no record to read it from.
+    """
     others = {
         name: kind
         for (kind, name), origin in getattr(tables.visibility, "by_key", {}).items()
         if origin.unit_name == unit_name and kind in _MEMBER_ONLY_KINDS
     }
+    others.update(homed or {})
     return UnitNamespace(
         unit_name,
         functions=dict(tables.funcs.by_unit.get(unit_name, {})),
@@ -250,8 +257,11 @@ def _stdlib_provider(use_stmt: UseStatement, tables: Any,
     )
 
     path = use_stmt.path
+    # The predefined enums this module is the HOME of ride along with every shape
+    # (#574): `<io/fs>` brings `FileMode`, `<math>` brings `MathError`.
+    homed = homed_enums(path, getattr(tables, "enums", None))
     if is_source_stdlib_module(path):
-        return _unit_provider(path, tables)
+        return _unit_provider(path, tables, homed)
 
     generic = GENERIC_UNIT_TYPES.get(path)
     if generic is not None:
@@ -259,11 +269,11 @@ def _stdlib_provider(use_stmt: UseStatement, tables: Any,
 
     module = get_stdlib_registry().get_module(path)
     if module is not None:
-        return StdlibNamespace(path, module)
+        return StdlibNamespace(path, module, types=homed)
 
     # A method interface: the import enables methods on a type and brings no name.
     # CW3004 is what says so, at the `use` rather than at every call after it.
-    return UnitNamespace(path, functions={}, constants={})
+    return UnitNamespace(path, functions={}, constants={}, others=homed)
 
 
 def _library_provider(use_stmt: UseStatement, tables: Any, units: Dict[str, Any],
