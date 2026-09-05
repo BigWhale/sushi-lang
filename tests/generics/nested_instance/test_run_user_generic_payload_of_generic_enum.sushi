@@ -1,0 +1,24 @@
+# A USER generic in a generic enum's payload, and the nested instance's generic-target
+# extension is cut for it too (#577, face d). CE2008 `undefined function 'Box<string>'`
+# before.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "box x\n"
+
+struct Box@(T):
+    T v
+
+extend Box@(T) label() string:
+    return "box {self.v}"
+
+enum Slot@(B):
+    Filled(Box@(B))
+    Empty
+
+fn main() i32:
+    let Slot@(string) s = Slot.Filled(Box("x"))
+    match s:
+        Slot.Filled(b) -> println(b.label())
+        Slot.Empty -> println("empty")
+    return Result.Ok(0)

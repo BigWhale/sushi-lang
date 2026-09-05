@@ -1,0 +1,23 @@
+# A `Maybe@(B)` payload of a generic enum: the nested instance is interned, so the enum
+# topological sort finishes and there is no false CE2052 (#577, face c).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "false\nempty\n"
+
+enum Slot@(B):
+    Filled(Maybe@(B))
+    Empty
+
+fn show(Slot@(string) s) i32:
+    match s:
+        Slot.Filled(m) -> println("{m.is_some()}")
+        Slot.Empty -> println("empty")
+    return Result.Ok(0)
+
+fn main() i32:
+    let Slot@(string) s = Slot.Filled(Maybe.None())
+    let Slot@(string) e = Slot.Empty
+    let i32 a = show(s).realise(1)
+    let i32 b = show(e).realise(1)
+    return Result.Ok(a + b)

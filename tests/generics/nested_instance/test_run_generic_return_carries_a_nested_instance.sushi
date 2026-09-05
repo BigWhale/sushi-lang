@@ -1,0 +1,23 @@
+# A generic FUNCTION's substituted return type names `Pair<i32, string>`, whose field
+# names `Box<string>`: two levels of nesting, both reached only through substitution
+# (#577, face d). CE0128 before.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7 towel\n"
+
+struct Box@(T):
+    T v
+
+struct Pair@(A, B):
+    A first
+    Box@(B) second
+
+fn wrap@(B)(nom B x) Pair@(i32, B):
+    return Result.Ok(Pair(7, Box(x)))
+
+fn main() i32:
+    match wrap(nom "towel"):
+        Result.Ok(p) -> println("{p.first} {p.second.v}")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)
