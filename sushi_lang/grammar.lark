@@ -7,7 +7,10 @@ const_def: PUBLIC? CONST type NAME "=" expr _NEWLINE
 # Unit-level storage (docs/design/unit-storage.md): the same shape as a constant, and
 # a different kind. A `const` has no address; a `var` has one.
 var_def: PUBLIC? VAR type NAME "=" expr _NEWLINE
-use_stmt: USE (stdlib_import | lib_import | user_import) [AS NAME] _NEWLINE
+# `public use X` re-exports what X brings (docs/design/unit-namespaces.md section 8.1):
+# the grammar takes the marker and an alias together, and the namespaces pass refuses
+# the pair (CE3016), so the fault gets one located diagnostic and not a parse error.
+use_stmt: PUBLIC? USE (stdlib_import | lib_import | user_import) [AS NAME] _NEWLINE
 stdlib_import: LT use_path GT
 lib_import: LT "lib" "/" use_path GT
 user_import: STRING

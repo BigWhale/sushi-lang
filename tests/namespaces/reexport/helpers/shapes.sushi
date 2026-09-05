@@ -1,0 +1,10 @@
+# A unit whose API answers `geometry`'s types, so it re-exports them: an importer of
+# `shapes` writes `Vec` and `Sign` without a `use "helpers/geometry"` of its own
+# (unit-namespaces.md section 8.1, Ruling 7).
+public use "helpers/geometry"
+
+public fn area(Vec v) i32:
+    return Result.Ok(v.x * v.y)
+
+public fn unit_square() Vec:
+    return Result.Ok(Vec(SIZE, SIZE))

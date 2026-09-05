@@ -65,6 +65,10 @@ class StdlibModule:
     python_module: any  # The imported Python module
     functions: Dict[str, StdlibFunction] = field(default_factory=dict)
     constants: Dict[str, StdlibFunction] = field(default_factory=dict)
+    # The stdlib modules this one RE-EXPORTS (`docs/design/unit-namespaces.md` section
+    # 8.1): a registry module has no `public use` to write, so its Python module names
+    # them in a `REEXPORTS` tuple and every importer gets their names beside this one's.
+    reexports: Tuple[str, ...] = ()
 
 
 # Stdlib functions whose last parameter is a native '...T' collecting variadic. Their
@@ -174,7 +178,8 @@ class StdlibRegistry:
 
         stdlib_module = StdlibModule(
             path=module_path,
-            python_module=py_module
+            python_module=py_module,
+            reexports=tuple(getattr(py_module, "REEXPORTS", ())),
         )
 
         module_name = module_path.split('/')[-1]

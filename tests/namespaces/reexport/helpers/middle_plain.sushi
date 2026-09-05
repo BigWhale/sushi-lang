@@ -1,0 +1,6 @@
+# A PLAIN `use` in the middle of a chain. `middle_plain` may write `Vec`; its importers
+# may not, because only a `public use` re-exports (Ruling 7, rule 2).
+use "helpers/geometry"
+
+public fn corner() Vec:
+    return Result.Ok(Vec(4, 4))

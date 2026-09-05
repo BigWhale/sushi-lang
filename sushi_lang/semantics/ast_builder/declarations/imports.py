@@ -11,16 +11,19 @@ if TYPE_CHECKING:
 
 
 def parse_usestatement(t: Tree, ast_builder: 'ASTBuilder') -> UseStatement:
-    """Parse use_stmt: USE (stdlib_import | lib_import | user_import) [AS NAME]"""
+    """Parse use_stmt: PUBLIC? USE (stdlib_import | lib_import | user_import) [AS NAME]"""
     t = expect(t, "use_stmt")
 
     import_node = None
     alias_tok = None
+    public_tok = None
     for child in t.children:
         if isinstance(child, Tree) and child.data in ("stdlib_import", "lib_import", "user_import"):
             import_node = child
         elif isinstance(child, Token) and child.type == "NAME":
             alias_tok = child
+        elif isinstance(child, Token) and child.type == "PUBLIC":
+            public_tok = child
 
     if import_node is None:
         ice(t, "missing import node")
@@ -84,5 +87,7 @@ def parse_usestatement(t: Tree, ast_builder: 'ASTBuilder') -> UseStatement:
         is_library=is_library,
         alias=str(alias_tok.value) if alias_tok is not None else None,
         alias_span=span_of(alias_tok) if alias_tok is not None else None,
+        is_public=public_tok is not None,
+        public_span=span_of(public_tok) if public_tok is not None else None,
         loc=span_of(t)
     )

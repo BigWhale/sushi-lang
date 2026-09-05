@@ -1,0 +1,9 @@
+# A re-export is of NAMES, not of a namespace: `public use ... as` is refused at the
+# alias (Ruling 7, rule 1). The alias still binds, so the one fault gets one diagnostic.
+# EXPECT_ERROR_CODE: CE3016
+public use "helpers/geometry" as geo
+
+fn main() i32:
+    let geo.Vec v = geo.origin().realise(geo.Vec(0, 0))
+    println("{v.x}")
+    return Result.Ok(0)

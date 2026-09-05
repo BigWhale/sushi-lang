@@ -1,0 +1,22 @@
+# The unit at the far end of every re-export chain in this batch. It declares one of
+# each kind a namespace holds, plus one private struct that no `public use` may hand on.
+public struct Vec:
+    i32 x
+    i32 y
+
+public enum Sign:
+    Plus
+    Minus
+
+public const i32 SIZE = 3
+
+public fn origin() Vec:
+    return Result.Ok(Vec(1, 2))
+
+public fn sign_of(i32 n) Sign:
+    if (n < 0):
+        return Result.Ok(Sign.Minus)
+    return Result.Ok(Sign.Plus)
+
+struct Hidden:
+    i32 n

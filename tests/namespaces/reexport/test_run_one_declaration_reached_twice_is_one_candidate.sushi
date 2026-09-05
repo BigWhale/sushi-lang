@@ -1,0 +1,14 @@
+# `shapes` and `twice_reached` both re-export `geometry`. An importer of both reaches
+# the SAME declaration of `Vec` and `origin` down two paths, and one declaration is one
+# candidate: no CE3012 (Ruling 7, shadows -- candidates count by declaring unit).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "8\n"
+use "helpers/shapes"
+use "helpers/twice_reached"
+
+fn main() i32:
+    let Vec o = origin().realise(Vec(0, 0))
+    let Vec d = doubled(o).realise(Vec(0, 0))
+    println("{area(d).realise(-1)}")
+    return Result.Ok(0)

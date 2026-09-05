@@ -1,0 +1,6 @@
+# The re-export that brings nothing: `nothing_public` has no public name to hand on.
+# The warning is asserted by the test that imports this unit.
+public use "helpers/nothing_public"
+
+public fn present() i32:
+    return Result.Ok(1)

@@ -84,6 +84,11 @@ class UseStatement(Node):
     # else (`docs/design/unit-namespaces.md` section 2).
     alias: Optional[str] = None
     alias_span: Optional[Span] = None
+    # `public use`: the unit re-exports what the import brings, so its own importers get
+    # the effect of the same `use` (section 8.1, Ruling 7). A re-export is of names and
+    # takes no `as` (CE3016).
+    is_public: bool = False
+    public_span: Optional[Span] = None
 
 @dataclass(slots=True)
 class Program(Node):

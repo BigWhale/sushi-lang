@@ -1,0 +1,18 @@
+# `use "shapes" as sh` puts what `shapes` re-exports behind the same dot as its own
+# names: `sh.Vec`, `sh.Sign.Plus`, `sh.SIZE` and `sh.origin()` beside `sh.area()`.
+# Nothing enters the flat scope (Ruling 7, rule 1).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 3 plus\n"
+use "helpers/shapes" as sh
+
+fn main() i32:
+    let sh.Vec o = sh.origin().realise(sh.Vec(0, 0))
+    let i32 a = sh.area(o).realise(-1)
+    let sh.Sign s = sh.Sign.Plus
+    let string word = "minus"
+    match s:
+        sh.Sign.Plus -> word := "plus"
+        sh.Sign.Minus -> word := "minus"
+    println("{a} {sh.SIZE} {word}")
+    return Result.Ok(0)

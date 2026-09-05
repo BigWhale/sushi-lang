@@ -1,0 +1,8 @@
+# A `public use` stands above every declaration like a `use` does (CE3014).
+# EXPECT_ERROR_CODE: CE3014
+fn main() i32:
+    let Vec v = origin().realise(Vec(0, 0))
+    println("{v.x}")
+    return Result.Ok(0)
+
+public use "helpers/geometry"
