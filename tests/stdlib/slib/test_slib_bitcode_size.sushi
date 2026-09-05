@@ -1,4 +1,4 @@
-# slib_bitcode_size reads the u64 bitcode length. Container v4 puts a
+# bitcode_size reads the u64 bitcode length. Container v4 puts a
 # length-prefixed SOURCE section between the metadata and the bitcode, so the
 # fixture carries an empty source section, then records 12345 (0x3039 little-
 # endian) and no bitcode bytes.
@@ -53,7 +53,7 @@ fn run_test() i32:
     if (write_fixture("test_slib_sized.slib", fixture)?? != 0):
         println("cannot write fixture")
         return Result.Ok(1)
-    match slib_bitcode_size("test_slib_sized.slib"):
+    match bitcode_size("test_slib_sized.slib"):
         Result.Ok(n) ->
             println(n)
         Result.Err(_) ->

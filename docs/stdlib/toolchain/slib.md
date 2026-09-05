@@ -52,12 +52,12 @@ use <encoding/msgpack>
 use <toolchain/slib>
 
 fn library_name(string path) string:
-    match slib_read_metadata(path):
+    match read_metadata(path):
         Result.Ok(meta) ->
-            let Maybe@(MsgValue) found = mp_map_get(meta, "library_name")??
+            let Maybe@(MsgValue) found = map_get(meta, "library_name")??
             match found:
                 Maybe.Some(v) ->
-                    return Result.Ok(mp_show(v)??)
+                    return Result.Ok(show(v)??)
                 Maybe.None() ->
                     return Result.Ok("missing")
         Result.Err(_) ->
@@ -80,7 +80,7 @@ and a binary one no source.
 use <toolchain/slib>
 
 fn main() i32:
-    match slib_sizes("mylib.slib"):
+    match sizes("mylib.slib"):
         Result.Ok(sizes) ->
             println("source {sizes.source}, bitcode {sizes.bitcode}")
         Result.Err(_) ->
@@ -99,7 +99,7 @@ length fields, never a payload.
 use <toolchain/slib>
 
 fn classify(string path) string:
-    match slib_read_metadata(path):
+    match read_metadata(path):
         Result.Ok(_) ->
             return Result.Ok("ok")
         Result.Err(e) ->

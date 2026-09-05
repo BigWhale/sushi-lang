@@ -4,7 +4,7 @@
 # unit when imported (`use <toolchain/slib>`). It reads the fixed 52-byte
 # little-endian header and the msgpack metadata map of a version-4 .slib
 # library. It mirrors the Python reader LibraryFormat.read_metadata_only and
-# never reads a payload blob for its own sake; slib_sizes reads only the two
+# never reads a payload blob for its own sake; sizes reads only the two
 # length fields that follow the metadata blob.
 #
 # Limitations: the four spare header fields are read and not validated. The
@@ -45,8 +45,8 @@ fn slib_header_check(peek u8[] header) ~ | SlibError:
         return Result.Err(SlibError.BadVersion(version as u32))
     return Result.Ok(~)
 
-# slib_read_metadata: decode the metadata map of a .slib file into a MsgValue.
-public fn slib_read_metadata(string path) MsgValue | SlibError:
+# read_metadata: decode the metadata map of a .slib file into a MsgValue.
+public fn read_metadata(string path) MsgValue | SlibError:
     match open(path, FileMode.ReadB()):
         Result.Ok(nom f) ->
             let u8[] empty1 = from([])
@@ -59,7 +59,7 @@ public fn slib_read_metadata(string path) MsgValue | SlibError:
             slib_header_check(peek header)??
             if (blob.len() < mlen):
                 return Result.Err(SlibError.Truncated())
-            match mp_decode(blob):
+            match decode(blob):
                 Result.Ok(v) ->
                     return Result.Ok(v.clone())
                 Result.Err(e) ->
@@ -74,11 +74,11 @@ public struct SlibSizes:
     u64 source
     u64 bitcode
 
-# slib_sizes: the length of both payload sections, in one pass over the file.
+# sizes: the length of both payload sections, in one pass over the file.
 # Container version 4 puts a length-prefixed SOURCE section between the metadata
 # and the bitcode, so reaching the bitcode length means stepping over that
 # section first. No report needs a blob itself, only its length.
-public fn slib_sizes(string path) SlibSizes | SlibError:
+public fn sizes(string path) SlibSizes | SlibError:
     match open(path, FileMode.ReadB()):
         Result.Ok(nom f) ->
             let u8[] empty3 = from([])
@@ -111,7 +111,7 @@ public fn slib_sizes(string path) SlibSizes | SlibError:
             return Result.Err(SlibError.OpenFailed(path.clone()))
     return Result.Err(SlibError.OpenFailed(path.clone()))
 
-# slib_bitcode_size: the u64 length of the bitcode section alone.
-public fn slib_bitcode_size(string path) u64 | SlibError:
-    let SlibSizes sizes = slib_sizes(path)??
-    return Result.Ok(sizes.bitcode)
+# bitcode_size: the u64 length of the bitcode section alone.
+public fn bitcode_size(string path) u64 | SlibError:
+    let SlibSizes both = sizes(path)??
+    return Result.Ok(both.bitcode)

@@ -1,0 +1,71 @@
+# <toolchain/slib> spells its three free functions by their verb: read_metadata(),
+# sizes() and bitcode_size(). The slib_ prefix named the unit, and the import already
+# does (#571). The fixture is a v4 header, a one-key metadata map, an empty source
+# section and a bitcode length of 12345 with no bitcode bytes after it.
+# EXPECT_STDOUT_EXACT: "{"library_name":"demo"}\n0 12345\n12345\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+use <io/fs>
+use <encoding/msgpack>
+use <toolchain/slib>
+
+fn fixture_header(u8 version, u8 mlen) u8[]:
+    let u8[] h = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
+    h.push(version)
+    let i32 i = 0
+    while (i < 27):
+        h.push(0)
+        i := i + 1
+    h.push(mlen)
+    let i32 j = 0
+    while (j < 7):
+        h.push(0)
+        j := j + 1
+    return Result.Ok(h)
+
+fn fixture() u8[]:
+    let u8[] b = fixture_header(4, 19)??
+    let u8[] blob = from([0x81, 0xac, 0x6c, 0x69, 0x62, 0x72, 0x61, 0x72, 0x79, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0xa4, 0x64, 0x65, 0x6d, 0x6f])
+    let u8[] source_len = from([0; 8])
+    let u8[] bitcode_len = from([0x39, 0x30, 0, 0, 0, 0, 0, 0])
+    b.extend(blob)
+    b.extend(source_len)
+    b.extend(bitcode_len)
+    return Result.Ok(b)
+
+fn write_fixture(string path, u8[] bytes) i32:
+    match open(path, FileMode.WriteB()):
+        Result.Ok(nom out) ->
+            out.write_bytes(bytes)
+            out.close()
+            return Result.Ok(0)
+        Result.Err(_) ->
+            return Result.Ok(1)
+    return Result.Ok(1)
+
+fn run_test() i32:
+    let u8[] bytes = fixture()??
+    if (write_fixture("test_slib_verbs.slib", bytes)?? != 0):
+        println("cannot write fixture")
+        return Result.Ok(1)
+    match read_metadata("test_slib_verbs.slib"):
+        Result.Ok(meta) ->
+            println(show(meta)??)
+        Result.Err(_) ->
+            println("read failed")
+    match sizes("test_slib_verbs.slib"):
+        Result.Ok(both) ->
+            println("{both.source} {both.bitcode}")
+        Result.Err(_) ->
+            println("sizes failed")
+    match bitcode_size("test_slib_verbs.slib"):
+        Result.Ok(n) ->
+            println(n)
+        Result.Err(_) ->
+            println("bitcode_size failed")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

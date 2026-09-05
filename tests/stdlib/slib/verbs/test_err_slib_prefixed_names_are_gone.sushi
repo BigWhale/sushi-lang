@@ -1,0 +1,19 @@
+# slib_read_metadata, slib_sizes and slib_bitcode_size are deleted, not aliased (#571).
+# EXPECT_ERROR_CODE: CE2008
+use <toolchain/slib>
+
+fn run_test() i32:
+    match slib_read_metadata("gone.slib"):
+        Result.Ok(_) -> println("read")
+        Result.Err(_) -> println("no read")
+    match slib_sizes("gone.slib"):
+        Result.Ok(_) -> println("sizes")
+        Result.Err(_) -> println("no sizes")
+    match slib_bitcode_size("gone.slib"):
+        Result.Ok(_) -> println("bitcode")
+        Result.Err(_) -> println("no bitcode")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)
