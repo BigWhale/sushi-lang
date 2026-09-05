@@ -1,9 +1,21 @@
 """Test metadata parsing for the Sushi language test framework."""
 
 import re
+import sys
 from dataclasses import dataclass
 from typing import Optional, List, Dict
 from pathlib import Path
+
+
+def _warn(message: str) -> None:
+    """Every diagnostic this module prints, on stderr.
+
+    `run_tests.py --json` writes the corpus report to stdout and the badge job pipes
+    that straight into a file it json.loads, so a warning on stdout is an unparseable
+    report. Collection knows nothing about the mode, so the channel is the fix rather
+    than a guard.
+    """
+    print(f"Warning: {message}", file=sys.stderr)
 
 
 @dataclass
@@ -108,7 +120,7 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                 try:
                     metadata.expect_runtime_exit = int(value)
                 except ValueError:
-                    print(f"Warning: Invalid EXPECT_RUNTIME_EXIT value in {test_file}: {value}")
+                    _warn(f"Invalid EXPECT_RUNTIME_EXIT value in {test_file}: {value}")
 
             elif directive.startswith('EXPECT_STDOUT_CONTAINS:'):
                 value = directive.split(':', 1)[1].strip()
@@ -173,7 +185,7 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                     if not token:
                         continue
                     if token in RUNNER_OWNED_FLAGS:
-                        print(f"Warning: {token} is the runner's to spell in "
+                        _warn(f"{token} is the runner's to spell in "
                               f"{test_file}; COMPILER_FLAGS ignored it")
                         continue
                     metadata.compiler_flags.append(token)
@@ -183,14 +195,14 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                 try:
                     metadata.timeout_seconds = int(value)
                 except ValueError:
-                    print(f"Warning: Invalid TIMEOUT_SECONDS value in {test_file}: {value}")
+                    _warn(f"Invalid TIMEOUT_SECONDS value in {test_file}: {value}")
 
             elif directive.startswith('TEST_TYPE:'):
                 value = directive.split(':', 1)[1].strip().lower()
                 if value in ('default', 'runtime', 'compilation', 'error', 'warning'):
                     metadata.test_type = value
                 else:
-                    print(f"Warning: Invalid TEST_TYPE value in {test_file}: {value}")
+                    _warn(f"Invalid TEST_TYPE value in {test_file}: {value}")
 
             elif directive.startswith('CMD_ARGS:'):
                 value = directive.split(':', 1)[1].strip()
@@ -215,7 +227,7 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                     key, val = value.split('=', 1)
                     metadata.test_env[key.strip()] = val.strip()
                 else:
-                    print(f"Warning: Invalid TEST_ENV value in {test_file}: {value}")
+                    _warn(f"Invalid TEST_ENV value in {test_file}: {value}")
 
             elif directive.startswith('TEST_CWD:'):
                 # Working directory to run the binary in, so getcwd()-style output is
@@ -223,7 +235,7 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                 metadata.test_cwd = directive.split(':', 1)[1].strip()
 
     except Exception as e:
-        print(f"Warning: Failed to parse metadata from {test_file}: {e}")
+        _warn(f"Failed to parse metadata from {test_file}: {e}")
 
     _apply_category_defaults(test_file, metadata)
 
