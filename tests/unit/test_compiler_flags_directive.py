@@ -56,14 +56,14 @@ def test_a_file_with_no_directive_carries_no_flags(tmp_path):
 def test_a_runner_owned_flag_is_refused(tmp_path, capsys, flag):
     meta = parse_test_metadata(_fixture(tmp_path, f"# COMPILER_FLAGS: {flag}\n"))
     assert meta.compiler_flags == []
-    assert flag in capsys.readouterr().out
+    assert flag in capsys.readouterr().err
 
 
 def test_a_refused_flag_does_not_take_the_others_with_it(tmp_path, capsys):
     meta = parse_test_metadata(
         _fixture(tmp_path, "# COMPILER_FLAGS: --warn-missing-docs --lib\n"))
     assert meta.compiler_flags == ["--warn-missing-docs"]
-    assert "--lib" in capsys.readouterr().out
+    assert "--lib" in capsys.readouterr().err
 
 
 def test_a_directive_below_the_header_block_is_not_read(tmp_path):
