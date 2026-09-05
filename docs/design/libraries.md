@@ -304,6 +304,13 @@ helper, a private constant, a perk the library itself implements), and those
 references have to resolve to *the library's* symbols, not to a same-named consumer
 symbol, without the consumer writing any glue.
 
+**A binary or hybrid library carries no re-export** (`docs/design/unit-namespaces.md`
+section 8.1, rule 3; #586). `public use X` makes X's public names the unit's own, and a
+source library ships the statement as text for the consumer to read; the manifest has no
+record for it, so a binary consumer would see the library's own names and miss the ones
+it handed on, silently. The build refuses the statement at the line (CE3514) before any
+bitcode is compiled. #585 is the manifest record that lifts the limit.
+
 The `templates` section carries its own `"version": 4`, which has revved independently
 of the container three times as the cross-library-generics feature grew:
 

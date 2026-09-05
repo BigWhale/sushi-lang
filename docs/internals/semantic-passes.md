@@ -17,7 +17,7 @@ order; this list mirrors it.
 | `docs` | check each doc block against its declaration (CE7001-CE7008, CW7001), and its completeness under `--warn-missing-docs` (CW7002-CW7006) | `semantics/passes/docs.py` |
 | `externs` | extern signatures (CE5003), `CW5001`, the `ptr` unit gate (CE5009) | `semantics/passes/types/externals.py` |
 | `libraries` | register every symbol a `.slib` exports | `semantics/semantic_analyzer.py` |
-| `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds (CE3013, CE3014, CW3004) | `semantics/passes/namespaces.py` |
+| `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds (CE3013, CE3014, CE3016, CW3004, CW3005) | `semantics/passes/namespaces.py` |
 | `ffi-clash` | reject an `unsafe external` that names a symbol this build defines (CE5013) | `semantics/passes/types/externals.py` |
 | `entrypoint` | `main()`'s signature and its `string[] args` | `semantics/semantic_analyzer.py` |
 | `instantiate` | collect every generic instantiation the program asks for | `semantics/generics/instantiate/` |
@@ -304,7 +304,18 @@ the provider, and the typecheck pass's type-position gate (`reject_out_of_scope_
 reads it to refuse the bare name where the home is not imported -- the `HashMap` rule.
 `StdError` carries no home and stays global.
 
-Three rules:
+A provider COMPOSES what its unit re-exports (`unit-namespaces.md` section 8.1, Ruling
+7). `_unit_provider` reads the unit's own `public use` statements and builds a provider
+for each through `_provider_for`, recursively and with a visited set, so a chain composes
+and a cycle terminates; a registry module names its re-exports in `StdlibModule.reexports`
+instead. `Provider.reaches` walks the chain once -- the provider, then each re-export in
+written order, then theirs -- and both halves of the answer read it: `lookup`/`members`
+for the dot, and `_scope_of` for the flat scope, which puts every reached unit, module and
+generic into the importer's `UnitScope`. A binding a re-export answers carries the
+re-export's own provider, so the back end routes a call through `sh.origin` to the unit
+that declares `origin`.
+
+Five rules:
 
 - `CE3014` -- a `use` below a declaration. The span comes from the AST builder, because
   the `libraries` step above appends a library's constants and private types to a host
@@ -313,6 +324,11 @@ Three rules:
   or one of its own declarations. `_` is refused too, as the discard name.
 - `CW3004` -- the `as` reached no name. A warning, because a namespace is empty for
   three reasons and only one is a mistake (`unit-namespaces.md` section 4.4).
+- `CE3016` -- `public use ... as`. A re-export is of names and not of a namespace; the
+  alias still binds, so the one fault gets one diagnostic.
+- `CW3005` -- a `public use` whose import brings no PUBLIC name. The provider holds the
+  privates too (so `u.hidden` is CE3005 and not "no such name"), and the count here is
+  of what the re-export can hand on.
 
 ### Why it stands between `libraries` and `ffi-clash`
 

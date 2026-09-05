@@ -1233,6 +1233,25 @@ imports `geometry` too -- and it cannot avoid writing it, because a `let` needs 
 So the rule is short: **to name a type, import the unit that declares it.** The compiler
 says which import is missing.
 
+The unit in the middle can spare its importers that line. `public use` re-exports: it
+takes what an import brings and hands it on as the unit's own.
+
+<!-- docs-sweep: skip (three units) -->
+```sushi
+# geometry.sushi        # shapes.sushi                  # main.sushi
+public struct Vec:      public use "geometry"          use "shapes"
+    f64 x               public fn origin() Vec:        fn main() i32:
+                            return Result.Ok(...)          let Vec v = origin()??
+```
+
+Now `shapes` says "whoever imports me gets `geometry` too", and `main` writes `Vec` with
+one import; `use "shapes" as sh` gives `sh.Vec` beside `sh.origin`. Only a `public use`
+does this -- a plain `use` stays private to the unit that wrote it -- and only the public
+names travel. A re-exported name behaves like any imported one: your own declaration wins
+over it, and two re-exports that offer different declarations of one name stop at the
+bare use with the candidates listed. The standard library leans on it: `use <io/fs>` alone
+brings `IoError`, because the module whose calls answer it hands the name on.
+
 ## Memory Management
 
 Sushi provides memory safety without garbage collection through a combination of RAII (Resource Acquisition Is Initialization), compile-time borrow checking, and move semantics. These features work together to prevent common memory bugs while maintaining C-like performance.
