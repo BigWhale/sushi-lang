@@ -241,7 +241,7 @@ out.finish()??
   and the `fd_*` primitives keep `FileError`
 
 **Buffered I/O** (`use <io/buf>`):
-- `buf_reader(nom src, cap)` / `buf_writer(nom dst, cap)` - one system call per WINDOW
+- `BufReader.new(nom src, cap)` / `BufWriter.new(nom dst, cap)` - one system call per WINDOW
 - `r.lines()` answers a `Lines@(R)`, which `foreach` walks:
   `foreach(line?? in r.lines())`
 

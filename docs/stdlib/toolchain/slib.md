@@ -2,8 +2,8 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-A `.slib` metadata reader, written in Sushi: `slib_read_metadata`, `slib_sizes` and
-`slib_bitcode_size`. It mirrors the Python reader `LibraryFormat.read_metadata_only`.
+A `.slib` metadata reader, written in Sushi: `read_metadata`, `sizes` and
+`bitcode_size`. It mirrors the Python reader `LibraryFormat.read_metadata_only`.
 
 ## Import
 
@@ -42,7 +42,7 @@ public struct SlibSizes:
 
 ## Functions
 
-### `slib_read_metadata(string path) -> MsgValue | SlibError`
+### `read_metadata(string path) -> MsgValue | SlibError`
 
 Read the metadata map of a `.slib` file. The four spare header fields are read and not
 validated, the same as the Python reader.
@@ -69,7 +69,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `slib_sizes(string path) -> SlibSizes | SlibError`
+### `sizes(string path) -> SlibSizes | SlibError`
 
 The length of both payload sections, in one pass over the file. A version-4 container
 puts a length-prefixed source section between the metadata and the bitcode, so a reader
@@ -88,9 +88,9 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `slib_bitcode_size(string path) -> u64 | SlibError`
+### `bitcode_size(string path) -> u64 | SlibError`
 
-The `bitcode` field of `slib_sizes`, on its own. The reader reads only the two 8-byte
+The `bitcode` field of `sizes`, on its own. The reader reads only the two 8-byte
 length fields, never a payload.
 
 ## Error handling
@@ -129,7 +129,7 @@ and `sushic --lib-info` then delegates to the binary. See `toolchain/README.md`.
 ## Limitations
 
 - Read-only, metadata-only. Writing a `.slib` stays in Python.
-- No typed manifest structs: consumers walk the `MsgValue` tree with `mp_map_get`.
+- No typed manifest structs: consumers walk the `MsgValue` tree with `map_get`.
 - Metadata above 2 GiB is not supported; a hostile length reads nothing and reports a
   decode error on the empty blob.
 

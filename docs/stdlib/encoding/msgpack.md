@@ -2,7 +2,7 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-A MessagePack decoder, written in Sushi: `mp_decode`, `mp_map_get`, and `mp_show`.
+A MessagePack decoder, written in Sushi: `decode`, `map_get`, and `show`.
 Decode-only — there is no encoder.
 
 ## Import
@@ -20,7 +20,7 @@ fn main() i32:
 `.sushi` source and is merged as a compilation unit when you import it. It is the first
 source module with concrete (non-generic) public functions.
 
-`mp_decode` reads one whole buffer as exactly one MessagePack value and returns a
+`decode` reads one whole buffer as exactly one MessagePack value and returns a
 `MsgValue` tree. Decode errors are values, not exits.
 
 ## Types
@@ -52,7 +52,7 @@ strings, and the wire order stays visible and deterministic.
 
 ## Functions
 
-### `mp_decode(u8[] buf) -> MsgValue | MpError`
+### `decode(u8[] buf) -> MsgValue | MpError`
 
 Decode the whole buffer as one value. Trailing bytes after the root value give
 `MpError.Trailing`.
@@ -73,7 +73,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `mp_map_get(MsgValue m, string key) -> Maybe@(MsgValue)`
+### `map_get(MsgValue m, string key) -> Maybe@(MsgValue)`
 
 Scan a `Map` in wire order for a string key. The found value comes back as a clone, so
 the tree stays intact. A missing key, a non-string key match, or a non-map argument gives
@@ -100,7 +100,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `mp_show(MsgValue v) -> string`
+### `show(MsgValue v) -> string`
 
 Render a value on one line, deterministically:
 
@@ -148,7 +148,7 @@ fn main() i32:
 
 - Decode-only. No encoder, no streaming entry point.
 - `ext`, `fixext`, and timestamp tags give `MpError.Unsupported` with the tag byte.
-- `mp_show` does not escape string contents.
+- `show` does not escape string contents.
 - The decoder targets buffers below 2 GiB. A length prefix is checked against what is
   left in the buffer as it is read, so a length the input cannot supply -- a hostile
   `0xffffffff` included -- is `Truncated` at the header rather than part way through the

@@ -64,7 +64,7 @@ type. So `Reader.read` cannot answer `FileError` on a `File` and `NetError` on a
 `TcpStream`. One channel is also what lets a generic propagate with `??`.
 
 The detailed enums stay where their detail is real: `open()` keeps its own errors on
-`IoError` too, while `tcp_connect()`, `tcp_listen()`, `accept()` and the address and option
+`IoError` too, while `connect()`, `listen()`, `accept()` and the address and option
 methods keep `NetError`. Every `NetError` variant with no twin in `IoError` -- `AddressInUse`,
 `HostUnreachable`, `ResolveFailed` and the rest -- belongs to a connect or a bind, and never
 to a read or a write.

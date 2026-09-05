@@ -14,8 +14,10 @@ All notable changes to Sushi Lang will be documented in this file.
   because a static is as visible as its target type. `new` is a legal static name and is
   still not a legal free-function name. A struct, an enum, a primitive (`extend f64 static
   of_int(i32 v) f64:`), a built-in generic and a generic target are all legal -- on a
-  generic target the type argument comes from the declared type at the call site, because
-  there is no receiver to read it from -- and the call folds through an alias
+  generic target the type arguments are solved from the ARGUMENTS first, for every type
+  parameter a parameter names, and from the declared type at the call site for the rest
+  (#573; the stamp alone was the rule from #542, and it left a `| E` static unwritable
+  because a Result-valued call is never stamped) -- and the call folds through an alias
   (`geo.Vec.origin()`) with nothing added. `List.new`, `List.with_capacity`,
   `HashMap.new`, `Own.alloc` and `f64/f32.from_bits` are static methods under the same
   rule, named in one table. `static` is now a reserved word, so `v.static()` and a method
@@ -25,7 +27,8 @@ All notable changes to Sushi Lang will be documented in this file.
   for a struct that IS declared -- the fault was the position, not the name; **CE2103** a
   static spelling a VARIANT of the enum it extends, relational, because the variant would
   always win; **CE2104** a static on an ARRAY target, which no expression could ever call;
-  **CE2060** a generic static in a position that declares no type, which used to reach
+  **CE2060** a generic static with a type parameter that no argument names and that the
+  position declares no type for -- the text names both sources -- which used to reach
   the backend as an ICE;
   **CE4014** a static inside a perk implementation, because a perk has no `Self`. A static
   beside an instance method of one name on one type stays CE0101, and CE2045 grew a help
@@ -144,6 +147,20 @@ All notable changes to Sushi Lang will be documented in this file.
   is destroyed on every exit path.
 
 ### Standard Library
+- **The constructor vocabulary: a static is `new`, a free function is a bare verb**
+  (#571). A function that builds a value of a type from its arguments and allocates for
+  it is a static named `new`; a function that DOES something -- opens, connects, listens,
+  binds, decodes, reads a header -- is a free function named by its verb, without its
+  unit as a leading prefix, because the module is the namespace and `use <m> as m` tells
+  two verbs apart. `<io/buf>`: `BufReader.new(nom src, cap)` and `BufWriter.new(nom dst,
+  cap)` replace `buf_reader` and `buf_writer`, the shape the handles epic planned and
+  could not build; the `Reader`/`Writer` constraints move onto the structs. `<net/tcp>`:
+  `connect`, `listen`. `<net/udp>`: `bind`. `<net/ip>`: `v4_any`, `v4_loopback`,
+  `v6_any`, `v6_loopback`. `<encoding/msgpack>`: `decode`, `map_get`, `show`.
+  `<toolchain/slib>`: `read_metadata`, `sizes`, `bitcode_size`. The fifteen old names
+  are deleted, not aliased. `open()`, `parse_ip`, `parse_ip_v4`, `parse_ip_v6` and
+  `parse_url` do not move: a verb's OBJECT is not a prefix, and neither are the `fd_*`,
+  `sock_*` and `zlib_*` layer and format prefixes.
 - **`Reader`, `Writer` and `Seek` take `poke self`, and the buffered types implement
   them.** `BufReader@(R)` is a `Reader` and `BufWriter@(W)` is a `Writer`, so one generic
   written `@(W: Writer)` takes the console, a `File`, a `TcpStream` and a
