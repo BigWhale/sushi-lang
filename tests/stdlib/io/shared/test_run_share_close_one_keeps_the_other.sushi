@@ -8,7 +8,6 @@
 # EXPECT_STDOUT_EXACT: "copy closed, original reads: Mostly Harmless\noriginal closed, copy reads: Mostly Harmless\n"
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn close_the_copy(string path) string | IoError:
     let File f = open(path, FileMode.Read())??

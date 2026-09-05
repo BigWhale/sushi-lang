@@ -14,11 +14,12 @@ The module declares three perks and nothing else -- no struct, no function, no c
 consumer writes `@(R: Reader)` and takes a `File`, a `TcpStream`, or anything later that
 satisfies the contract.
 
-It is also the HOME of two predefined enums: `IoError`, the one channel every contract
-method answers, and `SeekFrom`, the origin `Seek.seek` takes. `use <io/contracts>` is what
-brings either bare name into a unit -- `<io/fs>` alone does not, scope is per unit and
-not transitive -- and `use <io/contracts> as io` puts them behind the dot
-(`io.IoError.NotFound`).
+It is also the HOME of one predefined enum, `SeekFrom`, the origin `Seek.seek` takes, and
+it re-exports [`<io/error>`](error.md), the home of `IoError` -- the one channel every
+contract method answers -- and `FileError`. So `use <io/contracts>` brings all three bare
+names into a unit, `use <io/contracts> as io` puts them behind the dot
+(`io.IoError.NotFound`), and a module that re-exports this one (`<io/fs>`, `<io/buf>`,
+`<net/tcp>`) brings them too.
 
 | perk | methods | who implements it |
 |---|---|---|
@@ -124,7 +125,6 @@ meant.
 ### One function, two kinds of handle
 
 ```sushi
-use <io/contracts>
 use <io/fs>
 
 fn greet@(W: Writer)(poke W dst, string who) ~ | IoError:
@@ -147,7 +147,6 @@ over the console goes through the same `greet`.
 ### Asking for two contracts at once
 
 ```sushi
-use <io/contracts>
 use <io/fs>
 
 fn copy_text@(R: Reader, W: Writer)(poke R src, poke W dst) ~ | IoError:

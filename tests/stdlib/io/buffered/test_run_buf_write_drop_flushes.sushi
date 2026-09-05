@@ -7,7 +7,6 @@
 # EXPECT_STDOUT_EXACT: "[unflushed]\nok\n"
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn leave_unflushed(string path) ~ | IoError:
     let File wf = open(path, FileMode.Write())??

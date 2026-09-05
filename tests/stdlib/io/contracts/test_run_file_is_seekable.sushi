@@ -7,7 +7,6 @@
 # EXPECT_STDOUT_EXACT: "moved to 7\nHarmless\n"
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn skip@(S: Seek)(poke S h, i64 count) i64 | IoError:
     return Result.Ok(h.seek(count, SeekFrom.Start)??)

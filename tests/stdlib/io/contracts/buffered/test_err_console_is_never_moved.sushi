@@ -5,7 +5,6 @@
 
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn run() ~ | IoError:
     let BufWriter@(File) w = BufWriter.new(nom stdout, 64)??

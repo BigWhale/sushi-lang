@@ -8,7 +8,6 @@
 # EXPECT_STDOUT_EXACT: "read failed\n"
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn run(string path) i32 | IoError:
     let File f = open(path, FileMode.Read())??

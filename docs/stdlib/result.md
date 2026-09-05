@@ -46,17 +46,20 @@ fn foo() Result@(i32, MyError):
 ## Standard Error Enums
 
 Sushi provides built-in error types. Each but `StdError` has a HOME module, and the import
-is what brings the bare name into a unit (`docs/design/unit-namespaces.md`, #574):
+is what brings the bare name into a unit (`docs/design/unit-namespaces.md`, #574). A
+module whose calls answer an enum re-exports its home (#586), so the import a program
+already writes is the one that brings the name:
 
-| enum | import |
-|---|---|
-| `StdError` | none -- the implicit Result arm is in scope everywhere |
-| `MathError` | `use <math>` |
-| `FileError`, `FileMode` | `use <io/fs>` |
-| `IoError`, `SeekFrom` | `use <io/contracts>` |
-| `NetError` | `use <net/error>` |
-| `ProcessError` | `use <sys/process>` |
-| `EnvError` | `use <sys/env>` |
+| enum | home | also brought by |
+|---|---|---|
+| `StdError` | none -- the implicit Result arm is in scope everywhere | |
+| `MathError` | `use <math>` | |
+| `FileMode` | `use <io/fs>` | |
+| `IoError`, `FileError` | `use <io/error>` | `<io/contracts>`, `<io/fs>`, `<io/buf>`, `<io/files>`, `<net/tcp>` |
+| `SeekFrom` | `use <io/contracts>` | `<io/fs>`, `<io/buf>`, `<net/tcp>` |
+| `NetError` | `use <net/error>` | `<net/tcp>`, `<net/udp>`, `<net/dns>`, `<net/ip>` |
+| `ProcessError` | `use <sys/process>` | |
+| `EnvError` | `use <sys/env>` | |
 
 ### StdError
 

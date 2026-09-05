@@ -9,7 +9,6 @@
 
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn echo_lines() ~ | IoError:
     stdout.write("Reading lines from stdin:\n")??

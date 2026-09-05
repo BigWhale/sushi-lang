@@ -10,6 +10,8 @@
 use <net/dns>
 ```
 
+The import brings `NetError`, the channel `resolve` answers: the module re-exports [`<net/error>`](error.md), so a unit that matches on an error writes no second line.
+
 ## Overview
 
 `net/dns` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it. It is `sock_dns_resolve` from `<net/socket>` with `parse_ip` from `<net/ip>` over each answer, so a caller is handed `IpAddr` and never a string it has to read for itself.

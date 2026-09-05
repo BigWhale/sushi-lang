@@ -6,7 +6,6 @@
 
 use <io/fs>
 use <io/files>
-use <io/contracts>
 
 fn main() i32:
     # Write to /tmp which should always be writable

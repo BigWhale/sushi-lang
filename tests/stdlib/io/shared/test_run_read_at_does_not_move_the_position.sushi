@@ -8,7 +8,6 @@
 # EXPECT_STDOUT_EXACT: "at 7: Harmless\nat 0: Mostly\nposition 0\nMostly Harmless\n"
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn probe(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??

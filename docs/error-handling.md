@@ -349,7 +349,6 @@ Functions can return `Result@(Maybe@(T), E)` for three states:
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn load_optional_config() Maybe@(string) | IoError:
     match open("config.txt", FileMode.Read()):
@@ -492,7 +491,6 @@ short form for "leave the function on the first failure":
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -517,7 +515,6 @@ failure and carry on:
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??

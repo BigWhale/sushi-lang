@@ -8,7 +8,6 @@
 # EXPECT_STDOUT_EXACT: "[alpha]\n[]\n[gamma]\n[]\n4\n"
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn dump(string path) i32 | IoError:
     let File f = open(path, FileMode.Read())??

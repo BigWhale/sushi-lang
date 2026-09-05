@@ -26,6 +26,7 @@ Complete reference for Sushi's standard library modules and types.
 - [Path algebra](stdlib/io/path.md) - Lexical path manipulation (join, basename, dirname, extension, normalize)
 - [File-system ops](stdlib/io/fs.md) - stat, recursive walk, mkdir_all, remove_all
 - [I/O contracts](stdlib/io/contracts.md) - `Reader`, `Writer`, `Seek`: what a handle can do
+- [I/O errors](stdlib/io/error.md) - `IoError` and `FileError`, the error vocabulary of the io modules
 - [Buffered I/O](stdlib/io/buf.md) - `BufReader`, `BufWriter`: one system call per window
 
 ### Networking
@@ -56,7 +57,8 @@ use <collections/iter>     # Higher-order combinators (map/filter/fold/compose)
 use <compression/zlib>     # DEFLATE and the zlib container
 use <encoding/msgpack>     # MessagePack decoder
 use <io/buf>               # BufReader, BufWriter: buffered over any handle
-use <io/contracts>         # Reader, Writer, Seek
+use <io/contracts>         # Reader, Writer, Seek (re-exports <io/error>)
+use <io/error>             # IoError, FileError -- brought by <io/fs>, <io/buf>, <io/files>
 use <io/files>             # the path utilities and the fd_* primitives
 use <io/path>              # Lexical path manipulation
 use <io/fs>                # File, open, stdin/stdout/stderr, stat, walk, mkdir_all
@@ -240,8 +242,9 @@ out.finish()??
   a `File` closes itself when its owner leaves scope
 - Every read, write, seek, `open()` and `close()` answers `IoError`; the path utilities
   and the `fd_*` primitives keep `FileError`
-- `FileMode` and `FileError` come with `use <io/fs>`, `IoError` and `SeekFrom` with
-  `use <io/contracts>`: a predefined enum's import brings its name (#574)
+- `FileMode`, `FileError`, `IoError` and `SeekFrom` all come with `use <io/fs>`: a
+  predefined enum's import brings its name (#574), and `<io/fs>` re-exports the
+  modules that home the other three (#586)
 
 **Buffered I/O** (`use <io/buf>`):
 - `BufReader.new(nom src, cap)` / `BufWriter.new(nom dst, cap)` - one system call per WINDOW

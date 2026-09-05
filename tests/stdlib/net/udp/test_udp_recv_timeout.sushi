@@ -5,7 +5,6 @@
 # TIMEOUT_SECONDS: 20
 
 use <net/udp>
-use <net/error>
 
 fn main() i32:
     let UdpSocket s = bind("127.0.0.1", 0).realise(UdpSocket(-1))

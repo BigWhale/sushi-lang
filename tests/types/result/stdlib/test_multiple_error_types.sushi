@@ -4,7 +4,6 @@
 
 # Tests using multiple stdlib error types in one program
 
-use <io/contracts>
 use <io/fs>
 use <math>
 

@@ -9,7 +9,6 @@
 # EXPECT_STDOUT_EXACT: "wrote\nread Mostly Harmless\n"
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn write_it() ~ | IoError:
     let File f = open("file_struct_drop.txt", FileMode.Write())??

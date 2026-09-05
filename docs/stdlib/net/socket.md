@@ -21,7 +21,8 @@ Every function answers `Result@(T, NetError)`. A descriptor is a bare `i32`, and
 ## Types
 
 `NetError` is a predefined enum whose HOME is [`<net/error>`](error.md): that import
-brings the bare name, and every function here answers it:
+brings the bare name -- and so does every net module above this one, which re-exports
+it -- and every function here answers it:
 
 ```sushi
 public enum NetError:

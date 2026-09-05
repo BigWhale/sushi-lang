@@ -7,7 +7,6 @@
 
 use <net/dns>
 use <net/ip>
-use <net/error>
 
 fn main() i32:
     match resolve_first("127.0.0.1", true):

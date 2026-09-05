@@ -10,6 +10,8 @@
 use <net/tcp>
 ```
 
+The import brings `NetError`, the channel the constructors and the domain methods answer, and `IoError`, the channel the contract methods answer: the module re-exports [`<net/error>`](error.md) and [`<io/contracts>`](../io/contracts.md), so a unit that matches on an error writes no second line.
+
 ## Overview
 
 `net/tcp` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it. It composes the `<net/socket>` primitives, and a struct here is a typed name for a descriptor and carries nothing else.
@@ -91,7 +93,6 @@ A whole exchange, in one process. A blocking `connect()` to a listening socket c
 ```sushi
 use <net/tcp>
 use <collections/strings>
-use <net/error>
 
 fn exchange() ~ | NetError:
     let TcpListener listener = listen("127.0.0.1", 0, 8)??

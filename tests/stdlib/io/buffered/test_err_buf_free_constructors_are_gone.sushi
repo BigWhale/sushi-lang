@@ -3,7 +3,6 @@
 # EXPECT_ERROR_CODE: CE2008
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn work() ~ | IoError:
     let File f = open("gone.txt", FileMode.Read())??

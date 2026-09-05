@@ -9,7 +9,6 @@
 # EXPECT_STDOUT_EXACT: "first: 2\nsecond: 2\ntext: €!\n"
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn write_probe(string path) ~ | IoError:
     let File w = open(path, FileMode.Write())??

@@ -8,7 +8,6 @@
 
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn load_config() string:
     let Result@(File, IoError) result = open("nonexistent_nested_test.txt", FileMode.Read())

@@ -7,7 +7,6 @@
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "eating\nok\n"
 use <io/fs>
-use <io/contracts>
 
 struct Sink:
     File out

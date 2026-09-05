@@ -6,7 +6,6 @@
 
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 const string PATH = "/tmp/sushi_bufreader_is_a_reader.txt"
 

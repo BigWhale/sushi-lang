@@ -10,8 +10,9 @@ unbuffered handle yielding lines is one system call per line.
 use <io/buf>
 ```
 
-The module is bundled Sushi source, merged as a compilation unit when imported. It needs
-`<io/fs>` too, for the `File` and `IoError` names a program using it will write.
+The module is bundled Sushi source, merged as a compilation unit when imported. It
+re-exports [`<io/contracts>`](contracts.md), so `IoError` and the three perks come with
+it; a program that buffers a `File` imports `<io/fs>` too, for the `File` name.
 
 ## Overview
 
@@ -36,7 +37,6 @@ is declared `BufReader@(R: Reader)`, and `BufWriter@(W: Writer)` likewise (CE400
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn longest_line(string path) i32 | IoError:
     let File f = open(path, FileMode.Read())??
@@ -112,7 +112,6 @@ makes it walkable by `foreach`, with no `Iterator` type and no perk in sight
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -145,7 +144,6 @@ writes the `match` itself:
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -185,7 +183,6 @@ as the call returns.
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn write_report(string path) ~ | IoError:
     let File f = open(path, FileMode.Write())??
@@ -233,7 +230,6 @@ handles became unit variables (`public var File stdout`, Go's `os.Stdout`), so
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
     dst.write(line)??

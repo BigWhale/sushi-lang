@@ -437,7 +437,6 @@ The `??` operator provides elegant error propagation - it unwraps successful res
 ```sushi
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn read_config() string | IoError:
     # If open fails, ?? returns Err immediately
@@ -1417,7 +1416,6 @@ There is nothing to remember and nothing to pair.
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn log_it(string message) ~ | IoError:
     let File f = open("out.log", FileMode.Append())??
@@ -1457,7 +1455,6 @@ first two just as a `File` does:
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
     dst.write(line)??
@@ -1490,7 +1487,6 @@ is what lets a loop report one bad line and carry on.
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn number_lines(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -1517,7 +1513,6 @@ can forget to flush afterwards:
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn write_report(string path, i32 count) ~ | IoError:
     let File f = open(path, FileMode.Write())??
