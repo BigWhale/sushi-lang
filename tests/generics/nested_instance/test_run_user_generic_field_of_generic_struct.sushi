@@ -1,0 +1,18 @@
+# A USER generic in a generic struct's field: `Box<string>` is built while `Pair<i32,
+# string>` is substituted and is interned in turn (#577, face d). CE0128 before.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 x\n"
+
+struct Box@(T):
+    T v
+
+struct Pair@(A, B):
+    A first
+    Box@(B) second
+
+fn main() i32:
+    let Pair@(i32, string) p = Pair(3, Box("x"))
+    println("{p.first} {p.second.v}")
+    return Result.Ok(0)

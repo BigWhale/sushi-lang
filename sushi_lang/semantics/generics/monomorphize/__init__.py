@@ -145,6 +145,10 @@ class Monomorphizer:
         """Create concrete struct by substituting type parameters."""
         return self.type_monomorphizer.monomorphize_struct(generic, type_args)
 
+    def reached_instances(self):
+        """Every published instance a substitution reached, keyed (base, args) per kind (#577)."""
+        return self.type_monomorphizer.reached_instances()
+
     def monomorphize_function(
         self,
         generic: 'GenericFuncDef',

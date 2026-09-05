@@ -1,0 +1,17 @@
+# A `List@(B)` field of a generic struct: the nested instance is interned before the
+# derive pass, so the struct topological sort finishes (#577, face b). CE0128 before.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 towel\n"
+
+struct Bag@(B):
+    List@(B) items
+
+fn main() i32:
+    let Bag@(string) b = Bag(List.new())
+    b.items.push("towel")
+    b.items.push("guide")
+    let string first = b.items.get(0).realise('?')
+    println("{b.items.len()} {first}")
+    return Result.Ok(0)

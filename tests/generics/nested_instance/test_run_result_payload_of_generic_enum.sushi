@@ -1,0 +1,19 @@
+# A `Result@(B, StdError)` payload of a generic enum, the same root as the Maybe payload
+# (#577, face c).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ok towel\n"
+
+enum Outcome@(B):
+    Done(Result@(B, StdError))
+    Pending
+
+fn main() i32:
+    let Outcome@(string) o = Outcome.Done(Result.Ok("towel"))
+    match o:
+        Outcome.Done(r) ->
+            let string got = r.realise('?')
+            println("ok {got}")
+        Outcome.Pending -> println("pending")
+    return Result.Ok(0)

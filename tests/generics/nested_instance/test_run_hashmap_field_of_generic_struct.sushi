@@ -1,0 +1,17 @@
+# A `HashMap@(i32, B)` field of a generic struct, the same root as the List field
+# (#577, face b).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1 towel\n"
+use <collections/hashmap>
+
+struct Index@(B):
+    HashMap@(i32, B) by_id
+
+fn main() i32:
+    let Index@(string) idx = Index(HashMap.new())
+    idx.by_id.insert(42, "towel")
+    let string got = idx.by_id.get(42).realise('?')
+    println("{idx.by_id.len()} {got}")
+    return Result.Ok(0)

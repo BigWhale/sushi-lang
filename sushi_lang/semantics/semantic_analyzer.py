@@ -361,21 +361,28 @@ class SemanticAnalyzer:
             elif base_name in self.generic_structs.by_name:
                 struct_instantiations.add((base_name, _resolve_args(type_args)))
 
+        # Both publish into the tables at creation (`TypeMonomorphizer._publish`), the
+        # nested instances included.
         concrete_enums = monomorphizer.monomorphize_all(self.generic_enums.by_name, enum_instantiations)
-
-        # A name may already be interned on demand, so keep the first entry rather than
-        # clobbering it and appending a duplicate `order` key.
-        for enum_name, enum_type in concrete_enums.items():
-            if enum_name in self.enums.by_name:
-                continue
-            self.enums.by_name[enum_name] = enum_type
-            self.enums.order.append(enum_name)
-
         concrete_structs = monomorphizer.monomorphize_all_structs(self.generic_structs.by_name, struct_instantiations)
 
-        for struct_name, struct_type in concrete_structs.items():
-            self.structs.by_name[struct_name] = struct_type
-            self.structs.order.append(struct_name)
+        # The worklist (#577): an instance a substitution REACHED -- `Box<string>` from a
+        # `Box@(B)` field of `Pair<i32, string>`, `Maybe<string>` from a payload -- is an
+        # instantiation like a spelled one, so the extension and perk copies below are cut
+        # for it in this round. Keyed by interned name: a spelled instantiation may carry
+        # the same name under another argument spelling, and one copy per name is the rule.
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        reached_enums, reached_structs = monomorphizer.reached_instances()
+        for instantiations, concrete, reached in (
+                (enum_instantiations, concrete_enums, reached_enums),
+                (struct_instantiations, concrete_structs, reached_structs)):
+            named = {instantiation_key(base, args) for base, args in instantiations}
+            for (base, args), ty in reached.items():
+                if ty.name in named:
+                    continue
+                named.add(ty.name)
+                instantiations.add((base, args))
+                concrete[ty.name] = ty
 
         # A perk implementation on a GENERIC target is instantiated BEFORE the functions
         # are, and that order is load-bearing: a `@(S: Show)` constraint is checked while
@@ -747,19 +754,8 @@ class SemanticAnalyzer:
         if not struct_insts and not enum_insts:
             return
 
-        concrete_enums = monomorphizer.monomorphize_all(
-            self.generic_enums.by_name, enum_insts)
-        for enum_name, enum_type in concrete_enums.items():
-            if enum_name not in self.enums.by_name:
-                self.enums.by_name[enum_name] = enum_type
-                self.enums.order.append(enum_name)
-
-        concrete_structs = monomorphizer.monomorphize_all_structs(
-            self.generic_structs.by_name, struct_insts)
-        for struct_name, struct_type in concrete_structs.items():
-            if struct_name not in self.structs.by_name:
-                self.structs.by_name[struct_name] = struct_type
-                self.structs.order.append(struct_name)
+        monomorphizer.monomorphize_all(self.generic_enums.by_name, enum_insts)
+        monomorphizer.monomorphize_all_structs(self.generic_structs.by_name, struct_insts)
 
         from sushi_lang.semantics.passes.resolve import (
             resolve_enum_variant_types, resolve_struct_field_types)

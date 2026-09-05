@@ -265,21 +265,14 @@ class FunctionMonomorphizer:
             for annotation in let_annotations(concrete_func.body):
                 self._extract_type_instantiations(annotation, signature_instantiations)
 
+            # Each is published to its table at creation (`TypeMonomorphizer._publish`).
             for base_name, sig_type_args in signature_instantiations:
                 if base_name in self.monomorphizer.generic_enums:
-                    concrete_enum = self.monomorphizer.monomorphize_enum(
-                        self.monomorphizer.generic_enums[base_name], sig_type_args
-                    )
-                    if self.monomorphizer.enum_table and concrete_enum.name not in self.monomorphizer.enum_table.by_name:
-                        self.monomorphizer.enum_table.by_name[concrete_enum.name] = concrete_enum
-                        self.monomorphizer.enum_table.order.append(concrete_enum.name)
+                    self.monomorphizer.monomorphize_enum(
+                        self.monomorphizer.generic_enums[base_name], sig_type_args)
                 elif base_name in self.monomorphizer.generic_structs:
-                    concrete_struct = self.monomorphizer.monomorphize_struct(
-                        self.monomorphizer.generic_structs[base_name], sig_type_args
-                    )
-                    if self.monomorphizer.struct_table and concrete_struct.name not in self.monomorphizer.struct_table.by_name:
-                        self.monomorphizer.struct_table.by_name[concrete_struct.name] = concrete_struct
-                        self.monomorphizer.struct_table.order.append(concrete_struct.name)
+                    self.monomorphizer.monomorphize_struct(
+                        self.monomorphizer.generic_structs[base_name], sig_type_args)
 
             mangled_name = concrete_func.name
 
