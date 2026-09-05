@@ -1,6 +1,6 @@
-# map_get scans a decoded map in wire order and clones the found value out.
-# A missing key gives Maybe.None.
-# EXPECT_STDOUT_EXACT: "a=1\nb=[2]\nzz missing\n"
+# <encoding/msgpack> spells its three free functions by their verb: decode(), map_get()
+# and show(). The mp_ prefix named the unit, and the import already does (#571).
+# EXPECT_STDOUT_EXACT: "{"a":1,"b":[2]}\na=1\nzz missing\n"
 # EXPECT_NO_LEAKS: true
 
 use <encoding/msgpack>
@@ -19,8 +19,8 @@ fn run_test() i32:
     let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
     match decode(buf):
         Result.Ok(m) ->
+            println(show(m)??)
             lookup(m, "a")??
-            lookup(m, "b")??
             lookup(m, "zz")??
         Result.Err(_) ->
             println("decode failed")

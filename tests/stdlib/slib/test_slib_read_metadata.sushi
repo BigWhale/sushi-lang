@@ -60,9 +60,9 @@ fn run_test() i32:
     if (write_fixture("test_slib_valid.slib", fixture)?? != 0):
         println("cannot write fixture")
         return Result.Ok(1)
-    match slib_read_metadata("test_slib_valid.slib"):
+    match read_metadata("test_slib_valid.slib"):
         Result.Ok(meta) ->
-            println(mp_show(meta)??)
+            println(show(meta)??)
         Result.Err(_) ->
             println("read failed")
     return Result.Ok(0)

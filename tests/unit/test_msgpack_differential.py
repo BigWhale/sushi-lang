@@ -2,7 +2,7 @@
 
 Each case packs one Python value with msgpack.packb, writes it to a file, runs
 the compiled tests/stdlib/msgpack/helpers/dump.sushi tool on it, and compares
-the tool's stdout against a Python mirror of mp_show.
+the tool's stdout against a Python mirror of show.
 """
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ DUMP_SRC = REPO / "tests" / "stdlib" / "msgpack" / "helpers" / "dump.sushi"
 I64_MAX = 0x7FFFFFFFFFFFFFFF
 
 
-def mp_show(v) -> str:
-    """Mirror of the Sushi mp_show renderer."""
+def show(v) -> str:
+    """Mirror of the Sushi show renderer."""
     if v is None:
         return "nil"
     if v is True:
@@ -38,10 +38,10 @@ def mp_show(v) -> str:
     if isinstance(v, bytes):
         return "bin(" + ",".join(str(b) for b in v) + ")"
     if isinstance(v, list):
-        return "[" + ",".join(mp_show(x) for x in v) + "]"
+        return "[" + ",".join(show(x) for x in v) + "]"
     if isinstance(v, dict):
-        return "{" + ",".join(f"{mp_show(k)}:{mp_show(val)}" for k, val in v.items()) + "}"
-    raise TypeError(f"no mp_show mirror for {type(v)}")
+        return "{" + ",".join(f"{show(k)}:{show(val)}" for k, val in v.items()) + "}"
+    raise TypeError(f"no show mirror for {type(v)}")
 
 
 @pytest.fixture(scope="module")
@@ -124,7 +124,7 @@ def test_decodes_like_python(dump_tool, tmp_path, name):
     case.write_bytes(blob)
     r = subprocess.run([str(dump_tool), str(case)], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert r.stdout == mp_show(value) + "\n"
+    assert r.stdout == show(value) + "\n"
 
 
 def test_float32_widens_to_f64(dump_tool, tmp_path):
@@ -135,4 +135,4 @@ def test_float32_widens_to_f64(dump_tool, tmp_path):
     case.write_bytes(blob)
     r = subprocess.run([str(dump_tool), str(case)], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert r.stdout == mp_show(1.5) + "\n"
+    assert r.stdout == show(1.5) + "\n"
