@@ -11,7 +11,7 @@ use <io/buf>
 
 fn run(string path) i32 | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 64)??
+    let BufReader@(File) r = BufReader.new(nom f, 64)??
     let i32 seen = 0
     foreach(line?? in r.lines()):
         println("[{line}]")

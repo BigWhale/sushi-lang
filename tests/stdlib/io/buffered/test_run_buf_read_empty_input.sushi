@@ -12,7 +12,7 @@ fn run(string path) ~ | IoError:
     let File w = open(path, FileMode.Write())??
     w.close()??
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 64)??
+    let BufReader@(File) r = BufReader.new(nom f, 64)??
     match r.read_line()??:
         Maybe.Some(_) -> println("<line>")
         Maybe.None -> println("<end>")

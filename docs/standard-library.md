@@ -174,7 +174,7 @@ match open("output.txt", FileMode.Write()):
         println("Failed to open")
 
 # Buffered, when the loop is long: one system call per window, not per line
-let BufWriter@(File) out = buf_writer(nom stdout.share()??, 8192)??
+let BufWriter@(File) out = BufWriter.new(nom stdout.share()??, 8192)??
 out.write_line("Mostly Harmless")??
 out.finish()??
 ```

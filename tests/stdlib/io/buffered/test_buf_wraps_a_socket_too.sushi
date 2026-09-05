@@ -13,12 +13,12 @@ use <net/tcp>
 
 fn over_file(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 64)??
+    let BufReader@(File) r = BufReader.new(nom f, 64)??
     println(r.read_line()??.realise(""))
     let File rb = r.into_inner()
     rb.close()??
     let File wf = open(path, FileMode.Write())??
-    let BufWriter@(File) w = buf_writer(nom wf, 64)??
+    let BufWriter@(File) w = BufWriter.new(nom wf, 64)??
     w.write_line("x")??
     w.finish()??
     return Result.Ok(~)
@@ -26,7 +26,7 @@ fn over_file(string path) ~ | IoError:
 fn over_socket(string host) ~ | IoError:
     match connect(host, 9):
         Result.Ok(nom s) ->
-            let BufReader@(TcpStream) r = buf_reader(nom s, 64)??
+            let BufReader@(TcpStream) r = BufReader.new(nom s, 64)??
             println(r.read_line()??.realise(""))
             let TcpStream sb = r.into_inner()
             match sb.close():
@@ -36,7 +36,7 @@ fn over_socket(string host) ~ | IoError:
             println("no socket")
     match connect(host, 9):
         Result.Ok(nom s2) ->
-            let BufWriter@(TcpStream) w = buf_writer(nom s2, 64)??
+            let BufWriter@(TcpStream) w = BufWriter.new(nom s2, 64)??
             w.write_line("y")??
             w.finish()??
         Result.Err(_) ->

@@ -10,7 +10,7 @@ use <io/buf>
 
 fn run(string path) ~ | IoError:
     let File wf = open(path, FileMode.Write())??
-    let BufWriter@(File) w = buf_writer(nom wf, 4)??
+    let BufWriter@(File) w = BufWriter.new(nom wf, 4)??
     w.write("abcd")??
     w.flush()??
     w.finish()??

@@ -538,7 +538,7 @@ use <io/fs>
 use <io/buf>
 
 fn emit_many(i32 count) ~ | IoError:
-    let BufWriter@(File) out = buf_writer(nom stdout.share()??, 8192)??
+    let BufWriter@(File) out = BufWriter.new(nom stdout.share()??, 8192)??
     foreach(i in 0..count):
         out.write_line("line {i}")??
     out.finish()??               # the ONE drain, and its failure is seen

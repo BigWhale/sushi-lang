@@ -1,0 +1,10 @@
+# BufReader@(R) is declared over a Reader: the constraint moved from the free function
+# to the struct when the constructor became a static, so a non-Reader is refused at the
+# type and not only at the call (#571).
+# EXPECT_ERROR_CODE: CE4006
+use <io/buf>
+
+fn main() i32:
+    let BufReader@(i32) r = BufReader.new(nom 5, 8).realise(BufReader(5, from([]), 0, 8, false))
+    println("{r.cap}")
+    return Result.Ok(0)

@@ -1166,7 +1166,7 @@ use <io/buf>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 8192)??
+    let BufReader@(File) r = BufReader.new(nom f, 8192)??
 
     foreach(line?? in r.lines()):
         println(line)

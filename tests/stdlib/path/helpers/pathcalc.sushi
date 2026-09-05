@@ -19,7 +19,7 @@ fn answer(string op, string a, string b) string:
     return Result.Ok("unknown op: {op}")
 
 fn run() ~ | IoError:
-    let BufReader@(File) r = buf_reader(nom stdin.share()??, 8192)??
+    let BufReader@(File) r = BufReader.new(nom stdin.share()??, 8192)??
     foreach(line?? in r.lines()):
         let string[] parts = line.split("|")
         if (parts.len() >= 3):

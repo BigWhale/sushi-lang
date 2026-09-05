@@ -19,7 +19,7 @@ fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
 
 fn run() ~ | IoError:
     emit(poke stdout, "console")??
-    let BufWriter@(File) w = buf_writer(nom File(fd: STDOUT_FD, owned: false), 64)??
+    let BufWriter@(File) w = BufWriter.new(nom File(fd: STDOUT_FD, owned: false), 64)??
     emit(poke w, "buffered")??
     w.finish()??
     let File f = open(PATH, FileMode.Write())??

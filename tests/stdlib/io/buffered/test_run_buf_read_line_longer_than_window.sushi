@@ -13,7 +13,7 @@ fn run(string path) ~ | IoError:
     w.write("0123456789012345678901234567890123456789\n")??
     w.close()??
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = buf_reader(nom f, 4)??
+    let BufReader@(File) r = BufReader.new(nom f, 4)??
     let string line = r.read_line()??.realise("")
     println("{line.len()}")
     let File back = r.into_inner()
