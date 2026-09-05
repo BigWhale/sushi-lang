@@ -1,0 +1,13 @@
+# A generic FUNCTION's constraint is the same rule: `f(5)` against `@(T: Loud)` is one
+# CE4006 and no copy is cut, so the body's `x.shout()` is not a second diagnostic (#579).
+# EXPECT_ERROR_CODE: CE4006
+
+perk Loud:
+    fn shout() i32
+
+fn f@(T: Loud)(T x) i32:
+    return Result.Ok(x.shout())
+
+fn main() i32:
+    println("{f(5).realise(0)}")
+    return Result.Ok(0)

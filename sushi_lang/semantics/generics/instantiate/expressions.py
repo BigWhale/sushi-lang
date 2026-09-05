@@ -22,11 +22,17 @@ class ExpressionScanner:
         type_validator=None,
         namespaces=None,
         generic_enums=None,
+        sites=None,
+        file_of=None,
     ):
         """Initialize expression scanner."""
         self.type_inferrer = type_inferrer
         self.instantiations = instantiations
         self.function_instantiations = function_instantiations
+        # The first site naming each function instantiation (#579); see
+        # `InstantiationCollector.sites`. A plain dict on the unit-test paths.
+        self.sites = sites if sites is not None else {}
+        self.file_of = file_of or (lambda: None)
         self.generic_funcs = generic_funcs
         self.type_validator = type_validator
         self.namespaces = namespaces
@@ -265,7 +271,16 @@ class ExpressionScanner:
         # comes from the definition the ladder resolved for THIS unit (#495).
         self.function_instantiations.add(
             (getattr(generic_func, "unit_name", None), function_name, type_args))
+        self._record_function_site(function_name, type_args, getattr(call, "loc", None))
         self._collect_substituted_signature(generic_func, type_args)
+
+    def _record_function_site(self, name: str, type_args, loc) -> None:
+        """The first site naming a function instantiation, for CE4006's caret (#579)."""
+        if loc is None:
+            return
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        self.sites.setdefault(("fn", instantiation_key(name, tuple(type_args))),
+                              (loc, self.file_of()))
 
     def _scan_registry_signature(self, function_name: str) -> bool:
         """Intern the Result a registry primitive answers, from its own row (#550).

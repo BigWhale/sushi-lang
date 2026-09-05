@@ -1,0 +1,20 @@
+# An instantiation that violates its perk constraint is CE4006 at the type that names it,
+# and the analysis STOPS there (#579, Ruling 4; the CE2095 precedent): no copy of the
+# template is cut for the refused instantiation, so the body's `shout()` is never a second
+# CE2008 from inside a copy.
+# EXPECT_ERROR_CODE: CE4006
+# EXPECT_STDERR_CONTAINS: test_err_constraint_violation_stops_the_analysis.sushi:18:9
+
+perk Loud:
+    fn shout() i32
+
+struct Box@(T: Loud):
+    T item
+
+extend Box@(T) yell() i32:
+    return self.item.shout()
+
+fn main() i32:
+    let Box@(i32) b = Box(5)
+    println("{b.yell()}")
+    return Result.Ok(0)

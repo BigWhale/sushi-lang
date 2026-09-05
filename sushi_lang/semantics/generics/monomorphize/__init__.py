@@ -55,6 +55,15 @@ class Monomorphizer:
     # drops the instantiation (issue #214). None on unit-test paths built from loose tables.
     tables: object | None = None
     pending_instantiations: Set[Tuple[str | None, str, Tuple[Type, ...]]] = field(default_factory=set)
+    # The instantiate pass's site table (#579): the first span that named each
+    # instantiation, keyed by interned name, so a constraint violation has a caret.
+    sites: dict = field(default_factory=dict)
+    # How many instantiations a constraint refused. The analyzer STOPS the whole-program
+    # analysis after the monomorphize step when this is non-zero (Ruling 4, #579): no copy
+    # was cut for a refused instantiation, and the per-unit passes would only read the
+    # same fault back as a second diagnostic from inside a body.
+    constraint_violations: int = field(default=0, init=False)
+    _refused: Set = field(default_factory=set, init=False, repr=False)
 
     _monomorphize_depth: int = field(default=0, init=False, repr=False)
 
@@ -86,15 +95,41 @@ class Monomorphizer:
     def _validate_type_constraints(
         self,
         type_params: Tuple,
-        type_args: Tuple[Type, ...]
-    ) -> None:
-        """Validate perk constraints on type arguments (DRY helper)."""
-        if self.constraint_validator is None:
-            return
+        type_args: Tuple[Type, ...],
+        key: object = None,
+        template_file: str | None = None,
+    ) -> bool:
+        """Validate perk constraints on type arguments. False when one refused (#579).
 
+        `key` names the instantiation in `sites` and in the refusal record: a refused
+        instantiation is reported ONCE, at the first site that named it, and every later
+        reach -- a field of another instance, a copy's body -- answers False silently.
+        `template_file` is where the constraint is declared, for the note.
+        """
+        if self.constraint_validator is None:
+            return True
+        if key is not None and key in self._refused:
+            return False
+
+        span, filename = self.sites.get(key, (None, None)) if key is not None else (None, None)
+        valid = True
         for param, arg in zip(type_params, type_args, strict=False):
             if isinstance(param, BoundedTypeParam) and param.constraints:
-                self.constraint_validator.validate_all_constraints(param, arg, None)
+                if not self.constraint_validator.validate_all_constraints(
+                        param, arg, span, filename,
+                        note=(getattr(param, "loc", None), template_file)):
+                    valid = False
+        if not valid:
+            self.constraint_violations += 1
+            if key is not None:
+                self._refused.add(key)
+        return valid
+
+    def template_file(self, kind: str, name: str) -> str | None:
+        """The file that declares the generic template `name`, when the tables know it."""
+        table = getattr(self.tables, f"generic_{kind}s", None)
+        files = getattr(table, "files", None) or {}
+        return files.get(name)
 
     # Ceiling on nested type monomorphization. Real programs stay well under this
     # (a deeply nested Result<Maybe<HashMap<...>>> is only a handful of levels);

@@ -407,7 +407,7 @@ Perk-related compiler errors:
 | CE4003 | Unknown perk | `extend Point with UnknownPerk:` |
 | CE4004 | Method signature mismatch | Wrong parameter types or return type |
 | CE4005 | Missing required method | Perk defines `hash()` but implementation lacks it |
-| CE4006 | Type doesn't implement required perk | `Container@(T: Hashable)` used with type lacking Hashable |
+| CE4006 | Type doesn't implement required perk | `Container@(T: Hashable)` used with type lacking Hashable. Reported once, at the type that names the instantiation, with a note at the constraint; the analysis stops there and no copy of the template is cut for the refused instantiation (#579) |
 | CE4007 | Method name conflict | Perk method name conflicts with existing method |
 
 ## Known Limitations

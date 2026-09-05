@@ -15,8 +15,10 @@ class _FakeMono:
     def __init__(self):
         self.constraint_calls = []
 
-    def _validate_type_constraints(self, params, args):
+    def _validate_type_constraints(self, params, args, key=None, template_file=None):
+        # The seam answers whether every constraint held (#579); the fake refuses nothing.
         self.constraint_calls.append((tuple(params), tuple(args)))
+        return True
 
 
 def _generic(name, type_params):

@@ -419,6 +419,16 @@ instances back as instantiations for the copies below. An abstract instance, a
 method-level `U` still unbound while a generic-target template is cut per receiver, is
 not published.
 
+### A refused instantiation
+
+An instantiation that violates a perk constraint is CE4006 ONCE, at the first site that
+named it -- the collector records `(span, file)` per instantiation for this -- with a note
+at the constraint, which may stand in another file (a stdlib template's). It is built
+nowhere: not cached, not published, so no template copy is ever cut for it, and the
+whole-program analysis STOPS after the monomorphize step, the CE2095 precedent (#579,
+Ruling 4). The per-unit passes would only have read the same fault back as a CE2008 from
+inside a copy's body.
+
 The generic-target extension and perk-implementation copies are first cut from the
 collector's set, before the functions are monomorphized. Every instantiation interned after
 that -- the tables are the authority on what exists -- gets its copies afterwards, and a

@@ -1,0 +1,10 @@
+# The same for a stdlib template: `BufReader@(R: Reader)` over an `i32` is one CE4006 at
+# the user's annotation, and not a cascade rendered at `io/buf.sushi`'s line numbers
+# against the user's file (#579).
+# EXPECT_ERROR_CODE: CE4006
+# EXPECT_STDERR_CONTAINS: test_err_stdlib_constraint_violation_points_at_the_user_file.sushi:9:9
+use <io/buf>
+
+fn main() i32:
+    let BufReader@(i32) r = BufReader.new(nom 5, 8)
+    return Result.Ok(0)

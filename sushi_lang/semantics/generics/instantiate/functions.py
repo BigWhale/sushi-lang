@@ -18,12 +18,18 @@ class FunctionCollector:
         instantiations: Set[Tuple[str, Tuple["Type", ...]]],
         variable_types: dict[str, "Type"],
         visited_types: Set[str],
+        sites: dict | None = None,
+        file_of=None,
     ):
         """Initialize function collector."""
         self.expression_scanner = expression_scanner
         self.instantiations = instantiations
         self.variable_types = variable_types
         self.visited_types = visited_types
+        # The first site naming each type instantiation (#579); see
+        # `InstantiationCollector.sites`. A plain dict on the unit-test paths.
+        self.sites = sites if sites is not None else {}
+        self.file_of = file_of or (lambda: None)
 
     def _reset_scope(self) -> None:
         """Clear the per-function variable scope in place."""
@@ -170,10 +176,11 @@ class FunctionCollector:
             return
 
         self._reset_scope()
-        self.collect_from_signature(func.ret, getattr(func, "err_type", None), func.params)
+        self.collect_from_signature(func.ret, getattr(func, "err_type", None), func.params,
+                                    ret_span=getattr(func, "ret_span", None))
         self._collect_from_block(func.body)
 
-    def collect_from_signature(self, ret, err_type, params) -> None:
+    def collect_from_signature(self, ret, err_type, params, ret_span=None) -> None:
         """The instantiations a signature names: the return, the Result it answers, the parameters.
 
         ONE walk for a unit's `FuncDef` and a library's `FuncSig` (#543): a binary
@@ -183,7 +190,7 @@ class FunctionCollector:
         too -- with the spelled channel, or StdError.
         """
         if ret is not None:
-            self._collect_from_type(ret)
+            self._collect_from_type(ret, ret_span)
             from sushi_lang.semantics.typesys import UnknownType
             if not (isinstance(ret, GenericTypeRef) and ret.base_name == "Result"):
                 err = err_type if err_type is not None else UnknownType("StdError")
@@ -201,7 +208,7 @@ class FunctionCollector:
             self._collect_from_type(ext.target_type)
 
         if ext.ret is not None:
-            self._collect_from_type(ext.ret)
+            self._collect_from_type(ext.ret, getattr(ext, "ret_span", None))
 
         for param in ext.params:
             self._collect_from_param(param)
@@ -215,7 +222,7 @@ class FunctionCollector:
             self._bind_self(perk_impl.target_type)
 
             if method.ret is not None:
-                self._collect_from_type(method.ret)
+                self._collect_from_type(method.ret, getattr(method, "ret_span", None))
 
             for param in method.params:
                 self._collect_from_param(param)
@@ -225,24 +232,24 @@ class FunctionCollector:
     def collect_from_const(self, const) -> None:
         """Collect generic instantiations from constant definition."""
         if const.ty is not None:
-            self._collect_from_type(const.ty)
+            self._collect_from_type(const.ty, getattr(const, "type_span", None))
 
     def collect_from_struct(self, struct) -> None:
         """Collect generic instantiations from struct field types."""
         for field in struct.fields:
             if field.ty is not None:
-                self._collect_from_type(field.ty)
+                self._collect_from_type(field.ty, getattr(field, "loc", None))
 
     def collect_from_enum(self, enum) -> None:
         """Collect generic instantiations from enum variant associated types."""
         for variant in enum.variants:
             for assoc_type in variant.associated_types:
-                self._collect_from_type(assoc_type)
+                self._collect_from_type(assoc_type, getattr(variant, "loc", None))
 
     def _collect_from_param(self, param) -> None:
         """Collect generic instantiations from parameter type."""
         if param.ty is not None:
-            self._collect_from_type(param.ty)
+            self._collect_from_type(param.ty, getattr(param, "type_span", None))
             if param.name is not None:
                 self.variable_types[param.name] = self._resolve_local_type(param.ty)
 
@@ -257,7 +264,7 @@ class FunctionCollector:
 
         if isinstance(stmt, Let):
             if stmt.ty is not None:
-                self._collect_from_type(stmt.ty)
+                self._collect_from_type(stmt.ty, getattr(stmt, "type_span", None))
                 # Track variable type for later reference. Resolve a bare struct/enum
                 # name (UnknownType) to its concrete type so the shared inferrer can
                 # reach the fields and methods of a local when it appears as a generic
@@ -272,7 +279,7 @@ class FunctionCollector:
 
         elif isinstance(stmt, Foreach):
             if stmt.item_type is not None:
-                self._collect_from_type(stmt.item_type)
+                self._collect_from_type(stmt.item_type, getattr(stmt, "item_type_span", None))
             if stmt.iterable is not None:
                 self.expression_scanner.scan_expression(stmt.iterable)
             self._collect_from_block(stmt.body)
@@ -325,8 +332,12 @@ class FunctionCollector:
         elif isinstance(stmt, (Break, Continue)):
             pass
 
-    def _collect_from_type(self, ty: "Type") -> None:
-        """Collect generic instantiations from a type annotation."""
+    def _collect_from_type(self, ty: "Type", site=None) -> None:
+        """Collect generic instantiations from a type annotation.
+
+        `site` is the span of the written type, when the caller has one: the first is
+        kept per instantiation so a constraint violation can point at it (#579).
+        """
         resolver = self.expression_scanner._resolver
 
         if isinstance(ty, GenericTypeRef):
@@ -336,9 +347,13 @@ class FunctionCollector:
                 return
 
             self.instantiations.add((ty.base_name, resolved_type_args))
+            if site is not None:
+                from sushi_lang.semantics.generics.extension_targets import instantiation_key
+                self.sites.setdefault(instantiation_key(ty.base_name, resolved_type_args),
+                                      (site, self.file_of()))
 
             for arg in resolved_type_args:
-                self._collect_from_type(arg)
+                self._collect_from_type(arg, site)
 
         from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
         if isinstance(ty, ArrayType):
