@@ -15,8 +15,10 @@ use <net/error>
 `NetError` is a predefined enum -- the compiler synthesizes it, and no unit declares it --
 and this module is its HOME. The import is what brings the bare name into a unit, exactly
 as `<io/fs>` brings `FileMode` and `<collections/hashmap>` brings `HashMap`; `use
-<net/error> as ne` puts it behind the dot instead (`ne.NetError.TimedOut`). A unit that
-matches on a net module's error imports this module beside the one it calls.
+<net/error> as ne` puts it behind the dot instead (`ne.NetError.TimedOut`). Every net
+module re-exports this one (`docs/design/unit-namespaces.md`, section 8.1), so a unit
+that matches on a net module's error needs no second import: `use <net/tcp>` alone
+brings `NetError`.
 
 ```sushi
 public enum NetError:
@@ -49,7 +51,6 @@ INSIDE the stdlib -- `TcpStream.read` is `sock_recv` with its error passed throu
 
 ```sushi
 use <net/tcp>
-use <net/error>
 
 fn main() i32:
     match connect("localhost", 1):
@@ -62,5 +63,5 @@ fn main() i32:
 ## See also
 
 - [Socket primitives](socket.md) -- the `errno` mapping behind each variant
-- [I/O Contracts](../io/contracts.md) -- `IoError`, the channel a contract method answers
+- [I/O errors](../io/error.md) -- `IoError`, the channel a contract method answers
 - [Unit namespaces](../../design/unit-namespaces.md) -- why a predefined enum has a home

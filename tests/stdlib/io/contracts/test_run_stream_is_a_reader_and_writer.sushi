@@ -6,7 +6,6 @@
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "sent through the contract\nserver read: Mostly Harmless\n"
 use <net/tcp>
-use <io/contracts>
 
 fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
     dst.write(line)??

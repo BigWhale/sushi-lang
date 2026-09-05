@@ -4,18 +4,24 @@
 `collect` and `libraries` produce and nothing later, and `ffi-clash` is the first step
 that asks whether a name is already taken -- so the pass stands between the two.
 
-It answers three rules per unit: every import comes first (`CE3014`), an alias binds a
-name nothing else in the unit binds (`CE3013`), and an `as` that reaches no name says so
-(`CW3004`).
+It answers five rules per unit: every import comes first (`CE3014`), an alias binds a
+name nothing else in the unit binds (`CE3013`), an `as` that reaches no name says so
+(`CW3004`), a `public use` takes no `as` (`CE3016`), and a `public use` that hands on
+nothing says so (`CW3005`).
 
 Every `use` statement is read here, aliased or not, because one statement contributes to
 exactly one half of the same answer: `as` puts what the import brings behind a dot, and
 its absence puts it into the unit's flat scope (section 6). One walk, one provider per
 statement, and the two halves cannot disagree about what an import brought.
+
+A provider carries what its unit RE-EXPORTS (section 8.1, Ruling 7): `_unit_provider`
+reads the unit's own `public use` statements and builds a provider for each, recursively
+and with a visited set, so a chain composes and a cycle terminates. The flat scope reads
+the same chain through `Provider.reaches`, so the dot and the bare name agree.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import AbstractSet, Any, Dict, Iterable, Optional, Tuple
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
@@ -61,6 +67,13 @@ def build_namespaces(reporter: Reporter, unit: Any, tables: Any, *,
     for use_stmt in program.uses or ():
         provider = _provider_for(use_stmt, tables, units, library_registry, unit)
         alias = use_stmt.alias
+        if use_stmt.is_public and alias is not None:
+            # A re-export is of names and not of a namespace (Ruling 7, rule 1). The
+            # alias still binds below, so the one fault gets one diagnostic.
+            er.emit(reporter, er.ERR.CE3016, use_stmt.alias_span or use_stmt.loc)
+        elif use_stmt.is_public and not tuple(provider.public_members()):
+            er.emit(reporter, er.ERR.CW3005,
+                    use_stmt.public_span or use_stmt.loc, origin=provider.origin)
         if alias is None:
             flat.append((use_stmt, provider))
             continue
@@ -79,6 +92,10 @@ def _scope_of(unit: Any, flat: Iterable[Tuple[UseStatement, Provider]],
               units: Dict[str, Any], library_registry: Any = None) -> UnitScope:
     """What this unit may write with no qualifier, from its FLAT imports alone.
 
+    An import brings what it names AND what that re-exports (section 8.1): the walk is
+    `Provider.reaches`, the same one the dot reads, so `use "shapes"` puts `geometry`'s
+    unit into this scope when `shapes` says `public use "geometry"`.
+
     A LIBRARY import names the whole artifact: a `.slib` has no syntax for naming one
     of its units, so scoping the import to the matched unit would leave a multi-unit
     library's second unit unreachable with no escape. A library unit importing its own
@@ -88,16 +105,17 @@ def _scope_of(unit: Any, flat: Iterable[Tuple[UseStatement, Provider]],
     modules: list[str] = []
     generics: list[str] = []
     for use_stmt, provider in flat:
-        if provider.namespace_kind == "stdlib":
-            modules.append(provider.origin)
-        elif provider.namespace_kind == "generic":
-            generics.extend(provider.members())
-        elif provider.namespace_kind == "unit":
-            scoped_units.append(provider.origin)
-            if use_stmt.is_library:
-                scoped_units.extend(_library_units(provider.origin, units))
-                scoped_units.extend(
-                    _binary_library_units(provider.origin, library_registry))
+        for reached in provider.reaches():
+            if reached.namespace_kind == "stdlib":
+                modules.append(reached.origin)
+            elif reached.namespace_kind == "generic":
+                generics.extend(reached.members())
+            elif reached.namespace_kind == "unit":
+                scoped_units.append(reached.origin)
+        if use_stmt.is_library and provider.namespace_kind == "unit":
+            scoped_units.extend(_library_units(provider.origin, units))
+            scoped_units.extend(
+                _binary_library_units(provider.origin, library_registry))
     return UnitScope(unit=unit.name, units=tuple(dict.fromkeys(scoped_units)),
                      modules=tuple(dict.fromkeys(modules)),
                      generics=tuple(dict.fromkeys(generics)), everything=False)
@@ -201,13 +219,20 @@ def _reject_alias_collision(reporter: Reporter, table: NamespaceTable,
 
 
 def _provider_for(use_stmt: UseStatement, tables: Any, units: Dict[str, Any],
-                  library_registry: Any, host: Any = None) -> Provider:
-    """What one `use` brings. A provider, never a written path (section 3.1)."""
+                  library_registry: Any, host: Any = None,
+                  visited: AbstractSet[str] = frozenset()) -> Provider:
+    """What one `use` brings. A provider, never a written path (section 3.1).
+
+    `visited` is the chain of units whose `public use` statements led here, so a cycle
+    of re-exports builds a finite provider (Ruling 7, rule 2).
+    """
     if use_stmt.is_library:
-        return _library_provider(use_stmt, tables, units, library_registry)
+        return _library_provider(use_stmt, tables, units, library_registry, visited)
     if use_stmt.is_stdlib:
-        return _stdlib_provider(use_stmt, tables, units)
-    return _unit_provider(_imported_unit(use_stmt.path, host, units), tables)
+        return _stdlib_provider(use_stmt.path, tables, units, library_registry, visited)
+    return _unit_provider(_imported_unit(use_stmt.path, host, units), tables,
+                          units=units, library_registry=library_registry,
+                          visited=visited)
 
 
 def _imported_unit(path: str, host: Any, units: Dict[str, Any]) -> str:
@@ -228,17 +253,22 @@ def _imported_unit(path: str, host: Any, units: Dict[str, Any]) -> str:
 
 
 def _unit_provider(unit_name: str, tables: Any,
-                   homed: Optional[Dict[str, str]] = None) -> UnitNamespace:
+                   homed: Optional[Dict[str, str]] = None, *,
+                   units: Optional[Dict[str, Any]] = None,
+                   library_registry: Any = None,
+                   visited: AbstractSet[str] = frozenset()) -> UnitNamespace:
     """A compilation unit's own declarations, from the collect pass's tables.
 
     `homed` is the predefined enums a STDLIB unit is the home of (#574): no unit
-    declares `FileMode`, so the visibility table has no record to read it from.
+    declares `FileMode`, so the visibility table has no record to read it from. The
+    unit's `public use` statements become its re-exports (section 8.1).
     """
-    others = {
-        name: kind
+    declared = [
+        (kind, name, origin.is_public)
         for (kind, name), origin in getattr(tables.visibility, "by_key", {}).items()
         if origin.unit_name == unit_name and kind in _MEMBER_ONLY_KINDS
-    }
+    ]
+    others = {name: kind for kind, name, _ in declared}
     others.update(homed or {})
     return UnitNamespace(
         unit_name,
@@ -246,22 +276,49 @@ def _unit_provider(unit_name: str, tables: Any,
         constants=dict(tables.constants.by_unit.get(unit_name, {})),
         generics=dict(tables.generic_funcs.by_unit.get(unit_name, {})),
         others=others,
+        reexports=_reexports_of(unit_name, tables, units, library_registry, visited),
+        hidden={name for _, name, is_public in declared if not is_public},
     )
 
 
-def _stdlib_provider(use_stmt: UseStatement, tables: Any,
-                     units: Dict[str, Any]) -> Provider:
+def _reexports_of(unit_name: str, tables: Any, units: Optional[Dict[str, Any]],
+                  library_registry: Any,
+                  visited: AbstractSet[str]) -> Tuple[Provider, ...]:
+    """The providers a unit's `public use` statements name, in written order.
+
+    Read off the unit's own AST, so a source library's unit and a bundled stdlib module
+    re-export exactly as a user unit does. A unit already on the chain contributes
+    nothing a second time, which is what makes a cycle terminate; a unit with no AST --
+    a binary library's -- has no statement to read, and rule 3 refused it at build time.
+    """
+    if units is None or unit_name in visited:
+        return ()
+    unit = units.get(unit_name)
+    program = getattr(unit, "ast", None)
+    if program is None:
+        return ()
+    chain = frozenset(visited) | {unit_name}
+    return tuple(
+        _provider_for(use_stmt, tables, units, library_registry, unit, chain)
+        for use_stmt in program.uses or ()
+        if use_stmt.is_public and use_stmt.alias is None
+    )
+
+
+def _stdlib_provider(path: str, tables: Any, units: Dict[str, Any],
+                     library_registry: Any = None,
+                     visited: AbstractSet[str] = frozenset()) -> Provider:
     """One of the standard library's four shapes (section 4.3)."""
     from sushi_lang.semantics.stdlib_registry import (
         get_stdlib_registry, is_source_stdlib_module,
     )
 
-    path = use_stmt.path
     # The predefined enums this module is the HOME of ride along with every shape
     # (#574): `<io/fs>` brings `FileMode`, `<math>` brings `MathError`.
     homed = homed_enums(path, getattr(tables, "enums", None))
     if is_source_stdlib_module(path):
-        return _unit_provider(path, tables, homed)
+        return _unit_provider(path, tables, homed, units=units,
+                              library_registry=library_registry, visited=visited)
 
     generic = GENERIC_UNIT_TYPES.get(path)
     if generic is not None:
@@ -269,7 +326,13 @@ def _stdlib_provider(use_stmt: UseStatement, tables: Any,
 
     module = get_stdlib_registry().get_module(path)
     if module is not None:
-        return StdlibNamespace(path, module, types=homed)
+        # A registry module declares its re-exports beside its functions (section
+        # 8.1): `<io/files>` hands on `<io/error>`, so `FileError` rides with `fd_*`.
+        chain = frozenset(visited) | {path}
+        reexports = tuple(
+            _stdlib_provider(other, tables, units, library_registry, chain)
+            for other in getattr(module, "reexports", ()) if other not in chain)
+        return StdlibNamespace(path, module, types=homed, reexports=reexports)
 
     # A method interface: the import enables methods on a type and brings no name.
     # CW3004 is what says so, at the `use` rather than at every call after it.
@@ -277,7 +340,8 @@ def _stdlib_provider(use_stmt: UseStatement, tables: Any,
 
 
 def _library_provider(use_stmt: UseStatement, tables: Any, units: Dict[str, Any],
-                      library_registry: Any) -> Provider:
+                      library_registry: Any,
+                      visited: AbstractSet[str] = frozenset()) -> Provider:
     """One unit of a library. The namespace is the unit, never the library (section 8)."""
     wanted = use_stmt.path.rsplit("/", 1)[-1]
 
@@ -285,7 +349,8 @@ def _library_provider(use_stmt: UseStatement, tables: Any, units: Dict[str, Any]
                     if getattr(unit, "from_library", False)]
     matched = _one_of(source_units, lambda name: name.rsplit("/", 1)[-1] == wanted)
     if matched is not None:
-        return _unit_provider(matched, tables)
+        return _unit_provider(matched, tables, units=units,
+                              library_registry=library_registry, visited=visited)
 
     if library_registry is not None:
         provider = _binary_library_provider(wanted, tables, library_registry)

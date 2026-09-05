@@ -5,6 +5,21 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **`public use X` re-exports what an import brings** (#586). The unit takes X's PUBLIC
+  names as its own and hands them to its importers in the same place its own names land:
+  flat behind a flat `use "U"`, behind the dot of `use "U" as u`. Only a `public use`
+  re-exports -- a plain `use` stays the unit's own -- and re-exports compose along
+  `public use` chains; a cycle terminates. A re-exported name is a candidate exactly as a
+  flat import's is: the unit's own declaration wins, two re-exports offering different
+  declarations of one name are CE3012 at the use, and one declaration reached down two
+  paths is one candidate. Identity is untouched: `IoError`, `fs.IoError` and a name
+  reached through a two-hop chain are one type, and a `Result` over it interns once. New
+  refusals: **CE3016** a `public use` with an `as` (a re-export is of names, not of a
+  namespace; the alias still binds); **CW3005** a `public use` that hands on no public
+  name, the CW3004 rule; **CE3514** a `public use` in a library built with `--lib-kind
+  binary` or `hybrid`, refused before any bitcode is compiled, because the manifest has
+  no record for a re-export yet (#585). A source `.slib`, the default kind, re-exports by
+  construction. Design record: `docs/design/unit-namespaces.md` section 8.1 (Ruling 7).
 - **A static method: a name behind the TYPE's dot.** `extend Vec static at(i32 x, i32 y)
   Vec:` declares a method with NO receiver, called on the type name -- `Vec.at(3, 4)` --
   which is how a user type carries its own constructor (#542). A name behind a type's dot

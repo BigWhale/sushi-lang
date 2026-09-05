@@ -2,7 +2,6 @@
 # needs it, but a caller can no longer reach it: the first close spent the handle.
 # EXPECT_ERROR_CODE: CE2435
 use <io/fs>
-use <io/contracts>
 
 fn close_twice(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??

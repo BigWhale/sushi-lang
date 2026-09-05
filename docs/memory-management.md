@@ -300,7 +300,6 @@ value that holds it. `nom` marks the take:
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 struct Sink:
     File out

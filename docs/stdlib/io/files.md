@@ -7,7 +7,8 @@ File system operations for reading, writing, and managing files.
 ## Import
 
 `<io/files>` holds the path utilities -- `exists()`, `remove()`, `read_dir()` -- and the
-descriptor layer. **`File`, `open()` and the three console handles live in
+descriptor layer, and it brings `FileError`, the enum they answer, by re-exporting
+[`<io/error>`](error.md). **`File`, `open()` and the three console handles live in
 [`<io/fs>`](fs.md)**, beside `stat()` and `walk()`, so most programs want both:
 
 ```sushi
@@ -104,7 +105,6 @@ fn main() i32:
 ```sushi
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn read_config() string | IoError:
     let File f = open("config.txt", FileMode.Read())??
@@ -176,7 +176,6 @@ at once; a large file wants `read()` in a loop, or [`BufReader`](buf.md).
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn contents(string path) string | IoError:
     let File f = open(path, FileMode.Read())??
@@ -194,7 +193,6 @@ fn main() i32:
 ```sushi
 use <io/fs>
 use <collections/strings>
-use <io/contracts>
 
 fn report(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -283,7 +281,6 @@ to handle, and why a discarded write Result is `CW2001` at every bare-statement 
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn write_report(string path, i32 count) ~ | IoError:
     let File f = open(path, FileMode.Write())??
@@ -305,7 +302,6 @@ the end of the file, so two processes appending do not overwrite each other's li
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn log_line(string message) ~ | IoError:
     let File f = open("log.txt", FileMode.Append())??
@@ -387,7 +383,6 @@ socket's `send()`. A pipe has no offset, and both answer an error on one.
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn magic(string path) string | IoError:
     let File f = open(path, FileMode.Read())??
@@ -476,7 +471,6 @@ thread-safe. Match it when you need the number:
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn config() string | IoError:
     let File f = open("config.txt", FileMode.Read())??
@@ -518,7 +512,6 @@ enum FileError:
 ```sushi
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn read_config() string | IoError:
     let File f = open("config.txt", FileMode.Read())??
@@ -543,7 +536,6 @@ fn main() i32:
 ```sushi
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn duplicate(string src, string dst) ~ | IoError:
     let File input = open(src, FileMode.Read())??
@@ -569,7 +561,6 @@ fn main() i32:
 ```sushi
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn copy_file(string src, string dst) ~ | IoError:
     let File input = open(src, FileMode.Read())??
@@ -1015,7 +1006,6 @@ Close one descriptor.
 ```sushi
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn read_file(string path) string | IoError:
     let File f = open(path, FileMode.Read())??
@@ -1034,7 +1024,6 @@ fn main() i32:
 ```sushi
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn write_file(string path, string data) ~ | IoError:
     let File f = open(path, FileMode.Write())??
@@ -1055,7 +1044,6 @@ fn main() i32:
 use <io/files>
 use <io/fs>
 use <collections/strings>
-use <io/contracts>
 
 fn show_csv(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -1086,7 +1074,6 @@ fn main() i32:
 ```sushi
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn log_message(string message) ~ | IoError:
     let File f = open("app.log", FileMode.Append())??
@@ -1135,7 +1122,6 @@ fn main() i32:
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn read_input() string | IoError:
     # Unix-style paths work on all platforms
@@ -1178,7 +1164,6 @@ of it, so a line-at-a-time loop costs one call per window instead of one per lin
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -1217,7 +1202,6 @@ Always validate file paths from user input:
 use <io/files>
 use <io/fs>
 use <collections/strings>
-use <io/contracts>
 
 extend string is_safe_path() bool:
     # Reject paths with ..
@@ -1253,7 +1237,6 @@ Be cautious with write operations:
 ```sushi
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn overwrite() ~ | IoError:
     # FileMode.Write() TRUNCATES the existing file.

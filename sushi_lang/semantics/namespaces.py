@@ -15,6 +15,13 @@ A binding holds a PROVIDER and never a written path (section 3.1). `_inject_libr
 renames a library's units and leaves `UseStatement.path` alone, so an alias built from the
 path works for every user unit and breaks the moment a library unit imports its sibling.
 There is no string here for packaging to get wrong.
+
+A provider may RE-EXPORT (section 8.1, Ruling 7): `public use X` in U makes X's public
+names U's own, so U's provider answers them after its own and U's importers get them in
+the same place as U's -- flat behind a flat `use "U"`, behind the dot of `use "U" as u`.
+Composition is one walk, `Provider.reaches`, over the chain of re-exports with a visited
+set, and both halves of the answer read it: `lookup`/`members` for the dot, and the pass's
+`_scope_of` for the flat scope.
 """
 from __future__ import annotations
 
@@ -42,9 +49,10 @@ class UnitScope:
     """What ONE unit may write with NO qualifier (section 6).
 
     A unit sees its own declarations, plus what its own FLAT `use` statements bring.
-    Nothing else. An import is not re-exported, so a name a unit next door imported is
-    not a name here, and an `as` import contributes nothing at all -- the alias is the
-    gate, and `NamespaceTable` beside this is where it lands.
+    Nothing else. A plain import is not re-exported, so a name a unit next door imported
+    is not a name here; a `public use` next door IS (section 8.1), and its origins ride
+    in these tuples beside the imported unit's own. An `as` import contributes nothing
+    at all -- the alias is the gate, and `NamespaceTable` beside this is where it lands.
 
     Three memberships, one per producer that can put a name into the flat scope: a
     compilation unit, a registry stdlib module, and the built-in generic an import
@@ -176,16 +184,66 @@ class Provider:
     `namespace_kind` is the CLOSED set of producers -- "extern", "unit", "stdlib",
     "generic". A resolver reads it to pick the emitter, and the AST carries it beside
     the origin so the back end needs no table of its own.
+
+    `reexports` is what the provider's `public use` statements name (section 8.1). A
+    subclass answers its OWN names through `_lookup_own` / `_own_members`; `lookup` and
+    `members` here compose them with the re-exports, own first, then each re-export in
+    written order, then theirs. A binding a re-export answers carries the re-export's
+    provider, never this one, so a call through `sh.origin` still routes to the unit that
+    declares `origin`.
     """
 
     namespace_kind: str
     origin: str
+    reexports: Tuple["Provider", ...] = ()
+
+    def _lookup_own(self, name: str) -> Optional[Binding]:
+        raise NotImplementedError
+
+    def _own_members(self) -> Iterable[str]:
+        raise NotImplementedError
+
+    def _own_public_members(self) -> Iterable[str]:
+        """The members another unit may write. Every producer but a unit has no private."""
+        return self._own_members()
+
+    def reaches(self) -> Iterable["Provider"]:
+        """This provider, then every one its re-exports reach, each ONCE, in order.
+
+        A cycle of `public use` is legal and stops here: a provider is identified by
+        its kind and origin, so the second arrival at one is skipped.
+        """
+        seen: set[Tuple[str, str]] = set()
+        queue = [self]
+        while queue:
+            provider = queue.pop(0)
+            key = (provider.namespace_kind, provider.origin)
+            if key in seen:
+                continue
+            seen.add(key)
+            yield provider
+            queue.extend(provider.reexports)
 
     def lookup(self, name: str) -> Optional[Binding]:
-        raise NotImplementedError
+        for provider in self.reaches():
+            found = provider._lookup_own(name)
+            if found is not None:
+                return found
+        return None
 
     def members(self) -> Iterable[str]:
-        raise NotImplementedError
+        return tuple(dict.fromkeys(
+            name for provider in self.reaches() for name in provider._own_members()))
+
+    def public_members(self) -> Iterable[str]:
+        """What a `public use` of this provider hands on: only the public travels.
+
+        A namespace holds a unit's privates too, so that `u.hidden` is CE3005 and not
+        "no such name"; the question CW3005 asks is whether anything ELSE is here.
+        """
+        return tuple(dict.fromkeys(
+            name for provider in self.reaches()
+            for name in provider._own_public_members()))
 
 
 class ExternalNamespace(Provider):
@@ -197,11 +255,11 @@ class ExternalNamespace(Provider):
         self._table = external_table
         self.origin = ns
 
-    def lookup(self, name: str) -> Optional[Binding]:
+    def _lookup_own(self, name: str) -> Optional[Binding]:
         sig = self._table.lookup(self.origin, name)
         return None if sig is None else Binding("extern", name, self, sig)
 
-    def members(self) -> Iterable[str]:
+    def _own_members(self) -> Iterable[str]:
         return tuple(self._table.by_namespace.get(self.origin, {}))
 
 
@@ -217,6 +275,11 @@ class UnitNamespace(Provider):
     and a perk. They are members, so an alias over a unit that declares only those is
     not empty, and the grammar is what still refuses to write them (section 5 is the
     phase that lifts it).
+
+    `reexports` is what the unit's `public use` statements name (section 8.1), built by
+    the pass from the unit's own AST. A binary library's unit has none: rule 3 refuses
+    the statement at build time (CE3514). `hidden` is the subset of `others` the unit
+    declares without `public`; a function or a constant carries its own marker.
     """
 
     namespace_kind = "unit"
@@ -224,14 +287,18 @@ class UnitNamespace(Provider):
     def __init__(self, origin: str, *, functions: Mapping[str, Any],
                  constants: Mapping[str, Any],
                  generics: Optional[Mapping[str, Any]] = None,
-                 others: Optional[Mapping[str, str]] = None) -> None:
+                 others: Optional[Mapping[str, str]] = None,
+                 reexports: Tuple[Provider, ...] = (),
+                 hidden: AbstractSet[str] = frozenset()) -> None:
         self.origin = origin
         self._functions = functions
         self._constants = constants
         self._generics = generics or {}
         self._others = others or {}
+        self.reexports = reexports
+        self._hidden = frozenset(hidden)
 
-    def lookup(self, name: str) -> Optional[Binding]:
+    def _lookup_own(self, name: str) -> Optional[Binding]:
         sig = self._functions.get(name)
         if sig is not None:
             return Binding("function", name, self, sig)
@@ -244,26 +311,37 @@ class UnitNamespace(Provider):
         kind = self._others.get(name)
         return None if kind is None else Binding(kind, name, self)
 
-    def members(self) -> Iterable[str]:
+    def _own_members(self) -> Iterable[str]:
         return (*self._functions, *self._constants, *self._generics, *self._others)
+
+    def _own_public_members(self) -> Iterable[str]:
+        marked = (name for table in (self._functions, self._constants, self._generics)
+                  for name, record in table.items()
+                  if getattr(record, "is_public", True))
+        return (*marked, *(name for name in self._others if name not in self._hidden))
 
 
 class StdlibNamespace(Provider):
     """A registry stdlib module. Already keyed by `(module, name)` -- section 1.4.
 
     `types` carries the predefined enums HOMED at the module (#574): `<math>` brings
-    `MathError`, so `m.MathError` is a member exactly as `m.sqrt` is.
+    `MathError`, so `m.MathError` is a member exactly as `m.sqrt` is. `reexports` is
+    what the module's `REEXPORTS` row names (`StdlibModule.reexports`): a registry
+    module has no `use` statement to write, so its re-exports are declared beside its
+    functions (section 8.1).
     """
 
     namespace_kind = "stdlib"
 
     def __init__(self, module_path: str, module: Any,
-                 types: Optional[Mapping[str, str]] = None) -> None:
+                 types: Optional[Mapping[str, str]] = None,
+                 reexports: Tuple[Provider, ...] = ()) -> None:
         self.origin = module_path
         self._module = module
         self._types = types or {}
+        self.reexports = reexports
 
-    def lookup(self, name: str) -> Optional[Binding]:
+    def _lookup_own(self, name: str) -> Optional[Binding]:
         func = self._module.functions.get(name)
         if func is not None:
             return Binding("function", name, self, func)
@@ -273,7 +351,7 @@ class StdlibNamespace(Provider):
         kind = self._types.get(name)
         return None if kind is None else Binding(kind, name, self)
 
-    def members(self) -> Iterable[str]:
+    def _own_members(self) -> Iterable[str]:
         return (*self._module.functions, *self._module.constants, *self._types)
 
 
@@ -290,10 +368,10 @@ class GenericNamespace(Provider):
         self.origin = module_path
         self._names = frozenset(names)
 
-    def lookup(self, name: str) -> Optional[Binding]:
+    def _lookup_own(self, name: str) -> Optional[Binding]:
         return Binding("type", name, self) if name in self._names else None
 
-    def members(self) -> Iterable[str]:
+    def _own_members(self) -> Iterable[str]:
         return tuple(sorted(self._names))
 
 

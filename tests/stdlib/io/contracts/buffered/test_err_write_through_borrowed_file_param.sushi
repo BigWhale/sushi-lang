@@ -3,7 +3,6 @@
 # EXPECT_ERROR_CODE: CE2422
 
 use <io/fs>
-use <io/contracts>
 
 fn banner(File out) ~ | IoError:
     out.write("Mostly Harmless\n")??

@@ -1,0 +1,10 @@
+# `rex_nothing` says `public use "helpers/nothing_public"`, and `nothing_public` has no
+# public name: the re-export brings nothing and warns (CW3005), the way an empty alias
+# warns (CW3004). The import still did its work, so the program builds.
+# EXPECT_ERROR_CODE: CW3005
+# EXPECT_STDOUT_EXACT: "1\n"
+use "helpers/rex_nothing"
+
+fn main() i32:
+    println("{present().realise(0)}")
+    return Result.Ok(0)

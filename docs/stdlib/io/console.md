@@ -20,7 +20,6 @@ surface, and a function that takes a `poke File` takes either a file or the cons
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn banner(poke File out) ~ | IoError:
     out.writeln("Mostly Harmless")??
@@ -216,7 +215,6 @@ the handle in a [`BufReader`](buf.md).
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn dump(i32 max) ~ | IoError:
     let u8[] data = stdin.read_bytes(max)??
@@ -238,7 +236,6 @@ fn main() i32:
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn read_exact(i32 count) u8[] | IoError:
     let u8[] header = from([])
@@ -281,7 +278,6 @@ write, which is why the answer is `~` and not a count.
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn emit_bytes() ~ | IoError:
     let u8[] data = from([70 as u8, 111 as u8, 114 as u8, 100 as u8])
@@ -302,7 +298,6 @@ fn main() i32:
 ```sushi
 use <io/fs>
 use <collections/strings>
-use <io/contracts>
 
 fn emit_text() ~ | IoError:
     # Write UTF-8 encoded text
@@ -339,7 +334,6 @@ fn File.write_bytes(u8[] data) ~ | IoError
 ```sushi
 use <io/fs>
 use <collections/strings>
-use <io/contracts>
 
 fn complain() ~ | IoError:
     let string error = "ERROR: Something went wrong\n"
@@ -358,7 +352,6 @@ newline, so nothing has to reach for `to_bytes()`.
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn log_error(string message) ~ | IoError:
     stderr.writeln("[ERROR] {message}")??
@@ -418,7 +411,6 @@ bytes when the output is captured.
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn greet() ~ | IoError:
     if (stdin.is_terminal()):
@@ -456,7 +448,6 @@ call drains a real buffer. Writing the call is therefore free and never wrong.
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn work() ~ | IoError:
     stdout.write("Working... ")??      # already on the terminal
@@ -497,7 +488,6 @@ Shell redirection works as expected:
 
 ```sushi
 use <io/fs>
-use <io/contracts>
 
 fn log_info(string message) ~ | IoError:
     stdout.writeln("[INFO] {message}")??
@@ -546,7 +536,6 @@ times. When that matters, buffer explicitly and say where the drain happens:
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn emit_many(i32 count) ~ | IoError:
     let BufWriter@(File) out = BufWriter.new(nom stdout.share()??, 8192)??

@@ -137,3 +137,7 @@ _add(ErrorMessage("CW5001", Severity.WARNING,
 _add(ErrorMessage("CW3004", Severity.WARNING,
     "'{alias}' binds an empty namespace", Category.UNIT,
     "The import brought no name that a qualified form could reach, so the `as` clause does nothing. It is a warning and not an error because a namespace is empty for three reasons and only one of them is a mistake: a method interface such as `<io/stdio>` can never bring a name; a unit that is nothing but `extend` blocks exports methods rather than names, and is load-bearing anyway; and a public surface that happens to be empty today is one declaration away from changing. Refusing the first two would refuse a good import for a redundant clause, and refusing the third would make an error appear and disappear as a library grew. The import still did its work. Drop the `as`."))
+
+_add(ErrorMessage("CW3005", Severity.WARNING,
+    "`public use` of '{origin}' re-exports nothing", Category.UNIT,
+    "The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. It is a warning and not an error for the reasons CW3004 gives an empty alias: a method interface such as `<collections/strings>` brings no name and never will, a unit of nothing but `extend` blocks exports methods rather than names, and an empty public surface is one declaration away from changing. The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something."))

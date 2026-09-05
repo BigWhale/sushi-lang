@@ -9,7 +9,6 @@
 use <io/fs>
 use <io/files>
 use <collections/strings>
-use <io/contracts>
 
 # Reads one line and substitutes an empty string for the end of the file. readln()
 # answers Maybe@(string) now, so a caller that does not care which of the two it got

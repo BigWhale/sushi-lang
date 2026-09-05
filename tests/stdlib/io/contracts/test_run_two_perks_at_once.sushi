@@ -7,7 +7,6 @@
 # EXPECT_STDOUT_EXACT: "copied\nMostly Harmless\n"
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn copy_text@(R: Reader, W: Writer)(poke R src, poke W dst) ~ | IoError:
     let string all = src.read(64)??

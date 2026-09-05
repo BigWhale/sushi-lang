@@ -6,7 +6,6 @@
 # EXPECT_STDOUT_EXACT: "wrote through the contract\nMostly Harmless\n"
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
     dst.write(line)??

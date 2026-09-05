@@ -1,0 +1,6 @@
+# Re-exports `geometry` beside `shapes`, which re-exports it too. An importer of both
+# reaches ONE declaration of `Vec` twice, and that is one candidate, never CE3012.
+public use "helpers/geometry"
+
+public fn doubled(Vec v) Vec:
+    return Result.Ok(Vec(v.x * 2, v.y * 2))

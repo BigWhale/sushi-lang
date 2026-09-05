@@ -93,3 +93,8 @@ _add(ErrorMessage("CE3512", Severity.ERROR,
 _add(ErrorMessage("CE3513", Severity.ERROR,
     "library file too large '{path}': {size} bytes exceeds maximum {max_size} bytes",
     Category.LIBRARY, "Library file exceeds reasonable size limit."))
+
+_add(ErrorMessage("CE3514", Severity.ERROR,
+    "a {kind} library cannot carry a `public use`",
+    Category.LIBRARY,
+    "A `public use` re-exports what an import brings (`docs/design/unit-namespaces.md` section 8.1, Ruling 7). A SOURCE library ships its units as text, so a consumer re-parses the statement and the re-export works by construction. A binary or hybrid library ships a manifest, and the manifest has no record for a re-export yet: the consumer would read the library's own names and miss the ones it handed on, silently. The build is refused at the line rather than shipping a library whose API is narrower than its author wrote (#585 is the record the manifest still owes). Build the library with `--lib-kind source`, the default, or replace the re-export with a plain `use` and let the consumer import the unit it needs."))

@@ -22,8 +22,8 @@ recv_exact() is the loop for a caller that needs a count.
 :##
 
 use <collections/strings>
-use <io/contracts>
-use <net/error>
+public use <io/contracts>
+public use <net/error>
 use <net/socket>
 
 ##:

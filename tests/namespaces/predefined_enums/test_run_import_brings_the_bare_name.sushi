@@ -7,7 +7,6 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "8\n"
 use <io/fs>
-use <io/contracts>
 use <net/error>
 use <sys/process>
 use <sys/env>

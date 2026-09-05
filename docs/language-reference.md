@@ -695,7 +695,6 @@ first failure exactly as `??` does in any other position:
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -1277,6 +1276,41 @@ an import activates: `HashMap` is a name in a unit that wrote `use <collections/
 
 **An FFI namespace belongs to the unit that declares the block.** An `unsafe external
 "C" as libc` block binds `libc` where it is written, and nothing imports it.
+
+#### Re-exporting an import: `public use`
+
+`public use X` takes what X brings and makes it this unit's own, re-exported as public.
+Every importer of this unit then gets the effect of `use X` in the same place this unit's
+names land: flat behind a flat `use`, behind the dot of an aliased one. It is also an
+ordinary `use` for the unit that writes it.
+
+<!-- docs-sweep: skip (three units) -->
+```sushi
+# geometry.sushi          # shapes.sushi                 # main.sushi
+public struct Vec:        public use "geometry"         use "shapes"
+    i32 x                 public fn area(Vec v) i32:    fn main() i32:
+    i32 y                     return Result.Ok(v.x*v.y)     let Vec v = Vec(2, 3)
+                                                             println("{area(v).realise(0)}")
+                                                             return Result.Ok(0)
+```
+
+`main` writes `Vec` with one import, because `shapes` hands it on. `use "shapes" as sh`
+gives `sh.Vec` and `sh.area` alike. The rules:
+
+- Only a `public use` re-exports. A plain `use` brings nothing to the unit's importers.
+  Re-exports compose along `public use` chains and never along a plain `use`.
+- Only the PUBLIC names travel. A unit cannot hand on what it may not name.
+- A re-exported name is a candidate exactly as a flat import's is: this unit's own
+  declaration wins over it, two re-exports offering different declarations of one name
+  are `CE3012` at the use, and the same declaration reached down two paths is one
+  candidate.
+- `public use` takes no `as` (`CE3016`): a re-export is of names, not of a namespace.
+- A `public use` that hands on nothing public warns (`CW3005`).
+- A binary or hybrid `.slib` cannot carry a `public use` (`CE3514`); a source library, the
+  default kind, can.
+
+The standard library uses it: `use <io/fs>` alone brings `IoError`, `FileError` and
+`SeekFrom`, because `<io/fs>` re-exports `<io/contracts>` and that re-exports `<io/error>`.
 
 #### Where a qualified name may be written
 

@@ -1,0 +1,5 @@
+# Re-exports foo_a's `foo`. Beside rex_b, a bare `foo` has two candidates (CE3012).
+public use "helpers/foo_a"
+
+public fn tag_a() i32:
+    return Result.Ok(10)

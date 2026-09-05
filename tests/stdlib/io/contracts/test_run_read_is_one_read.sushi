@@ -8,7 +8,6 @@
 # EXPECT_STDOUT_EXACT: "one read: 100\nwhole file: 5000\n"
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn main() i32:
     match open("contract_chunk_probe.txt", FileMode.Write()):

@@ -73,3 +73,7 @@ _add(ErrorMessage("CE3014", Severity.ERROR,
 _add(ErrorMessage("CE3015", Severity.ERROR,
     "{name} needs the stdlib module <{module}>",
     Category.UNIT, "A built-in method whose body lives in a stdlib module is callable only where that module is imported. The refusal used to be CE0096, an INTERNAL error: it told the reader their program was a bug in the compiler, carried no line, no column and no caret, and asked for a report -- for a missing `use`. A missing import is a mistake in the program and reads like one now. Add the import the message names. A DIRECTORY import covers every module under it, so `use <io>` opens both `<io/stdio>` and `<io/files>`; a SIBLING import does not, and `use <io/files>` alone never made `stdout.write()` legal (#501)."))
+
+_add(ErrorMessage("CE3016", Severity.ERROR,
+    "a `public use` takes no `as`",
+    Category.UNIT, "`public use X` re-exports what X brings: the importing unit takes X's public names as its own and hands them to its importers, flat behind a flat `use` of it and behind the dot of an aliased one (`docs/design/unit-namespaces.md` section 8.1, Ruling 7). A re-export is of NAMES and never of a namespace, so there is nothing an alias could bind: an alias is local to the unit that wrote it (section 8) and is not exported, and a re-export that carried one would make the importer's spelling depend on a name it never wrote. The alias still binds here, as a plain `use ... as` would, so the one fault gets one diagnostic. Drop the `public` to keep the alias for this unit alone, or drop the `as` to re-export."))

@@ -111,7 +111,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
     """Merge bundled Sushi-source stdlib modules (e.g. <collections/iter>) as units."""
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.semantics.stdlib_registry import (
-        SOURCE_STDLIB_MODULES, resolve_source_stdlib_path,
+        SOURCE_STDLIB_MODULES, get_stdlib_registry, resolve_source_stdlib_path,
     )
 
     def _needed(units) -> set:
@@ -120,8 +120,17 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
             if unit.ast is None:
                 continue
             for use_stmt in unit.ast.uses:
-                if use_stmt.is_stdlib and use_stmt.path in SOURCE_STDLIB_MODULES:
+                if not use_stmt.is_stdlib:
+                    continue
+                if use_stmt.path in SOURCE_STDLIB_MODULES:
                     needed.add(use_stmt.path)
+                    continue
+                # A registry module's re-exports (`StdlibModule.reexports`) ride with
+                # its import, so a source module one of them names is compiled too.
+                module = get_stdlib_registry().get_module(use_stmt.path)
+                for other in getattr(module, "reexports", ()):
+                    if other in SOURCE_STDLIB_MODULES:
+                        needed.add(other)
         return needed
 
     while True:
@@ -417,6 +426,30 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     )
 
 
+def _reject_reexports_in_compiled_library(compilation_order, reporter: Reporter,
+                                          kind: str) -> bool:
+    """CE3514 at every `public use` of the library's own units. True when any was.
+
+    Only the units the author wrote: a bundled stdlib module carries a provenance and
+    re-exports on its own account, and the manifest never had to record that.
+    """
+    from sushi_lang.internals import errors as er
+
+    refused = False
+    for unit in compilation_order:
+        if unit.ast is None or unit.provenance is not None:
+            continue
+        unit_reporter = SemanticAnalyzer._unit_reporter(unit)
+        for use_stmt in unit.ast.uses or ():
+            if not use_stmt.is_public:
+                continue
+            er.emit(unit_reporter, er.ERR.CE3514, use_stmt.public_span or use_stmt.loc,
+                    kind=kind)
+            refused = True
+        reporter.items.extend(unit_reporter.items)
+    return refused
+
+
 def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
                         is_library, stdlib_units, library_imports, library_linker) -> int:
     """Original single-module compilation path."""
@@ -467,6 +500,12 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
         library_version = resolve_library_version(
             src_path.resolve().parent, args.lib_version, out_path.stem)
         manifest_gen = LibraryManifestGenerator(analyzer)
+        # A binary or hybrid library has no manifest record for a re-export, so a
+        # `public use` in one is refused before anything is compiled (#586 rule 3;
+        # the record is #585).
+        if args.lib_kind != "source" and _reject_reexports_in_compiled_library(
+                compilation_order, reporter, args.lib_kind):
+            return 2
         templates = manifest_gen._extract_templates(compilation_order)
         # A rejected export closure (CE5006) ends the build HERE, before the expensive
         # bitcode compilation. The producer emits and returns; this gate is what stops

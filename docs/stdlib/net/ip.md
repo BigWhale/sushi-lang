@@ -10,6 +10,8 @@
 use <net/ip>
 ```
 
+The import brings `NetError`, the channel `parse_ip` answers: the module re-exports [`<net/error>`](error.md), so a unit that matches on an error writes no second line.
+
 ## Overview
 
 `net/ip` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it. Everything works on the text alone — no system call, no name lookup, no network. RFC 4291 decides which forms are read and RFC 5952 decides the text that comes back.

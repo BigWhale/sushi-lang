@@ -7,7 +7,6 @@
 # EXPECT_STDOUT_EXACT: "read through the contract: Mostly Harmless\n"
 use <io/files>
 use <io/fs>
-use <io/contracts>
 
 fn first_text@(R: Reader)(poke R src) string | IoError:
     return Result.Ok(src.read(64)??)

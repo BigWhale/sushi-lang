@@ -12,7 +12,6 @@
 use <io/fs>
 use <io/files>
 use <collections/strings>
-use <io/contracts>
 
 fn main() i32:
     # Write test file

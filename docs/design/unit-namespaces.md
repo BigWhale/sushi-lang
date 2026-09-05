@@ -13,7 +13,7 @@ is not a program that compiles now.
 Sushi has one flat global namespace. `use` puts a whole unit into it and gives you no way
 to say which unit you meant. This document says what replaces that.
 
-It is normative for eight things:
+It is normative for nine things:
 
 1. What `as` does, and what an import without `as` keeps doing.
 2. Where a `use` may stand, and how far the namespace it binds reaches.
@@ -28,6 +28,8 @@ It is normative for eight things:
    two phases.
 8. That an orphan extension is legal and a duplicate one is refused, because no namespace
    can choose between two methods.
+9. That `public use X` re-exports what X brings, that only a `public use` does, and that a
+   re-exported name is one candidate exactly as a flat import's is (section 8.1).
 
 Read `docs/design/visibility.md` first: it decides which declarations are even candidates
 for a namespace. Read `docs/design/type-identity.md` for the constraint that section 7
@@ -386,7 +388,7 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 | Sushi-source modules, injected as ordinary units | `<collections/iter>`, `<compression/zlib>`, `<encoding/msgpack>`, `<toolchain/slib>` | **yes** — a user unit in every respect |
 | A built-in generic that the import activates | `<collections/hashmap>` (`generics/active_generics.py:3`) | **yes** — `hm.HashMap@(i32, string)`. The import brings the name, so the namespace holds it. `active_generics` retires whole — see 4.3.1 |
 | A method interface: the import enables methods on a type and brings **no name** | `<collections/strings>` | pointless, and said so — see below |
-| A predefined enum the import brings (#574, Ruling 3) | `FileMode`, `FileError` → `<io/fs>`; `IoError`, `SeekFrom` → `<io/contracts>`; `NetError` → `<net/error>`; `ProcessError` → `<sys/process>`; `EnvError` → `<sys/env>`; `MathError` → `<math>` | **yes** — `fs.FileMode.Read()`. No unit declares one, so the synthesis stamps each with its HOME (`EnumType.home_module`, the table is `passes/collect/enums.py:PREDEFINED_ENUM_HOMES`); the `namespaces` pass reads the stamp to list it as a member of the home's provider, and the type-position gate (`reject_out_of_scope_type`) reads it to refuse the bare name where the home is not imported, the `HashMap` rule. `StdError` is the implicit Result arm and stays global. `SeekFrom` is `<io/contracts>`'s because `Seek.seek` takes it and `<io/fs>` imports `<io/contracts>`; the other way round is a cycle |
+| A predefined enum the import brings (#574, Ruling 3) | `FileMode` → `<io/fs>`; `IoError`, `FileError` → `<io/error>`; `SeekFrom` → `<io/contracts>`; `NetError` → `<net/error>`; `ProcessError` → `<sys/process>`; `EnvError` → `<sys/env>`; `MathError` → `<math>` | **yes** — `fs.FileMode.Read()`. No unit declares one, so the synthesis stamps each with its HOME (`EnumType.home_module`, the table is `passes/collect/enums.py:PREDEFINED_ENUM_HOMES`); the `namespaces` pass reads the stamp to list it as a member of the home's provider, and the type-position gate (`reject_out_of_scope_type`) reads it to refuse the bare name where the home is not imported, the `HashMap` rule. **The home is reached through the modules that re-export it** (section 8.1, #586): `<io/contracts>` says `public use <io/error>`, `<io/fs>` and `<io/buf>` say `public use <io/contracts>`, so `use <io/fs>` alone brings `IoError`, `FileError` and `SeekFrom` beside `FileMode`, and `fs.IoError` holds behind the alias. `StdError` is the implicit Result arm and stays global. `SeekFrom` is `<io/contracts>`'s because `Seek.seek` takes it |
 
 `use <io/fs>` does not bring `stdin` into scope: `stdin` is always a name
 (`passes/types/visitor.py:703`), and what the import enables is `read_line()` on it. An
@@ -656,9 +658,11 @@ diagnostic is at that use, names both candidates, and says that `as` resolves it
 (`CE3012`). Refusing the whole program with no location was the only answer available in a
 flat namespace; it is not the answer now.
 
-**An import is not re-exported.** `my_math.<name>` reaches what `math` *declares*. It never
-reaches what `math` imported. The qualified form and the flat form agree on this, which is
-what makes the rule one rule.
+**An import is not re-exported, unless it is a `public use`.** `my_math.<name>` reaches what
+`math` *declares*. It never reaches what `math` imported with a plain `use`. The qualified
+form and the flat form agree on this, which is what makes the rule one rule -- and they
+agree on the exception too: what `math` says `public use` on is `math`'s to hand on, flat
+and behind the dot alike (section 8.1).
 
 **Section 1.2's program stops compiling.** `top.sushi` must add `use "deep"`. This is the
 one migration this document forces, and it is measured: of 2096 tracked `.sushi` files,
@@ -913,9 +917,97 @@ performs cannot reach it.
 
 **The namespace is the unit, never the library.** `use <lib/foo/bar> as f` binds unit
 `bar` of library `foo`, because that is what the import names. A library whose public API
-spans several units and wants a single namespace should ship one façade unit that
-re-declares it. That is a library design choice, and `docs/design/libraries.md` is where it
-belongs.
+spans several units and wants a single namespace ships one façade unit that says
+`public use` on each of the others (section 8.1). That is a library design choice, and
+`docs/design/libraries.md` is where it belongs.
+
+### 8.1 Ruling 7: `public use` re-exports
+
+**Status: LANDED** (#586, 2026-09-05). Section 6.1 measured the cost of a non-transitive
+scope -- a consumer imports every unit that declares a type it binds, on every `let` --
+and section 12 left re-export as the question to answer it against. #574 made the cost
+concrete: once `IoError` had a home at `<io/contracts>`, a program that wrote `use <io/fs>`,
+called `open()` and matched `IoError.NotFound` needed `use <io/contracts>` for a name it
+never chose, and 90 tests and 44 doc fences gained that line in one PR. Go, Rust and
+Python all answer the same way: the module whose API answers a type re-exports it
+(`os.FileInfo = fs.FileInfo`, `pub use`, a package `__init__`). Sushi names types more
+often than any of them -- a `let` declares its type and a channel spells `| IoError` in
+every signature -- so it needs the re-export more. This is Sushi's `pub use`.
+
+**The mental model.** `public use X` in U means: take X's public names, make them U's own,
+and re-export them as public. Every importer of U gets the effect of `use X` in the same
+place U's own names land -- flat behind a flat `use "U"`, behind the dot of `use "U" as u`.
+
+**Four rules.**
+
+1. `public use X` re-exports what X brings. It is also an ordinary `use` for U itself. It
+   takes no `as` (CE3016): a re-export is of names, not of a namespace, and an alias is
+   local to the unit that wrote it (section 8). The alias still binds, so the one fault
+   gets one diagnostic.
+2. Only a `public use` re-exports. A plain `use` in U brings nothing to U's importers, as
+   before. Re-exports compose along `public use` chains -- if X says `public use Y`, U's
+   importers get Y -- and never along a plain `use`. A cycle of `public use` is legal and
+   terminates on a visited set.
+3. A binary `.slib` carries no re-export today. A `public use` in a unit built with
+   `--lib-kind binary` or `hybrid` is CE3514 at the line, before anything is compiled: the
+   manifest has no record for it, and a consumer would read a narrower API than the author
+   wrote, silently. A source `.slib` needs nothing -- the consumer re-parses the statement.
+   #585 is the manifest record; CLAUDE.md Known Limitation 6 and `docs/design/libraries.md`
+   section 5 carry the limit.
+4. The predefined enums stay synthesized and homed (Ruling 3, #574). A module makes a home
+   reachable by re-exporting it -- `public use <io/error>` in `<io/contracts>` -- and the
+   stamp machinery (`homed_enums`, `UnitScope.holds_home`, `reject_out_of_scope_type`)
+   is read through the re-export unchanged. A registry (Python) module has no `use`
+   statement to write, so it declares its re-exports in a `REEXPORTS` tuple beside its
+   functions (`StdlibModule.reexports`); `<io/files>` hands on `<io/error>` that way. A
+   `public use` that hands on nothing public warns (CW3005), as an empty alias does (CW3004).
+
+**Shadows and duplicates.** A re-exported name is a candidate exactly as a flat import's
+is. U's own declaration wins over its re-exports, as a unit's own wins over its imports
+(section 8's ladder, row 2 over row 3). Two re-exports that offer DIFFERENT declarations
+of one name are CE3012 at the use, like two flat imports. The same declaration reached
+twice -- `use <io/fs>` and `use <io/error>` in one unit, or two units that both re-export
+`geometry` -- is ONE candidate: `VisibilityTable.candidates` counts by declaring unit and
+not by path, and must keep doing so. A predefined enum has no declaring unit and is never
+a candidate for CE3012. Only X's PUBLIC declarations travel: U cannot give away what it may
+not name, and CE3005 stays the consumer's answer for a private one it writes anyway. The
+provider still HOLDS the private, as every namespace does, so `u.hidden` is "not yours"
+and not "no such name"; what CW3005 counts is the public subset.
+
+**One type, whatever the path.** Guaranteed by the type model and pinned by a gate.
+Identity is nominal and program-wide (`docs/design/type-identity.md`; Ruling 6: a
+namespace is a resolution path, not a type identity). A qualifier folds into the bare
+name before the table lookup, so `IoError`, `fs.IoError`, `io.IoError` and a name reached
+through a two-hop chain resolve to the ONE synthesized `EnumType`, and
+`Result<string, IoError>` interns once. `tests/unit/test_public_use_reexport.py` is the
+gate: one program names `Vec` bare through two hops and behind two aliases, `IoError` bare
+and behind two aliases, and every `let` resolves to the same table object; no CE0126.
+
+**Mechanics.** The grammar takes `PUBLIC? USE`; `UseStatement.is_public` and
+`public_span` carry it. A provider composes what it re-exports: `Provider.reexports` is the
+tuple the unit's `public use` statements name, `Provider.reaches` walks the chain once
+with a visited set, and `lookup`/`members` read the walk -- own first, then each
+re-export in written order, then theirs. A binding a re-export answers carries the
+re-export's provider, so a call through `sh.origin` routes to the unit that declares
+`origin`. The flat scope reads the SAME walk: `_scope_of` puts every reached unit, module
+and generic into `UnitScope`, so the dot and the bare name cannot disagree. The
+`namespaces` pass does not move -- a provider still needs only what `collect` and
+`libraries` produce, and a unit's own AST, which it has.
+
+**Tests.** `tests/namespaces/reexport/`: the flat and the aliased import of a re-exporting
+unit; a two-hop chain; a plain `use` in the middle that re-exports nothing (CE2001 with the
+import in the help); `public use ... as` (CE3016); a `public use` below a declaration
+(CE3014); two re-exports offering one name (CE3012); an own declaration beside a re-export;
+one declaration reached twice; a `public use` of a unit with nothing public (CW3005). The
+stdlib half: `use <io/fs>` alone writes `| IoError`, `IoError.NotFound` and
+`SeekFrom.Start`; `use <io/fs> as fs` gives `fs.IoError`; `use <net/tcp>` alone matches
+`IoError` from a read. `tests/unit/test_public_use_reexport.py` holds the identity gate
+and rule 3.
+
+**What this does not decide.** Whether a `public use` may re-export a single name
+(`public use "geometry".Vec`), and whether a `.slib` consumer may re-export a library
+(rule 3 says not from a binary one; a source one works by construction). Both are open
+until asked for.
 
 ## 9. What the back end needs
 
@@ -1066,12 +1158,10 @@ unit level only. `visibility.md` section 4 records that Rust's trait rule is exp
 only on top of a name-level import, so this question also decides whether a sealed perk
 becomes possible. It is a separate feature and it composes with everything here.
 
-**Re-export.** Section 6 rules that an import is not re-exported, and a future `public use`
-is not ruled out — it would be a deliberate act with its own marker rather than the accident
-section 1.2 measures. Section 6.1 is what creates the demand for it: without re-export or
-`let` inference, a consumer must import every unit that declares a type it binds. Rust and
-Swift both answer that question with re-export, and this is the question to answer it
-against.
+**Re-export.** DECIDED: section 8.1 (Ruling 7, #586). `public use X` is the deliberate act
+with its own marker that this paragraph left room for; section 6.1's demand is what
+forced it, once #574 gave `IoError` a home. What section 8.1 leaves open is a name-level
+form (`public use "geometry".Vec`) and re-exporting a binary library.
 
 **A wildcard, and a nested namespace.** `my_math.*` and `a.b.c` are both out. A namespace
 is one flat set of names bound to one alias.

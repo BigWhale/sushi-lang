@@ -67,9 +67,9 @@ when there is one, and from `--lib-version` otherwise; neither is **CE3505**. Se
 
 | Kind | Ships | Portable | Notes |
 |--------|--------------------------|-----|--------------------------------------------|
-| `source` | unit source text | yes | the default; the consumer compiles it |
-| `binary` | LLVM bitcode | no | platform-bound (**CE3504** elsewhere) |
-| `hybrid` | both | no | the bitcode still binds it to one platform |
+| `source` | unit source text | yes | the default; the consumer compiles it; a `public use` re-exports |
+| `binary` | LLVM bitcode | no | platform-bound (**CE3504** elsewhere); no `public use` (**CE3514**) |
+| `hybrid` | both | no | the bitcode still binds it to one platform; no `public use` (**CE3514**) |
 
 ```bash
 # The default: one artifact for every platform
@@ -83,6 +83,13 @@ Choose `binary` when you want to ship a library without shipping its source. Not
 does **not** buy: a generic cannot be pre-compiled, because monomorphization needs the
 consumer's concrete type arguments, so a binary library carries the source text of its
 generics in the index regardless. Binary distribution hides concrete bodies only.
+
+A binary or hybrid library cannot re-export: a `public use` in one of its units is
+**CE3514** at the line, because the manifest has no record for a re-export yet and a
+consumer would read a narrower API than the author wrote. A source library carries the
+statement as text and the consumer's compiler reads it, so a façade unit that says
+`public use` on each of the library's other units is the way to give a multi-unit library
+one namespace.
 
 ### Public Declarations
 

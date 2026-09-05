@@ -1,0 +1,12 @@
+# Only a `public use` re-exports. `middle_plain` imports `geometry` with a plain `use`,
+# so an importer of `middle_plain` may call `corner()` and may not write `Vec`: the
+# refusal is the ordinary CE2001, with the import that would bring it in the help
+# (Ruling 7, rule 2; section 6.1).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: use "helpers/geometry"
+use "helpers/middle_plain"
+
+fn main() i32:
+    let Vec c = corner().realise(Vec(0, 0))
+    println("{c.x}")
+    return Result.Ok(0)

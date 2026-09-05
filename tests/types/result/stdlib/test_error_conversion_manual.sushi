@@ -4,7 +4,6 @@
 
 # Tests manual error type conversion between different error types
 
-use <io/contracts>
 use <io/fs>
 
 fn file_op() string | FileError:

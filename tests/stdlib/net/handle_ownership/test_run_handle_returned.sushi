@@ -5,7 +5,6 @@
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "got one\ndone\n"
 use <net/tcp>
-use <net/error>
 
 fn make_server() TcpListener | NetError:
     let TcpListener listener = listen("127.0.0.1", 0, 1)??

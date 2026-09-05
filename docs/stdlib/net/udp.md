@@ -10,6 +10,8 @@
 use <net/udp>
 ```
 
+The import brings `NetError`, the channel every method answers: the module re-exports [`<net/error>`](error.md), so a unit that matches on an error writes no second line.
+
 ## Overview
 
 `net/udp` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it.
@@ -55,7 +57,6 @@ Wait for one datagram. A datagram longer than `max` is truncated and the rest is
 ```sushi
 use <net/udp>
 use <collections/strings>
-use <net/error>
 
 fn exchange() ~ | NetError:
     let UdpSocket a = bind("127.0.0.1", 0)??

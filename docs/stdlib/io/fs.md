@@ -27,10 +27,13 @@ handles are in [Console I/O](console.md), and the buffered layer above the handl
 
 ## Types
 
-The import brings two predefined enums beside the struct: `FileMode` and `FileError` are
-homed here, so `use <io/fs>` is what lets a unit write either name bare, and
-`use <io/fs> as fs` puts them behind the dot (`fs.FileMode.Read()`). `IoError`, the
-channel `open()` and every method answer, is [`<io/contracts>`](contracts.md)'s.
+The import brings four predefined enums beside the struct. `FileMode` is homed here.
+`IoError` -- the channel `open()` and every method answer -- and `FileError` are
+[`<io/error>`](error.md)'s, and `SeekFrom` is [`<io/contracts>`](contracts.md)'s; this
+module re-exports `<io/contracts>`, which re-exports `<io/error>`, so `use <io/fs>` alone
+lets a unit write all four bare, and `use <io/fs> as fs` puts them behind the dot
+(`fs.FileMode.Read()`, `fs.IoError.NotFound`). The perks `Reader`, `Writer` and `Seek`
+ride along the same way.
 
 ### `FileMode`
 

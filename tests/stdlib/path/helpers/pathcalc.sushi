@@ -4,7 +4,6 @@
 use <io/fs>
 use <io/buf>
 use <io/path>
-use <io/contracts>
 
 fn answer(string op, string a, string b) string:
     if (op == "join"):

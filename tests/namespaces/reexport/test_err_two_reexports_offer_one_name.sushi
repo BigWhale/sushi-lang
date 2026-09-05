@@ -1,0 +1,10 @@
+# Two re-exports that offer DIFFERENT declarations of `foo` are two candidates for the
+# bare name, exactly as two flat imports are: CE3012 at the use (Ruling 7, shadows).
+# EXPECT_ERROR_CODE: CE3012
+use "helpers/rex_a"
+use "helpers/rex_b"
+
+fn main() i32:
+    let i32 n = foo().realise(0)
+    println("{n} {tag_a().realise(0)} {tag_b().realise(0)}")
+    return Result.Ok(0)

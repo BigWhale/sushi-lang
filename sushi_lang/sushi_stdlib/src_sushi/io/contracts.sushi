@@ -18,6 +18,8 @@ a free generic function rather than a provided method. A perk cannot carry a typ
 parameter, so there is no generic Reader@(T).
 :##
 
+public use <io/error>
+
 ##:
 A handle bytes can be read from.
 

@@ -1,0 +1,6 @@
+# The second hop: `outer` re-exports `shapes`, which re-exports `geometry`. An importer
+# of `outer` reaches `Vec` through both.
+public use "helpers/shapes"
+
+public fn describe(Vec v) string:
+    return Result.Ok("{v.x}x{v.y}")

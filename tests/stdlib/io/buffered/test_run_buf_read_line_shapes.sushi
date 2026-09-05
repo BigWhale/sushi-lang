@@ -8,7 +8,6 @@
 # EXPECT_STDOUT_EXACT: "[alpha]\n[]\n[gamma]\n<end>\nok\n"
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn setup(string path) ~ | IoError:
     let File w = open(path, FileMode.Write())??

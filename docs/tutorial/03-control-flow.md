@@ -123,7 +123,6 @@ changes nothing is an infinite loop.
 ```sushi
 use <io/fs>
 use <io/buf>
-use <io/contracts>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??

@@ -6,7 +6,6 @@
 # EXPECT_STDOUT_EXACT: "before\nmeanwhile\nafter: into the file\n"
 
 use <io/fs>
-use <io/contracts>
 
 const string PATH = "/tmp/sushi_console_rebind_redirects.txt"
 
