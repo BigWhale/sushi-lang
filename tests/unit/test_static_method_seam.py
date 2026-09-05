@@ -182,15 +182,17 @@ extend T[] static two() T[]:
     return from([])
 """
 
+# No parameter names T and the position declares no type: neither source reaches it
+# (#573). `Cage.holding(9)` was this shape until the argument became the first source.
 UNSTAMPED_GENERIC = """\
 struct Cage@(T):
-    T item
+    T[] items
 
-extend Cage@(T) static holding(T item) Cage@(T):
-    return Cage(item)
+extend Cage@(T) static empty() Cage@(T):
+    return Cage(from([]))
 
 fn main() i32:
-    println("{Cage.holding(9).item}")
+    println("{Cage.empty().items.len()}")
     return Result.Ok(0)
 """
 
@@ -198,11 +200,11 @@ UNSTAMPED_GENERIC_FOREIGN_RETURN = """\
 struct Cage@(T):
     T item
 
-extend Cage@(T) static describing(T item) i32:
+extend Cage@(T) static describing() i32:
     return 1
 
 fn main() i32:
-    println("{Cage.describing(9)}")
+    println("{Cage.describing()}")
     return Result.Ok(0)
 """
 

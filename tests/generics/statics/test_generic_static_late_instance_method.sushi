@@ -1,0 +1,30 @@
+# The instantiation a static's arguments name is collected by the instantiate pass, so
+# every copy is cut for it: an instance method on the value the static built resolves
+# although no annotation in the program spells Box@(Cat) (#573).
+# EXPECT_STDOUT_EXACT: "44\n"
+perk Loud:
+    fn shout() i32 | StdError
+
+struct Cat:
+    i32 n
+
+extend Cat with Loud:
+    fn shout() i32 | StdError:
+        return self.n * 10
+
+struct Box@(T: Loud):
+    T item
+    i32 first
+
+extend Box@(T) static holding(nom T item) Box@(T) | StdError:
+    let i32 f = item.shout()??
+    return Box(nom item, f)
+
+extend Box@(T) louder() i32 | StdError:
+    return self.first + self.item.shout()??
+
+fn main() i32:
+    match Box.holding(nom Cat(4)):
+        Result.Ok(b) -> println("{b.louder().realise(0) + 0 - 36}")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

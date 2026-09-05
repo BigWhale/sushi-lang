@@ -1,0 +1,26 @@
+# A `match` over a generic static's Result declares no type, and needs none: the
+# argument names T (#573).
+# EXPECT_STDOUT_EXACT: "40\n"
+perk Loud:
+    fn shout() i32 | StdError
+
+struct Cat:
+    i32 n
+
+extend Cat with Loud:
+    fn shout() i32 | StdError:
+        return self.n * 10
+
+struct Box@(T: Loud):
+    T item
+    i32 first
+
+extend Box@(T) static holding(nom T item) Box@(T) | StdError:
+    let i32 f = item.shout()??
+    return Box(nom item, f)
+
+fn main() i32:
+    match Box.holding(nom Cat(4)):
+        Result.Ok(b) -> println("{b.first}")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

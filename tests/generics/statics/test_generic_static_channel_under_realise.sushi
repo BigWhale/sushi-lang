@@ -1,0 +1,25 @@
+# `.realise(default)` over a generic static's Result: T comes from the argument, and
+# the default is checked against the solved instantiation (#573).
+# EXPECT_STDOUT_EXACT: "50\n"
+perk Loud:
+    fn shout() i32 | StdError
+
+struct Cat:
+    i32 n
+
+extend Cat with Loud:
+    fn shout() i32 | StdError:
+        return self.n * 10
+
+struct Box@(T: Loud):
+    T item
+    i32 first
+
+extend Box@(T) static holding(nom T item) Box@(T) | StdError:
+    let i32 f = item.shout()??
+    return Box(nom item, f)
+
+fn main() i32:
+    let Box@(Cat) c = Box.holding(nom Cat(5)).realise(Box(Cat(0), 0))
+    println("{c.first}")
+    return Result.Ok(0)

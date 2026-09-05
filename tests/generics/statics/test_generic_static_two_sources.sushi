@@ -1,0 +1,14 @@
+# Two type parameters, two sources, ONE resolution: an argument names A, and the
+# declared type at the binding site supplies B, which no parameter names (#573).
+# EXPECT_STDOUT_EXACT: "3 0\n"
+struct Pair@(A, B):
+    A first
+    B[] rest
+
+extend Pair@(A, B) static of_first(A a) Pair@(A, B):
+    return Pair(a, from([]))
+
+fn main() i32:
+    let Pair@(i32, string) p = Pair.of_first(3)
+    println("{p.first} {p.rest.len()}")
+    return Result.Ok(0)

@@ -1,0 +1,12 @@
+# Neither source reaches T: no parameter names it, and the position declares no type.
+# CE2060 names both sources (#573).
+# EXPECT_ERROR_CODE: CE2060
+struct Cage@(T):
+    T[] items
+
+extend Cage@(T) static empty() Cage@(T):
+    return Cage(from([]))
+
+fn main() i32:
+    println("{Cage.empty().items.len()}")
+    return Result.Ok(0)

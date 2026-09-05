@@ -1,0 +1,12 @@
+# The argument solves A and nothing reaches B: the refusal names B alone (#573).
+# EXPECT_ERROR_CODE: CE2060
+struct Pair@(A, B):
+    A first
+    B[] rest
+
+extend Pair@(A, B) static of_first(A a) Pair@(A, B):
+    return Pair(a, from([]))
+
+fn main() i32:
+    println("{Pair.of_first(3).first}")
+    return Result.Ok(0)

@@ -297,19 +297,29 @@ Both are **CE0134**, tier 2, with the caret on whichever was written.
 Every target an extension may name, **except an array**. A struct, an enum, a
 **primitive** (`extend f64 static of_int(i32 v) f64:`), a built-in generic
 (`extend List@(i32) static of_one(i32 v) List@(i32):`) and a **generic** target, which
-is a template like any other: one copy per instantiation, and the type argument comes
-from the PROPAGATION STAMP at the binding site, because there is no receiver to read it
-from.
+is a template like any other: one copy per instantiation. A generic static's type
+arguments are solved in two steps, as ONE resolution (#573). First from the ARGUMENTS,
+for every target type parameter that a parameter names (`nom R src` names `R`), exactly
+as a generic free function solves its own. Then from the PROPAGATION STAMP at the
+binding site, for every type parameter still unsolved -- there is no receiver to read
+it from. `Cage.holding(9)` with a plain `T item` is solved by the first step and needs
+no annotation; `Cage.empty()` is solved by the second, and `BufReader.new(nom f, 8192)`
+is the stdlib's example of the first: `R` comes from the handle, in every position,
+which is what lets a `| E` static be written at all -- a Result-valued call is never
+stamped, so the stamp alone (the rule from #542 to #573) left `match`, `.realise` and
+`??` all refused.
 
 An ARRAY target is **CE2104**. An array type has no spelling in an expression position
 -- `i32[].two()` is a parse error, and no form reaches it -- so the declaration would
 compile and never be callable. That is CE2097's hazard, and the answer is the same one:
 if the situation cannot possibly do what the user wrote, it is an error.
 
-A generic static in a position that stamps NOTHING is **CE2060**: there is no receiver
-and no annotation, so nothing says which instantiation was meant. Binding the result
-answers it when the return names the target (`let Cage@(i32) a = Cage.holding(9)`);
-when the return does NOT name the target the signature is what has to change, because
+A type parameter that NEITHER step reaches is **CE2060**, and the text names both
+sources: no argument names it, and this position declares no type. `Cage.empty()` in a
+`println` hole is the shape; `Pair.of_first(3)` in one names `B` alone, because the
+argument solved `A`. Binding the result answers it when the return names the target
+(`let Cage@(i32) a = Cage.empty()`); when the return does NOT name the target, a
+parameter that names the type parameter or the signature is what has to change, because
 a method carries no call-site `@(...)` slot at all (Known Limitation 7). The test is
 narrow on purpose -- it fires only when the base name declares a static of that name --
 because a generic ENUM in an unstamped position is a variant construction whose stamp
@@ -324,10 +334,16 @@ struct Cage@(T):
 extend Cage@(T) static holding(T item) Cage@(T):
     return Cage(item)
 
-let Cage@(i32) a = Cage.holding(9)      # T from the declared type
+let Cage@(i32) a = Cage.holding(9)      # T from the argument; the declared type agrees
+println("{Cage.holding(9).item}")       # T from the argument alone
 ```
 
-That stamp is the reason a static is not only ergonomics. A free function whose `T`
+The instantiate pass collects what the arguments solve, through the same solver, so
+every copy is cut for `Cage<i32>` before the typecheck pass looks it up; an argument
+only the typecheck pass can type interns the instantiation late, through the seam the
+method-generic rung uses, with the static's own copy queued for the fixpoint round.
+
+The stamp is the reason a static is not only ergonomics. A free function whose `T`
 names only the RETURN cannot be inferred (CE2060) and has to spell `box_new@(i32)()`; a
 static reads the binding site instead. It is also why `new` is available as a static's
 name and not as a free function's (CE6001).

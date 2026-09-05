@@ -1,0 +1,12 @@
+# A generic static whose parameter names T is solved from the argument alone, so a
+# position that declares no type is fine. This shape was CE2060 from #542 until #573.
+# EXPECT_STDOUT_EXACT: "9\n"
+struct Cage@(T):
+    T item
+
+extend Cage@(T) static holding(T item) Cage@(T):
+    return Cage(item)
+
+fn main() i32:
+    println("{Cage.holding(9).item}")
+    return Result.Ok(0)
