@@ -91,3 +91,26 @@ def test_the_leak_gated_memory_tests_really_are_gated(name):
     path = TESTS_ROOT / "memory" / f"{name}.sushi"
     assert path.is_file(), f"{path} moved; update this test or the name"
     assert parse_test_metadata(path).expect_no_leaks
+
+
+def test_no_corpus_file_makes_the_parser_warn(capsys):
+    """A warning means the runner discarded something the file meant to assert.
+
+    The value gate to `test_every_directive_name_is_one_the_parser_knows`'s name gate:
+    `TEST_TYPE: compile_error` names a real directive and still asserts nothing, because
+    the parser accepts five values and that is not one of them. The warning is also what
+    breaks the badge job -- `--json` stdout is piped straight into `corpus-results.json`.
+    """
+    from test_metadata import parse_test_metadata
+
+    for path in _sushi_tests():
+        parse_test_metadata(path)
+
+    captured = capsys.readouterr()
+    warnings = [
+        line for line in (captured.out + captured.err).split("\n")
+        if line.startswith("Warning:")
+    ]
+    assert not warnings, (
+        "parsing the corpus emitted warnings, so these files assert less than they "
+        "spell:\n  " + "\n  ".join(warnings))
