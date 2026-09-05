@@ -40,7 +40,7 @@ fn serve(nom TcpStream client) ~:
     return Result.Ok(~)          # client closes here
 
 fn main() i32:
-    let TcpListener server = tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
+    let TcpListener server = listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
     println("{server.local_port().realise(0) > 0}")
     return Result.Ok(0)          # server closes here
 ```
@@ -73,7 +73,7 @@ The receiver is a plain borrow, so `let TcpListener twin = l.share()??` leaves `
 use <net/tcp>
 
 fn main() i32:
-    let TcpListener server = tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
+    let TcpListener server = listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
     match server.share():
         Result.Ok(twin) -> println("two listeners: {twin.is_open() and server.is_open()}")
         Result.Err(_) -> println("no second listener")
@@ -93,11 +93,11 @@ use <net/tcp>
 use <collections/strings>
 
 fn exchange() ~ | NetError:
-    let TcpListener listener = tcp_listen("127.0.0.1", 0, 8)??
+    let TcpListener listener = listen("127.0.0.1", 0, 8)??
     listener.set_timeout(5000)??
 
     let i32 port = listener.local_port()??
-    let TcpStream client = tcp_connect("127.0.0.1", port)??
+    let TcpStream client = connect("127.0.0.1", port)??
     let TcpStream served = listener.accept()??
     client.set_timeouts(5000, 5000)??
     served.set_timeouts(5000, 5000)??

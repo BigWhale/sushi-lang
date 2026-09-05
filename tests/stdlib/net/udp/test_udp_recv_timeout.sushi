@@ -7,7 +7,7 @@
 use <net/udp>
 
 fn main() i32:
-    let UdpSocket s = udp_bind("127.0.0.1", 0).realise(UdpSocket(-1))
+    let UdpSocket s = bind("127.0.0.1", 0).realise(UdpSocket(-1))
     if (not s.set_timeouts(200, 200).is_ok()):
         println("set_timeouts failed")
         return Result.Ok(1)

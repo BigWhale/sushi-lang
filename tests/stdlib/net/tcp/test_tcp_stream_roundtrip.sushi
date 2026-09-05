@@ -12,7 +12,7 @@ use <net/tcp>
 use <collections/strings>
 
 fn main() i32:
-    let TcpListener listener = tcp_listen("127.0.0.1", 0, 8).realise(TcpListener(-1))
+    let TcpListener listener = listen("127.0.0.1", 0, 8).realise(TcpListener(-1))
     if (listener.fd < 0):
         println("listen failed")
         return Result.Ok(1)
@@ -21,7 +21,7 @@ fn main() i32:
         return Result.Ok(1)
 
     let i32 port = listener.local_port().realise(-1)
-    let TcpStream client = tcp_connect("127.0.0.1", port).realise(TcpStream(-1))
+    let TcpStream client = connect("127.0.0.1", port).realise(TcpStream(-1))
     if (client.fd < 0):
         println("connect failed")
         return Result.Ok(1)

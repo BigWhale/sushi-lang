@@ -1,0 +1,28 @@
+# <net/tcp> spells its two free functions by their verb and nothing else: connect() and
+# listen(). The unit is the namespace; a leading tcp_ prefix said what the import already
+# says (#571).
+# EXPECT_STDOUT_EXACT: "server got Mostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/tcp>
+use <collections/strings>
+
+fn exchange() ~ | NetError:
+    let TcpListener listener = listen("127.0.0.1", 0, 8)??
+    listener.set_timeout(5000)??
+    let i32 port = listener.local_port()??
+    let TcpStream client = connect("127.0.0.1", port)??
+    let TcpStream served = listener.accept()??
+    client.set_timeouts(5000, 5000)??
+    served.set_timeouts(5000, 5000)??
+    client.send_all("Mostly Harmless".to_bytes())??
+    let u8[] heard = served.recv_exact(15)??
+    println("server got {heard.to_string()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match exchange():
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> println("failed")
+    return Result.Ok(1)

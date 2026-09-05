@@ -1,0 +1,10 @@
+# The four ip_ constants are deleted, not aliased (#571).
+# EXPECT_ERROR_CODE: CE2008
+use <net/ip>
+
+fn main() i32:
+    let IpAddr a = ip_v4_any()??
+    let IpAddr b = ip_v4_loopback()??
+    let IpAddr c = ip_v6_any()??
+    let IpAddr d = ip_v6_loopback()??
+    return Result.Ok(0)

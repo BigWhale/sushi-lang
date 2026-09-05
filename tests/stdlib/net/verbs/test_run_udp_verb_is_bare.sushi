@@ -1,0 +1,11 @@
+# <net/udp> spells its one free function by its verb: bind(). The udp_ prefix named the
+# unit, and the import already does (#571).
+# EXPECT_STDOUT_EXACT: "true\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/udp>
+
+fn main() i32:
+    let UdpSocket s = bind("127.0.0.1", 0).realise(UdpSocket(-1))
+    println("{s.local_port().realise(0) > 0}")
+    return Result.Ok(0)

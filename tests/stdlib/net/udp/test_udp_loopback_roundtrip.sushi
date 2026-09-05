@@ -9,8 +9,8 @@ use <net/udp>
 use <collections/strings>
 
 fn main() i32:
-    let UdpSocket a = udp_bind("127.0.0.1", 0).realise(UdpSocket(-1))
-    let UdpSocket b = udp_bind("127.0.0.1", 0).realise(UdpSocket(-1))
+    let UdpSocket a = bind("127.0.0.1", 0).realise(UdpSocket(-1))
+    let UdpSocket b = bind("127.0.0.1", 0).realise(UdpSocket(-1))
     if (a.fd < 0 or b.fd < 0):
         println("bind failed")
         return Result.Ok(1)
