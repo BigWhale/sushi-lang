@@ -7,7 +7,7 @@
 use <net/tcp>
 
 fn make_server() TcpListener | NetError:
-    let TcpListener listener = tcp_listen("127.0.0.1", 0, 1)??
+    let TcpListener listener = listen("127.0.0.1", 0, 1)??
     return Result.Ok(listener)
 
 fn main() i32:

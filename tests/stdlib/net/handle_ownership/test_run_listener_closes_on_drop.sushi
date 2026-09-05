@@ -8,7 +8,7 @@ use <net/tcp>
 
 fn main() i32:
     if (true):
-        match tcp_listen("127.0.0.1", 0, 1):
+        match listen("127.0.0.1", 0, 1):
             Result.Ok(_) -> println("listening")
             Result.Err(_) -> println("listen failed")
     println("done")

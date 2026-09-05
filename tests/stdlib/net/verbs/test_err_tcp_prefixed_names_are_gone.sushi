@@ -1,0 +1,8 @@
+# tcp_connect and tcp_listen are deleted, not aliased: the new name is the only one (#571).
+# EXPECT_ERROR_CODE: CE2008
+use <net/tcp>
+
+fn main() i32:
+    let TcpListener l = tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
+    let TcpStream s = tcp_connect("127.0.0.1", 1).realise(TcpStream(-1))
+    return Result.Ok(0)

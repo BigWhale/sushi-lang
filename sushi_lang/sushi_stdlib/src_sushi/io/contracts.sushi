@@ -10,7 +10,7 @@ anything later that satisfies the contract.
 Every contract method answers IoError, and it has to: a perk contract carries ONE
 signature, and there is no Self type and no associated type, so a method cannot answer
 FileError on a File and NetError on a TcpStream. That is why the concrete constructors keep
-the detailed enum -- open() and tcp_connect() -- while the data path is one channel a
+the detailed enum -- open() and connect() -- while the data path is one channel a
 generic can propagate with ??.
 
 Limitations: a perk has no default implementations, so a convenience above these methods is

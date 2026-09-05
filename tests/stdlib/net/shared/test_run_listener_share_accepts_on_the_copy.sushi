@@ -9,7 +9,7 @@ use <net/tcp>
 use <io/contracts>
 
 fn main() i32:
-    let TcpListener server = tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
+    let TcpListener server = listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
     let i32 port = server.local_port().realise(0)
     if (port == 0):
         println("no port")
@@ -18,7 +18,7 @@ fn main() i32:
     match server.share():
         Result.Ok(twin) ->
             server.close()
-            match tcp_connect("127.0.0.1", port):
+            match connect("127.0.0.1", port):
                 Result.Ok(nom client) ->
                     client.write("Mostly Harmless")
                     match twin.accept():

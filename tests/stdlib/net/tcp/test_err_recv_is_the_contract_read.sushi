@@ -7,7 +7,7 @@
 use <net/tcp>
 
 fn main() i32:
-    let TcpStream s = tcp_connect("127.0.0.1", 1).realise(TcpStream(-1))
+    let TcpStream s = connect("127.0.0.1", 1).realise(TcpStream(-1))
     match s.recv(16):
         Result.Ok(got) -> println("{got.len()}")
         Result.Err(_) -> println("failed")

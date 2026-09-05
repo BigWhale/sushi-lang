@@ -5,7 +5,7 @@
 use <net/tcp>
 
 fn shut_then_ask() ~ | NetError:
-    let TcpListener listener = tcp_listen("127.0.0.1", 0, 1)??
+    let TcpListener listener = listen("127.0.0.1", 0, 1)??
     listener.close()??
     println("{listener.local_port()??}")
     return Result.Ok(~)
