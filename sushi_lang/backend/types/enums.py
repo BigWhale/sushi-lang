@@ -10,6 +10,7 @@ from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory, register_clone_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
 from sushi_lang.backend import enum_utils
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def _emit_enum_hash(enum_type: Type) -> Any:
@@ -91,7 +92,7 @@ def _emit_variant_data_hash(codegen: Any, enum_value: ir.Value, variant: Any, in
     data_array = enum_utils.extract_enum_data(codegen, enum_value, name="enum_data")
 
     data_array_type = enum_value.type.elements[1]  # [N x i8]
-    temp_alloca = builder.alloca(data_array_type, name="data_temp")
+    temp_alloca = entry_alloca(builder, data_array_type, name="data_temp")
     builder.store(data_array, temp_alloca)
 
     data_ptr = builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")

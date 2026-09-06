@@ -23,6 +23,7 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import get_element_size_constant
 from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_hashmap_insert(
@@ -115,7 +116,7 @@ def emit_hashmap_insert(
     # Loop-carried across probe steps: the first tombstone this chain passed, or
     # -1. The key may still be live further along the chain, so a tombstone cannot
     # end the probe -- but if the chain runs out, that slot is where the key goes.
-    first_tombstone_idx = builder.alloca(codegen.types.i32, name="first_tombstone_idx")
+    first_tombstone_idx = entry_alloca(builder, codegen.types.i32, name="first_tombstone_idx")
     no_tombstone = ir.Constant(codegen.types.i32, -1)
     builder.store(no_tombstone, first_tombstone_idx)
 
@@ -299,7 +300,7 @@ def emit_hashmap_remove(
     maybe_some = builder.insert_value(maybe_some, some_tag, 0, name="maybe_some_tag")
 
     data_array_type = maybe_llvm_type.elements[1]  # [N x i8]
-    data_ptr = builder.alloca(data_array_type, name="some_data_alloc")
+    data_ptr = entry_alloca(builder, data_array_type, name="some_data_alloc")
     value_ptr = builder.bitcast(data_ptr, ir.PointerType(value_llvm), name="value_ptr")
     builder.store(entry_value, value_ptr)
     data_value = builder.load(data_ptr, name="some_data")
@@ -366,7 +367,7 @@ def emit_hashmap_resize_to_capacity(
     if hash_method is None:
         raise_internal_error("CE0053", type=key_type)
 
-    old_i = builder.alloca(codegen.types.i32, name="old_i")
+    old_i = entry_alloca(builder, codegen.types.i32, name="old_i")
     builder.store(zero_i32, old_i)
 
     rehash_loop_cond_bb = builder.append_basic_block(name="rehash_loop_cond")

@@ -1,0 +1,15 @@
+# EXPECT_STDOUT_EXACT: "600000\n"
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+# Regression for #589: a `foreach` inside another loop used to put its range slots and its
+# counter in the LOOP BODY block, so the frame grew by one set on every pass of the outer
+# loop until the program hit the guard page. The count is large on purpose: a slot in the
+# entry block is one slot whatever the count, and a slot in the body is 200,000 of them.
+
+fn main() i32:
+    let i32 total = 0
+    foreach(i in 0..200000):
+        foreach(j in i..i + 2):
+            total := total + j - i + 1
+    println("{total}")
+    return Result.Ok(0)

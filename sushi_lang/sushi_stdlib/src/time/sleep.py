@@ -4,6 +4,7 @@ import typing
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types, get_timespec_type
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 _platform_time = get_platform_module('time')
 
@@ -32,8 +33,8 @@ def generate_nanosleep(module: ir.Module) -> None:
     entry = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry)
 
-    req = builder.alloca(timespec_type, name="req")
-    rem = builder.alloca(timespec_type, name="rem")
+    req = entry_alloca(builder, timespec_type, name="req")
+    rem = entry_alloca(builder, timespec_type, name="rem")
 
     req_sec_ptr = builder.gep(req, [i32(0), i32(0)], name="req.tv_sec.ptr")
     builder.store(seconds_param, req_sec_ptr)

@@ -7,6 +7,7 @@ from sushi_lang.semantics.ast import DynamicArrayNew, DynamicArrayFrom
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType
 from sushi_lang.backend import gep_utils
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -343,7 +344,7 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
     with codegen.builder.if_then(is_not_null):
         from sushi_lang.backend.destructors import needs_cleanup, emit_value_destructor
         if needs_cleanup(codegen, element_semantic_type):
-            loop_i = codegen.builder.alloca(codegen.types.i32, name="free_loop_i")
+            loop_i = entry_alloca(codegen.builder, codegen.types.i32, name="free_loop_i")
             codegen.builder.store(zero, loop_i)
 
             loop_cond_bb = codegen.builder.append_basic_block(name="free_loop_cond")
@@ -429,7 +430,7 @@ def emit_dynamic_array_fill(codegen: 'LLVMCodegen', array_value: ir.Value, array
     is_empty = codegen.builder.icmp_unsigned("==", current_len, zero)
 
     with codegen.builder.if_then(codegen.builder.not_(is_empty)):
-        loop_i = codegen.builder.alloca(codegen.types.i32, name="fill_loop_i")
+        loop_i = entry_alloca(codegen.builder, codegen.types.i32, name="fill_loop_i")
         codegen.builder.store(zero, loop_i)
 
         loop_cond_bb = codegen.builder.append_basic_block(name="fill_loop_cond")
@@ -475,9 +476,9 @@ def emit_dynamic_array_reverse(codegen: 'LLVMCodegen', array_value: ir.Value, ar
         half_len = codegen.builder.udiv(current_len, two, name="half_len")
 
         element_type = array_type.elements[2].pointee
-        temp_var = codegen.builder.alloca(element_type, name="temp")
+        temp_var = entry_alloca(codegen.builder, element_type, name="temp")
 
-        loop_i = codegen.builder.alloca(codegen.types.i32, name="reverse_loop_i")
+        loop_i = entry_alloca(codegen.builder, codegen.types.i32, name="reverse_loop_i")
         codegen.builder.store(zero, loop_i)
 
         loop_cond_bb = codegen.builder.append_basic_block(name="reverse_loop_cond")
@@ -544,7 +545,7 @@ def emit_fixed_array_fill(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_typ
     one = ir.Constant(codegen.types.i32, 1)
     array_size = ir.Constant(codegen.types.i32, array_type.count)
 
-    loop_i = codegen.builder.alloca(codegen.types.i32, name="fill_loop_i")
+    loop_i = entry_alloca(codegen.builder, codegen.types.i32, name="fill_loop_i")
     codegen.builder.store(zero, loop_i)
 
     loop_cond_bb = codegen.builder.append_basic_block(name="fill_loop_cond")
@@ -585,9 +586,9 @@ def emit_fixed_array_reverse(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_
     array_size_const = ir.Constant(codegen.types.i32, array_size)
 
     element_type = array_type.element
-    temp_var = codegen.builder.alloca(element_type, name="temp")
+    temp_var = entry_alloca(codegen.builder, element_type, name="temp")
 
-    loop_i = codegen.builder.alloca(codegen.types.i32, name="reverse_loop_i")
+    loop_i = entry_alloca(codegen.builder, codegen.types.i32, name="reverse_loop_i")
     codegen.builder.store(zero, loop_i)
 
     loop_cond_bb = codegen.builder.append_basic_block(name="reverse_loop_cond")

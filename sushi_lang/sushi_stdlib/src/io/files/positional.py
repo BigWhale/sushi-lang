@@ -23,6 +23,7 @@ from sushi_lang.sushi_stdlib.src.io.files.errno import (
 from sushi_lang.sushi_stdlib.src.io.files.results import emit_ok_result, emit_err_result
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_free, declare_malloc
 from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def generate_ir(module: ir.Module) -> None:
@@ -64,7 +65,7 @@ def generate_fd_open(module: ir.Module) -> None:
     path.name, intent.name, mode.name = "path", "intent", "mode"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    flags_slot = builder.alloca(i32, name="flags_slot")
+    flags_slot = entry_alloca(builder, i32, name="flags_slot")
     builder.store(ir.Constant(i32, platform_files.O_RDONLY), flags_slot)
 
     # One block per intent, and the default is read-only rather than a trap: an

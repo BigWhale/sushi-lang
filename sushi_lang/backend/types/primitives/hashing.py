@@ -11,6 +11,7 @@ from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
 from sushi_lang.backend.types.hash_utils import FNV1A_OFFSET_BASIS, emit_fnv1a_combine
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 FXHASH_MULTIPLIER = 0x517cc1b727220a95  # FxHash prime for 64-bit mixing
@@ -93,11 +94,11 @@ def _emit_string_hash_fnv1a(codegen: Any, string_value: ir.Value) -> ir.Value:
     str_len_i32 = builder.extract_value(string_value, 1, name="str_len")
     str_len_u64 = builder.zext(str_len_i32, u64)
 
-    hash_value = builder.alloca(u64, name="hash")
+    hash_value = entry_alloca(builder, u64, name="hash")
     offset_basis = ir.Constant(u64, FNV1A_OFFSET_BASIS)
     builder.store(offset_basis, hash_value)
 
-    counter = builder.alloca(u64, name="counter")
+    counter = entry_alloca(builder, u64, name="counter")
     zero_u64 = ir.Constant(u64, 0)
     builder.store(zero_u64, counter)
 

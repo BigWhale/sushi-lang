@@ -3,6 +3,7 @@
 import llvmlite.ir as ir
 from ..intrinsics import declare_utf8_count_intrinsic
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types, get_maybe_type
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_string_starts_with(module: ir.Module) -> ir.Function:
@@ -306,7 +307,7 @@ def emit_string_find(module: ir.Module) -> ir.Function:
     undef_maybe = ir.Constant(maybe_type, ir.Undefined)
     maybe_with_tag = builder.insert_value(undef_maybe, ir.Constant(i32, 0), 0, name="maybe_some_tag")
 
-    temp_alloca = builder.alloca(data_array_ty, name="data_temp")
+    temp_alloca = entry_alloca(builder, data_array_ty, name="data_temp")
     builder.store(ir.Constant(data_array_ty, None), temp_alloca)
     data_ptr_i8 = builder.bitcast(temp_alloca, i8_ptr, name="data_ptr_i8")
     data_ptr_i32 = builder.bitcast(data_ptr_i8, ir.PointerType(i32), name="data_ptr_i32")
@@ -513,7 +514,7 @@ def emit_string_find_last(module: ir.Module) -> ir.Function:
     undef_maybe = ir.Constant(maybe_type, ir.Undefined)
     maybe_with_tag = builder.insert_value(undef_maybe, ir.Constant(i32, 0), 0, name="maybe_some_tag")
 
-    temp_alloca = builder.alloca(data_array_ty, name="data_temp")
+    temp_alloca = entry_alloca(builder, data_array_ty, name="data_temp")
     builder.store(ir.Constant(data_array_ty, None), temp_alloca)
     data_ptr_i8 = builder.bitcast(temp_alloca, i8_ptr, name="data_ptr_i8")
     data_ptr_i32 = builder.bitcast(data_ptr_i8, ir.PointerType(i32), name="data_ptr_i32")

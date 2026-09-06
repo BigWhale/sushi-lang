@@ -8,6 +8,7 @@ from sushi_lang.backend import gep_utils
 from ..types import get_user_entry_type
 from sushi_lang.semantics.generics.hashmap import extract_key_value_types, ensure_entry_type_in_struct_table
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     pass
@@ -40,7 +41,7 @@ def emit_hashmap_keys(
     iterator_type = IteratorType(element_type=key_type)
     iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)
 
-    iterator_slot = codegen.builder.alloca(iterator_struct_type, name="hashmap_keys_iterator")
+    iterator_slot = entry_alloca(codegen.builder, iterator_struct_type, name="hashmap_keys_iterator")
 
     index_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 0, "index_ptr")
     codegen.builder.store(ir.Constant(codegen.types.i32, 0), index_ptr)
@@ -85,7 +86,7 @@ def emit_hashmap_values(
     iterator_type = IteratorType(element_type=value_type)
     iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)
 
-    iterator_slot = codegen.builder.alloca(iterator_struct_type, name="hashmap_values_iterator")
+    iterator_slot = entry_alloca(codegen.builder, iterator_struct_type, name="hashmap_values_iterator")
 
     index_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 0, "index_ptr")
     codegen.builder.store(ir.Constant(codegen.types.i32, 0), index_ptr)
@@ -129,7 +130,7 @@ def emit_hashmap_entries(
     iterator_type = IteratorType(element_type=entry_struct_type)
     iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)
 
-    iterator_slot = codegen.builder.alloca(iterator_struct_type, name="hashmap_entries_iterator")
+    iterator_slot = entry_alloca(codegen.builder, iterator_struct_type, name="hashmap_entries_iterator")
 
     index_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 0, "index_ptr")
     codegen.builder.store(ir.Constant(codegen.types.i32, 0), index_ptr)

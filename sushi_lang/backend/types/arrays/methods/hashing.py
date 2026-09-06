@@ -10,6 +10,7 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory, get_builtin_method
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
@@ -34,7 +35,7 @@ def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
         if isinstance(receiver_value.type, ir.PointerType):
             array_ptr = receiver_value
         else:
-            array_ptr = builder.alloca(receiver_type, name="array_temp")
+            array_ptr = entry_alloca(builder, receiver_type, name="array_temp")
             builder.store(receiver_value, array_ptr)
 
         for i in range(array_type.size):
@@ -69,14 +70,14 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
         i32 = ir.IntType(INT32_BIT_WIDTH)
         u64 = ir.IntType(INT64_BIT_WIDTH)
 
-        hash_value_alloca = builder.alloca(u64, name="hash_value")
+        hash_value_alloca = entry_alloca(builder, u64, name="hash_value")
         initial_hash = emit_fnv1a_init(codegen)
         builder.store(initial_hash, hash_value_alloca)
 
         if isinstance(receiver_value.type, ir.PointerType):
             array_struct_ptr = receiver_value
         else:
-            array_struct_ptr = builder.alloca(receiver_type, name="array_struct_temp")
+            array_struct_ptr = entry_alloca(builder, receiver_type, name="array_struct_temp")
             builder.store(receiver_value, array_struct_ptr)
 
         len_ptr = codegen.types.get_dynamic_array_len_ptr(builder, array_struct_ptr)
@@ -85,7 +86,7 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
         data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(builder, array_struct_ptr)
         data_ptr = builder.load(data_ptr_ptr, name="array_data")
 
-        counter = builder.alloca(i32, name="counter")
+        counter = entry_alloca(builder, i32, name="counter")
         zero_i32 = ZERO_I32
         builder.store(zero_i32, counter)
 

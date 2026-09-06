@@ -27,6 +27,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_string_type,
     get_unit_enum_type,
 )
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 # How many answers the first allocation holds. A host with more than this many
 # addresses grows the array; most have one or two.
@@ -70,11 +71,11 @@ def generate_resolve(module: ir.Module) -> None:
 
     # Every alloca is here, in the entry block. One inside the walk below would
     # grow the frame per answer, and the host buffer is a kilobyte each time.
-    res_slot = builder.alloca(i8_ptr, name="res_slot")
-    cur_slot = builder.alloca(i8_ptr, name="cur_slot")
-    len_slot = builder.alloca(i32, name="len_slot")
-    cap_slot = builder.alloca(i32, name="cap_slot")
-    data_slot = builder.alloca(string_ty.as_pointer(), name="data_slot")
+    res_slot = entry_alloca(builder, i8_ptr, name="res_slot")
+    cur_slot = entry_alloca(builder, i8_ptr, name="cur_slot")
+    len_slot = entry_alloca(builder, i32, name="len_slot")
+    cap_slot = entry_alloca(builder, i32, name="cap_slot")
+    data_slot = entry_alloca(builder, string_ty.as_pointer(), name="data_slot")
     host_buf = addr.alloca_zeroed(builder, platform_net.NI_MAXHOST, "host_buf")
 
     hints = addr.emit_hints(builder, platform_net.SOCK_STREAM, passive=False)

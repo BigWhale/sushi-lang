@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory import allocas
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -341,16 +342,10 @@ class ScopeManager:
         return self._enter_local(name, ty, semantic_ty, register_cleanup)
 
     def entry_alloca(self, ty: ir.Type, name: str) -> ir.AllocaInstr:
-        """Create alloca instruction in function entry block."""
-        if self.codegen.entry_block is None:
-            raise_internal_error("CE0011")
-        if self.codegen.alloca_builder is None:
-            raise_internal_error("CE0012")
-        if hasattr(self.codegen, "entry_branch") and self.codegen.entry_branch is not None:
-            self.codegen.alloca_builder.position_before(self.codegen.entry_branch)
-        else:
-            self.codegen.alloca_builder.position_at_start(self.codegen.entry_block)
-        return self.codegen.alloca_builder.alloca(ty, name=name)
+        """Make a stack slot in the entry block of the function being emitted."""
+        if self.codegen.builder is None:
+            raise_internal_error("CE0009")
+        return allocas.entry_alloca(self.codegen.builder, ty, name)
 
     def register_struct_cleanup(self, name: str, struct_type: 'StructType', slot: ir.AllocaInstr) -> None:
         """Register a struct variable for RAII cleanup of its dynamic-array fields."""

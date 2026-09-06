@@ -13,6 +13,7 @@ from sushi_lang.semantics.typesys import (
     Type, BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, FunctionType)
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, DA_DATA_INDEX
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -156,7 +157,7 @@ def _emit_dynamic_array_destructor(
             ], name="array_len_ptr")
             array_len = builder.load(len_ptr, name="array_len")
 
-            loop_i = builder.alloca(ZERO_I32.type, name="cleanup_i")
+            loop_i = entry_alloca(builder, ZERO_I32.type, name="cleanup_i")
             builder.store(ZERO_I32, loop_i)
 
             loop_cond_bb = builder.append_basic_block(name="array_cleanup_cond")
@@ -200,7 +201,7 @@ def _emit_fixed_array_destructor(
     count = ir.Constant(ZERO_I32.type, value_type.size)
     first_elem = builder.gep(value_ptr, [ZERO_I32, ZERO_I32], name="fixed_first_elem")
 
-    loop_i = builder.alloca(ZERO_I32.type, name="fixed_cleanup_i")
+    loop_i = entry_alloca(builder, ZERO_I32.type, name="fixed_cleanup_i")
     builder.store(ZERO_I32, loop_i)
 
     cond_bb = builder.append_basic_block(name="fixed_cleanup_cond")

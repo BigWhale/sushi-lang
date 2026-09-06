@@ -1,6 +1,7 @@
 """UTF-8 Character Count Intrinsic"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_utf8_count_intrinsic(module: ir.Module) -> ir.Function:
@@ -30,9 +31,9 @@ def emit_utf8_count_intrinsic(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
 
-    count = builder.alloca(i32, name="count")
+    count = entry_alloca(builder, i32, name="count")
     builder.store(ir.Constant(i32, 0), count)
-    idx = builder.alloca(i32, name="idx")
+    idx = entry_alloca(builder, i32, name="idx")
     builder.store(ir.Constant(i32, 0), idx)
     builder.branch(loop_header)
 

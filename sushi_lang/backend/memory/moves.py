@@ -36,7 +36,7 @@ class MoveTracker:
         current builder position -- the binding's declaration."""
         flag = self._flags.get(slot)
         if flag is None:
-            flag = self.codegen.alloca_builder.alloca(ir.IntType(1), name="drop_flag")
+            flag = self.codegen.memory.entry_alloca(ir.IntType(1), "drop_flag")
             self._flags[slot] = flag
         self.codegen.builder.store(ir.Constant(ir.IntType(1), 1), flag)
 

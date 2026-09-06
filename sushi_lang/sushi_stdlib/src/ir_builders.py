@@ -2,6 +2,7 @@
 
 from typing import Callable, Optional, Tuple, Any
 import llvmlite.ir as ir
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 class IRStructBuilder:
@@ -83,7 +84,7 @@ class IRLoopBuilder:
         if exit_block is None:
             exit_block = func.append_basic_block("loop_exit")
 
-        i_ptr = builder.alloca(i32, name="i_ptr")
+        i_ptr = entry_alloca(builder, i32, name="i_ptr")
         builder.store(start, i_ptr)
         builder.branch(loop_cond_block)
 

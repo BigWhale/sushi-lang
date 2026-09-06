@@ -6,6 +6,7 @@ from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types, get_string_type, get_maybe_type
 from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 _platform_env = get_platform_module('env')
 
@@ -72,7 +73,7 @@ def generate_getenv(module: ir.Module) -> None:
 
     string_complete = cstr_to_fat_pointer_with_len(builder, string_buffer, result_len, owned=1)
 
-    data_temp = builder.alloca(maybe_string_type.elements[1], name="data_temp")
+    data_temp = entry_alloca(builder, maybe_string_type.elements[1], name="data_temp")
 
     data_temp_string = builder.bitcast(data_temp, string_type.as_pointer(), name="data_temp_string")
     builder.store(string_complete, data_temp_string)

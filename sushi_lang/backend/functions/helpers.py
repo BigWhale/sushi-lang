@@ -147,7 +147,6 @@ class FunctionHelpers:
     def begin_function(self, llvm_fn: ir.Function, fn_def: FuncDef | None = None) -> None:
         """Initialize function emission context."""
         self.codegen.func = llvm_fn
-        self.codegen.entry_branch = None
         # The borrow pass stamps the names whose moves do not dominate their scope exit on the
         # BODY block (#414); registration arms a runtime drop flag for exactly those.
         body = getattr(fn_def, "body", None) if fn_def is not None else None
@@ -161,13 +160,13 @@ class FunctionHelpers:
         self._variable_types_stack.append(self.codegen.variable_types)
         self.codegen.variable_types = {}
 
+        # Two blocks, and the entry one holds the branch and the stack slots alone. The
+        # slots go there through `memory.entry_alloca`, which finds the block from the
+        # builder rather than from a field the caller has to keep in step.
         entry = llvm_fn.append_basic_block(name="entry")
         start = llvm_fn.append_basic_block(name="start")
 
-        self.codegen.entry_block = entry
         self.codegen.builder = ir.IRBuilder(start)
-        self.codegen.alloca_builder = ir.IRBuilder(entry)
-        self.codegen.alloca_builder.position_at_start(entry)
 
         self.codegen.memory.reset_scope_stack()
         self.codegen.memory.push_scope()
@@ -176,7 +175,7 @@ class FunctionHelpers:
         self.codegen.dynamic_arrays = DynamicArrayManager(self.codegen.builder, self.codegen)
         self.codegen.dynamic_arrays.push_scope()
 
-        self.codegen.entry_branch = self.codegen.alloca_builder.branch(start)
+        ir.IRBuilder(entry).branch(start)
 
         param_semantic_types = {}
         if fn_def is not None:
@@ -256,10 +255,7 @@ class FunctionHelpers:
         self.codegen.current_conditional_moves = frozenset()
         self.codegen.func = None
         self.codegen.builder = None
-        self.codegen.alloca_builder = None
-        self.codegen.entry_block = None
         self.codegen.memory.reset_scope_stack()
-        self.codegen.entry_branch = None
         self.codegen.variable_types = (
             self._variable_types_stack.pop() if self._variable_types_stack else {}
         )

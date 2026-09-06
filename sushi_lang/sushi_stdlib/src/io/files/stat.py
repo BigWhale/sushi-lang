@@ -16,6 +16,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.io.files.errno import emit_errno_err_result
 from sushi_lang.sushi_stdlib.src.io.files.results import emit_ok_result
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def generate_ir(module: ir.Module) -> None:
@@ -37,7 +38,7 @@ def _emit_stat_call(builder: ir.IRBuilder, stat_func: ir.Function,
                     path: ir.Value) -> tuple:
     """Alloca the opaque stat buffer, make the call; answer (success_i1, buffer)."""
     i8, i8_ptr, i32, i64 = get_basic_types()
-    stat_buffer = builder.alloca(ir.ArrayType(i8, 144), name="stat_buffer")
+    stat_buffer = entry_alloca(builder, ir.ArrayType(i8, 144), name="stat_buffer")
     stat_buffer_ptr = builder.bitcast(stat_buffer, i8_ptr, name="stat_ptr")
     result = builder.call(stat_func, [path, stat_buffer_ptr], name="stat_result")
     success = builder.icmp_signed("==", result, ir.Constant(i32, 0), name="stat_success")

@@ -2,6 +2,7 @@
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_strcmp_intrinsic(module: ir.Module) -> ir.Function:
@@ -43,7 +44,7 @@ def emit_strcmp_intrinsic(module: ir.Module) -> ir.Function:
     size1_lt_size2 = builder.icmp_signed("<", size1, size2, name="size1_lt_size2")
     min_size = builder.select(size1_lt_size2, size1, size2, name="min_size")
 
-    idx = builder.alloca(i32, name="idx")
+    idx = entry_alloca(builder, i32, name="idx")
     builder.store(ir.Constant(i32, 0), idx)
     builder.branch(loop_header)
 

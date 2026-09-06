@@ -33,6 +33,6 @@ def emit_array_literal(codegen: 'LLVMCodegen', expr: ArrayLiteral) -> ir.Value:
     if expanded is not None:
         return ir.Constant(array_type, expanded)
 
-    array_alloca = codegen.alloca_builder.alloca(array_type, name="array_literal")
+    array_alloca = codegen.memory.entry_alloca(array_type, "array_literal")
     runs.fill_fixed_slot(codegen, array_alloca, emitted, element_type)
     return codegen.builder.load(array_alloca)

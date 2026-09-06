@@ -1,0 +1,16 @@
+# EXPECT_STDOUT_EXACT: "1800000\n"
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+# Regression for #589: the iterator a protocol `foreach` walks lives in a slot, and the slot
+# used to be made where the loop stands rather than in the entry block.
+
+fn main() i32:
+    let i32[] arr = from([1, 2, 3])
+    let i32 total = 0
+    let i32 passes = 0
+    while (passes < 300000):
+        foreach(n in arr.iter()):
+            total := total + n
+        passes := passes + 1
+    println("{total}")
+    return Result.Ok(0)

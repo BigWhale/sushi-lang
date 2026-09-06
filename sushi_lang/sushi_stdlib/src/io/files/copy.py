@@ -6,6 +6,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.io.files.errno import emit_file_error_tag
 from sushi_lang.sushi_stdlib.src.io.files.results import emit_ok_result, emit_err_result
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def generate_ir(module: ir.Module) -> None:
@@ -46,12 +47,12 @@ def generate_copy(module: ir.Module) -> None:
     # malloc that no exit path freed, and this function has two `ret` instructions reached
     # by four routes -- a per-exit free is one missed branch away from a leak and one
     # doubled branch away from a double free (#291).
-    copy_buffer = builder.alloca(ir.ArrayType(i8, COPY_BUFFER_BYTES), name="copy_buffer_local")
+    copy_buffer = entry_alloca(builder, ir.ArrayType(i8, COPY_BUFFER_BYTES), name="copy_buffer_local")
     copy_buffer = builder.bitcast(copy_buffer, i8_ptr, name="copy_buffer")
 
     # errno is read on the failure edge and parked here, BEFORE any close()
     # call can overwrite it; the shared error block loads it back.
-    err_tag_slot = builder.alloca(i32, name="err_tag_slot")
+    err_tag_slot = entry_alloca(builder, i32, name="err_tag_slot")
 
     src_fd = builder.call(open_func, [
         src_null_term,

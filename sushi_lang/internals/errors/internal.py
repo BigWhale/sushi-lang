@@ -43,14 +43,6 @@ _add(ErrorMessage("CE0010", Severity.ERROR,
     "function context not initialized",
     Category.INTERNAL, "Function context is None - cannot emit code outside function context."))
 
-_add(ErrorMessage("CE0011", Severity.ERROR,
-    "entry block not initialized",
-    Category.INTERNAL, "Entry block is None - function entry block required."))
-
-_add(ErrorMessage("CE0012", Severity.ERROR,
-    "alloca builder not initialized",
-    Category.INTERNAL, "Alloca builder is None - function entry block required."))
-
 _add(ErrorMessage("CE0013", Severity.ERROR,
     "runtime function '{name}' not declared",
     Category.INTERNAL, "C library function not declared - runtime initialization required."))

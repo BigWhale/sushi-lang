@@ -6,6 +6,7 @@ from llvmlite import ir
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.backend import gep_utils
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -35,7 +36,7 @@ def emit_fixed_array_iter(codegen: 'LLVMCodegen', call: MethodCall, array_slot: 
     iterator_type = IteratorType(element_type=element_semantic_type)
     iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)
 
-    iterator_slot = codegen.builder.alloca(iterator_struct_type)
+    iterator_slot = entry_alloca(codegen.builder, iterator_struct_type)
 
     index_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 0, "index_ptr")
     codegen.builder.store(ir.Constant(codegen.types.i32, 0), index_ptr)
@@ -72,7 +73,7 @@ def emit_dynamic_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_v
     iterator_type = IteratorType(element_type=element_semantic_type)
     iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)
 
-    iterator_slot = codegen.builder.alloca(iterator_struct_type)
+    iterator_slot = entry_alloca(codegen.builder, iterator_struct_type)
 
     index_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 0, "index_ptr")
     codegen.builder.store(ir.Constant(codegen.types.i32, 0), index_ptr)

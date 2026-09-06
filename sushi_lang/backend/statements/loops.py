@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_both_initialized
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from llvmlite import ir
@@ -59,7 +60,7 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     iterator_type = IteratorType(element_type=node.item_type)
     iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)
 
-    iterator_slot = codegen.builder.alloca(iterator_struct_type, name="__iter")
+    iterator_slot = entry_alloca(codegen.builder, iterator_struct_type, name="__iter")
     codegen.builder.store(iterator_value, iterator_slot)
 
     zero = ir.Constant(codegen.types.i32, 0)
@@ -393,10 +394,10 @@ def _emit_range_foreach(codegen: 'LLVMCodegen', node: 'Foreach', range_expr: 'Ra
     end_value = codegen.expressions.emit_expr(range_expr.end)
     end_i32 = codegen.utils.as_i32(end_value)
 
-    start_slot = codegen.builder.alloca(codegen.types.i32, name="range_start")
+    start_slot = entry_alloca(codegen.builder, codegen.types.i32, name="range_start")
     codegen.builder.store(start_i32, start_slot)
 
-    end_slot = codegen.builder.alloca(codegen.types.i32, name="range_end")
+    end_slot = entry_alloca(codegen.builder, codegen.types.i32, name="range_end")
     codegen.builder.store(end_i32, end_slot)
 
     start_loaded = codegen.builder.load(start_slot, name="start_val")
@@ -444,7 +445,7 @@ def _emit_range_loop_path(
     incr_bb = codegen.func.append_basic_block(name=f"range.{'asc' if ascending else 'desc'}.incr")
 
     start_val = codegen.builder.load(start_slot, name="start_val")
-    counter_slot = codegen.builder.alloca(codegen.types.i32, name=node.item_name)
+    counter_slot = entry_alloca(codegen.builder, codegen.types.i32, name=node.item_name)
     codegen.builder.store(start_val, counter_slot)
 
     codegen.builder.branch(cond_bb)
