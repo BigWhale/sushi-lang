@@ -183,6 +183,12 @@ Multi-unit projects (those with `use` statements to other `.sushi` files) automa
 **How it works:**
 - Semantic analysis always runs whole-program (fast, pure Python)
 - After analysis, a content-based fingerprint is computed per unit
+- A unit's fingerprint covers its own source and declarations, and the **interface** of
+  every unit in its dependency closure: each declaration's shape (a struct's field order
+  and field types, an enum's variant order and payloads, a signature's parameter modes
+  and error channel) and each public constant's **value**, because a dependent bakes all
+  of those into its own object. The closure is transitive, so a type reached through a
+  `public use` counts, and it includes a source library's injected units
 - Each cached object is content-addressed: its filename is
   `{name}.{global_key}.{fingerprint}.o`, where `global_key` digests the compiler
   version, target triple, opt level, **and** a content digest of the compiler's own
