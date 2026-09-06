@@ -145,6 +145,9 @@ Print internal state.
 ages.debug()
 ```
 
+A key or a value of a primitive type or a string prints as `println` writes it, and a
+string is quoted. Anything else prints as `<value>`.
+
 ## Key Requirements
 
 Keys must implement `.hash() -> u64` method. Supported types:

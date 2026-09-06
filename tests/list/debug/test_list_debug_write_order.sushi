@@ -1,0 +1,10 @@
+# EXPECT_STDOUT_EXACT: "before\nList@(string) {\n  len: 1, capacity: 1\n  [0] "one"\n}\nafter\n"
+# Regression for #592 fault 2: the "%s" read ran on into the literal next to the
+# element in memory, so the line read `[0] "onebefore"`.
+fn main() i32:
+    let List@(string) a = List.new()
+    a.push("one")
+    println("before")
+    a.debug()
+    println("after")
+    return Result.Ok(0)

@@ -1,0 +1,12 @@
+# EXPECT_STDOUT_EXACT: "List@(string) {\n  len: 1, capacity: 1\n  [0] "one"\n}\nList@(string) {\n  len: 1, capacity: 1\n  [0] "two"\n}\n"
+# Regression for #592 fault 1: the format-string global was made inside an
+# `except KeyError`, so the SECOND debug() call in a module found the global,
+# skipped the branch and read an unbound name. The compiler stopped with CE0000.
+fn main() i32:
+    let List@(string) a = List.new()
+    a.push("one")
+    a.debug()
+    let List@(string) b = List.new()
+    b.push("two")
+    b.debug()
+    return Result.Ok(0)

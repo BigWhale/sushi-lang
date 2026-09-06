@@ -1,12 +1,14 @@
 """List<T> debug method implementation."""
 
 from typing import Any
-from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
+from sushi_lang.semantics.typesys import StructType
 from sushi_lang.semantics.generics.type_display import display_type
 import llvmlite.ir as ir
 from .types import extract_element_type, get_list_len_ptr, get_list_capacity_ptr, get_list_data_ptr
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32
-from sushi_lang.backend.generics.debug_output import emit_debug_string, emit_debug_i32
+from sushi_lang.backend.generics.debug_output import (
+    emit_debug_string, emit_debug_i32, emit_debug_value
+)
 from sushi_lang.backend.memory.allocas import entry_alloca
 
 
@@ -68,7 +70,7 @@ def emit_list_debug(
     element_ptr = builder.gep(data_ptr, [i_val], name="element_ptr")
     element = builder.load(element_ptr, name="element")
 
-    emit_debug_print_value(codegen, builder, element, element_type)
+    emit_debug_value(codegen, builder, element, element_type)
     emit_debug_string(codegen, builder, "\n")
 
     i_next = builder.add(i_val, one_i32, name="i_next")
@@ -80,94 +82,3 @@ def emit_list_debug(
     emit_debug_string(codegen, builder, "}\n")
 
     return ir.Constant(codegen.types.i32, 0)
-
-
-def emit_debug_print_value(codegen: Any, builder: Any, value: ir.Value, value_type: Type) -> None:
-    """Helper to print a value for debug output."""
-
-    if value_type == BuiltinType.I32:
-        emit_debug_i32(codegen, builder, value)
-    elif value_type == BuiltinType.I8:
-        value_i32 = builder.zext(value, codegen.types.i32, name="i8_to_i32")
-        emit_debug_i32(codegen, builder, value_i32)
-    elif value_type == BuiltinType.I16:
-        value_i32 = builder.sext(value, codegen.types.i32, name="i16_to_i32")
-        emit_debug_i32(codegen, builder, value_i32)
-    elif value_type == BuiltinType.I64:
-        fmt_str = "%lld"
-        str_bytes = (fmt_str + '\0').encode('utf-8')
-        str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
-
-        global_name = ".fmt_i64_debug"
-        try:
-            str_const = codegen.builder.module.get_global(global_name)
-        except KeyError:
-            str_const = ir.GlobalVariable(codegen.builder.module, str_type, name=global_name)
-            str_const.linkage = 'internal'
-            str_const.global_constant = True
-            str_const.initializer = ir.Constant(str_type, bytearray(str_bytes))
-
-            str_ptr = builder.gep(str_const, [ZERO_I32, ZERO_I32], name="fmt_ptr")
-
-        printf_fn = codegen.runtime.libc_stdio.printf
-        builder.call(printf_fn, [str_ptr, value])
-    elif value_type == BuiltinType.STRING:
-        emit_debug_string(codegen, builder, '"')
-        fmt_str = "%s"
-        str_bytes = (fmt_str + '\0').encode('utf-8')
-        str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
-
-        global_name = ".fmt_str_debug"
-        try:
-            str_const = codegen.builder.module.get_global(global_name)
-        except KeyError:
-            str_const = ir.GlobalVariable(codegen.builder.module, str_type, name=global_name)
-            str_const.linkage = 'internal'
-            str_const.global_constant = True
-            str_const.initializer = ir.Constant(str_type, bytearray(str_bytes))
-
-            str_ptr = builder.gep(str_const, [ZERO_I32, ZERO_I32], name="fmt_ptr")
-
-        printf_fn = codegen.runtime.libc_stdio.printf
-        builder.call(printf_fn, [str_ptr, value])
-        emit_debug_string(codegen, builder, '"')
-    elif value_type == BuiltinType.BOOL:
-        true_bb = builder.append_basic_block(name="print_true")
-        false_bb = builder.append_basic_block(name="print_false")
-        after_bb = builder.append_basic_block(name="after_print_bool")
-
-        is_true = builder.icmp_signed("!=", value, ir.Constant(codegen.types.i32, 0), name="is_true")
-        builder.cbranch(is_true, true_bb, false_bb)
-
-        builder.position_at_end(true_bb)
-        emit_debug_string(codegen, builder, "true")
-        builder.branch(after_bb)
-
-        builder.position_at_end(false_bb)
-        emit_debug_string(codegen, builder, "false")
-        builder.branch(after_bb)
-
-        builder.position_at_end(after_bb)
-    elif value_type == BuiltinType.F32 or value_type == BuiltinType.F64:
-        fmt_str = "%f"
-        str_bytes = (fmt_str + '\0').encode('utf-8')
-        str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
-
-        global_name = ".fmt_float_debug"
-        try:
-            str_const = codegen.builder.module.get_global(global_name)
-        except KeyError:
-            str_const = ir.GlobalVariable(codegen.builder.module, str_type, name=global_name)
-            str_const.linkage = 'internal'
-            str_const.global_constant = True
-            str_const.initializer = ir.Constant(str_type, bytearray(str_bytes))
-
-            str_ptr = builder.gep(str_const, [ZERO_I32, ZERO_I32], name="fmt_ptr")
-
-        if value_type == BuiltinType.F32:
-            value = builder.fpext(value, ir.DoubleType(), name="f32_to_f64")
-
-        printf_fn = codegen.runtime.libc_stdio.printf
-        builder.call(printf_fn, [str_ptr, value])
-    else:
-        emit_debug_string(codegen, builder, "<value>")

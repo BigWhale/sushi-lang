@@ -1,7 +1,7 @@
 """HashMap<K, V> debug method implementation."""
 
 from typing import Any
-from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
+from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 from ..types import get_hashmap_field_ptrs, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
 from sushi_lang.semantics.generics.hashmap import extract_key_value_types
@@ -9,7 +9,9 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i8_const
 from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_VALUE_INDICES, ENTRY_STATE_INDICES
 from sushi_lang.backend.generics.container_walk import emit_container_walk
-from sushi_lang.backend.generics.debug_output import emit_debug_string, emit_debug_i32
+from sushi_lang.backend.generics.debug_output import (
+    emit_debug_string, emit_debug_i32, emit_debug_value
+)
 
 
 def emit_hashmap_debug(
@@ -86,13 +88,13 @@ def emit_hashmap_debug(
 
         key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="key_ptr")
         key = builder.load(key_ptr, name="key")
-        emit_debug_print_value(codegen, builder, key, key_type)
+        emit_debug_value(codegen, builder, key, key_type)
 
         emit_debug_string(codegen, builder, " -> ")
 
         value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="value_ptr")
         value = builder.load(value_ptr, name="value")
-        emit_debug_print_value(codegen, builder, value, value_type)
+        emit_debug_value(codegen, builder, value, value_type)
 
         emit_debug_string(codegen, builder, "\n")
         builder.branch(join_bb)
@@ -110,58 +112,3 @@ def emit_hashmap_debug(
     emit_debug_string(codegen, builder, "}\n")
 
     return ZERO_I32
-
-
-def emit_debug_print_value(codegen: Any, builder: Any, value: ir.Value, value_type: Type) -> None:
-    """Helper to print a value for debug output."""
-
-    if value_type == BuiltinType.I32:
-        emit_debug_i32(codegen, builder, value)
-    elif value_type == BuiltinType.STRING:
-        emit_debug_string(codegen, builder, '"')
-        # Sushi strings are length-prefixed {i8* data, i32 len} and are NOT
-        # null-terminated. Printing them with "%s" makes printf read past the
-        # end until a stray NUL, spilling adjacent strings into the output
-        # (e.g. "alice" followed by "bob" printed as "alicebob"). Use "%.*s"
-        # with the explicit length so printf copies exactly `len` bytes.
-        data_ptr = builder.extract_value(value, 0, name="str_data")
-        length = builder.extract_value(value, 1, name="str_len")
-
-        fmt_str = "%.*s"
-        str_bytes = (fmt_str + '\0').encode('utf-8')
-        str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
-
-        global_name = ".fmt_str_len_debug"
-        try:
-            str_const = codegen.builder.module.get_global(global_name)
-        except KeyError:
-            str_const = ir.GlobalVariable(codegen.builder.module, str_type, name=global_name)
-            str_const.linkage = 'internal'
-            str_const.global_constant = True
-            str_const.initializer = ir.Constant(str_type, bytearray(str_bytes))
-
-        zero = ZERO_I32
-        str_ptr = builder.gep(str_const, [zero, zero], name="fmt_ptr")
-
-        printf_fn = codegen.runtime.libc_stdio.printf
-        builder.call(printf_fn, [str_ptr, length, data_ptr])
-        emit_debug_string(codegen, builder, '"')
-    elif value_type == BuiltinType.BOOL:
-        true_bb = builder.append_basic_block(name="print_true")
-        false_bb = builder.append_basic_block(name="print_false")
-        after_bb = builder.append_basic_block(name="after_print_bool")
-
-        is_true = builder.icmp_signed("!=", value, ZERO_I32, name="is_true")
-        builder.cbranch(is_true, true_bb, false_bb)
-
-        builder.position_at_end(true_bb)
-        emit_debug_string(codegen, builder, "true")
-        builder.branch(after_bb)
-
-        builder.position_at_end(false_bb)
-        emit_debug_string(codegen, builder, "false")
-        builder.branch(after_bb)
-
-        builder.position_at_end(after_bb)
-    else:
-        emit_debug_string(codegen, builder, "<value>")
