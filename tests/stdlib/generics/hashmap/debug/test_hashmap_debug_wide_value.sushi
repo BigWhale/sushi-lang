@@ -1,0 +1,11 @@
+# EXPECT_STDOUT_CONTAINS: Occupied: "a" -> 7
+# EXPECT_STDOUT_CONTAINS: HashMap@(string, i64) {
+# A HashMap value of a type the map's own debug writer did not know printed
+# "<value>". The one debug value writer knows every primitive the List knew.
+use <collections/hashmap>
+fn main() i32:
+    let HashMap@(string, i64) m = HashMap.new()
+    m.insert("a", 7)
+    m.debug()
+    m.free()
+    return Result.Ok(0)

@@ -1,0 +1,10 @@
+# EXPECT_STDOUT_EXACT: "List@(i64) {\n  len: 1, capacity: 1\n  [0] 10\n}\nList@(i64) {\n  len: 1, capacity: 1\n  [0] 20\n}\n"
+# Regression for #592 fault 1: the same unbound name, on the i64 element path.
+fn main() i32:
+    let List@(i64) a = List.new()
+    a.push(10)
+    a.debug()
+    let List@(i64) b = List.new()
+    b.push(20)
+    b.debug()
+    return Result.Ok(0)

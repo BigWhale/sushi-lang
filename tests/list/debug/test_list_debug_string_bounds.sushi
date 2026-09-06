@@ -1,0 +1,9 @@
+# EXPECT_STDOUT_EXACT: "List@(string) {\n  len: 2, capacity: 2\n  [0] "one"\n  [1] "two"\n}\n"
+# Regression for #592 fault 2: a Sushi string is a fat pointer and carries no
+# terminator, so "%s" read past the end and element 0 printed as "onetwo".
+fn main() i32:
+    let List@(string) a = List.new()
+    a.push("one")
+    a.push("two")
+    a.debug()
+    return Result.Ok(0)

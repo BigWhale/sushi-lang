@@ -306,6 +306,23 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **`List@(T).debug()` stopped the compiler on the second call, and read a string past
+  its end** (#592). The format-string global was made inside an `except KeyError`, and
+  the pointer into it was made there too: the first call took the branch, the second
+  call found the global, skipped the branch and read a name that was never bound. The
+  compiler stopped with CE0000. A string element printed through `"%s"`, and a Sushi
+  string is a fat pointer with no terminator, so the write ran on to the next zero byte
+  and a two-element list read `[0] "onetwo"`.
+
+  The cause is that `emit_debug_print_value` existed TWICE -- one copy for `List@(T)`,
+  one for `HashMap@(K, V)` -- and the copies had drifted. Both are gone. One
+  `emit_debug_value` in `backend/generics/debug_output.py` writes every element now, and
+  it renders through the writer `print` and `println` use, so the last route to
+  descriptor 1 outside `emit_console_write` is closed. Three more faults went with the
+  copies: a `List@(i8)` element widened without its sign, so -3 printed as 253; a
+  `List@(u8)` element had no branch at all and printed `<value>`; and a HashMap key or
+  value of any type outside i32, string and bool printed `<value>`, where a List printed
+  the number. A float now reads as `println` writes it -- `3.14159`, not `3.141590`.
 - **A binding cannot be rebound, and the rebind that was legal double-freed** (#590). A
   `match` or `foreach` binding is a read-only view: a write THROUGH it has been CE2414
   since #253, and a write to the whole NAME passed every gate. `Box.Full(s) -> s :=

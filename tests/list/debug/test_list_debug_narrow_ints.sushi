@@ -1,0 +1,13 @@
+# EXPECT_STDOUT_EXACT: "List@(i8) {\n  len: 2, capacity: 2\n  [0] -3\n  [1] 120\n}\nList@(u8) {\n  len: 1, capacity: 1\n  [0] 200\n}\n"
+# A narrow element keeps its sign: an i8 widened without regard to signedness, so
+# -3 printed as 253, and an unsigned element had no branch at all and printed
+# "<value>". Both read the one debug value writer now.
+fn main() i32:
+    let List@(i8) a = List.new()
+    a.push(-3)
+    a.push(120)
+    a.debug()
+    let List@(u8) b = List.new()
+    b.push(200)
+    b.debug()
+    return Result.Ok(0)

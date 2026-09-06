@@ -232,6 +232,10 @@ List@(i32) {
 }
 ```
 
+An element of a primitive type or a string prints as `println` writes it, and a
+string is quoted. Any other element -- a struct, an enum, a nested container --
+prints as `<value>`.
+
 ## Performance
 
 - `push()`: Amortized O(1)
