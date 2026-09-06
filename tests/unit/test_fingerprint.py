@@ -249,3 +249,154 @@ def test_stdlib_generator_sources_cover_primitives_package():
     sources = _stdlib_generator_sources()
     prim = [p for p in sources if "backend" in p.parts and "primitives" in p.parts]
     assert prim, "no backend/types/primitives/ files in the stdlib source fingerprint"
+
+
+# A dependency's declaration SHAPE, not just its public signatures (#593)
+
+def _two_units(make_unit, tmp_path, dep_src, dependent_src=CLEAN, dep_name="dep"):
+    """A dependent that imports `dep`, and a manager holding both."""
+    dependent = make_unit(dependent_src, name="dependent")
+    dependent.dependencies = [dep_name]
+    um = UnitManager(root_path=tmp_path)
+    um.units = {dep_name: make_unit(dep_src, name=dep_name), "dependent": dependent}
+    return dependent, um
+
+
+def _dep_moves(make_unit, tmp_path, before, after):
+    """The dependent's fingerprint before and after an edit to the dependency alone."""
+    dependent, um = _two_units(make_unit, tmp_path, before)
+    fp1 = compute_unit_fingerprint(dependent, um)
+    um.units["dep"] = make_unit(after, name="dep")
+    return fp1, compute_unit_fingerprint(dependent, um)
+
+
+def test_a_dependency_struct_field_moves_the_dependent(make_unit, tmp_path):
+    """The dependent bakes the LAYOUT in: a reordered field reads the other slot."""
+    before, after = _dep_moves(
+        make_unit, tmp_path,
+        "public struct Box:\n    i32 w\n    i32 h\n",
+        "public struct Box:\n    i32 h\n    i32 w\n")
+    assert before != after
+
+
+def test_a_dependency_struct_field_type_moves_the_dependent(make_unit, tmp_path):
+    before, after = _dep_moves(
+        make_unit, tmp_path,
+        "public struct Box:\n    i32 w\n    i32 h\n",
+        "public struct Box:\n    i64 w\n    i32 h\n")
+    assert before != after
+
+
+def test_a_dependency_enum_variant_order_moves_the_dependent(make_unit, tmp_path):
+    """A variant's TAG is its position, and the dependent's match compares tags."""
+    before, after = _dep_moves(
+        make_unit, tmp_path,
+        "public enum Sign:\n    Plus\n    Minus\n",
+        "public enum Sign:\n    Minus\n    Plus\n")
+    assert before != after
+
+
+def test_a_dependency_enum_payload_moves_the_dependent(make_unit, tmp_path):
+    """The widest variant sizes the payload, so a new wide variant resizes the enum."""
+    before, after = _dep_moves(
+        make_unit, tmp_path,
+        "public enum Slot:\n    Filled(i32)\n    Empty\n",
+        "public enum Slot:\n    Filled(i32)\n    Empty\n    Big(i64, i64, i64)\n")
+    assert before != after
+
+
+def test_a_dependency_constant_value_moves_the_dependent(make_unit, tmp_path):
+    """A constant is FOLDED into the dependent, so the VALUE is part of the interface."""
+    before, after = _dep_moves(
+        make_unit, tmp_path,
+        "public const i32 LIMIT = 10\n",
+        "public const i32 LIMIT = 20\n")
+    assert before != after
+
+
+def test_a_dependency_extension_signature_moves_the_dependent(make_unit, tmp_path):
+    before, after = _dep_moves(
+        make_unit, tmp_path,
+        "public struct Box:\n    i32 w\n\nextend Box scaled(i32 k) i32:\n    return self.w * k\n",
+        "public struct Box:\n    i32 w\n\nextend Box scaled(i64 k) i32:\n    return self.w\n")
+    assert before != after
+
+
+def test_a_dependency_perk_implementation_moves_the_dependent(make_unit, tmp_path):
+    """A perk implementation carries no marker, so it is in no unit's public symbols."""
+    before, after = _dep_moves(
+        make_unit, tmp_path,
+        "public perk Sized:\n    fn size() i32\n\npublic struct Box:\n    i32 w\n",
+        "public perk Sized:\n    fn size() i32\n\npublic struct Box:\n    i32 w\n\n"
+        "extend Box with Sized:\n    fn size() i32:\n        return Result.Ok(self.w)\n")
+    assert before != after
+
+
+def test_a_dependency_nom_marker_moves_the_dependent(make_unit, tmp_path):
+    """`nom` says the CALLEE frees; the caller's cleanup changes with it, and the mode
+    rides on the parameter and not on its type."""
+    before, after = _dep_moves(
+        make_unit, tmp_path,
+        "public fn eat(string s) ~:\n    println(s)\n    return Result.Ok(~)\n",
+        "public fn eat(nom string s) ~:\n    println(s)\n    return Result.Ok(~)\n")
+    assert before != after
+
+
+def test_a_dependency_error_channel_moves_the_dependent(make_unit, tmp_path):
+    """`| E` changes the Result the call site sees, and `ret` alone does not carry it."""
+    before, after = _dep_moves(
+        make_unit, tmp_path,
+        "public enum Bad:\n    Nope\n\npublic fn half(i32 n) i32:\n    return Result.Ok(n / 2)\n",
+        "public enum Bad:\n    Nope\n\npublic fn half(i32 n) i32 | Bad:\n    return Result.Ok(n / 2)\n")
+    assert before != after
+
+
+def test_an_unchanged_dependency_leaves_the_dependent_alone(make_unit, tmp_path):
+    """No spurious miss: re-parsing the same dependency must give the same digest."""
+    src = "public struct Box:\n    i32 w\n\npublic fn make() Box:\n    return Result.Ok(Box(1))\n"
+    before, after = _dep_moves(make_unit, tmp_path, src, src)
+    assert before == after
+
+
+def test_a_dependency_body_edit_leaves_the_dependent_alone(make_unit, tmp_path):
+    """The digest is the INTERFACE: a private body is the dependency's own business."""
+    before, after = _dep_moves(
+        make_unit, tmp_path,
+        "public fn twice(i32 n) i32:\n    return Result.Ok(n * 2)\n",
+        "public fn twice(i32 n) i32:\n    return Result.Ok(n + n)\n")
+    assert before == after
+
+
+# The dependency EDGE: an injected unit and a re-exported one (#593)
+
+def test_an_injected_library_unit_is_a_dependency_edge(make_unit, tmp_path):
+    """A source library's units join the unit table; the import spells no user path, so
+    `Unit.dependencies` never names them and only the graph knows the edge."""
+    consumer = make_unit('use <lib/boxlib>\n' + CLEAN, name="consumer")
+    assert consumer.dependencies == []          # the edge is not stored on the unit
+
+    um = UnitManager(root_path=tmp_path)
+    lib_v1 = make_unit("public struct Box:\n    i32 w\n    i32 h\n", name="lib/boxlib/boxlib")
+    um.units = {"lib/boxlib/boxlib": lib_v1, "consumer": consumer}
+    fp1 = compute_unit_fingerprint(consumer, um)
+
+    um.units["lib/boxlib/boxlib"] = make_unit(
+        "public struct Box:\n    i32 h\n    i32 w\n", name="lib/boxlib/boxlib")
+    assert compute_unit_fingerprint(consumer, um) != fp1
+
+
+def test_a_shape_two_units_away_moves_the_dependent(make_unit, tmp_path):
+    """`public use` re-exports, so a unit names a type its own import does not declare.
+    The digest has to walk the whole dependency closure, not the first ring."""
+    dependent = make_unit('use "middle"\n' + CLEAN, name="dependent")
+    middle = make_unit('public use "far"\n', name="middle")
+    um = UnitManager(root_path=tmp_path)
+    um.units = {
+        "far": make_unit("public struct Box:\n    i32 w\n    i32 h\n", name="far"),
+        "middle": middle,
+        "dependent": dependent,
+    }
+    fp1 = compute_unit_fingerprint(dependent, um)
+
+    um.units["far"] = make_unit("public struct Box:\n    i32 h\n    i32 w\n", name="far")
+    assert compute_unit_fingerprint(dependent, um) != fp1
