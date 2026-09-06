@@ -1,0 +1,22 @@
+# Both halves of an overwritten entry are accounted for, in a loop.
+#
+# The key and the value are two separate consuming uses (#591), so a map whose key and
+# value both own heap leaks two buffers per overwrite. Ten rounds over one key make the
+# count unmistakable.
+# EXPECT_STDOUT_EXACT: "value 9\nkey 3\n1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(string, string) m = HashMap.new()
+    let i32 k = 3
+    foreach(i in 0..10):
+        m.insert("key {k}", "value {i}")
+    println(m.get("key 3").realise("missing"))
+    foreach(key in m.keys()):
+        println(key)
+    println(m.len())
+    m.free()
+    return Result.Ok(0)

@@ -1,0 +1,36 @@
+# An overwritten value of a COMPOSITE owning type is destroyed too.
+#
+# A dynamic array and a struct holding a string reach the destroy through the composite
+# handler table, not the string path, so the update in `on_occupied` (#591) is covered for
+# every owning value kind and not just for a bare string.
+#
+# The struct is read back through a `match` and not through `.realise()`: a `.realise()`
+# over a Maybe whose payload OWNS leaks that payload, which is a separate defect and not
+# this one.
+# EXPECT_STDOUT_EXACT: "3\n99\n1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+use <collections/hashmap>
+
+struct Row:
+    string label
+    i32 weight
+
+fn main() i32:
+    let i32 n = 3
+    let HashMap@(i32, i32[]) arrays = HashMap.new()
+    arrays.insert(1, from([0; n]))
+    arrays.insert(1, from([1, 2, 3]))
+    println(arrays.get(1).realise(from([])).len())
+    arrays.free()
+
+    let HashMap@(i32, Row) rows = HashMap.new()
+    rows.insert(1, Row("first {n}", 1))
+    rows.insert(1, Row("second {n}", 99))
+    match rows.get(1):
+        Maybe.Some(r) -> println(r.weight)
+        Maybe.None -> println(-1)
+    println(rows.len())
+    rows.free()
+    return Result.Ok(0)
