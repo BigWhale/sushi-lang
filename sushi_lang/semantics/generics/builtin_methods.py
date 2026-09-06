@@ -12,13 +12,13 @@ from sushi_lang.semantics.typesys import (
     Type,
 )
 
-def _struct_enum_derived(receiver_type: Type, method_name: str) -> bool:
+def _struct_enum_derived(receiver_type: Type, method_name: str, registry=None) -> bool:
     """The derive pass's auto-derived pair (hash, clone), read from the registry."""
     from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    return get_builtin_method(receiver_type, method_name) is not None
+    return get_builtin_method(receiver_type, method_name, registry=registry) is not None
 
 
-def builtin_method_exists(receiver_type: Type | None, method_name: str) -> bool:
+def builtin_method_exists(receiver_type: Type | None, method_name: str, registry=None) -> bool:
     """Is `method_name` a compiler-defined method on `receiver_type`?"""
     if receiver_type is None:
         return False
@@ -57,7 +57,7 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str) -> bool:
             from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method
             if is_builtin_maybe_method(method_name):
                 return True
-        return _struct_enum_derived(receiver_type, method_name)
+        return _struct_enum_derived(receiver_type, method_name, registry)
 
     if isinstance(receiver_type, StructType):
         if receiver_type.name.startswith("Own<"):
@@ -75,6 +75,6 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str) -> bool:
         # A container still carries the auto-derived hash (the derive pass's registration has no
         # container exclusion), and codegen's auto-derived step precedes the extension
         # fallback -- so an extension of that name would be dead there too.
-        return _struct_enum_derived(receiver_type, method_name)
+        return _struct_enum_derived(receiver_type, method_name, registry)
 
     return False

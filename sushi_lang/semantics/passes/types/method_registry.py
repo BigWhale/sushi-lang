@@ -137,7 +137,9 @@ class StructEnumBuiltinInferrer:
 
     def infer_return_type(self) -> Optional['Type']:
         from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-        method = get_builtin_method(self.receiver_type, self.method_name)
+        method = get_builtin_method(
+            self.receiver_type, self.method_name,
+            registry=getattr(self.validator, "builtin_registry", None))
         if method is not None:
             return method.return_type
         return None
@@ -376,7 +378,9 @@ def check_struct_enum_builtin_methods(receiver_type, method_name, validator):
         return None
 
     from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    if get_builtin_method(receiver_type, method_name) is None:
+    if get_builtin_method(
+            receiver_type, method_name,
+            registry=getattr(validator, "builtin_registry", None)) is None:
         return None
 
     return StructEnumBuiltinInferrer(receiver_type, method_name, validator)

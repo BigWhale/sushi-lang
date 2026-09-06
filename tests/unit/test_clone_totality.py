@@ -119,9 +119,9 @@ def test_a_generic_type_argument_has_a_clone(name, ty):
 
 # The auto-derived pair, which needs the analyzer to have run
 
-def test_user_struct_and_enum_carry_a_clone(analyze):
+def test_user_struct_and_enum_carry_a_clone(analyze_program):
     """The derive pass registers clone from SEMANTICS, so the registry answer is import-order safe."""
-    analyze("""
+    analysis = analyze_program("""
 struct Bag:
     i32[] items
 
@@ -137,13 +137,14 @@ fn main() i32:
 """)
     bag = StructType(name="Bag", fields=())
     holder = EnumType(name="Holder", variants=())
-    assert builtin_method_exists(bag, "clone"), "the derive pass must auto-derive a struct clone"
-    assert builtin_method_exists(holder, "clone"), "the derive pass must auto-derive an enum clone"
+    registry = analysis.analyzer.builtin_registry
+    assert builtin_method_exists(bag, "clone", registry=registry), "the derive pass must auto-derive a struct clone"
+    assert builtin_method_exists(holder, "clone", registry=registry), "the derive pass must auto-derive an enum clone"
 
 
-def test_an_owning_user_struct_is_move_and_therefore_needs_its_clone(analyze):
+def test_an_owning_user_struct_is_move_and_therefore_needs_its_clone(analyze_program):
     """The two clauses meet: a struct with a `T[]` field is MOVE, so clause 1 binds to it."""
-    analyze("""
+    analysis = analyze_program("""
 struct Bag:
     i32[] items
 
@@ -154,7 +155,9 @@ fn main() i32:
 """)
     bag = StructType(name="Bag", fields=(("items", DynamicArrayType(base_type=BuiltinType.I32)),))
     assert type_class_of(bag, NO_DROPS) is TypeClass.MOVE
-    assert builtin_method_exists(StructType(name="Bag", fields=()), "clone")
+    assert builtin_method_exists(
+        StructType(name="Bag", fields=()), "clone",
+        registry=analysis.analyzer.builtin_registry)
 
 
 # The former known hole, now closed

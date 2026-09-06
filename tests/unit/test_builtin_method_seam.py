@@ -115,9 +115,9 @@ def test_reference_receivers_unwrap():
     assert builtin_method_exists(ReferenceType(referenced_type=arr), "len")
 
 
-def test_struct_auto_derived_pair_is_recognised(analyze):
+def test_struct_auto_derived_pair_is_recognised(analyze_program):
     """The one registry-backed family -- registered from semantics in the derive pass."""
-    analyze("""
+    analysis = analyze_program("""
 struct P:
     i32 x
 
@@ -127,6 +127,7 @@ fn main() i32:
     return Result.Ok(0)
 """)
     point = StructType(name="P", fields=())
-    assert builtin_method_exists(point, "hash") is True
-    assert builtin_method_exists(point, "clone") is True
-    assert builtin_method_exists(point, "describe") is False
+    registry = analysis.analyzer.builtin_registry
+    assert builtin_method_exists(point, "hash", registry=registry) is True
+    assert builtin_method_exists(point, "clone", registry=registry) is True
+    assert builtin_method_exists(point, "describe", registry=registry) is False

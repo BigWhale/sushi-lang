@@ -86,8 +86,10 @@ def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
 class LLVMCodegen:
     """Main LLVM backend orchestrator for the Sushi language compiler."""
 
-    def __init__(self, module_name: str = "lang_module", struct_table: Optional[StructTable] = None, enum_table: Optional[EnumTable] = None, func_table: Optional['FunctionTable'] = None, perk_impl_table: Optional['PerkImplementationTable'] = None, const_table: Optional['ConstantTable'] = None) -> None:
+    def __init__(self, module_name: str = "lang_module", struct_table: Optional[StructTable] = None, enum_table: Optional[EnumTable] = None, func_table: Optional['FunctionTable'] = None, perk_impl_table: Optional['PerkImplementationTable'] = None, const_table: Optional['ConstantTable'] = None, builtin_registry=None) -> None:
         """Initialize the LLVM code generator with all specialized subsystems."""
+        from sushi_lang.sushi_stdlib.src.common import new_builtin_method_registry
+        self.builtin_registry = builtin_registry or new_builtin_method_registry()
         # Our OWN context, not llvmlite's process-wide global_context: identified types
         # (#257) register per Context, so on the global one a second `struct Tree` would
         # find the first compilation's type and inherit its layout. Every module shares
@@ -400,6 +402,12 @@ class LLVMCodegen:
 
     def build_module_multi_unit(self, units: list[Unit]) -> ir.Module:
         """Generate LLVM IR for multiple compilation units and return the module."""
+        from sushi_lang.sushi_stdlib.src.common import use_builtin_method_registry
+        with use_builtin_method_registry(self.builtin_registry):
+            return self._build_module_multi_unit(units)
+
+    def _build_module_multi_unit(self, units: list[Unit]) -> ir.Module:
+        """Generate LLVM IR with the caller's compilation registry active."""
         for unit in units:
             if unit.ast is not None:
                 self.stdlib.extract_stdlib_units(unit.ast)
@@ -603,6 +611,12 @@ class LLVMCodegen:
 
     def build_module_single_unit(self, target_unit: Unit, all_units: list[Unit]) -> ir.Module:
         """Generate LLVM IR for a single compilation unit."""
+        from sushi_lang.sushi_stdlib.src.common import use_builtin_method_registry
+        with use_builtin_method_registry(self.builtin_registry):
+            return self._build_module_single_unit(target_unit, all_units)
+
+    def _build_module_single_unit(self, target_unit: Unit, all_units: list[Unit]) -> ir.Module:
+        """Generate LLVM IR for one unit with the caller's compilation registry active."""
         saved_module = self.module
         saved_funcs = self.funcs.copy()
         saved_constants = self.constants.copy()

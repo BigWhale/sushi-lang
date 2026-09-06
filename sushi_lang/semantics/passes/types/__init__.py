@@ -81,6 +81,8 @@ class TypeValidator:
         self.generic_func_table = tables.generic_funcs
         self.perk_table = tables.perks
         self.perk_impl_table = tables.perk_impls
+        from sushi_lang.sushi_stdlib.src.common import current_builtin_method_registry
+        self.builtin_registry = current_builtin_method_registry()
         # The types that implement `Drop`, for `owns_resource` (ruling R2a). A property
         # rather than a snapshot: a later unit may add an implementation, and a stale
         # set here would classify a handle PLAIN.

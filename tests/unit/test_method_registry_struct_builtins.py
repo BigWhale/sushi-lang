@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import pytest
+from contextlib import nullcontext
 
 from sushi_lang.semantics.passes.types.method_registry import (
     check_struct_enum_builtin_methods,
 )
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, StructType
+from sushi_lang.sushi_stdlib.src.common import use_builtin_method_registry
 
 
 STRUCT_SRC = """
@@ -82,14 +84,16 @@ class _PerkTableWith:
         return object() if method_name in self._names else None
 
 
-def _infer(receiver_type, method_name, validator=None):
+def _infer(receiver_type, method_name, validator=None, registry=None):
     """Run the checker and, if it claims the call, its inferrer."""
-    inferrer = check_struct_enum_builtin_methods(
-        receiver_type, method_name, validator or _FakeValidator()
-    )
-    if inferrer is None:
-        return None
-    return inferrer.infer_return_type()
+    context = nullcontext() if registry is None else use_builtin_method_registry(registry)
+    with context:
+        inferrer = check_struct_enum_builtin_methods(
+            receiver_type, method_name, validator or _FakeValidator()
+        )
+        if inferrer is None:
+            return None
+        return inferrer.infer_return_type()
 
 
 @pytest.fixture
@@ -105,20 +109,30 @@ def enum_colour(analyze):
     return EnumType(name="Colour", variants=())
 
 
-def test_hash_infers_u64(struct_p):
-    assert _infer(struct_p, "hash") is BuiltinType.U64
+@pytest.fixture
+def struct_registry(analyze_program):
+    return analyze_program(STRUCT_SRC).analyzer.builtin_registry
 
 
-def test_clone_infers_the_receiver_type(struct_p):
-    assert _infer(struct_p, "clone") == struct_p
+@pytest.fixture
+def enum_registry(analyze_program):
+    return analyze_program(ENUM_SRC).analyzer.builtin_registry
 
 
-def test_enum_hash_infers_u64(enum_colour):
-    assert _infer(enum_colour, "hash") is BuiltinType.U64
+def test_hash_infers_u64(struct_p, struct_registry):
+    assert _infer(struct_p, "hash", registry=struct_registry) is BuiltinType.U64
 
 
-def test_enum_clone_infers_the_receiver_type(enum_colour):
-    assert _infer(enum_colour, "clone") == enum_colour
+def test_clone_infers_the_receiver_type(struct_p, struct_registry):
+    assert _infer(struct_p, "clone", registry=struct_registry) == struct_p
+
+
+def test_enum_hash_infers_u64(enum_colour, enum_registry):
+    assert _infer(enum_colour, "hash", registry=enum_registry) is BuiltinType.U64
+
+
+def test_enum_clone_infers_the_receiver_type(enum_colour, enum_registry):
+    assert _infer(enum_colour, "clone", registry=enum_registry) == enum_colour
 
 
 def test_declines_an_unregistered_method(struct_p):
@@ -154,25 +168,56 @@ def test_declines_container_receivers(analyze, name):
     ) is None
 
 
-def test_list_monomorph_really_does_carry_a_registered_hash(analyze):
+def test_list_monomorph_really_does_carry_a_registered_hash(analyze_program):
     """The premise behind the container guard, pinned so it cannot silently change."""
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
+    analysis = analyze_program(CONTAINER_SRC)
+    assert analysis.analyzer.builtin_registry.get_method(
+        StructType(name="List<i32>", fields=()), "hash") is not None
 
-    analyze(CONTAINER_SRC)
-    assert get_builtin_method(StructType(name="List<i32>", fields=()), "hash") is not None
+
+def test_derived_methods_are_scoped_to_each_compilation(analyze_program):
+    """A second same-named struct must not reuse the first compilation's emitter closure."""
+    first = analyze_program("""
+struct Point:
+    i32 x
+
+fn main() i32:
+    let Point p = Point(1)
+    println(p.hash())
+    return Result.Ok(0)
+""", name="first")
+    second = analyze_program("""
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    println(p.hash())
+    return Result.Ok(0)
+""", name="second")
+
+    point = StructType(name="Point", fields=())
+    for method_name in ("hash", "clone"):
+        first_method = first.analyzer.builtin_registry.get_method(point, method_name)
+        second_method = second.analyzer.builtin_registry.get_method(point, method_name)
+        assert first_method is not None
+        assert second_method is not None
+        assert first_method is not second_method
 
 
-def test_declines_when_a_perk_impl_of_that_name_exists(analyze):
+def test_declines_when_a_perk_impl_of_that_name_exists(analyze_program):
     """Perk methods win at codegen (dispatcher step 12, before step 13), so inference must let them
     win too -- otherwise the typecheck pass would type the call as the auto-derived u64 while the backend
     emitted the perk body.
     """
-    analyze(PERK_SRC)
+    analysis = analyze_program(PERK_SRC)
+    registry = analysis.analyzer.builtin_registry
     point = StructType(name="Point", fields=())
     validator = _FakeValidator(_PerkTableWith({"hash"}))
     assert check_struct_enum_builtin_methods(point, "hash", validator) is None
     # A name the perk does NOT implement is still claimed.
-    assert _infer(point, "clone", validator) == point
+    assert _infer(point, "clone", validator, registry) == point
 
 
 def test_the_inferrer_emits_no_diagnostics(analyze):

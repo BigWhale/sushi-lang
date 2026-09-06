@@ -58,6 +58,11 @@ class SemanticAnalyzer:
         # backend (Tier 4.1 layering invariant), so no tighter annotation is legal.
         self.library_linker = library_linker
         self.library_registry = library_registry
+        # Derived hash/clone methods belong to this compilation. The registry's parent
+        # supplies language-wide primitive methods without sharing nominal user types
+        # between sequential compilations.
+        from sushi_lang.sushi_stdlib.src.common import new_builtin_method_registry
+        self.builtin_registry = new_builtin_method_registry()
         # What the stdlib generators define, read from the manifest their build writes.
         # A NAME list and nothing else: no semantic table holds these symbols, which is
         # why CE5013 could not see them (#472).
@@ -117,7 +122,9 @@ class SemanticAnalyzer:
         `passes/const_eval.py` is NOT a pass: the typecheck pass and the backend both call
         it as a helper.
         """
-        self._check_multi_file()
+        from sushi_lang.sushi_stdlib.src.common import use_builtin_method_registry
+        with use_builtin_method_registry(self.builtin_registry):
+            self._check_multi_file()
 
     @staticmethod
     def _unit_reporter(unit) -> Reporter:
@@ -847,7 +854,8 @@ class SemanticAnalyzer:
 
         for target_type, methods in self.extensions.by_type.items():
             for method_name, method in methods.items():
-                if not builtin_method_exists(target_type, method_name):
+                if not builtin_method_exists(
+                        target_type, method_name, registry=self.builtin_registry):
                     continue
                 shown = f"{display_type(target_type)}.{method_name}"
                 er.emit_with(

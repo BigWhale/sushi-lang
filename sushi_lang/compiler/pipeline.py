@@ -462,7 +462,8 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
     perk_impl_table = getattr(analyzer, 'perk_impls', None)
     cg = LLVMCodegen(struct_table=struct_table, enum_table=enum_table,
                      func_table=func_table, perk_impl_table=perk_impl_table,
-                     const_table=const_table)
+                     const_table=const_table,
+                     builtin_registry=analyzer.builtin_registry)
     external_table = getattr(analyzer, 'externals', None)
     if external_table is not None:
         cg.external_table = external_table
@@ -612,7 +613,8 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
     perk_impl_table = getattr(analyzer, 'perk_impls', None)
     cg = LLVMCodegen(struct_table=struct_table, enum_table=enum_table,
                      func_table=func_table, perk_impl_table=perk_impl_table,
-                     const_table=const_table)
+                     const_table=const_table,
+                     builtin_registry=analyzer.builtin_registry)
     external_table = getattr(analyzer, 'externals', None)
     if external_table is not None:
         cg.external_table = external_table
