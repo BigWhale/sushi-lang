@@ -438,9 +438,13 @@ the sites that used to spell `("Own<", "List<", "HashMap<")` by hand now share
 scrutinee or container still owns.** Reads are free and copy nothing. Writing through one is
 **CE2414** — a mutating method, a field assignment, and a `poke` borrow of the binding are all
 rejected (#253; the compiled binding is a private copy, so such a write could never reach the
-owner). A rebind of the binding ITSELF (`n := 99`) stays legal: it re-initializes a local, the
-Rust `Some(mut n) => n = 99` shape, and does not claim to write through. Consuming a binding
-whose type owns heap is **CE2411**, with `.clone()` as the escape.
+owner). A rebind of the binding ITSELF (`n := 99`) is **CE2414** too, since #590: the compiled
+copy is shallow, so the store frees a payload the scrutinee still owns. This retracts the
+earlier reading, which allowed it as the Rust `Some(mut n) => n = 99` shape — Rust's binding
+either moves the payload out or is a reference, and Sushi's bare binding is neither. The mode
+is the answer here as it is for every other write: `poke` to reach the owner, `nom` to take
+the payload. Consuming a binding whose type owns heap is **CE2411**, with `.clone()` as the
+escape.
 
 ### 8.1 What it was before this design (historical)
 

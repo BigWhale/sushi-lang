@@ -306,6 +306,31 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A binding cannot be rebound, and the rebind that was legal double-freed** (#590). A
+  `match` or `foreach` binding is a read-only view: a write THROUGH it has been CE2414
+  since #253, and a write to the whole NAME passed every gate. `Box.Full(s) -> s :=
+  "rebound"` compiled and the program aborted, because the compiled binding is a SHALLOW
+  copy -- the store frees what sits in the slot, and what sits in the slot is a payload the
+  scrutinee still owns. The same held for a `foreach` binding, for a `let` bound from a
+  field read or an index (CE2426), and one rebind LAUNDERED the binding: `reinitialize()`
+  cleared `is_borrowed_binding` and `is_let_borrow`, so a field write that was refused on
+  one line passed on the next. The gate now answers two POSITIONS -- a write through the
+  name, and a rebind of it -- and the position is one field on the existing table row
+  (`refuses_a_rebind`) rather than a second check beside it, which is what the retired
+  hand-rolled CE2408 was. The split is a rule, not a list: **a name with storage of its own
+  may be rebound** (a local, a unit variable, and a parameter, a borrow parameter included,
+  whose slot is the callee's own), **a name that views another value's storage may not**
+  (CE2414 a binding, CE2426 a `let`-borrow, CE2408 a `peek` reference). `reinitialize()`
+  keeps the three storage facts and clears only the value facts.
+
+  This RETRACTS the allowance in `docs/design/borrowing.md` mechanism 4 and
+  `ownership-conventions.md` S8 -- that `n := 99` re-initializes a local, the Rust `Some(mut
+  n) => n = 99` shape. Rust's binding either moves the payload out or is a reference; a bare
+  Sushi binding is neither, and the modes added since #253 spell both intents already. Three
+  escapes, all of them one keyword: `poke` to write through to the owner, `nom` to take the
+  payload where the match owns its scrutinee, `.clone()` for a value of your own -- and a
+  plain `let` off the binding borrows again, so the copy has to be asked for. CE2414 and
+  CE2426 now read "cannot write to", which covers both positions.
 - **A loop no longer grows the stack frame on every pass** (#589). A `foreach` inside
   another loop, and a `HashMap.get` in one, stopped with a segmentation fault after a few
   hundred thousand passes: the backend made the stack slot where the loop stood, so the

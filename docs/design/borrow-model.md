@@ -289,11 +289,14 @@ bound, for `List@(T)` and `T[]` as much as for a handle.
 The pattern boundary carries the same three modes, with the same meanings, marked the same
 way:
 
-| pattern | what the binding is | who frees | write through it |
-|---|---|---|---|
-| `Ok(x)` | a private copy of the payload | the scrutinee's owner | no -- CE2414 |
-| `Ok(poke x)` | a pointer into the payload's storage | the scrutinee's owner | yes |
-| `Ok(nom x)` | the value, now the arm's | **the arm** | yes |
+| pattern | what the binding is | who frees | write through it | rebind the name |
+|---|---|---|---|---|
+| `Ok(x)` | a SHALLOW copy of the payload | the scrutinee's owner | no -- CE2414 | no -- CE2414 (#590) |
+| `Ok(poke x)` | a pointer into the payload's storage | the scrutinee's owner | yes | yes |
+| `Ok(nom x)` | the value, now the arm's | **the arm** | yes | yes |
+
+The copy in row 1 is shallow, and that is why the last column reads as it does: the slot
+holds the owner's descriptor, so a rebind frees a payload the scrutinee still owns.
 
 The differences from the call boundary are two, and both come from the same fact: a match
 has no declaration side to agree with.

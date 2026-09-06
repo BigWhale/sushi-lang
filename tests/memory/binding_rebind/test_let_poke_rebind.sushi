@@ -1,0 +1,17 @@
+# EXPECT_STDOUT_EXACT: "rebound\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# TEST_TYPE: runtime
+# The `let poke` twin: the binding is a POINTER into the field, so the store reaches the
+# owner and the whole-name rebind is what it says it is (#590).
+
+struct Holder:
+    string tag
+
+fn main() i32:
+    let i32 n = 3
+    let Holder h = Holder(tag: "tag {n}")
+    let poke string t = h.tag
+    t := "rebound"
+    println(h.tag)
+    return Result.Ok(0)

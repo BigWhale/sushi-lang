@@ -53,7 +53,7 @@ fn build_chain(poke HashMap@(string, string) chain, string[] words) ~:
 
 # Generate text using the chain with improbability factor
 fn generate_text(peek HashMap@(string, string) chain, peek string[] vocab, f64 factor, i32 count) ~:
-    let string current = vocab[0]
+    let string current = vocab[0].clone()
     let i32 c = 0
 
     while (c < count):

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.borrow import BorrowState, FlowFacts
 
 
@@ -72,7 +73,14 @@ def test_every_flow_fact_field_is_restored():
     assert restore == fields, f"restore_flow misses {sorted(fields - restore)}"
 
 
-# REBIND. A rebind re-initializes: every fact about the OLD value is stale.
+# REBIND. A rebind re-initializes: every fact about the OLD VALUE is stale, and every fact
+# about WHERE THE STORAGE IS stands, because no rebind moves storage (#590).
+
+_LIVE = {"is_moved": True, "moved_at_span": Span(1, 1, 1, 2),
+         "is_destroyed": True, "invalidated_at": Span(1, 1, 1, 2),
+         "invalidated_by": ("c", "assign"),
+         "is_borrowed_binding": True, "is_let_borrow": True,
+         "borrows_from": "c"}
 
 _REBIND_CLEARS = [
     ("is_moved", False),
@@ -80,26 +88,31 @@ _REBIND_CLEARS = [
     ("is_destroyed", False),
     ("invalidated_at", None),
     ("invalidated_by", ()),
-    ("is_borrowed_binding", False),
-    ("is_let_borrow", False),
-    ("borrows_from", None),
 ]
 
+# Clearing these three let one rebind launder a binding into a writable local (#590).
+_REBIND_KEEPS = ["is_borrowed_binding", "is_let_borrow", "borrows_from"]
 
-@pytest.mark.parametrize("flag,cleared_value", _REBIND_CLEARS)
-def test_rebind_clears(flag, cleared_value):
-    """Each flag fell out of step one at a time; each was its own bug."""
-    from sushi_lang.internals.report import Span
+
+def _reinitialized(flag: str) -> BorrowState:
     from sushi_lang.semantics.passes.borrow.flow import reinitialize
 
     state = BorrowState(name="x")
-    setattr(state, flag, {"is_moved": True, "moved_at_span": Span(1, 1, 1, 2),
-                          "is_destroyed": True, "invalidated_at": Span(1, 1, 1, 2),
-                          "invalidated_by": ("c", "assign"),
-                          "is_borrowed_binding": True, "is_let_borrow": True,
-                          "borrows_from": "c"}[flag])
+    setattr(state, flag, _LIVE[flag])
     reinitialize(state)
-    assert getattr(state, flag) == cleared_value
+    return state
+
+
+@pytest.mark.parametrize("flag,cleared_value", _REBIND_CLEARS)
+def test_rebind_clears_the_value_facts(flag, cleared_value):
+    """Each flag fell out of step one at a time; each was its own bug."""
+    assert getattr(_reinitialized(flag), flag) == cleared_value
+
+
+@pytest.mark.parametrize("flag", _REBIND_KEEPS)
+def test_rebind_keeps_the_storage_facts(flag):
+    """A rebind supplies a new value; it does not move the binding's storage."""
+    assert getattr(_reinitialized(flag), flag) == _LIVE[flag]
 
 
 def test_rebind_after_destroy_is_not_a_use_after_destroy(analyze):
@@ -113,23 +126,6 @@ def test_rebind_after_destroy_is_not_a_use_after_destroy(analyze):
         "    return Result.Ok(0)\n"
     )
     assert "CE2406" not in _codes(analyze(src))
-
-
-def test_rebind_of_a_borrowed_binding_makes_it_an_owner(analyze):
-    """The provenance triple is re-derived, so consuming the re-initialized value is legal."""
-    src = (
-        "fn eat(nom i32[] a) i32:\n"
-        "    return Result.Ok(a.len())\n"
-        "\n"
-        "fn f(peek i32[] src) i32:\n"
-        "    let i32[] b = src\n"
-        "    b := from([1, 2, 3])\n"
-        "    return Result.Ok(eat(nom b)??)\n"
-        "\n"
-        "fn main() i32:\n"
-        "    return Result.Ok(0)\n"
-    )
-    assert "CE2411" not in _codes(analyze(src))
 
 
 # BRANCH JOIN. Exclusive paths must not see each other's facts.

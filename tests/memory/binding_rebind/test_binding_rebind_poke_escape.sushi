@@ -1,0 +1,23 @@
+# EXPECT_STDOUT_EXACT: "rebound 7\nrebound 7\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# TEST_TYPE: runtime
+# The escape when the rebind meant the OWNER: `poke` binds a pointer into the payload, so
+# the store reaches what the enum holds and the old value is freed once (#590).
+
+enum Box:
+    Full(string)
+    Empty
+
+fn main() i32:
+    let i32 n = 7
+    let Box b = Box.Full("value {n} on the heap")
+    match b:
+        Box.Full(poke s) ->
+            s := "rebound {n}"
+            println(s)
+        Box.Empty -> println("empty")
+    match b:
+        Box.Full(s) -> println(s)
+        Box.Empty -> println("empty")
+    return Result.Ok(0)

@@ -1,0 +1,14 @@
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2426
+# The index twin of the field read: `rows[0]` borrows too (#590).
+
+struct Row:
+    string tag
+
+fn main() i32:
+    let i32 n = 1
+    let Row[] rows = from([Row(tag: "a {n}")])
+    let Row r = rows[0]
+    r := Row(tag: "rebound")
+    println(r.tag)
+    return Result.Ok(0)

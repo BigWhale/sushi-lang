@@ -373,6 +373,13 @@ a `match`/`foreach` binding (`CE2414`), a method receiver without `poke self` (`
 unmarked parameter (`CE2422`), a `let` binding that borrows from an owner (`CE2426`), an
 unbound chained receiver such as `o.get().items` (`CE2429`), and a constant (`CE2096`).
 
+Rebinding the NAME (`x := v`) asks a narrower version of the same question, and the answer
+splits those kinds. A name with storage of its own may be rebound -- a local, a unit
+variable, and a parameter, a borrow parameter included, whose slot is the callee's own. A
+name that is a view of another value's storage may not, because the store would free a
+value the owner still holds: a `match`/`foreach` binding (`CE2414`), a `let` that borrows
+from an owner (`CE2426`), a `peek` reference (`CE2408`).
+
 ### Function Arguments
 
 **A parameter is a borrow unless it says otherwise.** The caller keeps the value and frees it, so a
@@ -730,6 +737,11 @@ fn main() i32:
 2. **Consuming the binding itself is `CE2411`**, exactly like consuming a `match`/`foreach` binding
    or a direct field read -- `.clone()` is the escape (see
    [Reading Through a Borrow, Without Consuming](#reading-through-a-borrow-without-consuming)).
+
+3. **Rebinding the binding itself is `CE2426`**. The binding names storage the owner keeps,
+   so `x := "bye"` would free a value `w` still holds. Write to the owner (`w.inner := "bye"`),
+   or take a value of your own with `.clone()` and rebind that. A `match`/`foreach` binding
+   reads `CE2414` for the same reason, and a `peek` reference `CE2408`.
 
 **A `let` may also declare a reference *type*** (#409): `let poke T x = <place>` binds a
 pointer INTO the owner's storage, so a write through it reaches the owner -- the zero-copy
