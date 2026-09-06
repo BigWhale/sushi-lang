@@ -24,6 +24,7 @@ from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import get_element_size_constant
 from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend.destructors import destroy_old_value
 
 
 def emit_hashmap_insert(
@@ -129,7 +130,17 @@ def emit_hashmap_insert(
         builder.cbranch(keys_equal, update_value_bb, slot.continue_bb)
 
         builder.position_at_end(update_value_bb)
+        # An update REPLACES two owned values, not one. Both arguments were consumed
+        # above, so the map owns the incoming key and the incoming value; the entry
+        # already holds a key and a value it owns as well. Destroy each old half before
+        # its store, exactly as `_store_fill_element` does for an array slot -- without
+        # it the overwritten value leaked, and so did the key the call consumed (#591).
+        # The key equality check above has already read the old key.
+        destroy_old_value(codegen, entry_key_ptr, key_type)
+        builder.store(key_value, entry_key_ptr)
+
         entry_value_ptr = builder.gep(slot.entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
+        destroy_old_value(codegen, entry_value_ptr, value_type)
         builder.store(value_value, entry_value_ptr)
         builder.branch(insert_done_bb)
 

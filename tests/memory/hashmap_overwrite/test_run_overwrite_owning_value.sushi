@@ -1,0 +1,21 @@
+# An insert over a key the map already holds destroys the value it replaces.
+#
+# `on_occupied` in the hashmap insert emitter stored the new value over the old one and
+# never destroyed what the store overwrote (#591), so every overwrite of an owning value
+# leaked one buffer. A string LITERAL carries owned=0, so only an interpolated value --
+# a fresh heap buffer -- makes the leak visible.
+# EXPECT_STDOUT_EXACT: "second value 7\n1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, string) m = HashMap.new()
+    let i32 n = 7
+    m.insert(1, "first value {n}")
+    m.insert(1, "second value {n}")
+    println(m.get(1).realise("missing"))
+    println(m.len())
+    m.free()
+    return Result.Ok(0)

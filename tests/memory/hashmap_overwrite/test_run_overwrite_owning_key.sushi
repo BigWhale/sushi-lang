@@ -1,0 +1,20 @@
+# An insert over an equal key does not leak the key the call consumed.
+#
+# `insert` consumes BOTH arguments, so the key of an update is an owned value the map has
+# to account for. The update path stored neither and destroyed neither (#591), so an owning
+# key leaked one buffer per overwrite.
+# EXPECT_STDOUT_EXACT: "22\n1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(string, i32) m = HashMap.new()
+    let i32 n = 7
+    m.insert("key {n}", 11)
+    m.insert("key {n}", 22)
+    println(m.get("key 7").realise(-1))
+    println(m.len())
+    m.free()
+    return Result.Ok(0)
