@@ -1,0 +1,13 @@
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2408
+# A `peek` reference binding was already refused, by a check of its own beside the gate.
+# It reads the same code through the gate now, and gains the note and the help the
+# hand-rolled emit never carried (#590).
+
+fn main() i32:
+    let i32 n = 2
+    let string s = "src {n}"
+    let peek string r = s
+    r := "rebound"
+    println(r)
+    return Result.Ok(0)

@@ -142,8 +142,39 @@ _CELL_OVERRIDES = {
 }
 
 
+# The REBIND position (#590): a write to the NAME, not through it. It splits the kinds
+# rather than adding a column, because the answer is not the same for all of them -- a
+# name with storage of ITS OWN may be rebound, a name that is a view of another value's
+# storage may not. `None` is "accepted"; the receiver's CE1002 comes from the scope pass,
+# which refuses `self :=` before the borrow pass sees it.
+_REBIND = "r := Holder(2, from([5]))"
+
+_REBIND_VERDICT = {
+    "peek_reference":     "CE2408",
+    "pattern_binding":    "CE2414",
+    "let_borrow":         "CE2426",
+    "method_receiver":    "CE1002",
+    "method_parameter":   None,
+    "function_parameter": None,
+}
+
+
 def _codes(reporter) -> list[str]:
     return [item.code for item in reporter.items]
+
+
+@pytest.mark.parametrize("kind", sorted(_REBIND_VERDICT))
+def test_a_rebind_of_the_name_splits_the_kinds(analyze, kind):
+    """A parameter owns its slot and may be rebound; a binding is a view and may not."""
+    expected = _REBIND_VERDICT[kind]
+    _kind_code, build = KINDS[kind]
+    codes = _codes(analyze(build(_REBIND)))
+    if expected is None:
+        assert not (set(codes) & {"CE2408", "CE2414", "CE2421", "CE2422", "CE2426"}), (
+            f"`{_REBIND}` on a {kind} has storage of its own and stays legal; got {codes}")
+    else:
+        assert expected in codes, (
+            f"`{_REBIND}` on a {kind} was not refused with {expected}; got {codes}")
 
 
 @pytest.mark.parametrize("kind", sorted(KINDS))
@@ -277,8 +308,13 @@ def test_a_let_borrow_out_of_a_temporary_keeps_its_own_code(analyze):
     assert "CE2426" in codes and "CE2414" not in codes, codes
 
 
-def test_a_rebound_let_borrow_becomes_writable(analyze):
-    """A rebind RE-INITIALIZES: the new value is the binding's own, so writes are legal."""
+def test_a_rebind_does_not_launder_a_binding(analyze):
+    """The second half of #590: the rebind is refused, and it does not clear the flags.
+
+    `reinitialize()` used to drop `is_borrowed_binding` and `is_let_borrow`, so one rebind
+    bought a later field write that was CE2426 without it. Those two flags say WHERE the
+    storage is, and no rebind moves storage.
+    """
     src = (
         _STRUCT +
         "fn main() i32:\n"
@@ -288,7 +324,9 @@ def test_a_rebound_let_borrow_becomes_writable(analyze):
         "    v.push(9)\n"
         "    return Result.Ok(0)\n"
     )
-    assert "CE2426" not in _codes(analyze(src))
+    codes = _codes(analyze(src))
+    assert codes.count("CE2426") == 2, (
+        f"the rebind and the write after it are both refused; got {codes}")
 
 
 def test_every_readonly_kind_is_in_the_gate_table(analyze):

@@ -106,10 +106,16 @@ here at the binding instead of the statement. `bind_let_reference` in
 `passes/borrow/bindings.py` is the one seam. CE2413, which refused the form while it was
 untracked, is retired.
 
-**4 — the pattern value binding** is compiled as a private copy, so a write through it
-could never reach the owner. A rebind of the binding itself (`n := 99`) stays legal: it
-re-initializes a local, and does not claim to write through. Each binding has a scope of
-its own — an arm binding no longer replaces an outer local of the same name (#337).
+**4 — the pattern value binding** is compiled as a copy of the payload, so a write through
+it could never reach the owner. The copy is SHALLOW: it holds the owner's descriptor and
+points at the owner's heap, which is why a rebind of the binding itself (`n := 99`) is
+**CE2414** as well (#590). It was legal until then, on the reading that it re-initializes a
+local — but the store frees what sits in the slot, and what sits in the slot is a value the
+scrutinee still owns. A plain payload only hid it. The three escapes are the binding's own
+modes plus the copy: `poke` to write through to the owner, `nom` to take the payload where
+the match owns its scrutinee, `.clone()` for a value of your own — and note that a plain
+`let` off the binding borrows again, so the copy has to be asked for. Each binding has a
+scope of its own — an arm binding no longer replaces an outer local of the same name (#337).
 
 **5 — the pattern reference binding** (#300) binds a POINTER into the owner's storage, so
 `r.n := 5` and `p.push(9)` mutate in place. It registers with its full `ReferenceType`, so
@@ -172,6 +178,17 @@ indexed assignment, which routes through the same gate:
 | by-value method parameter | CE2422 | declare the parameter `poke T` |
 | `let`-borrow binding | CE2426 | write to the owner; or `.clone()`, mutate, store back |
 | unbound chained borrow (`o.get().items`) | CE2429 | `.clone()`, mutate, rebuild the owner (`o := Own.alloc(h)`); or a nested `Own(poke ...)` binding where the `Own` sits in an enum |
+
+A **rebind of the NAME** (`v := ...`) is the gate's other position, and it splits the table
+(#590). A name with storage of ITS OWN may be rebound — the store lands in that storage and
+reaches exactly what it names — so a by-value parameter and a by-value receiver stay
+rebindable, which is what `test_rebind_borrow_param.sushi` has pinned since #326. A name
+that is a VIEW of another value's storage may not, because the store frees a value the
+owner still holds: the `match`/`foreach` binding (CE2414), the `let`-borrow (CE2426) and
+the `peek` reference (CE2408). The position is one field on the row —
+`ReadOnlyReceiver.refuses_a_rebind` — and a `rebind=True` argument to the gate, rather than
+a check beside it: the check that stood beside it covered `peek` alone, which is how a
+match binding came to be rebindable.
 
 The first five kinds are a TABLE (`READONLY_RECEIVERS`) behind one dispatcher
 (`reject_readonly_write`) with four call sites, so a new state-keyed kind is one row and not
@@ -236,7 +253,7 @@ Each gate turns the next occurrence of its bug class into a red test:
 | `test_borrow_dispatch_is_total.py` | an arm for every `Expr` node (CE0125) |
 | `test_scope_dispatch_is_total.py` | the same for the scope pass (CE0130) |
 | `test_peek_write_gate_is_total.py` | every member of `_MUTATING_METHODS` |
-| `test_readonly_receiver_matrix.py` | every kind x shape cell of §5, the shape-keyed sixth kind included |
+| `test_readonly_receiver_matrix.py` | every kind x shape cell of §5, the shape-keyed sixth kind included, and the rebind position per kind |
 | `test_borrow_flag_lifecycle.py` | every `BorrowState` flag x flow event |
 | `test_ownership_table.py` | the 3x2 table, reference rows included |
 | `test_consuming_use_coverage.py` | nothing bypasses the backend seam |

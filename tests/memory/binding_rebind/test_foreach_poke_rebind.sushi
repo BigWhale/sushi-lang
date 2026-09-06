@@ -1,0 +1,14 @@
+# EXPECT_STDOUT_EXACT: "rebound\nrebound\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# TEST_TYPE: runtime
+# The `foreach` twin of the `poke` escape (#590).
+
+fn main() i32:
+    let i32 n = 1
+    let string[] items = from(["a {n}", "b {n}"])
+    foreach(poke s in items.iter()):
+        s := "rebound"
+    foreach(s in items.iter()):
+        println(s)
+    return Result.Ok(0)

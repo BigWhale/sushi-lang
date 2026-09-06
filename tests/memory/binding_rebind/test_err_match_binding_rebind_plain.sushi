@@ -1,0 +1,19 @@
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2414
+# The RETRACTED half of the #253 rule (#590). A plain payload never faulted, because there
+# is no heap to free twice, but the binding is the same read-only view whatever it holds --
+# and a rule that reads the payload type would refuse this line only after an unrelated
+# edit gave the enum an owning field. `let i32 m = n` is the local this asked for.
+
+enum Num:
+    Val(i32)
+    Nothing
+
+fn main() i32:
+    let Num v = Num.Val(5)
+    match v:
+        Num.Val(n) ->
+            n := 99
+            println("local: {n}")
+        Num.Nothing -> println("nothing")
+    return Result.Ok(0)

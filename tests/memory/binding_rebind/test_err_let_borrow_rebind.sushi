@@ -1,0 +1,15 @@
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2426
+# A `let` bound from a field read borrows storage the owner keeps, so a rebind frees a
+# value the owner still holds (#590). It compiled, and the program aborted.
+
+struct Holder:
+    string tag
+
+fn main() i32:
+    let i32 n = 3
+    let Holder h = Holder(tag: "tag {n}")
+    let string t = h.tag
+    t := "rebound {n}"
+    println(t)
+    return Result.Ok(0)

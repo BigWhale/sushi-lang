@@ -1,0 +1,20 @@
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2414
+# EXPECT_STDERR_CONTAINS: poke
+# A bare `match` binding is a view of the owner's value, not storage of its own, so a
+# rebind of the NAME is refused exactly as a write through it is (#590). It used to
+# compile, and the store freed the payload the enum still owned -- a double free.
+
+enum Box:
+    Full(string)
+    Empty
+
+fn main() i32:
+    let i32 n = 7
+    let Box b = Box.Full("value {n} on the heap")
+    match b:
+        Box.Full(s) ->
+            s := "rebound {n}"
+            println(s)
+        Box.Empty -> println("empty")
+    return Result.Ok(0)

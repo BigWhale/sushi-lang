@@ -255,6 +255,28 @@ x := 30     # OK
 # y := 5    # CE1002: assignment to undeclared variable 'y'
 ```
 
+A name that is a **view of another value's storage** cannot be rebound. A `match` or
+`foreach` binding is **CE2414**, a `let` bound from a field read, an index or a container
+get-out is **CE2426**, and a `peek` reference is **CE2408** — in each case the store would
+free a value the owner still holds. A name with storage of its own is unaffected: a local,
+a parameter (a borrow parameter included) and a unit variable are all rebindable.
+
+```sushi
+match b:
+    Box.Full(s) -> s := "rebound"        # CE2414
+    Box.Empty -> println("empty")
+
+match b:
+    Box.Full(poke s) -> s := "rebound"   # write through to the owner
+    Box.Empty -> println("empty")
+
+match b:
+    Box.Full(s) ->
+        let string m = s.clone()         # a value of your own; a plain `let` borrows again
+        m := "rebound"
+    Box.Empty -> println("empty")
+```
+
 ### Reference bindings
 
 A `let` may bind a **reference** into storage another variable owns, with the mode on the
@@ -1125,11 +1147,11 @@ match result:
 A payload binding carries a MODE, and the three are the ones a parameter has. The bare
 form is the common case and is unchanged.
 
-| pattern | the binding is | write through it | may be given away |
-|---|---|---|---|
-| `Ok(x)` | a read-only view | no (CE2414) | no (CE2411) |
-| `Ok(poke x)` | a pointer into the scrutinee's payload | yes, and it reaches the owner | no |
-| `Ok(nom x)` | the value itself, now the arm's | yes | yes |
+| pattern | the binding is | write through it | rebind the name | may be given away |
+|---|---|---|---|---|
+| `Ok(x)` | a read-only view | no (CE2414) | no (CE2414) | no (CE2411) |
+| `Ok(poke x)` | a pointer into the scrutinee's payload | yes, and it reaches the owner | yes, and it reaches the owner | no |
+| `Ok(nom x)` | the value itself, now the arm's | yes | yes | yes |
 
 `nom` TAKES the payload, so the match has to own its scrutinee. A temporary -- a call
 result, a constructor, a `??` -- is owned by construction. A place expression belongs to

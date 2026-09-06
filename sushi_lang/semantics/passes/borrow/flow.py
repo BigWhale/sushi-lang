@@ -71,15 +71,18 @@ class FlowFacts:
 
 
 def reinitialize(state: BorrowState) -> None:
-    """A rebind RE-INITIALIZES the binding: every fact about the OLD value is stale."""
+    """A rebind RE-INITIALIZES the binding: every fact about the OLD VALUE is stale.
+
+    Only the value facts. `is_borrowed_binding`, `is_let_borrow` and `borrows_from` say
+    WHERE the storage is, and no rebind moves storage -- clearing them let one rebind
+    launder a binding into a writable local, so a field write that was CE2426 on the line
+    above passed on the line below (#590).
+    """
     state.is_moved = False
     state.moved_at_span = None
     state.is_destroyed = False
     state.invalidated_at = None
     state.invalidated_by = ()
-    state.is_borrowed_binding = False
-    state.is_let_borrow = False
-    state.borrows_from = None
 
 
 def terminates(node) -> bool:

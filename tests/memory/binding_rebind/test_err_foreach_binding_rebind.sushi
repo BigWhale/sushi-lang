@@ -1,0 +1,11 @@
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2414
+# The `foreach` twin: one binding kind, one rule (#590).
+
+fn main() i32:
+    let i32 n = 1
+    let string[] items = from(["a {n}", "b {n}"])
+    foreach(s in items.iter()):
+        s := "rebound"
+        println(s)
+    return Result.Ok(0)

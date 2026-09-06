@@ -1,0 +1,24 @@
+# EXPECT_STDOUT_EXACT: "rebound\nvalue 7\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# TEST_TYPE: runtime
+# The escape when the rebind meant a LOCAL. A plain `let` off the binding borrows again
+# and is refused with it, so the copy has to be asked for: `.clone()` (#590).
+
+enum Box:
+    Full(string)
+    Empty
+
+fn main() i32:
+    let i32 n = 7
+    let Box b = Box.Full("value {n}")
+    match b:
+        Box.Full(s) ->
+            let string m = s.clone()
+            m := "rebound"
+            println(m)
+        Box.Empty -> println("empty")
+    match b:
+        Box.Full(s) -> println(s)
+        Box.Empty -> println("empty")
+    return Result.Ok(0)

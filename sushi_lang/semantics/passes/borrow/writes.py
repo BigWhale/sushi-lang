@@ -35,6 +35,12 @@ class ReadOnlyReceiver:
     note_span: Callable[[BorrowState], Optional[Span]]  # where the kind was introduced
     note: str
     help: str
+    # Does the kind refuse a rebind of the NAME as well as a write THROUGH it (#590)? The
+    # two positions ask different questions, and the answer splits the table in one place:
+    # a name with storage of ITS OWN may be rebound -- the store lands in that storage and
+    # reaches exactly what it names -- while a name that is a VIEW of another value's
+    # storage may not, because the store frees a value the owner still holds.
+    refuses_a_rebind: bool = False
 
 
 # The five kinds, most specific first. They are disjoint by construction -- the receiver is
@@ -64,9 +70,10 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
                                and state.var_type.is_peek()),
         note_span=lambda state: state.declared_at_span,
         note="'{name}' is declared here as a read-only borrow",
-        help="the write ({what}) would change the caller's value through a read-only "
-             "borrow; declare the parameter `poke` if the callee must write, or take "
+        help="the write ({what}) would change the borrowed value through a read-only "
+             "reference; declare it `poke` if the write must reach the owner, or take "
              "an independent value with `{name}.clone()`",
+        refuses_a_rebind=True,
     ),
     ReadOnlyReceiver(
         # AFTER the `peek` row and excluding every reference parameter, so `peek` keeps
@@ -92,9 +99,11 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
         # `{escape}` rather than a spelled `.clone()`: a type that owns a resource has
         # no clone (CE2431), so the copy route has to be asked for rather than assumed.
         # The MODES come first, because they are the escape this binding actually has.
-        help="the write ({what}) would land on a private copy and be lost; bind the "
-             "payload `poke` to write through to the owner, or `nom` to take it where "
-             "the match owns its scrutinee -- otherwise {escape}, and store it back",
+        help="'{name}' is a view of the owner's value and not storage of its own, so "
+             "the write ({what}) cannot stand; bind the payload `poke` to write "
+             "through to the owner, or `nom` to take it where the match owns its "
+             "scrutinee -- otherwise {escape}, and store it back",
+        refuses_a_rebind=True,
     ),
     ReadOnlyReceiver(
         # The fifth kind (#344). CE2412 asks "may I mutate the OWNER while the binding
@@ -109,9 +118,11 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
         note_span=lambda state: state.bound_at_span,
         note="'{name}' is bound here, borrowing storage its owner keeps",
         help="the write ({what}) reaches storage another value owns and still frees, so "
-             "it is lost from the owner's view and a reallocating write frees the "
-             "owner's buffer; write to the owner directly, or take an independent value "
-             "with `{name}.clone()`, mutate it, and store it back",
+             "it is lost from the owner's view, a reallocating write frees the owner's "
+             "buffer, and a rebind frees a value the owner still holds; write to the "
+             "owner directly, or take an independent value with `{name}.clone()`, "
+             "mutate it, and store it back",
+        refuses_a_rebind=True,
     ),
 )
 
@@ -133,8 +144,15 @@ def maybe_reject_mutation(checker: 'BorrowChecker', expr: Expr) -> None:
 
 def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
                           span: Optional[Span], what: str,
-                          receiver: Optional[Expr] = None) -> bool:
-    """THE gate: a write that cannot reach the value it appears to write is rejected."""
+                          receiver: Optional[Expr] = None,
+                          *, rebind: bool = False) -> bool:
+    """THE gate: a write that cannot reach the value it appears to write is rejected.
+
+    `rebind` names the POSITION: a write to the name itself rather than through it. Half
+    the table answers differently there (`refuses_a_rebind`), which is why the position is
+    an argument and not a second gate -- one of those grew beside this one and covered a
+    single kind, so a match binding was rebindable and freed the owner's payload (#590).
+    """
     # The sixth kind keys on SHAPE, not on the state of a name (#352, #407): past a call
     # boundary the receiver is a temporary copy, whatever the root's mode is -- so this
     # answers BEFORE the state table, and the boundary is the diagnostic's second location.
@@ -157,6 +175,8 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
     for kind in READONLY_RECEIVERS:
         if not kind.matches(state):
             continue
+        if rebind and not kind.refuses_a_rebind:
+            return False
         diag = checker.err.emit_with(kind.code, span, name=name)
         note_span = kind.note_span(state)
         if note_span is not None:

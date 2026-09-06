@@ -3,7 +3,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
     Block,
     Break,
@@ -148,9 +147,12 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
     if isinstance(target, Name):
         state = checker.borrow_state.get(target.id)
         if state is not None:
-            # A `poke` reference allows a rebind -- that is what it is for.
-            if isinstance(state.var_type, ReferenceType) and state.var_type.is_peek():
-                checker.err.emit(er.ERR.CE2408, stmt.loc, name=target.id)
+            # THE gate, in the rebind position: a name that is a view of another value's
+            # storage cannot be rebound, a name with storage of its own can. A `poke`
+            # reference is the middle case and stays legal -- the store goes through the
+            # pointer, which is what the mode is for.
+            reject_readonly_write(checker, target.id, stmt.loc, "rebind the name",
+                                  rebind=True)
             # Option B: RE-DERIVE, never inherit. A rebind can only CLEAR this flag,
             # never set it on a value that owns heap.
             state.owns_no_heap = binds_a_bare_literal_string(state.var_type, stmt.value)
