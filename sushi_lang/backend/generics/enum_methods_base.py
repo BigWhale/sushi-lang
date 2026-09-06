@@ -11,6 +11,7 @@ from sushi_lang.backend.destructors import (
     emit_value_destructor, needs_cleanup, resolve_named_type
 )
 from sushi_lang.backend.expressions.memory import emit_value_clone
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -98,9 +99,9 @@ def emit_enum_realise(
                 value_llvm_type, owned_type
             )
 
-        value_slot = codegen.builder.alloca(value_llvm_type, name="realise_value_slot")
+        value_slot = entry_alloca(codegen.builder, value_llvm_type, name="realise_value_slot")
         codegen.builder.store(unpacked_value, value_slot)
-        default_slot = codegen.builder.alloca(value_llvm_type, name="realise_default_slot")
+        default_slot = entry_alloca(codegen.builder, value_llvm_type, name="realise_default_slot")
         codegen.builder.store(default_value, default_slot)
         chosen_ptr = codegen.builder.select(is_success, value_slot, default_slot, name="realise_ptr")
         return codegen.builder.load(chosen_ptr, name="realise_result")
@@ -197,9 +198,9 @@ def _emit_owning_realise(
     borrowed_receiver = _expression_is_borrow(codegen, call.receiver)
     borrowed_default = _expression_is_borrow(codegen, call.args[0])
 
-    default_slot = codegen.builder.alloca(value_llvm_type, name="realise_default_slot")
+    default_slot = entry_alloca(codegen.builder, value_llvm_type, name="realise_default_slot")
     codegen.builder.store(default_value, default_slot)
-    result_slot = codegen.builder.alloca(value_llvm_type, name="realise_result_slot")
+    result_slot = entry_alloca(codegen.builder, value_llvm_type, name="realise_result_slot")
 
     with codegen.builder.if_else(is_success) as (then_block, else_block):
         with then_block:

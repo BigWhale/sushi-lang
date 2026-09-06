@@ -32,6 +32,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_result_type,
     get_unit_enum_type,
 )
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def generate_ir(module: ir.Module) -> None:
@@ -97,7 +98,7 @@ def generate_send_to(module: ir.Module) -> None:
 
     zero = ir.Constant(i32, 0)
     null = ir.Constant(i8_ptr, None)
-    res_slot = builder.alloca(i8_ptr, name="res_slot")
+    res_slot = entry_alloca(builder, i8_ptr, name="res_slot")
 
     hints = addr.emit_hints(builder, platform_net.SOCK_DGRAM, passive=False)
     rc = builder.call(getaddrinfo_fn, [host, null, hints, res_slot], name="gai_rc")
@@ -179,11 +180,11 @@ def generate_recv_from(module: ir.Module) -> None:
     null = ir.Constant(i8_ptr, None)
 
     storage = addr.alloca_zeroed(builder, platform_net.SOCKADDR_STORAGE_SIZE, "ss")
-    len_slot = builder.alloca(i32, name="ss_len")
+    len_slot = entry_alloca(builder, i32, name="ss_len")
     builder.store(ir.Constant(i32, platform_net.SOCKADDR_STORAGE_SIZE), len_slot)
     host_buf = addr.alloca_zeroed(builder, platform_net.NI_MAXHOST, "host_buf")
-    ip_slot = builder.alloca(i8_ptr, name="ip_slot")
-    ip_len_slot = builder.alloca(i32, name="ip_len_slot")
+    ip_slot = entry_alloca(builder, i8_ptr, name="ip_slot")
+    ip_len_slot = entry_alloca(builder, i32, name="ip_len_slot")
 
     max64 = builder.zext(maximum, i64, name="max64")
     buffer = builder.call(malloc_fn, [max64], name="recv_buf")

@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 import llvmlite.ir as ir
 from sushi_lang.semantics.typesys import DynamicArrayType, BuiltinType
 from sushi_lang.backend.memory.heap import emit_malloc
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -46,7 +47,7 @@ def populate_string_array_from_argv(
     loop_body = builder.append_basic_block(name="argv_loop_body")
     loop_end = builder.append_basic_block(name="argv_loop_end")
 
-    counter = builder.alloca(codegen.i32, name="argv_counter")
+    counter = entry_alloca(builder, codegen.i32, name="argv_counter")
     builder.store(zero_i32, counter)
     builder.branch(loop_cond)
 

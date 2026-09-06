@@ -11,6 +11,7 @@ generator picks the table that turns an errno into that tag.
 """
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 # Maybe<T>'s two variant tags, in declaration order.
 MAYBE_SOME_TAG = 0
@@ -24,9 +25,9 @@ def emit_ok_result(builder: ir.IRBuilder, result_type: ir.LiteralStructType,
     data_array_type = result_type.elements[1]
     memcpy_fn = builder.module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
-    value_alloca = builder.alloca(value.type, name="ok_value")
+    value_alloca = entry_alloca(builder, value.type, name="ok_value")
     builder.store(value, value_alloca)
-    data_alloca = builder.alloca(data_array_type, name="ok_data")
+    data_alloca = entry_alloca(builder, data_array_type, name="ok_data")
     builder.store(ir.Constant(data_array_type, None), data_alloca)
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy_fn, [
@@ -52,7 +53,7 @@ def emit_err_result(builder: ir.IRBuilder, result_type: ir.LiteralStructType,
     i8, i8_ptr, i32, i64 = get_basic_types()
     data_array_type = result_type.elements[1]
 
-    data_alloca = builder.alloca(data_array_type, name="err_data")
+    data_alloca = entry_alloca(builder, data_array_type, name="err_data")
     builder.store(ir.Constant(data_array_type, None), data_alloca)
     tag_ptr = builder.bitcast(data_alloca, i32.as_pointer(), name="err_tag_ptr")
     builder.store(error_tag, tag_ptr)
@@ -74,7 +75,7 @@ def emit_some(builder: ir.IRBuilder, maybe_type: ir.LiteralStructType,
     i8, i8_ptr, i32, i64 = get_basic_types()
     data_type = maybe_type.elements[1]
 
-    data_alloca = builder.alloca(data_type, name="some_data")
+    data_alloca = entry_alloca(builder, data_type, name="some_data")
     builder.store(ir.Constant(data_type, None), data_alloca)
     builder.store(value, builder.bitcast(data_alloca, value.type.as_pointer(),
                                          name="some_payload_ptr"))

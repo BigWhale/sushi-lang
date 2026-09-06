@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -29,7 +30,7 @@ def get_or_emit_utf8_validate(codegen: "LLVMCodegen") -> ir.Function:
     data.name, length.name = "data", "len"
 
     b = ir.IRBuilder(fn.append_basic_block("entry"))
-    idx = b.alloca(i32, name="i")
+    idx = entry_alloca(b, i32, name="i")
     b.store(ir.Constant(i32, 0), idx)
 
     head = fn.append_basic_block("head")
@@ -86,7 +87,7 @@ def get_or_emit_utf8_validate(codegen: "LLVMCodegen") -> ir.Function:
     b.cbranch(c1_ok, cont_bb, ret_false)
 
     b.position_at_end(cont_bb)
-    j = b.alloca(i32, name="j")
+    j = entry_alloca(b, i32, name="j")
     b.store(ir.Constant(i32, 2), j)
     cl_head = fn.append_basic_block("cl_head")
     cl_body = fn.append_basic_block("cl_body")

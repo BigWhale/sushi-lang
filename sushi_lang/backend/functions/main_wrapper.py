@@ -35,11 +35,8 @@ class MainFunctionWrapper:
         # the [N x i8] blob into a value-typed alloca and load that: the round trip
         # miscompiled the trailing field of a payload holding nested string fat pointers at
         # -O1/-O2 (#119). One typed load is both robust and cheaper.
-        # The slot goes in the ENTRY block, never at the current position. An alloca
-        # emitted inside a loop allocates again on every iteration and LLVM only
-        # releases it at function return, so a `??` in a long loop used to grow the
-        # frame until it hit the stack guard page (BUGS.md B1). The slot is scratch:
-        # the payload is loaded straight back out, so one slot per site is enough.
+        # The slot is scratch: the payload is loaded straight back out, so one slot per
+        # site is enough. Where it goes is `backend/memory/allocas.py`'s to say (#589).
         data_array = enum_utils.extract_enum_data(self.codegen, result_enum, name="result_data")
         data_alloca = self.codegen.memory.entry_alloca(data_array.type, "result_data_slot")
         self.codegen.builder.store(data_array, data_alloca)

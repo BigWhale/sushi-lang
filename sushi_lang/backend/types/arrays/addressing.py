@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -37,6 +38,6 @@ def as_array_address(codegen: 'LLVMCodegen', value: ir.Value,
         from sushi_lang.backend.expressions.memory import park_value
         return park_value(codegen, source_expr, value, semantic_type,
                           slot_type=array_struct_type or value.type)
-    slot = codegen.builder.alloca(array_struct_type or value.type, name="array_addr_slot")
+    slot = entry_alloca(codegen.builder, array_struct_type or value.type, name="array_addr_slot")
     codegen.builder.store(value, slot)
     return slot

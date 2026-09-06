@@ -22,6 +22,7 @@ from sushi_lang.sushi_stdlib.src.io.files.results import (
     emit_err_result, emit_none, emit_ok_result, emit_some)
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_free, declare_malloc
 from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 # `fd_readln`'s buffer step, and its `pread` size on the seekable path. It bounds the
 # reallocations on both paths and the system calls on the chunked one.
@@ -78,7 +79,7 @@ def generate_fd_read(module: ir.Module) -> None:
     # A signal that lands before the first byte moves answers -1 with EINTR, and the
     # only correct response is to ask again (probe P13).
     builder.position_at_end(do_read_bb)
-    got_slot = builder.alloca(i64, name="got_slot")
+    got_slot = entry_alloca(builder, i64, name="got_slot")
     attempt_bb = func.append_basic_block(name="read_attempt")
     builder.branch(attempt_bb)
 
@@ -125,7 +126,7 @@ def _emit_write_all(builder: ir.IRBuilder, func: ir.Function, write_fn: ir.Funct
     """
     _i8, _i8_ptr, i32, i64 = get_basic_types()
 
-    done_slot = builder.alloca(i64, name="done")
+    done_slot = entry_alloca(builder, i64, name="done")
     builder.store(ir.Constant(i64, 0), done_slot)
 
     cond_bb = func.append_basic_block(name="write_cond")
@@ -261,14 +262,14 @@ def generate_fd_readln(module: ir.Module) -> None:
     fd.name = "fd"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    cap_slot = builder.alloca(i64, name="cap")
-    len_slot = builder.alloca(i64, name="len")
-    buf_slot = builder.alloca(i8_ptr, name="buf")
-    one_byte = builder.alloca(i8, name="one_byte")
-    start_slot = builder.alloca(i64, name="line_start")
+    cap_slot = entry_alloca(builder, i64, name="cap")
+    len_slot = entry_alloca(builder, i64, name="len")
+    buf_slot = entry_alloca(builder, i8_ptr, name="buf")
+    one_byte = entry_alloca(builder, i8, name="one_byte")
+    start_slot = entry_alloca(builder, i64, name="line_start")
     # Which end this is: a newline, or the file running out. Only the second one, with
     # nothing read before it, is None. Both paths write it, so `finish` reads one flag.
-    at_eof_slot = builder.alloca(i8, name="at_eof")
+    at_eof_slot = entry_alloca(builder, i8, name="at_eof")
     builder.store(ir.Constant(i8, 0), at_eof_slot)
 
     builder.store(ir.Constant(i64, _LINE_CHUNK), cap_slot)
@@ -483,7 +484,7 @@ def _emit_readln_chunked(builder, func, module, fd, pread_fn, lseek_fn, realloc_
 
     # Scan only the bytes this pread delivered, from `len` to `len + got`.
     builder.position_at_end(scan_bb)
-    scan_slot = builder.alloca(i64, name="scan")
+    scan_slot = entry_alloca(builder, i64, name="scan")
     builder.store(length, scan_slot)
     limit = builder.add(length, got, name="limit")
     scan_cond_bb = func.append_basic_block(name="chunk_scan_cond")
@@ -547,7 +548,7 @@ def generate_fd_seek(module: ir.Module) -> None:
     fd.name, offset.name, whence.name = "fd", "offset", "whence"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
-    whence_slot = builder.alloca(i32, name="whence_slot")
+    whence_slot = entry_alloca(builder, i32, name="whence_slot")
     builder.store(ir.Constant(i32, platform_files.SEEK_SET), whence_slot)
 
     # An unrecognised whence seeks from the START, which is the reading of a number this

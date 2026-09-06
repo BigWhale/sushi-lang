@@ -9,6 +9,7 @@ from sushi_lang.backend.constants import INT32_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -139,7 +140,7 @@ class DynamicArrayManager:
             ir.PointerType(element_llvm_type)            # data*
         ])
 
-        alloca = self.builder.alloca(struct_type, name=f"{name}_struct")
+        alloca = entry_alloca(self.builder, struct_type, name=f"{name}_struct")
 
         null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
 

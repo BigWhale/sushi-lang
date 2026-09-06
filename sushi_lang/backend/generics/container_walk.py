@@ -5,6 +5,7 @@ from typing import Any, Callable, Optional
 import llvmlite.ir as ir
 
 from sushi_lang.backend import gep_utils
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 ElementFn = Callable[[ir.Value, ir.Value], None]
@@ -48,7 +49,7 @@ def _emit_walk(
     zero = ir.Constant(i32, 0)
     one = ir.Constant(i32, 1)
 
-    index_slot = builder.alloca(i32, name=f"{prefix}_i")
+    index_slot = entry_alloca(builder, i32, name=f"{prefix}_i")
     builder.store(zero, index_slot)
 
     cond_bb = builder.append_basic_block(name=f"{prefix}_cond")
@@ -111,7 +112,7 @@ def emit_container_search(
     zero = ir.Constant(i32, 0)
     one = ir.Constant(i32, 1)
 
-    index_slot = builder.alloca(i32, name=f"{prefix}_i")
+    index_slot = entry_alloca(builder, i32, name=f"{prefix}_i")
     builder.store(zero, index_slot)
 
     cond_bb = builder.append_basic_block(name=f"{prefix}_cond")

@@ -9,6 +9,7 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -72,10 +73,10 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
 
             data_array_type = result_llvm_type.elements[1]
 
-            value_alloca = codegen.builder.alloca(i32, name="setenv_result_value")
+            value_alloca = entry_alloca(codegen.builder, i32, name="setenv_result_value")
             codegen.builder.store(result, value_alloca)
 
-            data_alloca = codegen.builder.alloca(data_array_type, name="data_array")
+            data_alloca = entry_alloca(codegen.builder, data_array_type, name="data_array")
 
             src_ptr = codegen.builder.bitcast(value_alloca, codegen.types.i8.as_pointer())
             dest_ptr = codegen.builder.bitcast(data_alloca, codegen.types.i8.as_pointer())

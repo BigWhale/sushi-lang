@@ -9,6 +9,7 @@ from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_strtoll,
 )
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types, get_maybe_type
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_string_to_i32(module: ir.Module) -> ir.Function:
@@ -48,7 +49,7 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
     size_plus_one_i64 = builder.zext(size_plus_one, i64, name="size_plus_one_i64")
     buffer = builder.call(malloc, [size_plus_one_i64], name="buffer")
 
-    idx_ptr = builder.alloca(i32, name="idx_ptr")
+    idx_ptr = entry_alloca(builder, i32, name="idx_ptr")
     builder.store(ir.Constant(i32, 0), idx_ptr)
 
     copy_loop = func.append_basic_block("copy_loop")
@@ -75,7 +76,7 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
     null_ptr = builder.gep(buffer, [str_size], name="null_ptr")
     builder.store(ir.Constant(i8, 0), null_ptr)
 
-    endptr_storage = builder.alloca(i8_ptr, name="endptr_storage")
+    endptr_storage = entry_alloca(builder, i8_ptr, name="endptr_storage")
     base = ir.Constant(i32, 10)
     result_i64 = builder.call(strtol, [buffer, endptr_storage, base], name="result_i64")
     endptr = builder.load(endptr_storage, name="endptr")
@@ -104,7 +105,7 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
     undef_some = ir.Constant(maybe_i32_type, ir.Undefined)
     some_with_tag = builder.insert_value(undef_some, ir.Constant(i32, 0), 0, name="some_with_tag")
 
-    data_temp = builder.alloca(maybe_i32_type.elements[1], name="data_temp")
+    data_temp = entry_alloca(builder, maybe_i32_type.elements[1], name="data_temp")
     data_temp_i8 = builder.bitcast(data_temp, i8_ptr, name="data_temp_i8")
     data_temp_i32 = builder.bitcast(data_temp_i8, i32.as_pointer(), name="data_temp_i32")
     builder.store(result_i32, data_temp_i32)
@@ -168,7 +169,7 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
     size_plus_one_i64 = builder.zext(size_plus_one, i64, name="size_plus_one_i64")
     buffer = builder.call(malloc, [size_plus_one_i64], name="buffer")
 
-    idx_ptr = builder.alloca(i32, name="idx_ptr")
+    idx_ptr = entry_alloca(builder, i32, name="idx_ptr")
     builder.store(ir.Constant(i32, 0), idx_ptr)
 
     copy_loop = func.append_basic_block("copy_loop")
@@ -195,7 +196,7 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
     null_ptr = builder.gep(buffer, [str_size], name="null_ptr")
     builder.store(ir.Constant(i8, 0), null_ptr)
 
-    endptr_storage = builder.alloca(i8_ptr, name="endptr_storage")
+    endptr_storage = entry_alloca(builder, i8_ptr, name="endptr_storage")
     base = ir.Constant(i32, 10)
     result_i64 = builder.call(strtoll, [buffer, endptr_storage, base], name="result_i64")
     endptr = builder.load(endptr_storage, name="endptr")
@@ -212,7 +213,7 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
     undef_some = ir.Constant(maybe_i64_type, ir.Undefined)
     some_with_tag = builder.insert_value(undef_some, ir.Constant(i32, 0), 0, name="some_with_tag")
 
-    data_temp = builder.alloca(maybe_i64_type.elements[1], name="data_temp")
+    data_temp = entry_alloca(builder, maybe_i64_type.elements[1], name="data_temp")
     data_temp_i8 = builder.bitcast(data_temp, i8_ptr, name="data_temp_i8")
     data_temp_i64 = builder.bitcast(data_temp_i8, i64.as_pointer(), name="data_temp_i64")
     builder.store(result_i64, data_temp_i64)
@@ -277,7 +278,7 @@ def emit_string_to_f64(module: ir.Module) -> ir.Function:
     size_plus_one_i64 = builder.zext(size_plus_one, i64, name="size_plus_one_i64")
     buffer = builder.call(malloc, [size_plus_one_i64], name="buffer")
 
-    idx_ptr = builder.alloca(i32, name="idx_ptr")
+    idx_ptr = entry_alloca(builder, i32, name="idx_ptr")
     builder.store(ir.Constant(i32, 0), idx_ptr)
 
     copy_loop = func.append_basic_block("copy_loop")
@@ -304,7 +305,7 @@ def emit_string_to_f64(module: ir.Module) -> ir.Function:
     null_ptr = builder.gep(buffer, [str_size], name="null_ptr")
     builder.store(ir.Constant(i8, 0), null_ptr)
 
-    endptr_storage = builder.alloca(i8_ptr, name="endptr_storage")
+    endptr_storage = entry_alloca(builder, i8_ptr, name="endptr_storage")
     result_f64 = builder.call(strtod, [buffer, endptr_storage], name="result_f64")
     endptr = builder.load(endptr_storage, name="endptr")
 
@@ -320,7 +321,7 @@ def emit_string_to_f64(module: ir.Module) -> ir.Function:
     undef_some = ir.Constant(maybe_f64_type, ir.Undefined)
     some_with_tag = builder.insert_value(undef_some, ir.Constant(i32, 0), 0, name="some_with_tag")
 
-    data_temp = builder.alloca(maybe_f64_type.elements[1], name="data_temp")
+    data_temp = entry_alloca(builder, maybe_f64_type.elements[1], name="data_temp")
     data_temp_i8 = builder.bitcast(data_temp, i8_ptr, name="data_temp_i8")
     data_temp_f64 = builder.bitcast(data_temp_i8, f64.as_pointer(), name="data_temp_f64")
     builder.store(result_f64, data_temp_f64)

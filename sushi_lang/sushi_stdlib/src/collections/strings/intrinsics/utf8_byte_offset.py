@@ -1,6 +1,7 @@
 """UTF-8 Byte Offset Intrinsic"""
 
 import llvmlite.ir as ir
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_utf8_byte_offset_intrinsic(module: ir.Module) -> ir.Function:
@@ -32,9 +33,9 @@ def emit_utf8_byte_offset_intrinsic(module: ir.Module) -> ir.Function:
 
     builder = ir.IRBuilder(entry_block)
 
-    char_count = builder.alloca(i32, name="char_count")
+    char_count = entry_alloca(builder, i32, name="char_count")
     builder.store(ir.Constant(i32, 0), char_count)
-    byte_idx = builder.alloca(i32, name="byte_idx")
+    byte_idx = entry_alloca(builder, i32, name="byte_idx")
     builder.store(ir.Constant(i32, 0), byte_idx)
     builder.branch(loop_header)
 

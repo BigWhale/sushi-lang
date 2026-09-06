@@ -306,6 +306,20 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A loop no longer grows the stack frame on every pass** (#589). A `foreach` inside
+  another loop, and a `HashMap.get` in one, stopped with a segmentation fault after a few
+  hundred thousand passes: the backend made the stack slot where the loop stood, so the
+  slot was made again on every pass and LLVM releases a frame only at the return. It was
+  not an optimizer question -- `mem2reg` and SROA promote a slot in the ENTRY block alone,
+  so the fault was the same at `--opt none`, at the default and at `O2`. Every stack slot
+  now comes from one seam, `entry_alloca` in `backend/memory/allocas.py`, which finds the
+  entry block from the BUILDER rather than from a field the caller keeps in step -- 164
+  sites across the backend and the generated standard library, where five had the rule and
+  the rest wrote it out by hand. Two gates hold the line:
+  `tests/unit/test_allocas_are_in_the_entry_block.py` reads the SOURCE for a call that
+  bypasses the seam, and the emitted IR for a slot outside an entry block. The compiler
+  stops carrying `entry_block`, `alloca_builder` and `entry_branch`, and CE0011 and CE0012
+  go with them.
 - **A named argument is refused where it names nothing.** `p.shifted(dx: 5)` compiled and
   the compiler read the arguments by position, so `p.moved(dy: 5)` against
   `(i32 dx, i32 dy)` wrote the wrong slot on a program the compiler accepted (#563). A

@@ -1,0 +1,19 @@
+# EXPECT_STDOUT_EXACT: "4000000\n"
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+# Regression for #589: `HashMap.get` is emitted INLINE at the call site, and both its probe
+# offset and the slot it builds the `Maybe.Some` payload in used to be made at the current
+# position. In a loop that is two more slots on every pass.
+
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, i32) m = HashMap.new()
+    m.insert(0, 10)
+    m.insert(1, 10)
+    let i32 total = 0
+    foreach(i in 0..400000):
+        total := total + m.get(i % 2).realise(0)
+    println("{total}")
+    m.free()
+    return Result.Ok(0)

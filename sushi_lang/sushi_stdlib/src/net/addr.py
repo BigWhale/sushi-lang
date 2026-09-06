@@ -10,6 +10,7 @@ from llvmlite import ir
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def i8_array(size: int) -> ir.ArrayType:
@@ -25,7 +26,7 @@ def alloca_zeroed(builder: ir.IRBuilder, size: int, name: str) -> ir.Value:
     """
     _i8, i8_ptr, _i32, _i64 = get_basic_types()
     buf_ty = i8_array(size)
-    slot = builder.alloca(buf_ty, name=name)
+    slot = entry_alloca(builder, buf_ty, name=name)
     builder.store(ir.Constant(buf_ty, None), slot)
     return builder.bitcast(slot, i8_ptr, name=f"{name}_ptr")
 
@@ -132,7 +133,7 @@ def emit_node_or_null(builder: ir.IRBuilder, host: ir.Value) -> ir.Value:
 def alloca_one_i32(builder: ir.IRBuilder, name: str) -> ir.Value:
     """An entry-block i32 holding 1, for the setsockopt calls that want a flag."""
     _i8, _i8_ptr, i32, _i64 = get_basic_types()
-    slot = builder.alloca(i32, name=name)
+    slot = entry_alloca(builder, i32, name=name)
     builder.store(ir.Constant(i32, 1), slot)
     return slot
 

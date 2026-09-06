@@ -8,6 +8,7 @@ from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_
 from sushi_lang.backend.constants.llvm_values import FALSE_I1
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if typing.TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -312,8 +313,8 @@ class StringOperations:
         str_param = func.args[0]
         str_param.name = "str"
 
-        count_ptr = builder.alloca(self.codegen.i32, name="count")
-        index_ptr = builder.alloca(self.codegen.i32, name="index")
+        count_ptr = entry_alloca(builder, self.codegen.i32, name="count")
+        index_ptr = entry_alloca(builder, self.codegen.i32, name="index")
 
         builder.store(ir.Constant(self.codegen.i32, 0), count_ptr)
         builder.store(ir.Constant(self.codegen.i32, 0), index_ptr)

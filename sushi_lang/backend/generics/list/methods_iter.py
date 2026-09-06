@@ -7,6 +7,7 @@ from sushi_lang.semantics.typesys import StructType
 from sushi_lang.backend import gep_utils
 from .types import get_list_len_ptr, get_list_data_ptr, extract_element_type
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     pass
@@ -35,7 +36,7 @@ def emit_list_iter(
     iterator_type = IteratorType(element_type=element_semantic_type)
     iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)
 
-    iterator_slot = codegen.builder.alloca(iterator_struct_type, name="list_iterator")
+    iterator_slot = entry_alloca(codegen.builder, iterator_struct_type, name="list_iterator")
 
     index_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 0, "index_ptr")
     codegen.builder.store(ir.Constant(codegen.types.i32, 0), index_ptr)

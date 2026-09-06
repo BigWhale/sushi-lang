@@ -7,6 +7,7 @@ import llvmlite.ir as ir
 from .types import extract_element_type, get_list_len_ptr, get_list_capacity_ptr, get_list_data_ptr
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32
 from sushi_lang.backend.generics.debug_output import emit_debug_string, emit_debug_i32
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_list_debug(
@@ -43,7 +44,7 @@ def emit_list_debug(
     emit_debug_i32(codegen, builder, capacity)
     emit_debug_string(codegen, builder, "\n")
 
-    i = builder.alloca(codegen.types.i32, name="i")
+    i = entry_alloca(builder, codegen.types.i32, name="i")
     builder.store(zero_i32, i)
 
     loop_cond_bb = builder.append_basic_block(name="debug_loop_cond")

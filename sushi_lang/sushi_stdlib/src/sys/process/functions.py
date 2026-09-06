@@ -11,6 +11,7 @@ from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_fread, declare_fseek, declare_ftell, declare_fclose,
 )
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 _PE_SPAWN_FAILED = 0
@@ -64,7 +65,7 @@ def generate_getcwd(module: ir.Module) -> None:
     # owns it now.
     sushi_string = cstr_to_fat_pointer_with_len(builder, result_ptr, str_len_i32, owned=1)
 
-    result_ok = builder.alloca(result_type)
+    result_ok = entry_alloca(builder, result_type)
     tag_ptr = builder.gep(result_ok, [ir.Constant(i32, 0), ir.Constant(i32, 0)])
     builder.store(ir.Constant(i32, 0), tag_ptr)  # tag = 0 (Ok)
 
@@ -78,7 +79,7 @@ def generate_getcwd(module: ir.Module) -> None:
     builder.position_at_end(error_block)
     builder.call(free_fn, [buffer])
 
-    result_err = builder.alloca(result_type)
+    result_err = entry_alloca(builder, result_type)
     tag_ptr_err = builder.gep(result_err, [ir.Constant(i32, 0), ir.Constant(i32, 0)])
     builder.store(ir.Constant(i32, 1), tag_ptr_err)  # tag = 1 (Err)
 
@@ -106,7 +107,7 @@ def generate_chdir(module: ir.Module) -> None:
 
     chdir_result = builder.call(libc_chdir, [c_path])
 
-    result_ok = builder.alloca(result_type)
+    result_ok = entry_alloca(builder, result_type)
     tag_ptr = builder.gep(result_ok, [ir.Constant(i32, 0), ir.Constant(i32, 0)])
     builder.store(ir.Constant(i32, 0), tag_ptr)  # tag = 0 (Ok)
 
@@ -226,9 +227,9 @@ def generate_run(module: ir.Module) -> None:
     b = ir.IRBuilder(entry)
 
     def emit_err(variant_tag: int) -> None:
-        res = b.alloca(result_type)
+        res = entry_alloca(b, result_type)
         b.store(ir.Constant(i32, 1), b.gep(res, [z, z]))          # Result tag = Err
-        ev = b.alloca(err_type)
+        ev = entry_alloca(b, err_type)
         b.store(ir.Constant(i32, variant_tag), b.gep(ev, [z, z]))  # ProcessError variant tag
         # Zero the unit enum's [1 x i64] data word (#300 phase 2)
         b.store(ir.Constant(err_type.elements[1], None), b.gep(ev, [z, one_i32]))
@@ -245,12 +246,12 @@ def generate_run(module: ir.Module) -> None:
         b.store(ir.Constant(i8, 0), b.gep(buf, [n64]))                    # NUL terminate
         return cstr_to_fat_pointer_with_len(b, buf, b.trunc(n64, i32), owned=1)
 
-    args_slot = b.alloca(argv_type)
-    i_slot = b.alloca(i32)
-    j_slot = b.alloca(i32)
-    pid_slot = b.alloca(i32)
-    status_slot = b.alloca(i32)
-    fa_buf = b.alloca(ir.ArrayType(i8, 128))          # opaque posix_spawn_file_actions_t (conservative size)
+    args_slot = entry_alloca(b, argv_type)
+    i_slot = entry_alloca(b, i32)
+    j_slot = entry_alloca(b, i32)
+    pid_slot = entry_alloca(b, i32)
+    status_slot = entry_alloca(b, i32)
+    fa_buf = entry_alloca(b, ir.ArrayType(i8, 128))          # opaque posix_spawn_file_actions_t (conservative size)
     b.store(args_arg, args_slot)
     out_file = b.call(tmpfile_fn, [])
     err_file = b.call(tmpfile_fn, [])
@@ -339,13 +340,13 @@ def generate_run(module: ir.Module) -> None:
     b.call(fclose_fn, [out_file])
     b.call(fclose_fn, [err_file])
 
-    po = b.alloca(out_type)
+    po = entry_alloca(b, out_type)
     b.store(exit_code, b.gep(po, [z, z]))
     b.store(stdout_str, b.gep(po, [z, one_i32]))
     b.store(stderr_str, b.gep(po, [z, ir.Constant(i32, 2)]))
     po_val = b.load(po)
 
-    res = b.alloca(result_type)
+    res = entry_alloca(b, result_type)
     b.store(z, b.gep(res, [z, z]))                                # Result tag = Ok
     ok_data = b.bitcast(b.gep(res, [z, one_i32]), out_type.as_pointer())
     b.store(po_val, ok_data)

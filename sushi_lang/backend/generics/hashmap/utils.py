@@ -7,6 +7,7 @@ from .types import ENTRY_OCCUPIED
 from sushi_lang.backend import enum_utils
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, TRUE_I1, make_i32_const
 from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_VALUE_INDICES, ENTRY_STATE_INDICES
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_key_equality_check(codegen: Any, key_type: Type, key1: ir.Value, key2: ir.Value) -> ir.Value:
@@ -93,12 +94,12 @@ def emit_enum_equality(codegen: Any, enum_type: EnumType, enum1: ir.Value, enum2
     # on the (equal) tag and unpack each data-carrying variant's fields with their
     # real semantic types, then compare field-by-field.
     i1_ty = ir.IntType(1)
-    data_eq_slot = builder.alloca(i1_ty, name="enum_data_eq")
+    data_eq_slot = entry_alloca(builder, i1_ty, name="enum_data_eq")
     builder.store(TRUE_I1, data_eq_slot)
 
     enum_llvm_type = codegen.types.get_enum_type(enum_type)
-    enum1_ptr = builder.alloca(enum_llvm_type, name="enum1_tmp")
-    enum2_ptr = builder.alloca(enum_llvm_type, name="enum2_tmp")
+    enum1_ptr = entry_alloca(builder, enum_llvm_type, name="enum1_tmp")
+    enum2_ptr = entry_alloca(builder, enum_llvm_type, name="enum2_tmp")
     builder.store(enum1, enum1_ptr)
     builder.store(enum2, enum2_ptr)
     data1_ptr = enum_utils.get_data_ptr(codegen, enum1_ptr, name="enum1_data")
@@ -154,15 +155,15 @@ def emit_fixed_array_equality(codegen: Any, array_type: ArrayType, arr1: ir.Valu
     size = array_type.size
 
     arr1_llvm_type = codegen.types.ll_type(array_type)
-    arr1_ptr = builder.alloca(arr1_llvm_type, name="arr1_ptr")
+    arr1_ptr = entry_alloca(builder, arr1_llvm_type, name="arr1_ptr")
     builder.store(arr1, arr1_ptr)
-    arr2_ptr = builder.alloca(arr1_llvm_type, name="arr2_ptr")
+    arr2_ptr = entry_alloca(builder, arr1_llvm_type, name="arr2_ptr")
     builder.store(arr2, arr2_ptr)
 
-    result = builder.alloca(codegen.types.i1, name="arrays_equal")
+    result = entry_alloca(builder, codegen.types.i1, name="arrays_equal")
     builder.store(TRUE_I1, result)
 
-    i_ptr = builder.alloca(codegen.types.i32, name="i_ptr")
+    i_ptr = entry_alloca(builder, codegen.types.i32, name="i_ptr")
     builder.store(ZERO_I32, i_ptr)
 
     loop_cond_bb = builder.append_basic_block(name="array_eq_loop_cond")
@@ -215,10 +216,10 @@ def emit_dynamic_array_equality(codegen: Any, array_type: DynamicArrayType, arr1
     data1_ptr = builder.extract_value(arr1, 2, name="data1_ptr")
     data2_ptr = builder.extract_value(arr2, 2, name="data2_ptr")
 
-    result = builder.alloca(codegen.types.i1, name="elements_equal")
+    result = entry_alloca(builder, codegen.types.i1, name="elements_equal")
     builder.store(TRUE_I1, result)
 
-    i_ptr = builder.alloca(codegen.types.i32, name="i_ptr")
+    i_ptr = entry_alloca(builder, codegen.types.i32, name="i_ptr")
     builder.store(ZERO_I32, i_ptr)
 
     loop_cond_bb = builder.append_basic_block(name="dyn_array_loop_cond")

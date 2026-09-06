@@ -2,6 +2,7 @@
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types, get_timespec_type
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def _generate_clock_read(module: ir.Module, sushi_name: str, clock_id: int,
@@ -21,7 +22,7 @@ def _generate_clock_read(module: ir.Module, sushi_name: str, clock_id: int,
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    ts = builder.alloca(timespec, name="ts")
+    ts = entry_alloca(builder, timespec, name="ts")
     result = builder.call(clock_gettime, [ir.Constant(i32, clock_id), ts], name="cg_result")
 
     ok = builder.icmp_signed("==", result, ir.Constant(i32, 0), name="cg_ok")

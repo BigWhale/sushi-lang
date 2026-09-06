@@ -5,6 +5,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
 from ...intrinsics import declare_utf8_count_intrinsic
 from ...common import build_string_struct
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_string_repeat(module: ir.Module) -> ir.Function:
@@ -141,9 +142,9 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
     total_size_i64 = builder.zext(total_size, i64, name="total_size_i64")
     result_data = builder.call(malloc, [total_size_i64], name="result_data")
 
-    idx_ptr = builder.alloca(i32, name="idx_ptr")
+    idx_ptr = entry_alloca(builder, i32, name="idx_ptr")
     builder.store(ir.Constant(i32, 0), idx_ptr)
-    offset_ptr = builder.alloca(i32, name="offset_ptr")
+    offset_ptr = entry_alloca(builder, i32, name="offset_ptr")
     builder.store(ir.Constant(i32, 0), offset_ptr)
     builder.branch(padding_loop_block)
 
@@ -235,9 +236,9 @@ def emit_string_pad_right(module: ir.Module) -> ir.Function:
 
     builder.call(memcpy, [result_data, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
 
-    idx_ptr = builder.alloca(i32, name="idx_ptr")
+    idx_ptr = entry_alloca(builder, i32, name="idx_ptr")
     builder.store(ir.Constant(i32, 0), idx_ptr)
-    offset_ptr = builder.alloca(i32, name="offset_ptr")
+    offset_ptr = entry_alloca(builder, i32, name="offset_ptr")
     builder.store(str_size, offset_ptr)
     builder.branch(padding_loop_block)
 

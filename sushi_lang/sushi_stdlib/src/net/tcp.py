@@ -24,6 +24,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_unit_enum_type,
 )
 from sushi_lang.backend.runtime.constants import ERRNO_DEFAULT_NET_ERROR
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def generate_ir(module: ir.Module) -> None:
@@ -104,10 +105,10 @@ def _emit_addrinfo_walk(builder, func, module, result_type, host, socktype,
     zero = ir.Constant(i32, 0)
     null = ir.Constant(i8_ptr, None)
 
-    res_slot = builder.alloca(i8_ptr, name="res_slot")
-    cur_slot = builder.alloca(i8_ptr, name="cur_slot")
-    err_slot = builder.alloca(i32, name="err_slot")
-    fd_slot = builder.alloca(i32, name="fd_slot")
+    res_slot = entry_alloca(builder, i8_ptr, name="res_slot")
+    cur_slot = entry_alloca(builder, i8_ptr, name="cur_slot")
+    err_slot = entry_alloca(builder, i32, name="err_slot")
+    fd_slot = entry_alloca(builder, i32, name="fd_slot")
     builder.store(ir.Constant(i32, ERRNO_DEFAULT_NET_ERROR), err_slot)
 
     hints = addr.emit_hints(builder, socktype, passive)
@@ -257,7 +258,7 @@ def generate_accept(module: ir.Module) -> None:
 
     one_slot = addr.alloca_one_i32(builder, "opt_on")
     storage = addr.alloca_zeroed(builder, platform_net.SOCKADDR_STORAGE_SIZE, "ss")
-    len_slot = builder.alloca(i32, name="ss_len")
+    len_slot = entry_alloca(builder, i32, name="ss_len")
     builder.store(ir.Constant(i32, platform_net.SOCKADDR_STORAGE_SIZE), len_slot)
 
     fd = builder.call(accept_fn, [func.args[0], storage, len_slot], name="accepted_fd")

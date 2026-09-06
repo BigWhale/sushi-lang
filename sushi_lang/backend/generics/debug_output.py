@@ -15,6 +15,7 @@ from typing import Any
 import llvmlite.ir as ir
 
 from sushi_lang.backend.constants.llvm_values import ZERO_I32
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def _text_global(codegen: Any, name: str, text: str) -> ir.GlobalVariable:
@@ -43,7 +44,7 @@ def emit_debug_i32(codegen: Any, builder: Any, value: ir.Value) -> None:
     """Write one i32 to the console, formatted into a frame buffer first."""
     fmt = builder.gep(_text_global(codegen, ".fmt_i32_debug", "%d"),
                       [ZERO_I32, ZERO_I32], name="fmt_ptr")
-    slot = builder.alloca(ir.ArrayType(codegen.i8, 24), name="debug_buf")
+    slot = entry_alloca(builder, ir.ArrayType(codegen.i8, 24), name="debug_buf")
     buf = builder.bitcast(slot, codegen.i8.as_pointer(), name="debug_buf_ptr")
     written = builder.call(codegen.runtime.libc_strings.sprintf, [buf, fmt, value],
                            name="debug_len")

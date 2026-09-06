@@ -3,6 +3,7 @@
 import llvmlite.ir as ir
 from ..common import declare_malloc, declare_memcpy, build_string_struct
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_string_to_bytes(module: ir.Module) -> ir.Function:
@@ -107,9 +108,9 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     builder.branch(return_block)
 
     builder.position_at_end(normal_split_block)
-    count_ptr = builder.alloca(i32, name="count_ptr")
+    count_ptr = entry_alloca(builder, i32, name="count_ptr")
     builder.store(ir.Constant(i32, 0), count_ptr)
-    pos_ptr = builder.alloca(i32, name="pos_ptr")
+    pos_ptr = entry_alloca(builder, i32, name="pos_ptr")
     builder.store(ir.Constant(i32, 0), pos_ptr)
     builder.branch(count_loop_block)
 
@@ -120,10 +121,10 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     builder.cbranch(can_fit, count_check_block, count_done_block)
 
     builder.position_at_end(count_check_block)
-    match_ptr = builder.alloca(i1, name="match_ptr")
+    match_ptr = entry_alloca(builder, i1, name="match_ptr")
     builder.store(ir.Constant(i1, 1), match_ptr)
 
-    cmp_idx_ptr = builder.alloca(i32, name="cmp_idx_ptr")
+    cmp_idx_ptr = entry_alloca(builder, i32, name="cmp_idx_ptr")
     builder.store(ir.Constant(i32, 0), cmp_idx_ptr)
 
     cmp_loop_block = func.append_basic_block("cmp_loop")
@@ -181,9 +182,9 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     array_data = builder.bitcast(array_data_raw, string_ptr, name="array_data")
 
     builder.store(ir.Constant(i32, 0), pos_ptr)
-    array_idx_ptr = builder.alloca(i32, name="array_idx_ptr")
+    array_idx_ptr = entry_alloca(builder, i32, name="array_idx_ptr")
     builder.store(ir.Constant(i32, 0), array_idx_ptr)
-    start_ptr = builder.alloca(i32, name="start_ptr")
+    start_ptr = entry_alloca(builder, i32, name="start_ptr")
     builder.store(ir.Constant(i32, 0), start_ptr)
     builder.branch(split_loop_block)
 
@@ -194,9 +195,9 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     builder.cbranch(can_fit2, split_check_block, split_done_block)
 
     builder.position_at_end(split_check_block)
-    match_ptr2 = builder.alloca(i1, name="match_ptr2")
+    match_ptr2 = entry_alloca(builder, i1, name="match_ptr2")
     builder.store(ir.Constant(i1, 1), match_ptr2)
-    cmp_idx_ptr2 = builder.alloca(i32, name="cmp_idx_ptr2")
+    cmp_idx_ptr2 = entry_alloca(builder, i32, name="cmp_idx_ptr2")
     builder.store(ir.Constant(i32, 0), cmp_idx_ptr2)
 
     cmp_loop2_block = func.append_basic_block("cmp_loop2")
@@ -356,9 +357,9 @@ def emit_string_join(module: ir.Module) -> ir.Function:
     builder.branch(return_block)
 
     builder.position_at_end(size_loop_block)
-    idx_ptr = builder.alloca(i32, name="idx_ptr")
+    idx_ptr = entry_alloca(builder, i32, name="idx_ptr")
     builder.store(ir.Constant(i32, 0), idx_ptr)
-    total_size_ptr = builder.alloca(i32, name="total_size_ptr")
+    total_size_ptr = entry_alloca(builder, i32, name="total_size_ptr")
     builder.store(ir.Constant(i32, 0), total_size_ptr)
 
     size_loop_cond = func.append_basic_block("size_loop_cond")
@@ -394,7 +395,7 @@ def emit_string_join(module: ir.Module) -> ir.Function:
     result_data = builder.call(malloc, [final_size_i64], name="result_data")
 
     builder.store(ir.Constant(i32, 0), idx_ptr)
-    offset_ptr = builder.alloca(i32, name="offset_ptr")
+    offset_ptr = entry_alloca(builder, i32, name="offset_ptr")
     builder.store(ir.Constant(i32, 0), offset_ptr)
     builder.branch(copy_loop_block)
 

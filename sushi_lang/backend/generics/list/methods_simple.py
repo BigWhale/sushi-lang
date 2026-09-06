@@ -7,6 +7,7 @@ import llvmlite.ir as ir
 from .types import get_list_llvm_type, get_list_len_ptr, get_list_capacity_ptr, extract_element_type, get_list_data_ptr
 
 from sushi_lang.backend.memory.heap import emit_malloc
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_list_new(codegen: Any, list_type: StructType) -> ir.Value:
@@ -53,7 +54,7 @@ def emit_list_with_capacity(codegen: Any, expr: Any, list_type: StructType) -> i
 
     zero_i32 = ir.Constant(codegen.types.i32, 0)
 
-    list_alloca = codegen.builder.alloca(list_llvm_type, name="list")
+    list_alloca = entry_alloca(codegen.builder, list_llvm_type, name="list")
 
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)

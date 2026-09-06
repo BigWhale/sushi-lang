@@ -1,0 +1,15 @@
+# EXPECT_STDOUT_EXACT: "3 300000\n"
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+# Regression for #589: `reverse()` walks the array with a counter and swaps through a scratch
+# slot. Both used to be made at the call site, so a call in a loop paid for them again on
+# every pass.
+
+fn main() i32:
+    let i32[] arr = from([1, 2, 3])
+    let i32 passes = 0
+    while (passes < 300000):
+        arr.reverse()
+        passes := passes + 1
+    println("{arr.len()} {passes}")
+    return Result.Ok(0)

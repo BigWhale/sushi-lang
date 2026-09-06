@@ -11,6 +11,7 @@ from sushi_lang.sushi_stdlib.src.libc_declarations import (
 )
 from sushi_lang.sushi_stdlib.src.io.files.errno import emit_errno_err_result
 from sushi_lang.sushi_stdlib.src.io.files.results import emit_ok_result
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def generate_ir(module: ir.Module) -> None:
@@ -61,9 +62,9 @@ def generate_read_dir(module: ir.Module) -> None:
     builder.ret(emit_errno_err_result(builder, module, result_type))
 
     builder.position_at_end(init_bb)
-    len_slot = builder.alloca(i32, name="len_slot")
-    cap_slot = builder.alloca(i32, name="cap_slot")
-    data_slot = builder.alloca(string_ptr, name="data_slot")
+    len_slot = entry_alloca(builder, i32, name="len_slot")
+    cap_slot = entry_alloca(builder, i32, name="cap_slot")
+    data_slot = entry_alloca(builder, string_ptr, name="data_slot")
     zero_i32 = ir.Constant(i32, 0)
     initial_cap = ir.Constant(i32, 8)
     builder.store(zero_i32, len_slot)

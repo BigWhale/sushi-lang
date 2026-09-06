@@ -8,6 +8,7 @@ from sushi_lang.backend.constants.llvm_values import ZERO_I8, make_i32_const
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -94,7 +95,7 @@ def emit_byte_array_to_string_checked(codegen: "LLVMCodegen", call: MethodCall, 
     ok_value = codegen.builder.insert_value(
         ok_value, ir.Constant(codegen.types.i32, ok_index), 0, name="Result_Ok_tag")
     data_array_type = result_llvm_type.elements[1]
-    temp_alloca = codegen.builder.alloca(data_array_type, name="ok_data_temp")
+    temp_alloca = entry_alloca(codegen.builder, data_array_type, name="ok_data_temp")
     typed_ptr = codegen.builder.bitcast(temp_alloca, ir.PointerType(string_value.type), name="ok_value_ptr")
     codegen.builder.store(string_value, typed_ptr)
     packed = codegen.builder.load(temp_alloca, name="ok_packed")

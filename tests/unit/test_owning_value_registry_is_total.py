@@ -34,8 +34,6 @@ def codegen():
     fn = ir.Function(cg.module, ir.FunctionType(ir.VoidType(), []), name="_registry_probe")
     block = fn.append_basic_block("entry")
     cg.builder = ir.IRBuilder(block)
-    cg.entry_block = block
-    cg.alloca_builder = ir.IRBuilder(block)
     cg.func = fn
     cg.dynamic_arrays = DynamicArrayManager(cg.builder, cg)
     return cg

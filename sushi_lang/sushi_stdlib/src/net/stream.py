@@ -23,6 +23,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_string_type,
     get_unit_enum_type,
 )
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def generate_ir(module: ir.Module) -> None:
@@ -117,7 +118,7 @@ def generate_local_port(module: ir.Module) -> None:
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
     storage = addr.alloca_zeroed(builder, platform_net.SOCKADDR_STORAGE_SIZE, "ss")
-    len_slot = builder.alloca(i32, name="ss_len")
+    len_slot = entry_alloca(builder, i32, name="ss_len")
     builder.store(ir.Constant(i32, platform_net.SOCKADDR_STORAGE_SIZE), len_slot)
 
     rc = builder.call(getsockname_fn, [func.args[0], storage, len_slot],
@@ -255,7 +256,7 @@ def _emit_getpeername(builder: ir.IRBuilder, module: ir.Module, func: ir.Functio
     getpeername_fn = platform_net.declare_getpeername(module)
 
     storage = addr.alloca_zeroed(builder, platform_net.SOCKADDR_STORAGE_SIZE, "ss")
-    len_slot = builder.alloca(i32, name="ss_len")
+    len_slot = entry_alloca(builder, i32, name="ss_len")
     builder.store(ir.Constant(i32, platform_net.SOCKADDR_STORAGE_SIZE), len_slot)
 
     rc = builder.call(getpeername_fn, [fd, storage, len_slot], name="getpeername_rc")

@@ -6,6 +6,7 @@ import llvmlite.ir as ir
 
 from sushi_lang.backend.constants import ENTRY_STATE_INDICES
 from .types import ENTRY_EMPTY, ENTRY_OCCUPIED
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 class ProbeSlot(NamedTuple):
@@ -36,7 +37,7 @@ def emit_probe_loop(
     i8 = codegen.types.i8
     one = ir.Constant(i32, 1)
 
-    probe_offset = builder.alloca(i32, name=f"{prefix}_offset")
+    probe_offset = entry_alloca(builder, i32, name=f"{prefix}_offset")
     builder.store(ir.Constant(i32, 0), probe_offset)
 
     loop_bb = builder.append_basic_block(name=f"{prefix}_loop")

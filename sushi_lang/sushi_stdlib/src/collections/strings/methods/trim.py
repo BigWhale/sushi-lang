@@ -4,6 +4,7 @@ import llvmlite.ir as ir
 from ..intrinsics import declare_isspace_intrinsic
 from ..common import declare_malloc, declare_memcpy, allocate_substring
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_string_tleft(module: ir.Module) -> ir.Function:
@@ -34,7 +35,7 @@ def emit_string_tleft(module: ir.Module) -> ir.Function:
     data = builder.extract_value(func.args[0], 0, name="data")
     size = builder.extract_value(func.args[0], 1, name="size")
 
-    start_ptr = builder.alloca(i32, name="start_ptr")
+    start_ptr = entry_alloca(builder, i32, name="start_ptr")
     builder.store(ir.Constant(i32, 0), start_ptr)
     builder.branch(loop_cond_block)
 
@@ -95,7 +96,7 @@ def emit_string_tright(module: ir.Module) -> ir.Function:
     data = builder.extract_value(func.args[0], 0, name="data")
     size = builder.extract_value(func.args[0], 1, name="size")
 
-    end_ptr = builder.alloca(i32, name="end_ptr")
+    end_ptr = entry_alloca(builder, i32, name="end_ptr")
     builder.store(size, end_ptr)
     builder.branch(loop_cond_block)
 
@@ -159,8 +160,8 @@ def emit_string_trim(module: ir.Module) -> ir.Function:
     data = builder.extract_value(func.args[0], 0, name="data")
     size = builder.extract_value(func.args[0], 1, name="size")
 
-    start_ptr = builder.alloca(i32, name="start_ptr")
-    end_ptr = builder.alloca(i32, name="end_ptr")
+    start_ptr = entry_alloca(builder, i32, name="start_ptr")
+    end_ptr = entry_alloca(builder, i32, name="end_ptr")
     builder.store(ir.Constant(i32, 0), start_ptr)
     builder.store(size, end_ptr)
     builder.branch(left_loop_cond_block)

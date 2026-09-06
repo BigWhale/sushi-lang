@@ -2,6 +2,7 @@
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_strlen_intrinsic(module: ir.Module) -> ir.Function:
@@ -28,7 +29,7 @@ def emit_strlen_intrinsic(module: ir.Module) -> ir.Function:
     loop_exit = func.append_basic_block("loop_exit")
 
     builder = ir.IRBuilder(entry_block)
-    counter = builder.alloca(i32, name="counter")
+    counter = entry_alloca(builder, i32, name="counter")
     builder.store(ir.Constant(i32, 0), counter)
     builder.branch(loop_header)
 

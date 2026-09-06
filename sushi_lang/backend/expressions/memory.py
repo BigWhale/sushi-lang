@@ -10,6 +10,7 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -155,7 +156,7 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     new_data_ptr_i8 = emit_malloc(codegen, codegen.builder, total_bytes)
     new_data_ptr = codegen.builder.bitcast(new_data_ptr_i8, ir.PointerType(element_llvm_type))
 
-    copy_index = codegen.builder.alloca(codegen.types.i32, name="copy_idx")
+    copy_index = entry_alloca(codegen.builder, codegen.types.i32, name="copy_idx")
     codegen.builder.store(zero, copy_index)
 
     copy_loop_head = codegen.builder.append_basic_block('copy_loop_head')
@@ -422,7 +423,7 @@ def _clone_function_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
     clone_ptr = b.extract_value(fat, 3, name="closure_clone")
     env_ptr = b.extract_value(fat, 1, name="closure_env")
 
-    slot = b.alloca(fat.type, name="clone_closure_slot")
+    slot = entry_alloca(b, fat.type, name="clone_closure_slot")
     b.store(fat, slot)  # default: return the input unchanged (clone_ptr == null)
 
     has_clone = b.icmp_unsigned("!=", clone_ptr, ir.Constant(clone_ptr.type, None))
@@ -444,7 +445,7 @@ def _clone_own_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struct
     elem_llvm = codegen.types.ll_type(elem_ty)
     ptr = b.extract_value(value, 0, name="clone_own_ptr")  # T*
 
-    slot = b.alloca(value.type, name="clone_own_slot")
+    slot = entry_alloca(b, value.type, name="clone_own_slot")
     b.store(value, slot)  # default: passthrough (null ptr)
 
     is_not_null = b.icmp_unsigned("!=", ptr, ir.Constant(ptr.type, None))
@@ -472,7 +473,7 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
     cap = b.extract_value(value, 1, name="clone_list_cap")
     data = b.extract_value(value, 2, name="clone_list_data")  # T*
 
-    slot = b.alloca(value.type, name="clone_list_slot")
+    slot = entry_alloca(b, value.type, name="clone_list_slot")
     b.store(value, slot)  # default: passthrough (null data)
 
     is_not_null = b.icmp_unsigned("!=", data, ir.Constant(data.type, None))
@@ -520,7 +521,7 @@ def _clone_hashmap_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: St
     capacity = b.extract_value(value, 2, name="clone_hm_cap")      # outer capacity field
     data = b.extract_value(buckets, 2, name="clone_hm_data")       # Entry*
 
-    slot = b.alloca(value.type, name="clone_hm_slot")
+    slot = entry_alloca(b, value.type, name="clone_hm_slot")
     b.store(value, slot)  # default: passthrough (null data)
 
     is_not_null = b.icmp_unsigned("!=", data, ir.Constant(data.type, None))
@@ -607,7 +608,7 @@ def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir
     if not variants_nc:
         return value  # no owning payload in any variant -> nothing to clone
 
-    slot = b.alloca(value.type, name="clone_enum_slot")
+    slot = entry_alloca(b, value.type, name="clone_enum_slot")
     b.store(value, slot)
 
     tag_ptr = b.gep(slot, [ZERO_I32, ZERO_I32], name="clone_enum_tag_ptr")
