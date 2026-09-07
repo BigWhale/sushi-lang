@@ -4,8 +4,8 @@ from typing import Optional, TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import unhandled
-from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, TYPE_NODE_NAMES
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import is_type_node, unhandled
+from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -19,7 +19,7 @@ def parse_array_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[ArrayTyp
     for child in node.children:
         if isinstance(child, Tree) and child.data == "array_size":
             size_node = child
-        elif isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t" or child.data == "reference_t"):
+        elif is_type_node(child):
             base_type_node = child
 
     if base_type_node is None or size_node is None:
@@ -95,7 +95,7 @@ def parse_dynamic_array_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[
     base_type_node = None
 
     for child in node.children:
-        if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t" or child.data == "reference_t"):
+        if is_type_node(child):
             base_type_node = child
             break
 

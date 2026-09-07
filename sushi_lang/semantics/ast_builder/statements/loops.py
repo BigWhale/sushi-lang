@@ -4,8 +4,8 @@ from itertools import count
 from typing import TYPE_CHECKING, Optional
 from lark import Tree, Token
 from sushi_lang.semantics.ast import Block, Foreach, Expand, Let, Name, TryExpr
-from sushi_lang.semantics.typesys import ReferenceType, Type, TYPE_NODE_NAMES
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import ice
+from sushi_lang.semantics.typesys import ReferenceType, Type
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import ice, is_type_node
 from sushi_lang.internals.report import span_of, Span
 
 if TYPE_CHECKING:
@@ -53,7 +53,7 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
 
     item_type: Optional[Type] = None
     item_type_span: Optional[Span] = None
-    if idx < len(children) and isinstance(children[idx], Tree) and children[idx].data in TYPE_NODE_NAMES:
+    if idx < len(children) and is_type_node(children[idx]):
         type_tree = children[idx]
         item_type = ast_builder._parse_type(type_tree)
         item_type_span = span_of(type_tree)

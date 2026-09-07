@@ -3,9 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 from lark import Tree, Token
 from sushi_lang.semantics.ast import PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef
-from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    expect, first_name, first_tree, ice, read_public)
+    expect, first_name, first_tree, ice, is_type_node, read_public)
 from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
@@ -98,9 +97,7 @@ def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMetho
     # The return type, then the optional `| E` channel -- the same two-type read
     # `parse_funcdef` does, because the contract and the implementation now declare
     # the channel in the same shape.
-    type_nodes = [child for child in t.children
-                  if isinstance(child, Tree)
-                  and (child.data in TYPE_NODE_NAMES or child.data == "name_t")]
+    type_nodes = [child for child in t.children if is_type_node(child)]
 
     if not type_nodes:
         ice(t, "missing return type")
@@ -131,14 +128,14 @@ def parse_extendwithdef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendWithDef:
 
     target_type_node = None
     for child in t.children:
-        if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
+        if is_type_node(child):
             target_type_node = child
             break
 
     perk_name_tok = None
     found_type = False
     for child in t.children:
-        if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
+        if is_type_node(child):
             found_type = True
         elif found_type and isinstance(child, Token) and child.type == "NAME":
             perk_name_tok = child
@@ -170,7 +167,7 @@ def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendW
 
     target_type_node = None
     for child in t.children:
-        if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
+        if is_type_node(child):
             target_type_node = child
             break
 

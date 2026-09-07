@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 from lark import Tree, Token
 from sushi_lang.semantics.ast import FuncDef, Param
-from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
+from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    expect, find_tree_recursive, first_name, first_tree, ice, read_public)
+    expect, find_tree_recursive, first_name, first_tree, ice, is_type_node,
+    read_public)
 from sushi_lang.semantics.ast_builder.declarations.docs import lift_body_doc
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
@@ -51,7 +52,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     # First type after params is return type, second type (if exists) is error type
     type_nodes = []
     for child in t.children:
-        if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
+        if is_type_node(child):
             type_nodes.append(child)
 
     ret_node = type_nodes[0] if len(type_nodes) >= 1 else None
@@ -137,14 +138,7 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
 
         if node.data in ("typed_param", "variadic_param"):
             ty_node = next(
-                (
-                    sub
-                    for sub in node.children
-                    if isinstance(sub, Tree)
-                    and (sub.data in TYPE_NODE_NAMES or sub.data == "name_t")
-                ),
-                None,
-            )
+                (sub for sub in node.children if is_type_node(sub)), None)
             if ty_node is None:
                 ice(node, "missing type")
 

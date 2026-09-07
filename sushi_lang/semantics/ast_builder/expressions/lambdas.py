@@ -4,16 +4,12 @@ from typing import TYPE_CHECKING, List, Optional, Union
 from lark import Token, Tree
 
 from sushi_lang.semantics.ast import Lambda, Param, Block, Expr
-from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
+    first_name, first_tree, is_type_node)
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
-
-
-def _is_type_node(node) -> bool:
-    return isinstance(node, Tree) and (node.data in TYPE_NODE_NAMES or node.data == "name_t")
 
 
 def parse_lambda(t: Tree, ast_builder: "ASTBuilder") -> Lambda:
@@ -28,7 +24,7 @@ def parse_lambda(t: Tree, ast_builder: "ASTBuilder") -> Lambda:
     if is_block:
         ret_node = first_tree(t.children, "lambda_ret")
         if ret_node is not None:
-            type_children = [c for c in ret_node.children if _is_type_node(c)]
+            type_children = [c for c in ret_node.children if is_type_node(c)]
             if type_children:
                 ret = ast_builder._parse_type(type_children[0])
             if len(type_children) > 1:
@@ -61,7 +57,7 @@ def _parse_lambda_params(t: Tree, ast_builder: "ASTBuilder") -> List[Param]:
         if not isinstance(ch, Tree):
             continue
         if ch.data == "lambda_typed_param":
-            ty_node = next((c for c in ch.children if _is_type_node(c)), None)
+            ty_node = next((c for c in ch.children if is_type_node(c)), None)
             nm_tok = first_name(ch.children)
             ty = ast_builder._parse_type(ty_node) if ty_node is not None else None
             nom_tok = next((c for c in ch.children

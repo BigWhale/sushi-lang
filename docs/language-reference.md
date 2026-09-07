@@ -688,6 +688,11 @@ foreach(i32 element in array.iter()):
     println(element)
 ```
 
+The item position takes any written type: a built-in, a struct or an enum this program
+declares, a generic instantiation (`Maybe@(i32)`), a qualified name (`geo.Vec`), and a
+reference form (`poke Point p`), which is the long spelling of `poke p`. A type that
+the iterator's element does not match is **CE2034**.
+
 **Two things are walkable.** An ITERATOR -- what `.iter()` answers on an array or a
 `List@(T)`, what `.keys()` / `.values()` / `.entries()` answer on a `HashMap`, and what a
 range is. Or **any type carrying `next()` answering `Maybe@(T)`**: the loop calls it until

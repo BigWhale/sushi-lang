@@ -306,6 +306,15 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A `foreach` with a bare user type in the item position stopped the compiler** (#595).
+  `foreach(Point p in ps.iter())` answered CE0002 -- an internal error, for a program the
+  reference documents -- while `foreach(i32 p in ...)`, `foreach(Maybe@(i32) m in ...)`
+  and the qualified `foreach(geo.Point p in ...)` all compiled. `TYPE_NODE_NAMES`, the set
+  that answers "is this child a written type", did not hold `name_t`, and `name_t` is what
+  the grammar makes of a bare name. Seventeen readers asked that question: sixteen added
+  the missing member by hand, in five different spellings, and the `foreach` reader used
+  the set alone. The set now holds every alias the grammar's `?type` and `?atom_type` rules
+  make, and `is_type_node()` is its ONE reader, so a reader cannot forget a member again.
 - **A library exported the declarations of every module and library it imported** (#594).
   A `use <io/fs>` injects the bundled module as an ordinary compilation unit, and a
   `use <lib/other>` over a source library injects its units the same way, so both reached

@@ -1,0 +1,14 @@
+# An enum name is a bare user type too, and the written item type reads it.
+# EXPECT_STDOUT_EXACT: "plus\nminus\n"
+
+enum Sign:
+    Plus
+    Minus
+
+fn main() i32:
+    let Sign[] signs = from([Sign.Plus, Sign.Minus])
+    foreach(Sign s in signs.iter()):
+        match s:
+            Sign.Plus -> println("plus")
+            Sign.Minus -> println("minus")
+    return Result.Ok(0)

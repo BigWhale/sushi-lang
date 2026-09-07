@@ -5,10 +5,11 @@ from typing import TYPE_CHECKING, List, Optional
 from lark import Tree, Token
 
 from sushi_lang.semantics.ast import ExternalBlock, ExternalDecl
-from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
+from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
 from sushi_lang.semantics.ast_builder.declarations.functions import parse_params
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
+    first_tree, ice, is_type_node)
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -98,7 +99,7 @@ def parse_extern_decl(t: Tree, ast_builder: 'ASTBuilder') -> ExternalDecl:
 
     ret_node = None
     for child in t.children:
-        if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
+        if is_type_node(child):
             ret_node = child
             break
     ret_ty: Optional[Type] = ast_builder._parse_type(ret_node) if ret_node is not None else None

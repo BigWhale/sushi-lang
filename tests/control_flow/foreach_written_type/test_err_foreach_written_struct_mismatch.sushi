@@ -1,0 +1,13 @@
+# A written item type that the iterator's element does not match is an ordinary
+# diagnostic, and it must stay one for a bare user type: the parser reads the name,
+# then the typecheck pass answers.
+# EXPECT_ERROR_CODE: CE2034
+
+struct Point:
+    i32 x
+
+fn main() i32:
+    let i32[] ns = from([1, 2])
+    foreach(Point p in ns.iter()):
+        println("{p.x}")
+    return Result.Ok(0)
