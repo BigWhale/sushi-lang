@@ -306,6 +306,30 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A library exported the declarations of every module and library it imported** (#594).
+  A `use <io/fs>` injects the bundled module as an ordinary compilation unit, and a
+  `use <lib/other>` over a source library injects its units the same way, so both reached
+  the manifest generator beside the library's own files. A library that declared one
+  function shipped eleven, plus the structs and the perks of `<io/fs>`, `<io/path>` and
+  `<io/contracts>`, and a consumer that imported the same module read a second definition
+  of each name -- CE4001 against the STDLIB source, for a program that named none of it.
+  The `units` index and the source section filtered them; the six extractors did not.
+  `own_units` now reads `Unit.provenance`, the field that already answers "did the author
+  write this unit", so one predicate covers a bundled module and an imported library
+  alike and every index of the declared API reads it. `dependencies` keeps the transitive
+  set: it says what a consumer's build must be able to provide, not what the library
+  declares.
+
+  The bitcode was the other half, and it predates the source-stdlib modules: a compiled
+  library links every stdlib module it imports into its own bitcode, so a MULTI-UNIT
+  consumer of the same module read duplicate symbols from `ld` -- 39 for a library over
+  `<collections/strings>` alone, 90 for one over `<io/fs>`. The monolithic consumer path
+  never showed it, because `TwoPhaseLinker` resolves a duplicate by symbol source. A
+  compiled library stays SELF-CONTAINED, so the copy is weakened rather than dropped:
+  `weak_odr` on every definition a foreign unit contributed and on every symbol a stdlib
+  `.bc` brought in (`backend/library_linkage.py`), the answer the perk-impl seam and the
+  monomorphized extensions already take. `ld` keeps one copy, a consumer's own strong
+  definition wins, and a consumer that imports none of the module still links.
 - **`List@(T).debug()` stopped the compiler on the second call, and read a string past
   its end** (#592). The format-string global was made inside an `except KeyError`, and
   the pointer into it was made there too: the first call took the branch, the second

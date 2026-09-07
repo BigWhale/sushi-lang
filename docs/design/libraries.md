@@ -304,6 +304,26 @@ helper, a private constant, a perk the library itself implements), and those
 references have to resolve to *the library's* symbols, not to a same-named consumer
 symbol, without the consumer writing any glue.
 
+**A compiled library declares its own units and nothing else** (#594). A
+`use <io/fs>` injects the bundled module as an ordinary compilation unit, and a
+`use <lib/other>` over a source library injects its units the same way, so both reach
+the manifest generator beside the library's own files. `own_units` filters them out of
+every index -- one predicate, `Unit.provenance`, the field that already answers "did
+the author write this unit" for CE3514. Without it a library that declared one
+function shipped eleven, and a consumer that imported `<io/fs>` for itself read a
+second definition of each name (CE4001).
+
+The bitcode is the other half, and the answer there is different: a compiled library is
+**self-contained**, so the module's compiled code stays in it and a consumer that names
+nothing of the module still links. That copy is a second definition for a consumer that
+does import the module. It is weakened rather than dropped -- `weak_odr` on every
+definition a foreign unit contributed and on every symbol a stdlib `.bc` brought in
+(`backend/library_linkage.py`), which is the same answer the perk-impl seam and the
+monomorphized extensions already take. `ld` then keeps one copy and a consumer's own
+strong definition wins. The monolithic consumer path never showed the fault, because
+`TwoPhaseLinker` resolves a duplicate by symbol source; the per-unit incremental path
+hands `ld` both objects and has no such rule.
+
 **A binary or hybrid library carries no re-export** (`docs/design/unit-namespaces.md`
 section 8.1, rule 3; #586). `public use X` makes X's public names the unit's own, and a
 source library ships the statement as text for the consumer to read; the manifest has no
