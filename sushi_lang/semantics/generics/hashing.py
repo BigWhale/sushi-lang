@@ -1,7 +1,9 @@
 """Hashability analysis and hash() method registration."""
 from __future__ import annotations
 
-from typing import Any, Optional
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import (
@@ -26,19 +28,74 @@ from sushi_lang.sushi_stdlib.src.common import (
 from sushi_lang.semantics.generics.type_display import display_type
 
 
-def can_struct_be_hashed(struct_type: StructType, visited: Optional[set] = None, path: Optional[list] = None) -> tuple[bool, str]:
+@dataclass
+class _Walk:
+    """One hashability walk: where it is, and what it has already decided.
+
+    `on_path` is the DFS path and nothing else. It is what detects RECURSION, and it
+    has to be the path: a type reached twice through two different fields is not
+    recursive, and the copied-per-field set the walk used to carry could not tell the
+    two apart without multiplying the work by the fan-out at every link (#598).
+
+    `decided` is the memo that makes the walk linear. It holds only an answer no cycle
+    took part in -- a "recursive" verdict is true of the PATH that found it and of
+    nothing else, so remembering one would refuse a type that a different reader can
+    hash. `cycles` counts the hits, and an unchanged count over a subtree is what says
+    its answer is the type's own.
+    """
+
+    path: List[str] = field(default_factory=list)
+    on_path: Set[str] = field(default_factory=set)
+    decided: Dict[Tuple[str, str], Tuple[bool, str]] = field(default_factory=dict)
+    cycles: int = 0
+
+
+@contextmanager
+def _walking(walk: _Walk, name: str) -> Iterator[None]:
+    """`name` is on the path for the length of this block, and off it after."""
+    walk.on_path.add(name)
+    walk.path.append(name)
+    try:
+        yield
+    finally:
+        walk.path.pop()
+        walk.on_path.discard(name)
+
+
+def _decide(walk: _Walk, kind: str, name: str,
+            verdict: Callable[[], tuple[bool, str]]) -> tuple[bool, str]:
+    """One NAMED type's answer, walked at most once per walk.
+
+    Type identity is nominal, so one name is one type and one answer serves every field
+    that reaches it.
+    """
+    key = (kind, name)
+    remembered = walk.decided.get(key)
+    if remembered is not None:
+        return remembered
+
+    if name in walk.on_path:
+        walk.cycles += 1
+        return False, f"recursive {kind} type: {' -> '.join(walk.path + [name])}"
+
+    hits = walk.cycles
+    with _walking(walk, name):
+        answer = verdict()
+    if walk.cycles == hits:
+        walk.decided[key] = answer
+    return answer
+
+
+def can_struct_be_hashed(struct_type: StructType,
+                         walk: Optional[_Walk] = None) -> tuple[bool, str]:
     """Check if a struct type can have an auto-derived hash method."""
-    if visited is None:
-        visited = set()
-    if path is None:
-        path = []
+    walk = walk if walk is not None else _Walk()
+    return _decide(walk, "struct", struct_type.name,
+                   lambda: _struct_fields_are_hashable(struct_type, walk))
 
-    if struct_type.name in visited:
-        return False, f"recursive struct type: {' -> '.join(path + [struct_type.name])}"
 
-    visited.add(struct_type.name)
-    path.append(struct_type.name)
-
+def _struct_fields_are_hashable(struct_type: StructType, walk: _Walk) -> tuple[bool, str]:
+    """Every field of one struct, with the walk already standing on that struct."""
     # Generic structs cannot be hashed (should be monomorphized first)
     if isinstance(struct_type, GenericStructType):
         return False, f"generic struct {struct_type.name} (should be monomorphized first)"
@@ -51,42 +108,39 @@ def can_struct_be_hashed(struct_type: StructType, visited: Optional[set] = None,
             return False, f"field '{field_name}' is a foreign ptr (unhashable)"
 
         if isinstance(field_type, (ArrayType, DynamicArrayType)):
-            can_hash, reason = can_array_be_hashed(field_type, visited.copy(), path.copy())
+            can_hash, reason = can_array_be_hashed(field_type, walk)
             if not can_hash:
                 return False, f"field '{field_name}' -> {reason}"
 
         if isinstance(field_type, EnumType):
-            can_hash, reason = can_enum_be_hashed(field_type, visited.copy(), path.copy())
+            can_hash, reason = can_enum_be_hashed(field_type, walk)
             if not can_hash:
                 return False, f"field '{field_name}' -> {reason}"
 
         if isinstance(field_type, StructType):
-            can_hash, reason = can_struct_be_hashed(field_type, visited.copy(), path.copy())
+            can_hash, reason = can_struct_be_hashed(field_type, walk)
             if not can_hash:
                 return False, f"field '{field_name}' -> {reason}"
 
     return True, "all fields are hashable"
 
 
-def can_enum_be_hashed(enum_type: EnumType, visited: Optional[set] = None, path: Optional[list] = None) -> tuple[bool, str]:
+def can_enum_be_hashed(enum_type: EnumType,
+                       walk: Optional[_Walk] = None) -> tuple[bool, str]:
     """Check if an enum type can have an auto-derived hash method."""
-    if visited is None:
-        visited = set()
-    if path is None:
-        path = []
+    walk = walk if walk is not None else _Walk()
+    return _decide(walk, "enum", enum_type.name,
+                   lambda: _enum_payloads_are_hashable(enum_type, walk))
 
-    if enum_type.name in visited:
-        return False, f"recursive enum type: {' -> '.join(path + [enum_type.name])}"
 
-    visited.add(enum_type.name)
-    path.append(enum_type.name)
-
+def _enum_payloads_are_hashable(enum_type: EnumType, walk: _Walk) -> tuple[bool, str]:
+    """Every payload of one enum, with the walk already standing on that enum."""
     # Generic enums cannot be hashed (should be monomorphized first)
     if isinstance(enum_type, GenericEnumType):
         return False, f"generic enum {enum_type.name} (should be monomorphized first)"
 
     for variant in enum_type.variants:
-        for _assoc_idx, assoc_type in enumerate(variant.associated_types):
+        for assoc_type in variant.associated_types:
             if isinstance(assoc_type, UnknownType):
                 return False, f"variant {variant.name} has unresolved type '{assoc_type.name}'"
 
@@ -94,34 +148,35 @@ def can_enum_be_hashed(enum_type: EnumType, visited: Optional[set] = None, path:
                 return False, f"variant {variant.name} carries a foreign ptr (unhashable)"
 
             if isinstance(assoc_type, (ArrayType, DynamicArrayType)):
-                can_hash, reason = can_array_be_hashed(assoc_type, visited.copy(), path.copy())
+                can_hash, reason = can_array_be_hashed(assoc_type, walk)
                 if not can_hash:
                     return False, f"variant {variant.name} -> {reason}"
 
             if isinstance(assoc_type, EnumType):
-                can_hash, reason = can_enum_be_hashed(assoc_type, visited.copy(), path.copy())
+                can_hash, reason = can_enum_be_hashed(assoc_type, walk)
                 if not can_hash:
                     return False, f"variant {variant.name} -> {reason}"
 
             if isinstance(assoc_type, StructType):
-                can_hash, reason = can_struct_be_hashed(assoc_type, visited.copy(), path.copy())
+                can_hash, reason = can_struct_be_hashed(assoc_type, walk)
                 if not can_hash:
                     return False, f"variant {variant.name} -> {reason}"
 
     return True, "all variant types are hashable"
 
 
-def can_array_be_hashed(array_type: Type, visited: Optional[set] = None, path: Optional[list] = None) -> tuple[bool, str]:
-    """Check if an array type can have an auto-derived hash method."""
+def can_array_be_hashed(array_type: Type,
+                        walk: Optional[_Walk] = None) -> tuple[bool, str]:
+    """Check if an array type can have an auto-derived hash method.
+
+    An array has no name of its own, so there is nothing here to memoize or to stand
+    on: it is its ELEMENT that answers, and the walk is only carried through.
+    """
     if not isinstance(array_type, (ArrayType, DynamicArrayType)):
         return False, f"not an array type: {type(array_type).__name__}"
 
+    walk = walk if walk is not None else _Walk()
     element_type = array_type.base_type
-
-    if visited is None:
-        visited = set()
-    if path is None:
-        path = []
 
     if isinstance(element_type, (ArrayType, DynamicArrayType)):
         return False, "nested array type (arrays of arrays not supported)"
@@ -130,13 +185,13 @@ def can_array_be_hashed(array_type: Type, visited: Optional[set] = None, path: O
         return True, "element type is primitive"
 
     if isinstance(element_type, StructType):
-        can_hash, reason = can_struct_be_hashed(element_type, visited.copy(), path.copy())
+        can_hash, reason = can_struct_be_hashed(element_type, walk)
         if not can_hash:
             return False, f"element struct type cannot be hashed: {reason}"
         return True, "element struct type is hashable"
 
     if isinstance(element_type, EnumType):
-        can_hash, reason = can_enum_be_hashed(element_type, visited.copy(), path.copy())
+        can_hash, reason = can_enum_be_hashed(element_type, walk)
         if not can_hash:
             return False, f"element enum type cannot be hashed: {reason}"
         return True, "element enum type is hashable"
@@ -201,11 +256,12 @@ def _register_hash_method(target_type: Type, kind: str, validator, description: 
 
 
 def register_struct_hash_method(struct_type: StructType) -> None:
-    """Register the auto-derived hash() method for a hashable struct type."""
-    can_hash, _reason = can_struct_be_hashed(struct_type)
-    if not can_hash:
-        return
+    """Register the auto-derived hash() method for a hashable struct type.
 
+    The CALLER decides and this one acts. Every one of the six call sites already asks
+    `can_struct_be_hashed` and registers only on a yes, so re-deciding here was the
+    second of two exponential walks per type (#598).
+    """
     _register_hash_method(
         struct_type, "struct", _validate_struct_hash,
         f"Auto-derived hash for struct {struct_type}",
@@ -213,11 +269,10 @@ def register_struct_hash_method(struct_type: StructType) -> None:
 
 
 def register_enum_hash_method(enum_type: EnumType) -> None:
-    """Register the auto-derived hash() method for a hashable enum type."""
-    can_hash, _reason = can_enum_be_hashed(enum_type)
-    if not can_hash:
-        return
+    """Register the auto-derived hash() method for a hashable enum type.
 
+    The caller decides; see `register_struct_hash_method`.
+    """
     _register_hash_method(
         enum_type, "enum", _validate_enum_hash,
         f"Auto-derived hash for enum {enum_type}",
@@ -225,11 +280,10 @@ def register_enum_hash_method(enum_type: EnumType) -> None:
 
 
 def register_array_hash_method(array_type: Type) -> None:
-    """Register the auto-derived hash() method for a hashable array type."""
-    can_hash, _reason = can_array_be_hashed(array_type)
-    if not can_hash:
-        return
+    """Register the auto-derived hash() method for a hashable array type.
 
+    The caller decides; see `register_struct_hash_method`.
+    """
     _register_hash_method(
         array_type, "array", _validate_array_hash,
         f"Auto-derived hash for array {array_type}",

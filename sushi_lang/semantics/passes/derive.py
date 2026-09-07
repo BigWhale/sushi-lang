@@ -16,18 +16,11 @@ def register_all_struct_hashes(struct_table: StructTable) -> None:
     """Register hash methods for all hashable structs in dependency order."""
     sorted_structs = topological_sort_structs(struct_table)
 
-    registered_count = 0
-    skipped_count = 0
-
     for struct_name in sorted_structs:
         struct_type = struct_table.by_name[struct_name]
-        can_hash, reason = can_struct_be_hashed(struct_type)
-
+        can_hash, _reason = can_struct_be_hashed(struct_type)
         if can_hash:
             register_struct_hash_method(struct_type)
-            registered_count += 1
-        else:
-            skipped_count += 1
 
 
 def topological_sort_structs(struct_table: StructTable) -> List[str]:
@@ -76,18 +69,11 @@ def register_all_enum_hashes(enum_table: EnumTable, reporter: Reporter) -> None:
     """Register hash methods for all hashable enums in dependency order."""
     sorted_enums = topological_sort_enums(enum_table, reporter)
 
-    registered_count = 0
-    skipped_count = 0
-
     for enum_name in sorted_enums:
         enum_type = enum_table.by_name[enum_name]
-        can_hash, reason = can_enum_be_hashed(enum_type)
-
+        can_hash, _reason = can_enum_be_hashed(enum_type)
         if can_hash:
             register_enum_hash_method(enum_type)
-            registered_count += 1
-        else:
-            skipped_count += 1
 
 
 def topological_sort_enums(enum_table: EnumTable, reporter: Reporter) -> List[str]:
@@ -226,17 +212,10 @@ def register_all_array_hashes(struct_table: StructTable, enum_table: EnumTable) 
     """Register hash methods for all hashable array types."""
     array_types = collect_array_types(struct_table, enum_table)
 
-    registered_count = 0
-    skipped_count = 0
-
     for array_type in array_types:
-        can_hash, reason = can_array_be_hashed(array_type)
-
+        can_hash, _reason = can_array_be_hashed(array_type)
         if can_hash:
             register_array_hash_method(array_type)
-            registered_count += 1
-        else:
-            skipped_count += 1
 
 
 def register_all_clones(struct_table: StructTable, enum_table: EnumTable) -> None:
