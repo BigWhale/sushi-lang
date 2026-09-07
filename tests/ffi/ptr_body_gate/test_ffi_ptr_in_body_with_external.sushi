@@ -1,0 +1,11 @@
+# FFI: the unit declares a danger zone, so a `ptr` local is legal here.
+# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+unsafe external "C" as libc because "the gate needs a unit that may name ptr":
+    fn reserve(u64 count, u64 size) ptr = "calloc"
+    fn release(ptr p) ~   = "free"
+
+fn main() i32:
+    let ptr block = libc.reserve(1 as u64, 8 as u64)
+    libc.release(block)
+    println("Mostly Harmless")
+    return Result.Ok(0)

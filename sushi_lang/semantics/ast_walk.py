@@ -171,7 +171,7 @@ def signature_types(program: 'Program') -> Iterator[TypeSite]:
     (CE5008, CE3009), and nothing that cares about a local.
 
     A body is deliberately absent. A private type is perfectly legal in a local variable,
-    and CE5009 -- which does care -- keeps its own body walk.
+    and CE5009 -- which does care -- reads `body_types()` beside this one.
     """
     for const in program.constants:
         yield TypeSite("variable" if isinstance(const, VarDef) else "constant",
@@ -209,3 +209,166 @@ def signature_types(program: 'Program') -> Iterator[TypeSite]:
         yield TypeSite("extension", "receiver", ext, getattr(ext, "target_type", None),
                        getattr(ext, "target_type_span", None) or ext.loc)
         yield from _callable_sites("extension", ext, ext)
+
+
+# A node that holds no type and no sub-expression. Named rather than implied, so the
+# gate can tell a deliberate leaf from a forgotten arm.
+TERMINAL_NODES = frozenset({
+    "Break", "Continue",
+    "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit",
+    "DynamicArrayNew",
+})
+
+
+def _lambda_types(lam) -> Iterator[Tuple[Any, Any]]:
+    """The types a lambda literal names: its parameters, its return, its error arm."""
+    for param in lam.params or ():
+        yield param.ty, param.type_span or param.loc or lam.loc
+    yield lam.ret, lam.loc
+    yield lam.err_type, lam.loc
+    yield from _body_of(lam.body)
+
+
+def _call_type_args(call) -> Iterator[Tuple[Any, Any]]:
+    """Explicit call-site type arguments: `identity@(ptr)(p)` names `ptr`."""
+    for ty in call.type_args or ():
+        yield ty, call.type_args_loc or call.loc
+
+
+def _array_literal_types(literal) -> Iterator[Tuple[Any, Any]]:
+    """An array literal's elements, each with its optional repeat count."""
+    for element in literal.elements:
+        yield from _expr_types(element.value)
+        yield from _expr_types(element.count)
+
+
+def _expr_types(expr) -> Iterator[Tuple[Any, Any]]:
+    """Every type an expression NAMES, and where to point at it.
+
+    Total over the `Expr` union. A kind with nothing to walk is in `TERMINAL_NODES`;
+    `tests/unit/test_body_walk_is_total.py` is the gate.
+    """
+    from sushi_lang.semantics import ast as a
+
+    if expr is None:
+        return
+    match expr:
+        case a.Name() | a.IntLit() | a.FloatLit() | a.BoolLit() | a.BlankLit() \
+                | a.StringLit() | a.DynamicArrayNew():
+            return
+        case a.InterpolatedString():
+            for part in expr.parts:
+                if not isinstance(part, str):
+                    yield from _expr_types(part)
+        case a.ArrayLiteral():
+            yield from _array_literal_types(expr)
+        case a.DynamicArrayFrom():
+            yield from _array_literal_types(expr.elements)
+        case a.IndexAccess():
+            yield from _expr_types(expr.array)
+            yield from _expr_types(expr.index)
+        case a.UnaryOp():
+            yield from _expr_types(expr.expr)
+        case a.BinaryOp():
+            yield from _expr_types(expr.left)
+            yield from _expr_types(expr.right)
+        case a.RangeExpr():
+            yield from _expr_types(expr.start)
+            yield from _expr_types(expr.end)
+        case a.Call():
+            yield from _call_type_args(expr)
+            yield from _expr_types(expr.callee)
+            for arg in expr.args:
+                yield from _expr_types(arg)
+        case a.DotCall():
+            yield from _call_type_args(expr)
+            yield from _expr_types(expr.receiver)
+            for arg in expr.args:
+                yield from _expr_types(arg)
+        case a.MethodCall():
+            yield from _expr_types(expr.receiver)
+            for arg in expr.args:
+                yield from _expr_types(arg)
+        case a.MemberAccess():
+            yield from _expr_types(expr.receiver)
+        case a.EnumConstructor():
+            for arg in expr.args:
+                yield from _expr_types(arg)
+        case a.CastExpr():
+            yield expr.target_type, expr.loc
+            yield from _expr_types(expr.expr)
+        case a.Borrow() | a.TryExpr():
+            yield from _expr_types(expr.expr)
+        case a.Spread():
+            yield from _expr_types(expr.value)
+        case a.Lambda():
+            yield from _lambda_types(expr)
+
+
+def _stmt_types(stmt) -> Iterator[Tuple[Any, Any]]:
+    """Every type one statement NAMES, and where to point at it.
+
+    Total over the `Stmt` subclasses; see `_expr_types` for the gate.
+    """
+    from sushi_lang.semantics import ast as a
+
+    match stmt:
+        case a.Break() | a.Continue():
+            return
+        case a.Let():
+            yield stmt.ty, stmt.type_span or stmt.loc
+            yield from _expr_types(stmt.value)
+        case a.Rebind():
+            yield from _expr_types(stmt.target)
+            yield from _expr_types(stmt.value)
+        case a.ExprStmt():
+            yield from _expr_types(stmt.expr)
+        case a.Return() | a.Print() | a.PrintLn():
+            yield from _expr_types(stmt.value)
+        case a.If():
+            for cond, block in stmt.arms:
+                yield from _expr_types(cond)
+                yield from _body_of(block)
+            yield from _body_of(stmt.else_block)
+        case a.While():
+            yield from _expr_types(stmt.cond)
+            yield from _body_of(stmt.body)
+        case a.Foreach():
+            yield stmt.item_type, stmt.item_type_span or stmt.loc
+            yield from _expr_types(stmt.iterable)
+            yield from _body_of(stmt.body)
+        case a.Expand():
+            yield from _expr_types(stmt.iterable)
+            yield from _body_of(stmt.body)
+        case a.Match():
+            yield from _expr_types(stmt.scrutinee)
+            for arm in stmt.arms:
+                yield from _body_of(arm.body)
+
+
+def _body_of(body) -> Iterator[Tuple[Any, Any]]:
+    """A body slot, which holds a block or a single expression."""
+    from sushi_lang.semantics.ast import Block
+
+    if body is None:
+        return
+    if isinstance(body, Block):
+        for stmt in body.statements:
+            yield from _stmt_types(stmt)
+    else:
+        yield from _expr_types(body)
+
+
+def body_types(program: 'Program') -> Iterator[Tuple[Any, Any]]:
+    """Every type one unit's BODIES name, as (type, span). Never a signature.
+
+    The companion to `signature_types()`: a signature is where a type crosses a boundary,
+    a body is where it is merely spelled. Only a rule about the SPELLING reads this one --
+    the `ptr` quarantine (CE5009), which refuses `ptr` anywhere in a unit that declares no
+    danger zone. A private type in a local is perfectly legal, so the leak fence does not.
+
+    A slot the source left blank yields `(None, span)`; the caller filters.
+    `tests/unit/test_body_walk_is_total.py` is the gate.
+    """
+    for node in bodied(program):
+        yield from _body_of(getattr(node, "body", None))

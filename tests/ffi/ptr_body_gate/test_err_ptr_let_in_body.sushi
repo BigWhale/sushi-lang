@@ -1,0 +1,7 @@
+# FFI: `ptr` may only be named in a unit that declares an `unsafe external` block,
+# and a function BODY is a naming position exactly as a signature is (#596).
+# EXPECT_ERROR_CODE: CE5009
+fn main() i32:
+    let ptr p = 0
+    println("Mostly Harmless")
+    return Result.Ok(0)
