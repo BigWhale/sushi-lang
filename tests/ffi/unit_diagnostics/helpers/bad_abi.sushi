@@ -1,0 +1,3 @@
+# An extern whose parameter type is outside the C ABI subset (CE5003).
+unsafe external "C" as bad because "the diagnostic must name this file":
+    fn takes_maybe(Maybe@(i32) m) i32 = "takes_maybe"

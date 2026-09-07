@@ -48,6 +48,10 @@ class Unit:
     # to be spelled "the first unit of the compilation order" and was only the same thing
     # while that order put a dependent before its dependency.
     is_entry: bool = False
+    # The file's text, for a per-unit Reporter's caret line. Filled at construction where
+    # the caller already holds it, read once on first ask otherwise: four per-unit pass
+    # loops each want a Reporter, and each used to re-read the file (#599).
+    source: Optional[str] = None
 
     def __post_init__(self):
         """Initialize computed fields after dataclass creation."""
@@ -109,6 +113,15 @@ class Unit:
 
         self.public_symbols = symbols
 
+    def read_source(self) -> str:
+        """The file's text. Read from disk once; empty when it cannot be read."""
+        if self.source is None:
+            try:
+                self.source = self.file_path.read_text(encoding="utf-8")
+            except Exception:
+                self.source = ""  # a diagnostic still renders, without its caret line
+        return self.source
+
     def load_ast(self, ast: Program) -> None:
         """Load the parsed AST and update computed fields."""
         self.ast = ast
@@ -131,8 +144,9 @@ class UnitManager:
         relative_path = Path(unit_name + ".sushi")
         return self.root_path / relative_path
 
-    def load_unit(self, unit_name: str, ast: Program) -> Optional[Unit]:
-        """Load a unit with its parsed AST."""
+    def load_unit(self, unit_name: str, ast: Program,
+                  source: Optional[str] = None) -> Optional[Unit]:
+        """Load a unit with its parsed AST. `source` is the text the loader already read."""
         file_path = self.resolve_unit_path(unit_name)
 
         if not file_path.exists():
@@ -145,7 +159,8 @@ class UnitManager:
             file_path=file_path,
             ast=ast,
             dependencies=[],
-            public_symbols={}
+            public_symbols={},
+            source=source,
         )
 
         unit.load_ast(ast)
