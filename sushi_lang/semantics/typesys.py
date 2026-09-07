@@ -408,15 +408,16 @@ Type = Union[
 ]
 
 
+# Every alias the grammar's `?type` and `?atom_type` rules make. The answer to "is this
+# child a written type" is yes for each of them, and a name is one of them -- bare or
+# behind an alias. `is_type_node` (`ast_builder/utils/tree_navigation.py`) is the reader.
 TYPE_NODE_NAMES = {
     "i8_t", "i16_t", "i32_t", "i64_t", "u8_t", "u16_t", "u32_t", "u64_t",
     "f32_t", "f64_t", "bool_t", "string_t", "blank_t",
     "array_t", "dynamic_array_t", "reference_t",
     "generic_type_t",  # Generic type instantiation (e.g., Result<i32>)
     "fn_type_t",       # First-class function type (e.g., fn(i32) -> i32)
-    # A name written behind an alias. Every reader of this set asks one question --
-    # "is this child a written type" -- and the answer for a qualified name is yes.
-    "qualified_name_t", "qualified_generic_type_t",
+    "name_t", "qualified_name_t", "qualified_generic_type_t",
 }
 
 NODE_TO_TYPE: Mapping[str, BuiltinType] = {

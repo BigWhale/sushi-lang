@@ -5,6 +5,7 @@ from lark import Tree, Token
 
 from sushi_lang.internals.diagnostics import AstBuilderICE
 from sushi_lang.internals.report import Span, span_of
+from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
 
 
 def _kind_of(node: object) -> str:
@@ -82,6 +83,16 @@ def read_public(children: List[object]) -> tuple[bool, Optional[Span]]:
     if token is None:
         return False, None
     return True, span_of(token)
+
+
+def is_type_node(node: object) -> bool:
+    """Is this child a written type?
+
+    One predicate for the question, because a reader that spells the membership test
+    again can forget a member of `TYPE_NODE_NAMES` -- and then one position in the
+    grammar refuses a type every other position takes (#595).
+    """
+    return isinstance(node, Tree) and node.data in TYPE_NODE_NAMES
 
 
 def first_tree(children: List[object], data: str) -> Optional[Tree]:

@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import ExtendDef
-from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.declarations.docs import lift_body_doc
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    first_method_name, first_token, first_tree, find_tree_recursive, ice)
+    find_tree_recursive, first_method_name, first_token, first_tree, ice,
+    is_type_node)
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
 
     target_type_node = None
     for child in t.children:
-        if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
+        if is_type_node(child):
             target_type_node = child
             break
 
@@ -54,8 +54,7 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
 
     params_node = first_tree(suffix.children, "parameters")
 
-    type_nodes = [child for child in suffix.children
-                  if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t")]
+    type_nodes = [child for child in suffix.children if is_type_node(child)]
     return_type_node = type_nodes[0] if len(type_nodes) >= 1 else None
     err_type_node = type_nodes[1] if len(type_nodes) >= 2 else None
 

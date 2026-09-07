@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import Optional, List, TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.generics.types import GenericTypeRef
-from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES, UnknownType
+from sushi_lang.semantics.typesys import Type, UnknownType
 from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    first_name, first_tree, name_tokens)
+    first_name, first_tree, is_type_node, name_tokens)
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -17,7 +17,7 @@ def parse_type_list(type_list_node: Tree, ast_builder: 'ASTBuilder') -> List[Typ
     """Turn a `type_list` parse node into a list of resolved Types."""
     type_args: List[Type] = []
     for child in type_list_node.children:
-        if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t" or child.data == "generic_type_t"):
+        if is_type_node(child):
             arg_type = ast_builder._parse_type(child)
             if arg_type is not None:
                 type_args.append(arg_type)

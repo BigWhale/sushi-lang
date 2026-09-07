@@ -1,0 +1,13 @@
+# A written item type in a `foreach` takes a bare user type, the same as it takes a
+# built-in one (language-reference.md, Foreach Loops). The bare name was the one type
+# node the parser did not recognize, so it stopped with an internal error (#595).
+# EXPECT_STDOUT_EXACT: "1\n2\n"
+
+struct Point:
+    i32 x
+
+fn main() i32:
+    let Point[] ps = from([Point(1), Point(2)])
+    foreach(Point p in ps.iter()):
+        println("{p.x}")
+    return Result.Ok(0)

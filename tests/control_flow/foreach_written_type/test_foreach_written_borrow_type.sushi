@@ -1,0 +1,14 @@
+# The long spelling of the reference form (`poke <type> <name>`) over a bare user type:
+# the mode is read off the reference node and the item type is the referent (#300).
+# EXPECT_STDOUT_EXACT: "11\n21\n"
+
+struct Point:
+    i32 x
+
+fn main() i32:
+    let Point[] ps = from([Point(10), Point(20)])
+    foreach(poke Point p in ps.iter()):
+        p.x := p.x + 1
+    foreach(Point p in ps.iter()):
+        println("{p.x}")
+    return Result.Ok(0)

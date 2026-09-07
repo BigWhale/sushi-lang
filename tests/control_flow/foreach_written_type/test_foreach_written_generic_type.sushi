@@ -1,0 +1,9 @@
+# A generic instantiation in the item position. It always worked; it holds the line
+# while the bare name joins it.
+# EXPECT_STDOUT_EXACT: "true\nfalse\n"
+
+fn main() i32:
+    let Maybe@(i32)[] ms = from([Maybe.Some(1), Maybe.None])
+    foreach(Maybe@(i32) m in ms.iter()):
+        println("{m.is_some()}")
+    return Result.Ok(0)

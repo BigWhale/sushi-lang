@@ -3,9 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import ConstDef, VarDef
-from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    first_name, ice, read_public)
+    first_name, ice, is_type_node, read_public)
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import _EXPR_NODES
 from sushi_lang.internals.report import span_of
 from sushi_lang.semantics.visibility import declared_public
@@ -28,7 +27,7 @@ def _parse_valued_decl(t: Tree, ast_builder: 'ASTBuilder', node_cls, kind: str):
 
     type_node = None
     for child in t.children:
-        if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
+        if is_type_node(child):
             type_node = child
             break
 

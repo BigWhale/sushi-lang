@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import span_of
-from sushi_lang.semantics.typesys import ReferenceType, BorrowMode, Type, TYPE_NODE_NAMES
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import is_type_node, span_of
+from sushi_lang.semantics.typesys import ReferenceType, BorrowMode, Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -22,7 +22,7 @@ def parse_reference_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type
                 mutability = BorrowMode.PEEK
             elif mode_str == "poke":
                 mutability = BorrowMode.POKE
-        elif isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t" or child.data == "array_t" or child.data == "dynamic_array_t" or child.data == "reference_t"):
+        elif is_type_node(child):
             referenced_type_node = child
 
     if mutability is None:
