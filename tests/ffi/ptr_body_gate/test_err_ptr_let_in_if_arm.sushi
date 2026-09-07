@@ -1,0 +1,7 @@
+# FFI: an `if` arm is a block like any other, so the gate reaches a `ptr` inside it.
+# EXPECT_ERROR_CODE: CE5009
+fn main() i32:
+    if (true):
+        let ptr p = 0
+        println("Mostly Harmless")
+    return Result.Ok(0)

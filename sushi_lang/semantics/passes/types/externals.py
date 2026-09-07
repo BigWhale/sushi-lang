@@ -118,49 +118,23 @@ def reject_external_naming_a_defined_symbol(
 
 
 def validate_ptr_unit_gate(reporter: Reporter, program: 'Program') -> None:
-    """CE5009: `ptr` may only be NAMED in a unit that declares an `unsafe external` block."""
+    """CE5009: `ptr` may only be NAMED in a unit that declares an `unsafe external` block.
+
+    Both walks, because both are naming positions: a signature hands the type across a
+    boundary, a body merely spells it, and neither is writable without a danger zone.
+    """
     if getattr(program, "externals", None):
         return  # The unit declares a danger zone; ptr is legal here.
 
-    from sushi_lang.semantics.ast_walk import signature_types
+    from sushi_lang.semantics.ast_walk import body_types, signature_types
     from sushi_lang.semantics.type_predicates import contains_foreign_ptr
 
-    def check(ty, span) -> None:
+    sites = [(site.ty, site.span) for site in signature_types(program)]
+    sites.extend(body_types(program))
+
+    for ty, span in sites:
         if ty is not None and contains_foreign_ptr(ty):
             er.emit(reporter, er.ERR.CE5009, span)
-
-    def walk_block(block) -> None:
-        import dataclasses
-        from sushi_lang.semantics.ast import Node, Block
-        if block is None:
-            return
-        for stmt in getattr(block, "stmts", ()):
-            check(getattr(stmt, "ty", None),
-                  getattr(stmt, "type_span", None) or getattr(stmt, "loc", None))
-            check(getattr(stmt, "item_type", None),
-                  getattr(stmt, "item_type_span", None) or getattr(stmt, "loc", None))
-            if dataclasses.is_dataclass(stmt):
-                for f in dataclasses.fields(stmt):
-                    value = getattr(stmt, f.name, None)
-                    if isinstance(value, Block):
-                        walk_block(value)
-                    elif isinstance(value, list):
-                        for item in value:
-                            if isinstance(item, Block):
-                                walk_block(item)
-                            elif isinstance(item, Node) and isinstance(getattr(item, "body", None), Block):
-                                walk_block(item.body)
-
-    for site in signature_types(program):
-        check(site.ty, site.span)
-
-    for func in program.functions:
-        walk_block(getattr(func, "body", None))
-    for ext in program.extensions + program.generic_extensions:
-        walk_block(getattr(ext, "body", None))
-    for impl in program.perk_impls:
-        for method in impl.methods:
-            walk_block(getattr(method, "body", None))
 
 
 def _validate_block_abi(reporter: Reporter, block: 'ExternalBlock') -> None:

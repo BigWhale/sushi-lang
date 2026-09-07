@@ -1,0 +1,6 @@
+# FFI: a cast names its target type, so `as ptr` is a naming position.
+# EXPECT_ERROR_CODE: CE5009
+fn main() i32:
+    let i32 n = 0
+    println("{n as ptr}")
+    return Result.Ok(0)

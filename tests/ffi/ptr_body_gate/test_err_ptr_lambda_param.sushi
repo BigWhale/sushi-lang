@@ -1,0 +1,6 @@
+# FFI: a lambda parameter names a type, and a lambda body is a block.
+# EXPECT_ERROR_CODE: CE5009
+fn main() i32:
+    let fn(ptr) -> i32 f = |ptr p| 1
+    println("Mostly Harmless")
+    return Result.Ok(0)

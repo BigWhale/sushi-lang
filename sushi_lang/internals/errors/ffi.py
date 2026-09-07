@@ -43,7 +43,7 @@ _add(ErrorMessage("CE5008", Severity.ERROR,
 
 _add(ErrorMessage("CE5009", Severity.ERROR,
     "foreign `ptr` used in a unit with no `unsafe external` block",
-    Category.FFI, "The `ptr` type may only be named in a unit that declares an `unsafe external` block - no danger zone, no ptr. This keeps every file that can traffic in raw foreign handles greppable by its `unsafe external` marker. Other units hold handles through wrapper structs declared in the FFI unit."))
+    Category.FFI, "The `ptr` type may only be named in a unit that declares an `unsafe external` block - no danger zone, no ptr. This keeps every file that can traffic in raw foreign handles greppable by its `unsafe external` marker. Other units hold handles through wrapper structs declared in the FFI unit. The rule reads two walks, because a body spells the name exactly as a signature does: a local, a `foreach` item, a cast target, a lambda parameter and a call-site type argument are all naming positions. The body half read a field the AST does not have and enforced nothing until #596, so `let ptr p = 0` compiled and the type checker answered CE2002 about the initializer instead."))
 
 _add(ErrorMessage("CE5010", Severity.ERROR,
     "foreign `ptr` cannot be used with operator '{op}'",

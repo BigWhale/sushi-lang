@@ -1,0 +1,6 @@
+# FFI: a `foreach` item type is a written type, so the gate reads it.
+# EXPECT_ERROR_CODE: CE5009
+fn main() i32:
+    foreach(ptr p in 0..1):
+        println("Mostly Harmless")
+    return Result.Ok(0)

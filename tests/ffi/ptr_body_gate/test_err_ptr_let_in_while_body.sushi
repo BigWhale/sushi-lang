@@ -1,0 +1,7 @@
+# FFI: the gate reaches a `ptr` named in a loop body.
+# EXPECT_ERROR_CODE: CE5009
+fn main() i32:
+    while (false):
+        let ptr p = 0
+        println("Mostly Harmless")
+    return Result.Ok(0)
