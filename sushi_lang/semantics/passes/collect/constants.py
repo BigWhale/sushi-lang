@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -45,6 +45,14 @@ class ConstantTable:
     by_name: Dict[str, ConstSig] = field(default_factory=dict)
     by_unit: Dict[str, Dict[str, ConstSig]] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
+    # What each declaration's initializer folded to, keyed by (unit, name). The value
+    # of a constant is the DECLARING unit's answer and nothing else -- the initializer
+    # is folded in that unit's scope and with its aliases -- so one fold serves every
+    # reader. It lives on the table rather than on the evaluator because a fresh
+    # evaluator is built per call site, and the typecheck pass and the back end share
+    # this table: with no cache a chain of constants that each name the one before
+    # them twice doubles per link, and 22 of them cost a minute (#597).
+    folded: Dict[Tuple[Optional[str], str], object] = field(default_factory=dict)
 
     def declare(self, name: str, sig: ConstSig) -> None:
         """Register one declaration in both views. The ONE insert."""
