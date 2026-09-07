@@ -558,7 +558,9 @@ fn main() i32:
 Current limitations of the library system:
 
 1. **No transitive dependencies**: If library A depends on library B, you must import both
-   explicitly. A library's own `use <lib/...>` is not followed.
+   explicitly. A library's own `use <lib/...>` is not followed, and a library exports
+   nothing of the stdlib module or the library it imports — a consumer states each one
+   for itself.
 2. **Portable as text, not automatically in behaviour**: a source library compiles anywhere,
    but Sushi has no conditional compilation — no `cfg`, no build tags, no per-platform source
    files. A library that binds a platform-specific C function through `unsafe external` still

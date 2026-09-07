@@ -395,15 +395,21 @@ class LLVMCodegen:
         from sushi_lang.backend.runtime.args import generate_argc_argv_conversion
         return generate_argc_argv_conversion(self, argc, argv)
 
-    def build_module_multi_unit(self, units: list[Unit]) -> ir.Module:
-        """Generate LLVM IR for multiple compilation units and return the module."""
+    def build_module_multi_unit(self, units: list[Unit],
+                                weak_units: frozenset[str] = frozenset()) -> ir.Module:
+        """Generate LLVM IR for multiple compilation units and return the module.
+
+        `weak_units` names the units whose definitions the consumer of this module may
+        also hold -- a library build's bundled stdlib modules (#594). Empty for a
+        program, which is the only build that owns every symbol it emits.
+        """
         for unit in units:
             if unit.ast is not None:
                 self.stdlib.extract_stdlib_units(unit.ast)
 
         self.runtime.declare_externs()
         self.declare_user_externs()
-        self._emit_multi_unit_program(units)
+        self._emit_multi_unit_program(units, weak_units=weak_units)
         return self.module
 
     def compile_multi_unit(
@@ -518,7 +524,13 @@ class LLVMCodegen:
 
         self.is_library_mode = True
 
-        mod_ir: ir.Module = self.build_module_multi_unit(units)
+        # A bundled stdlib module and an injected source library both arrive as
+        # ordinary units and carry a provenance; neither is this library's to own, and
+        # the consumer holds its own copy of each (#594). `library_manifest.own_units`
+        # is the same question about the same field, asked of the manifest.
+        weak_units = frozenset(u.name for u in units if u.provenance is not None)
+
+        mod_ir: ir.Module = self.build_module_multi_unit(units, weak_units=weak_units)
 
         # A perk impl may ship through the manifest and be overridden locally. weak_odr,
         # not linkonce_odr: it must survive optimization while unreferenced in the library,
@@ -540,8 +552,11 @@ class LLVMCodegen:
 
         llmod = llvm.parse_assembly(str(mod_ir))
 
-        self.stdlib.link_stdlib_modules(
-            llmod, [unit.ast for unit in units if unit.ast is not None])
+        # The stdlib `.bc` half of the same rule: the consumer links its own copy of
+        # every module it imports, so this one may not be a second strong definition.
+        from sushi_lang.backend.library_linkage import weaken_linked_symbols
+        weaken_linked_symbols(llmod, self.stdlib.link_stdlib_modules(
+            llmod, [unit.ast for unit in units if unit.ast is not None]))
 
         self.optimizer.ensure_target(llmod)
 
@@ -803,14 +818,28 @@ class LLVMCodegen:
         """Check if a stdlib unit has been imported."""
         return self.stdlib.has_stdlib_unit(unit_path)
 
-    def _emit_multi_unit_program(self, units: list[Unit]) -> None:
-        """Emit LLVM IR for multiple compilation units."""
+    def _emit_multi_unit_program(self, units: list[Unit],
+                                 weak_units: frozenset[str] = frozenset()) -> None:
+        """Emit LLVM IR for multiple compilation units.
+
+        A unit named in `weak_units` is not this module's to own: its definitions are
+        weakened so a consumer that compiles the same unit keeps one copy of each
+        (`backend/library_linkage.py`). The module is asked what appeared while the
+        unit was emitted, so no symbol name is re-derived here.
+        """
+        from sushi_lang.backend.library_linkage import (
+            weaken_all, weaken_foreign_globals,
+        )
+
         for unit in units:
             if unit.ast is None:
                 continue
 
+            before = set(self.module.globals) if unit.name in weak_units else None
             for const in unit.ast.constants:
                 self._emit_global_constant(const, unit.name)
+            if before is not None:
+                weaken_foreign_globals(self.module, before)
 
         for unit in units:
             if unit.ast is None:
@@ -842,18 +871,25 @@ class LLVMCodegen:
 
             self.emitting_unit = unit.name
             self.emitting_unit_file = str(unit.file_path)
+            # Each body as the emitter named it. A snapshot cannot find these: the
+            # declaration round above already put every function in the module.
+            emitted = []
             for fn in unit.ast.functions:
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
-                self.functions.emit_func_def(fn, unit.name)
+                emitted.append(self.functions.emit_func_def(fn, unit.name))
 
             for ext in unit.ast.extensions:
-                self.functions.emit_extension_method_def(ext)
+                emitted.append(self.functions.emit_extension_method_def(ext))
 
             for perk_impl in unit.ast.perk_impls:
                 for method in perk_impl.methods:
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
-                    self.functions.emit_extension_method_def(synthetic_ext)
+                    emitted.append(
+                        self.functions.emit_extension_method_def(synthetic_ext))
+
+            if unit.name in weak_units:
+                weaken_all(emitted)
         self.emitting_unit = None
         self.emitting_unit_file = None
 

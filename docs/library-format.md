@@ -156,6 +156,16 @@ is the authority, and the index is a cache of it.
     "library_version": str,            # The library's own version, "major.minor.patch"
     "kind": str,                       # "source" / "binary" / "hybrid", matching KIND
     "units": [str],                    # Unit names present in the source section
+                                       #   The library's OWN units, and every index
+                                       #   below reads the same filter (#594): a
+                                       #   bundled stdlib module and an imported
+                                       #   source library both arrive as ordinary
+                                       #   compilation units, and a consumer states
+                                       #   each module and each library it uses for
+                                       #   itself. `dependencies` is the exception --
+                                       #   it says what the consumer's build must be
+                                       #   able to provide, not what this library
+                                       #   declares.
     "requires_compiler": str,          # Compiler constraint, e.g. "~0.11" ("" if unknown)
     "compiled_at": str,                # ISO 8601 timestamp
     "platform": str,                   # "darwin", "linux", "windows"

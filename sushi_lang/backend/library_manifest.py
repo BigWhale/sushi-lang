@@ -17,17 +17,21 @@ if TYPE_CHECKING:
 
 
 def own_units(units: list['Unit']) -> list['Unit']:
-    """The library's OWN units -- the compilation order minus what came bundled.
+    """The library's OWN units -- the compilation order minus what the author did not write.
 
-    A `use <collections/iter>` injects the bundled module as an ordinary unit, so it
-    reaches the manifest generator alongside the library's own files. The consumer has
-    its own copy of every bundled module, so shipping ours would put a second
-    definition of each of its symbols into their build. One filter, used by both the
-    `units` index and the source section, so the two can never disagree.
+    A `use <collections/iter>` injects the bundled module as an ordinary unit, and a
+    `use <lib/other>` over a source library injects its units the same way, so both
+    reach the manifest generator alongside the library's own files. A consumer states
+    each library and each module it uses for itself (`docs/libraries.md`, limitation
+    1), so shipping either one's declarations puts a SECOND definition of every name
+    into that consumer's build -- CE4001 for a perk, and a duplicate symbol for the
+    rest. `Unit.provenance` is the one field that marks such a unit, and it is the
+    field `_reject_reexports_in_compiled_library` already reads, so the two questions
+    take one answer. Every index of the library's DECLARED API reads this filter;
+    `dependencies` does not, because it says what a consumer's build must be able to
+    provide rather than what this library declares.
     """
-    from sushi_lang.semantics.stdlib_registry import SOURCE_STDLIB_MODULES
-
-    return [u for u in units if u.name not in SOURCE_STDLIB_MODULES]
+    return [u for u in units if u.provenance is None]
 
 
 def collect_unit_source(units: list['Unit']) -> dict[str, str]:
@@ -177,7 +181,7 @@ class LibraryManifestGenerator:
 
         public_funcs = []
 
-        for unit in units:
+        for unit in own_units(units):
             if unit.ast is None:
                 continue
             for func in unit.ast.functions:
@@ -354,7 +358,7 @@ class LibraryManifestGenerator:
         structs = []
         seen_names = set()
 
-        for unit in units:
+        for unit in own_units(units):
             if unit.ast is None:
                 continue
             for struct_def in unit.ast.structs:
@@ -387,7 +391,7 @@ class LibraryManifestGenerator:
         enums = []
         seen_names = set()
 
-        for unit in units:
+        for unit in own_units(units):
             if unit.ast is None:
                 continue
             for enum_def in unit.ast.enums:
@@ -505,7 +509,7 @@ class LibraryManifestGenerator:
         types_by_name: dict[tuple[str, str], tuple] = {}
         external_namespaces: set[str] = set()
 
-        for unit in units:
+        for unit in own_units(units):
             if unit.ast is None:
                 continue
             source = unit.file_path.read_text()
@@ -664,7 +668,7 @@ class LibraryManifestGenerator:
         # -- it is monomorphized at the consumer, so its instances take the consumer's
         # mangling -- but the unit is what an alias binds to, and for a BINARY library
         # the manifest is the only place that can say (section 3.1).
-        for unit in units:
+        for unit in own_units(units):
             if unit.ast is None:
                 continue
             source = unit.file_path.read_text()
@@ -761,7 +765,7 @@ class LibraryManifestGenerator:
         # monomorphized copies, which the consumer cuts for itself from this source.
         generic_perk_impls: list[dict] = []
         template_keys: set[tuple[str, str]] = set()
-        for unit in units:
+        for unit in own_units(units):
             if unit.ast is None:
                 continue
             source = unit.file_path.read_text()
@@ -784,7 +788,7 @@ class LibraryManifestGenerator:
         # names ships too, as before.
         perks: list[dict] = []
         seen_perks: set[str] = set()
-        for unit in units:
+        for unit in own_units(units):
             if unit.ast is None:
                 continue
             source = unit.file_path.read_text()
@@ -803,7 +807,7 @@ class LibraryManifestGenerator:
 
         perk_impls: list[dict] = []
         seen_impls: set[tuple[str, str]] = set()
-        for unit in units:
+        for unit in own_units(units):
             if unit.ast is None:
                 continue
             source = unit.file_path.read_text()
