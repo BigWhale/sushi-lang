@@ -1,0 +1,86 @@
+# A struct graph that FANS OUT: each struct has four fields of the one before it.
+# A hashability walk that copies its visited set per field multiplies by the fan-out
+# at every link -- 13 of these cost 28.5 seconds (#598).
+# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+struct S0:
+    i32 a
+
+struct S1:
+    S0 f0
+    S0 f1
+    S0 f2
+    S0 f3
+
+struct S2:
+    S1 f0
+    S1 f1
+    S1 f2
+    S1 f3
+
+struct S3:
+    S2 f0
+    S2 f1
+    S2 f2
+    S2 f3
+
+struct S4:
+    S3 f0
+    S3 f1
+    S3 f2
+    S3 f3
+
+struct S5:
+    S4 f0
+    S4 f1
+    S4 f2
+    S4 f3
+
+struct S6:
+    S5 f0
+    S5 f1
+    S5 f2
+    S5 f3
+
+struct S7:
+    S6 f0
+    S6 f1
+    S6 f2
+    S6 f3
+
+struct S8:
+    S7 f0
+    S7 f1
+    S7 f2
+    S7 f3
+
+struct S9:
+    S8 f0
+    S8 f1
+    S8 f2
+    S8 f3
+
+struct S10:
+    S9 f0
+    S9 f1
+    S9 f2
+    S9 f3
+
+struct S11:
+    S10 f0
+    S10 f1
+    S10 f2
+    S10 f3
+
+struct S12:
+    S11 f0
+    S11 f1
+    S11 f2
+    S11 f3
+
+fn main() i32:
+    let S0 leaf = S0(1)
+    let u64 h = leaf.hash()
+    if (h == 0):
+        println("no hash")
+    println("Mostly Harmless")
+    return Result.Ok(0)
