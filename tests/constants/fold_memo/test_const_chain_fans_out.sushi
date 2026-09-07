@@ -1,0 +1,29 @@
+# A chain where each constant names the one before it TWICE. Without memoization
+# the fold is exponential: 22 of these cost about a minute (#597).
+# EXPECT_STDOUT_CONTAINS: 2097152
+const i32 C0 = 1
+const i32 C1 = C0 + C0
+const i32 C2 = C1 + C1
+const i32 C3 = C2 + C2
+const i32 C4 = C3 + C3
+const i32 C5 = C4 + C4
+const i32 C6 = C5 + C5
+const i32 C7 = C6 + C6
+const i32 C8 = C7 + C7
+const i32 C9 = C8 + C8
+const i32 C10 = C9 + C9
+const i32 C11 = C10 + C10
+const i32 C12 = C11 + C11
+const i32 C13 = C12 + C12
+const i32 C14 = C13 + C13
+const i32 C15 = C14 + C14
+const i32 C16 = C15 + C15
+const i32 C17 = C16 + C16
+const i32 C18 = C17 + C17
+const i32 C19 = C18 + C18
+const i32 C20 = C19 + C19
+const i32 C21 = C20 + C20
+
+fn main() i32:
+    println("{C21}")
+    return Result.Ok(0)

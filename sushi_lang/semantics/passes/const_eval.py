@@ -614,6 +614,10 @@ class ConstantEvaluator:
             return None
 
         key = (sig.unit_name, sig.name)
+        cached = self.const_table.folded.get(key)
+        if cached is not None:
+            return cached
+
         if key in self.evaluation_stack:
             chain = " -> ".join(name for _unit, name in self.evaluation_stack + [key])
             er.emit(self.reporter, er.ERR.CE0109, span, chain=chain)
@@ -623,10 +627,17 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE1002, span, name=sig.name)
             return None
 
+        said = len(self.reporter.items)
         self.evaluation_stack.append(key)
         with self._in_unit(sig.unit_name):
             result = self.evaluate(sig.decl.value, sig.const_type, sig.loc)
         self.evaluation_stack.pop()
+
+        # Only a CLEAN fold is kept. A fold that had something to say is the one thing a
+        # cache would silence, and every failing path here answers None in any case, so
+        # the two conditions cost nothing and the diagnostics stay exactly as they were.
+        if result is not None and len(self.reporter.items) == said:
+            self.const_table.folded[key] = result
         return result
 
     def _evaluate_cast(self, expr: CastExpr, span: Optional[Span]) -> Optional[ConstantValue]:
