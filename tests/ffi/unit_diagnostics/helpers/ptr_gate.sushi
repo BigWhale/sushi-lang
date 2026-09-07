@@ -1,0 +1,4 @@
+# A unit with no `unsafe external` block that names `ptr` in a signature. The fault
+# belongs to THIS file, and the diagnostic must say so.
+fn hold(ptr p) i32:
+    return Result.Ok(0)

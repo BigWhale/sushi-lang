@@ -1,0 +1,9 @@
+# The `ptr` unit gate fires in a second unit. The diagnostic must name that unit's
+# file and line, not the entry unit's (#599).
+# EXPECT_ERROR_CODE: CE5009
+# EXPECT_STDERR_CONTAINS: ptr_gate.sushi:3:9
+use "helpers/ptr_gate"
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

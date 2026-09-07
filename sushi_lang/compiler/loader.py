@@ -75,7 +75,7 @@ def load_unit_recursively(unit_manager: UnitManager, unit_name: str,
 
         check_duplicate_uses(unit_ast, unit_reporter)
 
-        unit = unit_manager.load_unit(unit_name, unit_ast)
+        unit = unit_manager.load_unit(unit_name, unit_ast, source=unit_src)
         if unit is None:
             reporter.items.extend(unit_reporter.items)
             return False

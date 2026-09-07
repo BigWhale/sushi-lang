@@ -158,7 +158,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
             # `tests/unit/test_stdlib_doc_blocks.py`.
             unit_manager.units[module_path] = Unit(
                 name=module_path, file_path=src_path, ast=module_ast,
-                dependencies=[], public_symbols={},
+                dependencies=[], public_symbols={}, source=module_src,
                 provenance=(f"'{module_path}' is a bundled stdlib module written in "
                             f"Sushi, compiled here because of `use <{module_path}>`"),
             )
@@ -264,7 +264,7 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
 
         unit = Unit(name=f"lib/{lib_name}/{unit_name}", file_path=file_path,
                     ast=module_ast, dependencies=[], public_symbols={},
-                    from_library=True,
+                    from_library=True, source=text,
                     provenance=provenance)
         unit.dependencies = [f"lib/{lib_name}/{d}" for d in unit.dependencies if d in own]
         unit_manager.units[unit.name] = unit
@@ -276,7 +276,7 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     main_unit_name = src_path.stem
     unit_manager = UnitManager(root_path=src_path.parent, reporter=reporter)
 
-    main_unit = unit_manager.load_unit(main_unit_name, main_ast)
+    main_unit = unit_manager.load_unit(main_unit_name, main_ast, source=reporter.source)
     if main_unit is None:
         return 2
     main_unit.is_entry = True

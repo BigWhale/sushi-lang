@@ -122,11 +122,7 @@ class SemanticAnalyzer:
     @staticmethod
     def _unit_reporter(unit) -> Reporter:
         """A Reporter that knows one unit's file and source, for a per-unit pass."""
-        try:
-            source = unit.file_path.read_text(encoding="utf-8")
-        except Exception:
-            source = ""  # the diagnostic still renders, without its caret line
-        return Reporter(source=source, filename=str(unit.file_path),
+        return Reporter(source=unit.read_source(), filename=str(unit.file_path),
                         provenance=unit.provenance)
 
     def _check_multi_file(self) -> None:
@@ -214,9 +210,12 @@ class SemanticAnalyzer:
             validate_external_signatures, validate_ptr_unit_gate,
         )
         for unit in compilation_order:
-            if unit.ast is not None:
-                validate_external_signatures(self.reporter, unit.ast)
-                validate_ptr_unit_gate(self.reporter, unit.ast)
+            if unit.ast is None:
+                continue
+            unit_reporter = self._unit_reporter(unit)
+            validate_external_signatures(unit_reporter, unit.ast)
+            validate_ptr_unit_gate(unit_reporter, unit.ast)
+            self.reporter.items.extend(unit_reporter.items)
 
         if self.library_linker is not None and self.library_registry is None:
             self._build_library_registry()
