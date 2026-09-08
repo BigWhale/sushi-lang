@@ -453,13 +453,13 @@ class SemanticAnalyzer:
             register_all_struct_hashes, register_all_enum_hashes, register_all_array_hashes,
             register_all_clones,
         )
-        register_all_struct_hashes(self.structs)
+        register_all_struct_hashes(self.structs, self.tables.derived_methods)
 
-        register_all_enum_hashes(self.enums, self.reporter)
+        register_all_enum_hashes(self.enums, self.tables.derived_methods, self.reporter)
 
-        register_all_array_hashes(self.structs, self.enums)
+        register_all_array_hashes(self.structs, self.enums, self.tables.derived_methods)
 
-        register_all_clones(self.structs, self.enums)
+        register_all_clones(self.structs, self.enums, self.tables.derived_methods)
 
         for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
             self.monomorphized_extensions.append(extend_def)
@@ -775,10 +775,10 @@ class SemanticAnalyzer:
         from sushi_lang.semantics.passes.derive import (
             register_all_array_hashes, register_all_clones,
             register_all_enum_hashes, register_all_struct_hashes)
-        register_all_struct_hashes(self.structs)
-        register_all_enum_hashes(self.enums, self.reporter)
-        register_all_array_hashes(self.structs, self.enums)
-        register_all_clones(self.structs, self.enums)
+        register_all_struct_hashes(self.structs, self.tables.derived_methods)
+        register_all_enum_hashes(self.enums, self.tables.derived_methods, self.reporter)
+        register_all_array_hashes(self.structs, self.enums, self.tables.derived_methods)
+        register_all_clones(self.structs, self.enums, self.tables.derived_methods)
 
     def _check_monomorphized_extensions(self, destroy_effects, enum_names,
                                         lift_target=None, only=None) -> None:
@@ -846,7 +846,8 @@ class SemanticAnalyzer:
 
         for target_type, methods in self.extensions.by_type.items():
             for method_name, method in methods.items():
-                if not builtin_method_exists(target_type, method_name):
+                if not builtin_method_exists(target_type, method_name,
+                                             self.tables.derived_methods):
                     continue
                 shown = f"{display_type(target_type)}.{method_name}"
                 er.emit_with(

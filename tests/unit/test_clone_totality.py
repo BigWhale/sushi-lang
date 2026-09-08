@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
 from sushi_lang.semantics.ownership import TypeClass, type_class_of
 from sushi_lang.semantics.typesys import (
@@ -18,6 +19,10 @@ from sushi_lang.semantics.typesys import (
 # No type in this gate's corpus implements `Drop`; the resource
 # half of the predicate is `tests/unit/test_cleanup_predicates_agree.py`.
 NO_DROPS: frozenset = frozenset()
+
+# Every clone in this gate's corpus is the COMPILER's, registered for every program. Only
+# the two auto-derived cases below need a compilation's own table (#601).
+NOTHING_DERIVED = DerivedMethodTable()
 
 
 def _fn(captures=None) -> FunctionType:
@@ -94,7 +99,7 @@ MOVE_TYPES = [(n, t) for n, t in REPRESENTATIVE_TYPES if type_class_of(t, NO_DRO
 @pytest.mark.parametrize("name,ty", MOVE_TYPES, ids=[n for n, _ in MOVE_TYPES])
 def test_a_move_type_has_a_clone(name, ty):
     """If consuming a borrow of `T` is CE2411, `T.clone()` must exist."""
-    assert builtin_method_exists(ty, "clone"), (
+    assert builtin_method_exists(ty, "clone", NOTHING_DERIVED), (
         f"{name} is a MOVE type, so consuming a borrow of it is CE2411 -- and CE2411's help "
         f"text tells the user to call .clone(), which does not exist on it. That is a "
         f"rejection with no escape. This exact hole has already stopped two phases."
@@ -110,7 +115,7 @@ def test_a_move_type_has_a_clone(name, ty):
 @pytest.mark.parametrize("name,ty", REPRESENTATIVE_TYPES, ids=[n for n, _ in REPRESENTATIVE_TYPES])
 def test_a_generic_type_argument_has_a_clone(name, ty):
     """One monomorphized body must satisfy every instantiation of its type parameter."""
-    assert builtin_method_exists(ty, "clone"), (
+    assert builtin_method_exists(ty, "clone", NOTHING_DERIVED), (
         f"{name} can be a generic type argument, so a body written as `x.clone()` for an "
         f"owning instantiation fails to compile when it is instantiated at {name}. The "
         f"escape must survive monomorphization -- Rust makes `Copy: Clone` for this reason."
@@ -119,9 +124,9 @@ def test_a_generic_type_argument_has_a_clone(name, ty):
 
 # The auto-derived pair, which needs the analyzer to have run
 
-def test_user_struct_and_enum_carry_a_clone(analyze):
-    """The derive pass registers clone from SEMANTICS, so the registry answer is import-order safe."""
-    analyze("""
+def test_user_struct_and_enum_carry_a_clone(analyze_program):
+    """The derive pass registers clone from SEMANTICS, so the answer is import-order safe."""
+    analysis = analyze_program("""
 struct Bag:
     i32[] items
 
@@ -137,13 +142,16 @@ fn main() i32:
 """)
     bag = StructType(name="Bag", fields=())
     holder = EnumType(name="Holder", variants=())
-    assert builtin_method_exists(bag, "clone"), "the derive pass must auto-derive a struct clone"
-    assert builtin_method_exists(holder, "clone"), "the derive pass must auto-derive an enum clone"
+    derived = analysis.analyzer.tables.derived_methods
+    assert builtin_method_exists(bag, "clone", derived), (
+        "the derive pass must auto-derive a struct clone")
+    assert builtin_method_exists(holder, "clone", derived), (
+        "the derive pass must auto-derive an enum clone")
 
 
-def test_an_owning_user_struct_is_move_and_therefore_needs_its_clone(analyze):
+def test_an_owning_user_struct_is_move_and_therefore_needs_its_clone(analyze_program):
     """The two clauses meet: a struct with a `T[]` field is MOVE, so clause 1 binds to it."""
-    analyze("""
+    analysis = analyze_program("""
 struct Bag:
     i32[] items
 
@@ -154,7 +162,8 @@ fn main() i32:
 """)
     bag = StructType(name="Bag", fields=(("items", DynamicArrayType(base_type=BuiltinType.I32)),))
     assert type_class_of(bag, NO_DROPS) is TypeClass.MOVE
-    assert builtin_method_exists(StructType(name="Bag", fields=()), "clone")
+    assert builtin_method_exists(StructType(name="Bag", fields=()), "clone",
+                                 analysis.analyzer.tables.derived_methods)
 
 
 # The former known hole, now closed
@@ -175,7 +184,7 @@ fn main() i32:
 def test_hashmap_carries_a_clone():
     """The closed hole, asserted from the other side."""
     hashmap = StructType(name="HashMap<i32, i32>", fields=())
-    assert builtin_method_exists(hashmap, "clone"), (
+    assert builtin_method_exists(hashmap, "clone", NOTHING_DERIVED), (
         "HashMap.clone() is the only escape from CE2411 for a borrowed HashMap; it must exist"
     )
 

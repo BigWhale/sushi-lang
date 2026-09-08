@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.namespaces import NamespaceTable
 from sushi_lang.semantics.visibility import VisibilityTable
 from sushi_lang.semantics.passes.collect import (
@@ -63,3 +64,12 @@ class SymbolTables:
     # The analyzer's late interner (risk 1): the typecheck pass hands it a type whose
     # generic instantiations may not be interned yet. None outside a full analysis.
     intern_generic_ref: object = None
+
+    @property
+    def derived_methods(self) -> DerivedMethodTable:
+        """The hash() and clone() the `derive` pass wrote for THIS program (#601).
+
+        Stored on the enum table, which is what the `Result`/`Maybe` interning seams
+        hold when they derive a hash. One table, named here for every other reader.
+        """
+        return self.enums.derived

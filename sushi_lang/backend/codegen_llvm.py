@@ -96,6 +96,10 @@ class LLVMCodegen:
         self.module: ir.Module = ir.Module(name=module_name, context=self.llvm_context)
         self.struct_table = struct_table or StructTable()
         self.enum_table = enum_table or EnumTable()
+        # The hash() and clone() the `derive` pass wrote for THIS program, and the
+        # process-wide primitive built-ins behind them (#601). It travels on the enum
+        # table, so the analyser's tables carry it here with no wiring of their own.
+        self.derived_methods = self.enum_table.derived
         from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
         self.func_table = func_table or FunctionTable()
         # The unit whose bodies are being emitted, or None outside a multi-unit walk.

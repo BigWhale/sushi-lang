@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from sushi_lang.internals.errors import InternalCompilerError
+from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
 from sushi_lang.semantics.generics.results import (
     ensure_result_type_in_table,
@@ -20,11 +21,16 @@ from sushi_lang.semantics.typesys import (
 
 
 class FakeEnumTable:
-    """The duck-typed shape both ensure_* helpers consume: `.by_name` and `.order`."""
+    """The duck-typed shape both ensure_* helpers consume.
+
+    `.by_name`, `.order`, and `.derived` -- the compilation's auto-derived methods, which
+    the seams write a hash into the moment they intern an enum (#601).
+    """
 
     def __init__(self, by_name=None):
         self.by_name = dict(by_name or {})
         self.order = list(self.by_name)
+        self.derived = DerivedMethodTable()
 
 
 STD_ERROR = EnumType(

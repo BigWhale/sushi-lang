@@ -125,11 +125,11 @@ def _validate_hashmap_new(
         er.emit(reporter, er.ERR.CE2058, call.loc, key_type=display_type(key_type))
         return
 
-    # The seam, not the backend-populated registry: during the typecheck pass the registry holds
-    # only what the derive pass derived, so reading it directly rejected every primitive key
+    # The seam, not the derived-method table alone: that table holds what the derive pass
+    # derived plus the primitive families, and nothing about an array or a container key
     # (#272). A perk implementation is the sanctioned hash override and counts too.
     from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
-    has_hash = (builtin_method_exists(key_type, "hash")
+    has_hash = (builtin_method_exists(key_type, "hash", validator.derived_methods)
                 or validator.perk_impl_table.get_method(key_type, "hash") is not None)
     if not has_hash:
         er.emit(reporter, er.ERR.CE2054, call.loc, key_type=display_type(key_type))

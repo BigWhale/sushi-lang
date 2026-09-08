@@ -53,27 +53,9 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
     builder = require_builder(codegen)
     builder = codegen.builder
 
-    if isinstance(field_type, BuiltinType):
-        import sushi_lang.backend.types.primitives.hashing  # noqa: F401
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-
-        hash_method = get_builtin_method(field_type, "hash")
-        if hash_method is None:
-            raise_internal_error("CE0051", type=str(field_type))
-
-        fake_call = MethodCall(
-            receiver=Name(id="field", loc=(0, 0)),
-            method="hash",
-            args=[],
-            loc=(0, 0)
-        )
-
-        return hash_method.llvm_emitter(
-            codegen, fake_call, field_value, field_value.type, False
-        )
-
-    elif isinstance(field_type, StructType):
-
+    # A nested struct is walked field by field rather than through its own registered
+    # hash, so the combine order of the outer struct is one flat sequence.
+    if isinstance(field_type, StructType):
         nested_hash = emit_fnv1a_init(codegen)
 
         for nested_idx, (nested_name, nested_type) in enumerate(field_type.fields):
@@ -85,59 +67,41 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
 
         return nested_hash
 
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-    if isinstance(field_type, GenericTypeRef) and field_type.base_name == "Result":
-        if len(field_type.type_args) >= 2:
-            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-            ok_type = field_type.type_args[0]
-            err_type = field_type.type_args[1]
-            result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type, struct_table=codegen.struct_table.by_name)
-            if result_enum is not None:
-                field_type = result_enum
-
-    if isinstance(field_type, EnumType):
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-
-        hash_method = get_builtin_method(field_type, "hash")
-        if hash_method is None:
-            raise_internal_error("CE0051", type=str(field_type))
-
-        fake_call = MethodCall(
-            receiver=Name(id="field", loc=(0, 0)),
-            method="hash",
-            args=[],
-            loc=(0, 0)
-        )
-
-        return hash_method.llvm_emitter(
-            codegen, fake_call, field_value, field_value.type, False
-        )
-
-    elif isinstance(field_type, (ArrayType, DynamicArrayType)):
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-
-        hash_method = get_builtin_method(field_type, "hash")
-        if hash_method is None:
-            raise_internal_error("CE0051", type=str(field_type))
-
-        fake_call = MethodCall(
-            receiver=Name(id="field", loc=(0, 0)),
-            method="hash",
-            args=[],
-            loc=(0, 0)
-        )
-
-        # IMPORTANT: field_value from extract_value is an array VALUE, not a pointer.
-        # The array hash emitters (_emit_fixed_array_hash and _emit_dynamic_array_hash)
-        # already handle this case - they check if the value is a pointer or a value,
-        # and allocate temporary space if needed (see lines 132-137 in hashing.py).
-        # So we can just pass field_value directly!
-        return hash_method.llvm_emitter(
-            codegen, fake_call, field_value, field_value.type, False
-        )
-
+    if isinstance(field_type, BuiltinType):
+        import sushi_lang.backend.types.primitives.hashing  # noqa: F401
     else:
-        raise_internal_error("CE0052", type=str(field_type))
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        if isinstance(field_type, GenericTypeRef) and field_type.base_name == "Result":
+            if len(field_type.type_args) >= 2:
+                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+                ok_type = field_type.type_args[0]
+                err_type = field_type.type_args[1]
+                result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type, struct_table=codegen.struct_table.by_name)
+                if result_enum is not None:
+                    field_type = result_enum
+
+        if not isinstance(field_type, (EnumType, ArrayType, DynamicArrayType)):
+            raise_internal_error("CE0052", type=str(field_type))
+
+    hash_method = codegen.derived_methods.get_method(field_type, "hash")
+    if hash_method is None:
+        raise_internal_error("CE0051", type=str(field_type))
+
+    fake_call = MethodCall(
+        receiver=Name(id="field", loc=(0, 0)),
+        method="hash",
+        args=[],
+        loc=(0, 0)
+    )
+
+    # IMPORTANT: an array field_value from extract_value is an array VALUE, not a
+    # pointer. The array hash emitters (_emit_fixed_array_hash and
+    # _emit_dynamic_array_hash) already handle that -- they check whether the value is
+    # a pointer or a value and allocate temporary space if needed -- so field_value
+    # goes straight through.
+    return hash_method.llvm_emitter(
+        codegen, fake_call, field_value, field_value.type, False
+    )
 
 
 register_hash_emitter_factory("struct", _emit_struct_hash)

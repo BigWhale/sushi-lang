@@ -8,7 +8,7 @@ from sushi_lang.semantics.generics.primitives import (
     primitive_method_return_type,
 )
 from sushi_lang.semantics.typesys import BuiltinType
-from sushi_lang.sushi_stdlib.src.common import get_builtin_method
+from sushi_lang.semantics.derived_methods import builtin_registry
 
 # Importing the backend package runs the registrations under test.
 import sushi_lang.backend.types.primitives  # noqa: F401
@@ -25,7 +25,7 @@ ALL_PRIMITIVES = [
 def test_semantics_table_is_registered_by_the_backend(method_name):
     """Every (type, method) semantics claims exists must be registered with an emitter."""
     for prim_type in PRIMITIVE_METHOD_TYPES[method_name]:
-        method = get_builtin_method(prim_type, method_name)
+        method = builtin_registry.get_method(prim_type, method_name)
         assert method is not None, (
             f"semantics claims {prim_type}.{method_name}() exists, "
             f"but the backend registers no such method"
@@ -42,7 +42,7 @@ def test_backend_registers_nothing_semantics_does_not_know_about(method_name):
     for prim_type in ALL_PRIMITIVES:
         if prim_type in carriers:
             continue
-        assert get_builtin_method(prim_type, method_name) is None, (
+        assert builtin_registry.get_method(prim_type, method_name) is None, (
             f"the backend registers {prim_type}.{method_name}(), but semantics does not "
             f"list {prim_type} as a carrier -- the typecheck pass would report it undefined"
         )
@@ -51,7 +51,7 @@ def test_backend_registers_nothing_semantics_does_not_know_about(method_name):
 def test_to_bits_is_float_only():
     """to_bits() exposes an IEEE-754 encoding, so it must not exist on integers."""
     assert PRIMITIVE_METHOD_TYPES["to_bits"] == frozenset({BuiltinType.F32, BuiltinType.F64})
-    assert get_builtin_method(BuiltinType.I32, "to_bits") is None
+    assert builtin_registry.get_method(BuiltinType.I32, "to_bits") is None
 
 
 # Return types (#239)
@@ -102,7 +102,7 @@ def test_unknown_pairs_return_none():
 def test_semantics_return_type_matches_the_backend_registration(method_name):
     """The semantics table and the backend's BuiltinMethod must agree on the return type."""
     for prim_type in PRIMITIVE_METHOD_TYPES[method_name]:
-        registered = get_builtin_method(prim_type, method_name)
+        registered = builtin_registry.get_method(prim_type, method_name)
         assert registered is not None, f"{prim_type}.{method_name}() is not registered"
         assert registered.return_type == primitive_method_return_type(prim_type, method_name), (
             f"{prim_type}.{method_name}(): semantics says "

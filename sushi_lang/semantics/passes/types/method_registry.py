@@ -136,8 +136,8 @@ class StructEnumBuiltinInferrer:
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-        method = get_builtin_method(self.receiver_type, self.method_name)
+        method = self.validator.derived_methods.get_method(
+            self.receiver_type, self.method_name)
         if method is not None:
             return method.return_type
         return None
@@ -375,8 +375,7 @@ def check_struct_enum_builtin_methods(receiver_type, method_name, validator):
     if validator.perk_impl_table.get_method(receiver_type, method_name) is not None:
         return None
 
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    if get_builtin_method(receiver_type, method_name) is None:
+    if validator.derived_methods.get_method(receiver_type, method_name) is None:
         return None
 
     return StructEnumBuiltinInferrer(receiver_type, method_name, validator)

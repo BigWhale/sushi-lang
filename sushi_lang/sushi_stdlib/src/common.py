@@ -1,9 +1,10 @@
 """Common utilities and infrastructure for built-in extension methods."""
 
-from typing import Dict, Set, Optional, Callable, Any
+from typing import Dict, Optional, Callable, Any
 from dataclasses import dataclass
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import Type, ArrayType, DynamicArrayType, BuiltinType
+from sushi_lang.semantics.derived_methods import builtin_registry
 import llvmlite.ir as ir
 
 
@@ -18,53 +19,14 @@ class BuiltinMethod:
     llvm_emitter: Callable[[Any, MethodCall, ir.Value, ir.Type, bool], ir.Value]
 
 
-class BuiltinMethodRegistry:
-    """Central registry for all built-in extension methods."""
-
-    def __init__(self):
-        self._methods: Dict[Type, Dict[str, BuiltinMethod]] = {}
-
-    def register_method(self, target_type: Type, method: BuiltinMethod) -> None:
-        """Register a built-in method for a specific type."""
-        if target_type not in self._methods:
-            self._methods[target_type] = {}
-        self._methods[target_type][method.name] = method
-
-    def get_method(self, target_type: Type, method_name: str) -> Optional[BuiltinMethod]:
-        """Get a built-in method for a type, or None if not found."""
-        type_methods = self._methods.get(target_type, {})
-        return type_methods.get(method_name)
-
-    def has_method(self, target_type: Type, method_name: str) -> bool:
-        """Check if a method exists for a type."""
-        return self.get_method(target_type, method_name) is not None
-
-    def get_method_names(self, target_type: Type) -> Set[str]:
-        """Get all method names available for a type."""
-        type_methods = self._methods.get(target_type, {})
-        return set(type_methods.keys())
-
-    def get_all_types(self) -> Set[Type]:
-        """Get all types that have built-in methods."""
-        return set(self._methods.keys())
-
-
-builtin_registry = BuiltinMethodRegistry()
-
-
 def register_builtin_method(target_type: Type, method: BuiltinMethod) -> None:
-    """Convenience function to register a built-in method."""
+    """Register a method the compiler defines for every program.
+
+    The primitive families only. A method the `derive` pass writes for a type a PROGRAM
+    declares goes in that compilation's own table (#601) -- see
+    `semantics/derived_methods.py`.
+    """
     builtin_registry.register_method(target_type, method)
-
-
-def get_builtin_method(target_type: Type, method_name: str) -> Optional[BuiltinMethod]:
-    """Convenience function to get a built-in method."""
-    return builtin_registry.get_method(target_type, method_name)
-
-
-def has_builtin_method(target_type: Type, method_name: str) -> bool:
-    """Convenience function to check if a built-in method exists."""
-    return builtin_registry.has_method(target_type, method_name)
 
 
 # Hash emitter factories, keyed by type kind ("struct" / "enum" / "array").

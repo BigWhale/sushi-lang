@@ -93,13 +93,11 @@ def get_key_hash_method(codegen: Any, key_type: Type) -> Optional[Any]:
     (docs/design/method-resolution.md) -- otherwise the map would probe with the
     derived hash while `.hash()` answers the override.
     """
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-
     perk_method = _perk_key_hash_method(codegen, key_type)
     if perk_method is not None:
         return perk_method
 
-    hash_method = get_builtin_method(key_type, "hash")
+    hash_method = codegen.derived_methods.get_method(key_type, "hash")
     if hash_method is not None:
         return hash_method
 
@@ -107,8 +105,8 @@ def get_key_hash_method(codegen: Any, key_type: Type) -> Optional[Any]:
         from sushi_lang.semantics.generics.hashing import register_array_hash_method, can_array_be_hashed
         can_hash, reason = can_array_be_hashed(key_type)
         if can_hash:
-            register_array_hash_method(key_type)
-            return get_builtin_method(key_type, "hash")
+            register_array_hash_method(key_type, codegen.derived_methods)
+            return codegen.derived_methods.get_method(key_type, "hash")
 
     return None
 

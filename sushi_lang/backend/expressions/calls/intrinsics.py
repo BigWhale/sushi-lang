@@ -200,8 +200,7 @@ def _try_emit_auto_derived(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
         if semantic_type.name.startswith(CONTAINER_PREFIXES):
             return None
 
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    derived = get_builtin_method(semantic_type, method)
+    derived = codegen.derived_methods.get_method(semantic_type, method)
     if derived is None:
         return None
 
@@ -304,8 +303,6 @@ def try_emit_primitive_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
     if codegen.has_stdlib_unit("core/primitives") and expr.method == "to_str":
         return emit_stdlib_primitive_call(codegen, expr.method, receiver_value, receiver_type, str(semantic_type))
     else:
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-
         type_map = {
             'i8': BuiltinType.I8, 'i16': BuiltinType.I16, 'i32': BuiltinType.I32, 'i64': BuiltinType.I64,
             'u8': BuiltinType.U8, 'u16': BuiltinType.U16, 'u32': BuiltinType.U32, 'u64': BuiltinType.U64,
@@ -313,7 +310,7 @@ def try_emit_primitive_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
         }
         builtin_type = type_map[str(semantic_type)]
 
-        builtin_method = get_builtin_method(builtin_type, expr.method)
+        builtin_method = codegen.derived_methods.get_method(builtin_type, expr.method)
         if builtin_method is not None:
             temp_expr = MethodCall(receiver=expr.receiver, method=expr.method, args=expr.args, loc=expr.loc)
             return builtin_method.llvm_emitter(codegen, temp_expr, receiver_value, receiver_type, to_i1)
