@@ -12,6 +12,39 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 
 
+def extract_type_instantiations(
+    ty: Optional[Type],
+    instantiations: Set[Tuple[str, Tuple[Type, ...]]],
+) -> None:
+    """Every generic instantiation a SUBSTITUTED signature type names.
+
+    A monomorphized type IS the instance and carries the base it came from, so the test
+    at each node is `generic_base`; the traversal is `walk_named_types`, the one walk over
+    a type. The recursion written here saw an iterator's element and nothing else -- not
+    an array's element, not a reference's referent, not a function type's parameters --
+    and a type reached only that way was never interned (#603).
+
+    An instantiation already collected stops the walk of its arguments, which is what
+    ends the walk of a type that holds an instance of itself.
+    """
+    from sushi_lang.semantics.type_walk import walk_named_types
+    from sushi_lang.semantics.typesys import EnumType, StructType
+
+    for inner in walk_named_types(ty):
+        if not isinstance(inner, (StructType, EnumType)):
+            continue
+        base_name = inner.generic_base
+        type_args = tuple(inner.generic_args or ())
+        if not base_name or not type_args:
+            continue
+        entry = (base_name, type_args)
+        if entry in instantiations:
+            continue
+        instantiations.add(entry)
+        for arg in type_args:
+            extract_type_instantiations(arg, instantiations)
+
+
 def let_annotations(block) -> Iterator[Type]:
     """Every `let` annotation in a block, nested blocks included.
 
@@ -277,15 +310,15 @@ class FunctionMonomorphizer:
                     result_type_args = (concrete_func.ret, err_type)
                     signature_instantiations.add(("Result", result_type_args))
 
-            self._extract_type_instantiations(concrete_func.ret, signature_instantiations)
+            extract_type_instantiations(concrete_func.ret, signature_instantiations)
             for param in concrete_func.params:
-                self._extract_type_instantiations(param.ty, signature_instantiations)
+                extract_type_instantiations(param.ty, signature_instantiations)
             # The body's own annotations too: `let Box@(T) b` in the copy is a
             # `Box<string>` the substitutor built, and nothing else may name it (#555).
             # Unrecorded, it lived in the substitutor's cache alone, and every use of
             # the local was CE2008 on a type that was never interned.
             for annotation in let_annotations(concrete_func.body):
-                self._extract_type_instantiations(annotation, signature_instantiations)
+                extract_type_instantiations(annotation, signature_instantiations)
 
             # Each is published to its table at creation (`TypeMonomorphizer._publish`).
             for base_name, sig_type_args in signature_instantiations:
@@ -587,36 +620,3 @@ class FunctionMonomorphizer:
             type_args.append(type_param_map[tp_name])
 
         return tuple(type_args)
-
-    def _extract_type_instantiations(
-        self,
-        ty: Type,
-        instantiations: Set[Tuple[str, Tuple[Type, ...]]]
-    ) -> None:
-        """Recursively extract all generic type instantiations from a Type."""
-        from sushi_lang.semantics.typesys import EnumType, StructType
-
-        if ty is None:
-            return
-
-        if isinstance(ty, EnumType) and hasattr(ty, 'generic_base') and ty.generic_base:
-            base_name = ty.generic_base
-            type_args = ty.generic_args if hasattr(ty, 'generic_args') and ty.generic_args else tuple()
-            if type_args:  # Only add if we have type arguments
-                instantiations.add((base_name, type_args))
-                for arg in type_args:
-                    self._extract_type_instantiations(arg, instantiations)
-
-        elif isinstance(ty, StructType) and hasattr(ty, 'generic_base') and ty.generic_base:
-            base_name = ty.generic_base
-            type_args = ty.generic_args if hasattr(ty, 'generic_args') and ty.generic_args else tuple()
-            if type_args:  # Only add if we have type arguments
-                instantiations.add((base_name, type_args))
-                for arg in type_args:
-                    self._extract_type_instantiations(arg, instantiations)
-
-        elif hasattr(ty, 'element_type'):
-            self._extract_type_instantiations(ty.element_type, instantiations)
-
-        elif hasattr(ty, 'target_type'):
-            self._extract_type_instantiations(ty.target_type, instantiations)

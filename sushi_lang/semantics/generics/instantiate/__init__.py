@@ -55,6 +55,8 @@ class InstantiationCollector:
 
     variable_types: dict[str, "Type"] = field(default_factory=dict)
 
+    # The instantiations whose RESOLVED arguments are walked already, so a type that
+    # holds an instance of itself ends the walk (`instantiate/type_collection.py`).
     visited_types: Set[str] = field(default_factory=set)
 
     # The FIRST site that names each instantiation, keyed by its interned name (a type)

@@ -8,6 +8,9 @@ if TYPE_CHECKING:
 
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.type_resolution import TypeResolver
+from sushi_lang.semantics.generics.instantiate.type_collection import (
+    collect_type_instantiations,
+)
 
 
 class ExpressionScanner:
@@ -45,9 +48,10 @@ class ExpressionScanner:
         # `let` RHS, which those paths do not construct).
         self.scan_block = None
         # Callback to collect the instantiations a TYPE names. Wired by the
-        # InstantiationCollector to its FunctionCollector._collect_from_type, which
-        # walks arrays and named types too; the scanner's own GenericTypeRef-only walk
-        # is the fallback on the unit-test paths that drive the scanner directly.
+        # InstantiationCollector to its FunctionCollector._collect_from_type, which adds
+        # the written SITE and a program-wide visited set; the scanner's own call is the
+        # fallback on the unit-test paths that drive the scanner directly. Both walk the
+        # type through the one seam.
         self.collect_type = self._collect_from_type
         self._resolver = TypeResolver(
             type_inferrer.struct_table or {},
@@ -543,13 +547,10 @@ class ExpressionScanner:
 
     def _collect_from_type(self, ty: "Type") -> None:
         """Collect generic instantiations from a type annotation."""
-        if isinstance(ty, GenericTypeRef):
-            resolved_type_args = self._resolver.resolve_type_args(ty.type_args)
-
-            if self._resolver.contains_unresolvable_in_tuple(resolved_type_args):
-                return
-
-            self.instantiations.add((ty.base_name, resolved_type_args))
-
-            for arg in resolved_type_args:
-                self._collect_from_type(arg)
+        collect_type_instantiations(
+            ty,
+            self._resolver,
+            self.instantiations,
+            structs=self.type_inferrer.struct_table or {},
+            enums=self.type_inferrer.enum_table or {},
+        )

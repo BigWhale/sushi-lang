@@ -1,0 +1,17 @@
+# The `poke` half of the same rule: a read-write borrow of a generic instance names
+# that instance (#603).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+
+struct Box@(T):
+    T item
+
+fn relabel(poke Box@(string) b) ~:
+    b.item := "towel"
+    return Result.Ok(~)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

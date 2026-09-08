@@ -1,0 +1,18 @@
+# A generic instance that a program reaches only through a `peek` parameter is an
+# instance the program names. The collection walk had no reference arm, so the
+# declaration answered a false CE2001 for a type declared two lines above it (#603).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+
+struct Box@(T):
+    T item
+
+fn measure(peek Box@(string) b) i32:
+    println(b.item)
+    return Result.Ok(0)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)
