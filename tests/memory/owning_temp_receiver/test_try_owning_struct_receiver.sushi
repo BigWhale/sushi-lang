@@ -1,0 +1,21 @@
+# A `??` answer that owns heap is freed once when it is a field read's receiver
+#
+# The shape #624 made writable. The unwrapped struct owns its label, and only the field
+# read position can give it an owner (#610).
+# EXPECT_STDOUT_EXACT: "4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Row:
+    string label
+    i32 weight
+
+fn make(i32 n) Row:
+    return Result.Ok(Row("row {n}", n))
+
+fn weigh(i32 n) i32:
+    return Result.Ok(make(n)??.weight)
+
+fn main() i32:
+    println(weigh(4).realise(0))
+    return Result.Ok(0)

@@ -116,6 +116,13 @@ def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool =
     else:
         receiver_value = codegen.expressions.emit_expr(expr.receiver)
 
+    # A receiver nobody names still owns what it holds, and the field read is a borrow
+    # out of it -- so without an owner here the whole struct leaks (#610). The twin of
+    # `_own_receiver_temp` on the method-call side: `own_temporary` makes the decision,
+    # and it gives no owner to a receiver that names storage somebody else frees.
+    from sushi_lang.backend.expressions.memory import own_temporary
+    own_temporary(codegen, expr.receiver, receiver_value, struct_type)
+
     field_value = codegen.builder.extract_value(receiver_value, field_index)
     return field_value
 
