@@ -4,6 +4,10 @@ from dataclasses import replace
 from typing import Dict, List, TYPE_CHECKING
 import copy
 
+from sushi_lang.internals import errors as er
+from sushi_lang.semantics.ast import (
+    BlankLit, BoolLit, DynamicArrayNew, FloatLit, IntLit, Name, StringLit
+)
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter, TypePack
 from sushi_lang.semantics.typesys import (
     Type, EnumType, EnumVariantInfo, StructType, UnknownType,
@@ -11,7 +15,12 @@ from sushi_lang.semantics.typesys import (
 )
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Block, Param
+    from sushi_lang.semantics.ast import ArrayElement, Block, Expr, Lambda, Param
+
+
+# Nodes that hold no sub-expression and no type the SOURCE writes. Listed EXPLICITLY so
+# `substitute_expr`'s `case _` can be a hard error (CE0135) instead of a silent copy.
+INERT_EXPRS = (Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, DynamicArrayNew)
 
 
 class TypeSubstitutor:
@@ -248,6 +257,12 @@ class TypeSubstitutor:
             result = copy.copy(stmt)
             result.iterable = self.substitute_expr(stmt.iterable, substitution)
             result.body = self.substitute_body(stmt.body, substitution)
+            # The item ANNOTATION is source-written and names the type parameter as any
+            # other annotation does (#602). The `??` binder's hidden `let` is stamped
+            # from it by the typecheck pass, so each instantiation needs its own copy.
+            result.item_type = self._substitute_optional_type(stmt.item_type, substitution)
+            if stmt.item_try_let is not None:
+                result.item_try_let = self.substitute_statement(stmt.item_try_let, substitution)
             return result
 
         # Expand statement (compile-time pack expansion). Type-substitute the
@@ -295,24 +310,141 @@ class TypeSubstitutor:
         if isinstance(stmt, (Break, Continue)):
             return copy.copy(stmt)
 
-        return copy.deepcopy(stmt)
+        # The same backstop the expression walk carries: a statement with no arm keeps
+        # every type parameter its annotations name.
+        er.raise_internal_error("CE0135", kind="statement", node=type(stmt).__name__)
 
-    def substitute_expr(self, expr, substitution: Dict[str, "Type | TypePack"]):
-        """Recursively substitute types in an expression."""
-        from sushi_lang.semantics.ast import CastExpr, TryExpr
+    def _substitute_optional_type(
+        self, ty: 'Type | None', substitution: Dict[str, "Type | TypePack"]
+    ) -> 'Type | None':
+        """A type field the source may leave empty."""
+        return self.substitute_type(ty, substitution) if ty is not None else None
 
-        if isinstance(expr, CastExpr):
-            new_expr = self.substitute_expr(expr.expr, substitution)
-            new_target_type = self.substitute_type(expr.target_type, substitution)
-            result = copy.copy(expr)
-            result.expr = new_expr
-            result.target_type = new_target_type
-            return result
+    def _substitute_array_element(
+        self, element: 'ArrayElement', substitution: Dict[str, "Type | TypePack"]
+    ) -> 'ArrayElement':
+        """One element of an array literal: its value, and the count of a run."""
+        result = copy.copy(element)
+        result.value = self.substitute_expr(element.value, substitution)
+        if element.count is not None:
+            result.count = self.substitute_expr(element.count, substitution)
+        return result
 
-        if isinstance(expr, TryExpr):
-            new_expr = self.substitute_expr(expr.expr, substitution)
-            result = copy.copy(expr)
-            result.expr = new_expr
-            return result
+    def _substitute_lambda(
+        self, lam: 'Lambda', substitution: Dict[str, "Type | TypePack"]
+    ) -> 'Lambda':
+        """A lambda carries annotations of its own: each parameter, the return, the channel."""
+        from sushi_lang.semantics.ast import Block
 
-        return copy.deepcopy(expr)
+        result = copy.copy(lam)
+        new_params = []
+        for param in lam.params:
+            new_param = copy.copy(param)
+            new_param.ty = self._substitute_optional_type(param.ty, substitution)
+            new_params.append(new_param)
+        result.params = new_params
+        result.ret = self._substitute_optional_type(lam.ret, substitution)
+        result.err_type = self._substitute_optional_type(lam.err_type, substitution)
+        if isinstance(lam.body, Block):
+            result.body = self.substitute_body(lam.body, substitution)
+        else:
+            result.body = self.substitute_expr(lam.body, substitution)
+        return result
+
+    def substitute_expr(self, expr: 'Expr', substitution: Dict[str, "Type | TypePack"]) -> 'Expr':
+        """Substitute types in an expression. Total over `Expr`; the `else` is a hard CE0135."""
+        from sushi_lang.semantics.ast import (
+            ArrayLiteral, BinaryOp, Borrow, Call, CastExpr, DotCall, DynamicArrayFrom,
+            EnumConstructor, IndexAccess, InterpolatedString, Lambda, MemberAccess,
+            MethodCall, RangeExpr, Spread, TryExpr, UnaryOp,
+        )
+
+        match expr:
+            case CastExpr():
+                result = copy.copy(expr)
+                result.expr = self.substitute_expr(expr.expr, substitution)
+                result.target_type = self.substitute_type(expr.target_type, substitution)
+                return result
+            case Call():
+                result = copy.copy(expr)
+                result.callee = self.substitute_expr(expr.callee, substitution)
+                result.args = [self.substitute_expr(a, substitution) for a in expr.args]
+                # Explicit call-site type arguments are written in the source, so they
+                # name the enclosing type parameter as any annotation does (#602).
+                if expr.type_args:
+                    result.type_args = [
+                        self.substitute_type(t, substitution) for t in expr.type_args
+                    ]
+                return result
+            case DotCall():
+                result = copy.copy(expr)
+                result.receiver = self.substitute_expr(expr.receiver, substitution)
+                result.args = [self.substitute_expr(a, substitution) for a in expr.args]
+                if expr.type_args:
+                    result.type_args = [
+                        self.substitute_type(t, substitution) for t in expr.type_args
+                    ]
+                return result
+            case MethodCall():
+                result = copy.copy(expr)
+                result.receiver = self.substitute_expr(expr.receiver, substitution)
+                result.args = [self.substitute_expr(a, substitution) for a in expr.args]
+                return result
+            case MemberAccess():
+                result = copy.copy(expr)
+                result.receiver = self.substitute_expr(expr.receiver, substitution)
+                return result
+            case EnumConstructor():
+                result = copy.copy(expr)
+                result.args = [self.substitute_expr(a, substitution) for a in expr.args]
+                return result
+            case BinaryOp():
+                result = copy.copy(expr)
+                result.left = self.substitute_expr(expr.left, substitution)
+                result.right = self.substitute_expr(expr.right, substitution)
+                return result
+            case UnaryOp() | Borrow() | TryExpr():
+                result = copy.copy(expr)
+                result.expr = self.substitute_expr(expr.expr, substitution)
+                return result
+            case IndexAccess():
+                result = copy.copy(expr)
+                result.array = self.substitute_expr(expr.array, substitution)
+                result.index = self.substitute_expr(expr.index, substitution)
+                return result
+            case RangeExpr():
+                result = copy.copy(expr)
+                result.start = self.substitute_expr(expr.start, substitution)
+                result.end = self.substitute_expr(expr.end, substitution)
+                return result
+            case Spread():
+                result = copy.copy(expr)
+                result.value = self.substitute_expr(expr.value, substitution)
+                return result
+            case InterpolatedString():
+                result = copy.copy(expr)
+                result.parts = [
+                    part if isinstance(part, str)
+                    else self.substitute_expr(part, substitution)
+                    for part in expr.parts
+                ]
+                return result
+            case ArrayLiteral():
+                result = copy.copy(expr)
+                result.elements = [
+                    self._substitute_array_element(e, substitution) for e in expr.elements
+                ]
+                return result
+            case DynamicArrayFrom():
+                result = copy.copy(expr)
+                result.elements = self.substitute_expr(expr.elements, substitution)
+                return result
+            case Lambda():
+                return self._substitute_lambda(expr, substitution)
+            case _ if isinstance(expr, INERT_EXPRS):
+                return copy.copy(expr)
+            case _:
+                # NOT a silent copy: a node with no arm keeps its type PARAMETER, and the
+                # compiler's own bookkeeping name reaches the user (#602). The CI gate is
+                # tests/unit/test_substitution_dispatch_is_total.py; this is the backstop.
+                er.raise_internal_error("CE0135", kind="expression", node=type(expr).__name__)

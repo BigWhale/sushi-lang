@@ -1,0 +1,15 @@
+# The same fault one operand deep: a cast under a `+` was copied unchanged, so the
+# monomorphized body still cast to `T` (#602).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "6\n"
+
+fn bump@(T)(i32 v) i64:
+    let i64 a = (v as T) + 1
+    return Result.Ok(a)
+
+fn main() i32:
+    let i64 out = bump@(i64)(5).realise(0)
+    println("{out}")
+    return Result.Ok(0)

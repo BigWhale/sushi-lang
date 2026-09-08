@@ -435,6 +435,25 @@ instances back as instantiations for the copies below. An abstract instance, a
 method-level `U` still unbound while a generic-target template is cut per receiver, is
 not published.
 
+### The substitution walk is total
+
+`TypeSubstitutor.substitute_expr` and `substitute_statement` replace a type parameter
+wherever an instantiated body names one. Both walks are TOTAL over their node union, and
+the fall-through is a hard CE0135. A copy is not an acceptable answer: a node with no arm
+keeps the type parameter, and the compiler's own bookkeeping name -- `T`, `U` -- reaches
+the user (#602). The walk handled a cast and a `??` only, so a cast one level deep
+answered CE2014, explicit call-site type arguments answered CE2061, a lambda annotation
+answered CE2002 and a `foreach` item annotation answered CE2001.
+
+The walk substitutes every type the SOURCE writes: a cast target, the type arguments of a
+call, a lambda's parameters, return and `| E` channel, a `let` annotation and a `foreach`
+item annotation. An analysis STAMP is not substituted, because the typecheck pass writes
+it after this pass and writes it on the copy. `INERT_EXPRS` names the leaves: a node with
+no sub-expression and no type of its own, which a shallow copy answers completely.
+
+`tests/unit/test_substitution_dispatch_is_total.py` is the CI gate, in the shape
+`test_borrow_dispatch_is_total.py` gives the borrow pass.
+
 ### A refused instantiation
 
 An instantiation that violates a perk constraint is CE4006 ONCE, at the first site that
