@@ -306,6 +306,32 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A type name where a value belongs reached the emitter and blamed the compiler**
+  (#600). `let i32 x = Color`, with `Color` an enum of the program, passed all eighteen
+  semantic passes and died in the LLVM emitter as CE0055, "unknown variable or
+  constant", under the note that says the fault is a bug in Sushi and not in your
+  program: no file, no line, no caret, and the blame on the wrong person. A STRUCT name
+  in the same place got as far as CE1001, "use of undeclared identifier", about a type
+  that IS declared -- the answer CE2102 already retired for the receiver position, on the
+  grounds that the fault is the POSITION and not the name.
+
+  The cause was two ladders. `docs/design/unit-namespaces.md` section 8 gives a bare name
+  one ordered walk over the KINDS it can reach, and the scope pass and the typecheck pass
+  each carried their own copy of it. Neither had a rung for a type name: to the scope
+  pass it was "not a variable, so not my fault", and to the typecheck pass it was "no
+  type to infer". The order lives in one module now (`semantics/name_ladder.py`), each
+  pass answers one question per rung with its own unit-scoped lookups, and the type rung
+  answers **CE2105**, `'Color' is a type, not a value`, with a location and the spelling
+  that IS a value: `Color.Red` for an enum, `Point(...)` for a struct.
+
+  One ladder means one answer in every position: an initializer, an interpolation hole, a
+  `return`, an argument, an operand, an index, and a borrow -- where an enum name used to
+  read CE2400 and a struct name CE1001 -- for all four kinds of type name (a struct, an
+  enum, and either one's generic form). A struct's dot in a MEMBER position (`Point.x`)
+  is a value position too and joins them; it used to reach the emitter as CE0056. Every
+  WRITTEN-name position is untouched: an annotation, a constraint, a variant
+  construction, a static call and a match arm all still take the type name, and a local
+  named after a type still wins over it (#296).
 - **A `foreach` with a bare user type in the item position stopped the compiler** (#595).
   `foreach(Point p in ps.iter())` answered CE0002 -- an internal error, for a program the
   reference documents -- while `foreach(i32 p in ...)`, `foreach(Maybe@(i32) m in ...)`

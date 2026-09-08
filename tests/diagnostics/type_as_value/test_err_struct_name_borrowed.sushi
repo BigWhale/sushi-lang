@@ -1,0 +1,13 @@
+# The struct half of the borrow position: it used to read CE1001 where the enum half
+# read CE2400. Two ladders, two answers, one fault.
+# EXPECT_ERROR_CODE: CE2105
+struct Point:
+    i32 x
+
+fn read_value(peek i32 x) i32:
+    return Result.Ok(x)
+
+fn main() i32:
+    let i32 y = read_value(peek Point).realise(0)
+    println("{y}")
+    return Result.Ok(0)

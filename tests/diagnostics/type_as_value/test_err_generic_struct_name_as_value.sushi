@@ -1,0 +1,10 @@
+# A generic struct's name, the fourth kind of type name the ladder knows.
+# EXPECT_ERROR_CODE: CE2105
+struct Pair@(T, U):
+    T first
+    U second
+
+fn main() i32:
+    let i32 x = Pair
+    println("{x}")
+    return Result.Ok(0)

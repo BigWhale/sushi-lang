@@ -622,6 +622,21 @@ Track variable lifetimes, scopes, and ownership.
 2. **Scope Analysis**: Track block-level scopes
 3. **Move Semantics**: Mark variables as moved
 4. **Usage Tracking**: Detect undefined variables
+5. **What KIND of name is this**: the bare-name ladder, from `semantics/name_ladder.py`
+
+### The bare-name ladder
+
+`docs/design/unit-namespaces.md` section 8 gives an unqualified name one ordered ladder
+over the KINDS it can reach: a local, a constant, a registry constant, a function, a
+namespace, a type, nothing. This pass and the typecheck pass both walk it, and the ORDER
+lives in `semantics/name_ladder.py` so neither can drift from the other -- which is what
+happened at the type rung, where an enum name in a value position escaped both passes
+and died in the emitter as `CE0055` (#600). Each pass answers one question per rung with
+its own lookups (`ScopeAnalyzer.is_local` … `is_type`, and `visitor._InferenceRungs`),
+`classify` walks them, and `tests/unit/test_bare_name_ladder_is_one.py` is the gate.
+
+This pass owns the two rungs that are not values: a type name in a value position or
+under a borrow is `CE2105`, and a name that reaches nothing is `CE1001`.
 
 ### Variable States
 

@@ -1,0 +1,20 @@
+# The green mirror for every position a type name IS legal: a variant construction, a
+# static method, a written type and a match arm. The new rung must reach none of them.
+# EXPECT_STDOUT_EXACT: "42\n"
+enum Color:
+    Red
+    Blue
+
+struct Crate:
+    i32 weight
+
+extend Crate static weighing(i32 weight) Crate:
+    return Crate(weight)
+
+fn main() i32:
+    let Color c = Color.Red
+    let Crate box = Crate.weighing(42)
+    match c:
+        Color.Red -> println("{box.weight}")
+        Color.Blue -> println("0")
+    return Result.Ok(0)

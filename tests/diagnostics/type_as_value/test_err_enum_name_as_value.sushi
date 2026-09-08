@@ -1,0 +1,12 @@
+# An enum's own name where a value belongs. It used to pass every semantic pass and die
+# in the emitter as CE0055, which blamed the compiler for the user's own mistake and gave
+# them no file, no line and no caret (#600).
+# EXPECT_ERROR_CODE: CE2105
+enum Color:
+    Red
+    Blue
+
+fn main() i32:
+    let i32 x = Color
+    println("{x}")
+    return Result.Ok(0)

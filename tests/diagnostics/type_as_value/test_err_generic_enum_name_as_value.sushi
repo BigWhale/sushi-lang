@@ -1,0 +1,10 @@
+# A generic enum's name is a type name at the same rung as a plain one's.
+# EXPECT_ERROR_CODE: CE2105
+enum Wrap@(T):
+    One(T)
+    None
+
+fn main() i32:
+    let i32 x = Wrap
+    println("{x}")
+    return Result.Ok(0)

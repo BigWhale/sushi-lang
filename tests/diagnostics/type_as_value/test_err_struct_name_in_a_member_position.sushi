@@ -1,0 +1,10 @@
+# A struct's dot in a MEMBER position reaches nothing: a field needs an instance and a
+# static needs a call. So the type name is a value position after all, and letting it
+# through to the emitter answered CE0056, another internal error with no location.
+# EXPECT_ERROR_CODE: CE2105
+struct Point:
+    i32 x
+
+fn main() i32:
+    println("{Point.x}")
+    return Result.Ok(0)

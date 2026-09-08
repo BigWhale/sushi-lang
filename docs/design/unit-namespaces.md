@@ -798,6 +798,45 @@ initializer folds `PI / 2.0` like any other constant.
 `tests/unit/test_stdlib_constants_take_the_ladder.py` keeps the module's hooks readable
 by the registry alone.
 
+#### The KIND ladder, and the rung that answered nothing
+
+The table above says WHICH declaration a name resolves to. Underneath it there is a
+second ladder, over the KINDS a bare name can reach, and it has to be as explicit,
+because a pass that walks an expression acts on the kind and not on the unit:
+
+| Rung | Kind | What a value position does with it |
+|---|---|---|
+| 1 | a local or a parameter | reads it; it wins over every rung below (#296) |
+| 2 | a `const` or a unit `var` | reads it |
+| 3 | a registry module's constant | reads it (#560) |
+| 4 | a function, generic or plain | takes its value |
+| 5 | a `use ... as` alias, or an FFI namespace | **not a value** |
+| 6 | a type name — struct, enum, either one's generic form, a primitive | **not a value**: `CE2105` |
+| — | nothing at all | `CE1001`, with the import that would bring it |
+
+**Rung 6 is the one that used to answer nothing.** An enum name in a value position was
+"not a variable, so not my fault" to the scope pass and "no type to infer" to the
+typecheck pass, so `let i32 x = Color` passed all eighteen passes and died in the
+emitter as `CE0055`, "unknown variable or constant", under the note that says the fault
+is a bug in the compiler: no file, no line, no caret, and the blame on the wrong person
+(#600). A struct name got as far as `CE1001`, "use of undeclared identifier", about a
+type that IS declared -- which is the answer `CE2102` already retired for the receiver
+position, on the grounds that the fault is the POSITION and not the name.
+
+**The order lives in one module** (`semantics/name_ladder.py`) and the LOOKUPS stay each
+pass's own, because they are not the same lookups: the typecheck pass resolves a
+constant and a function through the asking unit's view (section 13.1), and the scope
+pass has no unit view of the function table at all. A consumer answers one question per
+rung and `classify` walks them, so a rung cannot be dropped or reordered in one pass
+alone. `tests/unit/test_bare_name_ladder_is_one.py` is the gate: every rung is
+reachable, a higher rung wins over the one below, and every value position -- an
+initializer, a hole, a `return`, an argument, an operand, an index, a borrow -- reads
+`CE2105` for all four kinds of type name.
+
+A type name stays legal in every WRITTEN-name position, and none of them reaches this
+ladder: an annotation, a constraint, and its own dot, where the name is a member of the
+type and not a value (section 5, and `method-resolution.md`).
+
 Row 2 beating row 3 is the rule the compiler already follows and the linker already agrees
 with: a private function has internal linkage, so the consumer's call binds to the
 consumer's definition (`visibility.md` decision 10). It keeps warning — `CW3002` survives
