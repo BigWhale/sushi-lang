@@ -1,0 +1,17 @@
+# The statement walk has the same hole: a `foreach` item ANNOTATION is a source-written
+# type, and it was copied unchanged, so the monomorphized loop declared an item of type
+# `T` and answered CE2001 plus CE2034 (#602).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1\n2\n3\n"
+
+fn show_all@(T)(T[] xs) i32:
+    foreach(T x in xs.iter()):
+        println("{x}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let i32 r = show_all@(i32)(a).realise(1)
+    return Result.Ok(r)

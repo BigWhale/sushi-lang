@@ -1,0 +1,19 @@
+# Explicit call-site type arguments are a source-written type list. The walk copied the
+# call whole, so `ident@(T)` in a monomorphized body still asked for `T` and answered
+# CE2061 (#602).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7\n"
+
+fn ident@(U)(nom U x) U:
+    return Result.Ok(x)
+
+fn wrap@(T)(nom T v) T:
+    let T y = ident@(T)(nom v)??
+    return Result.Ok(y)
+
+fn main() i32:
+    let i32 r = wrap@(i32)(nom 7).realise(0)
+    println("{r}")
+    return Result.Ok(0)
