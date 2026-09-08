@@ -291,6 +291,14 @@ Test files must follow naming conventions to indicate expected compilation behav
 - `test_err_<name>.sushi` - Should fail compilation (exit 2)
 - `test_run_<name>.sushi` - Always executed in enhanced mode
 
+A test file name must also be UNIQUE across the whole of `tests/`, whatever directory it
+sits in. The runners report each test by its file name and key their quarantine sets on
+it, so a name that picks out two files drops one of them from the count and makes a
+failure unattributable. `tests/unit/test_fixture_identity_is_its_path.py` refuses a
+duplicate. Give the name enough of its subject to stand alone:
+`test_run_socket_close_then_scope_exit.sushi`, not `test_run_close_then_scope_exit.sushi`
+next to another of that name.
+
 ## Complete Example: Constant Expression Test
 
 ```sushi

@@ -15,7 +15,8 @@ import time
 from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_metadata import parse_test_metadata  # noqa: E402
+from test_metadata import (parse_test_metadata, collect_fixtures,  # noqa: E402
+                          fixture_binary_name)
 
 
 DEFAULT_JOBS = 4
@@ -260,7 +261,8 @@ def get_expected_exit_code(test_file: Path) -> int:
         # Non-test file, shouldn't happen but default to 0
         return 0
 
-def run_single_test(test_file: Path, bin_dir: Path, verbose: bool = False) -> tuple[str, bool, int, int, str]:
+def run_single_test(test_file: Path, bin_dir: Path, tests_dir: Path,
+                    verbose: bool = False) -> tuple[str, bool, int, int, str]:
     """Run a single test file and return results."""
     test_name = test_file.name
     expected_exit_code = get_expected_exit_code(test_file)
@@ -271,9 +273,10 @@ def run_single_test(test_file: Path, bin_dir: Path, verbose: bool = False) -> tu
         return test_name, True, expected_exit_code, expected_exit_code, "[QUARANTINED - known compiler ICE]"
 
     try:
-        # Generate unique output filename to avoid race conditions in parallel execution
-        output_name = test_file.stem  # e.g., test_arithmetic.sushi -> test_arithmetic
-        output_path = bin_dir / output_name  # Output to tests/bin/ directory
+        # The output binary, named from the fixture's PATH. The stem alone was not
+        # unique, and the run is parallel: two fixtures of one stem raced for one
+        # output file (#604).
+        output_path = bin_dir / fixture_binary_name(test_file, tests_dir)
 
         # Run the compiler on the test file with unique output, plus whatever the
         # fixture's COMPILER_FLAGS directive asks for.
@@ -391,12 +394,7 @@ def main():
     os.environ["SUSHI_LIB_PATH"] = str(libs_bin_dir)
 
     # Find all test files in tests directory recursively, excluding helper/build directories
-    test_files = list(tests_dir.rglob("test_*.sushi"))
-
-    # Exclude any files in the helpers or bin subdirectories
-    # (helpers contains non-standalone modules, bin contains compiled binaries)
-    excluded_dirs = {"helpers", "bin"}
-    test_files = [f for f in test_files if not any(d in excluded_dirs for d in f.relative_to(tests_dir).parts)]
+    test_files = collect_fixtures(tests_dir)
 
     if args.filter:
         # Filter by relative path (supports directory filters like "stdlib" or filename patterns)
@@ -420,7 +418,8 @@ def main():
     results = []
     show_progress = not args.json and not args.verbose
     with ThreadPoolExecutor(max_workers=args.jobs) as executor:
-        futures = {executor.submit(run_single_test, f, bin_dir, args.verbose): f for f in test_files}
+        futures = {executor.submit(run_single_test, f, bin_dir, tests_dir, args.verbose): f
+                   for f in test_files}
         if show_progress:
             pbar = tqdm(total=len(test_files), desc="Running tests", unit="test",
                        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")

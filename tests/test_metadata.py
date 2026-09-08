@@ -1,5 +1,6 @@
 """Test metadata parsing for the Sushi language test framework."""
 
+import hashlib
 import re
 import sys
 from dataclasses import dataclass
@@ -307,3 +308,49 @@ def should_run_runtime_test(test_file: Path, metadata: TestMetadata) -> bool:
         return metadata.expect_no_leaks or metadata.expect_no_open_fds
 
     return metadata.requires_runtime
+
+
+# Directories the corpus glob steps over: `helpers` holds modules that are not
+# standalone programs, `bin` holds what a run compiled.
+EXCLUDED_FIXTURE_DIRS = {"helpers", "bin"}
+
+
+def collect_fixtures(tests_dir: Path) -> List[Path]:
+    """Every `.sushi` fixture the harness runs, sorted.
+
+    ONE collector, for both runners and for the gates that check the corpus. A gate
+    that globbed on its own could pass over a fixture a runner runs.
+    """
+    tests_dir = Path(tests_dir)
+    return sorted(
+        f for f in tests_dir.rglob("test_*.sushi")
+        if not (EXCLUDED_FIXTURE_DIRS & set(f.relative_to(tests_dir).parts))
+    )
+
+
+def fixture_id(test_file: Path, tests_dir: Path) -> str:
+    """A fixture's identity: its path under `tests/`, without the suffix.
+
+    The file name alone is not an identity -- four stems named two fixtures each
+    (#604). A fixture a gate builds in a temporary directory has no path under
+    `tests/`; its own stem plus a digest of the directory holding it answers there,
+    because two such fixtures may still carry one stem.
+    """
+    test_file = Path(test_file)
+    try:
+        relative = test_file.resolve().relative_to(Path(tests_dir).resolve())
+    except ValueError:
+        digest = hashlib.sha256(
+            str(test_file.resolve().parent).encode("utf-8")).hexdigest()[:8]
+        return f"{test_file.stem}-{digest}"
+    return relative.with_suffix("").as_posix()
+
+
+def fixture_binary_name(test_file: Path, tests_dir: Path) -> str:
+    """The name of the binary a fixture compiles to: its identity, flattened.
+
+    The runners compile into ONE directory, so the name has to carry the directory
+    the fixture came from. It used to carry the process id instead, which every
+    thread of a run shares -- so a shared stem was a shared binary.
+    """
+    return fixture_id(test_file, tests_dir).replace("/", "__")

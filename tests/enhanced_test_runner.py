@@ -19,7 +19,8 @@ import time
 import os
 from tqdm import tqdm
 
-from test_metadata import parse_test_metadata, get_test_category, should_run_runtime_test, TestMetadata
+from test_metadata import (parse_test_metadata, get_test_category, should_run_runtime_test,
+                          TestMetadata, collect_fixtures, fixture_binary_name)
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs)
@@ -330,12 +331,7 @@ class TestRunner:
 
     def run_all_tests(self, filter_pattern: str = None) -> Dict[str, TestResult]:
         """Run all tests in the test directory."""
-        test_files = sorted(self.tests_dir.rglob("test_*.sushi"))
-
-        # Exclude files in helpers or bin subdirectories
-        # (helpers contains non-standalone modules, bin contains compiled binaries)
-        excluded_dirs = {"helpers", "bin"}
-        test_files = [f for f in test_files if not any(d in excluded_dirs for d in f.relative_to(self.tests_dir).parts)]
+        test_files = collect_fixtures(self.tests_dir)
 
         # Filter by relative path if pattern provided
         if filter_pattern:
@@ -469,9 +465,10 @@ class TestRunner:
         expected_exit_code = expected_exit_codes.get(category, 0)
 
         try:
-            # Create unique output binary name
-            binary_name = f"test_{test_file.stem}_{os.getpid()}"
-            binary_path = Path(self.temp_dir) / binary_name
+            # The output binary, named from the fixture's PATH. The stem plus the
+            # process id was not unique: a run is threads in ONE process, so the id is
+            # constant and a shared stem was a shared binary (#604).
+            binary_path = Path(self.temp_dir) / fixture_binary_name(test_file, self.tests_dir)
 
             # Run the compiler (from project root). Force NO_COLOR so diagnostic
             # codes/messages land in stderr without ANSI escapes, keeping
@@ -538,8 +535,7 @@ class TestRunner:
         """Run runtime phase for a test."""
         try:
             # Find the compiled binary
-            binary_name = f"test_{test_file.stem}_{os.getpid()}"
-            binary_path = Path(self.temp_dir) / binary_name
+            binary_path = Path(self.temp_dir) / fixture_binary_name(test_file, self.tests_dir)
 
             if not binary_path.exists():
                 return False, "✗ Runtime: Binary not found after compilation"
