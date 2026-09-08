@@ -385,6 +385,21 @@ not exist yet, so it answers nothing for one here. A `match` over a generic call
 types its arm bindings from that substituted signature, and a generic called with such a
 binding is collected like any other (#549).
 
+### Where a type names an instantiation
+
+A type names an instantiation in every position that HOLDS a type, and the reader of those
+positions is `type_walk.walk_named_types` -- the one walk over a type. `peek Box@(string)`,
+`fn(i32) -> Box@(string)` and a struct field of that function type each name `Box@(string)`,
+and the recursion written here saw an array, a struct and an enum alone: the declaration
+answered CE2001 for a type the program declares (#603).
+
+There are two node handlers over that one walk, because the two readers see two spellings of
+one instantiation. `instantiate/type_collection.py` reads a WRITTEN type -- a
+`GenericTypeRef`, whose arguments the resolver resolves -- and
+`monomorphize/functions.extract_type_instantiations` reads a SUBSTITUTED one, which IS the
+instance and carries the base it came from. `tests/unit/test_instantiation_collection_is_total.py`
+is the gate: a kind the walk enters needs an answer from both.
+
 ### Example
 
 ```sushi

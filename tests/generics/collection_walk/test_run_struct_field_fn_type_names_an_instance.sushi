@@ -1,0 +1,15 @@
+# A generic instance one level down a struct FIELD's function type (#603).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+
+struct Box@(T):
+    T item
+
+struct Factory:
+    fn(i32) -> Box@(string) make
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

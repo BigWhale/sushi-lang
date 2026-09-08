@@ -7,6 +7,9 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.generics.instantiate.expressions import ExpressionScanner
 
 from sushi_lang.semantics.generics.types import GenericTypeRef
+from sushi_lang.semantics.generics.instantiate.type_collection import (
+    collect_type_instantiations,
+)
 
 
 class FunctionCollector:
@@ -338,50 +341,15 @@ class FunctionCollector:
         `site` is the span of the written type, when the caller has one: the first is
         kept per instantiation so a constraint violation can point at it (#579).
         """
-        resolver = self.expression_scanner._resolver
-
-        if isinstance(ty, GenericTypeRef):
-            resolved_type_args = resolver.resolve_type_args(ty.type_args)
-
-            if resolver.contains_unresolvable_in_tuple(resolved_type_args):
-                return
-
-            self.instantiations.add((ty.base_name, resolved_type_args))
-            if site is not None:
-                from sushi_lang.semantics.generics.extension_targets import instantiation_key
-                self.sites.setdefault(instantiation_key(ty.base_name, resolved_type_args),
-                                      (site, self.file_of()))
-
-            for arg in resolved_type_args:
-                self._collect_from_type(arg, site)
-
-        from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
-        if isinstance(ty, ArrayType):
-            self._collect_from_type(ty.base_type)
-        elif isinstance(ty, DynamicArrayType):
-            self._collect_from_type(ty.base_type)
-
-        from sushi_lang.semantics.typesys import StructType
-        if isinstance(ty, StructType):
-            type_key = f"struct:{ty.name}"
-            if type_key in self.visited_types:
-                return  # Already processed this struct
-
-            self.visited_types.add(type_key)
-
-            for _field_name, field_type in ty.fields:
-                self._collect_from_type(field_type)
-
-        from sushi_lang.semantics.typesys import EnumType
-        if isinstance(ty, EnumType):
-            type_key = f"enum:{ty.name}"
-            if type_key in self.visited_types:
-                return  # Already processed this enum
-
-            self.visited_types.add(type_key)
-
-            for variant in ty.variants:
-                for assoc_type in variant.associated_types:
-                    self._collect_from_type(assoc_type)
-
-            self.visited_types.discard(type_key)  # Allow revisiting from different paths
+        inferrer = self.expression_scanner.type_inferrer
+        collect_type_instantiations(
+            ty,
+            self.expression_scanner._resolver,
+            self.instantiations,
+            structs=inferrer.struct_table or {},
+            enums=inferrer.enum_table or {},
+            sites=self.sites,
+            site=site,
+            file=self.file_of(),
+            visited=self.visited_types,
+        )
