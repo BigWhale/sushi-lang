@@ -115,14 +115,18 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
             if cap.ty is None:
                 cap.ty = saved.get(cap.name)
 
+    ok_type: Optional[Type]
     if lam.ret is not None:
         ok_type = lam.ret
-    elif not lam.is_block_body:
-        ok_type = type_validator.infer_expression_type(lam.body)
-    elif isinstance(expected, FunctionType):
-        ok_type = expected.ok_type
     else:
-        ok_type = None
+        # An EXPRESSION body says what it builds, and the DECLARED type answers when it
+        # cannot: a built-in static and a generic variant read their type from the
+        # position and infer nothing of their own (#625). A block body has no expression
+        # to ask at all.
+        ok_type = (None if lam.is_block_body
+                   else type_validator.infer_expression_type(lam.body))
+        if ok_type is None and isinstance(expected, FunctionType):
+            ok_type = expected.ok_type
 
     err_type = lam.err_type
     if err_type is None:

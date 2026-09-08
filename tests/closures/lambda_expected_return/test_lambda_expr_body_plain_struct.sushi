@@ -1,0 +1,12 @@
+# The control: a PLAIN struct constructor needs no type argument, so this position
+# always compiled. It guards the rule of #625 against a fix that stamps only a generic
+# construction.
+# EXPECT_STDOUT_EXACT: "42\n"
+struct Point:
+    i32 x
+
+fn main() i32:
+    let fn(i32) -> Point f = |i32 n| Point(n * 2)
+    let Point p = f(21).realise(Point(0))
+    println("{p.x}")
+    return Result.Ok(0)

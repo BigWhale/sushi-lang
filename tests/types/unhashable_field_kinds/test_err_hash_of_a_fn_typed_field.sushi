@@ -1,0 +1,19 @@
+# A struct that holds a function value derives no hash(), so the call site reads an
+# ordinary located diagnostic. The hashability walk had no arm for a FunctionType, so
+# the field fell through as though it were hashable and the backend answered CE0052,
+# an INTERNAL error that told the user the fault was the compiler's (#618).
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: undefined function 'Handler.hash'
+# EXPECT_STDERR_CONTAINS: h.hash()
+
+struct Handler:
+    i32 id
+    fn(i32) -> i32 f
+
+fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    let Handler h = Handler(1, twice)
+    println("{h.hash()}")
+    return Result.Ok(0)

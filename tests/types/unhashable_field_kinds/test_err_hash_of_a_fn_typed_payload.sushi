@@ -1,0 +1,17 @@
+# The same hole on the enum side: a variant payload of function type. The payload loop
+# had no arm for a FunctionType either (#618).
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: undefined function 'Callback.hash'
+# EXPECT_STDERR_CONTAINS: c.hash()
+
+enum Callback:
+    None
+    Some(fn(i32) -> i32)
+
+fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    let Callback c = Callback.Some(twice)
+    println("{c.hash()}")
+    return Result.Ok(0)

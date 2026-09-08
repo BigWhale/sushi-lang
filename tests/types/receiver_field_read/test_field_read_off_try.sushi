@@ -1,0 +1,21 @@
+# A field read whose receiver is a `??` compiles
+#
+# `infer_struct_type` answered one hand-written arm per node kind, and a `TryExpr` had
+# none, so this legal program stopped with the internal CE0067 -- tier 1, and with no
+# location (#624). The typecheck pass stamps the unwrapped type; the backend reads it.
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Point:
+    i32 x
+    i32 y
+
+fn make() Point:
+    return Result.Ok(Point(7, 3))
+
+fn read_x() i32:
+    return Result.Ok(make()??.x)
+
+fn main() i32:
+    println("{read_x().realise(0)}")
+    return Result.Ok(0)

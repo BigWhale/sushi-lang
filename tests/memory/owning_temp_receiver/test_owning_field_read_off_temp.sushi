@@ -1,0 +1,24 @@
+# The OWNING field of a temporary receiver is a borrow, and the temporary frees it once
+#
+# The field read hands back the label of a struct nobody names. The receiver owns it, so
+# the read is a borrow: one free at scope exit, and no second owner (#610).
+# EXPECT_STDOUT_EXACT: "mostly harmless\n15\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+struct Row:
+    string label
+    i32 weight
+
+fn make(i32 n) Row:
+    return Result.Ok(Row("mostly harmless", n))
+
+fn label_len(i32 n) i32:
+    return Result.Ok(make(n)??.label.len())
+
+fn main() i32:
+    println(Row("mostly harmless", 2).label)
+    println(label_len(1).realise(0))
+    return Result.Ok(0)

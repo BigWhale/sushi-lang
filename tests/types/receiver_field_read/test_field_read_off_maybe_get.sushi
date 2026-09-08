@@ -1,0 +1,18 @@
+# A field read whose receiver is a `??` over a `Maybe@(T)` compiles
+#
+# `.get(i)` answers `Maybe@(T)`, so the receiver is the same `TryExpr` shape the
+# `Result` gives (#624).
+# EXPECT_STDOUT_EXACT: "4\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Point:
+    i32 x
+    i32 y
+
+fn first_x(Point[] pts) i32:
+    return Result.Ok(pts.get(0)??.x)
+
+fn main() i32:
+    let Point[] pts = from([Point(4, 5)])
+    println("{first_x(pts).realise(0)}")
+    return Result.Ok(0)

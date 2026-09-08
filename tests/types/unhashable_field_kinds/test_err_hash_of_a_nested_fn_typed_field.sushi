@@ -1,0 +1,20 @@
+# The refusal composes: an outer struct that holds a struct that holds a function value
+# derives no hash() either (#618).
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: undefined function 'Outer.hash'
+# EXPECT_STDERR_CONTAINS: o.hash()
+
+struct Inner:
+    fn(i32) -> i32 f
+
+struct Outer:
+    i32 id
+    Inner inner
+
+fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    let Outer o = Outer(1, Inner(twice))
+    println("{o.hash()}")
+    return Result.Ok(0)

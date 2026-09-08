@@ -1,0 +1,22 @@
+# A nested field read whose innermost receiver is a `??` compiles
+#
+# The outer read asks its receiver for a struct, and that receiver is a member access
+# over the `TryExpr`, so the stamp must answer through the recursion too (#624).
+# EXPECT_STDOUT_EXACT: "9\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Inner:
+    i32 x
+
+struct Outer:
+    Inner inner
+
+fn make() Outer:
+    return Result.Ok(Outer(Inner(9)))
+
+fn read_x() i32:
+    return Result.Ok(make()??.inner.x)
+
+fn main() i32:
+    println("{read_x().realise(0)}")
+    return Result.Ok(0)

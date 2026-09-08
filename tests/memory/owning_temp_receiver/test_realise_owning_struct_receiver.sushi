@@ -1,0 +1,19 @@
+# A `realise()` answer that owns heap is freed once when it is a field read's receiver
+#
+# `.realise(default)` over an owning payload answers a value nobody names. A `let` and a
+# callee argument give it an owner, but a field read gave it none, so the payload leaked
+# (#610). The receiver position registers it now, like every other unbound temporary.
+# EXPECT_STDOUT_EXACT: "1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Row:
+    string label
+    i32 weight
+
+fn pick(i32 n) Maybe@(Row):
+    return Result.Ok(Maybe.Some(Row("first {n}", 1)))
+
+fn main() i32:
+    println(pick(3).realise(Maybe.None).realise(Row("none", 0)).weight)
+    return Result.Ok(0)

@@ -116,6 +116,13 @@ def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool =
     else:
         receiver_value = codegen.expressions.emit_expr(expr.receiver)
 
+    # A receiver nobody names still owns what it holds, and the field read is a borrow
+    # out of it -- so without an owner here the whole struct leaks (#610). The twin of
+    # `_own_receiver_temp` on the method-call side: `own_temporary` makes the decision,
+    # and it gives no owner to a receiver that names storage somebody else frees.
+    from sushi_lang.backend.expressions.memory import own_temporary
+    own_temporary(codegen, expr.receiver, receiver_value, struct_type)
+
     field_value = codegen.builder.extract_value(receiver_value, field_index)
     return field_value
 
@@ -180,17 +187,17 @@ def _resolve_to_struct(codegen: 'LLVMCodegen', ty) -> Optional[StructType]:
     return None
 
 
-def _infer_call_struct(codegen: 'LLVMCodegen', expr: Expr) -> Optional[StructType]:
-    """The struct a call receiver produces, or None."""
-    return (_stamped_struct_type(codegen, expr)
-            or _infer_get_element_struct(codegen, expr))
-
-
 def _stamped_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional[StructType]:
-    """The struct the typecheck pass stamped as this call's return type, or None."""
-    stamped = getattr(expr, "inferred_return_type", None)
-    if stamped is None:
-        return None
+    """The struct the typecheck pass stamped on this expression, or None.
+
+    `stamped_semantic_type` is the ONE reader of those stamps, and it knows which
+    attribute each node kind carries: `inferred_unwrapped_type` for a `TryExpr`,
+    `inferred_return_type` for a call, `inferred_element_type` for an index. This side
+    only spells the answer as a struct.
+    """
+    from sushi_lang.backend.expressions.calls.utils import stamped_semantic_type
+
+    stamped = stamped_semantic_type(codegen, expr)
     if isinstance(stamped, ReferenceType):
         stamped = stamped.referenced_type
     resolved = _resolve_to_struct(codegen, stamped)
@@ -260,7 +267,18 @@ def _struct_type_of(codegen: 'LLVMCodegen', var_type) -> StructType:
 
 
 def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
-    """Infer the struct type of an expression."""
+    """Infer the struct type of an expression.
+
+    The typecheck pass's stamp answers first, whatever the node kind is. A dispatch of
+    one hand-written arm per kind had no arm for a `TryExpr` or for a `Call`, so
+    `make()??.x` and `Point(7).x` -- both legal -- stopped with the internal CE0067,
+    which carries no location (#624). CE0067 is left for a node that has no stamp and
+    that no arm below reconstructs.
+    """
+    stamped = _stamped_struct_type(codegen, expr)
+    if stamped is not None:
+        return stamped
+
     if isinstance(expr, Name):
         # Scope-aware, because `codegen.variable_types` is FLAT: a shadowing match binding
         # overwrote the outer entry for the rest of the function, so the outer struct was
@@ -300,28 +318,22 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
             raise_internal_error("CE0044", type=str(field_type))
 
     elif isinstance(expr, MethodCall):
-        inferred = _infer_call_struct(codegen, expr)
+        inferred = _infer_get_element_struct(codegen, expr)
         if inferred is not None:
             return inferred
 
         raise_internal_error("CE0068", method=expr.method)
 
     elif isinstance(expr, DotCall):
-        inferred = _infer_call_struct(codegen, expr)
+        inferred = _infer_get_element_struct(codegen, expr)
         if inferred is not None:
             return inferred
 
         raise_internal_error("CE0069", method=expr.method)
 
     elif isinstance(expr, IndexAccess):
-        # `a[i].field` -- the struct is the indexed array's ELEMENT type. The typecheck pass already
-        # stamped it (#348), so read the stamp first; the structural walk below stays as
-        # the answer for an unstamped node.
-        from sushi_lang.backend.expressions.calls.utils import stamped_semantic_type
-        stamped = stamped_semantic_type(codegen, expr)
-        if isinstance(stamped, StructType):
-            return stamped
-
+        # `a[i].field` -- the struct is the indexed array's ELEMENT type, and the stamp
+        # above already answered it (#348). This walk stays for an unstamped node.
         array_type = _indexed_array_type(codegen, expr.array)
         if isinstance(array_type, (ArrayType, DynamicArrayType)):
             return _resolve_struct_type(codegen, array_type.base_type, "CE0043")

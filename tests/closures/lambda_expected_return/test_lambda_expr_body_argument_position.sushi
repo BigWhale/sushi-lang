@@ -1,0 +1,14 @@
+# The declared type reaches the body at EVERY boundary, not at a `let` alone: a
+# parameter of function type stamps the lambda it receives, and the body reads the
+# stamp (#625).
+# EXPECT_STDOUT_EXACT: "42\n"
+struct Box@(T):
+    T item
+
+fn apply(fn(i32) -> Box@(i32) f, i32 n) i32:
+    let Box@(i32) b = f(n)??
+    return Result.Ok(b.item)
+
+fn main() i32:
+    println("{apply(|i32 x| Box(x * 2), 21).realise(0)}")
+    return Result.Ok(0)

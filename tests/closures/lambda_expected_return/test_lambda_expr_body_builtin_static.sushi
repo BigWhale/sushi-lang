@@ -1,0 +1,20 @@
+# A built-in generic static reads its type from the position that stamps it, and a
+# lambda's expression body is such a position when the declared function type names the
+# return (#625). The static used to answer CE2060: the position declared no type.
+# EXPECT_STDOUT_EXACT: "3\n0\n"
+# EXPECT_NO_LEAKS: true
+fn show() i32:
+    let fn(i32) -> List@(i32) f = |i32 n| List.with_capacity(n)
+    let List@(i32) numbers = f(8)??
+    numbers.push(1)
+    numbers.push(2)
+    numbers.push(3)
+    println("{numbers.len()}")
+
+    let fn() -> List@(string) g = |~| List.new()
+    let List@(string) words = g()??
+    println("{words.len()}")
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(show().realise(1))

@@ -11,7 +11,6 @@ from sushi_lang.semantics.typesys import (
     BuiltinType,
     DynamicArrayType,
     EnumType,
-    ForeignPtrType,
     StructType,
     Type,
     UnknownType,
@@ -25,6 +24,39 @@ from sushi_lang.sushi_stdlib.src.common import (
     get_hash_emitter_factory,
 )
 from sushi_lang.semantics.generics.type_display import display_type
+
+
+# A kind a derived hash cannot read, and the phrase that says why. Named rather than
+# implied: the three walks each carried their own chain of `isinstance` arms, and a kind
+# no chain named fell out of the loop untouched, which reads as hashable. A struct with a
+# `fn(i32) -> i32` field then got a hash() the backend could not emit, and the user read
+# CE0052 -- an internal error about a program that was theirs to fix (#618).
+UNHASHABLE_KINDS: Dict[str, str] = {
+    "ForeignPtrType": "a foreign ptr (unhashable)",
+    "FunctionType": "a function value (unhashable)",
+    "ReferenceType": "a reference (unhashable)",
+    "IteratorType": "an iterator (unhashable)",
+    "TypeParameter": "an unsubstituted type parameter",
+    "TypePack": "a type pack",
+    "GenericTypeRef": "an uninstantiated generic type",
+    "GenericStructType": "a generic struct (should be monomorphized first)",
+    "GenericEnumType": "a generic enum (should be monomorphized first)",
+}
+
+# A kind that holds other types, and answers through the walk over what it holds.
+WALKED_KINDS = frozenset({"ArrayType", "DynamicArrayType", "StructType", "EnumType"})
+
+# A kind that is hashable with nothing to walk.
+HASHABLE_KINDS = frozenset({"BuiltinType"})
+
+# A kind the walk lets through although the backend cannot hash it. `PointerType` is the
+# whole set. It has no spelling in Sushi and reaches the walk only in a container the
+# compiler synthesizes -- `List@(T).data`, `Own@(T).value` -- and letting it through is
+# what gives those two a derived hash today. That hash cannot be emitted:
+# `Own@(i32).hash()` reads CE0052, the same fault as #618. Refusing it is therefore
+# right, but it takes the derived hash off every container, which is a ruling of its
+# own; it is held back and named here rather than left to fall through in silence.
+LET_THROUGH_KINDS = frozenset({"PointerType"})
 
 
 @dataclass
@@ -85,6 +117,44 @@ def _decide(walk: _Walk, kind: str, name: str,
     return answer
 
 
+def hashability_of(ty: Type, walk: Optional[_Walk] = None) -> tuple[bool, str]:
+    """Can a derived hash read a value of `ty`? One reader for every position.
+
+    A struct field, an enum payload and an array element all ask this, so a kind is
+    answered once and every position inherits the answer. The dispatch is total over the
+    type kinds, and `tests/unit/test_hashability_dispatch_is_total.py` is the gate.
+    """
+    walk = walk if walk is not None else _Walk()
+
+    if isinstance(ty, UnknownType):
+        return False, f"unresolved type '{ty.name}'"
+
+    kind = type(ty).__name__
+
+    if kind in LET_THROUGH_KINDS:
+        return True, "let through: see LET_THROUGH_KINDS"
+
+    refusal = UNHASHABLE_KINDS.get(kind)
+    if refusal is not None:
+        return False, refusal
+
+    if isinstance(ty, (ArrayType, DynamicArrayType)):
+        return can_array_be_hashed(ty, walk)
+
+    if isinstance(ty, EnumType):
+        return can_enum_be_hashed(ty, walk)
+
+    if isinstance(ty, StructType):
+        return can_struct_be_hashed(ty, walk)
+
+    if isinstance(ty, BuiltinType):
+        return True, "a primitive"
+
+    # A kind the gate does not know about yet. Refusing loses a hash that might have
+    # been derivable; accepting hands the backend a value it cannot read.
+    return False, f"unsupported type kind '{kind}'"
+
+
 def can_struct_be_hashed(struct_type: StructType,
                          walk: Optional[_Walk] = None) -> tuple[bool, str]:
     """Check if a struct type can have an auto-derived hash method."""
@@ -95,31 +165,13 @@ def can_struct_be_hashed(struct_type: StructType,
 
 def _struct_fields_are_hashable(struct_type: StructType, walk: _Walk) -> tuple[bool, str]:
     """Every field of one struct, with the walk already standing on that struct."""
-    # Generic structs cannot be hashed (should be monomorphized first)
     if isinstance(struct_type, GenericStructType):
-        return False, f"generic struct {struct_type.name} (should be monomorphized first)"
+        return False, UNHASHABLE_KINDS["GenericStructType"]
 
     for field_name, field_type in struct_type.fields:
-        if isinstance(field_type, UnknownType):
-            return False, f"field '{field_name}' has unresolved type '{field_type.name}'"
-
-        if isinstance(field_type, ForeignPtrType):
-            return False, f"field '{field_name}' is a foreign ptr (unhashable)"
-
-        if isinstance(field_type, (ArrayType, DynamicArrayType)):
-            can_hash, reason = can_array_be_hashed(field_type, walk)
-            if not can_hash:
-                return False, f"field '{field_name}' -> {reason}"
-
-        if isinstance(field_type, EnumType):
-            can_hash, reason = can_enum_be_hashed(field_type, walk)
-            if not can_hash:
-                return False, f"field '{field_name}' -> {reason}"
-
-        if isinstance(field_type, StructType):
-            can_hash, reason = can_struct_be_hashed(field_type, walk)
-            if not can_hash:
-                return False, f"field '{field_name}' -> {reason}"
+        can_hash, reason = hashability_of(field_type, walk)
+        if not can_hash:
+            return False, f"field '{field_name}' -> {reason}"
 
     return True, "all fields are hashable"
 
@@ -134,32 +186,14 @@ def can_enum_be_hashed(enum_type: EnumType,
 
 def _enum_payloads_are_hashable(enum_type: EnumType, walk: _Walk) -> tuple[bool, str]:
     """Every payload of one enum, with the walk already standing on that enum."""
-    # Generic enums cannot be hashed (should be monomorphized first)
     if isinstance(enum_type, GenericEnumType):
-        return False, f"generic enum {enum_type.name} (should be monomorphized first)"
+        return False, UNHASHABLE_KINDS["GenericEnumType"]
 
     for variant in enum_type.variants:
         for assoc_type in variant.associated_types:
-            if isinstance(assoc_type, UnknownType):
-                return False, f"variant {variant.name} has unresolved type '{assoc_type.name}'"
-
-            if isinstance(assoc_type, ForeignPtrType):
-                return False, f"variant {variant.name} carries a foreign ptr (unhashable)"
-
-            if isinstance(assoc_type, (ArrayType, DynamicArrayType)):
-                can_hash, reason = can_array_be_hashed(assoc_type, walk)
-                if not can_hash:
-                    return False, f"variant {variant.name} -> {reason}"
-
-            if isinstance(assoc_type, EnumType):
-                can_hash, reason = can_enum_be_hashed(assoc_type, walk)
-                if not can_hash:
-                    return False, f"variant {variant.name} -> {reason}"
-
-            if isinstance(assoc_type, StructType):
-                can_hash, reason = can_struct_be_hashed(assoc_type, walk)
-                if not can_hash:
-                    return False, f"variant {variant.name} -> {reason}"
+            can_hash, reason = hashability_of(assoc_type, walk)
+            if not can_hash:
+                return False, f"variant {variant.name} -> {reason}"
 
     return True, "all variant types are hashable"
 
@@ -180,22 +214,11 @@ def can_array_be_hashed(array_type: Type,
     if isinstance(element_type, (ArrayType, DynamicArrayType)):
         return False, "nested array type (arrays of arrays not supported)"
 
-    if isinstance(element_type, BuiltinType):
-        return True, "element type is primitive"
+    can_hash, reason = hashability_of(element_type, walk)
+    if not can_hash:
+        return False, f"element -> {reason}"
 
-    if isinstance(element_type, StructType):
-        can_hash, reason = can_struct_be_hashed(element_type, walk)
-        if not can_hash:
-            return False, f"element struct type cannot be hashed: {reason}"
-        return True, "element struct type is hashable"
-
-    if isinstance(element_type, EnumType):
-        can_hash, reason = can_enum_be_hashed(element_type, walk)
-        if not can_hash:
-            return False, f"element enum type cannot be hashed: {reason}"
-        return True, "element enum type is hashable"
-
-    return False, f"element type {element_type} is not hashable"
+    return True, "element type is hashable"
 
 
 def _validate_struct_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
