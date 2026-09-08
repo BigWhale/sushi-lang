@@ -19,7 +19,8 @@ import time
 import os
 from tqdm import tqdm
 
-from test_metadata import parse_test_metadata, get_test_category, should_run_runtime_test, TestMetadata
+from test_metadata import (parse_test_metadata, get_test_category, should_run_runtime_test,
+                          TestMetadata, collect_fixtures, fixture_binary_name)
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs)
@@ -299,7 +300,9 @@ class TestResult:
 class TestRunner:
     """Enhanced test runner with compilation and runtime testing."""
 
-    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False, parallel_jobs: Optional[int] = None, json_output: bool = False, leaks_only: bool = False):
+    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False,
+                 parallel_jobs: Optional[int] = None, json_output: bool = False,
+                 leaks_only: bool = False, allow_leak_skips: bool = False):
         """Initialize the test runner."""
         self.tests_dir = tests_dir
         self.mode = mode
@@ -307,6 +310,7 @@ class TestRunner:
         self.parallel_jobs = default_jobs() if parallel_jobs is None else parallel_jobs
         self.json_output = json_output
         self.leaks_only = leaks_only
+        self.allow_leak_skips = allow_leak_skips
         # Every leak assertion that produced a verdict, and every one that could not
         # (as (test name, reason)). Both are lists because they are appended from the
         # worker threads, and list.append is atomic. "Passed" is not evidence a check
@@ -328,14 +332,23 @@ class TestRunner:
         if self.temp_dir and Path(self.temp_dir).exists():
             shutil.rmtree(self.temp_dir)
 
+    def unexcused_leak_skips(self) -> List[Tuple[str, str]]:
+        """The leak assertions this run did not evaluate and was not told to excuse.
+
+        A skip is not a pass (#605). The interposer can build and then fail to LOAD --
+        a `leakcheck.so` for the wrong architecture is the case that has happened --
+        and every EXPECT_NO_LEAKS records a skip while the run reports success. Under
+        `--leaks-only` that is a green job over the annotated subset with nothing
+        asserted at all. `--allow-leak-skips` is the one escape, for a platform that
+        genuinely cannot check.
+        """
+        if self.allow_leak_skips:
+            return []
+        return sorted(self.leaks_skipped)
+
     def run_all_tests(self, filter_pattern: str = None) -> Dict[str, TestResult]:
         """Run all tests in the test directory."""
-        test_files = sorted(self.tests_dir.rglob("test_*.sushi"))
-
-        # Exclude files in helpers or bin subdirectories
-        # (helpers contains non-standalone modules, bin contains compiled binaries)
-        excluded_dirs = {"helpers", "bin"}
-        test_files = [f for f in test_files if not any(d in excluded_dirs for d in f.relative_to(self.tests_dir).parts)]
+        test_files = collect_fixtures(self.tests_dir)
 
         # Filter by relative path if pattern provided
         if filter_pattern:
@@ -469,9 +482,10 @@ class TestRunner:
         expected_exit_code = expected_exit_codes.get(category, 0)
 
         try:
-            # Create unique output binary name
-            binary_name = f"test_{test_file.stem}_{os.getpid()}"
-            binary_path = Path(self.temp_dir) / binary_name
+            # The output binary, named from the fixture's PATH. The stem plus the
+            # process id was not unique: a run is threads in ONE process, so the id is
+            # constant and a shared stem was a shared binary (#604).
+            binary_path = Path(self.temp_dir) / fixture_binary_name(test_file, self.tests_dir)
 
             # Run the compiler (from project root). Force NO_COLOR so diagnostic
             # codes/messages land in stderr without ANSI escapes, keeping
@@ -538,8 +552,7 @@ class TestRunner:
         """Run runtime phase for a test."""
         try:
             # Find the compiled binary
-            binary_name = f"test_{test_file.stem}_{os.getpid()}"
-            binary_path = Path(self.temp_dir) / binary_name
+            binary_path = Path(self.temp_dir) / fixture_binary_name(test_file, self.tests_dir)
 
             if not binary_path.exists():
                 return False, "✗ Runtime: Binary not found after compilation"
@@ -794,6 +807,7 @@ class TestRunner:
 
         compilation_tests = sum(1 for r in results.values() if not r.skipped_runtime or not r.compilation_success)
         runtime_tests = sum(1 for r in results.values() if not r.skipped_runtime)
+        unexcused = self.unexcused_leak_skips()
 
         if self.json_output:
             # Build list of failed tests with details
@@ -826,6 +840,7 @@ class TestRunner:
                     {"name": name, "reason": reason}
                     for name, reason in sorted(self.leaks_skipped)
                 ],
+                "leak_skips_allowed": self.allow_leak_skips,
             }
             print(json.dumps(json_output, indent=2))
         else:
@@ -851,9 +866,19 @@ class TestRunner:
                     if len(names) > 5:
                         shown += f", ... (+{len(names) - 5} more)"
                     print(f"    {tint(f'{len(names)} x {reason}', YELLOW)}: {shown}")
+                if unexcused:
+                    print("    " + tint(
+                        "This run asserted nothing about those tests, so it FAILS. "
+                        "Pass --allow-leak-skips where a skip is expected.", RED))
+                else:
+                    print("    " + tint("Excused by --allow-leak-skips.", YELLOW))
 
-            if failed_tests == 0:
+            if failed_tests == 0 and not unexcused:
                 print("\n" + tint("All tests passed! ✓", GREEN, BOLD))
+            elif failed_tests == 0:
+                print("\n" + tint(
+                    f"{len(unexcused)} leak assertion(s) were not evaluated! ✗",
+                    RED, BOLD))
             else:
                 print("\n" + tint(f"{failed_tests} test(s) failed! ✗", RED, BOLD))
 
@@ -920,6 +945,13 @@ def main():
              "always enforced)"
     )
 
+    parser.add_argument(
+        "--allow-leak-skips",
+        action="store_true",
+        help="Report a pass even though leak assertions were not evaluated. Only for a "
+             "platform that cannot check at all; a skip is otherwise a failure"
+    )
+
     args = parser.parse_args()
 
     tests_dir = Path(__file__).parent
@@ -945,7 +977,8 @@ def main():
         if leakcheck_platform() is None:
             if not args.json:
                 print(f"Leak checking is not supported on {sys.platform}; "
-                      "leak assertions will be skipped")
+                      "leak assertions will be skipped, and a skip fails the run. "
+                      "Pass --allow-leak-skips to report a pass regardless.")
         elif not build_leakcheck(project_root, args.verbose):
             if not args.json:
                 print("Failed to build leak-check interposer, aborting tests")
@@ -955,12 +988,14 @@ def main():
     libs_bin_dir = tests_dir / "libs" / "bin"
     os.environ["SUSHI_LIB_PATH"] = str(libs_bin_dir)
 
-    with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json, args.leaks_only) as runner:
+    with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json,
+                    args.leaks_only, args.allow_leak_skips) as runner:
         results = runner.run_all_tests(filter_pattern=args.filter)
 
-    # Exit with appropriate code
+    # Exit with appropriate code. A leak assertion that was not evaluated counts here:
+    # a run that asserts nothing must not report a pass (#605).
     failed_count = sum(1 for r in results.values() if not r.total_success)
-    return 0 if failed_count == 0 else 1
+    return 0 if failed_count == 0 and not runner.unexcused_leak_skips() else 1
 
 
 if __name__ == "__main__":
