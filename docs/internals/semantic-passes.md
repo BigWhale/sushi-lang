@@ -634,6 +634,30 @@ on the primitives, registered once at import time from
 `backend/types/primitives/`. Those emitters close over a `BuiltinType` and nothing a
 program can change, so one table serves the process.
 
+### Which types get a hash
+
+`hashability_of` (`semantics/generics/hashing.py`) is the one reader. A struct field, an
+enum payload and an array element all ask it, and its dispatch is total over the type
+kinds: `UNHASHABLE_KINDS` names every kind a derived hash cannot read, `WALKED_KINDS`
+names the kinds that answer through what they hold, and `HASHABLE_KINDS` names the
+primitives. `tests/unit/test_hashability_dispatch_is_total.py` is the gate.
+
+`LET_THROUGH_KINDS` is the fourth set, and `PointerType` is all of it. A pointer has no
+spelling in Sushi and reaches the walk only in a container the compiler synthesizes --
+`List@(T).data`, `Own@(T).value` -- and letting it through is what gives those two a
+derived hash. That hash cannot be emitted: `Own@(i32).hash()` reads CE0052. Refusing it
+is therefore right, but it takes the derived hash off every container, so it is a ruling
+of its own and is named here instead of left to fall through in silence.
+
+The tables have to be explicit. Each of the three walks used to carry its own chain of
+`isinstance` arms, and a kind no chain named fell out of the loop untouched -- which
+reads as hashable. A struct with a `fn(i32) -> i32` field therefore got a `hash()` the
+backend could not emit, and the user read CE0052: an internal error, with no file and no
+line, about a program that was theirs to fix (#618).
+
+A type that derives no `hash()` has no such method, so a `.hash()` call on it is CE2008
+at the call site, with the line and the caret.
+
 ### Limitations
 
 Nested arrays cannot be hashed (type system constraint).

@@ -1,0 +1,20 @@
+# The refusal is narrow: a struct of plain fields, and an enum with plain payloads,
+# still derive a hash() and still answer one (#618).
+# EXPECT_STDOUT_CONTAINS: hashed both
+
+struct Point:
+    i32 x
+    i32 y
+
+enum Shape:
+    Dot
+    Circle(i32)
+
+fn main() i32:
+    let Point p = Point(3, 4)
+    let Shape s = Shape.Circle(5)
+    let u64 a = p.hash()
+    let u64 b = s.hash()
+    if (a != b):
+        println("hashed both")
+    return Result.Ok(0)
