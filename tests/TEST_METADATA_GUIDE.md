@@ -136,7 +136,8 @@ and any non-zero balance fails the test.
   subtract.
 - If the interposer cannot be built, fails to load, or the run times out, the assertion is
   **skipped and reported** (with the test name and the reason in the summary), never
-  silently passed. A skip does not fail the run.
+  silently passed. **A skip FAILS the run**: a run that asserted nothing must not report a
+  pass. `--allow-leak-skips` is the one escape, for a platform that cannot check at all.
 - A `test_warn_*` test may carry it: warning tests are not normally executed, but one that
   declares a leak assertion is, because that is the only way to leak-check a
   warned-but-legal construct such as shadowing an owning binding.
