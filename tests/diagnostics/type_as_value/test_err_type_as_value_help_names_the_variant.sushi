@@ -1,0 +1,12 @@
+# The help line carries the spelling that WOULD be a value, so the reader has the fix
+# in front of them: a variant for an enum, and a static for a struct.
+# EXPECT_ERROR_CODE: CE2105
+# EXPECT_STDERR_CONTAINS: Color.Red
+enum Color:
+    Red
+    Blue
+
+fn main() i32:
+    let i32 x = Color
+    println("{x}")
+    return Result.Ok(0)

@@ -1,0 +1,9 @@
+# A flat import brings the type name, so the ladder answers the same way it does for a
+# name of this unit's own: a type, not a value.
+# EXPECT_ERROR_CODE: CE2105
+use "helpers/shapes"
+
+fn main() i32:
+    let i32 x = Shade
+    println("{x}")
+    return Result.Ok(0)

@@ -1,0 +1,8 @@
+# An interpolation hole is a value position too, and it reached the emitter the same way.
+# EXPECT_ERROR_CODE: CE2105
+enum Color:
+    Red
+
+fn main() i32:
+    println("{Color}")
+    return Result.Ok(0)

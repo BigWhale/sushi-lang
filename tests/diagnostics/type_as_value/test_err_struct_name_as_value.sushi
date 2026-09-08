@@ -1,0 +1,11 @@
+# The same mistake on a struct name. One ladder, one answer: it used to read CE1001,
+# "use of undeclared identifier", about a type that IS declared -- wrong about the one
+# thing it named, because the fault is the POSITION (#600, CE2102's argument).
+# EXPECT_ERROR_CODE: CE2105
+struct Point:
+    i32 x
+
+fn main() i32:
+    let i32 x = Point
+    println("{x}")
+    return Result.Ok(0)

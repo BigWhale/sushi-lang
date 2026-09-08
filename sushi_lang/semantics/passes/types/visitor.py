@@ -4,6 +4,7 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.name_ladder import BareName, classify
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -25,6 +26,45 @@ from sushi_lang.semantics.ast import (
 # purpose: its return type depends on the argument types, so it keeps its own branch.
 _REGISTRY_TYPED_STDLIB_MODULES = ("time", "sys/env", "sys/process", "random", "io/files",
                                   "net/socket")
+
+
+class _InferenceRungs:
+    """Section 8's ladder as the typecheck pass answers it (`name_ladder.Rungs`).
+
+    Every lookup here is UNIT-SCOPED, which is what makes this a second answerer rather
+    than a duplicate of the scope pass's: a constant, a function and a generic function
+    each resolve through the asking unit's view (section 13.1), and the scope pass has
+    no unit view of the function table at all.
+    """
+
+    def __init__(self, type_validator: 'TypeValidator') -> None:
+        self.tv = type_validator
+
+    def is_local(self, name: str) -> bool:
+        return self.tv.variable_types.get(name) is not None
+
+    def is_constant(self, name: str) -> bool:
+        return self.tv.const_sig(name) is not None
+
+    def is_stdlib_constant(self, name: str) -> bool:
+        from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
+        return lookup_stdlib_constant(name, self.tv.scope) is not None
+
+    def is_function(self, name: str) -> bool:
+        return (self.tv.func_sig(name) is not None
+                or self.tv.generic_sig(name) is not None)
+
+    def is_namespace(self, name: str) -> bool:
+        return self.tv.namespaces.is_namespace(name)
+
+    def is_type(self, name: str) -> bool:
+        from sushi_lang.semantics import statics
+        return statics.names_a_type(
+            name,
+            structs=self.tv.struct_table.by_name.keys(),
+            enums=self.tv.enum_table.by_name.keys(),
+            generic_structs=self.tv.generic_struct_table.by_name.keys(),
+            generic_enums=self.tv.generic_enum_table.by_name.keys())
 
 
 def function_value_type_of(type_validator, name: str) -> Optional[Type]:
@@ -809,48 +849,65 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return tv.enum_table.by_name.get(receiver_name)
 
     def visit_name(self, node: Name) -> Optional[Type]:
-        """Infer name expression type: section 8's ladder, top to bottom."""
-        var_type = self.type_validator.variable_types.get(node.id)
-        if var_type is not None:
+        """Infer a bare name's type: section 8's ladder, from the one place it lives.
+
+        The order used to be written out a second time here, and it drifted from the
+        scope pass's at the type rung (#600). `name_ladder` holds the order now; the
+        lookups stay this pass's, because they are unit-scoped and the scope pass's are
+        not.
+        """
+        tv = self.type_validator
+        rung = classify(node.id, _InferenceRungs(tv))
+
+        if rung is BareName.LOCAL:
             from sushi_lang.semantics.typesys import ReferenceType
+            var_type = tv.variable_types[node.id]
             if isinstance(var_type, ReferenceType):
                 return var_type.referenced_type
             return var_type
 
-        const_sig = self.type_validator.const_sig(node.id)
-        if const_sig is not None:
+        if rung is BareName.CONSTANT:
             # The record keeps the DECLARED spelling, which is an `UnknownType` for a
             # struct until the declaring unit's own typecheck resolves it. A reader in
             # another unit -- the instantiate pass inferring `stdin.share()??` as a generic
             # argument -- needs the interned type, so resolve it here, the one place a
             # bare constant or unit variable is typed.
             from sushi_lang.semantics.type_resolution import resolve_unknown_type
+            const_sig = tv.const_sig(node.id)
+            if const_sig is None:
+                return None
             return resolve_unknown_type(const_sig.const_type,
-                                        self.type_validator.struct_table.by_name,
-                                        self.type_validator.enum_table.by_name)
+                                        tv.struct_table.by_name,
+                                        tv.enum_table.by_name)
 
-        # A stdlib constant a flat `use <module>` brought: below every declaration of
-        # this program and above a function value, at the rung the back end reads it
-        # (#560). It used to be asked FIRST, so `let i32 PI = 3` typed as an f64.
-        from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
-        stdlib_const = lookup_stdlib_constant(node.id, self.type_validator.scope)
-        if stdlib_const is not None:
+        if rung is BareName.STDLIB_CONSTANT:
+            # Below every declaration of this program and above a function value, at the
+            # rung the back end reads it (#560). It used to be asked FIRST, so
+            # `let i32 PI = 3` typed as an f64.
+            from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
+            stdlib_const = lookup_stdlib_constant(node.id, tv.scope)
+            if stdlib_const is None:
+                return None
             return self._materialize_stdlib_return_type(stdlib_const.get_return_type())
 
-        fn_value_type = function_value_type_of(self.type_validator, node.id)
-        if fn_value_type is not None:
-            return fn_value_type
+        if rung is BareName.FUNCTION:
+            fn_value_type = function_value_type_of(tv, node.id)
+            if fn_value_type is not None:
+                return fn_value_type
+            # A generic-fn reference with an explicit expected fn type (T2.3): solve the
+            # type args and return the concrete FunctionType (the node is rewritten to
+            # the mangled name during validation).
+            if tv.generic_sig(node.id) is not None:
+                from sushi_lang.semantics.passes.types.calls.generics import resolve_generic_fn_reference
+                resolved = resolve_generic_fn_reference(
+                    tv, node.id, getattr(node, "expected_type", None))
+                if resolved is not None:
+                    return resolved[1]
+            return None
 
-        # A generic-fn reference with an explicit expected fn type (T2.3): solve the type
-        # args and return the concrete FunctionType (the node is rewritten to the mangled
-        # name during validation).
-        if self.type_validator.generic_sig(node.id) is not None:
-            from sushi_lang.semantics.passes.types.calls.generics import resolve_generic_fn_reference
-            resolved = resolve_generic_fn_reference(
-                self.type_validator, node.id, getattr(node, "expected_type", None))
-            if resolved is not None:
-                return resolved[1]
-
+        # A NAMESPACE and a TYPE are names with no value, and NOTHING is undeclared. The
+        # scope pass has already said so -- CE2105 for a type, CE1001 for nothing -- so
+        # there is no type to infer and nothing to add here.
         return None
 
     def visit_lambda(self, node: Lambda) -> Optional[Type]:

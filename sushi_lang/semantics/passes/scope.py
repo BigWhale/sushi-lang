@@ -11,9 +11,17 @@ from sushi_lang.semantics.ast import (
     DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, Param
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
+from sushi_lang.semantics.name_ladder import BareName, classify
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import NamespaceTable
+
+# The rungs a `poke` element binding cannot write through: each is a name with no frame
+# slot of its own, so a store through it is undefined behaviour and not a diagnostic
+# (#330). A TYPE is deliberately absent -- the iterable walk answers CE2105 first.
+_NOT_A_POKE_CONTAINER: frozenset[BareName] = frozenset({
+    BareName.CONSTANT, BareName.STDLIB_CONSTANT, BareName.FUNCTION,
+})
 
 
 @dataclass
@@ -122,7 +130,7 @@ class ScopeAnalyzer:
 
     def _is_namespace(self, name: str) -> bool:
         """True if `name` names a namespace here and is not shadowed by a local."""
-        return self.namespaces.is_namespace(name) and not self._is_bound_local(name)
+        return self.is_namespace(name) and not self._is_bound_local(name)
 
     def _is_unit_variable(self, name: str) -> bool:
         """True if `name` is a `var` this unit can write, and no local shadows it."""
@@ -134,8 +142,63 @@ class ScopeAnalyzer:
 
     def _names_a_type(self, name: str) -> bool:
         """True if `name` denotes a type here, and no local shadows it (#296)."""
+        return self.is_type(name) and not self._is_bound_local(name)
+
+    def _names_an_enum(self, name: str) -> bool:
+        """True if `name` denotes an ENUM here -- the one type whose dot holds a value.
+
+        A payload-less variant is written `Color.Red` with no call, so an enum name is
+        the only type name a MEMBER position may carry.
+        """
         if self._is_bound_local(name):
             return False
+        return name in self.enums.by_name or name in self.generic_enums.by_name
+
+    # --- The rungs of section 8's ladder, as `name_ladder.Rungs` asks them. The ORDER
+    # lives in `semantics/name_ladder.py` and the lookups are this pass's own.
+
+    def is_local(self, name: str) -> bool:
+        """Row 1. It wins over every rung below, which is #296's rule."""
+        return self._is_bound_local(name)
+
+    def is_constant(self, name: str) -> bool:
+        """A `const` or a unit `var` this unit may write, plus a binary library's kept one.
+
+        A constant a BINARY library declares and keeps resolves to nothing here, and "no
+        such name" is the wrong word for a declaration the library has: the typecheck
+        pass says whose it is (CE3005) once this pass lets the name through.
+
+        Section 6: a constant of a unit this one did NOT import is not a name here, so
+        the walk that would have called it a global says CE1001 instead.
+        """
+        if name in self.kept_constants:
+            return True
+        return self.constants.lookup(name, self.namespaces.scope.unit,
+                                     self.namespaces.scope) is not None
+
+    def is_stdlib_constant(self, name: str) -> bool:
+        """A registry module's constant a flat `use <module>` brought.
+
+        It stands BELOW every declaration above it (#560): the module has to be in
+        scope, and a local, a constant or a variable of that name wins here.
+        """
+        from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
+        return lookup_stdlib_constant(name, self.namespaces.scope) is not None
+
+    def is_function(self, name: str) -> bool:
+        """A function of this program, referenced as a value.
+
+        Flat, unlike the constant rung: an out-of-scope CALL is the typecheck pass's
+        CE2008, which says which unit declares it.
+        """
+        return name in self.function_names
+
+    def is_namespace(self, name: str) -> bool:
+        """A `use ... as` alias or an `unsafe external` block's namespace."""
+        return self.namespaces.is_namespace(name)
+
+    def is_type(self, name: str) -> bool:
+        """A type name, of every kind `statics.names_a_type` knows."""
         from sushi_lang.semantics import statics
         return statics.names_a_type(
             name,
@@ -144,30 +207,36 @@ class ScopeAnalyzer:
             generic_structs=self.generic_structs.by_name.keys(),
             generic_enums=self.generic_enums.by_name.keys())
 
-    def _names_a_non_local(self, name: str) -> bool:
-        """True if `name` resolves to something that is not a variable at all."""
-        # Local-wins: a bound local shadows an enum name, a constant and a function
-        # name alike (#296) -- the same rule the EnumConstructor arm applies.
-        if self._is_bound_local(name):
-            return False
-        if name in self.enums.by_name or name in self.generic_enums.by_name:
-            return True
-        if name in self.kept_constants:
-            return True
-        # Section 6: a constant of a unit this one did not import is not a name here,
-        # so the same walk that would have called it a global says CE1001 instead. The
-        # function half stays flat -- an out-of-scope CALL is the typecheck pass's
-        # CE2008, which says which unit declares it.
-        if self.constants.lookup(name, self.namespaces.scope.unit,
-                                 self.namespaces.scope) is not None:
-            return True
-        # A stdlib constant is a name a flat `use <module>` brought, and it stands
-        # BELOW every declaration above (#560): the module has to be in scope, and a
-        # local, a constant or a variable of that name is what the name means here.
-        from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
-        if lookup_stdlib_constant(name, self.namespaces.scope) is not None:
-            return True
-        return name in self.function_names
+    def _rung_of(self, name: str) -> BareName:
+        """Which rung of section 8's ladder `name` reaches here."""
+        return classify(name, self)
+
+    def _reject_type_as_value(self, name: str, span: Optional[Span]) -> None:
+        """CE2105: a type name where a value belongs, with the spelling that IS one.
+
+        This is the rung that used to answer nothing at all. An enum name reached the
+        emitter and read CE0055, which blames the compiler for the user's typo; a struct
+        name read CE1001, which calls a declared type undeclared (#600).
+        """
+        diagnostic = self.err.emit_with(er.ERR.CE2105, span, name=name)
+        help_line = self._value_of_type_help(name)
+        if help_line is not None:
+            diagnostic = diagnostic.help(help_line)
+        diagnostic.emit()
+
+    def _value_of_type_help(self, name: str) -> Optional[str]:
+        """How a value of this type IS written, or None when nothing useful can be said."""
+        enum_type = self.enums.by_name.get(name) or self.generic_enums.by_name.get(name)
+        if enum_type is not None:
+            variants = getattr(enum_type, "variants", ())
+            if variants:
+                return (f"a value of an enum is one of its variants: "
+                        f"`{name}.{variants[0].name}`")
+            return "a value of an enum is one of its variants"
+        if name in self.structs.by_name or name in self.generic_structs.by_name:
+            return (f"a value of a struct is a construction or a static: "
+                    f"`{name}(...)`")
+        return None
 
     def _use_variable(self, name: str, usage_span: Optional[Span] = None, is_rebind: bool = False) -> None:
         """Mark a variable as used, searching through scope stack."""
@@ -229,10 +298,16 @@ class ScopeAnalyzer:
 
         if self._is_unit_variable(name):
             return  # storage with an address: borrowable like a local (unit-storage.md)
-        if self._names_a_non_local(name) or self._is_namespace(name):
-            self.err.emit(er.ERR.CE2400, usage_span, name=name)
-        else:
+        rung = self._rung_of(name)
+        if rung is BareName.TYPE:
+            # The same ladder the value position walks (#600). A type name reached
+            # CE2400 for an enum and CE1001 for a struct, and neither is the fault:
+            # nothing about a type name would be borrowable if it were a local.
+            self._reject_type_as_value(name, usage_span)
+        elif rung is BareName.NOTHING:
             self.err.emit(er.ERR.CE1001, usage_span, name=name)
+        else:
+            self.err.emit(er.ERR.CE2400, usage_span, name=name)
 
     def _record_capture(self, name: str, resolved_index: int, span: Optional[Span]) -> None:
         """Record `name` as a capture for every enclosing lambda it is free in."""
@@ -402,13 +477,16 @@ class ScopeAnalyzer:
         # A `poke` element binding writes through a pointer into the container's storage,
         # so the container must be a LOCAL: a constant lives in `.rodata`, where a store is
         # undefined behaviour rather than a diagnostic. This pass owns "what kind of name is
-        # this" (#330), so the rejection is CE2400.
+        # this" (#330), so the rejection is CE2400. A TYPE name is not in the set: the
+        # walk above already read the iterable and said CE2105 about it, and one fault
+        # gets one diagnostic.
         if stmt.item_borrow == "poke":
             root = stmt.iterable
             from sushi_lang.semantics.ast import DotCall as _DotCall, MethodCall as _MethodCall
             while isinstance(root, (_DotCall, _MethodCall)):
                 root = root.receiver
-            if (isinstance(root, Name) and self._names_a_non_local(root.id)
+            if (isinstance(root, Name)
+                    and self._rung_of(root.id) in _NOT_A_POKE_CONTAINER
                     and not self._is_unit_variable(root.id)):
                 self.err.emit(er.ERR.CE2400, stmt.item_borrow_span or stmt.loc,
                               name=root.id)
@@ -494,10 +572,16 @@ class ScopeAnalyzer:
         """Check an expression for variable usage."""
         match expr:
             case Name():
-                if self._names_a_non_local(expr.id):
-                    pass
-                else:
-                    self._use_variable(expr.id, expr.loc)
+                # A bare name in a VALUE position: the receiver arms below take the
+                # written-name positions, so section 8's ladder answers here (#600).
+                rung = self._rung_of(expr.id)
+                if rung is BareName.LOCAL or rung is BareName.NOTHING:
+                    self._use_variable(expr.id, expr.loc)   # CE1001 when it is NOTHING
+                elif rung is BareName.TYPE:
+                    self._reject_type_as_value(expr.id, expr.loc)
+                # A constant, a stdlib constant, a function value and a namespace are
+                # all names with no frame slot: not a variable, and not undeclared. The
+                # typecheck pass types the three that are values.
             case IntLit() | FloatLit() | BoolLit() | StringLit():
                 pass
             case InterpolatedString():
@@ -523,9 +607,10 @@ class ScopeAnalyzer:
                 for arg in expr.args:
                     self._check_expression(arg)
             case MethodCall():
-                # An enum type name as receiver (`Result.Ok()`) is a constructor, not a
-                # method call, so the name must not be treated as a variable.
-                if isinstance(expr.receiver, Name) and (expr.receiver.id in self.enums.by_name or expr.receiver.id in self.generic_enums.by_name):
+                # A TYPE name as receiver is a written-name position, not a value: the
+                # call is a variant construction (`Result.Ok()`) or a static. The same
+                # test the DotCall arm below applies, and for the same reason.
+                if isinstance(expr.receiver, Name) and self._names_a_type(expr.receiver.id):
                     pass
                 else:
                     self._check_expression(expr.receiver)
@@ -565,10 +650,18 @@ class ScopeAnalyzer:
             case CastExpr():
                 self._check_expression(expr.expr)
             case MemberAccess():
-                # `geo.MAX_DEPTH` reads a namespace, not a variable. A local named
-                # `geo` wins, which is what `_is_namespace` asks.
+                # Two written-name receivers, and neither is a value. `geo.MAX_DEPTH`
+                # reads a namespace; `Color.Red` names a payload-less VARIANT, which is
+                # the position CE2105 must not reach. A local named `geo` or `Color`
+                # wins, which is what both tests ask.
+                #
+                # Only an ENUM name, and not every type name: a struct's dot in a
+                # MEMBER position reaches nothing at all -- a field needs an instance
+                # and a static needs a call -- so `Point.x` is a value position after
+                # all, and letting it through reached the emitter as CE0056.
                 if not (isinstance(expr.receiver, Name)
-                        and self._is_namespace(expr.receiver.id)):
+                        and (self._is_namespace(expr.receiver.id)
+                             or self._names_an_enum(expr.receiver.id))):
                     self._check_expression(expr.receiver)
             case EnumConstructor():
                 # The AST builder parses both `Result.Ok(42)` and `x.realise(0)` as an

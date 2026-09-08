@@ -1,0 +1,11 @@
+# The green mirror for row 1 of section 8's ladder: a local named after a type shadows
+# the type name, so it is an ordinary variable read and no diagnostic at all (#296).
+# EXPECT_STDOUT_EXACT: "7\n"
+enum Color:
+    Red
+    Blue
+
+fn main() i32:
+    let i32 Color = 7
+    println("{Color}")
+    return Result.Ok(0)
