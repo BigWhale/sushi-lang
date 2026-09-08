@@ -1,0 +1,17 @@
+# The same rule for a generic ENUM variant in a lambda's expression body (#625). A
+# payload gives no answer either: `Maybe.Some("towel {n}")` inferred nothing, and the
+# lambda answered fn(i32) -> None.
+# EXPECT_STDOUT_EXACT: "towel 42\nnone\n"
+# EXPECT_NO_LEAKS: true
+fn show() i32:
+    let fn(i32) -> Maybe@(string) f = |i32 n| Maybe.Some("towel {n}")
+    let Maybe@(string) some = f(42)??
+    println(some.realise("none"))
+
+    let fn() -> Maybe@(string) g = |~| Maybe.None
+    let Maybe@(string) none = g()??
+    println(none.realise("none"))
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(show().realise(1))

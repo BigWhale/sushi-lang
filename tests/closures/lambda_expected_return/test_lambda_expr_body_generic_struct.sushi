@@ -1,0 +1,21 @@
+# The declared function type gives a lambda's EXPRESSION body its return type, so a
+# generic struct constructor in that body knows which instantiation it builds (#625).
+# The body used to be typed alone: the constructor read as an undefined function
+# (CE2008) and the lambda answered fn(i32) -> None.
+# EXPECT_STDOUT_EXACT: "towel 42\n7\n"
+# EXPECT_NO_LEAKS: true
+struct Box@(T):
+    T item
+
+fn show() i32:
+    let fn(i32) -> Box@(string) f = |i32 n| Box("towel {n}")
+    let Box@(string) b = f(42)??
+    println(b.item)
+
+    let fn(i32) -> Box@(i32) g = |i32 n| Box(n)
+    let Box@(i32) c = g(7)??
+    println("{c.item}")
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(show().realise(1))

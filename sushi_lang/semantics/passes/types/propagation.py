@@ -333,9 +333,16 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
     # Hand a lambda its expected FunctionType so bare-name params (`|x|`) infer, and a
     # bare Name its expected fn type so a generic-fn reference can solve its type args.
     from sushi_lang.semantics.typesys import FunctionType as _FunctionType
-    from sushi_lang.semantics.ast import Lambda as _Lambda, Name as _Name
+    from sushi_lang.semantics.ast import Block as _Block, Lambda as _Lambda, Name as _Name
     if isinstance(expected_type, _FunctionType) and isinstance(value_expr, (_Lambda, _Name)):
         value_expr.expected_type = expected_type
+        # An EXPRESSION body sits in the declared RETURN position, as a block body's
+        # `return` does. Typed alone it built no instantiation, so the lambda answered
+        # `fn(...) -> None` (#625). The DECLARED entry, because a parameter of function
+        # type holds the spelling: `fn(i32) -> Box@(i32)` resolves first (#387).
+        body = value_expr.body if isinstance(value_expr, _Lambda) else None
+        if body is not None and not isinstance(body, _Block) and expected_type.ok_type is not None:
+            propagate_declared_type_to_value(validator, body, expected_type.ok_type)
         return
 
     # Generic enum propagation -- Result, Maybe, Either, user-defined. Result used to have a
