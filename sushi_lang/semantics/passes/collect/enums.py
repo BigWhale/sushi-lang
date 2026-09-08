@@ -11,6 +11,7 @@ from sushi_lang.internals.errors import ERR
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.structs import StructTable, GenericStructTable
 from sushi_lang.semantics.ast import EnumDef, Program, BoundedTypeParam
+from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.typesys import (
     Type,
     BuiltinType,
@@ -38,6 +39,12 @@ class EnumTable:
     # The unit each span is in, keyed alike: a duplicate is reported while ANOTHER
     # unit is being collected, so the note has to name this file (#473).
     files: Dict[str, Optional[str]] = field(default_factory=dict)
+    # This compilation's auto-derived hash() and clone() (#601), read by name as
+    # `SymbolTables.derived_methods`. It is stored HERE because the interning seams for
+    # `Result` and `Maybe` derive a hash the moment they intern the enum and hold only
+    # this table -- so the alternative was a parameter on all 33 of their call sites.
+    derived: DerivedMethodTable = field(default_factory=DerivedMethodTable,
+                                        compare=False, repr=False)
 
 
 @dataclass

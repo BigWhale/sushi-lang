@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.passes.types.method_registry import (
     check_struct_enum_builtin_methods,
 )
@@ -63,10 +64,16 @@ fn main() i32:
 
 
 class _FakeValidator:
-    """Minimal stand-in carrying only what the checker's guards consult."""
+    """Minimal stand-in carrying only what the checker's guards consult.
 
-    def __init__(self, perk_impl_table=None):
+    `derived_methods` is one compilation's auto-derived pair (#601), so a case that
+    asserts a claim hands over the table its own analysis produced; the default empty
+    one is what a compilation that declared nothing looks like.
+    """
+
+    def __init__(self, perk_impl_table=None, derived_methods=None):
         self.perk_impl_table = perk_impl_table or _EmptyPerkTable()
+        self.derived_methods = derived_methods or DerivedMethodTable()
 
 
 class _EmptyPerkTable:
@@ -92,42 +99,49 @@ def _infer(receiver_type, method_name, validator=None):
     return inferrer.infer_return_type()
 
 
+def _analysed(analyze_program, src, ty):
+    """A type plus the validator holding the analysis that derived its methods."""
+    analysis = analyze_program(src)
+    return ty, _FakeValidator(derived_methods=analysis.analyzer.tables.derived_methods)
+
+
 @pytest.fixture
-def struct_p(analyze):
+def struct_p(analyze_program):
     """The StructType `P` after a full analysis (so the derive pass has run)."""
-    analyze(STRUCT_SRC)
-    return StructType(name="P", fields=())
+    return _analysed(analyze_program, STRUCT_SRC, StructType(name="P", fields=()))
 
 
 @pytest.fixture
-def enum_colour(analyze):
-    analyze(ENUM_SRC)
-    return EnumType(name="Colour", variants=())
+def enum_colour(analyze_program):
+    return _analysed(analyze_program, ENUM_SRC, EnumType(name="Colour", variants=()))
 
 
 def test_hash_infers_u64(struct_p):
-    assert _infer(struct_p, "hash") is BuiltinType.U64
+    ty, validator = struct_p
+    assert _infer(ty, "hash", validator) is BuiltinType.U64
 
 
 def test_clone_infers_the_receiver_type(struct_p):
-    assert _infer(struct_p, "clone") == struct_p
+    ty, validator = struct_p
+    assert _infer(ty, "clone", validator) == ty
 
 
 def test_enum_hash_infers_u64(enum_colour):
-    assert _infer(enum_colour, "hash") is BuiltinType.U64
+    ty, validator = enum_colour
+    assert _infer(ty, "hash", validator) is BuiltinType.U64
 
 
 def test_enum_clone_infers_the_receiver_type(enum_colour):
-    assert _infer(enum_colour, "clone") == enum_colour
+    ty, validator = enum_colour
+    assert _infer(ty, "clone", validator) == ty
 
 
 def test_declines_an_unregistered_method(struct_p):
     """Only a registered (type, name) may be claimed -- otherwise the extension table and the
     CE2008 unknown-method path would be shadowed.
     """
-    assert check_struct_enum_builtin_methods(
-        struct_p, "not_a_builtin", _FakeValidator()
-    ) is None
+    ty, validator = struct_p
+    assert check_struct_enum_builtin_methods(ty, "not_a_builtin", validator) is None
 
 
 def test_declines_a_type_with_no_builtins_at_all():
@@ -143,33 +157,34 @@ def test_declines_a_non_struct_receiver():
 
 
 @pytest.mark.parametrize("name", ["Own<i32>", "List<i32>", "HashMap<i32, i32>"])
-def test_declines_container_receivers(analyze, name):
+def test_declines_container_receivers(analyze_program, name):
     """Own/List/HashMap are named StructTypes but keep their own method paths."""
-    analyze(CONTAINER_SRC)
+    analysis = analyze_program(CONTAINER_SRC)
+    validator = _FakeValidator(derived_methods=analysis.analyzer.tables.derived_methods)
     assert check_struct_enum_builtin_methods(
-        StructType(name=name, fields=()), "hash", _FakeValidator()
+        StructType(name=name, fields=()), "hash", validator
     ) is None
     assert check_struct_enum_builtin_methods(
-        StructType(name=name, fields=()), "clone", _FakeValidator()
+        StructType(name=name, fields=()), "clone", validator
     ) is None
 
 
-def test_list_monomorph_really_does_carry_a_registered_hash(analyze):
+def test_list_monomorph_really_does_carry_a_registered_hash(analyze_program):
     """The premise behind the container guard, pinned so it cannot silently change."""
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
+    analysis = analyze_program(CONTAINER_SRC)
+    derived = analysis.analyzer.tables.derived_methods
+    assert derived.get_method(StructType(name="List<i32>", fields=()), "hash") is not None
 
-    analyze(CONTAINER_SRC)
-    assert get_builtin_method(StructType(name="List<i32>", fields=()), "hash") is not None
 
-
-def test_declines_when_a_perk_impl_of_that_name_exists(analyze):
+def test_declines_when_a_perk_impl_of_that_name_exists(analyze_program):
     """Perk methods win at codegen (dispatcher step 12, before step 13), so inference must let them
     win too -- otherwise the typecheck pass would type the call as the auto-derived u64 while the backend
     emitted the perk body.
     """
-    analyze(PERK_SRC)
+    analysis = analyze_program(PERK_SRC)
     point = StructType(name="Point", fields=())
-    validator = _FakeValidator(_PerkTableWith({"hash"}))
+    validator = _FakeValidator(_PerkTableWith({"hash"}),
+                               analysis.analyzer.tables.derived_methods)
     assert check_struct_enum_builtin_methods(point, "hash", validator) is None
     # A name the perk does NOT implement is still claimed.
     assert _infer(point, "clone", validator) == point

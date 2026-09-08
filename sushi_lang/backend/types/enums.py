@@ -126,79 +126,21 @@ def _emit_associated_value_hash(codegen: Any, value: ir.Value, value_type: Type)
     require_builder(codegen)
     if isinstance(value_type, BuiltinType):
         import sushi_lang.backend.types.primitives.hashing  # noqa: F401
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-
-        hash_method = get_builtin_method(value_type, "hash")
-        if hash_method is None:
-            raise_internal_error("CE0051", type=str(value_type))
-
-        fake_call = MethodCall(
-            receiver=Name(id="value", loc=(0, 0)),
-            method="hash",
-            args=[],
-            loc=(0, 0)
-        )
-
-        return hash_method.llvm_emitter(
-            codegen, fake_call, value, value.type, False
-        )
-
-    elif isinstance(value_type, StructType):
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-
-        hash_method = get_builtin_method(value_type, "hash")
-        if hash_method is None:
-            raise_internal_error("CE0051", type=str(value_type))
-
-        fake_call = MethodCall(
-            receiver=Name(id="value", loc=(0, 0)),
-            method="hash",
-            args=[],
-            loc=(0, 0)
-        )
-
-        return hash_method.llvm_emitter(
-            codegen, fake_call, value, value.type, False
-        )
-
-    elif isinstance(value_type, EnumType):
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-
-        hash_method = get_builtin_method(value_type, "hash")
-        if hash_method is None:
-            raise_internal_error("CE0051", type=str(value_type))
-
-        fake_call = MethodCall(
-            receiver=Name(id="value", loc=(0, 0)),
-            method="hash",
-            args=[],
-            loc=(0, 0)
-        )
-
-        return hash_method.llvm_emitter(
-            codegen, fake_call, value, value.type, False
-        )
-
-    elif isinstance(value_type, (ArrayType, DynamicArrayType)):
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-
-        hash_method = get_builtin_method(value_type, "hash")
-        if hash_method is None:
-            raise_internal_error("CE0051", type=str(value_type))
-
-        fake_call = MethodCall(
-            receiver=Name(id="value", loc=(0, 0)),
-            method="hash",
-            args=[],
-            loc=(0, 0)
-        )
-
-        return hash_method.llvm_emitter(
-            codegen, fake_call, value, value.type, False
-        )
-
-    else:
+    elif not isinstance(value_type, (StructType, EnumType, ArrayType, DynamicArrayType)):
         raise_internal_error("CE0052", type=str(value_type))
+
+    hash_method = codegen.derived_methods.get_method(value_type, "hash")
+    if hash_method is None:
+        raise_internal_error("CE0051", type=str(value_type))
+
+    fake_call = MethodCall(
+        receiver=Name(id="value", loc=(0, 0)),
+        method="hash",
+        args=[],
+        loc=(0, 0)
+    )
+
+    return hash_method.llvm_emitter(codegen, fake_call, value, value.type, False)
 
 
 register_hash_emitter_factory("enum", _emit_enum_hash)

@@ -578,6 +578,28 @@ for element in elements:
 return hash
 ```
 
+### Where a derived method lives
+
+The pass writes each method into `SymbolTables.derived_methods`, which belongs to ONE
+compilation (#601). It has to: the method closes over the type it was derived for, type
+identity is nominal, and two programs compiled in one process that each declare a `Point`
+name one key -- so a module-level table handed the second program the first one's emitter,
+closed over the first one's fields, and the first one's answer to "can this be hashed".
+Any host that compiles twice in a process reaches that, the pytest layer and a future
+language server included.
+
+The table is stored on `EnumTable.derived` and read by name everywhere else
+(`SymbolTables.derived_methods`, `TypeValidator.derived_methods`,
+`LLVMCodegen.derived_methods`). The enum table is the carrier because the `Result` and
+`Maybe` interning seams derive a hash the moment they intern an enum and hold only that
+table; every other reader already holds a validator or a codegen.
+
+A lookup that finds nothing falls through to `builtin_registry`, the process-wide table
+of what the compiler defines for EVERY program -- `hash`, `to_str`, `to_bits` and `clone`
+on the primitives, registered once at import time from
+`backend/types/primitives/`. Those emitters close over a `BuiltinType` and nothing a
+program can change, so one table serves the process.
+
 ### Limitations
 
 Nested arrays cannot be hashed (type system constraint).

@@ -602,15 +602,13 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     # kinds are disjoint, so the order is arbitrary; stating ONE order in both layers
     # is the point (#273), and tests/unit/test_method_resolution_family_order.py pins it.
     if isinstance(receiver_type, StructType) and call.method == "hash":
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-        struct_hash_method = get_builtin_method(receiver_type, "hash")
+        struct_hash_method = validator.derived_methods.get_method(receiver_type, "hash")
         if struct_hash_method is not None:
             struct_hash_method.semantic_validator(call, receiver_type, validator.reporter)
             return
 
     if isinstance(receiver_type, EnumType) and call.method == "hash":
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-        enum_hash_method = get_builtin_method(receiver_type, "hash")
+        enum_hash_method = validator.derived_methods.get_method(receiver_type, "hash")
         if enum_hash_method is not None:
             enum_hash_method.semantic_validator(call, receiver_type, validator.reporter)
             return
@@ -621,8 +619,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     # Check for auto-derived struct/enum clone (#134) - AFTER perks. Own/List/HashMap
     # named structs keep their own method paths and are not registered here.
     if isinstance(receiver_type, (StructType, EnumType)) and call.method == "clone":
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-        clone_method = get_builtin_method(receiver_type, "clone")
+        clone_method = validator.derived_methods.get_method(receiver_type, "clone")
         if clone_method is not None:
             clone_method.semantic_validator(call, receiver_type, validator.reporter)
             return
@@ -721,7 +718,7 @@ def _method_exists_on(validator: 'TypeValidator', payload, method_name: str) -> 
     from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
     from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
 
-    if builtin_method_exists(payload, method_name):
+    if builtin_method_exists(payload, method_name, validator.derived_methods):
         return True
     if validator.extension_table.get_method(payload, method_name) is not None:
         return True

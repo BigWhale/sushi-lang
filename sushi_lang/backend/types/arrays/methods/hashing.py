@@ -8,7 +8,7 @@ from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
-from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory, get_builtin_method
+from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
 from sushi_lang.backend.memory.allocas import entry_alloca
 
@@ -139,56 +139,23 @@ def _emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type
             return _emit_string_hash_fnv1a(codegen, element_value)
 
         import sushi_lang.backend.types.primitives.hashing  # noqa: F401
-
-        hash_method = get_builtin_method(element_type, "hash")
-        if hash_method is None:
-            raise_internal_error("CE0051", type=str(element_type))
-
-        fake_call = MethodCall(
-            receiver=Name(id="element", loc=(0, 0)),
-            method="hash",
-            args=[],
-            loc=(0, 0)
-        )
-
-        return hash_method.llvm_emitter(
-            codegen, fake_call, element_value, element_value.type, False
-        )
-
-    elif isinstance(element_type, StructType):
-        hash_method = get_builtin_method(element_type, "hash")
-        if hash_method is None:
-            raise_internal_error("CE0051", type=str(element_type))
-
-        fake_call = MethodCall(
-            receiver=Name(id="element", loc=(0, 0)),
-            method="hash",
-            args=[],
-            loc=(0, 0)
-        )
-
-        return hash_method.llvm_emitter(
-            codegen, fake_call, element_value, element_value.type, False
-        )
-
-    elif isinstance(element_type, EnumType):
-        hash_method = get_builtin_method(element_type, "hash")
-        if hash_method is None:
-            raise_internal_error("CE0051", type=str(element_type))
-
-        fake_call = MethodCall(
-            receiver=Name(id="element", loc=(0, 0)),
-            method="hash",
-            args=[],
-            loc=(0, 0)
-        )
-
-        return hash_method.llvm_emitter(
-            codegen, fake_call, element_value, element_value.type, False
-        )
-
-    else:
+    elif not isinstance(element_type, (StructType, EnumType)):
         raise_internal_error("CE0052", type=str(element_type))
+
+    hash_method = codegen.derived_methods.get_method(element_type, "hash")
+    if hash_method is None:
+        raise_internal_error("CE0051", type=str(element_type))
+
+    fake_call = MethodCall(
+        receiver=Name(id="element", loc=(0, 0)),
+        method="hash",
+        args=[],
+        loc=(0, 0)
+    )
+
+    return hash_method.llvm_emitter(
+        codegen, fake_call, element_value, element_value.type, False
+    )
 
 
 def emit_fixed_array_hash_direct(codegen: Any, expr: Any, array_ptr: ir.Value,

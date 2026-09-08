@@ -4,6 +4,7 @@ from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.generics.hashing import can_struct_be_hashed, register_struct_hash_method
 from sushi_lang.semantics.generics.hashing import can_enum_be_hashed, register_enum_hash_method
 from sushi_lang.semantics.generics.hashing import can_array_be_hashed, register_array_hash_method
+from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, DynamicArrayType, Type
 from collections import defaultdict, deque
 from typing import List, Set, Dict
@@ -12,7 +13,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 
 
-def register_all_struct_hashes(struct_table: StructTable) -> None:
+def register_all_struct_hashes(struct_table: StructTable,
+                               derived: DerivedMethodTable) -> None:
     """Register hash methods for all hashable structs in dependency order."""
     sorted_structs = topological_sort_structs(struct_table)
 
@@ -20,7 +22,7 @@ def register_all_struct_hashes(struct_table: StructTable) -> None:
         struct_type = struct_table.by_name[struct_name]
         can_hash, _reason = can_struct_be_hashed(struct_type)
         if can_hash:
-            register_struct_hash_method(struct_type)
+            register_struct_hash_method(struct_type, derived)
 
 
 def topological_sort_structs(struct_table: StructTable) -> List[str]:
@@ -65,7 +67,8 @@ def topological_sort_structs(struct_table: StructTable) -> List[str]:
     return result
 
 
-def register_all_enum_hashes(enum_table: EnumTable, reporter: Reporter) -> None:
+def register_all_enum_hashes(enum_table: EnumTable, derived: DerivedMethodTable,
+                             reporter: Reporter) -> None:
     """Register hash methods for all hashable enums in dependency order."""
     sorted_enums = topological_sort_enums(enum_table, reporter)
 
@@ -73,7 +76,7 @@ def register_all_enum_hashes(enum_table: EnumTable, reporter: Reporter) -> None:
         enum_type = enum_table.by_name[enum_name]
         can_hash, _reason = can_enum_be_hashed(enum_type)
         if can_hash:
-            register_enum_hash_method(enum_type)
+            register_enum_hash_method(enum_type, derived)
 
 
 def topological_sort_enums(enum_table: EnumTable, reporter: Reporter) -> List[str]:
@@ -208,17 +211,19 @@ def collect_array_types(struct_table: StructTable, enum_table: EnumTable) -> Set
     return array_types
 
 
-def register_all_array_hashes(struct_table: StructTable, enum_table: EnumTable) -> None:
+def register_all_array_hashes(struct_table: StructTable, enum_table: EnumTable,
+                              derived: DerivedMethodTable) -> None:
     """Register hash methods for all hashable array types."""
     array_types = collect_array_types(struct_table, enum_table)
 
     for array_type in array_types:
         can_hash, _reason = can_array_be_hashed(array_type)
         if can_hash:
-            register_array_hash_method(array_type)
+            register_array_hash_method(array_type, derived)
 
 
-def register_all_clones(struct_table: StructTable, enum_table: EnumTable) -> None:
+def register_all_clones(struct_table: StructTable, enum_table: EnumTable,
+                        derived: DerivedMethodTable) -> None:
     """Auto-derive clone() for every struct and enum (#134).
 
     No ordering constraint -- the clone emitter resolves nested and recursive types at
@@ -229,8 +234,8 @@ def register_all_clones(struct_table: StructTable, enum_table: EnumTable) -> Non
     )
 
     for struct_type in struct_table.by_name.values():
-        register_struct_clone_method(struct_type)
+        register_struct_clone_method(struct_type, derived)
 
     for enum_type in enum_table.by_name.values():
-        register_enum_clone_method(enum_type)
+        register_enum_clone_method(enum_type, derived)
 

@@ -81,6 +81,9 @@ class TypeValidator:
         self.generic_func_table = tables.generic_funcs
         self.perk_table = tables.perks
         self.perk_impl_table = tables.perk_impls
+        # This program's auto-derived hash() and clone(), and the process-wide built-ins
+        # behind them: one lookup answers both (#601).
+        self.derived_methods = tables.derived_methods
         # The types that implement `Drop`, for `owns_resource` (ruling R2a). A property
         # rather than a snapshot: a later unit may add an implementation, and a stale
         # set here would classify a handle PLAIN.

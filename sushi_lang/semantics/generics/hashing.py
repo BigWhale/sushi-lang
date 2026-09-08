@@ -19,11 +19,10 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.sushi_stdlib.src.common import (
     BuiltinMethod,
-    get_builtin_method,
     get_hash_emitter_factory,
-    register_builtin_method,
 )
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -237,12 +236,13 @@ def _lazy_hash_emitter(kind: str, target_type: Type):
     return emit
 
 
-def _register_hash_method(target_type: Type, kind: str, validator, description: str) -> None:
+def _register_hash_method(target_type: Type, derived: DerivedMethodTable, kind: str,
+                          validator, description: str) -> None:
     """Register the auto-derived hash() method for a type."""
-    if get_builtin_method(target_type, "hash") is not None:
+    if derived.get_method(target_type, "hash") is not None:
         return  # Already registered
 
-    register_builtin_method(
+    derived.register_method(
         target_type,
         BuiltinMethod(
             name="hash",
@@ -255,7 +255,8 @@ def _register_hash_method(target_type: Type, kind: str, validator, description: 
     )
 
 
-def register_struct_hash_method(struct_type: StructType) -> None:
+def register_struct_hash_method(struct_type: StructType,
+                                derived: DerivedMethodTable) -> None:
     """Register the auto-derived hash() method for a hashable struct type.
 
     The CALLER decides and this one acts. Every one of the six call sites already asks
@@ -263,28 +264,30 @@ def register_struct_hash_method(struct_type: StructType) -> None:
     second of two exponential walks per type (#598).
     """
     _register_hash_method(
-        struct_type, "struct", _validate_struct_hash,
+        struct_type, derived, "struct", _validate_struct_hash,
         f"Auto-derived hash for struct {struct_type}",
     )
 
 
-def register_enum_hash_method(enum_type: EnumType) -> None:
+def register_enum_hash_method(enum_type: EnumType,
+                              derived: DerivedMethodTable) -> None:
     """Register the auto-derived hash() method for a hashable enum type.
 
     The caller decides; see `register_struct_hash_method`.
     """
     _register_hash_method(
-        enum_type, "enum", _validate_enum_hash,
+        enum_type, derived, "enum", _validate_enum_hash,
         f"Auto-derived hash for enum {enum_type}",
     )
 
 
-def register_array_hash_method(array_type: Type) -> None:
+def register_array_hash_method(array_type: Type,
+                               derived: DerivedMethodTable) -> None:
     """Register the auto-derived hash() method for a hashable array type.
 
     The caller decides; see `register_struct_hash_method`.
     """
     _register_hash_method(
-        array_type, "array", _validate_array_hash,
+        array_type, derived, "array", _validate_array_hash,
         f"Auto-derived hash for array {array_type}",
     )

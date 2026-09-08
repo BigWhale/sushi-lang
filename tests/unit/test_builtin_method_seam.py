@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
 from sushi_lang.semantics.typesys import (
     ArrayType,
@@ -22,7 +23,7 @@ VALIDATION = SOURCE_ROOT / "semantics" / "passes" / "types" / "calls" / "methods
 
 # How a built-in family is recognised in either file.
 FAMILY_PREDICATE = re.compile(
-    r"\b(is_builtin_\w+_method|has_primitive_method|get_builtin_method)\b"
+    r"\b(is_builtin_\w+_method|has_primitive_method|derived_methods)\b"
 )
 
 # Families validate_method_call consults that the seam deliberately does not.
@@ -69,6 +70,11 @@ def _list(elem="i32"):
     return StructType(name=f"List<{elem}>", fields=())
 
 
+# The auto-derived pair is one COMPILATION's (#601); every other family is the
+# compiler's, so an empty table is the right stand-in for those cases.
+NOTHING_DERIVED = DerivedMethodTable()
+
+
 @pytest.mark.parametrize("receiver,method", [
     (DynamicArrayType(base_type=BuiltinType.I32), "len"),
     (ArrayType(base_type=BuiltinType.I32, size=3), "get"),
@@ -85,7 +91,7 @@ def _list(elem="i32"):
     (_list(), "push"),
 ])
 def test_recognised(receiver, method):
-    assert builtin_method_exists(receiver, method) is True
+    assert builtin_method_exists(receiver, method, NOTHING_DERIVED) is True
 
 
 @pytest.mark.parametrize("receiver,method", [
@@ -106,18 +112,19 @@ def test_recognised(receiver, method):
     (None, "hash"),
 ])
 def test_not_recognised(receiver, method):
-    assert builtin_method_exists(receiver, method) is False
+    assert builtin_method_exists(receiver, method, NOTHING_DERIVED) is False
 
 
 def test_reference_receivers_unwrap():
     """Methods on &T are the methods on T, so a borrow must not hide a collision."""
     arr = DynamicArrayType(base_type=BuiltinType.I32)
-    assert builtin_method_exists(ReferenceType(referenced_type=arr), "len")
+    assert builtin_method_exists(ReferenceType(referenced_type=arr), "len",
+                                 NOTHING_DERIVED)
 
 
-def test_struct_auto_derived_pair_is_recognised(analyze):
-    """The one registry-backed family -- registered from semantics in the derive pass."""
-    analyze("""
+def test_struct_auto_derived_pair_is_recognised(analyze_program):
+    """The one table-backed family -- registered from semantics in the derive pass."""
+    analysis = analyze_program("""
 struct P:
     i32 x
 
@@ -127,6 +134,11 @@ fn main() i32:
     return Result.Ok(0)
 """)
     point = StructType(name="P", fields=())
-    assert builtin_method_exists(point, "hash") is True
-    assert builtin_method_exists(point, "clone") is True
-    assert builtin_method_exists(point, "describe") is False
+    derived = analysis.analyzer.tables.derived_methods
+    assert builtin_method_exists(point, "hash", derived) is True
+    assert builtin_method_exists(point, "clone", derived) is True
+    assert builtin_method_exists(point, "describe", derived) is False
+
+    # And the same names on the same type are unknown to a compilation that never
+    # declared it -- the leak #601 closed.
+    assert builtin_method_exists(point, "hash", NOTHING_DERIVED) is False

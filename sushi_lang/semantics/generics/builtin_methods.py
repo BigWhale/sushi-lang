@@ -1,6 +1,7 @@
 """One answer to "does the compiler already define this method on this type?"."""
 from __future__ import annotations
 
+from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.typesys import (
     ArrayType,
     BuiltinType,
@@ -12,14 +13,14 @@ from sushi_lang.semantics.typesys import (
     Type,
 )
 
-def _struct_enum_derived(receiver_type: Type, method_name: str) -> bool:
-    """The derive pass's auto-derived pair (hash, clone), read from the registry."""
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    return get_builtin_method(receiver_type, method_name) is not None
 
+def builtin_method_exists(receiver_type: Type | None, method_name: str,
+                          derived_methods: DerivedMethodTable) -> bool:
+    """Is `method_name` a compiler-defined method on `receiver_type`?
 
-def builtin_method_exists(receiver_type: Type | None, method_name: str) -> bool:
-    """Is `method_name` a compiler-defined method on `receiver_type`?"""
+    `derived_methods` is the COMPILATION's auto-derived pair (hash, clone) -- one program's
+    `Point` is not another's, however alike the two names look (#601).
+    """
     if receiver_type is None:
         return False
 
@@ -57,7 +58,7 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str) -> bool:
             from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method
             if is_builtin_maybe_method(method_name):
                 return True
-        return _struct_enum_derived(receiver_type, method_name)
+        return derived_methods.get_method(receiver_type, method_name) is not None
 
     if isinstance(receiver_type, StructType):
         if receiver_type.name.startswith("Own<"):
@@ -75,6 +76,6 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str) -> bool:
         # A container still carries the auto-derived hash (the derive pass's registration has no
         # container exclusion), and codegen's auto-derived step precedes the extension
         # fallback -- so an extension of that name would be dead there too.
-        return _struct_enum_derived(receiver_type, method_name)
+        return derived_methods.get_method(receiver_type, method_name) is not None
 
     return False

@@ -7,11 +7,10 @@ from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import EnumType, StructType, Type
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.sushi_stdlib.src.common import (
     BuiltinMethod,
-    get_builtin_method,
     get_clone_emitter_factory,
-    register_builtin_method,
 )
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -48,12 +47,13 @@ def _lazy_clone_emitter(kind: str, target_type: Type):
     return emit
 
 
-def _register_clone_method(target_type: Type, kind: str, validator, description: str) -> None:
+def _register_clone_method(target_type: Type, derived: DerivedMethodTable, kind: str,
+                           validator, description: str) -> None:
     """Register the auto-derived clone() method for a type."""
-    if get_builtin_method(target_type, "clone") is not None:
+    if derived.get_method(target_type, "clone") is not None:
         return  # Already registered
 
-    register_builtin_method(
+    derived.register_method(
         target_type,
         BuiltinMethod(
             name="clone",
@@ -66,19 +66,21 @@ def _register_clone_method(target_type: Type, kind: str, validator, description:
     )
 
 
-def register_struct_clone_method(struct_type: StructType) -> None:
+def register_struct_clone_method(struct_type: StructType,
+                                 derived: DerivedMethodTable) -> None:
     """Register the auto-derived clone() method for a user struct type."""
     if struct_type.name.startswith(CONTAINER_PREFIXES):
         return  # Own/List/HashMap keep their own method paths
     _register_clone_method(
-        struct_type, "struct", _validate_struct_clone,
+        struct_type, derived, "struct", _validate_struct_clone,
         f"Auto-derived clone for struct {struct_type}",
     )
 
 
-def register_enum_clone_method(enum_type: EnumType) -> None:
+def register_enum_clone_method(enum_type: EnumType,
+                               derived: DerivedMethodTable) -> None:
     """Register the auto-derived clone() method for an enum type."""
     _register_clone_method(
-        enum_type, "enum", _validate_enum_clone,
+        enum_type, derived, "enum", _validate_enum_clone,
         f"Auto-derived clone for enum {enum_type}",
     )

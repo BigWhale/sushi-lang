@@ -312,6 +312,6 @@ def ensure_result_type_in_table(
 
     can_hash, _ = can_enum_be_hashed(result_enum)
     if can_hash:
-        register_enum_hash_method(result_enum)
+        register_enum_hash_method(result_enum, enum_table.derived)
 
     return result_enum
