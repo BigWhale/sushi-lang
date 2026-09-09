@@ -741,6 +741,29 @@ fn print_units(MsgValue meta, Opts o) ~:
     println("")
     return Result.Ok(~)
 
+# print_reexports: what each unit hands on (#585). One record per `public use`,
+# rendered as the statement that produced it: a unit target is quoted, and a stdlib
+# or library target is angled. The key is absent for a library that re-exports
+# nothing, and ml_len answers 0 for Nil.
+fn print_reexports(MsgValue meta, Opts o) ~:
+    let MsgValue records = ml_get(meta, "reexports")??
+    let i32 n = ml_len(records)??
+    if (not section("Re-exports", n, o)??):
+        return Result.Ok(~)
+    let i32 i = 0
+    while (i < n):
+        let MsgValue r = ml_at(records, i)??
+        let string unit = ml_get_str(r, "unit")??
+        let string path = ml_get_str(r, "path")??
+        let string kind = ml_get_str(r, "kind")??
+        let string target = "<{path}>"
+        if (kind == "unit"):
+            target := "\"{path}\""
+        println("  {unit}: public use {target}")
+        i := i + 1
+    println("")
+    return Result.Ok(~)
+
 fn print_dependencies(MsgValue meta, Opts o) ~:
     let MsgValue deps = ml_get(meta, "dependencies")??
     let i32 n = ml_len(deps)??
@@ -793,6 +816,7 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     println("Protocol: {proto}")
     println("")
     print_units(meta, o)??
+    print_reexports(meta, o)??
     print_functions(meta, o)??
     print_generic_functions(meta, o)??
     print_constants(meta, o)??

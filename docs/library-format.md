@@ -151,7 +151,7 @@ is the authority, and the index is a cache of it.
 
 ```python
 {
-    "sushi_lib_version": "2.2",        # Protocol version
+    "sushi_lib_version": "2.3",        # Protocol version
     "library_name": str,               # Library identifier, from the output filename
     "library_version": str,            # The library's own version, "major.minor.patch"
     "kind": str,                       # "source" / "binary" / "hybrid", matching KIND
@@ -289,6 +289,38 @@ is the authority, and the index is a cache of it.
             "type_params": [],         # Always empty, for the same reason
             "doc": DOC                 # If documented
         }
+    ],
+
+    # What each unit RE-EXPORTS: one record per `public use`, in written order (#585).
+    # `public use X` makes X's public names the unit's own, so the unit's importers get
+    # them where its own names land. A SOURCE library needs no record -- its units are
+    # in the source section and the consumer re-parses the statement -- but the index
+    # must answer without a parser, so every kind writes it. A compiled library has
+    # nothing else: the consumer composes the unit's namespace from its own records
+    # plus the providers of what these name.
+    #
+    # `unit` is the unit that WROTE the statement, and only the library's own units
+    # appear (#594): a bundled stdlib module and an injected source library re-export
+    # on their own account. `kind` says which producer the target is, so the consumer
+    # reaches the same provider builder the written statement would have:
+    #
+    #   "unit"    -- a sibling unit of THIS library. `path` is the name the `units`
+    #                index carries, so the consumer looks it up with no guessing
+    #   "stdlib"  -- a stdlib module. `path` is the import path, `io/fs`. The
+    #                consumer's build compiles the module and links its bitcode on
+    #                the strength of this record alone, because no unit wrote the
+    #                import (`_reexported_stdlib_modules`)
+    #   "library" -- another library. `path` is the written `lib/...` path. Limitation
+    #                1 still holds: the consumer states that library for itself, and
+    #                one that does not hears CE2008 at the call, exactly as a source
+    #                library's re-export of one answers
+    #
+    # The whole key is absent when no unit says `public use`, so an ordinary library
+    # grows by nothing. A manifest written before the key reads as no re-export, which
+    # is what an older compiled library has -- the statement was refused (CE3514,
+    # retired).
+    "reexports": [
+        {"unit": str, "path": str, "kind": str}
     ],
 
     # A unit's OWN doc block -- the one that stands first in its file and documents no

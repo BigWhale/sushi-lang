@@ -164,7 +164,7 @@ def test_a_bundled_modules_constants_are_not_this_librarys(tmp_path):
 def test_the_protocol_version_says_the_manifest_changed(tmp_path):
     _env, slib = _build_lib(tmp_path, MIXED_LIB, "protolib")
     metadata = LibraryFormat.read_metadata_only(slib)
-    assert metadata["sushi_lib_version"] == "2.2"
+    assert metadata["sushi_lib_version"] == "2.3"
 
 
 # --- what a consumer hears ---------------------------------------------------------

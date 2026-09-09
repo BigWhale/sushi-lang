@@ -165,6 +165,16 @@ def _print_generic_named(templates: dict, key: str, title: str, keyword: str,
     print()
 
 
+def _reexport_target(record: dict) -> str:
+    """A re-export record as the `public use` that produced it (#585).
+
+    A unit target is quoted and the other two are angled, which is how each is
+    written -- so the section reads back as the statements the author wrote.
+    """
+    path = record.get('path', '')
+    return f'"{path}"' if record.get('kind') == 'unit' else f"<{path}>"
+
+
 def _section(title: str, items: list, p: Palette) -> bool:
     """Open a section, or answer False when it holds nothing.
 
@@ -446,6 +456,12 @@ def print_library_info(library_path: Path, show_docs: bool = False,
             print(f"  {unit}")
             records.close(
                 _print_doc_record(unit_docs.get(unit), None, "    ", opts))
+        print()
+
+    reexports = metadata.get('reexports', [])
+    if _section("Re-exports", reexports, opts.p):
+        for record in reexports:
+            print(f"  {record['unit']}: public use {_reexport_target(record)}")
         print()
 
     templates = metadata.get('templates') or {}

@@ -16,10 +16,14 @@ All notable changes to Sushi Lang will be documented in this file.
   reached through a two-hop chain are one type, and a `Result` over it interns once. New
   refusals: **CE3016** a `public use` with an `as` (a re-export is of names, not of a
   namespace; the alias still binds); **CW3005** a `public use` that hands on no public
-  name, the CW3004 rule; **CE3514** a `public use` in a library built with `--lib-kind
-  binary` or `hybrid`, refused before any bitcode is compiled, because the manifest has
-  no record for a re-export yet (#585). A source `.slib`, the default kind, re-exports by
-  construction. Design record: `docs/design/unit-namespaces.md` section 8.1 (Ruling 7).
+  name, the CW3004 rule. Every kind of `.slib` carries a re-export (#585): a source
+  library ships the statement as text, a binary or hybrid one ships a `reexports` record
+  per statement -- the target, the unit that wrote it, and which producer the target is --
+  and the consumer composes the unit's namespace from it. A re-exported stdlib module
+  reaches the consumer's build through that record, so a `public use <io/fs>` in a
+  compiled library gives its consumer `open()`, `File` and `FileMode` with no import of
+  its own, exactly as a source library does. Protocol 2.3. Design record:
+  `docs/design/unit-namespaces.md` section 8.1 (Ruling 7).
 - **A static method: a name behind the TYPE's dot.** `extend Vec static at(i32 x, i32 y)
   Vec:` declares a method with NO receiver, called on the type name -- `Vec.at(3, 4)` --
   which is how a user type carries its own constructor (#542). A name behind a type's dot

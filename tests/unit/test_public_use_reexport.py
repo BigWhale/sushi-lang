@@ -3,9 +3,10 @@
 `docs/design/unit-namespaces.md` section 8.1 (Ruling 7). A re-export is a resolution
 path and not a type identity: a name reached bare, behind two aliases and through a
 two-hop `public use` chain resolves to ONE table entry, and a `Result` over it interns
-once. The type model guarantees it; this gate pins it. The second half is rule 3: a
-BINARY or HYBRID `.slib` carries no re-export today (#585), so a `public use` in one
-is refused at build time.
+once. The type model guarantees it; this gate pins it. The second half is rule 3,
+which #585 lifted: every kind of `.slib` carries a re-export now, a source one as text
+and a compiled one as a manifest record. `tests/unit/test_lib_binary_reexports.py` is
+the compiled half's own gate; what stays here is that all three kinds build.
 """
 from __future__ import annotations
 
@@ -186,7 +187,7 @@ def test_a_result_over_a_reexported_name_interns_once(identity):
     assert "CE0126" not in codes
 
 
-# --- Rule 3: a binary .slib carries no re-export ------------------------------
+# --- Rule 3: every kind of .slib carries a re-export (#585) -------------------
 
 LIB_MAIN = """\
 public use "helper"
@@ -214,17 +215,10 @@ def _build(tmp_path, *extra_args):
     return result, out
 
 
-@pytest.mark.parametrize("kind", ["binary", "hybrid"])
-def test_a_compiled_library_refuses_a_public_use(tmp_path, kind):
+@pytest.mark.parametrize("kind", ["source", "binary", "hybrid"])
+def test_every_kind_of_library_carries_a_public_use(tmp_path, kind):
+    """CE3514 is retired: a compiled library records the statement (#585)."""
     result, out = _build(tmp_path, "--lib-kind", kind)
-    assert result.returncode == 2, result.stdout + result.stderr
-    assert "CE3514" in result.stderr, result.stderr
-    # Tier 2: the refusal points at the line, in the unit that wrote it.
-    assert "rexlib.sushi:1:" in result.stderr, result.stderr
-    assert not out.exists(), "a refused build must write nothing"
-
-
-def test_a_source_library_carries_a_public_use(tmp_path):
-    result, out = _build(tmp_path, "--lib-kind", "source")
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "CE3514" not in result.stderr, result.stderr
     assert out.exists()

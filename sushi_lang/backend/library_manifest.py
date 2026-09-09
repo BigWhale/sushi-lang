@@ -26,12 +26,27 @@ def own_units(units: list['Unit']) -> list['Unit']:
     1), so shipping either one's declarations puts a SECOND definition of every name
     into that consumer's build -- CE4001 for a perk, and a duplicate symbol for the
     rest. `Unit.provenance` is the one field that marks such a unit, and it is the
-    field `_reject_reexports_in_compiled_library` already reads, so the two questions
-    take one answer. Every index of the library's DECLARED API reads this filter;
+    field `_extract_reexports` reads for the same question about a `public use`, so
+    the two take one answer. Every index of the library's DECLARED API reads this filter;
     `dependencies` does not, because it says what a consumer's build must be able to
     provide rather than what this library declares.
     """
     return [u for u in units if u.provenance is None]
+
+
+def _own_unit_named(path: str, own_names: set[str]) -> str | None:
+    """Which of the library's own units a `use "path"` names, or None.
+
+    The written path is main-relative, so it IS the unit name for a library built
+    from its own directory. A library unit that imports a sibling through a longer
+    path is matched on the last segment, the way the consumer's `_manifest_unit`
+    matches an import against the `units` index.
+    """
+    if path in own_names:
+        return path
+    tail = path.rsplit("/", 1)[-1]
+    matches = [name for name in own_names if name.rsplit("/", 1)[-1] == tail]
+    return matches[0] if len(matches) == 1 else None
 
 
 def collect_unit_source(units: list['Unit']) -> dict[str, str]:
@@ -130,7 +145,7 @@ class LibraryManifestGenerator:
         )
 
         manifest = {
-            "sushi_lib_version": "2.2",
+            "sushi_lib_version": "2.3",
             "library_name": library_name,
             "library_version": library_version,
             "kind": kind,
@@ -160,6 +175,13 @@ class LibraryManifestGenerator:
         foreign = self._extract_foreign_extensions(units)
         if foreign:
             manifest["foreign_extensions"] = foreign
+
+        # What each unit hands on (#585). Absent when no unit says `public use`, so
+        # an ordinary library grows by nothing. A source library carries the statement
+        # in its text as well; the index answers without a parser either way.
+        reexports = self._extract_reexports(units)
+        if reexports:
+            manifest["reexports"] = reexports
 
         # A map beside `units`, not a change to it: `units` is an ordered list and the
         # order is load-bearing for the consumer's injection. Absent when no unit
@@ -856,6 +878,52 @@ class LibraryManifestGenerator:
             "private_types": shipped_types,
             "closure_summary": closure_summary,
         }
+
+    def _extract_reexports(self, units: list['Unit']) -> list[dict]:
+        """What each own unit RE-EXPORTS: one record per `public use` (#585).
+
+        `public use X` makes X's public names the unit's own, so the unit's importers
+        get them where its own names land (`docs/design/unit-namespaces.md` section
+        8.1). A SOURCE library needs no record -- its units arrive as text and the
+        consumer's `namespaces` pass reads the statement like any other. A compiled
+        library ships records, so the statement has to become one, or a consumer reads
+        an API narrower than the author wrote. It was refused instead (CE3514, retired).
+
+        A record is the TARGET and the unit that wrote it. `kind` is which of the three
+        producers the target is, so the consumer picks the same provider builder the
+        written statement would have picked: a sibling unit of this library, a stdlib
+        module, or another library. A unit target is resolved to the name the `units`
+        index carries, because that is the key the consumer looks a unit up by; the
+        other two travel as the written path, which is what names them everywhere.
+
+        Own units only (#594). A bundled stdlib module and an injected source library
+        both re-export on their own account, and the consumer reads their statements
+        from their own text.
+        """
+        own = own_units(units)
+        own_names = {unit.name for unit in own}
+        records = []
+        for unit in own:
+            if unit.ast is None:
+                continue
+            for use_stmt in unit.ast.uses or ():
+                if not use_stmt.is_public:
+                    continue
+                if use_stmt.is_stdlib:
+                    kind, path = "stdlib", use_stmt.path
+                elif use_stmt.is_library:
+                    kind, path = "library", use_stmt.path
+                else:
+                    sibling = _own_unit_named(use_stmt.path, own_names)
+                    if sibling is None:
+                        # A `public use` of a unit this library does not own cannot
+                        # happen: the path resolved to a compiled unit for the build
+                        # to have got here. Recording nothing is still better than
+                        # recording a name the consumer cannot look up.
+                        continue
+                    kind, path = "unit", sibling
+                records.append({"unit": unit.name, "path": path, "kind": kind})
+        return records
 
     def _extract_dependencies(self, units: list['Unit']) -> list[str]:
         """Extract stdlib dependencies from all units."""
