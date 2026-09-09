@@ -24,6 +24,10 @@ class LambdaLifter:
         # (#468).
         self._owner_is_library = False
         self._owner_origin = None
+        # And whose SOURCE it is. A lambda in a generic body lifts once per instance,
+        # every copy carrying the template's spans, so the copies answer one report
+        # (#648).
+        self._owner_instance_of = None
 
     def run(self) -> None:
         for fn in list(self.program.functions):
@@ -31,9 +35,11 @@ class LambdaLifter:
                 continue  # generic templates: their instantiations carry the lambdas
             self._owner_is_library = bool(getattr(fn, "is_library_template", False))
             self._owner_origin = getattr(fn, "library_origin", None)
+            self._owner_instance_of = getattr(fn, "instance_of", None)
             self._walk(fn.body)
         self._owner_is_library = False
         self._owner_origin = None
+        self._owner_instance_of = None
         # Extension and perk-impl bodies emit through the same statement paths
         # as a plain fn, so their lambdas lift the same way (#399).
         # program.generic_extensions stays unwalked: templates, like generic
@@ -55,6 +61,7 @@ class LambdaLifter:
         before = len(self._lifted)
         self._owner_is_library = False
         self._owner_origin = None
+        self._owner_instance_of = None
         self._walk(body)
         return self._lifted[before:]
 
@@ -129,6 +136,8 @@ class LambdaLifter:
             # here is exactly the #402 aliasing, so fail loud instead.
             raise RuntimeError(f"lifted lambda name '{lifted_name}' already registered")
         self._lifted.append(lifted)
+
+        lifted.instance_of = self._owner_instance_of
 
         lam.lifted_name = lifted_name
         lam.env_struct = env_struct

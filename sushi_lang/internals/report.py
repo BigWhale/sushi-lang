@@ -64,6 +64,26 @@ class Origin:
     provenance: Optional[str] = None
 
 
+def diagnostic_identity(diagnostic: Diagnostic) -> tuple:
+    """What makes two diagnostics the same REPORT: everything the user reads first.
+
+    One source read twice says one thing about one line, so the second copy is noise --
+    a body shared by many monomorphized instances (#648), or an instantiation of a
+    generic-target extension. Notes are excluded deliberately: two instances can attach
+    different secondary locations to the same finding, and the user still wants to be
+    told once. The MESSAGE is included, so a finding that genuinely differs by type
+    argument is a different report and survives.
+    """
+    span = diagnostic.span
+    return (
+        diagnostic.kind,
+        diagnostic.code,
+        diagnostic.message,
+        diagnostic.filename,
+        None if span is None else (span.line, span.col, span.end_line, span.end_col),
+    )
+
+
 def in_source_order(items: List[Diagnostic]) -> List[Diagnostic]:
     """`items` ordered by where they are in the source, one file at a time.
 
@@ -138,7 +158,31 @@ class Reporter:
         # names a line the consumer never wrote (#471). One place stamps it, because
         # `_record` is the one place every diagnostic passes through.
         self.origin: Optional[Origin] = None
+        # Set while a pass reads the body of a MONOMORPHIZED INSTANCE. Every instance of
+        # one generic carries the TEMPLATE's spans, so a fault in the shared source would
+        # be told once per instantiation (#648). While it is set, a diagnostic whose
+        # identity has already been recorded is dropped. It is not a general
+        # de-duplicator: a repeat anywhere else is a bug to be fixed where it is made,
+        # and stays visible.
+        self.collapse_repeats: bool = False
         self.items: List[Diagnostic] = []
+        self._identities: set = set()
+
+    def enter_body(self, func) -> None:
+        """Tell the reporter whose body a pass is about to read.
+
+        Two answers ride on the same moment, and every per-unit pass needs both.
+        `origin` is whose FILE the spans belong to -- a transplanted library template's
+        came from the manifest slice, not from the consumer's file (#471).
+        `collapse_repeats` is whether this body is one of many copies of one source.
+        """
+        self.origin = getattr(func, "library_origin", None)
+        self.collapse_repeats = getattr(func, "instance_of", None) is not None
+
+    def leave_body(self) -> None:
+        """Clear what `enter_body` set, for a walk that reads no function body."""
+        self.origin = None
+        self.collapse_repeats = False
 
     def _record(self, d: Diagnostic) -> Diagnostic:
         if self.origin is not None:
@@ -151,6 +195,12 @@ class Reporter:
                 d.sub.append(SubDiagnostic("note", self.origin.provenance))
         elif self.provenance:
             d.sub.append(SubDiagnostic("note", self.provenance))
+        # AFTER the origin fixups: they can change the file a span is read against, and
+        # the file is part of what makes two reports the same one.
+        identity = diagnostic_identity(d)
+        if self.collapse_repeats and identity in self._identities:
+            return d
+        self._identities.add(identity)
         self.items.append(d)
         return d
 

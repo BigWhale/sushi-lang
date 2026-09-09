@@ -450,6 +450,31 @@ instances back as instantiations for the copies below. An abstract instance, a
 method-level `U` still unbound while a generic-target template is cut per receiver, is
 not published.
 
+### One source, one report
+
+Every instance carries the TEMPLATE's spans, and each copy is walked by the per-unit
+passes as an ordinary function -- correctly, because a per-instance truth is only visible
+there: a consume that is a plain copy for one type argument is CE2411 for an owning one.
+What must not follow is the COUNT. A fault in the shared body used to be told once per
+instantiation, at one caret, so the number of reports tracked how many times the caller
+happened to instantiate the function (#648).
+
+The copy is stamped `instance_of` with the template's name. `Reporter.enter_body(func)`
+reads it -- the one seam every per-unit pass calls to say whose body it is about to read,
+and the same seam that answers whose FILE the spans belong to (#471) -- and sets
+`collapse_repeats`, so a diagnostic whose `diagnostic_identity` has already been recorded
+is dropped. The identity is the kind, the code, the MESSAGE, the file and the span, so a
+finding that genuinely differs by type argument keeps its own message and is still told:
+`v + 1` over an `f64` and over a `u8` answers two CE2510s at one caret, and both survive.
+
+It is not a general de-duplicator. A repeat anywhere else is a bug to be fixed where it is
+made, and stays visible -- `tests/unit/test_diagnostics_not_duplicated.py` is the gate on
+that, and `tests/unit/test_generic_instance_reports_once.py` on this.
+
+A lambda in a generic body lifts once per instance, so `LambdaLifter` carries
+`instance_of` onto what it lifts. The `borrow` pass is the one that walks the template as
+well as the copies, so a borrow fault was N + 1 rather than N.
+
 ### The substitution walk is total
 
 `TypeSubstitutor.substitute_expr` and `substitute_statement` replace a type parameter
