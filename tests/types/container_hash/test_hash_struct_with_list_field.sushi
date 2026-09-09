@@ -1,0 +1,30 @@
+# A user struct that holds a List@(T) derives a hash, because the field now answers with
+# what the list holds. Before #628 the field walk read the list's `data` pointer, let it
+# through, and the backend answered CE0052 -- an internal error about the user's program.
+# EXPECT_STDOUT_CONTAINS: same=true
+# EXPECT_STDOUT_CONTAINS: different=false
+# EXPECT_NO_LEAKS
+
+struct Bag:
+    i32 id
+    List@(i32) items
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    let Bag a = Bag(7, xs)
+
+    let List@(i32) ys = List.new()
+    ys.push(1)
+    ys.push(2)
+    let Bag b = Bag(7, ys)
+
+    let List@(i32) zs = List.new()
+    zs.push(1)
+    zs.push(3)
+    let Bag c = Bag(7, zs)
+
+    println("same={a.hash() == b.hash()}")
+    println("different={a.hash() == c.hash()}")
+    return Result.Ok(0)

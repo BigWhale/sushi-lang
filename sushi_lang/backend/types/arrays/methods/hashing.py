@@ -45,7 +45,7 @@ def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
 
             element_value = builder.load(element_ptr, name=f"elem_{i}")
 
-            element_hash = _emit_element_hash(codegen, element_value, array_type.base_type)
+            element_hash = emit_element_hash(codegen, element_value, array_type.base_type)
 
             hash_value = emit_fnv1a_combine(codegen, hash_value, element_hash)
 
@@ -106,7 +106,7 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
         element_ptr = builder.gep(data_ptr, [current_counter], name="element_ptr")
         element_value = builder.load(element_ptr, name="element")
 
-        element_hash = _emit_element_hash(codegen, element_value, array_type.base_type)
+        element_hash = emit_element_hash(codegen, element_value, array_type.base_type)
 
         current_hash = builder.load(hash_value_alloca)
         new_hash = emit_fnv1a_combine(codegen, current_hash, element_hash)
@@ -129,8 +129,13 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
     return emitter
 
 
-def _emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type) -> ir.Value:
-    """Emit code to get the hash of an array element."""
+def emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type) -> ir.Value:
+    """The hash of ONE held value, by its semantic type.
+
+    An array element asks this, and so does a `List@(T)` element and an `Own@(T)`
+    payload (#628): a held value is a held value, and one reader keeps the three from
+    drifting apart.
+    """
     require_builder(codegen)
 
     if isinstance(element_type, BuiltinType):

@@ -1,0 +1,20 @@
+# An empty List@(T) has a null data pointer, so the element walk must not read it. Two
+# empty lists hash the same, and an empty list does not hash as a list of one element.
+# EXPECT_STDOUT_CONTAINS: empty_matches_empty=true
+# EXPECT_STDOUT_CONTAINS: empty_matches_one=false
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let List@(i32) a = List.new()
+    let List@(i32) b = List.new()
+
+    let List@(i32) one = List.new()
+    one.push(0)
+
+    println("empty_matches_empty={a.hash() == b.hash()}")
+    println("empty_matches_one={a.hash() == one.hash()}")
+
+    a.free()
+    b.free()
+    one.free()
+    return Result.Ok(0)

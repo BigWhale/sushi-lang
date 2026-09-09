@@ -1,0 +1,38 @@
+# A List@(T) hashes what it HOLDS: its elements and its length. Two lists that hold the
+# same elements hash the same, and a list that holds different elements does not. The
+# derived hash used to walk the backing struct instead, so it read the `data` POINTER
+# and could not be emitted at all (#628).
+# EXPECT_STDOUT_CONTAINS: same=true
+# EXPECT_STDOUT_CONTAINS: different=false
+# EXPECT_STDOUT_CONTAINS: shorter=false
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let List@(i32) a = List.new()
+    a.push(1)
+    a.push(2)
+    a.push(3)
+
+    let List@(i32) b = List.new()
+    b.push(1)
+    b.push(2)
+    b.push(3)
+
+    let List@(i32) c = List.new()
+    c.push(1)
+    c.push(2)
+    c.push(9)
+
+    let List@(i32) d = List.new()
+    d.push(1)
+    d.push(2)
+
+    println("same={a.hash() == b.hash()}")
+    println("different={a.hash() == c.hash()}")
+    println("shorter={a.hash() == d.hash()}")
+
+    a.free()
+    b.free()
+    c.free()
+    d.free()
+    return Result.Ok(0)

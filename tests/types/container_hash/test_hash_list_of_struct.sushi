@@ -1,0 +1,30 @@
+# The element hash is the element type's own derived hash, so a struct element works and
+# the walk reaches it through the derived-method table.
+# EXPECT_STDOUT_CONTAINS: same=true
+# EXPECT_STDOUT_CONTAINS: different=false
+# EXPECT_NO_LEAKS
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let List@(Point) a = List.new()
+    a.push(Point(1, 2))
+    a.push(Point(3, 4))
+
+    let List@(Point) b = List.new()
+    b.push(Point(1, 2))
+    b.push(Point(3, 4))
+
+    let List@(Point) c = List.new()
+    c.push(Point(1, 2))
+    c.push(Point(3, 5))
+
+    println("same={a.hash() == b.hash()}")
+    println("different={a.hash() == c.hash()}")
+
+    a.free()
+    b.free()
+    c.free()
+    return Result.Ok(0)

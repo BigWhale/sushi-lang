@@ -50,6 +50,16 @@ fn main() i32:
     return Result.Ok(0)
 """
 
+HASHMAP_SRC = """
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, i32) m = HashMap.new()
+    m.insert(1, 2)
+    m.free()
+    return Result.Ok(0)
+"""
+
 CONTAINER_SRC = """
 fn main() i32:
     let List@(i32) xs = List.new()
@@ -157,20 +167,46 @@ def test_declines_a_non_struct_receiver():
 
 
 @pytest.mark.parametrize("name", ["Own<i32>", "List<i32>", "HashMap<i32, i32>"])
-def test_declines_container_receivers(analyze_program, name):
-    """Own/List/HashMap are named StructTypes but keep their own method paths."""
+def test_declines_a_container_clone(analyze_program, name):
+    """Own/List/HashMap are named StructTypes but keep their own CLONE path."""
     analysis = analyze_program(CONTAINER_SRC)
     validator = _FakeValidator(derived_methods=analysis.analyzer.tables.derived_methods)
-    assert check_struct_enum_builtin_methods(
-        StructType(name=name, fields=()), "hash", validator
-    ) is None
     assert check_struct_enum_builtin_methods(
         StructType(name=name, fields=()), "clone", validator
     ) is None
 
 
+@pytest.mark.parametrize("name", ["Own<i32>", "List<i32>"])
+def test_claims_a_container_hash(analyze_program, name):
+    """`hash` is the one name a container does NOT keep to itself (#628).
+
+    A `List@(T)` and an `Own@(T)` hash what they hold, so the derived table is the right
+    answer for them. While this checker declined them, the container method inferrers
+    answered None for `hash` and the call carried no inferred type at all, so nothing
+    compared it against its declaration: `let i32 h = l.hash()` was accepted in silence.
+    """
+    analysis = analyze_program(CONTAINER_SRC)
+    validator = _FakeValidator(derived_methods=analysis.analyzer.tables.derived_methods)
+    assert check_struct_enum_builtin_methods(
+        analysis.analyzer.tables.structs.by_name[name], "hash", validator
+    ) is not None
+
+
+def test_declines_a_hash_map_hash(analyze_program):
+    """A HashMap@(K, V) derives no hash, so the table lookup declines it on its own.
+
+    Its buckets carry a state for each slot and the slot order is not the entry order,
+    so it needs a fold that no walk over elements can give (#628).
+    """
+    analysis = analyze_program(HASHMAP_SRC)
+    validator = _FakeValidator(derived_methods=analysis.analyzer.tables.derived_methods)
+    assert check_struct_enum_builtin_methods(
+        analysis.analyzer.tables.structs.by_name["HashMap<i32, i32>"], "hash", validator
+    ) is None
+
+
 def test_list_monomorph_really_does_carry_a_registered_hash(analyze_program):
-    """The premise behind the container guard, pinned so it cannot silently change."""
+    """A List@(i32) carries a derived hash -- a real one now, over its elements (#628)."""
     analysis = analyze_program(CONTAINER_SRC)
     derived = analysis.analyzer.tables.derived_methods
     assert derived.get_method(StructType(name="List<i32>", fields=()), "hash") is not None

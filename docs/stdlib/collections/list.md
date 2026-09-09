@@ -191,6 +191,31 @@ foreach(value in list.iter()):
     println(value)
 ```
 
+## Hashing
+
+### `.hash() -> u64`
+
+The hash of what the list HOLDS: each element in turn, then the length. It is derived
+automatically, and it exists only when the element type has a hash of its own.
+
+```sushi
+let List@(i32) a = List.new()
+a.push(1)
+a.push(2)
+
+let List@(i32) b = List.new()
+b.push(1)
+b.push(2)
+
+println("{a.hash() == b.hash()}")   # true -- two lists, the same elements
+```
+
+Two lists that hold equal elements answer one hash, although their buffers are two. The
+length is part of the hash, so a list of one zero and a list of two zeros do not collide.
+
+A list is not a `HashMap@(K, V)` key: a key also needs an equality test, and a list has
+none.
+
 ## Memory Management
 
 ### `.free() -> ~`

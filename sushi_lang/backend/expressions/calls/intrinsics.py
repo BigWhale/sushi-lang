@@ -117,6 +117,14 @@ def try_emit_array_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
     if not is_fixed_array and not is_dynamic_array:
         return None
 
+    # A `List@(T)` is `{i32 len, i32 capacity, T* data}`, which is the dynamic-array
+    # descriptor's own shape, so the LLVM type alone cannot tell the two apart. The
+    # SEMANTIC type can, and it is already here. Without this the array path claimed
+    # `List@(i32).hash()` and then refused its own receiver with CE0042 (#628).
+    from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
+    if isinstance(semantic_type, StructType) and semantic_type.name.startswith(CONTAINER_PREFIXES):
+        return None
+
     if not is_builtin_array_method(expr.method):
         return None
 

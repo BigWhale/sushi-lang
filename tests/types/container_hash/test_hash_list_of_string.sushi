@@ -1,0 +1,26 @@
+# The element type may own heap. A List@(string) hashes each string by its BYTES, so two
+# lists built from equal strings hash the same although the two buffers differ.
+# EXPECT_STDOUT_CONTAINS: same=true
+# EXPECT_STDOUT_CONTAINS: different=false
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let List@(string) a = List.new()
+    a.push("mostly")
+    a.push("harmless")
+
+    let List@(string) b = List.new()
+    b.push("mostly")
+    b.push("harmless")
+
+    let List@(string) c = List.new()
+    c.push("mostly")
+    c.push("dangerous")
+
+    println("same={a.hash() == b.hash()}")
+    println("different={a.hash() == c.hash()}")
+
+    a.free()
+    b.free()
+    c.free()
+    return Result.Ok(0)

@@ -1,0 +1,14 @@
+# A container's hash() is typed like any other derived hash, so a wrong declared type
+# reads the ordinary CE2002. The container method inferrers answer nothing for `hash`,
+# so while the guard declined a container here the call carried NO inferred type and
+# nothing compared it against the declaration -- this program was accepted in silence.
+# EXPECT_ERROR_CODE: CE2002
+# EXPECT_STDERR_CONTAINS: cannot assign u64 to i32
+
+fn main() i32:
+    let List@(i32) l = List.new()
+    l.push(1)
+    let i32 bad = l.hash()
+    println("{bad}")
+    l.free()
+    return Result.Ok(0)
