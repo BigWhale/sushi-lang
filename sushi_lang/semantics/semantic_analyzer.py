@@ -1,7 +1,8 @@
 from __future__ import annotations
 from typing import Dict, Optional, TYPE_CHECKING
 
-from sushi_lang.internals.report import Origin, Reporter, in_source_order
+from sushi_lang.internals.report import (
+    Origin, Reporter, diagnostic_identity, in_source_order)
 from sushi_lang.semantics.ast import Program, ExtendDef, ExtendWithDef
 from sushi_lang.semantics.passes.collect import CollectorPass, ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, PerkTable, PerkImplementationTable, FunctionTable, ExtensionTable, GenericExtensionTable, GenericFunctionTable
 
@@ -26,24 +27,6 @@ def enum_base_names(*tables) -> set[str]:
         mapping = table.by_name if hasattr(table, 'by_name') else table
         names.update(name.split('<', 1)[0] for name in mapping)
     return names
-
-
-def _diagnostic_identity(diagnostic):
-    """What makes two diagnostics the same REPORT: everything the user reads first.
-
-    A diagnostic repeated per instantiation says one thing about one line of source, so the
-    second copy is noise. Notes are excluded from the identity deliberately -- two
-    instantiations can attach different secondary locations to the same finding, and the
-    user still wants to be told once.
-    """
-    span = diagnostic.span
-    return (
-        diagnostic.kind,
-        diagnostic.code,
-        diagnostic.message,
-        diagnostic.filename,
-        None if span is None else (span.line, span.col, span.end_line, span.end_col),
-    )
 
 
 class SemanticAnalyzer:
@@ -837,9 +820,9 @@ class SemanticAnalyzer:
             for fn in lifted:
                 borrow_checker._check_function(fn)
 
-        seen = {_diagnostic_identity(d) for d in self.reporter.items}
+        seen = {diagnostic_identity(d) for d in self.reporter.items}
         for diagnostic in scratch.items:
-            identity = _diagnostic_identity(diagnostic)
+            identity = diagnostic_identity(diagnostic)
             if identity in seen:
                 continue
             seen.add(identity)

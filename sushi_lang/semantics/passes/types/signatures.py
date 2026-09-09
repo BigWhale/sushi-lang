@@ -51,9 +51,10 @@ def validate_function(self, func: FuncDef) -> None:
     self.in_library_body = (self.in_library_unit
                             or bool(getattr(func, "is_library_template", False)))
     self.in_synthesized_body = bool(getattr(func, "is_synthesized", False))
-    # And whose file it is. Set on every entry, so an ordinary body clears what a
-    # transplanted one set (#471).
-    self.reporter.origin = getattr(func, "library_origin", None)
+    # And whose body it is: the file its spans belong to (#471), and whether it is one
+    # of many copies of one source (#648). Set on every entry, so an ordinary body
+    # clears what a transplanted or copied one set.
+    self.reporter.enter_body(func)
     self.extension_method_name = None
     self.extension_return_type = None
     self.variable_types = {}  # Reset for each function
@@ -108,9 +109,9 @@ def _validate_target_type(self, target_type, span) -> None:
     It belongs to the header, not to a method, so a perk implementation with three
     methods and one bad target says so once.
     """
-    # An extension body is never a transplanted library body, so the origin a previously
+    # An extension body is never a transplanted library body, so what a previously
     # validated function set must not colour this diagnostic (#471).
-    self.reporter.origin = None
+    self.reporter.leave_body()
     validate_type_name(self, target_type, span)
     if target_type == BuiltinType.BLANK:
         self.err.emit(er.ERR.CE2032, span)
@@ -146,7 +147,7 @@ def _validate_method_body(self, target_type, method) -> None:
     self.in_extension_context = True  # Dedicated flag: this body returns a bare value.
     self.in_library_body = self.in_library_unit
     self.in_synthesized_body = False
-    self.reporter.origin = None
+    self.reporter.leave_body()
     self.extension_method_name = method.name
     self.extension_return_type = method.ret  # Checked in validate_return_statement.
     self.variable_types = {}

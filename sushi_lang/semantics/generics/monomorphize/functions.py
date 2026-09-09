@@ -340,6 +340,10 @@ class FunctionMonomorphizer:
             if mangled_name in declared:
                 continue
 
+            # Which source this body is a copy of. Every copy carries the template's
+            # spans, so the reporter tells a fault in the shared source once (#648).
+            concrete_func.instance_of = generic_func.name
+
             from sushi_lang.semantics.generics.synthesis import register_synthesized_function
             register_synthesized_function(
                 self.monomorphizer.func_table,

@@ -201,6 +201,11 @@ class FuncDef(Node):
     # The unit that DECLARED the generic this instance came from, so two units'
     # instances of one generic stay distinct (#495). Set by generics/synthesis.py.
     home_unit: Optional[str] = None
+    # The generic function this body is a monomorphized instance OF. Every instance
+    # carries the TEMPLATE's spans, so a diagnostic raised in one is a diagnostic about
+    # the template's source and is told once, not once per instantiation (#648). Set by
+    # generics/monomorphize, and carried onto a lambda lifted out of such a body.
+    instance_of: Optional[str] = None
     # Where a `static` marker was written on a perk-implementation method. The
     # grammar admits it in that position only so the perk pass can refuse it (CE4014).
     static_span: Optional[Span] = None

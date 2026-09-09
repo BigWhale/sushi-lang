@@ -93,10 +93,11 @@ class BorrowChecker:
     def run(self, program: Program) -> None:
         """Run borrow checking on the entire program."""
         for func in program.functions:
-            # Whose file the diagnostics of this body belong to (#471).
-            self.reporter.origin = getattr(func, "library_origin", None)
+            # Whose body this is: the file its diagnostics belong to (#471), and whether
+            # it is one of many copies of one source (#648).
+            self.reporter.enter_body(func)
             self._check_function(func)
-        self.reporter.origin = None
+        self.reporter.leave_body()
 
         for ext in program.extensions:
             self._check_extension(ext)
