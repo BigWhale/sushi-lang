@@ -44,26 +44,19 @@ class LambdaLifter:
         for impl in list(self.program.perk_impls):
             for method in impl.methods:
                 self._walk(method.body)
-        if self.annotate is not None:
-            for lifted in self._lifted:
-                self.annotate(lifted)
 
     def lift_body(self, body) -> List[FuncDef]:
         """Lift one body and answer the FuncDefs this call produced (#399).
 
         The per-instantiation extension copies live in no unit AST, so the
-        caller runs the passes the per-unit loop cannot: it annotates and
-        borrow-checks exactly what this call lifted.
+        caller runs the pass the per-unit loop cannot: it borrow-checks exactly
+        what this call lifted.
         """
         before = len(self._lifted)
         self._owner_is_library = False
         self._owner_origin = None
         self._walk(body)
-        produced = self._lifted[before:]
-        if self.annotate is not None:
-            for lifted in produced:
-                self.annotate(lifted)
-        return produced
+        return self._lifted[before:]
 
     def _walk(self, node) -> None:
         """Find and lift Lambda nodes anywhere under `node` (not into their bodies)."""
@@ -108,8 +101,6 @@ class LambdaLifter:
         cap_names = {c.name for c in captures}
         _rewrite_captures(body, cap_names)
 
-        self._walk(body)
-
         ok_type = lam.resolved_type.ok_type if lam.resolved_type is not None else lam.ret
         err_type = lam.resolved_type.err_type if lam.resolved_type is not None else lam.err_type
         # The env borrow is `poke`, and the mode is not decoration: a move-captured
@@ -141,6 +132,15 @@ class LambdaLifter:
 
         lam.lifted_name = lifted_name
         lam.env_struct = env_struct
+
+        # Annotate FIRST, then look for a lambda nested in this body. The hook is the
+        # typecheck pass's `_validate_function`, and it is what types a Lambda node --
+        # so a nested one lifted before it ran carried no parameter types, no captures
+        # and no channel, and its own body went unchecked (#629). The order is the
+        # dependency: type this body, then lift what the typing found in it.
+        if self.annotate is not None:
+            self.annotate(lifted)
+        self._walk(body)
 
 
 def _rewrite_captures(node, cap_names: set) -> None:
