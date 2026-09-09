@@ -64,6 +64,25 @@ class Origin:
     provenance: Optional[str] = None
 
 
+def in_source_order(items: List[Diagnostic]) -> List[Diagnostic]:
+    """`items` ordered by where they are in the source, one file at a time.
+
+    The per-unit passes each walk the whole unit, so what they emit is in pass order and
+    a reader wants the file. A file keeps the place its FIRST diagnostic gave it -- the
+    order the passes reached the files in is information, and alphabetical is not -- and
+    inside a file the order is the line, then the column. A diagnostic with no span is
+    about the file as a whole and heads its group. The sort is stable, so two findings on
+    one caret keep the order the passes made them in.
+    """
+    groups: dict[Optional[str], int] = {}
+    for d in items:
+        groups.setdefault(d.filename, len(groups))
+    return sorted(items, key=lambda d: (
+        groups[d.filename],
+        (d.span.line, d.span.col) if d.span is not None else (-1, -1),
+    ))
+
+
 def span_of(t: Any) -> Optional[Span]:
     m = getattr(t, "meta", None)
     if m is not None:

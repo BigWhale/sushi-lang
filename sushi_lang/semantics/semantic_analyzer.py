@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Optional, TYPE_CHECKING
 
-from sushi_lang.internals.report import Origin, Reporter
+from sushi_lang.internals.report import Origin, Reporter, in_source_order
 from sushi_lang.semantics.ast import Program, ExtendDef, ExtendWithDef
 from sushi_lang.semantics.passes.collect import CollectorPass, ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, PerkTable, PerkImplementationTable, FunctionTable, ExtensionTable, GenericExtensionTable, GenericFunctionTable
 
@@ -125,6 +125,16 @@ class SemanticAnalyzer:
         return Reporter(source=unit.read_source(), filename=str(unit.file_path),
                         provenance=unit.provenance)
 
+    def _merge_unit(self, unit_reporter: Reporter) -> None:
+        """Hand one unit's findings to the program reporter, in source order.
+
+        The one place a per-unit reporter is drained. The passes emit in pass order and
+        a unit is walked whole by each of them, so a fault the `lift` pass found sits
+        behind every fault the `typecheck` pass found -- source order is what a reader
+        asked for (#629).
+        """
+        self.reporter.items.extend(in_source_order(unit_reporter.items))
+
     def _check_multi_file(self) -> None:
         """Multi-file semantic analysis with cross-unit symbol resolution."""
         if self.unit_manager is None:
@@ -202,7 +212,7 @@ class SemanticAnalyzer:
             # a doc block on every instance the program asked for.
             if self.warn_missing_docs:
                 check_missing_docs(unit_reporter, unit.ast)
-            self.reporter.items.extend(unit_reporter.items)
+            self._merge_unit(unit_reporter)
 
         # FFI: validate external signatures (CE5003), emit CW5001, and enforce
         # the ptr unit gate (CE5009) per unit.
@@ -215,7 +225,7 @@ class SemanticAnalyzer:
             unit_reporter = self._unit_reporter(unit)
             validate_external_signatures(unit_reporter, unit.ast)
             validate_ptr_unit_gate(unit_reporter, unit.ast)
-            self.reporter.items.extend(unit_reporter.items)
+            self._merge_unit(unit_reporter)
 
         if self.library_linker is not None and self.library_registry is None:
             self._build_library_registry()
@@ -257,7 +267,7 @@ class SemanticAnalyzer:
             self.namespaces[unit.name] = build_namespaces(
                 unit_reporter, unit, self.tables, units=all_units,
                 library_registry=self.library_registry)
-            self.reporter.items.extend(unit_reporter.items)
+            self._merge_unit(unit_reporter)
 
         # ffi-clash: an `unsafe external` may name a FOREIGN symbol, never one this
         # build defines (#470). It reads the whole program's symbols, the linked
@@ -273,7 +283,7 @@ class SemanticAnalyzer:
             reject_external_naming_a_defined_symbol(
                 unit_reporter, unit.ast, self.tables, self.library_registry,
                 self.generated_symbols)
-            self.reporter.items.extend(unit_reporter.items)
+            self._merge_unit(unit_reporter)
 
         self._check_main_function_args_multi_file(compilation_order)
 
@@ -550,7 +560,7 @@ class SemanticAnalyzer:
                                            scope=namespaces.scope if namespaces else None)
             borrow_checker.run(unit.ast)
 
-            self.reporter.items.extend(unit_reporter.items)
+            self._merge_unit(unit_reporter)
 
         # The ENTRY unit, for the same reason `generics/synthesis.py` names it: a
         # lifted body belongs to the unit the compiler was pointed at, not to

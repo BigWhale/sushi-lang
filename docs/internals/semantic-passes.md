@@ -843,6 +843,18 @@ Each lambda literal becomes a top-level function plus a captured environment. It
 BETWEEN `typecheck` and `borrow`, per unit: the lifted body needs the types `typecheck`
 stamped, and the lifted function must be borrow-checked like any other.
 
+**This pass owns the lambda BODY.** A lifted lambda is a function, so its body goes
+through `_validate_function` -- the `annotate` hook -- like every other function's, and
+the `typecheck` pass does not descend into a lambda body at all. `visit_lambda` keeps
+only what no lifted function carries: the function TYPE the enclosing expression needs,
+and the capture rules (CE2094), because lift consumes the capture list into the
+environment struct. Walking the body in both places checked it twice and reported every
+fault in it twice (#629).
+
+The annotation of one lifted body comes BEFORE the search for a lambda nested in it. The
+hook is what types a `Lambda` node, so a nested lambda lifted first carried no parameter
+types, no captures and no channel, and its own body was never checked.
+
 The environment parameter is a `poke` borrow, never a `peek` one. See
 `docs/design/closures.md`.
 
@@ -982,6 +994,15 @@ then per unit, in one loop:
 
   scope → typecheck → lift → borrow
 ```
+
+Each turn of that loop reports into a reporter of its own, and `_merge_unit` drains it
+into the program reporter through `in_source_order` (`internals/report.py`). The four
+passes each walk the unit whole, so what they emit is in PASS order and a reader wants
+the FILE: a fault the `lift` pass found in a lambda body would otherwise stand behind
+every fault the `typecheck` pass found (#629). A file keeps the place its first
+diagnostic gave it -- the order the passes reached the files in is information, and
+alphabetical is not -- and the sort is stable, so two findings on one caret keep pass
+order.
 
 **Dependencies:**
 - `docs` needs `collect` (the merged unit table), and must run BEFORE `instantiate` and

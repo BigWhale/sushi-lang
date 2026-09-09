@@ -405,9 +405,16 @@ class ExpressionValidator(RecursiveVisitor):
                 propagate_types_to_value(self.type_validator, right, sibling_type)
 
     def visit_lambda(self, node: Lambda) -> None:
-        """Validate a lambda body and reject illegal captures (CE2094)."""
+        """Type the lambda and reject illegal captures (CE2094).
+
+        The BODY is not walked here. A lifted lambda is a function, and the `lift` pass
+        hands its body to `_validate_function` like any other -- so walking it here as
+        well checked it twice and reported every fault in it twice (#629). What is left
+        is what no lifted function carries: the capture list, which lift consumes into
+        the environment struct, and the function TYPE the enclosing expression needs.
+        """
         tv = self.type_validator
-        ft = infer_lambda_type(tv, node)  # fills param + capture types (idempotent)
+        infer_lambda_type(tv, node)  # fills param + capture types (idempotent)
 
         # CE2094: capturing a peek/poke borrow is deferred to Tier 2. A captured
         # name whose enclosing type is a reference is a borrow capture.
@@ -436,28 +443,6 @@ class ExpressionValidator(RecursiveVisitor):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"lambda parameter '{p.name}' has an owning type '{display_type(p.ty)}'; "
                                f"owning function-value parameters are deferred to Tier 2")
-
-        saved_vars = dict(tv.variable_types)
-        for p in node.params:
-            if p.ty is not None:
-                tv.variable_types[p.name] = p.ty
-        # The ?? validator reads current_function for the enclosing Result
-        # channel, and a lambda has its OWN channel in both body forms (#403).
-        # The expression body used to validate against the ENCLOSING function:
-        # a false CE2511 on a mismatched error type, and a false CW2511 in main.
-        from sushi_lang.semantics.ast import Block, FuncDef
-        body_block = node.body if node.is_block_body else Block(statements=[], loc=node.loc)
-        synthetic = FuncDef(name="<lambda>", params=list(node.params), ret=ft.ok_type,
-                            body=body_block, err_type=ft.err_type, loc=node.loc)
-        saved_fn = tv.current_function
-        tv.current_function = synthetic
-        if node.is_block_body:
-            tv._validate_block(node.body)
-        else:
-            tv.validate_expression(node.body)
-        tv.current_function = saved_fn
-        tv.variable_types.clear()
-        tv.variable_types.update(saved_vars)
 
     def visit_call(self, node: Call) -> None:
         """Validate function call."""
