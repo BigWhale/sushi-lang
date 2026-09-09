@@ -126,7 +126,7 @@ authority, and the index is a cache of it.
 
 | Field | Notes |
 |---|---|
-| `sushi_lib_version` | `"2.0"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
+| `sushi_lib_version` | `"2.3"`. A protocol string, unrelated to `VERSION` or to `templates.version` |
 | `library_name` | from the output filename |
 | `library_version` | **new** — see §6 |
 | `requires_compiler` | **new** — see §6 |
@@ -138,6 +138,7 @@ authority, and the index is a cache of it.
 | `public_functions`, `public_constants`, `structs`, `enums` | the index |
 | `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |
 | `not_exported` | **new** — what the library declares and keeps: a name and its kind, and nothing else. The complement of `templates.closure_summary`, and absent when a library keeps nothing (§5.5) |
+| `reexports` | **new** — one record per `public use`: the target, the unit that wrote it, and which producer the target is. Absent when no unit re-exports (#585) |
 | `dependencies` | see `TODO.md` 6b |
 
 `structs` / `enums` / `public_functions` carry **only concrete, non-generic**
@@ -309,9 +310,9 @@ symbol, without the consumer writing any glue.
 `use <lib/other>` over a source library injects its units the same way, so both reach
 the manifest generator beside the library's own files. `own_units` filters them out of
 every index -- one predicate, `Unit.provenance`, the field that already answers "did
-the author write this unit" for CE3514. Without it a library that declared one
-function shipped eleven, and a consumer that imported `<io/fs>` for itself read a
-second definition of each name (CE4001).
+the author write this unit" for a `public use` record. Without it a library that
+declared one function shipped eleven, and a consumer that imported `<io/fs>` for itself
+read a second definition of each name (CE4001).
 
 The bitcode is the other half, and the answer there is different: a compiled library is
 **self-contained**, so the module's compiled code stays in it and a consumer that names
@@ -324,12 +325,25 @@ strong definition wins. The monolithic consumer path never showed the fault, bec
 `TwoPhaseLinker` resolves a duplicate by symbol source; the per-unit incremental path
 hands `ld` both objects and has no such rule.
 
-**A binary or hybrid library carries no re-export** (`docs/design/unit-namespaces.md`
-section 8.1, rule 3; #586). `public use X` makes X's public names the unit's own, and a
-source library ships the statement as text for the consumer to read; the manifest has no
-record for it, so a binary consumer would see the library's own names and miss the ones
-it handed on, silently. The build refuses the statement at the line (CE3514) before any
-bitcode is compiled. #585 is the manifest record that lifts the limit.
+**Every kind of library re-exports** (`docs/design/unit-namespaces.md` section 8.1,
+rule 3; #586 ruled it, #585 built it). `public use X` makes X's public names the unit's
+own. A source library ships the statement as text and the consumer re-parses it; a
+compiled library ships one `reexports` record per statement -- the target, and the unit
+that wrote it -- and the consumer's `_binary_unit_provider` composes the unit's namespace
+from its own records plus the providers of what those name, exactly as `_unit_provider`
+does for a source unit. `LibraryMetadata.reexports` is the one reader of the key.
+
+Two consequences beyond the namespace. The `units` index, not the record lists, is what
+answers "which unit does this import name": a façade unit whose every public name is
+re-exported declares nothing of its own, so no `public_functions` record can name it. And
+a re-exported STDLIB module has to reach the consumer's build at all -- a source
+library's `use <io/fs>` does that by being text in the build, and a compiled one has only
+the record, so `_reexported_stdlib_modules` reads it and both the source-module injection
+and the bitcode link line take it. A re-exported LIBRARY is limitation 1 unchanged: the
+consumer states that library for itself, and one that does not hears CE2008 at the call
+-- the same answer a source library's re-export of one gives, and not the silence rule 3
+was written against. CE3514, which refused the statement while the record did not exist,
+is retired.
 
 The `templates` section carries its own `"version": 4`, which has revved independently
 of the container three times as the cross-library-generics feature grew:

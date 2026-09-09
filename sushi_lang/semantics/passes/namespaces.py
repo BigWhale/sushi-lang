@@ -227,7 +227,8 @@ def _provider_for(use_stmt: UseStatement, tables: Any, units: Dict[str, Any],
     of re-exports builds a finite provider (Ruling 7, rule 2).
     """
     if use_stmt.is_library:
-        return _library_provider(use_stmt, tables, units, library_registry, visited)
+        return _library_provider(use_stmt.path, tables, units, library_registry,
+                                 visited)
     if use_stmt.is_stdlib:
         return _stdlib_provider(use_stmt.path, tables, units, library_registry, visited)
     return _unit_provider(_imported_unit(use_stmt.path, host, units), tables,
@@ -339,11 +340,11 @@ def _stdlib_provider(path: str, tables: Any, units: Dict[str, Any],
     return UnitNamespace(path, functions={}, constants={}, others=homed)
 
 
-def _library_provider(use_stmt: UseStatement, tables: Any, units: Dict[str, Any],
+def _library_provider(path: str, tables: Any, units: Dict[str, Any],
                       library_registry: Any,
                       visited: AbstractSet[str] = frozenset()) -> Provider:
     """One unit of a library. The namespace is the unit, never the library (section 8)."""
-    wanted = use_stmt.path.rsplit("/", 1)[-1]
+    wanted = path.rsplit("/", 1)[-1]
 
     source_units = [name for name, unit in units.items()
                     if getattr(unit, "from_library", False)]
@@ -352,46 +353,122 @@ def _library_provider(use_stmt: UseStatement, tables: Any, units: Dict[str, Any]
         return _unit_provider(matched, tables, units=units,
                               library_registry=library_registry, visited=visited)
 
-    if library_registry is not None:
-        provider = _binary_library_provider(wanted, tables, library_registry)
-        if provider is not None:
-            return provider
+    provider = _binary_library_provider(path, tables, units, library_registry, visited)
+    if provider is not None:
+        return provider
 
-    return UnitNamespace(use_stmt.path, functions={}, constants={})
+    return UnitNamespace(path, functions={}, constants={})
 
 
-def _binary_library_provider(wanted: str, tables: Any,
-                             library_registry: Any) -> Optional[UnitNamespace]:
-    """A binary library has no AST: its records name their unit in the manifest."""
-    for metadata in library_registry.get_all_libraries().values():
-        manifest = metadata.raw_manifest or {}
-        records = manifest.get("public_functions", []) or []
-        unit_name = _manifest_unit(records, wanted)
+def _binary_library_provider(path: str, tables: Any, units: Dict[str, Any],
+                             library_registry: Any,
+                             visited: AbstractSet[str] = frozenset()
+                             ) -> Optional[UnitNamespace]:
+    """A binary library has no AST: its records name their unit in the manifest.
+
+    The written path names the library in its first segment and the unit in its last,
+    so a registered library of that name answers alone; only a path that names none
+    falls back to scanning every loaded library for the unit.
+    """
+    if library_registry is None:
+        return None
+    wanted = path.rsplit("/", 1)[-1]
+    named = _named_library(path, library_registry)
+    candidates = ([named] if named is not None
+                  else list(library_registry.get_all_libraries().values()))
+    for metadata in candidates:
+        unit_name = _manifest_unit(metadata.raw_manifest or {}, wanted)
         if unit_name is None:
             continue
-        functions = {
-            record["name"]: metadata.functions[record["name"]]
-            for record in records
-            if record.get("unit") == unit_name and record["name"] in metadata.functions
-        }
-        constants = {
-            record["name"]: sig
-            for record in manifest.get("public_constants", []) or []
-            if record.get("unit") == unit_name
-            and (sig := tables.constants.by_name.get(record["name"])) is not None
-        }
-        others = _manifest_types(manifest, unit_name)
-        return UnitNamespace(f"{metadata.name}/{unit_name}", functions=functions,
-                             constants=constants, others=others)
+        return _binary_unit_provider(metadata, unit_name, tables, units,
+                                     library_registry, visited)
     return None
 
 
-def _manifest_unit(records: Iterable[dict], wanted: str) -> Optional[str]:
-    """Which of the library's units the import names: the match, or its only one."""
-    names = {record.get("unit") for record in records if record.get("unit")}
+def _named_library(path: str, library_registry: Any) -> Any:
+    """The loaded library the written path names, by its first segment after `lib/`."""
+    parts = [part for part in path.split("/") if part]
+    if parts and parts[0] == "lib":
+        parts = parts[1:]
+    return library_registry.get_library(parts[0]) if parts else None
+
+
+def _binary_unit_provider(metadata: Any, unit_name: str, tables: Any,
+                          units: Optional[Dict[str, Any]], library_registry: Any,
+                          visited: AbstractSet[str]) -> UnitNamespace:
+    """One unit of one binary library, from that library's manifest alone."""
+    manifest = metadata.raw_manifest or {}
+    records = manifest.get("public_functions", []) or []
+    functions = {
+        record["name"]: metadata.functions[record["name"]]
+        for record in records
+        if record.get("unit") == unit_name and record["name"] in metadata.functions
+    }
+    constants = {
+        record["name"]: sig
+        for record in manifest.get("public_constants", []) or []
+        if record.get("unit") == unit_name
+        and (sig := tables.constants.by_name.get(record["name"])) is not None
+    }
+    return UnitNamespace(
+        f"{metadata.name}/{unit_name}", functions=functions, constants=constants,
+        others=_manifest_types(manifest, unit_name),
+        reexports=_binary_reexports(metadata, unit_name, tables, units,
+                                    library_registry, visited),
+    )
+
+
+def _binary_reexports(metadata: Any, unit_name: str, tables: Any,
+                      units: Optional[Dict[str, Any]], library_registry: Any,
+                      visited: AbstractSet[str]) -> Tuple[Provider, ...]:
+    """The providers one compiled unit's `public use` statements name (#585).
+
+    The manifest record IS the statement: a compiled library ships no text for this
+    pass to read, so `kind` says which of the three builders the written statement
+    would have reached, and each record composes exactly as `_reexports_of` composes a
+    source unit's. The chain and its visited set are the source unit's too -- a
+    compiled unit's key is the `lib/<library>/<unit>` name its declarations register
+    under -- so a re-export cycle inside a compiled library terminates the same way.
+    """
+    key = f"lib/{metadata.name}/{unit_name}"
+    if key in visited:
+        return ()
+    chain = frozenset(visited) | {key}
+    providers: list[Provider] = []
+    for record in metadata.reexports:
+        if record.get("unit") != unit_name:
+            continue
+        path = record.get("path") or ""
+        kind = record.get("kind")
+        if not path:
+            continue
+        if kind == "stdlib":
+            providers.append(_stdlib_provider(path, tables, units or {},
+                                              library_registry, chain))
+        elif kind == "library":
+            providers.append(_library_provider(path, tables, units or {},
+                                               library_registry, chain))
+        else:
+            providers.append(_binary_unit_provider(metadata, path, tables, units,
+                                                   library_registry, chain))
+    return tuple(providers)
+
+
+def _manifest_unit(manifest: dict, wanted: str) -> Optional[str]:
+    """Which of the library's units the import names: the match, or its only one.
+
+    The `units` index answers, not the record list: a façade unit whose every public
+    name is re-exported declares nothing of its own, so no record can name it (#585).
+    An older manifest with no index falls back to the units its records name.
+    """
+    names = [name for name in (manifest.get("units") or []) if name]
+    if not names:
+        names = sorted({record.get("unit")
+                        for record in manifest.get("public_functions", []) or []
+                        if record.get("unit")})
     if wanted in names:
         return wanted
-    return next(iter(names)) if len(names) == 1 else None
+    return names[0] if len(names) == 1 else None
 
 
 def _manifest_types(manifest: dict, unit_name: str) -> Dict[str, str]:

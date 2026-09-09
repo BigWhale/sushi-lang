@@ -1333,8 +1333,8 @@ gives `sh.Vec` and `sh.area` alike. The rules:
   candidate.
 - `public use` takes no `as` (`CE3016`): a re-export is of names, not of a namespace.
 - A `public use` that hands on nothing public warns (`CW3005`).
-- A binary or hybrid `.slib` cannot carry a `public use` (`CE3514`); a source library, the
-  default kind, can.
+- Every kind of `.slib` carries a `public use`: a source library ships the statement as
+  text, a binary or hybrid one ships a manifest record of it.
 
 The standard library uses it: `use <io/fs>` alone brings `IoError`, `FileError` and
 `SeekFrom`, because `<io/fs>` re-exports `<io/contracts>` and that re-exports `<io/error>`.

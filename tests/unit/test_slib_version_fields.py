@@ -55,9 +55,9 @@ def manifest(tmp_path_factory):
 def test_the_protocol_string_is_bumped(manifest):
     # 2.1: the three concrete lists gained an `is_public` gate and `not_exported` grew
     # three kinds. 2.2: every record names its `unit`, and a record with a symbol in the
-    # shipped bitcode names that too (`link_symbol`). Either way an older `.slib` has to
-    # be rebuilt.
-    assert manifest["sushi_lib_version"] == "2.2"
+    # shipped bitcode names that too (`link_symbol`). 2.3: a `reexports` list, one record
+    # per `public use` (#585). Either way an older `.slib` has to be rebuilt.
+    assert manifest["sushi_lib_version"] == "2.3"
 
 
 def test_the_manifest_records_its_kind(manifest):

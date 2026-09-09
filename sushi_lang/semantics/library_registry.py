@@ -11,6 +11,19 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import FuncSig
 
 
+def manifest_reexports(manifest: dict) -> tuple[dict, ...]:
+    """One library's `public use` records: `{"unit", "path", "kind"}` each (#585).
+
+    The ONE reader of the key. Two readers ask, and neither can ask the other's
+    question: the `namespaces` pass composes the unit's namespace from what it names,
+    and the driver has to put a re-exported stdlib module into the consumer's build at
+    all -- a source library's `use` line does that by being text, and a compiled one
+    has only this record. A manifest written before the key reads as no re-export,
+    which is what an older compiled library has: the statement was refused (CE3514).
+    """
+    return tuple((manifest or {}).get("reexports") or ())
+
+
 @dataclass
 class LibraryMetadata:
     """Pre-parsed library metadata with typed objects."""
@@ -35,6 +48,10 @@ class LibraryMetadata:
     structs: dict[str, StructType] = field(default_factory=dict)
     enums: dict[str, EnumType] = field(default_factory=dict)
     dependencies: list[str] = field(default_factory=list)
+    # What each of the library's units re-exports (#585): the target of every
+    # `public use`, keyed by the unit that wrote it. A compiled library ships no text
+    # for the `namespaces` pass to read the statement from.
+    reexports: tuple[dict, ...] = ()
     raw_manifest: dict = field(default_factory=dict)
 
 
@@ -68,6 +85,7 @@ class LibraryRegistry:
             platform=manifest.get("platform", "unknown"),
             version=manifest.get("version", "0.0.0"),
             dependencies=manifest.get("dependencies", []),
+            reexports=manifest_reexports(manifest),
             raw_manifest=manifest,
         )
 

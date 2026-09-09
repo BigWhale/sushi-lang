@@ -277,9 +277,10 @@ class UnitNamespace(Provider):
     phase that lifts it).
 
     `reexports` is what the unit's `public use` statements name (section 8.1), built by
-    the pass from the unit's own AST. A binary library's unit has none: rule 3 refuses
-    the statement at build time (CE3514). `hidden` is the subset of `others` the unit
-    declares without `public`; a function or a constant carries its own marker.
+    the pass from the unit's own AST -- or, for a compiled library's unit, which has no
+    AST at all, from the manifest's `reexports` record of the same statement (#585).
+    `hidden` is the subset of `others` the unit declares without `public`; a function or
+    a constant carries its own marker.
     """
 
     namespace_kind = "unit"

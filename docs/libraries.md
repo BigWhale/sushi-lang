@@ -67,9 +67,9 @@ when there is one, and from `--lib-version` otherwise; neither is **CE3505**. Se
 
 | Kind | Ships | Portable | Notes |
 |--------|--------------------------|-----|--------------------------------------------|
-| `source` | unit source text | yes | the default; the consumer compiles it; a `public use` re-exports |
-| `binary` | LLVM bitcode | no | platform-bound (**CE3504** elsewhere); no `public use` (**CE3514**) |
-| `hybrid` | both | no | the bitcode still binds it to one platform; no `public use` (**CE3514**) |
+| `source` | unit source text | yes | the default; the consumer compiles it |
+| `binary` | LLVM bitcode | no | platform-bound (**CE3504** elsewhere) |
+| `hybrid` | both | no | the bitcode still binds it to one platform |
 
 ```bash
 # The default: one artifact for every platform
@@ -84,12 +84,13 @@ does **not** buy: a generic cannot be pre-compiled, because monomorphization nee
 consumer's concrete type arguments, so a binary library carries the source text of its
 generics in the index regardless. Binary distribution hides concrete bodies only.
 
-A binary or hybrid library cannot re-export: a `public use` in one of its units is
-**CE3514** at the line, because the manifest has no record for a re-export yet and a
-consumer would read a narrower API than the author wrote. A source library carries the
-statement as text and the consumer's compiler reads it, so a façade unit that says
-`public use` on each of the library's other units is the way to give a multi-unit library
-one namespace.
+Every kind re-exports. A façade unit that says `public use` on each of the library's
+other units is the way to give a multi-unit library one namespace, and it works whichever
+kind you build: a source library ships the statement as text and the consumer's compiler
+reads it, a compiled one ships a `reexports` record per statement and the consumer
+composes the namespace from that. A `public use <io/fs>` hands the module on the same
+way, and the consumer's build compiles the module on the strength of the record even
+where no unit of its own wrote the import.
 
 ### Public Declarations
 
@@ -338,6 +339,8 @@ This is useful for:
 - Reading a library's contracts: every public perk prints with its method signatures, and
   `Perk Implementations` lists which types satisfy each one -- a concrete implementation
   and a generic-target template (`extend Box@(T) with Show`) alike
+- Seeing what a unit hands on: `Re-exports` prints one line per `public use`, as the
+  statement was written, so a façade unit's whole surface reads off the report
 - Verifying platform compatibility
 - Understanding library dependencies
 

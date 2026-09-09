@@ -987,12 +987,15 @@ place U's own names land -- flat behind a flat `use "U"`, behind the dot of `use
    before. Re-exports compose along `public use` chains -- if X says `public use Y`, U's
    importers get Y -- and never along a plain `use`. A cycle of `public use` is legal and
    terminates on a visited set.
-3. A binary `.slib` carries no re-export today. A `public use` in a unit built with
-   `--lib-kind binary` or `hybrid` is CE3514 at the line, before anything is compiled: the
-   manifest has no record for it, and a consumer would read a narrower API than the author
-   wrote, silently. A source `.slib` needs nothing -- the consumer re-parses the statement.
-   #585 is the manifest record; CLAUDE.md Known Limitation 6 and `docs/design/libraries.md`
-   section 5 carry the limit.
+3. Every kind of `.slib` carries a re-export (#585 built the record; it was CE3514 at
+   the line until then). A source `.slib` needs nothing -- the consumer re-parses the
+   statement. A binary or hybrid one ships a `reexports` list in the manifest, one record
+   per statement: the target, the unit that wrote it, and which of the three producers the
+   target is, so the consumer reaches the same provider builder the written statement
+   would have. `docs/design/libraries.md` section 5 carries the two consequences: the
+   `units` index is what finds a façade unit that declares nothing of its own, and a
+   re-exported stdlib module reaches the consumer's build through the record because no
+   `use` line of its own does.
 4. The predefined enums stay synthesized and homed (Ruling 3, #574). A module makes a home
    reachable by re-exporting it -- `public use <io/error>` in `<io/contracts>` -- and the
    stamp machinery (`homed_enums`, `UnitScope.holds_home`, `reject_out_of_scope_type`)
@@ -1021,6 +1024,7 @@ through a two-hop chain resolve to the ONE synthesized `EnumType`, and
 `Result<string, IoError>` interns once. `tests/unit/test_public_use_reexport.py` is the
 gate: one program names `Vec` bare through two hops and behind two aliases, `IoError` bare
 and behind two aliases, and every `let` resolves to the same table object; no CE0126.
+`tests/unit/test_lib_binary_reexports.py` is the compiled half's gate (#585).
 
 **Mechanics.** The grammar takes `PUBLIC? USE`; `UseStatement.is_public` and
 `public_span` carry it. A provider composes what it re-exports: `Provider.reexports` is the
@@ -1031,7 +1035,9 @@ re-export's provider, so a call through `sh.origin` routes to the unit that decl
 `origin`. The flat scope reads the SAME walk: `_scope_of` puts every reached unit, module
 and generic into `UnitScope`, so the dot and the bare name cannot disagree. The
 `namespaces` pass does not move -- a provider still needs only what `collect` and
-`libraries` produce, and a unit's own AST, which it has.
+`libraries` produce, and a unit's own AST, which it has. A COMPILED library's unit has no
+AST, so `_binary_reexports` reads the manifest record in its place and composes the same
+way, with the same chain and the same visited set (#585).
 
 **Tests.** `tests/namespaces/reexport/`: the flat and the aliased import of a re-exporting
 unit; a two-hop chain; a plain `use` in the middle that re-exports nothing (CE2001 with the

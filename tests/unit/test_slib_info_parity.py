@@ -20,9 +20,10 @@ TOOL_SRC = REPO / "toolchain" / "src" / "slib_info.sushi"
 
 # One declaration per --lib-info section: concrete functions with every mode
 # family, a generic template, a constant, a struct, a payload and a unit enum
-# variant, and one stdlib dependency.
+# variant, one stdlib dependency, and a re-export of it (#585).
 DEMO_LIB = """\
 use <collections/strings>
+public use <math>
 
 public const i32 ANSWER = 42
 
@@ -97,6 +98,7 @@ def test_the_tool_renders_every_section(built):
     assert "enum Shade:" in out
     assert "Custom(i32)" in out
     assert "<collections/strings>" in out
+    assert "demolib: public use <math>" in out
     assert "Source: " in out
 
 
