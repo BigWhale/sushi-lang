@@ -53,9 +53,16 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
     builder = require_builder(codegen)
     builder = codegen.builder
 
+    # A CONTAINER is the one struct that is not flattened. Its fields are its
+    # implementation -- `List@(T).data` is a raw pointer, and the values are not in the
+    # struct at all -- so it answers through its own registered hash, which reads what it
+    # holds. Walking it here read the pointer and answered CE0052 (#628).
+    from sushi_lang.semantics.generics.hashing import container_hash_kind
+    is_container = isinstance(field_type, StructType) and container_hash_kind(field_type) is not None
+
     # A nested struct is walked field by field rather than through its own registered
     # hash, so the combine order of the outer struct is one flat sequence.
-    if isinstance(field_type, StructType):
+    if isinstance(field_type, StructType) and not is_container:
         nested_hash = emit_fnv1a_init(codegen)
 
         for nested_idx, (nested_name, nested_type) in enumerate(field_type.fields):
@@ -80,7 +87,9 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
                 if result_enum is not None:
                     field_type = result_enum
 
-        if not isinstance(field_type, (EnumType, ArrayType, DynamicArrayType)):
+        # A StructType reaching here is a container and nothing else: a plain struct
+        # returned above, from the flattening arm.
+        if not isinstance(field_type, (EnumType, ArrayType, DynamicArrayType, StructType)):
             raise_internal_error("CE0052", type=str(field_type))
 
     hash_method = codegen.derived_methods.get_method(field_type, "hash")

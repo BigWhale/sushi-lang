@@ -365,11 +365,14 @@ def check_struct_enum_builtin_methods(receiver_type, method_name, validator):
     if not isinstance(receiver_type, (StructType, EnumType)):
         return None
 
-    # Own/List/HashMap keep their own method paths. A List<i32> monomorph really does
-    # carry a registered `hash` while validation reports CE2008 for it, so without this
-    # guard inference and validation disagree.
+    # Own/List/HashMap keep their own method paths -- except `hash`, which is a genuinely
+    # derived method for a container now (#628). The derived table below is the right
+    # answer for all three: `List@(T)` and `Own@(T)` carry a hash of what they hold, and
+    # a `HashMap@(K, V)` carries no entry at all. Declining it here left the container
+    # method inferrers to answer None, and a call with NO inferred type is not compared
+    # against its declared one -- `let i32 h = l.hash()` was accepted in silence.
     from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
-    if receiver_type.name.startswith(CONTAINER_PREFIXES):
+    if method_name != "hash" and receiver_type.name.startswith(CONTAINER_PREFIXES):
         return None
 
     if validator.perk_impl_table.get_method(receiver_type, method_name) is not None:

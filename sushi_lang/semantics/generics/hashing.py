@@ -15,6 +15,7 @@ from sushi_lang.semantics.typesys import (
     Type,
     UnknownType,
 )
+from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
@@ -41,6 +42,7 @@ UNHASHABLE_KINDS: Dict[str, str] = {
     "GenericTypeRef": "an uninstantiated generic type",
     "GenericStructType": "a generic struct (should be monomorphized first)",
     "GenericEnumType": "a generic enum (should be monomorphized first)",
+    "PointerType": "a raw pointer (unhashable)",
 }
 
 # A kind that holds other types, and answers through the walk over what it holds.
@@ -49,14 +51,24 @@ WALKED_KINDS = frozenset({"ArrayType", "DynamicArrayType", "StructType", "EnumTy
 # A kind that is hashable with nothing to walk.
 HASHABLE_KINDS = frozenset({"BuiltinType"})
 
-# A kind the walk lets through although the backend cannot hash it. `PointerType` is the
-# whole set. It has no spelling in Sushi and reaches the walk only in a container the
-# compiler synthesizes -- `List@(T).data`, `Own@(T).value` -- and letting it through is
-# what gives those two a derived hash today. That hash cannot be emitted:
-# `Own@(i32).hash()` reads CE0052, the same fault as #618. Refusing it is therefore
-# right, but it takes the derived hash off every container, which is a ruling of its
-# own; it is held back and named here rather than left to fall through in silence.
-LET_THROUGH_KINDS = frozenset({"PointerType"})
+# A kind the walk would let through although the backend cannot hash it. The set is
+# EMPTY, and the gate that pins it says so. `PointerType` was the one inhabitant: it
+# reaches the walk only inside a container the compiler synthesizes, and letting it
+# through gave `List@(T)` and `Own@(T)` a hash the backend could not emit (#628). A
+# container now answers from what it HOLDS instead, so the pointer is refused with every
+# other unhashable kind and no hole is left open.
+LET_THROUGH_KINDS: frozenset[str] = frozenset()
+
+# What a container hashes, and the backend emitter kind that reads it. A container's
+# backing FIELDS are the wrong answer: `List@(T).data` and `Own@(T).value` are raw
+# pointers, and the hash of an address says nothing about the value. `HashMap@(K, V)` is
+# absent on purpose -- its buckets carry a state for each slot and the slot order is not
+# the entry order, so it needs a fold that no walk over elements can give -- an emitter
+# of its own, and a ruling on which fold. It is refused until then (#628).
+CONTAINER_HASH_KINDS: Dict[str, str] = {
+    "List": "list",
+    "Own": "own",
+}
 
 
 @dataclass
@@ -163,10 +175,45 @@ def can_struct_be_hashed(struct_type: StructType,
                    lambda: _struct_fields_are_hashable(struct_type, walk))
 
 
+def container_hash_kind(ty: Type) -> Optional[str]:
+    """The emitter kind for a container that hashes what it holds, else None.
+
+    One reader for two questions: whether the walk reads the type arguments instead of
+    the fields, and which backend emitter the registration then names.
+    """
+    base = getattr(ty, "generic_base", None)
+    if base is None:
+        return None
+    return CONTAINER_HASH_KINDS.get(base)
+
+
+def _container_content_is_hashable(struct_type: StructType, walk: _Walk) -> tuple[bool, str]:
+    """A container answers from what it HOLDS, with the walk standing on the container."""
+    kind = container_hash_kind(struct_type)
+    if kind is None:
+        return False, "a container with no derived hash (its slot order is not its entry order)"
+
+    held = struct_type.generic_args or ()
+    if not held:
+        return False, "a container with no type argument to read"
+
+    for arg in held:
+        can_hash, reason = hashability_of(arg, walk)
+        if not can_hash:
+            return False, f"holds -> {reason}"
+
+    return True, "the type it holds is hashable"
+
+
 def _struct_fields_are_hashable(struct_type: StructType, walk: _Walk) -> tuple[bool, str]:
     """Every field of one struct, with the walk already standing on that struct."""
     if isinstance(struct_type, GenericStructType):
         return False, UNHASHABLE_KINDS["GenericStructType"]
+
+    # A compiler container's fields are its IMPLEMENTATION, not its content: two of the
+    # three hold a raw pointer there. Read what it holds instead (#628).
+    if struct_type.name.startswith(CONTAINER_PREFIXES):
+        return _container_content_is_hashable(struct_type, walk)
 
     for field_name, field_type in struct_type.fields:
         can_hash, reason = hashability_of(field_type, walk)
@@ -287,7 +334,8 @@ def register_struct_hash_method(struct_type: StructType,
     second of two exponential walks per type (#598).
     """
     _register_hash_method(
-        struct_type, derived, "struct", _validate_struct_hash,
+        struct_type, derived, container_hash_kind(struct_type) or "struct",
+        _validate_struct_hash,
         f"Auto-derived hash for struct {struct_type}",
     )
 

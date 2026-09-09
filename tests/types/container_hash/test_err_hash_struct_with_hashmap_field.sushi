@@ -1,0 +1,16 @@
+# The refusal travels through a field the same way the acceptance does: a struct that
+# holds a HashMap@(K, V) derives no hash either, and says so at the call site.
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: undefined function 'Cache.hash'
+# EXPECT_STDERR_CONTAINS: c.hash()
+
+use <collections/hashmap>
+
+struct Cache:
+    i32 id
+    HashMap@(i32, i32) entries
+
+fn main() i32:
+    let Cache c = Cache(1, HashMap.new())
+    println("{c.hash()}")
+    return Result.Ok(0)

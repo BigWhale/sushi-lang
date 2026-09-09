@@ -157,7 +157,12 @@ Keys must implement `.hash() -> u64` method. Supported types:
 - **Structs** (with hashable fields)
 - **Enums** (with hashable variant data)
 
-**Not supported:** Nested arrays (cannot be hashed)
+- **`List@(T)` and `Own@(T)`** have a hash of what they hold, but no equality test, so
+  neither is a key today
+
+**Not supported:** Nested arrays (cannot be hashed), and a `HashMap@(K, V)` itself. A map
+has no hash of its own: its buckets carry a state for each slot and the slot order is not
+the entry order, so a hash over them would answer two values for one set of entries.
 
 ## Hash Function
 

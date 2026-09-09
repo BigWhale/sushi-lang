@@ -1,0 +1,19 @@
+# An Own@(T) hashes its PAYLOAD, not the address it holds. Two allocations of the same
+# value hash the same although the two pointers differ; that is what makes the hash mean
+# something. The derived hash used to read the pointer field and answered CE0052 (#628).
+# EXPECT_STDOUT_CONTAINS: same_value=true
+# EXPECT_STDOUT_CONTAINS: other_value=false
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let Own@(i32) a = Own.alloc(42)
+    let Own@(i32) b = Own.alloc(42)
+    let Own@(i32) c = Own.alloc(7)
+
+    println("same_value={a.hash() == b.hash()}")
+    println("other_value={a.hash() == c.hash()}")
+
+    a.destroy()
+    b.destroy()
+    c.destroy()
+    return Result.Ok(0)

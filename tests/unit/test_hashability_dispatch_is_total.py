@@ -94,18 +94,20 @@ def test_no_kind_is_named_twice():
     assert not overlap, f"a kind is both refused and accepted: {sorted(overlap)}"
 
 
-def test_a_pointer_is_let_through_on_purpose():
-    """`PointerType` is a hole, and it is named rather than left to fall through.
+def test_nothing_is_let_through():
+    """The set is EMPTY, and it must stay that way.
 
-    It has no spelling in Sushi. It reaches the walk only in a container the compiler
-    synthesizes -- `List@(T).data`, `Own@(T).value` -- and letting it through is what
-    gives those two the derived hash that
-    `test_method_registry_struct_builtins.test_list_monomorph_really_does_carry_a_registered_hash`
-    pins. The hash cannot be emitted (`Own@(i32).hash()` reads CE0052), so refusing it
-    is right, but that takes the derived hash off every container and is a ruling of
-    its own.
+    `PointerType` was its one inhabitant. It has no spelling in Sushi and reached the
+    walk only inside a container the compiler synthesizes -- `List@(T).data`,
+    `Own@(T).value` -- so letting it through was what gave those two a derived hash. That
+    hash could never be emitted: `Own@(i32).hash()` read CE0052, `List@(i32).hash()` read
+    CE0042 and `HashMap@(i32, i32).hash()` crashed the backend outright. A container now
+    answers from what it HOLDS (`CONTAINER_HASH_KINDS`), so the pointer is refused with
+    every other unhashable kind and the hole is closed (#628).
+
+    A kind belongs in `UNHASHABLE_KINDS` or in a walk, never here.
     """
-    assert set(LET_THROUGH_KINDS) == {"PointerType"}
+    assert set(LET_THROUGH_KINDS) == set()
 
 
 @pytest.mark.parametrize("kind", sorted(_one_of_every_unhashable_kind()))

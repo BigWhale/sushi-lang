@@ -1,0 +1,21 @@
+# An Own@(T) whose payload is a struct delegates to the struct's own derived hash.
+# EXPECT_STDOUT_CONTAINS: same=true
+# EXPECT_STDOUT_CONTAINS: different=false
+# EXPECT_NO_LEAKS
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Own@(Point) a = Own.alloc(Point(3, 4))
+    let Own@(Point) b = Own.alloc(Point(3, 4))
+    let Own@(Point) c = Own.alloc(Point(3, 5))
+
+    println("same={a.hash() == b.hash()}")
+    println("different={a.hash() == c.hash()}")
+
+    a.destroy()
+    b.destroy()
+    c.destroy()
+    return Result.Ok(0)

@@ -1,0 +1,17 @@
+# A HashMap@(K, V) derives NO hash. It holds no flat sequence of elements -- its buckets
+# carry a state for each slot and the slot order is not the entry order -- so a correct
+# hash needs an emitter of its own, and a ruling on which fold. The call reads an
+# ordinary located diagnostic; it used to crash the backend with a raw AttributeError
+# reported as CE0000 (#628).
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: undefined function 'HashMap@(i32, i32).hash'
+# EXPECT_STDERR_CONTAINS: m.hash()
+
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, i32) m = HashMap.new()
+    m.insert(1, 2)
+    println("{m.hash()}")
+    m.free()
+    return Result.Ok(0)
