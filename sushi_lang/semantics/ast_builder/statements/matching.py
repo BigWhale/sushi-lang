@@ -6,7 +6,7 @@ from sushi_lang.semantics.ast import (
     Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
 )
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice, expect, unhandled
-from sushi_lang.semantics.ast_builder.utils.expression_discovery import _EXPR_NODES, contains_expr_like
+from sushi_lang.semantics.ast_builder.utils.expression_discovery import EXPR_NODES
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
 
@@ -26,7 +26,7 @@ def parse_match_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Match:
         elif isinstance(child, Tree):
             if child.data == "match_arm":
                 arms.append(parse_matcharm(child, ast_builder))
-            elif child.data in _EXPR_NODES and scrutinee_tree is None:
+            elif child.data in EXPR_NODES and scrutinee_tree is None:
                 scrutinee_tree = child
 
     if scrutinee_tree is None:
@@ -77,15 +77,12 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
                     if inline_child.data.endswith("_stmt"):
                         stmt = ast_builder.stmt_parser.parse_stmt(inline_child)
                         body = Block(statements=[stmt], loc=span_of(child))
-                    elif inline_child.data in _EXPR_NODES or contains_expr_like(inline_child):
+                    elif inline_child.data in EXPR_NODES:
                         body = ast_builder._expr(inline_child)
                     else:
                         unhandled(inline_child)
                 else:
                     unhandled(inline_child)
-                break
-            elif child.data in _EXPR_NODES or contains_expr_like(child):
-                body = ast_builder._expr(child)
                 break
 
     if body is None:

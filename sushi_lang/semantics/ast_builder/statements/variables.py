@@ -5,7 +5,7 @@ from lark import Tree
 from sushi_lang.semantics.ast import Let, Rebind
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_name, first_token, first_tree, ice, is_type_node, mark_nom)
-from sushi_lang.semantics.ast_builder.utils.expression_discovery import find_outer_expr_structural, _EXPR_NODES
+from sushi_lang.semantics.ast_builder.utils.expression_discovery import EXPR_NODES, statement_expr
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ def parse_let_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Let:
         from sushi_lang.semantics.ast_builder.expressions import lambdas
         value = lambdas.parse_lambda(lambda_block_node, ast_builder)
     else:
-        expr_node = find_outer_expr_structural(node)
+        expr_node = statement_expr(node)
         if expr_node is None:
             ice(node, "expression missing")
         value = ast_builder._expr(expr_node)
@@ -55,12 +55,11 @@ def parse_rebind_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Rebind:
     if target_node is None:
         ice(node, "target missing")
 
-    # Find the value expression (the second expression child, after the target)
-    # The grammar is: rebind_stmt: postfix ASSIGN_REBIND expr
-    # So we need to find the expr child (which will be or_expr, and_expr, etc.)
+    # `rebind_stmt: postfix ASSIGN_REBIND expr` holds two expressions, and the
+    # target is the first, so the value is the other one.
     expr_node = None
     for child in node.children:
-        if isinstance(child, Tree) and child.data in _EXPR_NODES and child is not target_node:
+        if isinstance(child, Tree) and child.data in EXPR_NODES and child is not target_node:
             expr_node = child
             break
 
