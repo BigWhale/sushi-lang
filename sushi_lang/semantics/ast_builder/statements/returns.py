@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import Return
-from sushi_lang.semantics.ast_builder.utils.expression_discovery import find_outer_expr_structural
+from sushi_lang.semantics.ast_builder.utils.expression_discovery import statement_expr
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_token, ice, mark_nom
 from sushi_lang.internals.report import span_of
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 def parse_return_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Return:
     """Parse return_stmt: RETURN NOM? expr"""
-    expr_node = find_outer_expr_structural(node)
+    expr_node = statement_expr(node)
     if expr_node is None:
         ice(node, "missing expression")
     value = ast_builder._expr(expr_node)
