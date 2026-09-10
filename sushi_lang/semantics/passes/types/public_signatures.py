@@ -111,8 +111,15 @@ def _type_visibility(validator: 'TypeValidator', ty: Optional[Any]) -> Optional[
 
     A builtin, a monomorphized instance and a lifted environment all answer None: they are
     nameable everywhere, and none of them carries a source marker.
+
+    A WRITTEN generic target answers from its BASE name: `extend Box@(T) with P` promises
+    what `Box` promises, and `Box` is the name that carries the marker. The monomorphized
+    copy of the same declaration keeps answering None, so one written target reads one
+    marker and the fence reports it one time.
     """
     name = getattr(ty, "name", None)
+    if not isinstance(name, str):
+        name = getattr(ty, "base_name", None)
     if not isinstance(name, str):
         return None
     table = validator.visibility

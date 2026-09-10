@@ -467,6 +467,7 @@ widening somebody else's:
 | Perk method return and parameter | yes | the perk's, or the target type's |
 | Public generic constraint | yes (CE3010) | the declaring function's, struct's or enum's marker |
 | Extension or perk-implementation RECEIVER | no | it IS the gate; asking would answer itself |
+| A GENERIC target (`extend Box@(T) with P`) | yes | the BASE type's marker, which is where it is written |
 | A target with no declaration (`extend i32`) | no | there is no marker to inherit |
 
 The extension guard reading its *target's* flag mirrors the function guard reading its
