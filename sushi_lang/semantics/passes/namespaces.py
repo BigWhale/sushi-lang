@@ -26,6 +26,7 @@ from typing import AbstractSet, Any, Dict, Iterable, Optional, Tuple
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program, UseStatement
+from sushi_lang.semantics.ast_walk import declarations
 from sushi_lang.semantics.namespaces import (
     GENERIC_UNIT_TYPES,
     ExternalNamespace,
@@ -41,6 +42,11 @@ from sushi_lang.semantics.namespaces import (
 # The kinds a namespace holds that a qualified form cannot reach yet. They are members
 # all the same, so an alias over a unit of nothing but types is not an empty namespace.
 _MEMBER_ONLY_KINDS = frozenset({"struct", "enum", "perk"})
+
+# What the declaration walk yields that lives INSIDE another declaration. A struct
+# field, an enum variant, a perk method and an FFI declaration are each reached through
+# the thing that holds them, so none of them contests an alias (CE3013).
+_INNER_KINDS = frozenset({"field", "variant", "perk method", "external declaration"})
 
 
 def build_namespaces(reporter: Reporter, unit: Any, tables: Any, *,
@@ -171,17 +177,17 @@ def _reject_use_below_declaration(reporter: Reporter, unit: Any) -> None:
                 .note("this declaration comes first", first).emit()
 
 
-def _top_level_declarations(program: Program) -> Iterable[Any]:
-    """Every node a `use` must stand above."""
-    for group in ("constants", "structs", "enums", "perks", "functions", "extensions",
-                  "generic_extensions", "perk_impls", "externals"):
-        yield from (getattr(program, group, None) or ())
-
-
 def _names_declared_by(program: Program) -> Dict[str, Span]:
-    """The names this unit declares itself, each with the span that declares it."""
+    """The names this unit declares itself, each with the span that declares it.
+
+    The walk is `ast_walk.declarations`, the one home for "what does this unit
+    declare". A second list here read the concrete groups alone and lost every generic
+    one the collect pass had re-filed (#631).
+    """
     names: Dict[str, Span] = {}
-    for node in _top_level_declarations(program):
+    for kind, node in declarations(program):
+        if kind in _INNER_KINDS:
+            continue
         name = getattr(node, "name", None)
         if isinstance(name, str) and name not in names:
             names[name] = getattr(node, "name_span", None) or getattr(node, "loc", None)

@@ -1,0 +1,31 @@
+# Test: --warn-missing-docs sees a perk implementation on a GENERIC target and the
+# method inside it. The declaration walk read the concrete list alone, so the two
+# CW7002 lints below were never reported. Everything else here carries a block, so
+# the file goes quiet the day the walk drops the generic list again.
+# COMPILER_FLAGS: --warn-missing-docs
+# EXPECT_ERROR_CODE: CW7002
+
+##: A unit whose only undocumented declarations are the generic perk implementation. :##
+
+##: A box that holds one value. :##
+public struct Box@(T):
+    ##: The held value. :##
+    T held
+
+##: Something that can say a number. :##
+perk Show:
+    ##:
+    Say the number.
+
+    - Returns: The number.
+    :##
+    fn show() i32
+
+extend Box@(T) with Show:
+    fn show() i32:
+        return 1
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println("{b.show()}")
+    return Result.Ok(0)

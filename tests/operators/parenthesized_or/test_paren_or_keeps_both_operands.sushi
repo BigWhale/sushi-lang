@@ -1,7 +1,6 @@
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\nbare\nparen\n"
 # A parenthesized `or` must evaluate the whole operator, not its left operand
-# alone (#496). `or` is the outermost level of the expression grammar, so it is
-# the one level whose parenthesized form carries more than one child.
+# alone (#496).
 
 fn main() i32:
     println("Mostly Harmless")

@@ -6,7 +6,7 @@ from sushi_lang.semantics.ast import (
     Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
 )
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice, expect, unhandled
-from sushi_lang.semantics.ast_builder.utils.expression_discovery import _EXPR_NODES, contains_expr_like
+from sushi_lang.semantics.ast_builder.utils.expression_discovery import EXPR_NODES
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
 
@@ -26,7 +26,7 @@ def parse_match_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Match:
         elif isinstance(child, Tree):
             if child.data == "match_arm":
                 arms.append(parse_matcharm(child, ast_builder))
-            elif child.data in _EXPR_NODES and scrutinee_tree is None:
+            elif child.data in EXPR_NODES and scrutinee_tree is None:
                 scrutinee_tree = child
 
     if scrutinee_tree is None:
@@ -77,15 +77,12 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
                     if inline_child.data.endswith("_stmt"):
                         stmt = ast_builder.stmt_parser.parse_stmt(inline_child)
                         body = Block(statements=[stmt], loc=span_of(child))
-                    elif inline_child.data in _EXPR_NODES or contains_expr_like(inline_child):
+                    elif inline_child.data in EXPR_NODES:
                         body = ast_builder._expr(inline_child)
                     else:
                         unhandled(inline_child)
                 else:
                     unhandled(inline_child)
-                break
-            elif child.data in _EXPR_NODES or contains_expr_like(child):
-                body = ast_builder._expr(child)
                 break
 
     if body is None:
@@ -117,6 +114,32 @@ def parse_literal_pattern(t: Tree, ast_builder: 'ASTBuilder') -> LiteralPattern:
     # _stamp_numeric_literal in passes/types/propagation.py).
     radix = 10 if negative else lit.radix
     return LiteralPattern(value=value, display=display, radix=radix, loc=span_of(t))
+
+
+def _read_pattern_item(node: Tree, ast_builder: 'ASTBuilder') -> Union[str, Pattern, 'OwnPattern']:
+    """Read one `pattern_item`: a nested pattern, a wildcard, an `Own(...)` or a NAME.
+
+    A binding MODE is not read here: `peek`/`poke` and `nom` rename the whole node
+    (`ref_binding`, `nom_binding`), so each caller reads a marked binding beside this
+    one. A fifth shape is grammar/builder drift and is an ICE with a location -- a
+    binding dropped without a word makes `Pattern.bindings` shorter than the payload,
+    and the arity check downstream then blames the count of the payload.
+    """
+    inner_pattern = first_tree(node.children, "pattern")
+    if inner_pattern is not None:
+        return parse_pattern(inner_pattern, ast_builder, nested=True)
+
+    if first_tree(node.children, "wildcard_pattern") is not None:
+        return "_"
+
+    inner_own = first_tree(node.children, "own_pattern_call")
+    if inner_own is not None:
+        return parse_own_pattern(inner_own, ast_builder)
+
+    token = next((c for c in node.children if isinstance(c, Token)), None)
+    if token is None or token.type != "NAME":
+        ice(node, "invalid pattern item")
+    return str(token.value)
 
 
 def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> Pattern:
@@ -177,19 +200,7 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> P
                                                loc=span_of(child)))
                     continue
                 if child.data == "pattern_item":
-                    inner_pattern = first_tree(child.children, "pattern")
-                    inner_wildcard = first_tree(child.children, "wildcard_pattern")
-                    inner_own = first_tree(child.children, "own_pattern_call")
-                    if inner_pattern is not None:
-                        bindings.append(parse_pattern(inner_pattern, ast_builder, nested=True))
-                    elif inner_wildcard is not None:
-                        bindings.append("_")
-                    elif inner_own is not None:
-                        bindings.append(parse_own_pattern(inner_own, ast_builder))
-                    else:
-                        token = next((c for c in child.children if isinstance(c, Token)), None)
-                        if token and token.type == "NAME":
-                            bindings.append(str(token.value))
+                    bindings.append(_read_pattern_item(child, ast_builder))
 
     return Pattern(
         enum_name=str(enum_name_tok.value),
@@ -243,24 +254,7 @@ def parse_own_pattern(t: Tree, ast_builder: 'ASTBuilder') -> 'OwnPattern':
     if pattern_item_tree is None:
         ice(t, "own_pattern must contain a pattern_item")
 
-    inner_pattern = first_tree(pattern_item_tree.children, "pattern")
-    inner_wildcard = first_tree(pattern_item_tree.children, "wildcard_pattern")
-    inner_own = first_tree(pattern_item_tree.children, "own_pattern_call")
-
-    if inner_pattern is not None:
-        inner = parse_pattern(inner_pattern, ast_builder, nested=True)
-    elif inner_wildcard is not None:
-        inner = "_"
-    elif inner_own is not None:
-        inner = parse_own_pattern(inner_own, ast_builder)
-    else:
-        token = next((c for c in pattern_item_tree.children if isinstance(c, Token)), None)
-        if token and token.type == "NAME":
-            inner = str(token.value)
-        else:
-            ice(t, "invalid own_pattern inner item")
-
     return OwnPattern(
-        inner_pattern=inner,
+        inner_pattern=_read_pattern_item(pattern_item_tree, ast_builder),
         loc=span_of(t)
     )

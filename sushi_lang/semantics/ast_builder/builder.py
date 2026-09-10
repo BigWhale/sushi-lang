@@ -6,20 +6,11 @@ from lark import Tree, Token
 
 from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
-from sushi_lang.semantics.generics.types import GenericTypeRef
 
-from sushi_lang.semantics.ast import (
-    Program, UseStatement, FuncDef, ConstDef, DocBlock, ExtendDef, Block,
-    StructDef, EnumDef, PerkDef, ExtendWithDef, Expr, ExternalBlock,
-)
+from sushi_lang.semantics.ast import Block, DocBlock, Expr, Program
 from sushi_lang.internals.report import span_of
 
-
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    first_tree as _first_tree,
-    find_tree_recursive as _find_tree_recursive,
-    expect,
-)
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import expect
 
 
 class ASTBuilder:
@@ -98,151 +89,35 @@ class ASTBuilder:
         return self._stmt_parser
 
     def build(self, tree: Tree) -> Program:
-        """Build Program AST from parse tree."""
-        from sushi_lang.semantics.ast_builder.declarations import imports, functions, constants, structs, enums, perks, extensions, externals
+        """Build the Program of one unit from its parse tree."""
+        from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
+        from sushi_lang.semantics.ast_builder.declarations.toplevel import (
+            TopLevelDeclarations, declarations_of)
 
         tree = expect(tree, "program")
-        uses: List[UseStatement] = []
-        constants_list: List[ConstDef] = []
-        structs_list: List[StructDef] = []
-        enums_list: List[EnumDef] = []
-        perks_list: List[PerkDef] = []
-        funcs: List[FuncDef] = []
-        extensions_list: List[ExtendDef] = []
-        generic_extensions: List[ExtendDef] = []
-        perk_impls: List[ExtendWithDef] = []
-        externals_list: List[ExternalBlock] = []
-        first_declaration_span = None
+        decls = TopLevelDeclarations()
+        decls.read_constants(tree, self)
+        for toplevel, declaration in declarations_of(tree):
+            decls.add(toplevel, declaration, self)
 
-        # Constants come first, whatever order they were written in: a fixed array's
-        # size may name one, and every other declaration can hold such a type. A unit
-        # variable rides in the same list and is NOT declared as a size: its value is
-        # read at run time (CE2099).
-        for ch in tree.children:
-            if not isinstance(ch, Tree):
-                continue
-            for rule, parse in (("const_def", constants.parse_constdef),
-                                ("var_def", constants.parse_vardef)):
-                found = (_first_tree(ch.children, rule) or _find_tree_recursive(ch, rule)
-                         if ch.data == "toplevel" else
-                         ch if ch.data == rule else None)
-                if found is None:
-                    continue
-                decl = parse(found, self)
-                constants_list.append(decl)
-                if rule == "const_def":
-                    self.unit_constants.declare(decl.name, decl)
+        attach_docs(tree.children, decls.documented(), self, allow_unit_doc=True)
+        self._orphan_unlifted_body_docs()
 
-        for ch in tree.children:
-            if not isinstance(ch, Tree):
-                continue
-            node = ch
-            if node.data == "toplevel":
-                use = _first_tree(node.children, "use_stmt") or _find_tree_recursive(node, "use_stmt")
-                if use is not None:
-                    uses.append(imports.parse_usestatement(use, self))
-                    continue
+        return Program(uses=decls.uses, constants=decls.constants,
+                       structs=decls.structs, enums=decls.enums, perks=decls.perks,
+                       functions=decls.functions, extensions=decls.extensions,
+                       generic_extensions=decls.generic_extensions,
+                       perk_impls=decls.perk_impls, externals=decls.externals,
+                       loc=span_of(tree), doc=self.unit_doc,
+                       orphan_docs=self.orphan_docs,
+                       first_declaration_span=decls.first_declaration_span)
 
-                # The first thing that is not an import. Source order lives in the tree
-                # and nowhere else, so the rule that reads it (CE3014) is served here.
-                if first_declaration_span is None:
-                    first_declaration_span = span_of(node)
-
-                const = _first_tree(node.children, "const_def") or _find_tree_recursive(node, "const_def")
-                if const is not None:
-                    continue
-
-                struct = _first_tree(node.children, "struct_def") or _find_tree_recursive(node, "struct_def")
-                if struct is not None:
-                    structs_list.append(structs.parse_structdef(struct, self))
-                    continue
-
-                enum = _first_tree(node.children, "enum_def") or _find_tree_recursive(node, "enum_def")
-                if enum is not None:
-                    enums_list.append(enums.parse_enumdef(enum, self))
-                    continue
-
-                perk = _first_tree(node.children, "perk_def") or _find_tree_recursive(node, "perk_def")
-                if perk is not None:
-                    perks_list.append(perks.parse_perkdef(perk, self))
-                    continue
-
-                external = _first_tree(node.children, "external_block") or _find_tree_recursive(node, "external_block")
-                if external is not None:
-                    externals_list.append(externals.parse_external_block(external, self))
-                    continue
-
-                extend_stmt = _first_tree(node.children, "extend_stmt") or _find_tree_recursive(node, "extend_stmt")
-                if extend_stmt is not None:
-                    for child in extend_stmt.children:
-                        if isinstance(child, Tree):
-                            if child.data == "extend_with_def":
-                                perk_impls.append(perks.parse_handle_extend_stmt_with(extend_stmt, self))
-                                break
-                            elif child.data == "extend_def":
-                                ext_def = extensions.parse_handle_extend_stmt_def(extend_stmt, self)
-                                if ext_def.target_type is not None and isinstance(ext_def.target_type, GenericTypeRef):
-                                    generic_extensions.append(ext_def)
-                                else:
-                                    extensions_list.append(ext_def)
-                                break
-                    continue
-
-                fn = _first_tree(node.children, "function_def") or _find_tree_recursive(node, "function_def")
-                if fn is not None:
-                    funcs.append(functions.parse_funcdef(fn, self))
-                    continue
-
-                ext_with = _first_tree(node.children, "extend_with_def") or _find_tree_recursive(node, "extend_with_def")
-                if ext_with is not None:
-                    perk_impls.append(perks.parse_extendwithdef(ext_with, self))
-                    continue
-
-            elif node.data == "use_stmt":
-                uses.append(imports.parse_usestatement(node, self))
-            elif node.data in ("const_def", "var_def"):
-                continue
-            elif node.data == "struct_def":
-                structs_list.append(structs.parse_structdef(node, self))
-            elif node.data == "enum_def":
-                enums_list.append(enums.parse_enumdef(node, self))
-            elif node.data == "perk_def":
-                perks_list.append(perks.parse_perkdef(node, self))
-            elif node.data == "external_block":
-                externals_list.append(externals.parse_external_block(node, self))
-            elif node.data == "function_def":
-                funcs.append(functions.parse_funcdef(node, self))
-            elif node.data == "extend_stmt":
-                for child in node.children:
-                    if isinstance(child, Tree):
-                        if child.data == "extend_with_def":
-                            perk_impls.append(perks.parse_handle_extend_stmt_with(node, self))
-                            break  # Only process one suffix per extend_stmt
-                        elif child.data == "extend_def":
-                            ext_def = extensions.parse_handle_extend_stmt_def(node, self)
-                            if ext_def.target_type is not None and isinstance(ext_def.target_type, GenericTypeRef):
-                                generic_extensions.append(ext_def)
-                            else:
-                                extensions_list.append(ext_def)
-                            break  # Only process one suffix per extend_stmt
-            elif node.data == "extend_with_def":
-                perk_impls.append(perks.parse_extendwithdef(node, self))
-
-        from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
-        attach_docs(tree.children,
-                    [*uses, *constants_list, *structs_list, *enums_list, *perks_list,
-                     *funcs, *extensions_list, *generic_extensions, *perk_impls,
-                     *externals_list],
-                    self, allow_unit_doc=True)
-
-        # A body block nothing lifted documents nothing: a lambda body, an `if` arm.
+    def _orphan_unlifted_body_docs(self) -> None:
+        """A body block nothing lifted documents nothing: a lambda body, an `if` arm."""
         for _body, doc in self.pending_body_docs.values():
             doc.orphan_reason = "detached"
             self.orphan_docs.append(doc)
         self.orphan_docs.sort(key=lambda d: (d.loc.line, d.loc.col) if d.loc else (0, 0))
-
-        return Program(uses=uses, constants=constants_list, structs=structs_list, enums=enums_list, perks=perks_list, functions=funcs, extensions=extensions_list, generic_extensions=generic_extensions, perk_impls=perk_impls, externals=externals_list, loc=span_of(tree), doc=self.unit_doc, orphan_docs=self.orphan_docs,
-                       first_declaration_span=first_declaration_span)
 
     def _parse_type(self, type_node: Tree) -> Optional[Type]:
         """Parse a type node into a Type object."""
