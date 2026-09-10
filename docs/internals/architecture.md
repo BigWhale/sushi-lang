@@ -48,6 +48,7 @@ sushi/
 │   ├── ast_builder/           # Modular AST construction, split by concern
 │   │   ├── builder.py         # Main orchestrator
 │   │   ├── declarations/      # Top-level constructs
+│   │   │   ├── toplevel.py    # One table sorts a unit's declarations
 │   │   │   ├── functions.py   # Function parsing
 │   │   │   ├── structs.py     # Struct definitions
 │   │   │   ├── enums.py       # Enum definitions
