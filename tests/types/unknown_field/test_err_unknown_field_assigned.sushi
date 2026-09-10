@@ -1,0 +1,12 @@
+# The assignment target is the same rule: `backend/statements/variables.py` was
+# the fourth CE0029 site (#630). A near miss carries the field it meant.
+# EXPECT_ERROR_CODE: CE2106
+# EXPECT_STDERR_CONTAINS: did you mean 'weight'
+struct Bag:
+    i32 weight
+
+fn main() i32:
+    let Bag b = Bag(1)
+    b.weigth := 3
+    println("{b.weight}")
+    return Result.Ok(0)
