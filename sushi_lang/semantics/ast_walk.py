@@ -6,6 +6,11 @@ collector reads it to record who may name what, and `tests/docs_sweep.py` reads 
 number its generated examples. Two walks would drift, and a kind missing from the walk
 would be silently missing from every consumer.
 
+A GENERIC target keeps a list of its own: the `collect` pass re-files
+`extend Box@(T)` and `extend Box@(T) with P` out of the concrete list, because every
+later walk over that one assumes a concrete `self`. Each walk here therefore reads BOTH
+lists, or a generic declaration is silently missing from every consumer (#631).
+
 The ORDER is part of the contract, not an implementation detail --
 `tests/docs_sweep.py` numbers its `doc_example_<n>` helpers from it, so a rearrangement
 renames every one of them. `tests/unit/test_declaration_walk_is_total.py` is the gate.
@@ -63,7 +68,7 @@ def _bodied_kinds(program: 'Program') -> Iterator[Declaration]:
         yield "function", func
     for extension in [*program.extensions, *program.generic_extensions]:
         yield "extension", extension
-    for impl in program.perk_impls:
+    for impl in [*program.perk_impls, *program.generic_perk_impls]:
         for method in impl.methods:
             yield "perk method", method
 
@@ -93,7 +98,7 @@ def declarations(program: 'Program') -> Iterator[Declaration]:
         yield "perk", perk
         for method in perk.methods:
             yield "perk method", method
-    for impl in program.perk_impls:
+    for impl in [*program.perk_impls, *program.generic_perk_impls]:
         yield "perk implementation", impl
     for block in program.externals:
         yield "external block", block
@@ -195,7 +200,7 @@ def signature_types(program: 'Program') -> Iterator[TypeSite]:
         for method in perk.methods:
             yield from _callable_sites("perk method", perk, method)
 
-    for impl in program.perk_impls:
+    for impl in [*program.perk_impls, *program.generic_perk_impls]:
         yield TypeSite("perk implementation", "receiver", impl,
                        getattr(impl, "target_type", None),
                        getattr(impl, "target_type_span", None) or impl.loc)

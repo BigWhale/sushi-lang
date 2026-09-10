@@ -1,0 +1,20 @@
+# FFI: a perk implementation on a GENERIC target is as visible as its target type,
+# so its method may not take a foreign `ptr` either. The declaration walk read the
+# concrete list alone, so the fence never saw this method.
+# EXPECT_ERROR_CODE: CE5008
+unsafe external "C" as libc because "intentional public ptr exposure":
+    fn free(ptr p) ~ = "free"
+
+public struct Box@(T):
+    T held
+
+perk Releaser:
+    fn release_with(ptr p) i32
+
+extend Box@(T) with Releaser:
+    fn release_with(ptr p) i32:
+        libc.free(p)
+        return 1
+
+fn main() i32:
+    return Result.Ok(0)

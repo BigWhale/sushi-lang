@@ -1,0 +1,22 @@
+# CE3009: a perk implementation on a GENERIC target is as visible as its target
+# type, exactly as a concrete one is. The declaration walk read the concrete list
+# alone, so the fence never saw this method and the private type went out.
+# EXPECT_ERROR_CODE: CE3009
+
+struct Secret:
+    i32 code
+
+perk Peel:
+    fn peel() Secret
+
+public struct Box@(T):
+    T held
+
+extend Box@(T) with Peel:
+    fn peel() Secret:
+        return Secret(1)
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println("{b.peel().code}")
+    return Result.Ok(0)
