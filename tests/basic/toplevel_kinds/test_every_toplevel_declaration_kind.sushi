@@ -1,0 +1,51 @@
+# Every top-level declaration kind of the grammar, in one unit. One table sorts them
+# into the lists a Program takes (#632).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless 3 7 0 1\n"
+
+use <math>
+public use <collections/hashmap>
+
+public const i32 LIMIT = 7
+const i32 SCRATCH = 3
+
+var i32 counter = 0
+public var i32 total = 1
+
+public struct Crate:
+    i32 weight
+
+struct Pair@(T, U):
+    T first
+    U second
+
+public enum Sign:
+    Plus
+    Minus
+
+perk Weighable:
+    fn heft(peek self) i32
+
+unsafe external "C" as libc because "the absolute value":
+    fn c_abs(i32 v) i32 = "abs"
+
+extend Crate heavy(peek self) bool:
+    return self.weight > LIMIT
+
+extend Crate static empty() Crate:
+    return Crate(0)
+
+extend Pair@(T, U) left(peek self) T:
+    return self.first
+
+extend Crate with Weighable:
+    fn heft(peek self) i32:
+        return self.weight
+
+fn describe(peek Crate c) i32:
+    return Result.Ok(c.weight + SCRATCH)
+
+fn main() i32:
+    let Crate c = Crate.empty()
+    let i32 w = describe(peek c).realise(0)
+    println("Mostly Harmless {w} {LIMIT} {counter} {total}")
+    return Result.Ok(0)

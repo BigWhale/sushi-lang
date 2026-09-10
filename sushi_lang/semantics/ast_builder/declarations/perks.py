@@ -122,46 +122,6 @@ def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMetho
     )
 
 
-def parse_extendwithdef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendWithDef:
-    """Parse extend_with_def: EXTEND type WITH NAME ":" _NEWLINE _INDENT function_def+ _DEDENT"""
-    t = expect(t, "extend_with_def")
-
-    target_type_node = None
-    for child in t.children:
-        if is_type_node(child):
-            target_type_node = child
-            break
-
-    perk_name_tok = None
-    found_type = False
-    for child in t.children:
-        if is_type_node(child):
-            found_type = True
-        elif found_type and isinstance(child, Token) and child.type == "NAME":
-            perk_name_tok = child
-            break
-
-    if perk_name_tok is None:
-        ice(t, "missing perk NAME")
-
-    methods = parse_impl_methods(t.children, ast_builder)
-
-    if not methods:
-        ice(t, "must have at least one method implementation")
-
-    attach_docs(t.children, methods, ast_builder)
-    target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
-
-    return ExtendWithDef(
-        target_type=target_type,
-        perk_name=str(perk_name_tok),
-        methods=methods,
-        loc=span_of(t),
-        target_type_span=span_of(target_type_node),
-        perk_name_span=span_of(perk_name_tok),
-    )
-
-
 def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendWithDef:
     """Handle extend_stmt when it's a perk implementation."""
 
