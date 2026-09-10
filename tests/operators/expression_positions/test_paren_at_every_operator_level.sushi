@@ -1,0 +1,30 @@
+# EXPECT_STDOUT_EXACT: "18\n19\n6\n3\n14\n7\ntrue\ntrue\n-5\n-6\ntrue\n7\n3\nMostly Harmless\n"
+# A parenthesized expression at each operator level. The brackets inline away,
+# so what the call chain reads is the level's own node, and every level under
+# `or` used to arrive there as a single-child wrapper instead (#496 is the
+# defect that shape once hid).
+
+fn main() i32:
+    let i32 a = 6
+    let i32 b = 3
+
+    println((a + b) * 2)
+    println((a * b) + 1)
+    println((a as i64) as i32)
+    println((a >> 1) + 0)
+    println((a & 7) | 8)
+    println((a ^ 1) + 0)
+    println((a == 6) and true)
+    println((a > b) or false)
+    println((-a) + 1)
+    println((~a) + 1)
+    println((not false) and true)
+    println((a) + 1)
+
+    let i32 total = 0
+    foreach(i in (0..3)):
+        total := total + i
+    println(total)
+
+    println("Mostly Harmless")
+    return Result.Ok(0)

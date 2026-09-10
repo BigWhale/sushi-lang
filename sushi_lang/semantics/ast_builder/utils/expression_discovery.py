@@ -14,7 +14,12 @@ from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, i
 # `range` or `borrow`. Both were still right, because `or_expr` carried no `?` and so
 # stood over every expression the grammar could build.
 EXPR_NODES = frozenset({
-    "or_expr",
+    "or_expr", "xor_expr", "and_expr",
+    "bitwise_or", "bitwise_xor", "bitwise_and",
+    "equality", "comparison", "range", "shift", "cast",
+    "add", "mul",
+    "neg", "not", "bitnot", "borrow",
+    "maybe_call",
 })
 
 

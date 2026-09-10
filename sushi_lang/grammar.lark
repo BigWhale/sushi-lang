@@ -160,17 +160,17 @@ fn_param_type: NOM? type
 
 ?expr: or_expr
 
-or_expr: xor_expr (OR xor_expr)*
-xor_expr: and_expr (XOR and_expr)*
-and_expr: bitwise_or (AND bitwise_or)*
-bitwise_or: bitwise_xor (BIT_OR bitwise_xor)*
-bitwise_xor: bitwise_and (BIT_XOR bitwise_and)*
-bitwise_and: equality (BIT_AND equality)*
-equality: comparison ((EQEQ | NEQ) comparison)*
-comparison: range ((LT | GT | LE | GE) range)*
-range: shift ((RANGE | RANGE_INCLUSIVE) shift)?
-shift: cast ((LSHIFT | RSHIFT) cast)*
-cast: add (AS type)*
+?or_expr: xor_expr (OR xor_expr)*
+?xor_expr: and_expr (XOR and_expr)*
+?and_expr: bitwise_or (AND bitwise_or)*
+?bitwise_or: bitwise_xor (BIT_OR bitwise_xor)*
+?bitwise_xor: bitwise_and (BIT_XOR bitwise_and)*
+?bitwise_and: equality (BIT_AND equality)*
+?equality: comparison ((EQEQ | NEQ) comparison)*
+?comparison: range ((LT | GT | LE | GE) range)*
+?range: shift ((RANGE | RANGE_INCLUSIVE) shift)?
+?shift: cast ((LSHIFT | RSHIFT) cast)*
+?cast: add (AS type)*
 ?add: mul ((PLUS | MINUS) mul)*
 ?mul: unary ((STAR | SLASH | MOD) unary)*
 
