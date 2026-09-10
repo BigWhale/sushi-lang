@@ -1513,7 +1513,9 @@ annotation, so nothing says which instantiation was meant. Bind the result first
 
 A name has one home, so a static beside an instance method of the same name on one type
 is `CE0101`, and a static spelling a VARIANT of the enum it extends is `CE2103`. A type
-whose dot holds no such member is `CE2102`.
+whose dot holds no such member is `CE2102`, and a VALUE whose type declares no such field
+is `CE2106` -- which is also what a method read without its parentheses answers, because a
+bound-method value is deferred.
 
 `List.new()`, `List.with_capacity()`, `HashMap.new()`, `Own.alloc()` and
 `f64.from_bits()` are the built-in statics — the same rule, on types the compiler

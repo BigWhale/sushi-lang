@@ -1,5 +1,7 @@
 # Error: Accessing non-existent field
-# EXPECT_ERROR_CODE: CE0029
+# The code moved from CE0029 to CE2106 with #630: the fault is a typo, so the
+# typecheck pass answers it at the read instead of letting it reach the backend.
+# EXPECT_ERROR_CODE: CE2106
 
 struct Point:
     i32 x

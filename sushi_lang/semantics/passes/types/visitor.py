@@ -612,6 +612,8 @@ class ExpressionValidator(RecursiveVisitor):
                 and self._validate_variant_spelling(node, node.member, [])):
             return
         self.visit(node.receiver)
+        from sushi_lang.semantics.passes.types.expressions import reject_unknown_field
+        reject_unknown_field(self.type_validator, node)
 
     def _validate_variant_spelling(self, node, variant_name: str, args: list) -> bool:
         """Validate `Enum.Variant(...)` or the bare `Enum.Variant` as the constructor it is.

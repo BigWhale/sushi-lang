@@ -1,0 +1,13 @@
+# A field no struct declares is the user's typo, and it is answered where it is
+# written (#630). It used to reach the backend and come back as CE0029: tier 1,
+# no file, no line, no caret, and the blame on the wrong person.
+# EXPECT_ERROR_CODE: CE2106
+# EXPECT_STDERR_CONTAINS: has no field 'n'
+struct Bag:
+    i32 weight
+
+fn main() i32:
+    let Bag b = Bag(1)
+    let i32 v = b.n
+    println("{v}")
+    return Result.Ok(0)

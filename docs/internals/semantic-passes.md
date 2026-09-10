@@ -834,6 +834,28 @@ backend. `??` on a raw foreign value therefore falls out as the existing
 - Control flow (if, while, foreach)
 - Return statements
 
+### A field the type does not declare
+
+A name behind a VALUE's dot is a field of that value's type, and one the type does not
+declare is `CE2106`, at the read. The pass used to walk past it entirely: the read reached
+codegen, and the backend was the first thing to notice, answering `CE0029` -- tier 1, no
+file, no line, no caret, and the note that says the fault is a bug in the compiler, for
+what is a typo (#630). The four backend `CE0029` sites stay where they are and go back to
+being the internal backstop they read as.
+
+`reject_unknown_field` (`passes/types/expressions.py`) is deliberately narrow: it answers
+only a receiver whose type is a STRUCT, which is the one case the inference arm looks a
+field up in. A namespace member, a bare enum variant (#545), an unresolved type and every
+non-struct receiver belong to another position, and a false `CE2106` there would be worse
+than the `CE0029` it replaces.
+
+A METHOD is not a field, and a bound-method value is deferred to Tier 2, so `v.probe` with
+no parentheses is the same refusal with a note that says so. Otherwise the help quotes
+`suggest_member` -- the one reader every position that can miss already uses -- or lists
+what the type does declare.
+
+`CE2102` is the same rule one position over: a name behind a TYPE's dot.
+
 ### Type Checking Examples
 
 **Valid:**

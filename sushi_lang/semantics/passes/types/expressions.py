@@ -6,7 +6,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType
 from sushi_lang.semantics.generics.types import GenericTypeRef
-from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, RangeExpr
+from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, RangeExpr, MemberAccess
 from sushi_lang.semantics.type_predicates import is_integer_type, is_numeric_type
 from .compatibility import is_valid_cast
 from .utils import validate_constant_array_index
@@ -562,3 +562,46 @@ def check_propagation_in_expression(expr: Expr) -> bool:
         return check_propagation_in_expression(expr.expr)
 
     return False
+
+
+def reject_unknown_field(validator: 'TypeValidator', node: MemberAccess) -> None:
+    """A field no struct declares is CE2106, at the read (#630).
+
+    The pass used to walk past an unknown field entirely, so the read reached codegen and
+    the backend was the first thing to notice -- CE0029, tier 1, no file and no line, with
+    the note that says the fault is a bug in the compiler. It is a typo.
+
+    The test is narrow on purpose: only a receiver whose type is a STRUCT is answered,
+    which is the one case the inference arm looks a field up in. A namespace member, a
+    bare enum variant, an unresolved type and every non-struct receiver are somebody
+    else's position, and a false CE2106 there would be worse than the CE0029 it replaces.
+    """
+    from sushi_lang.semantics.namespaces import suggest_member
+    from sushi_lang.semantics.typesys import ReferenceType
+
+    if validator.namespace_of(node.receiver) is not None:
+        return
+
+    receiver_type = validator.infer_expression_type(node.receiver)
+    if isinstance(receiver_type, ReferenceType):
+        receiver_type = receiver_type.referenced_type
+    if not isinstance(receiver_type, StructType):
+        return
+
+    names = [name for name, _ in receiver_type.fields]
+    if node.member in names:
+        return
+
+    shown = display_type(receiver_type)
+    builder = er.emit_with(validator.reporter, er.ERR.CE2106, node.loc,
+                           type=shown, field=node.member)
+    if validator.extension_table.get_method(receiver_type, node.member) is not None:
+        builder.note(f"'{shown}.{node.member}()' is a method, not a field").help(
+            "call it: write the parentheses")
+    else:
+        close = suggest_member(names, node.member)
+        if close is not None:
+            builder.help(f"did you mean '{close}'?")
+        elif names:
+            builder.help(f"'{shown}' declares {', '.join(repr(n) for n in names)}")
+    builder.emit()

@@ -1,0 +1,18 @@
+# The control: every legal field read still compiles and runs, through a plain
+# name, a reference binding and a chain (#630).
+# EXPECT_STDOUT_EXACT: "1 2 3\n"
+struct Inner:
+    i32 depth
+
+struct Outer:
+    Inner inner
+    i32 weight
+
+fn main() i32:
+    let Outer o = Outer(Inner(3), 1)
+    let peek Outer r = o
+    println("{o.weight} {r.weight_two()} {o.inner.depth}")
+    return Result.Ok(0)
+
+extend Outer weight_two() i32:
+    return self.weight + 1

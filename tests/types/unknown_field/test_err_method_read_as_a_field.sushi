@@ -1,0 +1,15 @@
+# A method is not a field. A bound-method value is deferred to Tier 2, so the
+# read is refused and the note says what the name actually is (#630).
+# EXPECT_ERROR_CODE: CE2106
+# EXPECT_STDERR_CONTAINS: is a method, not a field
+struct Bag:
+    i32 weight
+
+extend Bag probe() i32:
+    return self.weight
+
+fn main() i32:
+    let Bag b = Bag(1)
+    let i32 v = b.probe
+    println("{v}")
+    return Result.Ok(0)
