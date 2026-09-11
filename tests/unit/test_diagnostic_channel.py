@@ -26,8 +26,12 @@ EMITTERS = {"emit", "emit_with", "message_for", "raise_internal_error"}
 
 CODE_RE = re.compile(r"^(CE|CW|RE)\d{4}$")
 
-# Kwargs the emitters consume themselves, never the template.
-CHANNEL_KWARGS = {"filename"}
+# Kwargs the emitters consume themselves, never the template. `SushiError.__init__`
+# takes `span` and `filename` keyword-only, so `raise_internal_error` carries them too --
+# which is what lets an internal backstop point at the node that provoked it.
+# `message_for` renders text alone and consumes neither, so a channel kwarg there is dead.
+CHANNEL_KWARGS = {"filename", "span"}
+CHANNEL_EMITTERS = {"emit", "emit_with", "raise_internal_error"}
 
 
 def _placeholders(text: str) -> set[str]:
@@ -93,10 +97,9 @@ def test_call_site_kwargs_match_the_registered_template():
         registered = REGISTRY.get(code)
         if registered is None:
             continue  # test_error_registry owns unregistered codes
-        if name == "emit_with" or name == "emit":
-            kwargs = {k.arg for k in call.keywords} - CHANNEL_KWARGS
-        else:
-            kwargs = {k.arg for k in call.keywords}
+        kwargs = {k.arg for k in call.keywords}
+        if name in CHANNEL_EMITTERS:
+            kwargs -= CHANNEL_KWARGS
         wanted = _placeholders(registered.text)
         dead = sorted(kwargs - wanted)
         missing = sorted(wanted - kwargs)
