@@ -1,7 +1,7 @@
 """AST Visitor Pattern implementation for the Sushi language compiler."""
 from __future__ import annotations
 from abc import ABC
-from typing import TypeVar, Generic, TYPE_CHECKING
+from typing import TypeVar, Generic
 
 from sushi_lang.semantics.ast import Node, Block
 from sushi_lang.semantics.ast import (
@@ -11,10 +11,17 @@ from sushi_lang.semantics.ast import (
     DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread
 )
 
-if TYPE_CHECKING:
-    pass
-
 T = TypeVar('T')
+
+# A node kind a PARENT arm reads inside itself and never hands to `visit()`. Named so the
+# gate can tell a deliberate leaf from a forgotten arm, the way `ast_walk.TERMINAL_NODES`
+# does for the type walk. A member gets no `visit_` arm and never reaches the backstop.
+WALKED_IN_PARENT = frozenset({
+    "ArrayElement",      # `visit_arrayliteral` reads .value and .count
+    "MatchArm",          # `visit_match` hands the arm's BODY over; the pattern binds names
+    "Pattern", "LiteralPattern", "WildcardPattern",
+    "OwnPattern", "RefBinding", "NomBinding",
+})
 
 class NodeVisitor(ABC, Generic[T]):
     """Abstract base class for AST node visitors."""
