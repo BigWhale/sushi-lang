@@ -1,20 +1,29 @@
 """AST Visitor Pattern implementation for the Sushi language compiler."""
 from __future__ import annotations
 from abc import ABC
-from typing import TypeVar, Generic, TYPE_CHECKING
+from typing import TypeVar, Generic
 
+from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import Node, Block
 from sushi_lang.semantics.ast import (
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
     Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor,
-    DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread
+    DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread,
+    Expand, Lambda
 )
 
-if TYPE_CHECKING:
-    pass
-
 T = TypeVar('T')
+
+# A node kind a PARENT arm reads inside itself and never hands to `visit()`. Named so the
+# gate can tell a deliberate leaf from a forgotten arm, the way `ast_walk.TERMINAL_NODES`
+# does for the type walk. A member gets no `visit_` arm and never reaches the backstop.
+WALKED_IN_PARENT = frozenset({
+    "ArrayElement",      # `visit_arrayliteral` reads .value and .count
+    "MatchArm",          # `visit_match` hands the arm's BODY over; the pattern binds names
+    "Pattern", "LiteralPattern", "WildcardPattern",
+    "OwnPattern", "RefBinding", "NomBinding",
+})
 
 class NodeVisitor(ABC, Generic[T]):
     """Abstract base class for AST node visitors."""
@@ -38,8 +47,14 @@ class RecursiveVisitor(NodeVisitor[None]):
     """Base class for visitors that recursively traverse the entire AST."""
 
     def generic_visit(self, node: Node) -> None:
-        """Default behavior: no action for unknown nodes."""
-        pass
+        """A node kind with no arm. NOT a silent skip (#639).
+
+        A miss got NO analysis from any consumer, and said nothing. `WALKED_IN_PARENT`
+        names the kinds a parent arm reads itself, so none of them arrives here. The CI
+        gate is tests/unit/test_visitor_dispatch_is_total.py; this is the backstop.
+        """
+        er.raise_internal_error("CE0136", span=getattr(node, "loc", None),
+                                node=type(node).__name__)
 
     def visit_let(self, node: Let) -> None:
         """Visit a let statement. Default: visit the value expression."""
@@ -84,15 +99,19 @@ class RecursiveVisitor(NodeVisitor[None]):
         self.visit(node.body)
 
     def visit_match(self, node: 'Match') -> None:
-        """Visit a match statement. Default: visit scrutinee and arms."""
+        """Visit a match statement. Default: visit the scrutinee and each arm's body.
+
+        A body is a block or a bare expression, and `visit` takes either. The PATTERN is
+        not walked: it binds names and holds no expression.
+        """
         self.visit(node.scrutinee)
         for arm in node.arms:
-            # Note: We don't visit pattern bindings, just the body
-            if hasattr(arm, 'body'):
-                if isinstance(arm.body, Block):
-                    self.visit(arm.body)
-                else:  # Expression body
-                    self.visit(arm.body)
+            self.visit(arm.body)
+
+    def visit_expand(self, node: Expand) -> None:
+        """Visit an expand statement. Default: visit the value pack and the body."""
+        self.visit(node.iterable)
+        self.visit(node.body)
 
     def visit_break(self, node: Break) -> None:
         """Visit a break statement. Default: no action."""
@@ -212,3 +231,11 @@ class RecursiveVisitor(NodeVisitor[None]):
     def visit_spread(self, node: Spread) -> None:
         """Visit a spread argument (arr...). Default: visit the bloomed expression."""
         self.visit(node.value)
+
+    def visit_lambda(self, node: Lambda) -> None:
+        """Visit a lambda literal. Default: visit the body, a block or a bare expression.
+
+        A parameter carries a name and a type, never an expression, so `params` and
+        `captures` hold nothing for the walk.
+        """
+        self.visit(node.body)
