@@ -1,0 +1,40 @@
+# A declared type on a `??` binder names what the USER binds, which is the UNWRAPPED
+# value: the item here is a `Result@(string, Bad)` and the binder is a `string`
+# (docs/design/iteration.md section 3). This is also the widest `foreach` the grammar
+# writes -- an item type, an item name and the marker, all three in one header.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "got a\ngot b\nstopped\n"
+# EXPECT_NO_LEAKS
+
+enum Bad:
+    Broken()
+
+struct Words:
+    i32 at
+
+extend Words next(poke self) Maybe@(Result@(string, Bad)):
+    self.at := self.at + 1
+    if (self.at == 1):
+        let Maybe@(Result@(string, Bad)) first = Maybe.Some(Result.Ok("a"))
+        return first
+    if (self.at == 2):
+        let Maybe@(Result@(string, Bad)) second = Maybe.Some(Result.Ok("b"))
+        return second
+    if (self.at == 3):
+        let Maybe@(Result@(string, Bad)) failed = Maybe.Some(Result.Err(Bad.Broken))
+        return failed
+    let Maybe@(Result@(string, Bad)) ended = Maybe.None()
+    return ended
+
+fn walk() ~ | Bad:
+    let Words w = Words(0)
+    foreach(string s?? in w):
+        println("got {s}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match walk():
+        Result.Ok(_) -> println("finished")
+        Result.Err(_) -> println("stopped")
+    return Result.Ok(0)
