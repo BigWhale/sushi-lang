@@ -1,0 +1,9 @@
+# `nom` reads the same rule as `peek` and `poke`: a bare name is the receiver only.
+# `nom count` gives no type, so the compiler refuses it with CE2425.
+# EXPECT_ERROR_CODE: CE2425
+
+fn take(nom count) ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    return Result.Ok(0)

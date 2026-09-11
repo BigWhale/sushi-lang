@@ -18,12 +18,46 @@ renames every one of them. `tests/unit/test_declaration_walk_is_total.py` is the
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Iterator, List, Optional, Tuple, Union
 
 from sushi_lang.semantics.ast import VarDef
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Program
+    from sushi_lang.internals.report import Span
+    from sushi_lang.semantics.ast import (
+        ConstDef, EnumDef, EnumVariant, ExtendDef, ExtendWithDef, FuncDef, PerkDef,
+        PerkMethodSignature, Program, StructDef, StructField)
+    from sushi_lang.semantics.typesys import Type
+
+    # What each walk here holds, one arm per branch that reaches the site. A wider
+    # union than the walks produce would hide a field name that is wrong, which is
+    # what `Any` did (#640).
+
+    # A callable's return, error arm and parameters. A perk's contract signature is
+    # the one arm that is not a `Node`; all three declare the same four fields.
+    CallableDecl = Union["FuncDef", "ExtendDef", "PerkMethodSignature"]
+
+    # The declaration a callable's signature belongs to. It is the callable itself for
+    # a function and an extension, and the perk or the implementation for a method.
+    CallableOwner = Union["PerkDef", "ExtendWithDef", "FuncDef", "ExtendDef"]
+
+    # What `signature_types()` reads a position off. The TOP-LEVEL declaration only,
+    # because that is where visibility comes from. `VarDef` is a `ConstDef`.
+    SignatureDecl = Union["ConstDef", "StructDef", "EnumDef", "CallableOwner"]
+
+    # The inner node a position belongs to, when it belongs to one.
+    InnerDecl = Union["StructField", "EnumVariant", "CallableDecl"]
+
+    # What `signature_constraints()` reads. These four kinds declare the type
+    # parameters a constraint rides on; no other declaration has one to read.
+    ConstraintDecl = Union["FuncDef", "StructDef", "EnumDef", "ExtendDef"]
+
+    # A declaration with a body, which is what `bodied()` answers with.
+    BodiedDecl = Union["FuncDef", "ExtendDef"]
+
+    # One type a body names, and where to point at it. A blank slot yields
+    # `(None, span)`; the caller filters.
+    TypeMention = Tuple[Optional["Type"], Optional["Span"]]
 
 # A declaration, and the word a diagnostic calls its kind by.
 Declaration = Tuple[str, object]
@@ -50,15 +84,15 @@ class TypeSite:
 
     kind: str
     position: str
-    decl: Any
-    ty: Optional[Any]
-    span: Optional[Any]
+    decl: SignatureDecl
+    ty: Optional[Type]
+    span: Optional[Span]
     # The inner node, when the position belongs to one: the method, the field, the
     # variant. A diagnostic names THIS, while visibility comes from `decl`.
-    at: Optional[Any] = None
+    at: Optional[InnerDecl] = None
 
 
-def _bodied_kinds(program: 'Program') -> Iterator[Declaration]:
+def _bodied_kinds(program: 'Program') -> Iterator[Tuple[str, BodiedDecl]]:
     """Every declaration with a body, with the word a diagnostic calls it by.
 
     A body is what lets a declaration hold two blocks, one above it and one first
@@ -73,7 +107,7 @@ def _bodied_kinds(program: 'Program') -> Iterator[Declaration]:
             yield "perk method", method
 
 
-def bodied(program: 'Program') -> List:
+def bodied(program: 'Program') -> List[BodiedDecl]:
     """Every declaration with a body, in the one order both walks use."""
     return [node for _kind, node in _bodied_kinds(program)]
 
@@ -116,9 +150,9 @@ class ConstraintSite:
     """
 
     kind: str
-    decl: Any
+    decl: ConstraintDecl
     perk_name: str
-    span: Optional[Any]
+    span: Optional[Span]
     # The alias the constraint was written behind, when it was written behind one.
     # A qualified name never enters the flat scope, so a rule that measures the bare
     # name against that scope has to know which shape it is reading.
@@ -132,40 +166,43 @@ def signature_constraints(program: 'Program') -> Iterator[ConstraintSite]:
     not a type, so a rule over it reads a different field. Both walks cover the same
     declarations.
     """
-    for kind, decl in (
+    # Named, so that the four kinds stay one union. Left inline, the pairs read as
+    # their common base class and every field below goes unchecked again.
+    declared: Tuple[Tuple[str, ConstraintDecl], ...] = (
         *(("function", func) for func in program.functions),
         *(("struct", struct) for struct in program.structs),
         *(("enum", enum) for enum in program.enums),
         *(("extension", ext) for ext in
           [*program.extensions, *program.generic_extensions]),
-    ):
-        fallback = getattr(decl, "name_span", None) or getattr(decl, "loc", None)
-        for param in getattr(decl, "type_params", None) or ():
-            constraints = getattr(param, "constraints", None) or ()
-            namespaces = getattr(param, "constraint_namespaces", None) or ()
+    )
+    for kind, decl in declared:
+        fallback = decl.name_span or decl.loc
+        for param in decl.type_params or ():
+            constraints = param.constraints or ()
+            namespaces = param.constraint_namespaces or ()
             for index, constraint in enumerate(constraints):
                 if isinstance(constraint, str):
                     yield ConstraintSite(
                         kind, decl, constraint,
-                        getattr(param, "loc", None) or fallback,
+                        param.loc or fallback,
                         namespaces[index] if index < len(namespaces) else None)
 
 
-def _callable_sites(kind: str, decl: Any, callable_node: Any) -> Iterator[TypeSite]:
+def _callable_sites(kind: str, decl: CallableOwner,
+                    callable_node: CallableDecl) -> Iterator[TypeSite]:
     """The return, the error arm and every parameter of one callable.
 
     `decl` and `callable_node` are the same object for a free function, and differ for a
     method: the signature is the method's, the visibility is its perk's or its target's.
     """
-    fallback = (getattr(callable_node, "name_span", None)
-                or getattr(callable_node, "loc", None))
-    yield TypeSite(kind, "return", decl, getattr(callable_node, "ret", None),
-                   getattr(callable_node, "ret_span", None) or fallback, callable_node)
-    yield TypeSite(kind, "error", decl, getattr(callable_node, "err_type", None),
+    fallback = callable_node.name_span or callable_node.loc
+    yield TypeSite(kind, "return", decl, callable_node.ret,
+                   callable_node.ret_span or fallback, callable_node)
+    yield TypeSite(kind, "error", decl, callable_node.err_type,
                    fallback, callable_node)
-    for param in getattr(callable_node, "params", ()) or ():
-        yield TypeSite(kind, "parameter", decl, getattr(param, "ty", None),
-                       getattr(param, "type_span", None) or fallback, callable_node)
+    for param in callable_node.params or ():
+        yield TypeSite(kind, "parameter", decl, param.ty,
+                       param.type_span or fallback, callable_node)
 
 
 def signature_types(program: 'Program') -> Iterator[TypeSite]:
@@ -180,30 +217,26 @@ def signature_types(program: 'Program') -> Iterator[TypeSite]:
     """
     for const in program.constants:
         yield TypeSite("variable" if isinstance(const, VarDef) else "constant",
-                       "type", const, getattr(const, "ty", None),
-                       getattr(const, "type_span", None) or const.loc)
+                       "type", const, const.ty, const.type_span or const.loc)
 
     for struct in program.structs:
         for field in struct.fields:
-            yield TypeSite("struct", "field", struct, getattr(field, "ty", None),
-                           getattr(field, "loc", None)
-                           or getattr(struct, "name_span", None) or struct.loc, field)
+            yield TypeSite("struct", "field", struct, field.ty,
+                           field.loc or struct.name_span or struct.loc, field)
 
     for enum in program.enums:
         for variant in enum.variants:
-            span = (getattr(variant, "name_span", None) or getattr(variant, "loc", None)
-                    or getattr(enum, "name_span", None) or enum.loc)
-            for ty in getattr(variant, "associated_types", ()) or ():
+            span = variant.name_span or variant.loc or enum.name_span or enum.loc
+            for ty in variant.associated_types or ():
                 yield TypeSite("enum", "variant", enum, ty, span, variant)
 
     for perk in program.perks:
-        for method in perk.methods:
-            yield from _callable_sites("perk method", perk, method)
+        for signature in perk.methods:
+            yield from _callable_sites("perk method", perk, signature)
 
     for impl in [*program.perk_impls, *program.generic_perk_impls]:
         yield TypeSite("perk implementation", "receiver", impl,
-                       getattr(impl, "target_type", None),
-                       getattr(impl, "target_type_span", None) or impl.loc)
+                       impl.target_type, impl.target_type_span or impl.loc)
         for method in impl.methods:
             yield from _callable_sites("perk method", impl, method)
 
@@ -211,8 +244,8 @@ def signature_types(program: 'Program') -> Iterator[TypeSite]:
         yield from _callable_sites("function", func, func)
 
     for ext in [*program.extensions, *program.generic_extensions]:
-        yield TypeSite("extension", "receiver", ext, getattr(ext, "target_type", None),
-                       getattr(ext, "target_type_span", None) or ext.loc)
+        yield TypeSite("extension", "receiver", ext, ext.target_type,
+                       ext.target_type_span or ext.loc)
         yield from _callable_sites("extension", ext, ext)
 
 
@@ -225,7 +258,7 @@ TERMINAL_NODES = frozenset({
 })
 
 
-def _lambda_types(lam) -> Iterator[Tuple[Any, Any]]:
+def _lambda_types(lam) -> Iterator[TypeMention]:
     """The types a lambda literal names: its parameters, its return, its error arm."""
     for param in lam.params or ():
         yield param.ty, param.type_span or param.loc or lam.loc
@@ -234,20 +267,20 @@ def _lambda_types(lam) -> Iterator[Tuple[Any, Any]]:
     yield from _body_of(lam.body)
 
 
-def _call_type_args(call) -> Iterator[Tuple[Any, Any]]:
+def _call_type_args(call) -> Iterator[TypeMention]:
     """Explicit call-site type arguments: `identity@(ptr)(p)` names `ptr`."""
     for ty in call.type_args or ():
         yield ty, call.type_args_loc or call.loc
 
 
-def _array_literal_types(literal) -> Iterator[Tuple[Any, Any]]:
+def _array_literal_types(literal) -> Iterator[TypeMention]:
     """An array literal's elements, each with its optional repeat count."""
     for element in literal.elements:
         yield from _expr_types(element.value)
         yield from _expr_types(element.count)
 
 
-def _expr_types(expr) -> Iterator[Tuple[Any, Any]]:
+def _expr_types(expr) -> Iterator[TypeMention]:
     """Every type an expression NAMES, and where to point at it.
 
     Total over the `Expr` union. A kind with nothing to walk is in `TERMINAL_NODES`;
@@ -310,7 +343,7 @@ def _expr_types(expr) -> Iterator[Tuple[Any, Any]]:
             yield from _lambda_types(expr)
 
 
-def _stmt_types(stmt) -> Iterator[Tuple[Any, Any]]:
+def _stmt_types(stmt) -> Iterator[TypeMention]:
     """Every type one statement NAMES, and where to point at it.
 
     Total over the `Stmt` subclasses; see `_expr_types` for the gate.
@@ -351,7 +384,7 @@ def _stmt_types(stmt) -> Iterator[Tuple[Any, Any]]:
                 yield from _body_of(arm.body)
 
 
-def _body_of(body) -> Iterator[Tuple[Any, Any]]:
+def _body_of(body) -> Iterator[TypeMention]:
     """A body slot, which holds a block or a single expression."""
     from sushi_lang.semantics.ast import Block
 
@@ -364,7 +397,7 @@ def _body_of(body) -> Iterator[Tuple[Any, Any]]:
         yield from _expr_types(body)
 
 
-def body_types(program: 'Program') -> Iterator[Tuple[Any, Any]]:
+def body_types(program: 'Program') -> Iterator[TypeMention]:
     """Every type one unit's BODIES name, as (type, span). Never a signature.
 
     The companion to `signature_types()`: a signature is where a type crosses a boundary,
@@ -376,4 +409,4 @@ def body_types(program: 'Program') -> Iterator[Tuple[Any, Any]]:
     `tests/unit/test_body_walk_is_total.py` is the gate.
     """
     for node in bodied(program):
-        yield from _body_of(getattr(node, "body", None))
+        yield from _body_of(node.body)

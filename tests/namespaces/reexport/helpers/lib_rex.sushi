@@ -1,0 +1,6 @@
+# Re-exports what a source LIBRARY brings: `use <lib/runtime_lib>` behind `public`, so
+# an importer of this unit writes `greet` bare (unit-namespaces.md section 8.1).
+public use <lib/runtime_lib>
+
+public fn tag_lib() i32:
+    return Result.Ok(7)

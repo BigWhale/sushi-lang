@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 from lark import Tree, Token
 from sushi_lang.semantics.ast import FuncDef, Param
-from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.typesys import DynamicArrayType, Type
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    expect, find_tree_recursive, first_name, first_tree, ice, is_type_node,
-    read_public)
+    expect, find_tree_recursive, first_name, first_token, first_tree, ice,
+    is_type_node, read_public)
 from sushi_lang.semantics.ast_builder.declarations.docs import lift_body_doc
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
@@ -64,7 +64,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
 
     # Type-pack names declared by this function. A `variadic_param` whose element
     # type names one of these is a v2 type-pack value-param (...Ts args), not a v1
-    # native variadic; `parse_params` uses this set to disambiguate.
+    # native variadic; `_variadic_or_pack` reads this set to tell the two apart.
     pack_names = (
         {tp.name for tp in type_params if tp.is_pack} if type_params else frozenset()
     )
@@ -96,100 +96,119 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
 
 
 def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> List[Param]:
-    """Parse parameters: param ("," param)* where param is typed_param | variadic_param."""
-    t = expect(t, "parameters", "extern_params")
+    """Parse parameters: param ("," param)* where param is typed_param | variadic_param.
 
-    from sushi_lang.semantics.typesys import DynamicArrayType
-    from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name as _first_name
+    The loop unwraps the `param` node and hands the rule inside it to the reader that
+    owns that rule. A child that is no parameter rule is stepped over: `extern_params`
+    holds its `typed_param`s bare and adds an ELLIPSIS token for a C variadic.
+    """
+    t = expect(t, "parameters", "extern_params")
 
     out: List[Param] = []
     for ch in t.children:
-        node = ch
-        if isinstance(node, Tree) and node.data == "param":
-            inner = next((c for c in node.children if isinstance(c, Tree)), None)
-            if inner is None:
-                continue
-            node = inner
-
-        if not isinstance(node, Tree):
+        node = _param_rule(ch)
+        if node is None:
             continue
-
         if node.data in ("self_param", "nom_self_param"):
-            # `poke self` / `peek self` (#327) and `nom self` (ruling R25): a
-            # receiver-mode parameter. The mode rides on the Param; `strip_self_param`
-            # lifts it onto the declaration and validates the position, so collect never
-            # sees a `self`-named Param.
-            token_type = "NOM" if node.data == "nom_self_param" else "BORROW_MODE"
-            mode_tok = next((c for c in node.children
-                             if isinstance(c, Token) and c.type == token_type), None)
-            name_tok = first_name(node.children)
-            if mode_tok is None or name_tok is None:
-                ice(node, "malformed self_param")
-            if str(name_tok) != "self":
-                raise SyntaxDiagnostic("CE2425", span=span_of(node)) \
-                    .help("a reference parameter is written `poke T name`; the bare "
-                          "form is only the receiver, spelled `poke self`")
-            out.append(Param(
-                name="self", ty=None,
-                name_span=span_of(name_tok), loc=span_of(node),
-                self_mode=str(mode_tok.value),
-            ))
-            continue
-
-        if node.data in ("typed_param", "variadic_param"):
-            ty_node = next(
-                (sub for sub in node.children if is_type_node(sub)), None)
-            if ty_node is None:
-                ice(node, "missing type")
-
-            ty = ast_builder._parse_type(ty_node)
-
-            nm_tok = first_name(node.children)
-            if nm_tok is None:
-                ice(node, "missing NAME")
-
-            is_variadic = node.data == "variadic_param"
-            is_pack = False
-            if is_variadic:
-                # A `...Ts` whose element type is a bare NAME matching one of the
-                # function's declared type-pack type-params is a v2 type-pack
-                # value-param: keep `ty` as the bare pack-name reference (the same
-                # representation `_parse_type` produced) so the collect pass recognizes it.
-                elem_name = None
-                if ty_node.data == "name_t":
-                    elem_tok = _first_name(ty_node.children)
-                    if elem_tok is not None:
-                        elem_name = str(elem_tok)
-
-                if elem_name is not None and elem_name in pack_names:
-                    is_pack = True
-                    is_variadic = False
-                    # `ty` already holds the bare pack-name reference; do NOT wrap.
-                else:
-                    # v1 native variadic: the body sees a homogeneous T[]; `ty`
-                    # (the element type) is the collected dynamic-array type. The
-                    # element type stays recoverable as `ty.base_type`.
-                    ty = DynamicArrayType(base_type=ty)
-
-            # `nom T name`: the callee takes ownership. The grammar admits the marker on
-            # `typed_param` only, so a variadic or a pack can never carry one.
-            nom_tok = next((c for c in node.children
-                            if isinstance(c, Token) and c.type == "NOM"), None)
-
-            out.append(
-                Param(
-                    name=str(nm_tok),
-                    ty=ty,
-                    name_span=span_of(nm_tok),
-                    type_span=span_of(ty_node),
-                    loc=span_of(node),
-                    is_variadic=is_variadic,
-                    is_pack=is_pack,
-                    is_nom=nom_tok is not None,
-                    nom_span=span_of(nom_tok) if nom_tok is not None else None,
-                )
-            )
-
+            out.append(_self_param(node))
+        elif node.data == "typed_param":
+            out.append(_typed_param(node, ast_builder))
+        elif node.data == "variadic_param":
+            out.append(_variadic_or_pack(node, ast_builder, pack_names))
     return out
+
+
+def _param_rule(ch: object) -> Optional[Tree]:
+    """Step through a `param` wrapper to the rule it holds; answer None for anything else."""
+    node: object = ch
+    if isinstance(node, Tree) and node.data == "param":
+        node = next((c for c in node.children if isinstance(c, Tree)), None)
+    return node if isinstance(node, Tree) else None
+
+
+def _self_param(node: Tree) -> Param:
+    """Read a receiver parameter: `peek self` / `poke self` (#327), or `nom self` (R25).
+
+    The mode rides on the Param. `strip_self_param` lifts it onto the declaration and
+    validates the position, so collect never sees a Param named `self`.
+    """
+    token_type = "NOM" if node.data == "nom_self_param" else "BORROW_MODE"
+    mode_tok = first_token(node.children, token_type)
+    name_tok = first_name(node.children)
+    if mode_tok is None or name_tok is None:
+        ice(node, "malformed self_param")
+    if str(name_tok) != "self":
+        raise SyntaxDiagnostic("CE2425", span=span_of(node)) \
+            .help("a reference parameter is written `poke T name`; the bare "
+                  "form is only the receiver, spelled `poke self`")
+    return Param(
+        name="self", ty=None,
+        name_span=span_of(name_tok), loc=span_of(node),
+        self_mode=str(mode_tok.value),
+    )
+
+
+def _typed_param(node: Tree, ast_builder: 'ASTBuilder') -> Param:
+    """Read `typed_param`: an optional `nom` marker, a type and a name.
+
+    `nom T name` gives ownership to the callee. The grammar admits the marker on this
+    rule only, so a variadic and a pack can never carry one.
+    """
+    ty_node, ty, name_tok = _type_and_name(node, ast_builder)
+    nom_tok = first_token(node.children, "NOM")
+    return Param(
+        name=str(name_tok),
+        ty=ty,
+        name_span=span_of(name_tok),
+        type_span=span_of(ty_node),
+        loc=span_of(node),
+        is_nom=nom_tok is not None,
+        nom_span=span_of(nom_tok) if nom_tok is not None else None,
+    )
+
+
+def _variadic_or_pack(node: Tree, ast_builder: 'ASTBuilder', pack_names) -> Param:
+    """Read `variadic_param`: a native `...T`, or a type-pack value parameter `...Ts`.
+
+    The element type tells the two apart. A bare NAME that this function declared as a
+    type pack makes a v2 pack value-param, and `ty` stays that bare pack-name reference,
+    which is the representation the collect pass reads. Everything else is a v1 native
+    variadic: the body sees a homogeneous `T[]`, and the element type stays available as
+    `ty.base_type`.
+    """
+    ty_node, ty, name_tok = _type_and_name(node, ast_builder)
+    is_pack = _names_a_type_pack(ty_node, pack_names)
+    if not is_pack:
+        ty = DynamicArrayType(base_type=ty)
+    return Param(
+        name=str(name_tok),
+        ty=ty,
+        name_span=span_of(name_tok),
+        type_span=span_of(ty_node),
+        loc=span_of(node),
+        is_variadic=not is_pack,
+        is_pack=is_pack,
+    )
+
+
+def _names_a_type_pack(ty_node: Tree, pack_names) -> bool:
+    """Is this element type a bare NAME that the function declared as a type pack?"""
+    if ty_node.data != "name_t":
+        return False
+    elem_tok = first_name(ty_node.children)
+    return elem_tok is not None and str(elem_tok) in pack_names
+
+
+def _type_and_name(node: Tree,
+                   ast_builder: 'ASTBuilder') -> tuple[Tree, Optional[Type], Token]:
+    """Read the written type, the parsed type and the name off one parameter rule."""
+    ty_node = next((sub for sub in node.children if is_type_node(sub)), None)
+    if not isinstance(ty_node, Tree):
+        ice(node, "missing type")
+    ty = ast_builder._parse_type(ty_node)
+    name_tok = first_name(node.children)
+    if name_tok is None:
+        ice(node, "missing NAME")
+    return ty_node, ty, name_tok
 
 

@@ -1,0 +1,9 @@
+# A mode marker with a bare name is the receiver only. `poke count` gives no type, so the
+# compiler refuses it with CE2425 and asks for `poke T name`.
+# EXPECT_ERROR_CODE: CE2425
+
+fn bump(poke count) ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    return Result.Ok(0)
