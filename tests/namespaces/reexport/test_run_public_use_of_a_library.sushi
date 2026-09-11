@@ -1,0 +1,14 @@
+# `public use` takes a LIBRARY import too: `lib_rex` says `public use <lib/runtime_lib>`,
+# so main writes the library's `greet` bare beside `lib_rex`'s own `tag_lib`. The third
+# import form re-exports the same way the other two do (unit-namespaces.md section 8.1).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Hello, Ford!\nGoodbye from library!\n7\n"
+use "helpers/lib_rex"
+
+fn main() i32:
+    greet("Ford")
+    say_goodbye()
+    let i32 t = tag_lib().realise(0)
+    println("{t}")
+    return Result.Ok(0)
