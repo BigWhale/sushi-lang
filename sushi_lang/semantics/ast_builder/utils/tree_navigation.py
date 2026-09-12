@@ -100,6 +100,26 @@ def first_tree(children: List[object], data: str) -> Optional[Tree]:
     return first(children, lambda c: isinstance(c, Tree) and c.data == data)  # type: ignore[return-value]
 
 
+def read_method_name(node: Tree) -> str:
+    """The name a `method_call` or a `member_access` writes after the dot.
+
+    One reader, because `method_name` carries a language rule: a keyword after a DOT
+    is a method name, so `List.new()` and `a.extend(b)` are calls and not statements.
+    A second reader lets that rule hold in one position and not the other.
+
+    The grammar fixes the shape -- `method_name` has no `?`, so Lark always builds
+    the Tree and it always holds one token. There is thus no fallback to the node's
+    own children: a miss is grammar/builder drift and it stops here (CE0002).
+    """
+    name_tree = first_tree(node.children, "method_name")
+    if name_tree is None:
+        ice(node, "missing method_name")
+    token = first_method_name(name_tree.children)
+    if token is None:
+        ice(name_tree, "method_name holds no name token")
+    return str(token)
+
+
 def find_tree_recursive(n: Tree, data: str) -> Optional[Tree]:
     """Recursively find a tree node with specific data tag."""
     if n.data == data:
