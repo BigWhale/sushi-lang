@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.ast import Expr, Name, BlankLit, MemberAccess, DotCall, TryExpr, Call
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, first_method_name, ice, unhandled
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import read_method_name, unhandled
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -112,26 +112,18 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                     )
 
             elif call_node.data == "method_call":
-                method_name_tree = first_tree(call_node.children, "method_name")
-                if method_name_tree:
-                    method_name_tok = first_method_name(method_name_tree.children)
-                else:
-                    method_name_tok = first_method_name(call_node.children)
-
-                if method_name_tok:
-                    args, field_names = calls.extract_call_args(call_node, ast_builder)
-                    # Carried, not read here: `sh.Point(y: 2, x: 1)` parses as a
-                    # method call on `sh`, and only a pass with the namespace table can
-                    # tell that it is a named struct construction (#561).
-                    result_expr = DotCall(
-                        receiver=result_expr,
-                        method=str(method_name_tok),
-                        args=args,
-                        field_names=field_names,
-                        loc=span_of(t)
-                    )
-                else:
-                    ice(call_node, "missing method NAME")
+                method = read_method_name(call_node)
+                args, field_names = calls.extract_call_args(call_node, ast_builder)
+                # Carried, not read here: `sh.Point(y: 2, x: 1)` parses as a
+                # method call on `sh`, and only a pass with the namespace table can
+                # tell that it is a named struct construction (#561).
+                result_expr = DotCall(
+                    receiver=result_expr,
+                    method=method,
+                    args=args,
+                    field_names=field_names,
+                    loc=span_of(t)
+                )
 
             elif call_node.data == "member_access":
                 result_expr = members.member_access_from_parts(result_expr, call_node)

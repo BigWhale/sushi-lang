@@ -1,0 +1,14 @@
+# After a dot, `new` is a member name and not a keyword. `List.new()` is a call with
+# this name, and the same name with no parentheses is a member read. The reader must
+# put the name into the diagnostic. A struct cannot declare a field with this name.
+# Thus the refusal is the only proof that the reader found the token.
+# EXPECT_ERROR_CODE: CE2106
+# EXPECT_STDERR_CONTAINS: has no field 'new'
+struct Bag:
+    i32 weight
+
+fn main() i32:
+    let Bag b = Bag(1)
+    let i32 v = b.new
+    println("{v}")
+    return Result.Ok(0)
