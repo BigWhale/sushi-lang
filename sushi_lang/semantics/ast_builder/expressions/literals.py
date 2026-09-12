@@ -35,13 +35,16 @@ def _suggest(text: str, digits: frozenset, prefix: int) -> str:
     return "".join(out)
 
 
-def normalize_numeric(tok: Token) -> str:
+def normalize_numeric(tok: Token, ast_builder: 'ASTBuilder') -> str:
     """Check underscore placement, then return the literal with underscores removed.
 
     The grammar's numeric terminals match a permissive superset, so this is where
     the rule lives: one underscore, between two digits of the literal's own radix.
     Every consumer of a numeric token arrives here -- an expression, an array size
     and a match arm -- so no position can be spelled more loosely than another.
+
+    A badly placed underscore recovers to the digits alone, which is the literal the
+    help asks for, so the next one is found in the same run.
     """
     text = str(tok.value)
     digits = _RADIX_DIGITS.get(tok.type, _DECIMAL)
@@ -63,9 +66,11 @@ def normalize_numeric(tok: Token) -> str:
             reason = "underscore must separate digits"
         else:
             continue
-        raise SyntaxDiagnostic("CE6006", span=span_of(tok), literal=text,
-                               reason=reason).help(
-            f"write '{_suggest(text, digits, prefix)}'")
+        return ast_builder.recover(
+            SyntaxDiagnostic("CE6006", span=span_of(tok), literal=text,
+                             reason=reason).help(
+                f"write '{_suggest(text, digits, prefix)}'"),
+            text.replace("_", ""))
 
     return text.replace("_", "")
 
@@ -77,23 +82,27 @@ def expr_from_token(tok: Token, ast_builder: 'ASTBuilder') -> Expr:
     if t == "INT":
         # The leading-zero test reads the NORMALIZED digits: `0_77` is the same
         # C-style octal as `077`, and the underscore must not hide it.
-        digits = normalize_numeric(tok)
+        digits = normalize_numeric(tok, ast_builder)
         if len(digits) > 1 and digits[0] == '0' and digits[1].isdigit():
-            raise SyntaxDiagnostic("CE2071", span=span_of(tok), literal=tok.value,
-                                   octal=digits.lstrip('0') or '0')
+            # The leading zero is dropped and the rest reads as decimal, which is
+            # what the digits already say: nothing here invents a value.
+            return ast_builder.recover(
+                SyntaxDiagnostic("CE2071", span=span_of(tok), literal=tok.value,
+                                 octal=digits.lstrip('0') or '0'),
+                IntLit(value=int(digits), radix=10, loc=span_of(tok)))
         return IntLit(value=int(digits), radix=10, loc=span_of(tok))
 
     if t == "HEX_INT":
-        return IntLit(value=int(normalize_numeric(tok), 16), radix=16, loc=span_of(tok))
+        return IntLit(value=int(normalize_numeric(tok, ast_builder), 16), radix=16, loc=span_of(tok))
 
     if t == "BIN_INT":
-        return IntLit(value=int(normalize_numeric(tok), 2), radix=2, loc=span_of(tok))
+        return IntLit(value=int(normalize_numeric(tok, ast_builder), 2), radix=2, loc=span_of(tok))
 
     if t == "OCT_INT":
-        return IntLit(value=int(normalize_numeric(tok), 8), radix=8, loc=span_of(tok))
+        return IntLit(value=int(normalize_numeric(tok, ast_builder), 8), radix=8, loc=span_of(tok))
 
     if t == "FLOAT":
-        return FloatLit(value=float(normalize_numeric(tok)), loc=span_of(tok))
+        return FloatLit(value=float(normalize_numeric(tok, ast_builder)), loc=span_of(tok))
 
     if t == "TRUE":
         return BoolLit(value=True, loc=span_of(tok))

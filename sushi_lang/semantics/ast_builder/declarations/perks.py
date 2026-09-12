@@ -38,9 +38,13 @@ def parse_impl_methods(children: List, ast_builder: 'ASTBuilder') -> List[FuncDe
         if isinstance(child, Tree) and child.data == "function_def":
             method = parse_funcdef(child, ast_builder)
             if method.public_span is not None:
-                raise SyntaxDiagnostic("CE6103", span=method.public_span) \
-                    .help("an implementation is as visible as its target type; "
-                          "mark the type instead")
+                ast_builder.recover(
+                    SyntaxDiagnostic("CE6103", span=method.public_span).help(
+                        "an implementation is as visible as its target type; "
+                        "mark the type instead"),
+                    None)
+                method.is_public = False
+                method.public_span = None
             if pending_static is not None:
                 method.static_span = span_of(pending_static)
                 pending_static = None

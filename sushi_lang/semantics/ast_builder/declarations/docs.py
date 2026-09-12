@@ -330,8 +330,8 @@ def attach_docs(children: Sequence, built: Sequence, ast_builder: 'ASTBuilder',
     A blank line breaks the attachment, and so does an ordinary `#` comment: both are
     absorbed into `_NEWLINE`, so the builder compares line numbers and cannot tell
     them apart. A block that binds to nothing survives in `orphan_docs`, because the
-    builder takes no Reporter and dropping it here is exactly the silent loss this
-    feature exists to remove.
+    `docs` pass owns every doc diagnostic and dropping the block here is exactly the
+    silent loss this feature exists to remove.
     """
     by_line = {node.loc.line: node for node in built
                if getattr(node, "loc", None) is not None and _takes_docs(node)}

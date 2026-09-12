@@ -12,7 +12,7 @@ from lark.exceptions import LarkError
 from sushi_lang.internals.diagnostics import SushiError, SyntaxDiagnostic
 from sushi_lang.internals.parse_errors import lark_to_diagnostic
 from sushi_lang.internals.indenter import LangIndenter
-from sushi_lang.internals.report import Span, span_of
+from sushi_lang.internals.report import Reporter, Span, span_of
 from sushi_lang.semantics.ast_builder import ASTBuilder
 
 GRAMMAR_PATH = Path(__file__).parent.parent / "grammar.lark"
@@ -139,8 +139,15 @@ def parse_error_hint(e: UnexpectedInput, src: str = "") -> Optional[str]:
     return None
 
 
-def parse_to_ast(src: str, dump_parse: bool = False):
-    """Parse source code into an AST."""
+def parse_to_ast(src: str, dump_parse: bool = False,
+                 reporter: Optional[Reporter] = None):
+    """Parse source code into an AST.
+
+    `reporter` is the file's own. With one the AST builder batches its diagnostics
+    into it instead of stopping at the first (#641), and the caller stops on
+    `has_errors`. A caller that parses a source of its own -- a library template, a
+    bundled stdlib module -- passes none and reads one exception.
+    """
     try:
         tree = build_parser().parse(src)
     except SushiError:
@@ -152,5 +159,5 @@ def parse_to_ast(src: str, dump_parse: bool = False):
     if dump_parse:
         print(tree.pretty())
 
-    ast_builder = ASTBuilder()
+    ast_builder = ASTBuilder(reporter)
     return ast_builder.build(tree), tree

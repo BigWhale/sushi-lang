@@ -762,7 +762,14 @@ def _run(session: Session) -> int:
     session.reporter.source = src
     session.reporter.filename = str(src_path)
 
-    ast, _tree = parse_to_ast(src, dump_parse=args.dump_parse)
+    ast, _tree = parse_to_ast(src, dump_parse=args.dump_parse,
+                              reporter=session.reporter)
+
+    # The parse STAGE batches, and stops before the next one. A rule that recovered
+    # put a substitute node in the tree, so a pass reading it would blame the user for
+    # a value the builder invented (#641).
+    if session.reporter.has_errors:
+        return 2
 
     if args.dump_ast:
         print(ast)
