@@ -1,0 +1,25 @@
+# `extend` is a method name in the declaration slot, and not a keyword there. The call
+# slot always accepted the name. The declaration slot accepts it too (ruling R3). An
+# instance method and a static method both use the name here. Each one stands on its
+# own type, because one type cannot hold a static method and an instance method with
+# the same name.
+# EXPECT_STDOUT_EXACT: "5\n9\n"
+struct Bag:
+    i32 weight
+
+struct Crate:
+    i32 weight
+
+extend Bag extend(i32 more) i32:
+    return self.weight + more
+
+extend Crate static extend(i32 weight) Crate:
+    return Crate(weight)
+
+fn main() i32:
+    let Bag b = Bag(3)
+    let i32 total = b.extend(2)
+    println("{total}")
+    let Crate c = Crate.extend(9)
+    println("{c.weight}")
+    return Result.Ok(0)

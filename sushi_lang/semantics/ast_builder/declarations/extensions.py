@@ -6,8 +6,8 @@ from sushi_lang.semantics.ast import ExtendDef
 from sushi_lang.semantics.ast_builder.declarations.docs import lift_body_doc
 from sushi_lang.semantics.ast_builder.declarations.signatures import read_signature_types
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    find_tree_recursive, first_method_name, first_token, first_tree, ice,
-    is_type_node)
+    find_tree_recursive, first_token, first_tree, ice, is_type_node,
+    read_method_name)
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -37,12 +37,7 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
     if not suffix:
         ice(t, "missing extend_def suffix")
 
-    # `method_name` widened the declaration slot the call site always had, so `new`
-    # and `extend` are writable method names now (ruling R3).
-    name_tree = first_tree(suffix.children, "method_name")
-    name_tok = first_method_name(name_tree.children) if name_tree else None
-    if name_tok is None:
-        ice(suffix, "missing method NAME")
+    name_tok = read_method_name(suffix)
 
     static_tok = first_token(suffix.children, "STATIC")
 
