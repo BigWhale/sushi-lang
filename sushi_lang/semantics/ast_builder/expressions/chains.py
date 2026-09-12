@@ -112,7 +112,7 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                     )
 
             elif call_node.data == "method_call":
-                method = read_method_name(call_node)
+                method = str(read_method_name(call_node))
                 args, field_names = calls.extract_call_args(call_node, ast_builder)
                 # Carried, not read here: `sh.Point(y: 2, x: 1)` parses as a
                 # method call on `sh`, and only a pass with the namespace table can

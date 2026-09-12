@@ -16,7 +16,7 @@ def member_access_from_parts(receiver: Expr, member_access_node: Tree) -> Member
 
     return MemberAccess(
         receiver=receiver,
-        member=read_method_name(member_access_node),
+        member=str(read_method_name(member_access_node)),
         loc=span_of(member_access_node)
     )
 
