@@ -15,15 +15,19 @@ from sushi_lang.internals.report import span_of
 
 
 def strip_self_param(params: List[Param], where_span=None):
-    """Lift a `poke self` / `peek self` / `nom self` parameter off a param list."""
+    """Lift a `poke self` / `peek self` / `nom self` parameter off a param list.
+
+    The POSITION is `parse_params`' to refuse (CE2425), where the builder is in hand
+    and every caller of this reader goes through it. A receiver this finds behind
+    another parameter has already been reported, and is lifted as the receiver it was
+    meant to be. `where_span` went with the rule and is read nowhere now; it stays
+    until every call site drops it.
+    """
     self_mode = None
     self_mode_span = None
     remaining: List[Param] = []
-    for index, param in enumerate(params):
+    for param in params:
         if param.self_mode is not None:
-            if index != 0:
-                raise SyntaxDiagnostic("CE2425", span=param.loc or where_span) \
-                    .help("the receiver comes first: `(poke self, <params>)`")
             self_mode = param.self_mode
             self_mode_span = param.loc
         else:
@@ -99,7 +103,16 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
         if node is None:
             continue
         if node.data in ("self_param", "nom_self_param"):
-            out.append(_self_param(node))
+            receiver = _self_param(node, ast_builder)
+            if out:
+                # The receiver comes first, and this is the one place that still
+                # knows it did not: `strip_self_param` reads a list every caller
+                # builds here.
+                ast_builder.recover(
+                    SyntaxDiagnostic("CE2425", span=receiver.loc or span_of(t)).help(
+                        "the receiver comes first: `(poke self, <params>)`"),
+                    None)
+            out.append(receiver)
         elif node.data == "typed_param":
             out.append(_typed_param(node, ast_builder))
         elif node.data == "variadic_param":
@@ -115,11 +128,12 @@ def _param_rule(ch: object) -> Optional[Tree]:
     return node if isinstance(node, Tree) else None
 
 
-def _self_param(node: Tree) -> Param:
+def _self_param(node: Tree, ast_builder: 'ASTBuilder') -> Param:
     """Read a receiver parameter: `peek self` / `poke self` (#327), or `nom self` (R25).
 
-    The mode rides on the Param. `strip_self_param` lifts it onto the declaration and
-    validates the position, so collect never sees a Param named `self`.
+    The mode rides on the Param, and `strip_self_param` lifts it onto the declaration,
+    so collect never sees a Param named `self`. A bare name that is not `self` recovers
+    to the receiver, which is the one thing this position holds.
     """
     token_type = "NOM" if node.data == "nom_self_param" else "BORROW_MODE"
     mode_tok = first_token(node.children, token_type)
@@ -127,9 +141,11 @@ def _self_param(node: Tree) -> Param:
     if mode_tok is None or name_tok is None:
         ice(node, "malformed self_param")
     if str(name_tok) != "self":
-        raise SyntaxDiagnostic("CE2425", span=span_of(node)) \
-            .help("a reference parameter is written `poke T name`; the bare "
-                  "form is only the receiver, spelled `poke self`")
+        ast_builder.recover(
+            SyntaxDiagnostic("CE2425", span=span_of(node)).help(
+                "a reference parameter is written `poke T name`; the bare "
+                "form is only the receiver, spelled `poke self`"),
+            None)
     return Param(
         name="self", ty=None,
         name_span=span_of(name_tok), loc=span_of(node),

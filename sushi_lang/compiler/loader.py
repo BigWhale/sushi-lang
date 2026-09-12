@@ -67,7 +67,11 @@ def load_unit_recursively(unit_manager: UnitManager, unit_name: str,
     unit_reporter = Reporter(source=unit_src, filename=str(unit_path))
 
     try:
-        unit_ast, _ = parse_to_ast(unit_src, dump_parse=False)
+        unit_ast, _ = parse_to_ast(unit_src, dump_parse=False,
+                                   reporter=unit_reporter)
+        if unit_reporter.has_errors:
+            reporter.items.extend(unit_reporter.items)
+            return False
 
         if unit_src and not unit_src.endswith('\n'):
             from sushi_lang.internals import errors as er
