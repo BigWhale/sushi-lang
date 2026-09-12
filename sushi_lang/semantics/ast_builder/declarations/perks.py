@@ -97,7 +97,7 @@ def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMetho
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_params, strip_self_param
     params_node = first_tree(t.children, "parameters")
     params = parse_params(params_node, ast_builder) if params_node else []
-    self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
+    self_mode, self_mode_span, params = strip_self_param(params)
 
     signature = read_signature_types(t.children, ast_builder)
 

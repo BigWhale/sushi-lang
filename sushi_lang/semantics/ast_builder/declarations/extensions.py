@@ -55,7 +55,7 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
 
     target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
     params = parse_params(params_node, ast_builder) if params_node else []
-    self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
+    self_mode, self_mode_span, params = strip_self_param(params)
     signature = read_signature_types(suffix.children, ast_builder)
     body = ast_builder._block(body_node)
 

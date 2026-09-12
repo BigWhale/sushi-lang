@@ -14,14 +14,13 @@ from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
 
 
-def strip_self_param(params: List[Param], where_span=None):
+def strip_self_param(params: List[Param]):
     """Lift a `poke self` / `peek self` / `nom self` parameter off a param list.
 
     The POSITION is `parse_params`' to refuse (CE2425), where the builder is in hand
     and every caller of this reader goes through it. A receiver this finds behind
     another parameter has already been reported, and is lifted as the receiver it was
-    meant to be. `where_span` went with the rule and is read nowhere now; it stays
-    until every call site drops it.
+    meant to be.
     """
     self_mode = None
     self_mode_span = None
@@ -66,7 +65,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     params = parse_params(params_node, ast_builder, pack_names) if params_node else []
     # A perk-impl method parses through this rule and may declare a receiver (#327);
     # a plain top-level function may not -- collect rejects it there (CE2425).
-    self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
+    self_mode, self_mode_span, params = strip_self_param(params)
     signature = read_signature_types(t.children, ast_builder)
     body = ast_builder._block(body_node)
 
