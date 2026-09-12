@@ -39,9 +39,11 @@ def parse_reference_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type
     # -- a borrow of a borrow is the same borrow (CE2418, #317). Rejected HERE, in the type
     # builder, because one site then covers every position a type can appear in.
     if isinstance(referenced_type, ReferenceType):
-        raise SyntaxDiagnostic(
-            "CE2418", span=span_of(node),
-            outer=mutability.value, inner=referenced_type.mutability.value,
-        ).help("write the single borrow: a borrow of a borrow is the same borrow")
+        return ast_builder.recover(
+            SyntaxDiagnostic(
+                "CE2418", span=span_of(node),
+                outer=mutability.value, inner=referenced_type.mutability.value,
+            ).help("write the single borrow: a borrow of a borrow is the same borrow"),
+            referenced_type)
 
     return ReferenceType(referenced_type=referenced_type, mutability=mutability)

@@ -1,0 +1,13 @@
+# Three malformed numeric literals are three diagnostics, not one. The AST builder
+# reports each one and keeps building, so one run shows every fault.
+# EXPECT_ERROR_CODE: CE6006
+# EXPECT_STDERR_CONTAINS: "'1__000'"
+# EXPECT_STDERR_CONTAINS: "'2__000'"
+# EXPECT_STDERR_CONTAINS: "'3__000'"
+
+fn main() i32:
+    let i32 a = 1__000
+    let i32 b = 2__000
+    let i32 c = 3__000
+    println("{a} {b} {c}")
+    return Result.Ok(0)

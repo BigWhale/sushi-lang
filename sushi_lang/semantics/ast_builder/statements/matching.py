@@ -171,16 +171,20 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> P
                 # it stays CE2424: nested extraction walks through temporary copies, so a
                 # pointer into one writes to storage nobody reads.
                 if child.data == "ref_binding":
-                    if nested:
-                        raise SyntaxDiagnostic("CE2424", span=span_of(child)) \
-                            .help("bind the payload by value in the nested pattern, or "
-                                  "restructure to match the inner enum at the top level")
                     mode_tok = next((c for c in child.children
                                      if isinstance(c, Token) and c.type == "BORROW_MODE"), None)
                     name_tok = next((c for c in child.children
                                      if isinstance(c, Token) and c.type == "NAME"), None)
                     if mode_tok is None or name_tok is None:
                         ice(t, "malformed ref_binding in pattern")
+                    if nested:
+                        bindings.append(ast_builder.recover(
+                            SyntaxDiagnostic("CE2424", span=span_of(child))
+                            .help("bind the payload by value in the nested pattern, or "
+                                  "restructure to match the inner enum at the top "
+                                  "level"),
+                            str(name_tok.value)))
+                        continue
                     from sushi_lang.semantics.ast import RefBinding
                     bindings.append(RefBinding(
                         name=str(name_tok.value), mode=str(mode_tok.value),
@@ -245,10 +249,16 @@ def parse_own_pattern(t: Tree, ast_builder: 'ASTBuilder') -> 'OwnPattern':
     # would have to reconstruct what the user typed.
     nom_tree = first_tree(t.children, "nom_binding")
     if nom_tree is not None:
-        raise SyntaxDiagnostic("CE2434", span=span_of(nom_tree)) \
+        nom_name_tok = next((c for c in nom_tree.children
+                             if isinstance(c, Token) and c.type == "NAME"), None)
+        if nom_name_tok is None:
+            ice(t, "malformed nom_binding inside Own pattern")
+        return ast_builder.recover(
+            SyntaxDiagnostic("CE2434", span=span_of(nom_tree))
             .help("bind the pointee by value, or `Own(poke x)` to write through it; to "
                   "take the value out, move the whole `Own@(T)` with a `nom` binding on "
-                  "the payload that holds it")
+                  "the payload that holds it"),
+            OwnPattern(inner_pattern=str(nom_name_tok.value), loc=span_of(t)))
 
     pattern_item_tree = first_tree(t.children, "pattern_item")
     if pattern_item_tree is None:

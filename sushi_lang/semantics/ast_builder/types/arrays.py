@@ -34,7 +34,7 @@ def parse_array_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[ArrayTyp
 
 
 def _array_size(size_node: Tree, ast_builder: 'ASTBuilder') -> int:
-    """The element count of a fixed array. Raises CE2099 when it is not one.
+    """The element count of a fixed array. CE2099 when it is not one.
 
     An array size is the second consumer of a numeric token, so it goes through the
     same seam an expression does: every base, and the underscore rule (CE6006) and
@@ -58,36 +58,40 @@ def _array_size(size_node: Tree, ast_builder: 'ASTBuilder') -> int:
     # The grammar admits the form so the answer is the ruled code and not a parse error:
     # a size is read while this unit's AST is built, and an alias is bound long after.
     if len(tokens) > 1:
-        raise SyntaxDiagnostic(
-            "CE2099", span=span_of(size_node),
-            size=".".join(str(t.value) for t in tokens),
-            reason="a size is read while this unit is parsed, before any alias is "
-                   "bound").help(
-            "declare an integer constant in this unit and name it bare")
+        return ast_builder.recover(
+            SyntaxDiagnostic(
+                "CE2099", span=span_of(size_node),
+                size=".".join(str(t.value) for t in tokens),
+                reason="a size is read while this unit is parsed, before any alias is "
+                       "bound").help(
+                "declare an integer constant in this unit and name it bare"),
+            1)
 
     size_expr = expr_from_token(token, ast_builder)
 
     if isinstance(size_expr, Name):
-        value = ast_builder.integer_constant(size_expr.id)
-        if value is None:
-            _reject(token, "no integer constant of this unit is named "
-                           f"'{size_expr.id}'")
+        named = ast_builder.integer_constant(size_expr.id)
+        value = named if named is not None else _reject(
+            token, ast_builder,
+            f"no integer constant of this unit is named '{size_expr.id}'")
     elif isinstance(size_expr, IntLit):
         value = size_expr.value
     else:
-        _reject(token, "a size is an integer")
+        value = _reject(token, ast_builder, "a size is an integer")
 
     if value < 1:
-        _reject(token, "an array holds at least one element")
+        value = _reject(token, ast_builder, "an array holds at least one element")
     return value
 
 
-def _reject(token: Token, reason: str) -> None:
-    """Raise CE2099 for a size that cannot count elements."""
-    raise SyntaxDiagnostic("CE2099", span=span_of(token),
-                           size=str(token.value), reason=reason).help(
-        "write a positive integer in any base (256, 0x100, 0b1_0000_0000) or the "
-        "name of an integer constant declared in this unit")
+def _reject(token: Token, ast_builder: 'ASTBuilder', reason: str) -> int:
+    """CE2099 for a size that cannot count elements. Recovers to the smallest one."""
+    return ast_builder.recover(
+        SyntaxDiagnostic("CE2099", span=span_of(token),
+                         size=str(token.value), reason=reason).help(
+            "write a positive integer in any base (256, 0x100, 0b1_0000_0000) or the "
+            "name of an integer constant declared in this unit"),
+        1)
 
 
 def parse_dynamic_array_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[DynamicArrayType]:

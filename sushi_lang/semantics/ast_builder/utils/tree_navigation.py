@@ -62,16 +62,6 @@ def name_tokens(children: List[object]) -> List[Token]:
     return [c for c in children if isinstance(c, Token) and c.type == "NAME"]
 
 
-# The tokens the grammar's `method_name` admits. A keyword after a DOT is a method name
-# and never a statement, so the set grows with the grammar rule and nowhere else.
-_METHOD_NAME_TOKENS = ("NAME", "NEW", "EXTEND")
-
-
-def first_method_name(children: List[object]) -> Optional[Token]:
-    """Get the first method-name token from children."""
-    return first(children, lambda c: isinstance(c, Token) and c.type in _METHOD_NAME_TOKENS)  # type: ignore[return-value]
-
-
 def read_public(children: List[object]) -> tuple[bool, Optional[Span]]:
     """Is the `public` marker written here, and where?
 
@@ -98,6 +88,37 @@ def is_type_node(node: object) -> bool:
 def first_tree(children: List[object], data: str) -> Optional[Tree]:
     """Get first Tree child with specific data tag."""
     return first(children, lambda c: isinstance(c, Tree) and c.data == data)  # type: ignore[return-value]
+
+
+# The tokens the grammar's `method_name` admits. A keyword in this slot is a method
+# name and never a statement, so the set grows with the grammar rule and nowhere else.
+_METHOD_NAME_TOKENS = ("NAME", "NEW", "EXTEND")
+
+
+def read_method_name(node: Tree) -> Token:
+    """The name token the `method_name` slot of `node` holds.
+
+    One reader, because `method_name` carries a language rule. In the CALL slot a
+    keyword is a method name and not a statement, so `List.new()` and `a.extend(b)`
+    are calls. The DECLARATION slot admits the same keywords, so
+    `extend Crate static new()` is writable (ruling R3). One rule cannot hold in one
+    position and not the other, thus it has one reader.
+
+    The answer is the token, and not its text, because a declaration also needs the
+    position of the name for a diagnostic.
+
+    The grammar fixes the shape -- `method_name` has no `?`, so Lark always builds
+    the Tree and it always holds one token. There is thus no fallback to the node's
+    own children: a miss is grammar/builder drift and it stops here (CE0002).
+    """
+    name_tree = first_tree(node.children, "method_name")
+    if name_tree is None:
+        ice(node, "missing method_name")
+    token = first(name_tree.children,
+                  lambda c: isinstance(c, Token) and c.type in _METHOD_NAME_TOKENS)
+    if token is None:
+        ice(name_tree, "method_name holds no name token")
+    return token  # type: ignore[return-value]
 
 
 def find_tree_recursive(n: Tree, data: str) -> Optional[Tree]:

@@ -8,21 +8,25 @@ from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     expect, find_tree_recursive, first_name, first_token, first_tree, ice,
     is_type_node, read_public)
 from sushi_lang.semantics.ast_builder.declarations.docs import lift_body_doc
+from sushi_lang.semantics.ast_builder.declarations.signatures import read_signature_types
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
 
 
-def strip_self_param(params: List[Param], where_span=None):
-    """Lift a `poke self` / `peek self` / `nom self` parameter off a param list."""
+def strip_self_param(params: List[Param]):
+    """Lift a `poke self` / `peek self` / `nom self` parameter off a param list.
+
+    The POSITION is `parse_params`' to refuse (CE2425), where the builder is in hand
+    and every caller of this reader goes through it. A receiver this finds behind
+    another parameter has already been reported, and is lifted as the receiver it was
+    meant to be.
+    """
     self_mode = None
     self_mode_span = None
     remaining: List[Param] = []
-    for index, param in enumerate(params):
+    for param in params:
         if param.self_mode is not None:
-            if index != 0:
-                raise SyntaxDiagnostic("CE2425", span=param.loc or where_span) \
-                    .help("the receiver comes first: `(poke self, <params>)`")
             self_mode = param.self_mode
             self_mode_span = param.loc
         else:
@@ -47,17 +51,6 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
 
     params_node = first_tree(t.children, "parameters")
 
-    # Look for type nodes (return type and optional error type)
-    # Grammar: ")" type? ["|" type] ":"
-    # First type after params is return type, second type (if exists) is error type
-    type_nodes = []
-    for child in t.children:
-        if is_type_node(child):
-            type_nodes.append(child)
-
-    ret_node = type_nodes[0] if len(type_nodes) >= 1 else None
-    err_node = type_nodes[1] if len(type_nodes) >= 2 else None
-
     body_node = first_tree(t.children, "block") or find_tree_recursive(t, "block")
     if body_node is None:
         ice(t, "missing body block")
@@ -72,22 +65,21 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     params = parse_params(params_node, ast_builder, pack_names) if params_node else []
     # A perk-impl method parses through this rule and may declare a receiver (#327);
     # a plain top-level function may not -- collect rejects it there (CE2425).
-    self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
-    ret_ty: Optional[Type] = ast_builder._parse_type(ret_node) if ret_node is not None else None
-    err_ty: Optional[Type] = ast_builder._parse_type(err_node) if err_node is not None else None
+    self_mode, self_mode_span, params = strip_self_param(params)
+    signature = read_signature_types(t.children, ast_builder)
     body = ast_builder._block(body_node)
 
     return FuncDef(
         name=str(name_tok),
         params=params,
-        ret=ret_ty,
+        ret=signature.ret,
         body=body,
         is_public=is_public,
         type_params=type_params,
-        err_type=err_ty,
+        err_type=signature.err,
         loc=span_of(t),
         name_span=span_of(name_tok),
-        ret_span=span_of(ret_node),
+        ret_span=signature.ret_span,
         self_mode=self_mode,
         self_mode_span=self_mode_span,
         doc=lift_body_doc(body, ast_builder),
@@ -110,7 +102,16 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
         if node is None:
             continue
         if node.data in ("self_param", "nom_self_param"):
-            out.append(_self_param(node))
+            receiver = _self_param(node, ast_builder)
+            if out:
+                # The receiver comes first, and this is the one place that still
+                # knows it did not: `strip_self_param` reads a list every caller
+                # builds here.
+                ast_builder.recover(
+                    SyntaxDiagnostic("CE2425", span=receiver.loc or span_of(t)).help(
+                        "the receiver comes first: `(poke self, <params>)`"),
+                    None)
+            out.append(receiver)
         elif node.data == "typed_param":
             out.append(_typed_param(node, ast_builder))
         elif node.data == "variadic_param":
@@ -126,11 +127,12 @@ def _param_rule(ch: object) -> Optional[Tree]:
     return node if isinstance(node, Tree) else None
 
 
-def _self_param(node: Tree) -> Param:
+def _self_param(node: Tree, ast_builder: 'ASTBuilder') -> Param:
     """Read a receiver parameter: `peek self` / `poke self` (#327), or `nom self` (R25).
 
-    The mode rides on the Param. `strip_self_param` lifts it onto the declaration and
-    validates the position, so collect never sees a Param named `self`.
+    The mode rides on the Param, and `strip_self_param` lifts it onto the declaration,
+    so collect never sees a Param named `self`. A bare name that is not `self` recovers
+    to the receiver, which is the one thing this position holds.
     """
     token_type = "NOM" if node.data == "nom_self_param" else "BORROW_MODE"
     mode_tok = first_token(node.children, token_type)
@@ -138,9 +140,11 @@ def _self_param(node: Tree) -> Param:
     if mode_tok is None or name_tok is None:
         ice(node, "malformed self_param")
     if str(name_tok) != "self":
-        raise SyntaxDiagnostic("CE2425", span=span_of(node)) \
-            .help("a reference parameter is written `poke T name`; the bare "
-                  "form is only the receiver, spelled `poke self`")
+        ast_builder.recover(
+            SyntaxDiagnostic("CE2425", span=span_of(node)).help(
+                "a reference parameter is written `poke T name`; the bare "
+                "form is only the receiver, spelled `poke self`"),
+            None)
     return Param(
         name="self", ty=None,
         name_span=span_of(name_tok), loc=span_of(node),

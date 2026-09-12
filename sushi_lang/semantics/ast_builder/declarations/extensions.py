@@ -4,9 +4,10 @@ from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import ExtendDef
 from sushi_lang.semantics.ast_builder.declarations.docs import lift_body_doc
+from sushi_lang.semantics.ast_builder.declarations.signatures import read_signature_types
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    find_tree_recursive, first_method_name, first_token, first_tree, ice,
-    is_type_node)
+    find_tree_recursive, first_token, first_tree, ice, is_type_node,
+    read_method_name)
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -17,9 +18,8 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
     """Handle extend_stmt when it's an extension method definition.
 
     Suffix shape: NAME [type_params] "(" [parameters] ")" type ["|" type] ":" block.
-    With `maybe_placeholders=False` an omitted optional emits no child, so the
-    return and error types are the first and second type nodes among the suffix's
-    DIRECT children (the parameters subtree nests its own type nodes one level down).
+    The TARGET type stands on the outer node and the signature on the suffix, so the
+    two reads take the children of different nodes.
     """
 
     target_type_node = None
@@ -37,12 +37,7 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
     if not suffix:
         ice(t, "missing extend_def suffix")
 
-    # `method_name` widened the declaration slot the call site always had, so `new`
-    # and `extend` are writable method names now (ruling R3).
-    name_tree = first_tree(suffix.children, "method_name")
-    name_tok = first_method_name(name_tree.children) if name_tree else None
-    if name_tok is None:
-        ice(suffix, "missing method NAME")
+    name_tok = read_method_name(suffix)
 
     static_tok = first_token(suffix.children, "STATIC")
 
@@ -54,36 +49,31 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
 
     params_node = first_tree(suffix.children, "parameters")
 
-    type_nodes = [child for child in suffix.children if is_type_node(child)]
-    return_type_node = type_nodes[0] if len(type_nodes) >= 1 else None
-    err_type_node = type_nodes[1] if len(type_nodes) >= 2 else None
-
     body_node = first_tree(suffix.children, "block") or find_tree_recursive(suffix, "block")
     if body_node is None:
         ice(suffix, "missing body block")
 
     target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
     params = parse_params(params_node, ast_builder) if params_node else []
-    self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
-    return_type = ast_builder._parse_type(return_type_node) if return_type_node else None
-    err_type = ast_builder._parse_type(err_type_node) if err_type_node else None
+    self_mode, self_mode_span, params = strip_self_param(params)
+    signature = read_signature_types(suffix.children, ast_builder)
     body = ast_builder._block(body_node)
 
     return ExtendDef(
         target_type=target_type,
         name=str(name_tok),
         params=params,
-        ret=return_type,
+        ret=signature.ret,
         body=body,
         loc=span_of(t),
         target_type_span=span_of(target_type_node),
         name_span=span_of(name_tok),
-        ret_span=span_of(return_type_node),
+        ret_span=signature.ret_span,
         self_mode=self_mode,
         self_mode_span=self_mode_span,
         type_params=type_params,
-        err_type=err_type,
-        err_span=span_of(err_type_node) if err_type_node is not None else None,
+        err_type=signature.err,
+        err_span=signature.err_span,
         doc=lift_body_doc(body, ast_builder),
         is_static=static_tok is not None,
         static_span=span_of(static_tok) if static_tok is not None else None,

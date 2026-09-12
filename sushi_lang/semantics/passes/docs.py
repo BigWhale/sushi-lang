@@ -122,8 +122,8 @@ def _check_examples(reporter: 'Reporter', doc: 'DocBlock') -> None:
     """The two ways an `- Example:` can contradict itself (documentation.md S10, R17).
 
     Both are recorded by the parse and reported here, which is the split
-    `DocBlock.orphan_reason` settled: the builder takes no Reporter, so it cannot
-    diagnose, and dropping the defect there is the silent loss this feature removes.
+    `DocBlock.orphan_reason` settled: every CE70xx is this pass's to raise, and
+    dropping the defect at the parse is the silent loss this feature removes.
     """
     for example in doc.examples:
         if example.defect == "no-fence":
