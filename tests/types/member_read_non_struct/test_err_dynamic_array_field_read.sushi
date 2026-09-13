@@ -1,0 +1,10 @@
+# A dynamic array holds no field, so the read is a typo and it is answered where it
+# is written (#661). It used to walk past every semantic pass and stop in the backend
+# with CE0031: tier 1, no file, no line, no caret.
+# EXPECT_ERROR_CODE: CE2106
+# EXPECT_STDERR_CONTAINS: 'i32[]' has no field 'nope'
+fn main() i32:
+    let i32[] rows = from([1, 2, 3])
+    let i32 v = rows.nope
+    println("{v}")
+    return Result.Ok(0)
