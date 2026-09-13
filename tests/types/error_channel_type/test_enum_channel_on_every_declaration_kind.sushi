@@ -1,0 +1,34 @@
+# The other side of the rule (#663): an ENUM channel is legal in all four positions --
+# a free function, an extension method, a perk contract and its implementation -- and
+# the refusal must not reach any of them.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+
+enum OddError:
+    TooOdd
+
+struct Holder:
+    i32 n
+
+perk Source:
+    fn read_one(peek self) i32 | OddError
+
+extend Holder with Source:
+    fn read_one(peek self) i32 | OddError:
+        return self.n
+
+extend Holder doubled(peek self) i32 | OddError:
+    return self.n * 2
+
+fn halved(i32 v) i32 | OddError:
+    if (v % 2 == 1):
+        return Result.Err(OddError.TooOdd)
+    return Result.Ok(v / 2)
+
+fn main() i32:
+    let Holder h = Holder(4)
+    let i32 one = h.read_one().realise(0)
+    let i32 two = h.doubled().realise(0)
+    let i32 three = halved(8).realise(0)
+    if (one + two + three == 4 + 8 + 4):
+        println("Mostly Harmless")
+    return Result.Ok(0)

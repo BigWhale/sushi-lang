@@ -1,0 +1,8 @@
+# A fixed array reads the same rule as a dynamic one (#661).
+# EXPECT_ERROR_CODE: CE2106
+# EXPECT_STDERR_CONTAINS: 'i32[3]' has no field 'nope'
+fn main() i32:
+    let i32[3] rows = [1, 2, 3]
+    let i32 v = rows.nope
+    println("{v}")
+    return Result.Ok(0)

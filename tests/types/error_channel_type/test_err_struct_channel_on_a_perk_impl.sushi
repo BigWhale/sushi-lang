@@ -1,0 +1,22 @@
+# A perk IMPLEMENTATION method writes the channel too, and it reads the same rule
+# (#663). The contract must agree with it (CE0133), so both declarations name the
+# struct and each one answers.
+# EXPECT_ERROR_CODE: CE2084
+# EXPECT_STDERR_CONTAINS: test_err_struct_channel_on_a_perk_impl.sushi:15:34
+# EXPECT_STDERR_CONTAINS: test_err_struct_channel_on_a_perk_impl.sushi:18:34
+
+struct Bad:
+    i32 n
+
+struct Holder:
+    i32 n
+
+perk Source:
+    fn read_one(peek self) i32 | Bad
+
+extend Holder with Source:
+    fn read_one(peek self) i32 | Bad:
+        return self.n
+
+fn main() i32:
+    return Result.Ok(0)

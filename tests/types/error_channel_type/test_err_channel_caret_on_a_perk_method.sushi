@@ -1,0 +1,18 @@
+# A perk implementation's channel had no location at all (#662): the method node kept
+# no span for the channel, so the diagnostic named the file and nothing more. The
+# contract above it names the same unknown type, and each declaration answers once.
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: test_err_channel_caret_on_a_perk_method.sushi:14:34
+
+struct Holder:
+    i32 n
+
+perk Source:
+    fn read_one(peek self) i32 | NoSuchError
+
+extend Holder with Source:
+    fn read_one(peek self) i32 | NoSuchError:
+        return self.n
+
+fn main() i32:
+    return Result.Ok(0)

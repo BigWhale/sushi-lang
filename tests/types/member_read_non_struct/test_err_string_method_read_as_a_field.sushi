@@ -1,0 +1,9 @@
+# A string holds no field either, and 'len' is one of its built-in methods. Write
+# the parentheses (#661).
+# EXPECT_ERROR_CODE: CE2106
+# EXPECT_STDERR_CONTAINS: 'string.len()' is a method, not a field
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let i32 v = s.len
+    println("{v}")
+    return Result.Ok(0)

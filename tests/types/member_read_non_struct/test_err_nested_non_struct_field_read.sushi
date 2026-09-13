@@ -1,0 +1,12 @@
+# The receiver is a string FIELD, so the chain reached a second backend site, CE0044.
+# One rule answers both: a member read wants a struct, and a string is not one (#661).
+# EXPECT_ERROR_CODE: CE2106
+# EXPECT_STDERR_CONTAINS: 'string.len()' is a method, not a field
+struct Bag:
+    string label
+
+fn main() i32:
+    let Bag b = Bag("towel")
+    let i32 v = b.label.len
+    println("{v}")
+    return Result.Ok(0)

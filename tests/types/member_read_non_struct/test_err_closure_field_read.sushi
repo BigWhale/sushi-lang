@@ -1,0 +1,9 @@
+# A function value holds no field. A bound-method value is Tier 2 work, so the read
+# is refused here too (#661).
+# EXPECT_ERROR_CODE: CE2106
+# EXPECT_STDERR_CONTAINS: has no field 'nope'
+fn main() i32:
+    let fn(i32) -> i32 step = |i32 n| n + 1
+    let i32 v = step.nope
+    println("{v}")
+    return Result.Ok(0)

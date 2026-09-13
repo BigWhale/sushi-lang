@@ -1,0 +1,13 @@
+# A primitive is not an enum either (#663). It reaches the rule as a built-in type and
+# not as a name to look up, so it is the second half of the extension hole.
+# EXPECT_ERROR_CODE: CE2084
+# EXPECT_STDERR_CONTAINS: test_err_primitive_channel_on_an_extension.sushi:9:35
+
+struct Half:
+    i32 n
+
+extend Half take(peek self) i32 | i32:
+    return self.n
+
+fn main() i32:
+    return Result.Ok(0)

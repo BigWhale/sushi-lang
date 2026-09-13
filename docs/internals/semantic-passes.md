@@ -843,14 +843,25 @@ file, no line, no caret, and the note that says the fault is a bug in the compil
 what is a typo (#630). The four backend `CE0029` sites stay where they are and go back to
 being the internal backstop they read as.
 
-`reject_unknown_field` (`passes/types/expressions.py`) is deliberately narrow: it answers
-only a receiver whose type is a STRUCT, which is the one case the inference arm looks a
-field up in. A namespace member, a bare enum variant (#545), an unresolved type and every
-non-struct receiver belong to another position, and a false `CE2106` there would be worse
-than the `CE0029` it replaces.
+A receiver that carries NO field reads the same rule (#661). An array, a primitive, a
+string, a closure and a `ptr` declare nothing, so every name behind their dot is a miss.
+They used to reach the backend too, and there the SHAPE of the read picked the internal
+code: `CE0031` off a name or an assignment target, `CE0044` through a field, `CE0043`
+through an array element. `_field_names_of` (`passes/types/expressions.py`) is the one
+answer to "which fields does this receiver declare": a struct answers its own list, a
+fieldless kind answers the empty list, and everything else answers None.
+
+None means the position is not this rule's. A namespace member, a bare enum variant
+(#545), an unresolved name, a generic reference and a receiver the pass could not type all
+belong elsewhere, and a false `CE2106` there would be worse than the internal error it
+replaces. An ENUM receiver is also left out on purpose: the backend unwraps a `Maybe@(T)`
+receiver to its payload struct today, so a refusal here would speak for a question #661
+does not settle.
 
 A METHOD is not a field, and a bound-method value is deferred to Tier 2, so `v.probe` with
-no parentheses is the same refusal with a note that says so. Otherwise the help quotes
+no parentheses is the same refusal with a note that says so. `_is_a_method` asks the
+extension table for what the program declares and `builtin_method_exists` for what the
+compiler declares, so `s.len` reads the same note. Otherwise the help quotes
 `suggest_member` -- the one reader every position that can miss already uses -- or lists
 what the type does declare.
 

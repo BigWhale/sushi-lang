@@ -199,7 +199,7 @@ def _callable_sites(kind: str, decl: CallableOwner,
     yield TypeSite(kind, "return", decl, callable_node.ret,
                    callable_node.ret_span or fallback, callable_node)
     yield TypeSite(kind, "error", decl, callable_node.err_type,
-                   fallback, callable_node)
+                   callable_node.err_span or fallback, callable_node)
     for param in callable_node.params or ():
         yield TypeSite(kind, "parameter", decl, param.ty,
                        param.type_span or fallback, callable_node)
