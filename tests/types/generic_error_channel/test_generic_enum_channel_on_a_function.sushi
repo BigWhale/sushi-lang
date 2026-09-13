@@ -1,0 +1,21 @@
+# A generic enum is a legal error type. The explicit Result@(T, E) spelling of the same
+# type has always compiled, so the `| E` spelling of it must compile too (#668).
+# EXPECT_STDOUT_EXACT: "ok 3\nbad 7\n"
+enum MyErr@(T):
+    Bad(T)
+    Worse
+
+fn halved(i32 v) i32 | MyErr@(i32):
+    if (v == 0):
+        return Result.Err(MyErr.Bad(7))
+    return Result.Ok(v)
+
+fn main() i32:
+    match halved(3):
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(_) -> println("unexpected")
+    match halved(0):
+        Result.Ok(_) -> println("unexpected")
+        Result.Err(MyErr.Bad(code)) -> println("bad {code}")
+        Result.Err(MyErr.Worse) -> println("worse")
+    return Result.Ok(0)

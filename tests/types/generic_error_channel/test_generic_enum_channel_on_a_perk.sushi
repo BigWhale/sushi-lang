@@ -1,0 +1,23 @@
+# A perk contract and its implementation both write the channel, and CE0133 makes the
+# two agree. A generic enum is legal in both (#668).
+# EXPECT_STDOUT_EXACT: "read 4\n"
+enum MyErr@(T):
+    Bad(T)
+    Worse
+
+perk Source:
+    fn read_one(peek self) i32 | MyErr@(i32)
+
+struct Holder:
+    i32 n
+
+extend Holder with Source:
+    fn read_one(peek self) i32 | MyErr@(i32):
+        return self.n
+
+fn main() i32:
+    let Holder h = Holder(4)
+    match h.read_one():
+        Result.Ok(n) -> println("read {n}")
+        Result.Err(_) -> println("unexpected")
+    return Result.Ok(0)
