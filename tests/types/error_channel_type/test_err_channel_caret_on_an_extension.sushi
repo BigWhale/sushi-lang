@@ -1,0 +1,13 @@
+# The extension twin of the function caret: the same mistake, the same caret. The
+# extension path is the reference here, and it must stay put (#662).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: test_err_channel_caret_on_an_extension.sushi:9:35
+
+struct Half:
+    i32 n
+
+extend Half take(peek self) i32 | NoSuchError:
+    return self.n
+
+fn main() i32:
+    return Result.Ok(0)

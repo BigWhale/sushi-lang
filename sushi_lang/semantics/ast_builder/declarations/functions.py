@@ -80,6 +80,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
         loc=span_of(t),
         name_span=span_of(name_tok),
         ret_span=signature.ret_span,
+        err_span=signature.err_span,
         self_mode=self_mode,
         self_mode_span=self_mode_span,
         doc=lift_body_doc(body, ast_builder),

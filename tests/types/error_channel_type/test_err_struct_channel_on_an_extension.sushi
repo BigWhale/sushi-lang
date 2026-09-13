@@ -1,0 +1,17 @@
+# An error channel names an enum, in every declaration kind (#663). The extension path
+# checked the NAME and never the kind, so a struct channel was accepted here while the
+# function twin refused it.
+# EXPECT_ERROR_CODE: CE2084
+# EXPECT_STDERR_CONTAINS: test_err_struct_channel_on_an_extension.sushi:13:35
+
+struct Bad:
+    i32 n
+
+struct Half:
+    i32 n
+
+extend Half take(peek self) i32 | Bad:
+    return self.n
+
+fn main() i32:
+    return Result.Ok(0)
