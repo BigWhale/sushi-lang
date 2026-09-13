@@ -318,7 +318,7 @@ _add(ErrorMessage("CE2083", Severity.ERROR,
 
 _add(ErrorMessage("CE2084", Severity.ERROR,
     "error type must be an enum, not '{type_name}'",
-    Category.TYPE, "Custom error types (fn foo() T | E) must be enums. Structs and primitives are not allowed as error types. ONE rule over the four kinds that write a channel: a free function, an extension method, a perk contract and a perk implementation (#663). A name that spells nothing stops at CE2001, which already says everything a reader can act on."))
+    Category.TYPE, "Custom error types (fn foo() T | E) must be enums. Structs and primitives are not allowed as error types. ONE rule over the four kinds that write a channel: a free function, an extension method, a perk contract and a perk implementation (#663). A name that spells nothing stops at CE2001, which already says everything a reader can act on. A GENERIC enum qualifies: `| MyErr@(i32)` is an enum and is legal, which this rule denied on every kind until #668 -- the written instantiation is resolved before the kind is asked."))
 
 _add(ErrorMessage("CE2085", Severity.ERROR,
     "cannot use '| {err_type}' syntax with explicit Result@(T, E) return type",
