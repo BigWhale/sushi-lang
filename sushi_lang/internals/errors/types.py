@@ -318,13 +318,17 @@ _add(ErrorMessage("CE2083", Severity.ERROR,
 
 _add(ErrorMessage("CE2084", Severity.ERROR,
     "error type must be an enum, not '{type_name}'",
-    Category.TYPE, "Custom error types (fn foo() T | E) must be enums. Structs and primitives are not allowed as error types. ONE rule over the four kinds that write a channel: a free function, an extension method, a perk contract and a perk implementation (#663). A name that spells nothing stops at CE2001, which already says everything a reader can act on."))
+    Category.TYPE, "Custom error types (fn foo() T | E) must be enums. Structs and primitives are not allowed as error types. ONE rule over the four kinds that write a channel: a free function, an extension method, a perk contract and a perk implementation (#663). A name that spells nothing stops at CE2001, which already says everything a reader can act on. A GENERIC enum qualifies: `| MyErr@(i32)` is an enum and is legal, which this rule denied on every kind until #668 -- the written instantiation is resolved before the kind is asked."))
 
 _add(ErrorMessage("CE2085", Severity.ERROR,
     "cannot use '| {err_type}' syntax with explicit Result@(T, E) return type",
     Category.TYPE, "When using explicit Result@(T, E) syntax, the error type is already specified. Remove the '| ErrorType' syntax or use implicit return type."))
 
-# CE2086-CE2089 reserved for future extensions
+_add(ErrorMessage("CE2086", Severity.ERROR,
+    "error type cannot be a wrapper: '{type_name}'",
+    Category.TYPE, "A built-in wrapper is an enum, so CE2084 does not catch it, and it is still not an error vocabulary. `Result@(T, E)` models failure and `Maybe@(T)` models absence; the Err arm of the channel already says that something went wrong, so `fn f() i32 | Maybe@(string)` asks a reader to read an absence as a failure and says nothing they can act on. It also nests: the declared return becomes `Result@(i32, Maybe@(string))`. Write a plain enum that names the failures. A user's GENERIC enum is fine -- `| MyErr@(i32)` is legal (#668); this rule reads the OUTERMOST name only, so it refuses `Maybe` and `Result` and nothing else."))
+
+# CE2087-CE2089 reserved for future extensions
 _add(ErrorMessage("CE2090", Severity.ERROR,
     "type-pack element {index} of type '{ty}' does not satisfy constraint '{perk}'",
     Category.TYPE, "Each element type bound to a perk-constrained type-pack '...Ts: Perk' must implement the required perk."))

@@ -22,6 +22,10 @@ DECLARATIONS = (
     "enum Good:\n"
     "    One\n"
     "\n"
+    "enum MyErr@(T):\n"
+    "    Bad2(T)\n"
+    "    Worse\n"
+    "\n"
     "struct Holder:\n"
     "    i32 n\n"
     "\n"
@@ -29,13 +33,15 @@ DECLARATIONS = (
 
 MAIN = "fn main() i32:\n    return Result.Ok(0)\n"
 
-# What one channel can name: a name that spells nothing, two real non-enums, an
-# instantiation nothing collected, and an enum.
+# What one channel can name: a name that spells nothing, two real non-enums, a plain
+# enum, a user's generic enum and a built-in WRAPPER, which is an enum and is still not
+# an error vocabulary (#668).
 ARMS = {
     "unknown": "NoSuchError",
     "struct": "Bad",
     "primitive": "i32",
-    "generic": "Maybe@(i32)",
+    "wrapper": "Maybe@(i32)",
+    "generic user": "MyErr@(i32)",
     "enum": "Good",
 }
 
@@ -46,14 +52,16 @@ EXPECTED = {
     "unknown": {"CE2001"},
     "struct": {"CE2084"},
     "primitive": {"CE2084"},
-    # An instantiation a channel names is collected from a FUNCTION signature and from
-    # no other kind, so the name is real there and spells nothing everywhere else. The
-    # asymmetry belongs to instantiation collection, and is measured here, not fixed.
-    "generic": {"CE2001"},
+    # A user's generic enum IS an enum, and the explicit `Result@(T, E)` spelling of one
+    # has always compiled, so the `| E` spelling is legal too (#668). The rule resolves a
+    # written instantiation before it asks the kind, and the channel is collected for all
+    # four kinds now.
+    "generic user": set(),
     "enum": set(),
+    # A built-in wrapper passes the enum test and is refused by its own rule: the Err arm
+    # already means failure, so an absence or a second Result in it says nothing.
+    "wrapper": {"CE2086"},
 }
-
-OVERRIDE = {("generic", "function"): {"CE2084"}}
 
 # One channel per kind, written so the type under test starts at a known column.
 KINDS = {
@@ -96,12 +104,11 @@ def _codes(reporter) -> set:
 def test_every_kind_answers_one_channel_rule(analyze, kind: str, arm: str) -> None:
     """The code SET, which is what tells one fault from one fault told twice."""
     source, _column = KINDS[kind]
-    expected = OVERRIDE.get((arm, kind), EXPECTED[arm])
-    assert _codes(analyze(source(ARMS[arm]))) == expected, (kind, arm)
+    assert _codes(analyze(source(ARMS[arm]))) == EXPECTED[arm], (kind, arm)
 
 
 @pytest.mark.parametrize("kind", sorted(KINDS))
-@pytest.mark.parametrize("arm", ["unknown", "struct", "primitive", "generic"])
+@pytest.mark.parametrize("arm", ["unknown", "struct", "primitive", "wrapper"])
 def test_every_caret_points_at_the_channel(analyze, kind: str, arm: str) -> None:
     """The caret marks the channel, and never the return type beside it."""
     source, column = KINDS[kind]
@@ -112,3 +119,35 @@ def test_every_caret_points_at_the_channel(analyze, kind: str, arm: str) -> None
         assert item.span is not None, (kind, arm)
         assert item.span.col == column, (kind, arm, item.span)
         assert item.span.end_col - item.span.col == len(ARMS[arm]), (kind, arm)
+
+
+# `T | E` is SUGAR for `Result@(T, E)`, so the two spellings must admit exactly the same
+# `E`. They did not: CE2084 was a rule on the SHORT form alone, and a struct error
+# compiled in the long form while the short form refused it (#668). One derivation --
+# `signature_result_arms` -- answers the arm for both now, so this pins the equality
+# rather than either side's answer.
+def LONG(arm: str) -> str:
+    """The same signature, written `Result@(i32, E)` instead of `i32 | E`."""
+    return (DECLARATIONS
+            + "fn halved(i32 v) Result@(i32, %s):\n    return Result.Ok(v)\n\n" % arm
+            + MAIN)
+
+
+SHORT = KINDS["function"][0]
+
+
+@pytest.mark.parametrize("arm", sorted(ARMS))
+def test_the_two_spellings_admit_the_same_error_type(analyze, arm: str) -> None:
+    """`T | E` and `Result@(T, E)` answer alike, or the short form is not sugar."""
+    short = _codes(analyze(SHORT(ARMS[arm])))
+    long_form = _codes(analyze(LONG(ARMS[arm])))
+
+    # A name that spells nothing is the one row where the COUNT may differ: the long
+    # form's return walk adds its own complaints about the Result it could not build.
+    # The channel rule stays silent in both, which is what this asserts.
+    if arm == "unknown":
+        assert "CE2001" in short and "CE2001" in long_form, arm
+        assert not ({"CE2084", "CE2086"} & (short | long_form)), arm
+        return
+
+    assert short == long_form, (arm, short, long_form)

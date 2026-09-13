@@ -1,0 +1,10 @@
+# One rule over every declaration kind, the wrapper refusal included (#663, #668).
+# EXPECT_ERROR_CODE: CE2086
+struct Holder:
+    i32 n
+
+extend Holder take(peek self) i32 | Maybe@(i32):
+    return self.n
+
+fn main() i32:
+    return Result.Ok(0)

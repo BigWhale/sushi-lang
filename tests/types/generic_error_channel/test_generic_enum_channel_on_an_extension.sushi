@@ -1,0 +1,26 @@
+# The channel rule is one rule over every declaration kind (#663), so an extension
+# method takes a generic enum in its channel exactly as a free function does (#668).
+# EXPECT_STDOUT_EXACT: "got 5\nbad 9\n"
+enum MyErr@(T):
+    Bad(T)
+    Worse
+
+struct Holder:
+    i32 n
+
+extend Holder take(peek self) i32 | MyErr@(i32):
+    if (self.n == 0):
+        return Result.Err(MyErr.Bad(9))
+    return self.n
+
+fn main() i32:
+    let Holder full = Holder(5)
+    match full.take():
+        Result.Ok(n) -> println("got {n}")
+        Result.Err(_) -> println("unexpected")
+    let Holder empty = Holder(0)
+    match empty.take():
+        Result.Ok(_) -> println("unexpected")
+        Result.Err(MyErr.Bad(code)) -> println("bad {code}")
+        Result.Err(MyErr.Worse) -> println("worse")
+    return Result.Ok(0)

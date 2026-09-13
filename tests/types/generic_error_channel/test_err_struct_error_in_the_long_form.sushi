@@ -1,0 +1,11 @@
+# `T | E` is sugar for `Result@(T, E)`, so the long form refuses what the short form
+# refuses. A struct error compiled here until #668.
+# EXPECT_ERROR_CODE: CE2084
+struct Bad:
+    i32 n
+
+fn f() Result@(i32, Bad):
+    return Result.Ok(1)
+
+fn main() i32:
+    return Result.Ok(0)

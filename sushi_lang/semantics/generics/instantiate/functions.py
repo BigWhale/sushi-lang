@@ -213,10 +213,40 @@ class FunctionCollector:
         if ext.ret is not None:
             self._collect_from_type(ext.ret, getattr(ext, "ret_span", None))
 
+        self._collect_from_channel(ext)
+
         for param in ext.params:
             self._collect_from_param(param)
 
         self._collect_from_block(ext.body)
+
+    def _collect_from_channel(self, decl) -> None:
+        """The instantiation a `| E` channel names.
+
+        A function reaches this through `collect_from_signature`. Every other kind that
+        writes a channel had no reader at all, so `| MyErr@(i32)` was never interned and
+        the name spelled nothing (#668).
+        """
+        err_type = getattr(decl, "err_type", None)
+        if err_type is not None:
+            self._collect_from_type(err_type, getattr(decl, "err_span", None))
+
+    def collect_from_perk(self, perk) -> None:
+        """The instantiations a perk CONTRACT names: a return, a channel, a parameter.
+
+        A contract has no body, so no body walk reaches it, and it was in no other walk
+        either (#668).
+        """
+        for signature in perk.methods:
+            self._reset_scope()
+
+            if signature.ret is not None:
+                self._collect_from_type(signature.ret, getattr(signature, "ret_span", None))
+
+            self._collect_from_channel(signature)
+
+            for param in signature.params:
+                self._collect_from_param(param)
 
     def collect_from_perk_impl(self, perk_impl) -> None:
         """Collect generic instantiations from perk implementation methods."""
@@ -226,6 +256,8 @@ class FunctionCollector:
 
             if method.ret is not None:
                 self._collect_from_type(method.ret, getattr(method, "ret_span", None))
+
+            self._collect_from_channel(method)
 
             for param in method.params:
                 self._collect_from_param(param)

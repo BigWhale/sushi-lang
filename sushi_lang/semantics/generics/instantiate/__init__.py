@@ -140,6 +140,12 @@ class InstantiationCollector:
         for ext in program.extensions:
             function_collector.collect_from_extension(ext)
 
+        # A perk CONTRACT has no body, so no body walk reaches it. Its written types
+        # still name instantiations, and its channel is the one the implementation must
+        # agree with (CE0133).
+        for perk in program.perks:
+            function_collector.collect_from_perk(perk)
+
         # A perk method returns a bare type like an extension, but its parameters and
         # body still carry generic instantiations.
         for perk_impl in program.perk_impls:
