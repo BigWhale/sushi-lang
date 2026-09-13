@@ -65,7 +65,8 @@ def validate_function(self, func: FuncDef) -> None:
     validate_type_name(self, func.ret, func.ret_span)
 
     if func.err_type is not None:
-        validate_type_name(self, func.err_type, func.ret_span)  # Use ret_span since we don't have err_span
+        channel_span = func.err_span or func.ret_span
+        validate_type_name(self, func.err_type, channel_span)
 
         resolved_err_type = func.err_type
 
@@ -77,7 +78,7 @@ def validate_function(self, func: FuncDef) -> None:
             )
 
         if not isinstance(resolved_err_type, EnumType):
-            self.err.emit(er.ERR.CE2084, func.ret_span,
+            self.err.emit(er.ERR.CE2084, channel_span,
                          type_name=display_type(func.err_type))
 
     self._validate_block(func.body)
@@ -157,11 +158,11 @@ def _validate_method_body(self, target_type, method) -> None:
     # Result@(ret, E) that `??` propagates into and that `Result.Err(e)` constructs.
     # The success still returns bare against `extension_return_type` (ruling 6).
     self.extension_channel_result = None
-    err_ty = getattr(method, "err_type", None)
+    err_ty = method.err_type
     if err_ty is not None:
         from sushi_lang.semantics.generics.results import ensure_result_type_in_table
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
-        validate_type_name(self, err_ty, getattr(method, "err_span", None))
+        validate_type_name(self, err_ty, method.err_span or method.name_span)
         resolved_err = resolve_unknown_type(
             err_ty, self.struct_table.by_name, self.enum_table.by_name)
         self.extension_channel_result = ensure_result_type_in_table(

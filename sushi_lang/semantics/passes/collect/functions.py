@@ -205,6 +205,9 @@ class GenericFuncDef:
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     err_type: Optional[Type] = None              # Error type for Result<T, E> (None = StdError default)
+    err_span: Optional[Span] = None              # Where the channel is written (#662); an
+                                                 # instance is a copy of this node and the
+                                                 # signature walk reads the span off it
     is_library_template: bool = False            # True if registered from a consumed library's .slib templates
     library_origin: Optional[Origin] = None      # Set with the mark: how to render a diagnostic from this body
     unit_name: Optional[str] = None              # Unit that declared it; a monomorphized instance goes home to it
@@ -837,6 +840,7 @@ class FunctionCollector:
             name_span=name_span,
             ret_span=ret_span,
             err_type=fn.err_type,
+            err_span=fn.err_span,
             unit_name=self.current_unit_name,
             filename=self.current_unit_file,
         )

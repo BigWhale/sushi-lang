@@ -184,6 +184,10 @@ class FuncDef(Node):
     err_type: Optional[Type] = None  # Error type for Result<T, E> (None = StdError default)
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
+    # Where the channel is WRITTEN. An extension and a perk contract both keep it, and
+    # a function dropped it, so a diagnostic about the channel pointed at the return
+    # type beside it -- or, in a perk implementation, at nothing at all (#662).
+    err_span: Optional[Span] = None
     is_library_template: bool = False  # True if reconstructed from a consumed library's .slib templates
     # Set with `is_library_template` and never without it: the mark answers who may
     # be called from this body (#468), the origin answers how a diagnostic raised in
