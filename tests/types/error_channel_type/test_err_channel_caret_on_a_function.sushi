@@ -1,0 +1,11 @@
+# A free function's `| E` channel points its caret at the CHANNEL (#662). It pointed at
+# the return type beside it, because the node kept no span for the channel. The
+# extension twin always pointed at the channel, so one mistake read two carets.
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: test_err_channel_caret_on_a_function.sushi:7:24
+
+fn halved(i32 v) i32 | NoSuchError:
+    return Result.Ok(v)
+
+fn main() i32:
+    return Result.Ok(0)

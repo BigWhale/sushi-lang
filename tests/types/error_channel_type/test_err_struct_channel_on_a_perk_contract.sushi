@@ -1,0 +1,13 @@
+# A perk CONTRACT writes the channel like the other two kinds, so it answers the same
+# rule (#663). A contract with no implementation reached no check at all.
+# EXPECT_ERROR_CODE: CE2084
+# EXPECT_STDERR_CONTAINS: test_err_struct_channel_on_a_perk_contract.sushi:10:34
+
+struct Bad:
+    i32 n
+
+perk Source:
+    fn read_one(peek self) i32 | Bad
+
+fn main() i32:
+    return Result.Ok(0)
