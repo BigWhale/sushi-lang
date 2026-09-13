@@ -72,10 +72,11 @@ def validate_error_channel(self, err_type, span) -> None:
     if _errors_told(self) != told:
         return
 
-    resolved = err_type
-    if isinstance(err_type, UnknownType):
-        resolved = resolve_unknown_type(
-            err_type, self.struct_table.by_name, self.enum_table.by_name)
+    # Unconditionally: `resolve_unknown_type` answers a bare name AND a written
+    # instantiation, and hands anything else back unchanged. Guarding it on
+    # `UnknownType` alone told a generic enum it was not an enum (#668).
+    resolved = resolve_unknown_type(
+        err_type, self.struct_table.by_name, self.enum_table.by_name)
 
     if not isinstance(resolved, EnumType):
         self.err.emit(er.ERR.CE2084, span, type_name=display_type(err_type))

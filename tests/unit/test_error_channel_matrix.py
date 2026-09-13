@@ -22,6 +22,10 @@ DECLARATIONS = (
     "enum Good:\n"
     "    One\n"
     "\n"
+    "enum MyErr@(T):\n"
+    "    Bad2(T)\n"
+    "    Worse\n"
+    "\n"
     "struct Holder:\n"
     "    i32 n\n"
     "\n"
@@ -29,13 +33,14 @@ DECLARATIONS = (
 
 MAIN = "fn main() i32:\n    return Result.Ok(0)\n"
 
-# What one channel can name: a name that spells nothing, two real non-enums, an
-# instantiation nothing collected, and an enum.
+# What one channel can name: a name that spells nothing, two real non-enums, and three
+# kinds of enum -- a plain one, a built-in instantiation and a user one (#668).
 ARMS = {
     "unknown": "NoSuchError",
     "struct": "Bad",
     "primitive": "i32",
     "generic": "Maybe@(i32)",
+    "generic user": "MyErr@(i32)",
     "enum": "Good",
 }
 
@@ -46,14 +51,14 @@ EXPECTED = {
     "unknown": {"CE2001"},
     "struct": {"CE2084"},
     "primitive": {"CE2084"},
-    # An instantiation a channel names is collected from a FUNCTION signature and from
-    # no other kind, so the name is real there and spells nothing everywhere else. The
-    # asymmetry belongs to instantiation collection, and is measured here, not fixed.
-    "generic": {"CE2001"},
+    # A generic enum IS an enum, and the explicit `Result@(T, E)` spelling of one has
+    # always compiled. The `| E` spelling of it is legal too (#668). Every kind answers
+    # alike: the channel is collected for all four now, and the rule resolves a written
+    # instantiation before it asks whether the type is an enum.
+    "generic": set(),
+    "generic user": set(),
     "enum": set(),
 }
-
-OVERRIDE = {("generic", "function"): {"CE2084"}}
 
 # One channel per kind, written so the type under test starts at a known column.
 KINDS = {
@@ -96,12 +101,11 @@ def _codes(reporter) -> set:
 def test_every_kind_answers_one_channel_rule(analyze, kind: str, arm: str) -> None:
     """The code SET, which is what tells one fault from one fault told twice."""
     source, _column = KINDS[kind]
-    expected = OVERRIDE.get((arm, kind), EXPECTED[arm])
-    assert _codes(analyze(source(ARMS[arm]))) == expected, (kind, arm)
+    assert _codes(analyze(source(ARMS[arm]))) == EXPECTED[arm], (kind, arm)
 
 
 @pytest.mark.parametrize("kind", sorted(KINDS))
-@pytest.mark.parametrize("arm", ["unknown", "struct", "primitive", "generic"])
+@pytest.mark.parametrize("arm", ["unknown", "struct", "primitive"])
 def test_every_caret_points_at_the_channel(analyze, kind: str, arm: str) -> None:
     """The caret marks the channel, and never the return type beside it."""
     source, column = KINDS[kind]
