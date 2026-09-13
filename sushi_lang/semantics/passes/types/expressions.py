@@ -564,17 +564,51 @@ def check_propagation_in_expression(expr: Expr) -> bool:
     return False
 
 
+def _field_names_of(receiver_type: 'Type') -> Optional[list[str]]:
+    """The fields a receiver type declares, or None when this position is not ours.
+
+    A STRUCT answers its own list. The kinds below carry no field at all, so each answers
+    the empty list and every name behind their dot is a miss. Everything else -- an enum,
+    an unresolved name, a generic reference, a receiver the pass could not type -- is
+    somebody else's position, and a false CE2106 there would be worse than the internal
+    error it replaces.
+    """
+    from sushi_lang.semantics.typesys import (
+        ForeignPtrType, FunctionType, PointerType,
+    )
+
+    if isinstance(receiver_type, StructType):
+        return [name for name, _ in receiver_type.fields]
+    if isinstance(receiver_type, (ArrayType, DynamicArrayType, BuiltinType,
+                                  FunctionType, PointerType, ForeignPtrType)):
+        return []
+    return None
+
+
+def _is_a_method(validator: 'TypeValidator', receiver_type: 'Type', name: str) -> bool:
+    """Does the receiver's type carry a METHOD of this name, whoever declares it?
+
+    `builtin_method_exists` is the one seam that knows a compiler-defined method, and the
+    extension table holds what the program itself declares. A built-in target takes both.
+    """
+    from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
+
+    if validator.extension_table.get_method(receiver_type, name) is not None:
+        return True
+    return builtin_method_exists(receiver_type, name, validator.derived_methods)
+
+
 def reject_unknown_field(validator: 'TypeValidator', node: MemberAccess) -> None:
-    """A field no struct declares is CE2106, at the read (#630).
+    """A member read wants a field, and a type with no such field is CE2106 (#630, #661).
 
     The pass used to walk past an unknown field entirely, so the read reached codegen and
-    the backend was the first thing to notice -- CE0029, tier 1, no file and no line, with
-    the note that says the fault is a bug in the compiler. It is a typo.
+    the backend was the first thing to notice -- tier 1, no file and no line, with the
+    note that says the fault is a bug in the compiler. It is a typo.
 
-    The test is narrow on purpose: only a receiver whose type is a STRUCT is answered,
-    which is the one case the inference arm looks a field up in. A namespace member, a
-    bare enum variant, an unresolved type and every non-struct receiver are somebody
-    else's position, and a false CE2106 there would be worse than the CE0029 it replaces.
+    #630 answered the STRUCT receiver. A receiver that carries NO field -- an array, a
+    primitive, a string, a closure, a `ptr` -- still reached the backend, where the shape
+    of the read picked the code: CE0031 for a name, CE0044 through a field, CE0043
+    through an array element. One rule answers all of them here.
     """
     from sushi_lang.semantics.namespaces import suggest_member
     from sushi_lang.semantics.typesys import ReferenceType
@@ -585,17 +619,17 @@ def reject_unknown_field(validator: 'TypeValidator', node: MemberAccess) -> None
     receiver_type = validator.infer_expression_type(node.receiver)
     if isinstance(receiver_type, ReferenceType):
         receiver_type = receiver_type.referenced_type
-    if not isinstance(receiver_type, StructType):
+    if receiver_type is None:
         return
 
-    names = [name for name, _ in receiver_type.fields]
-    if node.member in names:
+    names = _field_names_of(receiver_type)
+    if names is None or node.member in names:
         return
 
     shown = display_type(receiver_type)
     builder = er.emit_with(validator.reporter, er.ERR.CE2106, node.loc,
                            type=shown, field=node.member)
-    if validator.extension_table.get_method(receiver_type, node.member) is not None:
+    if _is_a_method(validator, receiver_type, node.member):
         builder.note(f"'{shown}.{node.member}()' is a method, not a field").help(
             "call it: write the parentheses")
     else:
