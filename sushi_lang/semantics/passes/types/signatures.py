@@ -7,6 +7,9 @@ from sushi_lang.semantics.typesys import (
     BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType
 )
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
+from sushi_lang.semantics.generics.results import (
+    is_builtin_wrapper_enum, signature_result_arms)
+from sushi_lang.semantics.generics.types import TypeParameter
 
 from .utils import validate_type_name, validate_and_register_parameters
 from .perks import validate_perk_implementation, check_no_conflicts_with_regular_methods
@@ -43,43 +46,54 @@ def validate_declared_types(self, program) -> None:
         elif site.position == "error" and isinstance(site.decl, PerkDef):
             # The CONTRACT's channel. Its implementation is reached through its body,
             # and every other kind writes one too, so the rule comes here (#663).
-            validate_error_channel(self, site.ty, site.span)
+            validate_error_channel(self, site.at.ret, site.ty, site.span)
 
 
-def _errors_told(self) -> int:
-    """How many errors the reporter holds. A warning is not one, and does not gate."""
-    return sum(1 for diagnostic in self.reporter.items if diagnostic.kind == "error")
+def validate_error_channel(self, ret, err_type, span) -> None:
+    """The Err arm of the Result a signature answers, in EITHER spelling.
 
+    `T | E` is SUGAR for `Result@(T, E)` and nothing else, so the two must admit the
+    same `E`. They did not: CE2084 was a rule on the SHORT form alone, and
+    `fn f() Result@(i32, Bad):` with a struct error compiled while `fn f() i32 | Bad:`
+    was refused (#668). `signature_result_arms` is the one derivation of the arms a
+    signature answers -- an explicit Result is its own two arms, anything else is
+    wrapped with the spelled `| E` or with `StdError` -- so reading the Err arm off it
+    is what makes the short form sugar in the checker too.
 
-def validate_error_channel(self, err_type, span) -> None:
-    """The `| E` channel of one signature: the name it writes, then the rule about it.
+    The rule: the arm must be an ENUM. A struct, a primitive, an array and a function
+    type are CE2084. A built-in WRAPPER is an enum by representation and not by intent,
+    so it is named and refused (CE2086): the Err arm already means failure, and
+    `Result@(i32, Maybe@(string))` asks a reader to read an absence as one.
 
-    ONE rule, read by every kind that writes a channel -- a free function, an extension
-    method, a perk contract and a perk implementation. Each kind held its own half of
-    it, so a struct channel was refused on a function and accepted on an extension, and
-    a perk contract was asked nothing at all (#663).
-
-    A name the unit may not write stops where it was refused -- CE2001 for a name that
-    spells nothing, CE3005 for another unit's private type. Each already says everything
-    a reader can act on, and CE2084 beside one is a second diagnostic about one fault.
-    CE2084 is about a name that IS a type and is the wrong kind of one.
+    "Enum" is a PROXY for "error type" and NEEDS.md records the want. Until that lands
+    this is the line.
     """
-    if err_type is None:
-        return
+    if err_type is not None:
+        validate_type_name(self, err_type, span)
 
-    told = _errors_told(self)
-    validate_type_name(self, err_type, span)
-    if _errors_told(self) != told:
+    arms = signature_result_arms(
+        ret, err_type, self.enum_table.by_name.get("StdError"))
+    if arms is None:
         return
+    err_arm = arms[1]
 
-    # Unconditionally: `resolve_unknown_type` answers a bare name AND a written
-    # instantiation, and hands anything else back unchanged. Guarding it on
-    # `UnknownType` alone told a generic enum it was not an enum (#668).
     resolved = resolve_unknown_type(
-        err_type, self.struct_table.by_name, self.enum_table.by_name)
+        err_arm, self.struct_table.by_name, self.enum_table.by_name)
+
+    # A name that spells nothing was refused where it was written -- CE2001 for the
+    # short form's own name, and the return walk for the long form's. Each already says
+    # everything a reader can act on, and a kind complaint beside one is a second
+    # diagnostic about one fault (#663). A type PARAMETER is not this rule's either: it
+    # names no type until the instance is monomorphized.
+    if isinstance(resolved, (UnknownType, TypeParameter)):
+        return
 
     if not isinstance(resolved, EnumType):
-        self.err.emit(er.ERR.CE2084, span, type_name=display_type(err_type))
+        self.err.emit(er.ERR.CE2084, span, type_name=display_type(err_arm))
+        return
+
+    if is_builtin_wrapper_enum(resolved):
+        self.err.emit(er.ERR.CE2086, span, type_name=display_type(err_arm))
 
 
 def validate_function(self, func: FuncDef) -> None:
@@ -102,7 +116,8 @@ def validate_function(self, func: FuncDef) -> None:
     validate_and_register_parameters(self, func.params)
 
     validate_type_name(self, func.ret, func.ret_span)
-    validate_error_channel(self, func.err_type, func.err_span or func.ret_span)
+    validate_error_channel(self, func.ret, func.err_type,
+                           func.err_span or func.ret_span)
 
     self._validate_block(func.body)
 
@@ -185,7 +200,8 @@ def _validate_method_body(self, target_type, method) -> None:
     if err_ty is not None:
         from sushi_lang.semantics.generics.results import ensure_result_type_in_table
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
-        validate_error_channel(self, err_ty, method.err_span or method.name_span)
+        validate_error_channel(self, method.ret, err_ty,
+                               method.err_span or method.name_span)
         resolved_err = resolve_unknown_type(
             err_ty, self.struct_table.by_name, self.enum_table.by_name)
         self.extension_channel_result = ensure_result_type_in_table(

@@ -1,0 +1,9 @@
+# A wrapper is not an error vocabulary. `Maybe@(T)` models absence and the Err arm
+# already signals failure, so `| Maybe@(T)` says nothing a reader can act on (#668).
+# EXPECT_ERROR_CODE: CE2086
+# EXPECT_STDERR_CONTAINS: cannot be a wrapper
+fn bad() i32 | Maybe@(string):
+    return Result.Ok(1)
+
+fn main() i32:
+    return Result.Ok(0)

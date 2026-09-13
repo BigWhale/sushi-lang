@@ -1,0 +1,14 @@
+# The long form takes a user's generic enum, and so does the short form (#668).
+# EXPECT_STDOUT_EXACT: "ok 2\n"
+enum MyErr@(T):
+    Bad(T)
+    Worse
+
+fn halved(i32 v) Result@(i32, MyErr@(i32)):
+    return Result.Ok(v / 2)
+
+fn main() i32:
+    match halved(4):
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(_) -> println("unexpected")
+    return Result.Ok(0)

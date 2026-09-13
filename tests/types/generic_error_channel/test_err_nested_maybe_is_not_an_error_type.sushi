@@ -1,0 +1,7 @@
+# The rule reads the OUTERMOST name, so a nested wrapper is refused once (#668).
+# EXPECT_ERROR_CODE: CE2086
+fn bad() i32 | Maybe@(Maybe@(i32)):
+    return Result.Ok(1)
+
+fn main() i32:
+    return Result.Ok(0)
