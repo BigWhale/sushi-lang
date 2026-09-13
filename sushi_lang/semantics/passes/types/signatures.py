@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef
+from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, PerkDef
 from sushi_lang.semantics.typesys import (
     BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType
 )
@@ -36,11 +36,49 @@ def validate_declared_types(self, program) -> None:
         return
 
     for site in signature_types(program):
-        if site.position not in _DECLARED_TYPE_POSITIONS or site.ty is None:
+        if site.ty is None or getattr(site.decl, "type_params", None):
             continue
-        if getattr(site.decl, "type_params", None):
-            continue
-        validate_type_name(self, site.ty, site.span)
+        if site.position in _DECLARED_TYPE_POSITIONS:
+            validate_type_name(self, site.ty, site.span)
+        elif site.position == "error" and isinstance(site.decl, PerkDef):
+            # The CONTRACT's channel. Its implementation is reached through its body,
+            # and every other kind writes one too, so the rule comes here (#663).
+            validate_error_channel(self, site.ty, site.span)
+
+
+def _errors_told(self) -> int:
+    """How many errors the reporter holds. A warning is not one, and does not gate."""
+    return sum(1 for diagnostic in self.reporter.items if diagnostic.kind == "error")
+
+
+def validate_error_channel(self, err_type, span) -> None:
+    """The `| E` channel of one signature: the name it writes, then the rule about it.
+
+    ONE rule, read by every kind that writes a channel -- a free function, an extension
+    method, a perk contract and a perk implementation. Each kind held its own half of
+    it, so a struct channel was refused on a function and accepted on an extension, and
+    a perk contract was asked nothing at all (#663).
+
+    A name the unit may not write stops where it was refused -- CE2001 for a name that
+    spells nothing, CE3005 for another unit's private type. Each already says everything
+    a reader can act on, and CE2084 beside one is a second diagnostic about one fault.
+    CE2084 is about a name that IS a type and is the wrong kind of one.
+    """
+    if err_type is None:
+        return
+
+    told = _errors_told(self)
+    validate_type_name(self, err_type, span)
+    if _errors_told(self) != told:
+        return
+
+    resolved = err_type
+    if isinstance(err_type, UnknownType):
+        resolved = resolve_unknown_type(
+            err_type, self.struct_table.by_name, self.enum_table.by_name)
+
+    if not isinstance(resolved, EnumType):
+        self.err.emit(er.ERR.CE2084, span, type_name=display_type(err_type))
 
 
 def validate_function(self, func: FuncDef) -> None:
@@ -63,23 +101,7 @@ def validate_function(self, func: FuncDef) -> None:
     validate_and_register_parameters(self, func.params)
 
     validate_type_name(self, func.ret, func.ret_span)
-
-    if func.err_type is not None:
-        channel_span = func.err_span or func.ret_span
-        validate_type_name(self, func.err_type, channel_span)
-
-        resolved_err_type = func.err_type
-
-        if isinstance(func.err_type, UnknownType):
-            resolved_err_type = resolve_unknown_type(
-                func.err_type,
-                self.struct_table.by_name,
-                self.enum_table.by_name
-            )
-
-        if not isinstance(resolved_err_type, EnumType):
-            self.err.emit(er.ERR.CE2084, channel_span,
-                         type_name=display_type(func.err_type))
+    validate_error_channel(self, func.err_type, func.err_span or func.ret_span)
 
     self._validate_block(func.body)
 
@@ -162,7 +184,7 @@ def _validate_method_body(self, target_type, method) -> None:
     if err_ty is not None:
         from sushi_lang.semantics.generics.results import ensure_result_type_in_table
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
-        validate_type_name(self, err_ty, method.err_span or method.name_span)
+        validate_error_channel(self, err_ty, method.err_span or method.name_span)
         resolved_err = resolve_unknown_type(
             err_ty, self.struct_table.by_name, self.enum_table.by_name)
         self.extension_channel_result = ensure_result_type_in_table(
