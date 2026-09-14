@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import collections
 
-from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+from sushi_lang.semantics.const_eval import ConstantEvaluator
 
 
 DEPTH = 14

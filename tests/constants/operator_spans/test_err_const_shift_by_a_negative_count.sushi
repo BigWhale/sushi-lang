@@ -1,0 +1,7 @@
+# EXPECT_ERROR_CODE: CE0110
+# A shift in a constant refuses a negative count.
+
+const i32 X = 1 >> -1
+
+fn main() i32:
+    return Result.Ok(0)

@@ -177,7 +177,7 @@ def _evaluate(source: str, name: str = "VALUE") -> object:
     """The value the evaluator holds for one constant, read straight out of it."""
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.semantics.passes.collect.constants import ConstantTable, ConstSig
-    from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+    from sushi_lang.semantics.const_eval import ConstantEvaluator
     from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 
     program, _tree = parse_to_ast(source)

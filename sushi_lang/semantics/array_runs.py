@@ -18,7 +18,7 @@ raises CE2017 for a repeated value and CE2019 for a range.
 The count is read through a callback rather than by importing the evaluator. The typecheck
 pass hands in a reader backed by the real reporter; the back end hands in a silent one, the
 way `ASTBuilder.integer_constant` already does for a fixed array size. That keeps this
-module free of an import cycle with `passes/const_eval.py`.
+module free of an import cycle with `semantics/const_eval.py`.
 """
 from __future__ import annotations
 
@@ -27,10 +27,10 @@ from typing import TYPE_CHECKING, Callable, List, Optional, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
-from sushi_lang.semantics.ast import ArrayElement, Expr, IntLit, RangeExpr
+from sushi_lang.semantics.ast import ArrayElement, Expr, RangeExpr
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+    from sushi_lang.semantics.const_eval import ConstantEvaluator
     from sushi_lang.semantics.ranges import RangePlan
 
 # Reads an expression the compiler must know the value of, or None when it cannot.
@@ -151,9 +151,11 @@ def const_int_reader(evaluator: "ConstantEvaluator") -> ReadInt:
 
     def read(expr: Expr) -> Optional[int]:
         from sushi_lang.semantics.typesys import BuiltinType
+        from sushi_lang.semantics.const_eval import ScalarConstant
 
         evaluated = silent.evaluate(expr, BuiltinType.I32, expr.loc)
-        if evaluated is None or isinstance(evaluated.value, bool):
+        if (evaluated is None or not isinstance(evaluated, ScalarConstant)
+                or isinstance(evaluated.value, bool)):
             return None
         return evaluated.value if isinstance(evaluated.value, int) else None
 
@@ -216,22 +218,4 @@ def range_bounds(elements: Sequence[ArrayElement]) -> List[Expr]:
     for element in elements:
         if isinstance(element.value, RangeExpr):
             out.extend([element.value.start, element.value.end])
-    return out
-
-
-def expand(runs: Sequence[Run]) -> List[Expr]:
-    """One expression per slot.
-
-    For the constant evaluator, which holds a Python list either way, and which reaches this
-    only after `require_readable_length` answered. A caller that emits code must NOT use
-    this: the back end fills a run with a loop, never N stores.
-    """
-    out: List[Expr] = []
-    for run in runs:
-        if run.plan is not None:
-            out.extend(IntLit(loc=run.value.loc, value=v) for v in run.plan.values())
-            continue
-        if run.count is None:
-            raise ValueError("expand() needs a readable count")
-        out.extend([run.value] * run.count)
     return out

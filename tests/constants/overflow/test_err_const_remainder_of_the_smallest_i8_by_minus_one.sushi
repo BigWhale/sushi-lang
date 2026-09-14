@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODE: CE2077
+# The one overflow case of the remainder, the twin of the division above it: the
+# machine computes the quotient first, and LLVM calls an srem that overflows undefined,
+# so a compile-time report is the only correct answer here too.
+
+const i8 SMALLEST = -128
+const i8 LEFT = SMALLEST % -1
+
+fn main() i32:
+    println(LEFT)
+    return Result.Ok(0)

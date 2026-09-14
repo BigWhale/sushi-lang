@@ -22,7 +22,7 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.backend.constants.sizes import ENUM_TAG_SIZE_BYTES
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.passes.const_eval import ConstantValue
+    from sushi_lang.semantics.const_eval import AggregateConstant, ConstantValue
 
 # `(text, data_name)` -> the `{i8* data, i32 size, i8 owned}` constant, with its backing
 # bytes placed in the module. None where no module is at hand, and a string payload then
@@ -60,7 +60,8 @@ class _PayloadBytes:
         return words
 
 
-def enum_initializer(value: 'ConstantValue', types, finish_string: Optional[StringFinisher],
+def enum_initializer(value: 'AggregateConstant', types,
+                     finish_string: Optional[StringFinisher],
                      data_name: str) -> Optional[ir.Constant]:
     """The `{i32 tag, [K x i64] data}` constant for an evaluated enum value.
 
@@ -74,12 +75,12 @@ def enum_initializer(value: 'ConstantValue', types, finish_string: Optional[Stri
     tag = enum_type.get_variant_index(value.variant)
     if tag is None:
         return None
-    if not value.value:
+    if not value.elements:
         data = ir.Constant(data_type, None)
     else:
         blob = _PayloadBytes(data_type.count * WORD_BYTES)
         variant = enum_type.get_variant(value.variant)
-        if not _write_fields(blob, 0, variant.associated_types, value.value, types,
+        if not _write_fields(blob, 0, variant.associated_types, value.elements, types,
                              finish_string, data_name):
             return None
         data = ir.Constant(data_type, blob.words(types.i64))
@@ -101,7 +102,37 @@ def _write_fields(blob: _PayloadBytes, base: int, field_types: Sequence[Type],
 def _write(blob: _PayloadBytes, offset: int, value: 'ConstantValue', types,
            finish_string: Optional[StringFinisher], data_name: str) -> bool:
     """Write one constant value at `offset`; False when it needs a module and has none."""
+    from sushi_lang.semantics.const_eval import AggregateConstant
+
     ty = value.semantic_type
+
+    if isinstance(value, AggregateConstant):
+        if isinstance(ty, StructType):
+            return _write_fields(blob, offset,
+                                 [field_type for _name, field_type in ty.fields],
+                                 value.elements, types, finish_string, data_name)
+
+        if isinstance(ty, EnumType):
+            tag = ty.get_variant_index(value.variant)
+            if tag is None:
+                return False
+            blob.bytes[offset:offset + 4] = tag.to_bytes(4, "little")
+            if not value.elements:
+                return True
+            variant = ty.get_variant(value.variant)
+            return _write_fields(blob, offset + ENUM_TAG_SIZE_BYTES,
+                                 variant.associated_types, value.elements, types,
+                                 finish_string, data_name)
+
+        if isinstance(ty, ArrayType):
+            stride = types.get_type_size_bytes(ty.base_type)
+            for index, element in enumerate(value.elements):
+                if not _write(blob, offset + index * stride, element, types,
+                              finish_string, f"{data_name}.{index}"):
+                    return False
+            return True
+
+        return False
 
     if ty == BuiltinType.BOOL:
         blob.bytes[offset] = 1 if value.value else 0
@@ -129,29 +160,6 @@ def _write(blob: _PayloadBytes, offset: int, value: 'ConstantValue', types,
         size_at = offset + STRING_SIZE_OFFSET
         blob.bytes[size_at:size_at + 4] = size.constant.to_bytes(4, "little")
         blob.bytes[offset + STRING_OWNED_OFFSET] = owned.constant
-        return True
-
-    if isinstance(ty, StructType):
-        return _write_fields(blob, offset, [field_type for _name, field_type in ty.fields],
-                             value.value, types, finish_string, data_name)
-
-    if isinstance(ty, EnumType):
-        tag = ty.get_variant_index(value.variant)
-        if tag is None:
-            return False
-        blob.bytes[offset:offset + 4] = tag.to_bytes(4, "little")
-        if not value.value:
-            return True
-        variant = ty.get_variant(value.variant)
-        return _write_fields(blob, offset + ENUM_TAG_SIZE_BYTES, variant.associated_types,
-                             value.value, types, finish_string, data_name)
-
-    if isinstance(ty, ArrayType):
-        stride = types.get_type_size_bytes(ty.base_type)
-        for index, element in enumerate(value.value):
-            if not _write(blob, offset + index * stride, element, types, finish_string,
-                          f"{data_name}.{index}"):
-                return False
         return True
 
     return False

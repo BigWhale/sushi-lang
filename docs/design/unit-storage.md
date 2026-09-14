@@ -54,7 +54,7 @@ with it. Two consequences:
   descriptor `{0, 0, null}` and allocate nothing, so the backend emits them as the zero
   value of the type. `HashMap.new()` does not qualify: it mallocs its buckets on the
   spot. `from([1, 2])` does not either: the elements need a buffer. Both are CE0108. One
-  predicate, `allocates_nothing` in `passes/const_eval.py`, is read by the typecheck pass
+  predicate, `allocates_nothing` in `semantics/const_eval.py`, is read by the typecheck pass
   and the backend alike, so the two cannot disagree about what qualifies.
 - **An enum variant qualifies** (#551): a payload-free variant is a tag over a zero
   payload, so `var Maybe@(HashMap@(K, V)) cache = Maybe.None` is the cache-filled-on-

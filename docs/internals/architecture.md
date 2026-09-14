@@ -89,6 +89,7 @@ sushi/
 │   │   │   ├── expression_discovery.py # Expression finding
 │   │   │   └── string_processing.py # String handling
 │   │   └── exceptions.py      # Custom parsing exceptions
+│   ├── const_eval.py          # constant evaluation (a helper, NOT a pass)
 │   ├── passes/
 │   │   ├── collect/           # the collect pass
 │   │   │   ├── constants.py   # Constant definitions
@@ -99,7 +100,6 @@ sushi/
 │   │   │   └── utils.py       # Collection utilities
 │   │   ├── scope.py           # the scope pass
 │   │   ├── resolve.py         # the resolve pass
-│   │   ├── const_eval.py      # constant evaluation (a helper, NOT a pass)
 │   │   ├── derive.py          # the derive pass (hash + clone)
 │   │   ├── finite_types.py    # the finite-types pass
 │   │   ├── lift.py            # the lift pass (lambda lifting)

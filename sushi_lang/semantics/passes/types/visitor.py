@@ -347,11 +347,10 @@ class ExpressionValidator(RecursiveVisitor):
             er.emit(self.type_validator.reporter, er.ERR.CE5010, node.loc, op=node.op)
             return
 
-        # Check for string concatenation with + operator (CE2509)
         if node.op == "+":
             if left_type == BuiltinType.STRING or right_type == BuiltinType.STRING:
-                er.emit_with(self.type_validator.reporter, er.ERR.CE2509, node.loc) \
-                    .help("use string interpolation: \"{a}{b}\"").emit()
+                from sushi_lang.semantics.const_eval import emit_string_plus
+                emit_string_plus(self.type_validator.reporter, node.loc)
 
         if node.op in ["==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "%"]:
             from sushi_lang.semantics.passes.types.expressions import (

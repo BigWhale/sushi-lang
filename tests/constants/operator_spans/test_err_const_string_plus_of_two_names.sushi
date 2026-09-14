@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2509
+# Two string constants joined with + report the language rule, with its help.
+
+const string A = "Mostly"
+const string B = " Harmless"
+const string X = A + B
+
+fn main() i32:
+    return Result.Ok(0)

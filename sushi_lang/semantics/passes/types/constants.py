@@ -53,7 +53,7 @@ def validate_constant(self, const: ConstDef) -> None:
             sig.const_type = resolved
 
     if is_var:
-        from sushi_lang.semantics.passes.const_eval import allocates_nothing
+        from sushi_lang.semantics.const_eval import allocates_nothing
         if allocates_nothing(const.value):
             # An empty container is the descriptor `{0, 0, null}` -- no evaluation,
             # only the type stamp its position hands over (#544).

@@ -1,0 +1,7 @@
+# EXPECT_ERROR_CODE: CE0110
+# A bool has no order, in a constant as in a body.
+
+const bool X = true < false
+
+fn main() i32:
+    return Result.Ok(0)
