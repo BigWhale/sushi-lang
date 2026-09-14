@@ -50,11 +50,14 @@ sushi/
 │   │   ├── declarations/      # Top-level constructs
 │   │   │   ├── toplevel.py    # One table sorts a unit's declarations
 │   │   │   ├── functions.py   # Function parsing
+│   │   │   ├── signatures.py  # The return type and the `| E` channel
 │   │   │   ├── structs.py     # Struct definitions
 │   │   │   ├── enums.py       # Enum definitions
 │   │   │   ├── extensions.py  # Extension methods
 │   │   │   ├── perks.py       # Perk definitions
 │   │   │   ├── constants.py   # Constant declarations
+│   │   │   ├── externals.py   # `unsafe external` FFI blocks
+│   │   │   ├── docs.py        # Documentation blocks
 │   │   │   └── imports.py     # Use statements
 │   │   ├── expressions/       # Expression parsing
 │   │   │   ├── parser.py      # Main expression parser
