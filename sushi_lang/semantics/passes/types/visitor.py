@@ -349,7 +349,7 @@ class ExpressionValidator(RecursiveVisitor):
 
         if node.op == "+":
             if left_type == BuiltinType.STRING or right_type == BuiltinType.STRING:
-                from sushi_lang.semantics.passes.const_eval import emit_string_plus
+                from sushi_lang.semantics.const_eval import emit_string_plus
                 emit_string_plus(self.type_validator.reporter, node.loc)
 
         if node.op in ["==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "%"]:

@@ -408,7 +408,7 @@ def reject_overflowing_operation(validator: 'TypeValidator', expr: Expr,
     the node that computed it: the inner operation of `(200 + 100) / 2` reports once,
     and a constant that overflows is reported where it is declared and not at every use.
     """
-    from sushi_lang.semantics.passes.const_eval import emit_overflow
+    from sushi_lang.semantics.const_eval import emit_overflow
 
     evaluator = validator.constant_evaluator()
     evaluator.evaluate(expr, result_type, expr.loc)

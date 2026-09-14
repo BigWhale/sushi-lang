@@ -18,7 +18,7 @@ raises CE2017 for a repeated value and CE2019 for a range.
 The count is read through a callback rather than by importing the evaluator. The typecheck
 pass hands in a reader backed by the real reporter; the back end hands in a silent one, the
 way `ASTBuilder.integer_constant` already does for a fixed array size. That keeps this
-module free of an import cycle with `passes/const_eval.py`.
+module free of an import cycle with `semantics/const_eval.py`.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import ArrayElement, Expr, IntLit, RangeExpr
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+    from sushi_lang.semantics.const_eval import ConstantEvaluator
     from sushi_lang.semantics.ranges import RangePlan
 
 # Reads an expression the compiler must know the value of, or None when it cannot.

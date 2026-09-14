@@ -1,6 +1,6 @@
 """Sushi's integer operators have ONE compile-time home, and it agrees with the machine.
 
-The constant evaluator (`semantics/passes/const_eval.py`) is where an operation the
+The constant evaluator (`semantics/const_eval.py`) is where an operation the
 compiler reads is computed: a `const` initializer, and every literal pair in a body,
 which `reject_overflowing_operation` runs through the same evaluator. The backend used
 to hold a second home -- `_fold_arithmetic_constants` and `_fold_bitwise_constants` in
@@ -36,7 +36,7 @@ from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import BinaryOp, IntLit, UnaryOp
 from sushi_lang.semantics.integer_width import integer_bit_width, integer_range
 from sushi_lang.semantics.passes.collect.constants import ConstantTable
-from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+from sushi_lang.semantics.const_eval import ConstantEvaluator
 from sushi_lang.semantics.type_predicates import is_unsigned_int
 from sushi_lang.semantics.typesys import BuiltinType
 

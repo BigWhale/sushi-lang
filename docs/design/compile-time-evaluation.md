@@ -14,7 +14,7 @@ Read `docs/language-reference.md` for the constant rules that hold today.
 
 ## 1. What the compiler does today
 
-`semantics/passes/const_eval.py` is an expression walker. `evaluate` (`const_eval.py:73-104`)
+`semantics/const_eval.py` is an expression walker. `evaluate` (`const_eval.py:73-104`)
 sends work to nine node kinds: an integer, a float, a bool, a string, a binary operator, a
 unary operator, an array literal, a name, a cast and an index. Every other node gets CE0108.
 

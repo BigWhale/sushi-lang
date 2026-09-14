@@ -199,7 +199,7 @@ class TypeValidator:
 
     def constant_evaluator(self, reporter: Optional[Reporter] = None):
         """The evaluator for this unit's constant expressions. Silent with no reporter."""
-        from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+        from sushi_lang.semantics.const_eval import ConstantEvaluator
         return ConstantEvaluator(reporter if reporter is not None else Reporter(),
                                  self.const_table, self.current_unit_name,
                                  self.namespaces_of, self.struct_table, self.enum_table)

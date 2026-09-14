@@ -35,7 +35,7 @@ order; this list mirrors it.
 The last four run per unit, in one loop, so the whole-program passes above them see every
 unit before any function body is walked.
 
-`semantics/passes/const_eval.py` is **not** a pass. The `typecheck` pass and the backend
+`semantics/const_eval.py` is **not** a pass. The `typecheck` pass and the backend
 both call it as a helper.
 
 ### The word "phase"

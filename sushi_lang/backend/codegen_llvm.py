@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.ast import ExtendWithDef, FuncDef
     from sushi_lang.semantics.typesys import Type
     from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
-    from sushi_lang.semantics.passes.const_eval import ConstantValue
+    from sushi_lang.semantics.const_eval import ConstantValue
 
 from sushi_lang.semantics.ast import ConstDef, ExtendDef, VarDef
 from sushi_lang.semantics.units import Unit
@@ -230,7 +230,7 @@ class LLVMCodegen:
         expression; the back end only wants the value.
         """
         from sushi_lang.internals.report import Reporter
-        from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+        from sushi_lang.semantics.const_eval import ConstantEvaluator
         return ConstantEvaluator(Reporter(), self.const_table,
                                  unit_name or self.emitting_unit, self.namespaces_of,
                                  self.struct_table, self.enum_table)
@@ -1052,7 +1052,7 @@ class LLVMCodegen:
             self._register_global_constant(var.name, ll_type, None, unit_name,
                                            storage=True, symbol=var.link_symbol)
             return
-        from sushi_lang.semantics.passes.const_eval import allocates_nothing
+        from sushi_lang.semantics.const_eval import allocates_nothing
         if allocates_nothing(var.value):
             # The empty descriptor `{0, 0, null}` is the zero value of its type.
             initializer: Optional[ir.Constant] = ir.Constant(ll_type, None)

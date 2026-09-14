@@ -22,7 +22,7 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.backend.constants.sizes import ENUM_TAG_SIZE_BYTES
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.passes.const_eval import ConstantValue
+    from sushi_lang.semantics.const_eval import ConstantValue
 
 # `(text, data_name)` -> the `{i8* data, i32 size, i8 owned}` constant, with its backing
 # bytes placed in the module. None where no module is at hand, and a string payload then

@@ -104,7 +104,7 @@ class ASTBuilder:
         """
         from sushi_lang.internals.report import Reporter
         from sushi_lang.semantics.passes.collect.constants import ConstantTable, ConstSig
-        from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+        from sushi_lang.semantics.const_eval import ConstantEvaluator
         from sushi_lang.semantics.type_predicates import is_integer_type
 
         const_def = self.unit_constants.get(name)

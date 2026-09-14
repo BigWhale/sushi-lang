@@ -12,7 +12,7 @@ from sushi_lang.backend.constants.bit_widths import (
 )
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.passes.const_eval import ConstantValue
+    from sushi_lang.semantics.const_eval import ConstantValue
 
 
 FALSE_I1 = ir.Constant(ir.IntType(1), 0)
