@@ -14,13 +14,19 @@ lists, or a generic declaration is silently missing from every consumer (#631).
 The ORDER is part of the contract, not an implementation detail --
 `tests/docs_sweep.py` numbers its `doc_example_<n>` helpers from it, so a rearrangement
 renames every one of them. `tests/unit/test_declaration_walk_is_total.py` is the gate.
+
+`walk_nodes()` at the bottom is the other shared walk: the STRUCTURAL one, over the
+nodes themselves rather than over what a unit declares. It replaced seven hand-rolled
+`dataclasses.fields` recursions that disagreed with each other about which field kinds
+hold a node (#688).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterator, List, Optional, Tuple, Union
+from dataclasses import dataclass, fields
+from typing import (TYPE_CHECKING, Callable, Iterable, Iterator, List, Optional,
+                    Tuple, Union, cast)
 
-from sushi_lang.semantics.ast import VarDef
+from sushi_lang.semantics.ast import Node, VarDef
 
 if TYPE_CHECKING:
     from sushi_lang.internals.report import Span
@@ -410,3 +416,93 @@ def body_types(program: 'Program') -> Iterator[TypeMention]:
     """
     for node in bodied(program):
         yield from _body_of(node.body)
+
+
+# --- The structural walk, over the nodes themselves --------------------------------
+
+# What one FIELD of a node holds, as the node walk sorts it. Three kinds can hold a
+# node and the walk descends all three; everything else is a leaf and the walk stops.
+#
+# The kinds are named rather than implied because the seven walks this replaced
+# disagreed about them: the lifter's own two walks descended a tuple on one side and
+# skipped it on the other, so one new node kind with a tuple field would have been
+# seen by the lambda search and missed by the capture rewrite (#688). A field kind that
+# can hold a node and is not descended here is a node every reader silently misses, so
+# `tests/unit/test_node_walk_is_total.py` measures the claim instead of trusting it: it
+# proves that no leaf value anywhere in a parsed corpus holds a node.
+DESCENDED_FIELD_KINDS = frozenset({"node", "list", "tuple"})
+FIELD_KINDS = DESCENDED_FIELD_KINDS | {"leaf"}
+
+
+def field_kind(value: object) -> str:
+    """How the node walk sorts one field VALUE. Total: every value answers a kind.
+
+    A `leaf` is a span, a typesys `Type`, a plain `ast` record (`Param`, `StructField`,
+    `DocBlock`) or a scalar. None of those declares an `Expr`, a `Stmt` or a `Block`, so
+    the node graph and the type graph stay separate walks -- `type_walk.py` owns the
+    other one.
+    """
+    if isinstance(value, Node):
+        return "node"
+    if isinstance(value, list):
+        return "list"
+    if isinstance(value, tuple):
+        return "tuple"
+    return "leaf"
+
+
+def node_fields(node: Node) -> Iterator[Tuple[str, object]]:
+    """Every declared field of one node, as (name, value), in DECLARATION order.
+
+    The one reader of `dataclasses.fields` over a node. A node is slotted, so its
+    declared fields are all it has; there is no `__dict__` to walk beside them.
+    """
+    for f in fields(node):
+        yield f.name, getattr(node, f.name)
+
+
+def nodes_in(value: object) -> Iterator[Node]:
+    """Every node one field VALUE holds, in the order the value holds them."""
+    kind = field_kind(value)
+    if kind == "node":
+        yield cast(Node, value)
+    elif kind in DESCENDED_FIELD_KINDS:
+        for item in cast(Iterable[object], value):
+            yield from nodes_in(item)
+
+
+def children(node: Node) -> Iterator[Node]:
+    """Every node `node` holds directly, in field-declaration order.
+
+    The order is part of the contract. The lambda lifter numbers `__lambda_<n>` from
+    the order it meets the literals in, so a rearrangement here renames every lifted
+    function and every closure environment struct.
+    """
+    for _name, value in node_fields(node):
+        yield from nodes_in(value)
+
+
+def walk_nodes(root: object, visit: Callable[[Node], bool]) -> None:
+    """Visit every node under `root`, a parent before its children.
+
+    `visit` answers whether to DESCEND into the node it was given. A walk that lifts a
+    lambda out, or that refuses a `??`, answers False there and leaves that subtree
+    alone; a walk that only reads answers True everywhere.
+
+    `root` is a node, or a list or tuple of them -- a body, a statement list, an arm.
+    Anything else holds no node and the walk does nothing with it, so a blank slot
+    needs no guard at the call site.
+
+    There is deliberately NO cycle guard. Four of the walks this replaced carried none
+    and the AST they walk is a tree; the one that needs a guard keeps it in its own
+    visitor, where the reason for it stays next to the walk that needs it.
+    """
+    for node in nodes_in(root):
+        _walk_one(node, visit)
+
+
+def _walk_one(node: Node, visit: Callable[[Node], bool]) -> None:
+    if not visit(node):
+        return
+    for child in children(node):
+        _walk_one(child, visit)
