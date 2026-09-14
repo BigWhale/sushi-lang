@@ -8,7 +8,8 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.visibility import (
-    VisibilityTable, reject_private_perk_contract)
+    VisibilityTable, record_declaration, reject_private_perk_contract,
+    taken_by_a_library)
 from sushi_lang.semantics.ast import (
     PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
@@ -317,6 +318,9 @@ class PerkCollector:
         name = getattr(perk, "name", None)
         if not isinstance(name, str):
             return
+        record_declaration(self.visibility, "perk", perk,
+                           unit_name=self.current_unit_name,
+                           filename=self.current_unit_file)
 
         # The definition sweep collected this same declaration already, and the unit it
         # belongs to is being collected now. One node twice is not two perks, so the
@@ -521,9 +525,8 @@ class PerkCollector:
         if not self.perk_impls.register(impl, type_name,
                                         unit_name=self.current_unit_name):
             owner = self.perk_impls.owner(type_name, perk_name)
-            shadows_library = (owner is not None and owner in self.library_units
-                               and self.current_unit_name not in self.library_units)
-            if not shadows_library:
+            if not taken_by_a_library(owner, current_unit=self.current_unit_name,
+                                      library_units=self.library_units):
                 er.emit(self.r, ERR.CE4002, getattr(impl, "loc", None),
                         type=type_name, perk=perk_name)
                 return False

@@ -23,6 +23,7 @@ from sushi_lang.semantics.generics.types import GenericEnumType, TypeParameter
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_for_type_name,
+    record_declaration,
     reject_library_clash,
 )
 
@@ -291,6 +292,9 @@ class EnumCollector:
             return
 
         name_span: Optional[Span] = getattr(enum, "name_span", None) or getattr(enum, "loc", None)
+        record_declaration(self.visibility, "enum", enum,
+                           unit_name=self.current_unit_name,
+                           filename=self.current_unit_file)
 
         # Check if this enum has type parameters (e.g., enum Result<T>:)
         # Note: In the collect pass, type_params is always None -- the grammar has no syntax for it yet

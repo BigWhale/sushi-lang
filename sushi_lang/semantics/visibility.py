@@ -20,6 +20,11 @@ symbol table's own first-writer-wins rule decides WHICH declaration answers a ca
 origin has to be that one. A struct, an enum and a perk are answered from
 `VisibilityTable`, because their symbol tables carry a file but no unit and no marker.
 Either way the rule is one function, `_permitted`, and the record is one dataclass.
+
+The table is FILLED by the collectors: each files the kinds it collects, at the
+declaration and before any refusal, so a duplicate the collector turns away is still
+remembered as contested. There used to be a seventh walk over the declarations, after the
+six collectors, that recorded the same four facts a second time (#691).
 """
 from __future__ import annotations
 
@@ -286,14 +291,31 @@ def library_clash_origin(
     unit's collection, so a name the CURRENT unit declared twice is absent here and stays
     an ordinary duplicate.
     """
-    if table is None or current_unit is None or current_unit in library_units:
+    if table is None:
         return None
     origin = table.origin(kind, name)
-    if origin is None or origin.unit_name is None:
-        return None
-    if origin.unit_name not in library_units:
+    if origin is None or not taken_by_a_library(
+            origin.unit_name, current_unit=current_unit, library_units=library_units):
         return None
     return origin
+
+
+def taken_by_a_library(
+    owner_unit: Optional[str],
+    *,
+    current_unit: Optional[str],
+    library_units: AbstractSet[str],
+) -> bool:
+    """Is `owner_unit` a library's, and `current_unit` a consumer's?
+
+    The one predicate under every "did a library already take this" question: a name in
+    this table, and a perk implementation the implementation table owns, which has no
+    record here because it carries no marker (`FOLLOWS_TARGET_TYPE`). A library unit
+    collected beside another library's declaration is not a consumer of it.
+    """
+    if current_unit is None or current_unit in library_units:
+        return False
+    return owner_unit is not None and owner_unit in library_units
 
 
 def library_clash_for_type_name(
@@ -308,7 +330,37 @@ def library_clash_for_type_name(
     One namespace holds both kinds, so a consumer's `enum Mood` loses to a library's
     `struct Mood` exactly as it loses to a library's `enum Mood`.
     """
-    for kind in ("struct", "enum"):
+    return _library_clash_for_kinds(("struct", "enum"), table, name,
+                                    current_unit=current_unit,
+                                    library_units=library_units)
+
+
+def library_clash_for_storage_name(
+    table: Optional[VisibilityTable],
+    name: str,
+    *,
+    current_unit: Optional[str],
+    library_units: AbstractSet[str],
+) -> Optional[DeclOrigin]:
+    """The library CONSTANT or `var` a consumer's constant or `var` collides with, or None.
+
+    One table holds both kinds of unit-level storage, so a consumer's `var LIMIT` takes
+    a library's `const LIMIT` exactly as another constant would (#691).
+    """
+    return _library_clash_for_kinds(("constant", "variable"), table, name,
+                                    current_unit=current_unit,
+                                    library_units=library_units)
+
+
+def _library_clash_for_kinds(
+    kinds: tuple[str, ...],
+    table: Optional[VisibilityTable],
+    name: str,
+    *,
+    current_unit: Optional[str],
+    library_units: AbstractSet[str],
+) -> Optional[DeclOrigin]:
+    for kind in kinds:
         origin = library_clash_origin(table, kind, name, current_unit=current_unit,
                                       library_units=library_units)
         if origin is not None:
@@ -392,39 +444,32 @@ def reject_private_perk_constraints(
             current_unit=current_unit, filename=filename)
 
 
-def record_declarations(
-    table: VisibilityTable,
-    program: Any,
+def record_declaration(
+    table: Optional[VisibilityTable],
+    kind: str,
+    node: Any,
     *,
     unit_name: Optional[str],
     filename: Optional[str],
-    kinds: Optional[AbstractSet[str]] = None,
 ) -> None:
-    """Record one unit's declarations, for the kinds that carry a marker.
+    """File one declaration from the collector that meets it.
 
-    Driven by `declarations()` rather than by the symbol tables, so the walk that is
-    already gated for totality is what decides the list.
-
-    `kinds` narrows the walk to those kinds. The perk sweep asks for `{"perk"}`, because
-    an implementation next door reads a perk's marker before its own unit is collected
-    (#487). Recording the same declaration twice from the same unit is a no-op, so the
-    unit's own full pass repeats it without booking a contest.
+    Called at the declaration, before the collector decides whether to keep it: a
+    duplicate it refuses is exactly what `contested` has to remember, or the loser is
+    later told the name is somebody else's (D2). The same declaration filed twice from
+    one unit is a no-op. A collector built without a table -- a throwaway over a
+    library snippet -- files nothing, as it recorded nothing before.
     """
-    from sushi_lang.semantics.ast_walk import declarations
-
-    for kind, node in declarations(program):
-        if kind not in CARRIES_MARKER:
-            continue
-        if kinds is not None and kind not in kinds:
-            continue
-        name = getattr(node, "name", None)
-        if not isinstance(name, str):
-            continue
-        table.record(DeclOrigin(
-            kind=kind,
-            name=name,
-            unit_name=unit_name,
-            filename=filename,
-            name_span=getattr(node, "name_span", None) or getattr(node, "loc", None),
-            is_public=getattr(node, "is_public", True),
-        ))
+    if table is None or kind not in CARRIES_MARKER:
+        return
+    name = getattr(node, "name", None)
+    if not isinstance(name, str):
+        return
+    table.record(DeclOrigin(
+        kind=kind,
+        name=name,
+        unit_name=unit_name,
+        filename=filename,
+        name_span=getattr(node, "name_span", None) or getattr(node, "loc", None),
+        is_public=getattr(node, "is_public", True),
+    ))

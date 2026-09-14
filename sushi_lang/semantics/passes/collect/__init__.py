@@ -41,7 +41,7 @@ from .perks import (
 from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
 from sushi_lang.semantics.visibility import (
-    VisibilityTable, record_declarations, reject_private_perk_constraints)
+    VisibilityTable, reject_private_perk_constraints)
 
 __all__ = [
     'CollectorPass',
@@ -154,17 +154,12 @@ class CollectorPass:
             generic_structs=self.generic_structs,
             generic_enums=self.generic_enums
         )
-        # Which units came from a library, for every collector that has to know.
-        for collector in (self.struct_collector, self.enum_collector,
-                          self.perk_collector, self.function_collector,
-                          self.constant_collector):
-            collector.library_units = set(library_units or ())
-
-        # And who declared what, for the four that ask it: three refuse a library clash
-        # with CE3011, and all four refuse a promise about a private perk with CE4011. A
+        # Which units came from a library, and who declared what, for all six: each
+        # collector files the declarations it meets, and the ones that refuse a library
+        # clash (CE3011, CE0105, CW3002, the perk-impl override) read the same table. A
         # struct table carries a file and not a unit, so the answer comes from here.
-        for collector in (self.struct_collector, self.enum_collector,
-                          self.function_collector, self.perk_collector):
+        for collector in self._collectors:
+            collector.library_units = set(library_units or ())
             collector.visibility = self.visibility
 
         self._register_predefined_structs()
@@ -188,12 +183,16 @@ class CollectorPass:
         finally:
             self.r.origin = previous_origin
 
+    @property
+    def _collectors(self) -> tuple:
+        """All six, in collection order. One list, so no binding reaches five of them."""
+        return (self.constant_collector, self.struct_collector, self.enum_collector,
+                self.perk_collector, self.external_collector, self.function_collector)
+
     def _collect(self, root: Program, unit_name: Optional[str],
                  unit_file: Optional[str]) -> 'SymbolTables':
         # One way in for all six: the fields, not a parameter on one collector's method.
-        for collector in (self.constant_collector, self.struct_collector,
-                          self.enum_collector, self.perk_collector,
-                          self.external_collector, self.function_collector):
+        for collector in self._collectors:
             collector.current_unit_file = unit_file
             collector.current_unit_name = unit_name
 
@@ -214,9 +213,6 @@ class CollectorPass:
         reject_private_perk_constraints(
             self.r, self.visibility, root,
             current_unit=unit_name, filename=unit_file)
-
-        record_declarations(self.visibility, root,
-                            unit_name=unit_name, filename=unit_file)
 
         from sushi_lang.semantics.tables import SymbolTables
         return SymbolTables(

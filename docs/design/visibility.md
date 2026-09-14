@@ -67,8 +67,9 @@ reach was a struct field, an enum payload or an extern signature, and
 Two total walks and their gates hold the whole thing up:
 `semantics/ast_walk.py:74` — `declarations` — yields every declaration of a unit, and
 `semantics/type_walk.py:55` yields every type inside a type. The visibility seam is filled
-from the first (`semantics/visibility.py:359` — `record_declarations`) and every predicate
-over types is one line over the second.
+by the collectors as each meets a declaration (`semantics/visibility.py` --
+`record_declaration`, one record whether the declaration is kept or refused), and every
+predicate over types is one line over the second.
 
 ### Only functions carried a unit of origin
 
