@@ -5,6 +5,35 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **`Hashable` is a predefined perk, satisfied by the derived hash** (#696). It ships
+  beside `Drop`, public and importless, with one method `fn hash() u64`. Every type the
+  compiler derives a `hash()` for satisfies a `@(T: Hashable)` constraint with no
+  implementation: the twelve primitives, `string`, and every struct, enum and array whose
+  parts hash -- a `List@(T)` and an `Own@(T)` hash what they hold. A type the derive pass
+  refuses -- a struct holding a `HashMap`, a `ptr`, a function value -- stays CE4006, and
+  `extend T with Hashable` stays the override and satisfies the constraint on its own. A
+  user `perk Hashable:` is CE4001 now, the answer a user `perk Drop:` gets. The synthetic
+  implementation of a perk NAMED `Hashable` for twelve primitives is gone, so
+  `perk Hashy: fn hash() u64` is exactly as unsatisfied as the docs said it was not.
+- **An enum cycle is CE2095, the struct rule** (#677). An enum that holds itself by value
+  -- directly, through another enum, or through a fixed array -- is reported once per
+  cycle by the `finite-types` pass, at the first member's declaration, with the chain
+  (`A refers to B refers to A`). It was CE2052 from the `derive` pass: a file name with no
+  caret, once per member, and once more for every instance a call site solved late.
+  **CE2052 is retired**, and so is CE0128, the internal guard of a topological sort the
+  `derive` pass no longer has. An enum whose payload is a fixed array of itself
+  (`enum E: V(E[2])`) compiled silently before and is refused now. A late-solved instance
+  (`Tree@(bool)` from an argument, spelled nowhere) is checked when it is interned, once.
+- **A private perk in an extension's constraint reads the two existing rules, and no
+  extension is "public" by default** (#692). CE4011 is the use-site rule: another unit
+  names a private perk in a constraint, on a function, a struct, an enum or an extension
+  alike, and hears that code alone -- a public declaration in another unit no longer
+  answers CE4011 and CE3010 for one fault. CE3010 is the leak rule and belongs to the
+  perk's own unit: an extension answers from its TARGET type's marker (a generic target
+  from its BASE name), so an extension on a private type or on a builtin may constrain
+  with a private perk at home. The collect pass drives the use-site rule once per unit off
+  `signature_constraints()`, the walk the leak rule reads. Design record:
+  `docs/design/visibility.md` section 5.
 - **`public use X` re-exports what an import brings** (#586). The unit takes X's PUBLIC
   names as its own and hands them to its importers in the same place its own names land:
   flat behind a flat `use "U"`, behind the dot of `use "U" as u`. Only a `public use`
@@ -310,6 +339,36 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A borrow of a constant is refused by one gate, and the gate asks what the name means
+  HERE** (#685). A `poke self` method call on a unit `var` was refused, and one on a
+  constant was permitted, when another unit declared a private name that agreed: the
+  check read a program-wide, first-wins view of the constant table, and the permitted
+  program wrote read-only memory. A write into a constant through an indexed assignment
+  read the same view (CE2096). A `poke` PATTERN binding into a constant
+  (`match TONE: Shade.Dim(poke r) -> r := r + 1`) was checked by nothing and is CE2400 now.
+  A borrow behind a `use ... as` alias is reported once; a call argument was walked twice.
+  The seam is `reject_borrow_of_constant` in `semantics/constant_borrow.py`, with a matrix
+  gate; a `peek`/`poke` argument, a `let peek`/`let poke`, a `poke self` call, a `poke`
+  pattern binding and a `poke` foreach item all ask it, and an index borrow stays CE2404.
+- **A bare name in an extension target's argument position is classified by one
+  predicate on every path** (#653). A declared generic's name
+  (`extend Box@(Cage) with Show`) and a perk name (`extend Box@(Show) g()`,
+  `extend Show[] g()`) constrain now, where one of the two collectors read the name as a
+  fresh type parameter that shadowed the declaration: the implementation applied to
+  every `Box`, and the extension compiled and ran. The `known_types` view the perk
+  collector read is gone with it (#690).
+- **A constant's operator diagnostic carets the expression, not the declaration** (#682).
+  A bitwise, shift, logical, comparison, string `+`, unary, cast, index, name or call
+  fault at the top of a `const` initializer was reported under the whole line; it sits on
+  the node now, as a body's does, and CE2509 in a constant carries the help line the body
+  path gives.
+- **The smallest signed value `% -1` is refused** (#681). The remainder overflows where the
+  quotient does; the evaluator answered 0 where LLVM calls the `srem` undefined and x86
+  traps. It reads CE2077 now, like `/ -1`, in a constant and in a body.
+- **A lifted-lambda name clash reports itself** (#687). The lambda lifter's registration
+  guard raised a bare `RuntimeError`, which reached the user as CE0000 with no
+  explanation. It is **CE0137** now, whose text names the function and whose `doc`
+  carries the #402 aliasing it guards against.
 - **A member read on a `Maybe@(T)` printed the enum tag** (#666). `pts.get(0).x`
   compiled clean and answered 0 where the element held 11. The read reached the back
   end, which unwrapped the receiver to its payload struct and read field 0 -- the tag --
@@ -644,6 +703,10 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **Integer operators have one compile-time home** (#681). The backend no longer folds
+  `+ - * & | ^ <<` over two constants; the instruction is emitted and LLVM folds it. Gate:
+  `tests/unit/test_integer_operator_semantics_agree.py`, the evaluator against a
+  JIT-compiled copy of the emitted instruction.
 - **One signature table per stdlib layer, and every reader takes its row from it.** The
   `<net/socket>` function list was spelled in four Python places beside its own name
   list -- the registry's parameter specs, the backend's Ok type and error enum, the
