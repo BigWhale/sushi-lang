@@ -11,7 +11,11 @@ if TYPE_CHECKING:
 
 
 def expr_unary(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
-    """Handle unary operators: neg, not, bitnot, and fallback unary wrapper."""
+    """Handle the unary operators: neg, not, bitnot.
+
+    `?unary` is inlined by the grammar and every alternative of it is aliased, so a
+    `unary` Tree never arrives here (see `parser.py`).
+    """
     tag = t.data
 
     if tag in {"neg", "not"}:
@@ -24,16 +28,6 @@ def expr_unary(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
         sub = first_tree_child(t)
         rhs = ast_builder._expr(sub)
         return UnaryOp(op="~", expr=rhs, loc=span_of(t))
-
-    if tag == "unary":
-        if len(t.children) == 2 and isinstance(t.children[0], Token):
-            tok: Token = t.children[0]
-            sub = first_tree_child(t)
-            rhs = ast_builder._expr(sub)
-            if tok.type in ("MINUS",) or tok.value == "-":
-                return UnaryOp(op="neg", expr=rhs, loc=span_of(t))
-            return UnaryOp(op="not", expr=rhs, loc=span_of(t))
-        return ast_builder._expr(t.children[0])
 
     unhandled(t)
 

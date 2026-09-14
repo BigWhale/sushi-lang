@@ -29,7 +29,7 @@ places call it:
 | `passes/types/constants.py:27` | validate a `const` declaration | the real one |
 | `backend/codegen_llvm.py:957` | make the LLVM initializer | silent |
 | `passes/types/expressions.py:367` | read a shift count for CE2512 | silent |
-| `ast_builder/builder.py:35` | read a fixed array size | silent |
+| `ASTBuilder.integer_constant` (`ast_builder/builder.py`) | read a fixed array size | silent |
 
 The fourth caller runs while the compiler builds the AST, which is before any pass. This
 matters to every later decision in this document.
@@ -346,8 +346,8 @@ When one of these arrives, the cost is already known. Record it here so the deci
   end, and the typecheck pass runs per unit and late. A constant function body must be
   typechecked before it runs, so it needs a whole-program pass ahead of every caller of the
   evaluator.
-- **A constant function can never size an array.** `ast_builder/builder.py:35` reads a fixed
-  array size while the AST is built, before any pass. This is the same limit that keeps a
+- **A constant function can never size an array.** `ASTBuilder.integer_constant` reads a
+  fixed array size while the AST is built, before any pass. This is the same limit that keeps a
   size from naming a constant of another unit.
 - **It needs a budget and a cache.** The evaluator runs once per use and again in the back
   end, so a table would be computed several times. Recursion needs a limit. The precedents

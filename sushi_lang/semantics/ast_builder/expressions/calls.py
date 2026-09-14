@@ -2,10 +2,10 @@
 from __future__ import annotations
 from typing import List, Union, Tuple, Optional, TYPE_CHECKING
 from lark import Tree, Token
-from sushi_lang.semantics.ast import Expr, Call, MethodCall, Name, Spread
+from sushi_lang.semantics.ast import Expr, Call, Name, Spread
 from sushi_lang.semantics.ast_builder.types.generics import parse_type_list
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    first_tree, find_tree_recursive, first_name, ice, expect, mark_nom)
+    first_tree, first_name, ice, expect, mark_nom)
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -18,7 +18,11 @@ def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[
     field_names: Optional[List[str]] = None
 
     if call_node and call_node.children:
-        args_node = first_tree(call_node.children, "args") or find_tree_recursive(call_node, "args")
+        # The direct child and nothing deeper. A `call`'s subtree holds the `args` of
+        # every NESTED call, so a recursive search reads another call's argument list
+        # (#655). A call with no arguments has no `args` node at all, and that absence
+        # is the answer.
+        args_node = first_tree(call_node.children, "args")
         if args_node:
             arg_list = first_tree(args_node.children, "arg_list")
             if arg_list:
@@ -58,10 +62,6 @@ def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[
 
                         field_names.append(str(name_token))
                         args.append(ast_builder._expr(expr_node))
-            else:
-                for a in args_node.children:
-                    args.append(ast_builder._expr(a))
-                field_names = None
 
     return args, field_names
 
@@ -96,25 +96,3 @@ def call_from_parts(callee_name: Union[Name, Token], call_tail: Tree, ast_builde
     return Call(callee=callee, args=args, field_names=field_names,
                 type_args=type_args, type_args_loc=type_args_loc,
                 loc=span_of(call_tail))
-
-
-def method_call_from_parts(receiver: Expr, method_call_node: Tree, ast_builder: 'ASTBuilder') -> MethodCall:
-    """Parse method_call: \".\" NAME \"(\" [args] \")\" """
-    method_call_node = expect(method_call_node, "method_call")
-
-    method_name_tok = first_name(method_call_node.children)
-    if method_name_tok is None:
-        ice(method_call_node, "missing method NAME")
-
-    args, field_names = extract_call_args(method_call_node, ast_builder)
-
-    # Carried, not read here: a method takes no field name, and the typecheck pass is
-    # where a call knows what its callee is. Dropped here, the names reached nothing
-    # and the arguments went in by position (#563).
-    return MethodCall(
-        receiver=receiver,
-        method=str(method_name_tok),
-        args=args,
-        field_names=field_names,
-        loc=span_of(method_call_node)
-    )
