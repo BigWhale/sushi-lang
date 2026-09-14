@@ -1,0 +1,50 @@
+# A BINARY library whose manifest carries every arm the consumer's `libraries` step
+# reads from the registry and the templates: a public struct, a public enum with a
+# payload, a public perk with a concrete implementation, a constrained generic
+# function, a generic enum template, a parameter pack, and a kept private helper.
+public struct Crate:
+    i32 weight
+    string label
+
+public enum Mood:
+    Calm
+    Loud(i32)
+
+public perk Weigh:
+    fn weigh() i32
+
+extend i32 with Weigh:
+    fn weigh() i32:
+        return self * 10
+
+extend Crate with Weigh:
+    fn weigh() i32:
+        return self.weight
+
+public fn heavier@(T: Weigh)(nom T a, nom T b) T:
+    if (a.weigh() > b.weigh()):
+        return Result.Ok(a)
+    return Result.Ok(b)
+
+public enum Opt@(T):
+    Nope
+    Yep(T)
+
+public fn wrap_opt@(T)(nom T v) Opt@(T):
+    return Result.Ok(Opt.Yep(v))
+
+public perk Display:
+    fn display() string
+
+public fn show_all@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        println(a.display())
+    return Result.Ok(~)
+
+fn kept(i32 n) i32:
+    return Result.Ok(n + 1)
+
+public fn describe(Crate c, Mood m) string:
+    match m:
+        Mood.Calm -> return Result.Ok("{c.label} calm {kept(c.weight).realise(0)}")
+        Mood.Loud(n) -> return Result.Ok("{c.label} loud {n}")

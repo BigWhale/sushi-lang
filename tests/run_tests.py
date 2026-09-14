@@ -100,9 +100,13 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
 # twolib_bin backs tests/libs/multi_unit, the #494 shape: two units, each with a
 # private `helper`, shipped as one binary manifest. twolib_src is its source twin
 # and takes the default.
+# binary_api_lib backs tests/libs/binary_api, which pins the manifest arms the
+# `libraries` step reads at a consumer: a public struct and enum from the registry, a
+# concrete perk implementation, a constrained generic, a generic enum template and a
+# parameter pack. A source library reaches none of that code (#675).
 BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib", "const_lib", "var_bin_lib",
                        "mangle_closure_lib", "twolib_bin", "channel_bin_lib",
-                       "generic_perk_bin_lib"}
+                       "generic_perk_bin_lib", "binary_api_lib"}
 
 
 def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
