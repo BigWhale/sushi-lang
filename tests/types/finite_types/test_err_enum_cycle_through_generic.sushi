@@ -1,0 +1,12 @@
+# An enum that holds itself through a generic wrapper instantiated over it:
+# Ring -> Wrap@(Ring) -> Ring, every hop inline. One cycle, one CE2095 (#677).
+# EXPECT_ERROR_CODE: CE2095
+
+enum Wrap@(T):
+    W(T)
+
+enum Ring:
+    R(Wrap@(Ring))
+
+fn main() i32:
+    return Result.Ok(0)

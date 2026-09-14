@@ -1,0 +1,17 @@
+# Guard against CE2095 over-rejecting an enum. A DYNAMIC `Tree[]` payload is a
+# heap buffer, so it is real indirection and the type is finite. It is the enum
+# twin of test_run_recursive_struct_dyn_array.sushi (#677).
+# EXPECT_STDOUT_EXACT: "n=2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+enum Tree:
+    Node(Tree[])
+    Leaf(i32)
+
+fn main() i32:
+    let Tree t = Tree.Node(from([Tree.Leaf(1), Tree.Leaf(2)]))
+    match t:
+        Tree.Node(kids) -> println("n={kids.len()}")
+        Tree.Leaf(v) -> println("v={v}")
+    return Result.Ok(0)

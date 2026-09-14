@@ -1,0 +1,19 @@
+# Tree@(bool) is spelled nowhere: the call site solves U from the argument, and
+# the instance is interned AFTER the whole-program passes ran. Its payload holds
+# the instance itself by value, so the cycle exists only from that moment. It is
+# still one CE2095: the finite-types check walks the late instances too (#677).
+# EXPECT_ERROR_CODE: CE2095
+
+enum Tree@(T):
+    Leaf(T)
+    Node(Tree@(T))
+
+extend List@(T) wrap@(U)(U x) Tree@(U):
+    return Tree.Leaf(x)
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    match xs.wrap(true):
+        Tree.Leaf(_) -> return Result.Ok(0)
+        Tree.Node(_) -> return Result.Ok(1)
