@@ -1,0 +1,10 @@
+# A unit collected before the one that imports it. `SLOTS` is PRIVATE here and is a
+# `var`, where the importer declares a constant of the same name. The flat view of the
+# constant table is first-wins, so this record is the one a reader that skips the unit
+# scope finds.
+
+var i32[3] SLOTS = [0, 0, 0]
+
+public fn rival_slot() i32:
+    SLOTS[0] := SLOTS[0] + 1
+    return Result.Ok(SLOTS[0])

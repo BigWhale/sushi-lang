@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, AbstractSet, Dict, List, Optional
+from typing import TYPE_CHECKING, AbstractSet, Any, Callable, Dict, List, Optional
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -11,6 +11,7 @@ from sushi_lang.semantics.ast import (
     DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, Param
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
+from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.name_ladder import BareName, classify
 
 if TYPE_CHECKING:
@@ -41,7 +42,6 @@ class ScopeAnalyzer:
         self.structs = structs or StructTable()
         self.enums = enums or EnumTable()
         self.generic_enums = generic_enums or GenericEnumTable()
-        from sushi_lang.semantics.passes.collect import GenericStructTable, ExternalTable
         self.generic_structs = generic_structs or GenericStructTable()
         self.external_table = external_table or ExternalTable()
         # What this unit may write behind a dot. One seam for an FFI namespace and a
@@ -132,12 +132,16 @@ class ScopeAnalyzer:
         """True if `name` names a namespace here and is not shadowed by a local."""
         return self.is_namespace(name) and not self._is_bound_local(name)
 
+    def _const_sig(self, name: str):
+        """What a constant or a unit `var` of this name means INSIDE this unit."""
+        return self.constants.lookup(name, self.namespaces.scope.unit,
+                                     self.namespaces.scope)
+
     def _is_unit_variable(self, name: str) -> bool:
         """True if `name` is a `var` this unit can write, and no local shadows it."""
         if self._is_bound_local(name):
             return False
-        sig = self.constants.lookup(name, self.namespaces.scope.unit,
-                                    self.namespaces.scope)
+        sig = self._const_sig(name)
         return sig is not None and sig.is_var
 
     def _names_a_type(self, name: str) -> bool:
@@ -251,7 +255,7 @@ class ScopeAnalyzer:
             if not self._is_unit_variable(name):
                 self.err.emit(er.ERR.CE1002, usage_span, name=name)
             return
-        diagnostic = er.emit_with(self.reporter, er.ERR.CE1001, usage_span, name=name)
+        diagnostic = self.err.emit_with(er.ERR.CE1001, usage_span, name=name)
         help_line = self._declared_elsewhere(name)
         if help_line is not None:
             diagnostic = diagnostic.help(help_line)
@@ -296,8 +300,6 @@ class ScopeAnalyzer:
                 self._record_capture(name, i, usage_span)
                 return
 
-        if self._is_unit_variable(name):
-            return  # storage with an address: borrowable like a local (unit-storage.md)
         rung = self._rung_of(name)
         if rung is BareName.TYPE:
             # The same ladder the value position walks (#600). A type name reached
@@ -307,7 +309,10 @@ class ScopeAnalyzer:
         elif rung is BareName.NOTHING:
             self.err.emit(er.ERR.CE1001, usage_span, name=name)
         else:
-            self.err.emit(er.ERR.CE2400, usage_span, name=name)
+            # A unit `var` is storage with an address and passes; a constant, a function
+            # value, a stdlib constant and a namespace all have no frame slot.
+            reject_borrow_of_constant(self.err, name, self._const_sig(name),
+                                      usage_span, no_frame_slot=True)
 
     def _record_capture(self, name: str, resolved_index: int, span: Optional[Span]) -> None:
         """Record `name` as a capture for every enclosing lambda it is free in."""
@@ -400,16 +405,23 @@ class ScopeAnalyzer:
             self._check_statement(stmt)
 
     def _check_statement(self, stmt: Stmt) -> None:
-        """Check a statement."""
-        handler_name = f"_check_{type(stmt).__name__.lower()}"
-        if hasattr(self, handler_name):
-            handler = getattr(self, handler_name)
-            handler(stmt)
-        else:
-            # NOT a silent fall-through (#245): a statement with no handler got NO scope
-            # analysis, the class CE0125 closed in the borrow checker. The CI gate is
-            # tests/unit/test_scope_dispatch_is_total.py; this is the backstop.
-            er.raise_internal_error("CE0130", node=type(stmt).__name__)
+        """Check a statement. The table below says which arm, and it is keyed on the TYPE.
+
+        The dispatch read `_check_` plus the lowercased class name off `self` until #686.
+        A node class RENAME then silently moved every statement of that kind to the
+        backstop, and a class whose lowercased name collided with another arm's ran the
+        WRONG arm with no signal at all -- `Lambda` and `_check_lambda` are one pair that
+        is already written. A table keyed on the class object answers both at import time.
+        """
+        handler = _STATEMENT_HANDLERS.get(type(stmt))
+        if handler is not None:
+            handler(self, stmt)
+            return
+        # NOT a silent fall-through (#245): a statement with no handler got NO scope
+        # analysis, the class CE0125 closed in the borrow checker. The CI gate is
+        # tests/unit/test_scope_dispatch_is_total.py; this is the backstop.
+        er.raise_internal_error("CE0130", span=getattr(stmt, "loc", None),
+                                node=type(stmt).__name__)
 
     def _check_let(self, stmt: Let) -> None:
         """Check a let statement."""
@@ -428,7 +440,7 @@ class ScopeAnalyzer:
             # Not allowed for the read-only receiver, but a `poke self` method writes its
             # primitive receiver exactly this way (#327).
             if var_name == "self" and not self._self_is_poke:
-                er.emit(self.reporter, er.ERR.CE1002, stmt.loc, name=var_name)
+                self.err.emit(er.ERR.CE1002, stmt.loc, name=var_name)
             else:
                 self._use_variable(var_name, stmt.loc, is_rebind=True)
         elif isinstance(stmt.target, MemberAccess):
@@ -486,10 +498,10 @@ class ScopeAnalyzer:
             while isinstance(root, (_DotCall, _MethodCall)):
                 root = root.receiver
             if (isinstance(root, Name)
-                    and self._rung_of(root.id) in _NOT_A_POKE_CONTAINER
-                    and not self._is_unit_variable(root.id)):
-                self.err.emit(er.ERR.CE2400, stmt.item_borrow_span or stmt.loc,
-                              name=root.id)
+                    and self._rung_of(root.id) in _NOT_A_POKE_CONTAINER):
+                reject_borrow_of_constant(
+                    self.err, root.id, self._const_sig(root.id),
+                    stmt.item_borrow_span or stmt.loc, no_frame_slot=True)
 
         self._push_scope()
         self._declare_variable(stmt.item_name, stmt.item_name_span)
@@ -551,16 +563,12 @@ class ScopeAnalyzer:
     def _check_break(self, stmt: Break) -> None:
         """Check a break statement (only legal inside a loop)."""
         if self._loop_depth == 0:
-            er.emit(self.reporter, er.ERR.CE1003, stmt.loc)
+            self.err.emit(er.ERR.CE1003, stmt.loc)
 
     def _check_continue(self, stmt: Continue) -> None:
         """Check a continue statement (only legal inside a loop)."""
         if self._loop_depth == 0:
-            er.emit(self.reporter, er.ERR.CE1003, stmt.loc)
-
-    def _check_funcdef(self, stmt: FuncDef) -> None:
-        """Check a nested function definition."""
-        self._check_function(stmt)
+            self.err.emit(er.ERR.CE1003, stmt.loc)
 
     def _check_scoped_block(self, block: Block) -> None:
         """Check a block with its own scope."""
@@ -714,4 +722,26 @@ class ScopeAnalyzer:
                 # NOT a silent fall-through (#245). An expression node with no case got
                 # no usage tracking, invisibly. The CI gate is
                 # tests/unit/test_scope_dispatch_is_total.py; this is the backstop.
-                er.raise_internal_error("CE0130", node=type(expr).__name__)
+                er.raise_internal_error("CE0130", span=getattr(expr, "loc", None),
+                                        node=type(expr).__name__)
+
+
+# The statement dispatch, keyed on the node CLASS (#686). One row per direct subclass of
+# `Stmt`, and `tests/unit/test_scope_dispatch_is_total.py` is the gate that keeps it
+# complete in both directions. A `FuncDef` has no row on purpose: `function_def` at
+# statement position is refused while the AST is built (CE6101), so one never arrives.
+_STATEMENT_HANDLERS: Dict[type, Callable[[ScopeAnalyzer, Any], None]] = {
+    Let: ScopeAnalyzer._check_let,
+    Rebind: ScopeAnalyzer._check_rebind,
+    ExprStmt: ScopeAnalyzer._check_exprstmt,
+    Return: ScopeAnalyzer._check_return,
+    Print: ScopeAnalyzer._check_print,
+    PrintLn: ScopeAnalyzer._check_println,
+    If: ScopeAnalyzer._check_if,
+    While: ScopeAnalyzer._check_while,
+    Foreach: ScopeAnalyzer._check_foreach,
+    Expand: ScopeAnalyzer._check_expand,
+    Match: ScopeAnalyzer._check_match,
+    Break: ScopeAnalyzer._check_break,
+    Continue: ScopeAnalyzer._check_continue,
+}

@@ -318,6 +318,12 @@ TEMPORARY was CE2404, because a temporary had no address. It has one now -- the 
 what it owns in a slot for the whole statement, which `nom` needed in any case. A read
 through a live owner still has none, and is still CE2404.
 
+A `poke` binding also needs a scrutinee with STORAGE, and a `const` has none: it is folded
+into read-only memory, so the pointer has nothing to point at and a write through the
+binding lands there. That is CE2400, the same answer a `poke self` call on a constant
+reads, and `semantics/constant_borrow.py` is where every position asks it (#685). A `peek`
+and a bare binding READ the payload, and reading a constant is legal.
+
 ## 10c. The third boundary: a field take
 
 **Added 2026-09-02, P7 ruling R28.** A field read is a borrow, which left one shape with

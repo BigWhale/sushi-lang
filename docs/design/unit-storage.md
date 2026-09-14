@@ -83,11 +83,20 @@ already exist apply to it with one addition:
   `var` the caller is reading; that is what storage means, and it is the caller's to
   order.
 
-The scope pass owns "what kind of name is this": a `var` passes the three CE2400 gates a
-constant fails (a `poke`/`peek` of it, a `poke` foreach over it, a `poke self` call on it)
-and the CE1002 gate on a rebind target. The typecheck pass's CE2096 gate (a write into a
-constant) asks the record's `is_var` and lets a `var` through -- behind an alias too, so
-`geo.count := 3` writes and `geo.SIZE := 3` is still refused.
+The scope pass owns "what kind of name is this", and it asks one gate:
+`reject_borrow_of_constant` in `semantics/constant_borrow.py`. A `var` passes every
+position a constant fails there -- a `poke`/`peek` of it, a `poke` foreach over it, a
+`let poke`/`let peek` bound from it, a `poke self` call on it, a `poke` pattern binding
+into it, and the same through an alias -- and it passes the CE1002 gate on a rebind
+target. The typecheck pass's CE2096 gate (a write into a constant) asks the record's
+`is_var` and lets a `var` through -- behind an alias too, so `geo.count := 3` writes and
+`geo.SIZE := 3` is still refused.
+
+Every one of those readers asks the SCOPED lookup, never `ConstantTable.by_name`. The
+flat view holds one record per NAME over the whole program and is first-wins, so a unit
+whose own `var` shared a name with an earlier unit's `const` was refused, and a unit whose
+own `const` shared a name with an earlier unit's `var` was let through to write read-only
+memory (#685).
 
 ## Never destroyed at exit
 

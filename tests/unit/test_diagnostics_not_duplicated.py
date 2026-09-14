@@ -79,3 +79,25 @@ fn main() i32:
     return Result.Ok(0)
 """)
     assert _count(stderr, "CE2001") == 1, stderr
+
+
+def test_borrow_of_a_constant_behind_an_alias_reported_once(tmp_path):
+    """A call argument was walked twice: validated, then inferred a second time.
+
+    `poke t.STEP` is refused by an inference arm, so the second walk told the user the
+    same thing again (#685). `validate_expression` already returns the type the caller
+    asked the inference for.
+    """
+    (tmp_path / "tally.sushi").write_text(
+        "public const i32 STEP = 10\n", encoding="utf-8")
+    stderr = _compile(tmp_path, """use "tally" as t
+
+fn bump(poke i32 n) ~:
+    n := n + 1
+    return Result.Ok(~)
+
+fn main() i32:
+    bump(poke t.STEP)
+    return Result.Ok(0)
+""")
+    assert _count(stderr, "CE2400") == 1, stderr

@@ -1283,10 +1283,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if ref is not None and ref.kind == "constant":
             # `poke geo.SIZE`: the alias reaches the record, and the record decides. A
             # constant has no address behind an alias either (CE2400); a `var` has one.
+            from sushi_lang.semantics.constant_borrow import (
+                reject_borrow_of_constant)
             sig = self.type_validator.const_table.lookup(ref.name, ref.origin)
-            if sig is not None and not sig.is_var:
-                er.emit(self.type_validator.reporter, er.ERR.CE2400, node.expr.loc,
-                        name=ref.name)
+            if reject_borrow_of_constant(self.type_validator.err, ref.name, sig,
+                                         node.expr.loc):
                 return None
 
         mutability = BorrowMode.PEEK if node.mutability == "peek" else BorrowMode.POKE
