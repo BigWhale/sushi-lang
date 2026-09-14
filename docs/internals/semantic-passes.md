@@ -84,6 +84,10 @@ collect loop, and every unit's perk DEFINITIONS were swept up ahead of the loop 
 implementation could meet the two rules that read the perk table -- the perk exists
 (`CE4003`), and its marker lets this unit implement it (`CE4011`). A perk declared next
 door is in the table when the implementing unit is reached, so neither patch is needed.
+Two perks are in the table before any unit is collected: `Drop` and `Hashable`, the
+compiler's own (`register_predefined_perks`). The constraint check reads `Hashable`
+through the derive pass's predicate, `hashability_of`, so no implementation table
+entry stands for a derived hash (#696).
 
 ### Example
 

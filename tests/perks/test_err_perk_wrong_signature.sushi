@@ -1,9 +1,6 @@
 # Test CE4004: Method signature doesn't match perk requirement
 # EXPECT_ERROR_CODE: CE4004
 
-perk Hashable:
-    fn hash() u64
-
 struct Point:
     i32 x
     i32 y

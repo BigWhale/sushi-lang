@@ -1,6 +1,6 @@
 """The resolve pass: every struct field, enum variant and constant type made concrete."""
 
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.typesys import StructType, EnumType, UnknownType, Type, BuiltinType
 
@@ -11,6 +11,19 @@ def _type_lookup(struct_table: StructTable, enum_table: EnumTable) -> Dict[str, 
     lookup.update(struct_table.by_name)
     lookup.update(enum_table.by_name)
     return lookup
+
+
+def table_resolver(struct_table: StructTable,
+                   enum_table: EnumTable) -> Callable[[Type], Type]:
+    """One resolver over the tables as they stand NOW, for a reader before this pass.
+
+    The `Hashable` constraint check in the monomorphize pass walks a struct whose
+    fields still spell their types (#696). It takes one of these per question,
+    because monomorphization publishes instances while it runs, and a lookup taken
+    earlier would miss them.
+    """
+    lookup = _type_lookup(struct_table, enum_table)
+    return lambda ty: _resolve_type(ty, lookup)
 
 
 def resolve_struct_field_types(

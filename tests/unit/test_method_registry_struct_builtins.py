@@ -33,9 +33,6 @@ fn main() i32:
 """
 
 PERK_SRC = """
-perk Hashable:
-    fn hash() u64
-
 struct Point:
     i32 x
     i32 y

@@ -11,7 +11,7 @@ programming with zero runtime overhead.
 - [Implementing Perks](#implementing-perks)
 - [Generic Constraints](#generic-constraints)
 - [Generic Functions with Perks](#generic-functions-with-perks)
-- [Synthetic Implementations](#synthetic-implementations)
+- [The Predefined Perks](#the-predefined-perks)
 - [Multiple Constraints](#multiple-constraints)
 - [Common Patterns](#common-patterns)
 - [Error Codes](#error-codes)
@@ -31,7 +31,8 @@ Perks provide a way to:
   or `.realise(default)`. A `??` inside a lambda in the body is legal -- the lambda
   has its own Result channel
 - Static dispatch only (no dynamic dispatch/vtables)
-- Explicit implementations required (no structural typing)
+- Explicit implementations required (no structural typing). The one exception is
+  the predefined `Hashable`, which every type with a derived `hash()` satisfies
 - Full type checking at compile time
 
 ## Defining Perks
@@ -39,9 +40,6 @@ Perks provide a way to:
 A perk defines a set of method signatures that implementing types must provide:
 
 ```sushi
-perk Hashable:
-    fn hash() u64
-
 perk Displayable:
     fn display() string
     fn debug() string
@@ -49,6 +47,10 @@ perk Displayable:
 perk Comparable:
     fn compare(peek Point other) i32
 ```
+
+Two perks ship with the compiler and cannot be declared: `Hashable` (`fn hash() u64`)
+and `Drop` (`fn drop(poke self) ~`). A unit that declares either is **CE4001**. See
+[The Predefined Perks](#the-predefined-perks).
 
 A perk method that takes the implementing type by reference names that type
 explicitly (there is no `Self` keyword) and must use an explicit `peek` / `poke`
@@ -69,6 +71,7 @@ struct Point:
     i32 x
     i32 y
 
+# Point already has a derived hash; this implementation REPLACES it.
 extend Point with Hashable:
     fn hash() u64:
         let u64 hx = self.x as u64
@@ -134,10 +137,7 @@ Perks enable type constraints on generic types:
 ### Struct Constraints
 
 ```sushi
-perk Hashable:
-    fn hash() u64
-
-# Generic struct requiring Hashable implementation
+# Generic struct requiring Hashable
 struct Container@(T: Hashable):
     T value
 
@@ -145,16 +145,13 @@ struct Point:
     i32 x
     i32 y
 
-extend Point with Hashable:
-    fn hash() u64:
-        return (self.x as u64) + (self.y as u64)
-
 fn main() i32:
-    # Valid: Point implements Hashable
+    # Valid: Point has a derived hash, so it satisfies the predefined Hashable
     let Container@(Point) c = Container(Point(10, 20))
+    println(c.value.x)
 
-    # Invalid: Would fail with CE4006 if NoHash doesn't implement Hashable
-    # let Container@(NoHash) bad = Container(NoHash(42))
+    # Invalid: a struct holding a HashMap has no derived hash and no implementation,
+    # so `Container@(Index)` is CE4006
 
     return Result.Ok(0)
 ```
@@ -182,9 +179,6 @@ extend Status with Displayable:
 Perks enable generic functions with constrained type parameters:
 
 ```sushi
-perk Hashable:
-    fn hash() u64
-
 # Generic function with perk constraint
 fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
@@ -193,6 +187,7 @@ struct Point:
     i32 x
     i32 y
 
+# The override: without it, compute_hash(p) answers Point's derived hash.
 extend Point with Hashable:
     fn hash() u64:
         return (self.x as u64) + (self.y as u64)
@@ -213,41 +208,57 @@ fn main() i32:
 - Zero runtime overhead through monomorphization
 - Works with structs, enums, and primitives
 
-## Synthetic Implementations
+## The Predefined Perks
 
-Primitives automatically satisfy perks when they have matching auto-derived methods. This allows generic functions to work with primitives without explicit `extend...with` declarations:
+Two perks ship with the compiler. Neither needs an import, neither can be declared
+(**CE4001**), and no alias holds them: `sh.Hashable` is **CE2001**, as `sh.Drop` is.
+
+**`Drop`** (`fn drop(poke self) ~`) declares a resource: a type that implements it
+owns something RAII must release, whatever its fields say. It is documented with
+[memory management](memory-management.md).
+
+**`Hashable`** (`fn hash() u64`) is the contract of the derived `hash()`. The rule
+is NOMINAL and it reads one perk: a type satisfies `Hashable` when the compiler
+derives a `hash()` for it, or when the type implements the perk itself.
+
+- **Satisfied by derivation:** the twelve primitives, `string`, and every struct,
+  enum and array whose parts the compiler can hash -- a `List@(T)` and an `Own@(T)`
+  hash what they hold. No `extend ... with Hashable` is written, and none is needed.
+- **Not satisfied:** a type the derive pass refuses -- a struct holding a
+  `HashMap@(K, V)`, a `ptr`, or a function value. A constraint on it is **CE4006**,
+  exactly as for any other perk.
+- **Overridable:** `extend T with Hashable: fn hash() u64:` REPLACES the derived hash
+  (see [method resolution](design/method-resolution.md)). It also satisfies the
+  constraint for a type the derive pass refuses.
+
+A perk of your own follows the ordinary rule: only an explicit implementation
+satisfies it. `perk Hashy: fn hash() u64` is not satisfied by `i32`, because the
+compiler matches the perk's NAME and never its shape.
 
 ```sushi
-perk Hashable:
-    fn hash() u64
+struct Point:
+    i32 x
+    i32 y
 
 fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 
 fn main() i32:
-    # All work automatically - no explicit implementations needed
-    let u64 h1 = compute_hash(42)??           # i32
-    let u64 h2 = compute_hash("test")??       # string
-    let u64 h3 = compute_hash(true)??         # bool
-    let u64 h4 = compute_hash(3.14)??         # f64
+    # All satisfy Hashable by derivation - no implementation is written
+    let u64 h1 = compute_hash(42)??               # i32
+    let u64 h2 = compute_hash("test")??           # string
+    let u64 h3 = compute_hash(true)??             # bool
+    let u64 h4 = compute_hash(Point(1, 2))??      # a plain struct
+    println("{h1} {h2} {h3} {h4}")
 
     return Result.Ok(0)
 ```
-
-**Primitives with synthetic Hashable:**
-- Integer types: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`
-- Floating-point: `f32`, `f64`
-- Boolean: `bool`
-- String: `string`
 
 ## Multiple Constraints
 
 Types can require multiple perk implementations using the `+` operator:
 
 ```sushi
-perk Hashable:
-    fn hash() u64
-
 perk Displayable:
     fn display() string
 
@@ -285,12 +296,10 @@ fn main() i32:
 
 ### Hashable Pattern
 
-Used for types that can be hashed (e.g., HashMap keys):
+A key type has a derived hash already; implement the predefined `Hashable` to
+replace it (a `HashMap` uses the implementation for its keys):
 
 ```sushi
-perk Hashable:
-    fn hash() u64
-
 struct CustomKey:
     i32 id
     string name
@@ -354,9 +363,6 @@ fn find_max@(T: Comparable)(T a, T b) T:
 Implementing multiple perks for rich functionality:
 
 ```sushi
-perk Hashable:
-    fn hash() u64
-
 perk Displayable:
     fn display() string
 
@@ -402,7 +408,7 @@ Perk-related compiler errors:
 
 | Code | Description | Example |
 |------|-------------|---------|
-| CE4001 | Duplicate perk definition | Defining `Hashable` twice |
+| CE4001 | Duplicate perk definition | Declaring `Displayable` twice, or declaring `Hashable` or `Drop`, which the compiler predefines |
 | CE4002 | Type already implements perk | Two `extend Point with Hashable:` blocks |
 | CE4003 | Unknown perk | `extend Point with UnknownPerk:` |
 | CE4004 | Method signature mismatch | Wrong parameter types or return type |
@@ -497,7 +503,7 @@ perk Eq:
 2. **Use descriptive names**: `Hashable`, `Displayable`, `Comparable` clearly indicate purpose
 3. **Minimize method count**: Fewer methods = easier to implement
 4. **Document constraints**: Make it clear what perks are required for generic types
-5. **Leverage synthetic implementations**: Use primitive types when possible
+5. **Lean on the predefined `Hashable`**: a type the compiler can hash needs no implementation
 6. **Test thoroughly**: Verify implementations work with generic functions
 
 ## See Also

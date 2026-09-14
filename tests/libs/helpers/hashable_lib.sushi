@@ -1,0 +1,4 @@
+# A library that constrains on the predefined `Hashable` perk and declares no perk of
+# its own (#696). The perk is the compiler's, so no record of it ships in the .slib.
+public fn lib_fingerprint@(T: Hashable)(T value) u64:
+    return Result.Ok(value.hash())

@@ -1,0 +1,9 @@
+# `Hashable` is predefined beside `Drop`, so a unit that declares it collides with the
+# compiler's own definition (#696).
+# EXPECT_ERROR_CODE: CE4001
+
+perk Hashable:
+    fn hash() u64
+
+fn main() i32:
+    return Result.Ok(0)

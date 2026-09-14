@@ -3,9 +3,13 @@
 from typing import Optional
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
 from sushi_lang.semantics.ast import BoundedTypeParam
-from sushi_lang.semantics.passes.collect import PerkTable, PerkImplementationTable
+from sushi_lang.semantics.passes.collect import (
+    PerkTable, PerkImplementationTable, StructTable, EnumTable)
+from sushi_lang.semantics.passes.collect.perks import PerkCollector
+from sushi_lang.semantics.passes.resolve import table_resolver
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.hashing import hashability_of
 from sushi_lang.semantics.generics.type_display import display_type
 
 
@@ -18,6 +22,8 @@ class ConstraintValidator:
         perk_impl_table: PerkImplementationTable,
         reporter: Reporter,
         generic_perk_impls=None,
+        struct_table: Optional[StructTable] = None,
+        enum_table: Optional[EnumTable] = None,
     ):
         """Initialize constraint validator."""
         self.perk_table = perk_table
@@ -26,6 +32,11 @@ class ConstraintValidator:
         # The generic-target implementation templates (`GenericPerkImplTable`), when the
         # caller has them: a template answers for an instantiation whose copy is not cut yet.
         self.generic_perk_impls = generic_perk_impls
+        # The struct and enum tables, for the derived answer (#696): the walk that says
+        # whether a type has a derived hash runs here BEFORE the resolve pass, so it
+        # resolves each written name against the tables as it goes.
+        self.struct_table = struct_table
+        self.enum_table = enum_table
 
     def validate_constraint(
         self,
@@ -45,7 +56,8 @@ class ConstraintValidator:
         type_name = self._get_type_name(type_arg)
 
         if not (self.perk_impl_table.implements(type_name, constraint_name)
-                or self._template_implements(type_arg, constraint_name)):
+                or self._template_implements(type_arg, constraint_name)
+                or self._derived_implements(type_arg, constraint_name)):
             diagnostic = er.emit_with(self.reporter, er.ERR.CE4006, span, filename=filename,
                                       type=display_type(type_arg), perk=constraint_name)
             note_span, note_file = note if note is not None else (None, None)
@@ -73,6 +85,21 @@ class ConstraintValidator:
         return any(template.impl.perk_name == constraint_name
                    and len(template.type_params) == len(args)
                    for template in templates.templates(base))
+
+    def _derived_implements(self, type_arg: Type, constraint_name: str) -> bool:
+        """Does the derive pass hash this type? Then it satisfies `Hashable` (#696).
+
+        One predicate, the derive pass's own: `hashability_of`. A type it refuses -- a
+        struct holding a `HashMap`, a `ptr`, a function value -- does not satisfy the
+        constraint, unless an explicit `extend T with Hashable` answered above.
+        """
+        if constraint_name != PerkCollector.HASHABLE_PERK:
+            return False
+        resolve = (table_resolver(self.struct_table, self.enum_table)
+                   if self.struct_table is not None and self.enum_table is not None
+                   else None)
+        can_hash, _reason = hashability_of(type_arg, resolve=resolve)
+        return can_hash
 
     def validate_all_constraints(
         self,

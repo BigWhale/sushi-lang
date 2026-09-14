@@ -202,12 +202,11 @@ fn main() i32:
 
 Generic functions can require type parameters to satisfy perk constraints. Note that perk
 methods (like `hash()` below) return a **bare** value, while the surrounding ordinary
-function still wraps its result in `Result.Ok`:
+function still wraps its result in `Result.Ok`. `Hashable` is predefined: every type
+with a derived `hash()` satisfies it, and the implementation below REPLACES `Point`'s
+derived hash (see [Perks](perks.md#the-predefined-perks)):
 
 ```sushi
-perk Hashable:
-    fn hash() u64
-
 fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 
@@ -232,9 +231,6 @@ fn main() i32:
 Functions can require multiple perk constraints with `+`:
 
 ```sushi
-perk Hashable:
-    fn hash() u64
-
 perk Displayable:
     fn display() string
 
@@ -548,12 +544,12 @@ constraints on generic structs and enums are not yet available.)
 ### Function Constraints
 
 ```sushi
-perk Hashable:
-    fn hash() u64
-
 fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 ```
+
+`Hashable` needs no declaration: it is predefined, and a type satisfies it when the
+compiler derives a `hash()` for it or when the type implements the perk.
 
 ### Multiple Constraints
 

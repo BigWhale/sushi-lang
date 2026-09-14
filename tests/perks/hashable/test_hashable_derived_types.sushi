@@ -1,0 +1,56 @@
+# The predefined `Hashable` perk is satisfied by every type whose hash the compiler
+# derives (#696): a primitive, a string, a plain struct, an enum with payloads, a struct
+# holding a List, a struct holding a struct, an Own, and a generic instantiation. This
+# unit declares no `perk Hashable:` and writes no `extend ... with Hashable`.
+# EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+struct Point:
+    i32 x
+    i32 y
+
+enum Shape:
+    Circle(i32)
+    Rect(i32, i32)
+
+struct Bag:
+    List@(i32) items
+
+struct Segment:
+    Point a
+    Point b
+
+struct Box@(T):
+    T item
+
+fn fingerprint@(T: Hashable)(T value) u64:
+    return Result.Ok(value.hash())
+
+fn main() i32:
+    let i32 n = 42
+    println(fingerprint(n).realise(0 as u64) == n.hash())
+
+    let string s = "Mostly Harmless"
+    println(fingerprint(s).realise(0 as u64) == s.hash())
+
+    let Point p = Point(1, 2)
+    println(fingerprint(p).realise(0 as u64) == p.hash())
+
+    let Shape sh = Shape.Rect(3, 4)
+    println(fingerprint(sh).realise(0 as u64) == sh.hash())
+
+    let Bag bag = Bag(List.new())
+    bag.items.push(7)
+    println(fingerprint(bag).realise(0 as u64) == bag.hash())
+
+    let Segment seg = Segment(Point(1, 2), Point(3, 4))
+    println(fingerprint(seg).realise(0 as u64) == seg.hash())
+
+    let Own@(i32) o = Own.alloc(5)
+    println(fingerprint(o).realise(0 as u64) == o.hash())
+
+    let Box@(i32) b = Box(9)
+    println(fingerprint(b).realise(0 as u64) == b.hash())
+
+    return Result.Ok(0)

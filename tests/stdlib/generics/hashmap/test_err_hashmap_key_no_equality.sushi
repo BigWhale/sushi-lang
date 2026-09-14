@@ -10,9 +10,6 @@ unsafe external "C" as libc because "a ptr field is the one struct the compiler 
 struct Handle:
     ptr h
 
-perk Hashable:
-    fn hash() u64
-
 extend Handle with Hashable:
     fn hash() u64:
         return 7 as u64

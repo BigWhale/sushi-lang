@@ -1,8 +1,5 @@
 # Test valid perk implementation with all required methods
 
-perk Hashable:
-    fn hash() u64
-
 struct Point:
     i32 x
     i32 y

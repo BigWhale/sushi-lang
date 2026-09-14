@@ -298,6 +298,8 @@ class SemanticAnalyzer:
             perk_impl_table=self.perk_impls,
             reporter=self.reporter,
             generic_perk_impls=getattr(self.tables, "generic_perk_impls", None),
+            struct_table=self.structs,
+            enum_table=self.enums,
         )
 
         monomorphizer = Monomorphizer(

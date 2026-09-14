@@ -84,8 +84,8 @@ class PerkImplementationTable:
 
     # Which unit declared each implementation. Here and not on the collector, because
     # the question "may this implementation be replaced?" is asked of the table
-    # (decision 11 of `docs/design/visibility.md`). A synthetic implementation and a
-    # library manifest record have no declaring unit, so the answer may be None.
+    # (decision 11 of `docs/design/visibility.md`). A library manifest record has no
+    # declaring unit, so the answer may be None.
     units: Dict[Tuple[str, str], Optional[str]] = field(default_factory=dict)
 
     def register(self, impl: ExtendWithDef, type_name: str,
@@ -153,24 +153,6 @@ class PerkImplementationTable:
                         return method
 
         return None
-
-    def register_synthetic(self, type_name: str, perk_name: str) -> bool:
-        """Register a synthetic perk implementation for primitives."""
-        key = (type_name, perk_name)
-        if key in self.implementations:
-            return False  # Already registered (explicit or synthetic)
-
-        self.implementations[key] = None  # type: ignore
-
-        if type_name not in self.by_type:
-            self.by_type[type_name] = set()
-        self.by_type[type_name].add(perk_name)
-
-        if perk_name not in self.by_perk:
-            self.by_perk[perk_name] = set()
-        self.by_perk[perk_name].add(type_name)
-
-        return True
 
 
 def _get_type_name(ty: Optional[Type]) -> Optional[str]:
@@ -273,45 +255,44 @@ class PerkCollector:
     # `poke self`, because a destructor writes, and the return must be blank, because a
     # destructor has nowhere to put a Result (CE4012).
     DROP_PERK = "Drop"
+    # `Hashable` is the contract of the derived `hash()`: every type the derive pass can
+    # hash satisfies it with no implementation, and `extend T with Hashable` is the one
+    # override of the derived hash (#696). The constraint check reads this name.
+    HASHABLE_PERK = "Hashable"
 
-    def register_predefined_perks(self) -> None:
-        """Register `Drop`, the perk that declares a resource (HANDLES.md ruling R2).
-
-        A type that implements it owns something RAII must release, whatever its fields
-        say. It ships with the compiler, beside the synthesized enums, so it needs no
-        import -- `owns_resource` asks every program the question, so the answer has to
-        exist in every program.
-        """
-        if self.perks.get(self.DROP_PERK) is not None:
-            return
-        drop = PerkDef(
-            loc=None,
-            name=self.DROP_PERK,
-            methods=[PerkMethodSignature(
-                name="drop", params=[], ret=BuiltinType.BLANK, self_mode="poke")],
-            is_public=True,
-        )
-        self.perks.register(drop)
-        self.perks.files[self.DROP_PERK] = None
-
-    def register_synthetic_impls(self) -> None:
-        """Auto-register synthetic perk implementations for primitive types."""
-        hashable_primitives = [
-            "i8", "i16", "i32", "i64",
-            "u8", "u16", "u32", "u64",
-            "f32", "f64", "bool", "string"
+    def _predefined_perks(self) -> List[PerkDef]:
+        """The perks that ship with the compiler, public and importless."""
+        return [
+            PerkDef(
+                loc=None,
+                name=self.DROP_PERK,
+                methods=[PerkMethodSignature(
+                    name="drop", params=[], ret=BuiltinType.BLANK, self_mode="poke")],
+                is_public=True,
+            ),
+            PerkDef(
+                loc=None,
+                name=self.HASHABLE_PERK,
+                methods=[PerkMethodSignature(name="hash", params=[], ret=BuiltinType.U64)],
+                is_public=True,
+            ),
         ]
 
-        hashable_perk = self.perks.get("Hashable")
-        if hashable_perk:
-            has_hash_method = any(
-                method.name == "hash" and method.ret == BuiltinType.U64
-                for method in hashable_perk.methods
-            )
+    def register_predefined_perks(self) -> None:
+        """Register the two perks that ship with the compiler.
 
-            if has_hash_method:
-                for prim_type in hashable_primitives:
-                    self.perk_impls.register_synthetic(prim_type, "Hashable")
+        `Drop` declares a resource (HANDLES.md ruling R2): a type that implements it owns
+        something RAII must release, whatever its fields say. `Hashable` names the
+        derived hash (#696): a type satisfies it when the derive pass can hash it, and
+        an implementation is the override. Both stand beside the synthesized enums, so
+        they need no import -- `owns_resource` and a `@(T: Hashable)` constraint ask
+        every program the question, so the answer has to exist in every program.
+        """
+        for perk in self._predefined_perks():
+            if self.perks.get(perk.name) is not None:
+                continue
+            self.perks.register(perk)
+            self.perks.files[perk.name] = None
 
     def _collect_perk_def(self, perk: PerkDef) -> None:
         """Collect perk definition and register in perk table."""

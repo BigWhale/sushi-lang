@@ -1,0 +1,33 @@
+# `extend T with Hashable` is the sanctioned override of the derived hash, and it
+# satisfies the constraint on its own: `Handle` holds a `ptr[]`, which no derived hash
+# can read, and `Point` has a derived hash the override replaces (#696).
+# EXPECT_STDOUT_EXACT: "7\n9\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+unsafe external "C" as libc because "a ptr field is the one field the compiler cannot hash":
+    fn strlen(string s) i64 = "strlen"
+
+struct Handle:
+    ptr[] slots
+
+extend Handle with Hashable:
+    fn hash() u64:
+        return 7 as u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        return 9 as u64
+
+fn fingerprint@(T: Hashable)(T value) u64:
+    return Result.Ok(value.hash())
+
+fn main() i32:
+    let Handle h = Handle(from([]))
+    println(fingerprint(h).realise(0 as u64))
+    println(fingerprint(Point(1, 2)).realise(0 as u64))
+    return Result.Ok(0)

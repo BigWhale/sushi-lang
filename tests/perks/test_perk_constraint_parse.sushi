@@ -1,8 +1,5 @@
 # Test parsing of perk constraints in function signatures
 
-perk Hashable:
-    fn hash() u64
-
 struct Point:
     i32 x
     i32 y

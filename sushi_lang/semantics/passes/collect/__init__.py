@@ -195,7 +195,6 @@ class CollectorPass:
         self.enum_collector.collect(root)
         self.perk_collector.collect_definitions(root)
         self.perk_collector.collect_implementations(root)
-        self.perk_collector.register_synthetic_impls()
         self.function_collector.collect_functions(root)
         self.function_collector.collect_extensions(root)
         self.function_collector.register_stdlib_functions(root)
@@ -235,7 +234,7 @@ class CollectorPass:
         self.enum_collector.register_predefined_enums()
 
     def _register_predefined_perks(self) -> None:
-        """Register predefined perks (Drop)."""
+        """Register predefined perks (Drop, Hashable)."""
         self.perk_collector.register_predefined_perks()
 
     def _register_predefined_generics(self) -> None:
