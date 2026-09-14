@@ -65,6 +65,17 @@ def emit_overflow(reporter: Reporter, overflow: ConstOverflow) -> None:
         .help("use a wider type, or compute in one and cast the result with 'as'").emit()
 
 
+def emit_string_plus(reporter: Reporter, span: Optional[Span]) -> None:
+    """CE2509 with its help, for a constant and for a body alike.
+
+    Sushi has no concatenation operator anywhere, so a constant reports the language
+    rule and not a constant-only one (#441), and it renders the rule as the body's
+    validator does (#682).
+    """
+    er.emit_with(reporter, er.ERR.CE2509, span) \
+        .help("use string interpolation: \"{a}{b}\"").emit()
+
+
 @dataclass
 class ConstantValue:
     """Compile-time constant value with type information.
@@ -157,7 +168,14 @@ class ConstantEvaluator:
             self.unit_name, self.namespaces = saved
 
     def evaluate(self, expr: Expr, expected_type: Type, span: Optional[Span]) -> Optional[ConstantValue]:
-        """Evaluate an expression to a compile-time constant."""
+        """Evaluate an expression to a compile-time constant.
+
+        A diagnostic is reported at the NODE that failed: `span` is only the fallback
+        for a node that carries no location of its own. The caller of a `const` passes
+        the declaration's span, and a handler that reported with it put the caret
+        under the whole line (#682).
+        """
+        span = expr.loc or span
         if isinstance(expr, IntLit):
             return self._evaluate_int_lit(expr, expected_type)
         elif isinstance(expr, FloatLit):
@@ -316,7 +334,7 @@ class ConstantEvaluator:
         field_values: List[ConstantValue] = []
         for (_field_name, field_type), argument in zip(struct_type.fields, arguments,
                                                        strict=True):
-            value = self.evaluate(argument, field_type, argument.loc or span)
+            value = self.evaluate(argument, field_type, span)
             if value is None:
                 return None  # the recursion reported it
             field_values.append(value)
@@ -354,7 +372,7 @@ class ConstantEvaluator:
 
         payload: List[ConstantValue] = []
         for argument, field_type in zip(arguments, variant.associated_types, strict=True):
-            value = self.evaluate(argument, field_type, argument.loc or span)
+            value = self.evaluate(argument, field_type, span)
             if value is None:
                 return None  # the recursion reported it
             payload.append(value)
@@ -453,7 +471,7 @@ class ConstantEvaluator:
                 rendered.append(part)
                 continue
             part_span = getattr(part, "loc", None) or span
-            value = self.evaluate(part, BuiltinType.STRING, part_span)
+            value = self.evaluate(part, BuiltinType.STRING, span)
             if value is None:
                 return None
             text = self._format_hole(value, part_span)
@@ -464,27 +482,23 @@ class ConstantEvaluator:
 
     def _evaluate_binary_op(self, expr: BinaryOp, expected_type: Type, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate binary operation."""
-        left_val = self.evaluate(expr.left, expected_type, expr.left.loc)
-        right_val = self.evaluate(expr.right, expected_type, expr.right.loc)
+        left_val = self.evaluate(expr.left, expected_type, span)
+        right_val = self.evaluate(expr.right, expected_type, span)
 
         if left_val is None or right_val is None:
             return None
 
-        op_span = expr.loc or span
-
         if expr.op == '+' and BuiltinType.STRING in (left_val.semantic_type,
                                                      right_val.semantic_type):
-            # Sushi has no concatenation operator anywhere, so a constant reports the
-            # language rule and not a constant-only one (#441).
-            er.emit(self.reporter, er.ERR.CE2509, span)
+            emit_string_plus(self.reporter, span)
             return None
 
         if expr.op in _ARITHMETIC:
-            return self._eval_arithmetic(expr, left_val, right_val, op_span)
+            return self._eval_arithmetic(expr, left_val, right_val, span)
         elif expr.op == '/':
-            return self._eval_division(expr, left_val, right_val, op_span)
+            return self._eval_division(expr, left_val, right_val, span)
         elif expr.op == '%':
-            return self._eval_modulo(expr, left_val, right_val, op_span)
+            return self._eval_modulo(expr, left_val, right_val, span)
 
         elif expr.op in _BITWISE:
             return self._eval_bitwise(left_val, right_val, expr.op, span)
@@ -505,7 +519,7 @@ class ConstantEvaluator:
 
     def _evaluate_unary_op(self, expr: UnaryOp, expected_type: Type, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate unary operation."""
-        operand = self.evaluate(expr.expr, expected_type, expr.expr.loc)
+        operand = self.evaluate(expr.expr, expected_type, span)
         if operand is None:
             return None
 
@@ -516,7 +530,7 @@ class ConstantEvaluator:
                 if isinstance(expr.expr, (IntLit, FloatLit)):
                     return ConstantValue(-operand.value, operand.semantic_type)
                 return self._checked(expr, '-', -operand.value,
-                                     operand.semantic_type, expr.loc or span)
+                                     operand.semantic_type, span)
             else:
                 er.emit(self.reporter, er.ERR.CE0110, span, op='negation on non-numeric type')
                 return None
@@ -571,7 +585,7 @@ class ConstantEvaluator:
                 element_values.extend(
                     ConstantValue(value, element_type) for value in run.plan.values())
                 continue
-            run_val = self.evaluate(run.value, element_type, run.value.loc)
+            run_val = self.evaluate(run.value, element_type, span)
             if run_val is None:
                 return None  # Non-constant element
             element_values.extend([run_val] * run.count)
@@ -642,7 +656,7 @@ class ConstantEvaluator:
 
     def _evaluate_cast(self, expr: CastExpr, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate type cast."""
-        value = self.evaluate(expr.expr, expr.target_type, expr.expr.loc)
+        value = self.evaluate(expr.expr, expr.target_type, span)
         if value is None:
             return None
 
@@ -679,7 +693,7 @@ class ConstantEvaluator:
         A constant cannot trap, so the bounds a body leaves to run time (RE2020) are
         compile-time diagnostics here, the same codes a constant index in a body gets.
         """
-        base = self.evaluate(expr.array, None, expr.array.loc)
+        base = self.evaluate(expr.array, None, span)
         if base is None:
             return None
 
@@ -687,7 +701,7 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0110, span, op='index of a non-array constant')
             return None
 
-        index = self.evaluate(expr.index, BuiltinType.I32, expr.index.loc)
+        index = self.evaluate(expr.index, BuiltinType.I32, span)
         if index is None:
             return None
 

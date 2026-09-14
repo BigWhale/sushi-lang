@@ -58,6 +58,12 @@ CELLS = {
 
 MAIN = "\nfn main() i32:\n    return Result.Ok(0)\n"
 
+# The AST builder stamps a postfix node at its SUFFIX -- `[0]`, `()` -- and a body
+# diagnostic on such a node sits there too (a CE2002 on `y[0]` carets the `[0]`). So
+# these two cells start after the expression's first column, and only the node test
+# below applies to them.
+POSTFIX = {"index-scalar", "call"}
+
 
 def _program(prelude: str, ty: str, expr: str) -> tuple[str, int, int]:
     """The source, and the (line, col) where the initializer expression starts."""
@@ -77,17 +83,28 @@ def _helps(item) -> list[str]:
     return [sub.message for sub in item.sub if sub.kind == "help"]
 
 
+def _corners(span) -> tuple[int, int, int, int]:
+    return (span.line, span.col, span.end_line, span.end_col)
+
+
 @pytest.mark.parametrize("label", list(CELLS), ids=list(CELLS))
-def test_the_caret_is_under_the_initializer_expression(analyze, label):
+def test_the_caret_is_under_the_initializer_node(analyze_program, label):
     prelude, ty, expr, code = CELLS[label]
     src, line, col = _program(prelude, ty, expr)
-    item = _first(analyze(src), code)
+    analysis = analyze_program(src)
+    item = _first(analysis.reporter, code)
     assert item.span is not None, f"{label}: {code} has no location at all"
-    assert (item.span.line, item.span.col) == (line, col), (
-        f"{label}: {code} is at {item.span.line}:{item.span.col}, the expression "
-        f"`{expr}` starts at {line}:{col}. A caret under the whole declaration "
+
+    initializer = analysis.program.constants[-1].value   # X is declared last
+    assert _corners(item.span) == _corners(initializer.loc), (
+        f"{label}: {code} is at {_corners(item.span)}, the initializer node `{expr}` "
+        f"is at {_corners(initializer.loc)}. A caret under the whole declaration "
         f"separates nothing."
     )
+    if label not in POSTFIX:
+        assert (item.span.line, item.span.col) == (line, col), (
+            f"{label}: the expression `{expr}` starts at {line}:{col}"
+        )
 
 
 def test_string_plus_in_a_constant_gives_the_help_a_body_gives(analyze):
