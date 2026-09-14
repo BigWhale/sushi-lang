@@ -9,7 +9,6 @@ if TYPE_CHECKING:
 from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.typesys import (
-    Type,
     BuiltinType,
     EnumVariantInfo,
     PointerType,
@@ -40,6 +39,7 @@ from .perks import (
     PerkTable)
 from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
+from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
 from sushi_lang.semantics.visibility import VisibilityTable, record_declarations
 
 __all__ = [
@@ -69,16 +69,6 @@ __all__ = [
 ]
 
 
-# The builtins a target's argument position may name. Read by the collect pass and by the
-# analyzer when it files a library's shipped template (#543), so the two agree on what a
-# bare name in `extend Box@(X)` means.
-KNOWN_BUILTIN_TYPES: frozenset = frozenset({
-    BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-    BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING,
-})
-
-
 class CollectorPass:
     """Collect constants, structs, enums, functions, and perks from the AST."""
 
@@ -106,7 +96,12 @@ class CollectorPass:
         self.externals = ExternalTable()
         self.visibility = VisibilityTable()
 
-        self.known_types: Set[Type] = set(KNOWN_BUILTIN_TYPES)
+        # Which bare names are declared, for reading a target's arguments (#653). One
+        # predicate for every collector that classifies a target.
+        self.is_declared_type = DeclaredTypeNamer(
+            structs=self.structs, enums=self.enums,
+            generic_structs=self.generic_structs, generic_enums=self.generic_enums,
+            perks=self.perks)
 
         self.constant_collector = ConstantCollector(
             reporter=reporter,
@@ -117,7 +112,6 @@ class CollectorPass:
             reporter=reporter,
             structs=self.structs,
             generic_structs=self.generic_structs,
-            known_types=self.known_types
         )
 
         self.enum_collector = EnumCollector(
@@ -126,14 +120,13 @@ class CollectorPass:
             generic_enums=self.generic_enums,
             structs=self.structs,
             generic_structs=self.generic_structs,
-            known_types=self.known_types
         )
 
         self.perk_collector = PerkCollector(
             reporter=reporter,
             perks=self.perks,
             perk_impls=self.perk_impls,
-            known_types=self.known_types,
+            is_declared_type=self.is_declared_type,
             generic_perk_impls=self.generic_perk_impls,
         )
 
@@ -151,7 +144,8 @@ class CollectorPass:
             structs=self.structs,
             enums=self.enums,
             generic_structs=self.generic_structs,
-            generic_enums=self.generic_enums
+            generic_enums=self.generic_enums,
+            is_declared_type=self.is_declared_type,
         )
         # Which units came from a library, for every collector that has to know.
         for collector in (self.struct_collector, self.enum_collector,
@@ -310,4 +304,3 @@ class CollectorPass:
         self.generic_structs.by_name["List"] = list_generic
         self.generic_structs.order.append("List")
 
-        # Note: Generic enums and structs are not added to known_types until they are instantiated with concrete types

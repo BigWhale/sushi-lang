@@ -1164,14 +1164,14 @@ class SemanticAnalyzer:
             return
 
         from sushi_lang.internals.parser import parse_to_ast
-        from sushi_lang.semantics.passes.collect import KNOWN_BUILTIN_TYPES
+        from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
         from sushi_lang.semantics.passes.collect.perks import PerkCollector
         import sushi_lang.internals.errors as er
 
         table = self.tables.generic_perk_impls
-        known_types = (set(KNOWN_BUILTIN_TYPES)
-                       | set(self.structs.by_name.values())
-                       | set(self.enums.by_name.values()))
+        is_declared_type = DeclaredTypeNamer(
+            structs=self.structs, enums=self.enums, generic_structs=self.generic_structs,
+            generic_enums=self.generic_enums, perks=self.perks)
 
         for lib_name, manifest in self.library_linker.loaded_libraries.items():
             templates = manifest.get("templates") or {}
@@ -1196,7 +1196,7 @@ class SemanticAnalyzer:
                 collector = PerkCollector(
                     Reporter(source=source, filename=label),
                     perks=self.perks, perk_impls=self.perk_impls,
-                    known_types=known_types, generic_perk_impls=table)
+                    is_declared_type=is_declared_type, generic_perk_impls=table)
                 collector.current_unit_name = f"lib/{lib_name}/{record.get('unit') or lib_name}"
                 collector.current_unit_file = label
                 before = len(table.templates(base))
