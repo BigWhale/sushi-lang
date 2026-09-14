@@ -2,9 +2,6 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test generic function with enum implementing perk constraint
 
-perk Hashable:
-    fn hash() u64
-
 enum Status:
     Active(i32)
     Inactive()

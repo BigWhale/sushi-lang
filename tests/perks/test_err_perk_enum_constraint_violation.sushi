@@ -1,21 +1,19 @@
 # Test CE4006: Generic enum constraint violation
 # EXPECT_ERROR_CODE: CE4006
 
-perk Hashable:
-    fn hash() u64
+use <collections/hashmap>
 
-struct Point:
-    i32 x
-    i32 y
+struct Index:
+    HashMap@(i32, string) slots
 
-# Point does NOT implement Hashable
+# Index holds a HashMap, which has no derived hash, so it does not satisfy Hashable
 
 enum Option@(T: Hashable):
     Some(T)
     None()
 
 fn main() i32:
-    let Point p = Point(10, 20)
-    # Should fail: Point doesn't satisfy Hashable constraint
-    let Option@(Point) opt = Option.Some(p)
+    let Index ix = Index(HashMap.new())
+    # Should fail: Index doesn't satisfy Hashable constraint
+    let Option@(Index) opt = Option.Some(ix)
     return Result.Ok(0)

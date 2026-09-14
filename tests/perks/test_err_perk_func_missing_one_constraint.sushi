@@ -1,9 +1,6 @@
 # Test CE4006: Missing one of multiple constraints
 # EXPECT_ERROR_CODE: CE4006
 
-perk Hashable:
-    fn hash() u64
-
 perk Displayable:
     fn display() string
 

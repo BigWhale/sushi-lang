@@ -16,9 +16,6 @@ from sushic_path import SUSHIC, needs_sushic
 
 PERK_KEY_PROGRAM = """use <collections/hashmap>
 
-perk Hashable:
-    fn hash() u64
-
 struct Point:
     i32 x
     i32 y

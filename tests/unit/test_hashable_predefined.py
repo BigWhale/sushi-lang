@@ -17,7 +17,7 @@ fn fingerprint@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 
 fn main() i32:
-    let u64 h = fingerprint({value}).realise(0 as u64)
+    {setup}let u64 h = fingerprint({value}).realise(0 as u64)
     println(h)
     return Result.Ok(0)
 """
@@ -32,8 +32,8 @@ def _codes(reporter) -> list[str]:
     return sorted({item.code for item in reporter.items})
 
 
-def _program(decls: str, value: str) -> str:
-    return decls + MAIN.format(value=value)
+def _program(decls: str, value: str, setup: str = "") -> str:
+    return decls + MAIN.format(setup=setup, value=value)
 
 
 def test_hashable_is_predefined_beside_drop(analyze_program):
@@ -72,10 +72,16 @@ def test_a_user_declaration_collides_with_the_predefined_perk(analyze, decl):
     ("struct Point:\n    i32 x\n\nstruct Segment:\n    Point a\n    Point b\n",
      "Segment(Point(1), Point(2))"),
     ("struct Bag:\n    List@(i32) items\n", "Bag(List.new())"),
-    ("struct Box@(T):\n    T item\n", "Box(9)"),
 ])
 def test_a_type_with_a_derived_hash_satisfies_the_constraint(analyze, decls, value):
     reporter = analyze(_program(decls, value))
+    assert _codes(reporter) == [], "\n".join(str(item) for item in reporter.items)
+
+
+def test_a_generic_instantiation_with_a_derived_hash_satisfies_the_constraint(analyze):
+    """Bound first: a generic call fed an inferred construction is CE2060 on its own."""
+    reporter = analyze(_program("struct Box@(T):\n    T item\n", "b",
+                                setup="let Box@(i32) b = Box(9)\n    "))
     assert _codes(reporter) == [], "\n".join(str(item) for item in reporter.items)
 
 

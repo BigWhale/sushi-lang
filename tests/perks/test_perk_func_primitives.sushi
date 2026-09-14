@@ -3,9 +3,6 @@
 # Test generic function with primitives implementing perks
 # Primitives like i32, string have auto-derived hash, but we need to test constraints work
 
-perk Hashable:
-    fn hash() u64
-
 # Generic function that requires Hashable
 fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())

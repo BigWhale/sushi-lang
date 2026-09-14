@@ -3,9 +3,6 @@
 # Test perk constraints on generic struct (works now!)
 # This tests the constraint validation infrastructure without requiring generic functions
 
-perk Hashable:
-    fn hash() u64
-
 struct Point:
     i32 x
     i32 y
