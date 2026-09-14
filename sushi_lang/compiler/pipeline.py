@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+from typing import TYPE_CHECKING
 import time
 from pathlib import Path
 
@@ -14,6 +15,9 @@ from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 from sushi_lang.semantics.units import Unit, UnitManager
+
+if TYPE_CHECKING:
+    from sushi_lang.backend.library_paths import LibraryResolver
 
 
 def _check_library_platform(metadata: dict, lib_path: str) -> None:
@@ -186,7 +190,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
 
 
 def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter, args,
-                             cache_root: Path) -> tuple[object, set[str]] | None:
+                             cache_root: Path) -> tuple[LibraryResolver | None, set[str]] | None:
     """Resolve every `use <lib/...>`, injecting source libraries as ordinary units.
 
     A source library is not linked, registered or monomorphized through the library
