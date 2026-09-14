@@ -1,0 +1,18 @@
+# A BUILT-IN generic's name is a declared name too: `Maybe` is in the generic enum
+# table, so `Box@(Maybe)` constrains on the perk-implementation path (#653).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2001
+perk Named:
+    fn name() string
+
+struct Box@(T):
+    T item
+
+extend Box@(Maybe) with Named:
+    fn name() string:
+        return "box"
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println("{b.name()}")
+    return Result.Ok(0)

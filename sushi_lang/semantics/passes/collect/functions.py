@@ -3,7 +3,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 from sushi_lang.internals.report import Origin, Reporter, Span
 from sushi_lang.internals import errors as er
@@ -479,7 +479,8 @@ class FunctionCollector:
         structs: 'StructTable',
         enums: 'EnumTable',
         generic_structs: 'GenericStructTable',
-        generic_enums: 'GenericEnumTable'
+        generic_enums: 'GenericEnumTable',
+        is_declared_type: Callable[[str], bool],
     ) -> None:
         """Initialize function collector."""
         self.r = reporter
@@ -502,6 +503,7 @@ class FunctionCollector:
         self.enums = enums
         self.generic_structs = generic_structs
         self.generic_enums = generic_enums
+        self.is_declared_type = is_declared_type
 
     def collect_functions(self, root: Program) -> None:
         """Collect all function definitions from program AST."""
@@ -946,7 +948,7 @@ class FunctionCollector:
             # of the two is partial specialization, which Sushi does not have (#393). The collect pass
             # is the pass that can tell them apart, because the struct and enum tables say
             # which names are declared types -- so the answer is decided here and carried.
-            shape = classify_extension_target(target_type, self._is_declared_type)
+            shape = classify_extension_target(target_type, self.is_declared_type)
             ext.target_shape = shape
             if shape.is_mixed:
                 er.emit_with(self.r, ERR.CE2098, target_type_span or name_span,
@@ -1068,7 +1070,7 @@ class FunctionCollector:
             ARRAY_BASE_KEY, classify_array_extension_target)
 
         element = target_type.base_type
-        shape = classify_array_extension_target(element, self._is_declared_type)
+        shape = classify_array_extension_target(element, self.is_declared_type)
         ext.target_shape = shape
         if shape is None:
             er.emit_with(self.r, ERR.CE2101, target_type_span or name_span,
@@ -1242,19 +1244,6 @@ class FunctionCollector:
         else:
             diag.note("first defined here", other_span, other_filename)
         diag.emit()
-
-    def _is_declared_type(self, name: str) -> bool:
-        """Whether a bare name in a type position names a declared type.
-
-        The tables accumulate in compilation order, and library symbols register after the collect pass,
-        so a name this cannot see yet is read as a type PARAMETER. That is the safe direction:
-        a name IN the tables is certainly a type, so the only reachable mistake is the old
-        behaviour (the declaration applies to every instantiation), never a false rejection.
-        """
-        return (name in self.structs.by_name
-                or name in self.enums.by_name
-                or name in self.generic_structs.by_name
-                or name in self.generic_enums.by_name)
 
     def _reject_overlapping_target(self, method: GenericExtensionMethod,
                                    target_type: GenericTypeRef,

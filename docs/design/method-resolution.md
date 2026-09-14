@@ -375,6 +375,7 @@ test proves the general path covers them.
 | question | where |
 |---|---|
 | does this name denote a TYPE, of any kind | `semantics/statics.py:names_a_type` -- the scope pass and the typecheck pass both ask it |
+| does this bare name in a TARGET's argument position name a declared thing (a type, or a perk) | `semantics/generics/extension_targets.py:DeclaredTypeNamer` -- the type half is `names_a_type`, the perk half is the classifier's own rule; the extension path, the perk-implementation path and the array path all hand it to the classifier (#653). Gate: `tests/unit/test_declared_type_predicate_is_one.py` |
 | which type does this receiver name, and does it declare that static | `passes/types/calls/statics.py` -- the validation half and the inference half both read it |
 | instance or static (they share one table) | ONE filter at the end of `resolve_extension_method`; `resolve_method(..., static=True)` skips the perk rung outright |
 | what modes do the arguments cross in | `CalleeKind.STATIC_METHOD` -- a new kind, not a widened `METHOD`, because a receiver-less callee asks a different question. Gate: `tests/unit/test_callee_mode_matrix.py` |
@@ -459,8 +460,16 @@ on each handle rather than on a contract.
 
 **Where the rule lives.** The classification is decided ONCE, in the collect pass
 (`semantics/generics/extension_targets.py:classify_extension_target`), because that is the
-pass whose struct and enum tables say which bare names are declared types -- `Box@(T)` and
-`Box@(Point)` are spelled identically and mean opposite things. The answer is carried on the
+pass whose tables say which bare names are declared -- `Box@(T)` and `Box@(Point)` are
+spelled identically and mean opposite things. ONE predicate answers that question for the
+extension path, the perk-implementation path and the array path alike: `DeclaredTypeNamer`,
+beside the classifier, reads the four type tables through `statics.names_a_type` and the
+perk table (#653). A perk is not a type, but a perk name is a declared name: `extend
+Box@(Show)` constrains rather than binding a parameter called `Show`, and the name then
+fails as a type where every other type position fails it. Before #653 the two collectors
+answered from two different sets, so `extend Box@(Cage) with Show` was a template over
+every `Box` while `extend Box@(Cage) g()` constrained, and a perk name went the other way
+round. The answer is carried on the
 declaration (`ExtendDef.target_shape`) and on its collected signature
 (`GenericExtensionMethod.target_key`), so the instantiate and monomorphize passes read it instead of deciding
 again from a different set of visible types. `instantiation_key` is the one authority for the

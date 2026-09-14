@@ -6,8 +6,13 @@ applies to every instantiation of `Box`; the second is a CONSTRAINT and applies 
 `Box<Point>` and to nothing else, exactly as a perk implementation on the same target
 already did.
 
-The question is answered ONCE, in the collect pass, where the struct and enum tables say which names
-are declared types. The answer is carried on the declaration (`ExtendDef.target_shape`) and
+The question is answered ONCE, in the collect pass, and `DeclaredTypeNamer` is the one
+predicate that says which bare names are declared (#653): the four type tables through
+`statics.names_a_type`, plus the perk table -- a perk is not a type, but a declared name
+never binds a fresh parameter, so `extend Box@(Show)` reads as a constraint and `Show`
+then fails as a type where every other type position fails it. Two collectors used to
+answer from two different sets, so one spelling meant a template on the perk path and
+a constraint on the extension path. The answer is carried on the declaration (`ExtendDef.target_shape`) and
 on its collected signature (`GenericExtensionMethod`), so the instantiate and monomorphize passes read it
 rather than deciding again -- two decisions from two sets of visible types could disagree,
 and the disagreement would be silent.
@@ -15,10 +20,42 @@ and the disagreement would be silent.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple
+from typing import Callable, Mapping, Optional, Protocol, Tuple
 
+from sushi_lang.semantics.statics import names_a_type
 from sushi_lang.semantics.typesys import Type, UnknownType
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
+
+
+class NameTable(Protocol):
+    """What the predicate reads of a symbol table: the names it holds."""
+
+    @property
+    def by_name(self) -> Mapping[str, object]: ...
+
+
+@dataclass(frozen=True)
+class DeclaredTypeNamer:
+    """Does this bare name in a target's argument position name a TYPE? (#653)
+
+    The tables are read at call time, so a name collected later is seen. Every
+    classifier call hands in one of these and nothing else; the gate is
+    `tests/unit/test_declared_type_predicate_is_one.py`.
+    """
+
+    structs: NameTable
+    enums: NameTable
+    generic_structs: NameTable
+    generic_enums: NameTable
+    perks: NameTable
+
+    def __call__(self, name: str) -> bool:
+        return (names_a_type(name,
+                             structs=self.structs.by_name.keys(),
+                             enums=self.enums.by_name.keys(),
+                             generic_structs=self.generic_structs.by_name.keys(),
+                             generic_enums=self.generic_enums.by_name.keys())
+                or name in self.perks.by_name)
 
 
 @dataclass(frozen=True)

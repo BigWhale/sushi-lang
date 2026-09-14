@@ -20,7 +20,8 @@ from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.library_registry import LibraryRegistry
 from sushi_lang.semantics.library_templates import (
     apply_template_bindings, deserialize_perk_impl)
-from sushi_lang.semantics.passes.collect import CollectorPass, KNOWN_BUILTIN_TYPES
+from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
+from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
 from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo, StructType
 from sushi_lang.semantics.visibility import DeclOrigin
@@ -468,9 +469,10 @@ class LibraryRegistration:
 
         perks, perk_impls = self.tables.perks, self.tables.perk_impls
         table = self.tables.generic_perk_impls
-        known_types = (set(KNOWN_BUILTIN_TYPES)
-                       | set(self.tables.structs.by_name.values())
-                       | set(self.tables.enums.by_name.values()))
+        is_declared_type = DeclaredTypeNamer(
+            structs=self.tables.structs, enums=self.tables.enums,
+            generic_structs=self.tables.generic_structs,
+            generic_enums=self.tables.generic_enums, perks=perks)
 
         for lib_name, _manifest, record in self._template_records("generic_perk_impls"):
             base = record.get("type")
@@ -493,7 +495,7 @@ class LibraryRegistration:
             collector = PerkCollector(
                 Reporter(source=source, filename=label),
                 perks=perks, perk_impls=perk_impls,
-                known_types=known_types, generic_perk_impls=table)
+                is_declared_type=is_declared_type, generic_perk_impls=table)
             collector.current_unit_name = f"lib/{lib_name}/{record.get('unit') or lib_name}"
             collector.current_unit_file = label
             before = len(table.templates(base))

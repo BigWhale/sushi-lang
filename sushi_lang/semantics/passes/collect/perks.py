@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -207,14 +207,14 @@ class PerkCollector:
         reporter: Reporter,
         perks: PerkTable,
         perk_impls: PerkImplementationTable,
-        known_types: Optional[Set[Type]] = None,
+        is_declared_type: Callable[[str], bool],
         generic_perk_impls: Optional[GenericPerkImplTable] = None,
     ) -> None:
         """Initialize perk collector."""
         self.r = reporter
         # Which bare names are declared types, for reading a generic target's arguments:
         # `Box@(T)` and `Box@(Point)` are spelled identically and mean opposite things.
-        self.known_types: Set[Type] = known_types if known_types is not None else set()
+        self.is_declared_type = is_declared_type
         # The unit being collected. This pass shares one reporter across every
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
@@ -380,11 +380,6 @@ class PerkCollector:
             refused = True
         return refused
 
-    def _is_declared_type(self, name: str) -> bool:
-        """Does this bare name in a target's argument position name a TYPE?"""
-        return (name in self.perks.by_name
-                or any(str(t) == name for t in self.known_types))
-
     def _reject_bad_drop_target(self, impl: ExtendWithDef, target_type: Optional[Type],
                                 type_name: str, span: Optional[Span]) -> bool:
         """The one target `Drop` refuses: a FOREIGN one. True when it was reported.
@@ -433,7 +428,7 @@ class PerkCollector:
 
         if not isinstance(target_type, GenericTypeRef):
             return False
-        shape = classify_extension_target(target_type, self._is_declared_type)
+        shape = classify_extension_target(target_type, self.is_declared_type)
         if shape.is_mixed:
             er.emit_with(self.r, ERR.CE2098,
                          getattr(impl, "target_type_span", None)
