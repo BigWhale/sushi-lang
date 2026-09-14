@@ -1,9 +1,8 @@
 """One walk over a unit's declarations, shared by everything that needs the list.
 
 `declarations()` is the single answer to "what does this unit declare, and what word does
-a diagnostic call each kind by". The `docs` pass reads it to check blocks, the visibility
-collector reads it to record who may name what, and `tests/docs_sweep.py` reads it to
-number its generated examples. Two walks would drift, and a kind missing from the walk
+a diagnostic call each kind by". The `docs` pass reads it to check blocks, and
+`tests/docs_sweep.py` reads it to number its generated examples. Two walks would drift, and a kind missing from the walk
 would be silently missing from every consumer.
 
 A GENERIC target keeps a list of its own: the `collect` pass re-files

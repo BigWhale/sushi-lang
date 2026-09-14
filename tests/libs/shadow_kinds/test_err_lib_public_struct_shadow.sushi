@@ -1,0 +1,13 @@
+# A library's PUBLIC struct is the plain duplicate, CE0004: identity is
+# nominal, so one name is one shape, and the consumer can see the library's.
+# The private twin is CE3011 (tests/namespaces/library).
+# EXPECT_ERROR_CODE: CE0004
+
+use <lib/shadow_kinds_lib>
+
+struct Shown:
+    i32 tag
+
+fn main() i32:
+    println("{touch().realise(0)}")
+    return Result.Ok(0)

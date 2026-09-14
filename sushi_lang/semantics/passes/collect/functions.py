@@ -38,7 +38,7 @@ from sushi_lang.semantics.generics.types import (
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_origin,
-    reject_private_perk_constraints,
+    record_declaration,
 )
 
 from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
@@ -646,6 +646,9 @@ class FunctionCollector:
         name = getattr(fn, "name", None)
         if not isinstance(name, str):
             return
+        record_declaration(self.visibility, "function", fn,
+                           unit_name=self.current_unit_name,
+                           filename=self.current_unit_file)
 
         # A receiver parameter has no meaning on a plain top-level function (#327):
         # there is no receiver. The builder lifts the marker onto the FuncDef, so this
@@ -782,10 +785,6 @@ class FunctionCollector:
             else BoundedTypeParam(name=tp, constraints=[], loc=None)
             for tp in type_params_raw
         )
-
-        reject_private_perk_constraints(
-            self.r, self.visibility, type_param_instances, name_span,
-            current_unit=self.current_unit_name, filename=self.current_unit_file)
 
         params = []
         param_names = set()

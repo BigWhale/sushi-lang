@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import ExtendWithDef
 from sushi_lang.semantics.ast_walk import (
-    TypeSite, signature_constraints, signature_types)
+    ConstraintSite, TypeSite, signature_constraints, signature_types)
 from sushi_lang.semantics.type_predicates import contains_foreign_ptr
 from .visibility import name_is_contested
 
@@ -90,7 +90,8 @@ def _declared_name(site: TypeSite) -> str:
     return "<anonymous>"
 
 
-def _declared_public(validator: 'TypeValidator', site: TypeSite) -> Optional[bool]:
+def _declared_public(validator: 'TypeValidator',
+                     site: TypeSite | ConstraintSite) -> Optional[bool]:
     """Whether the declaration owning this position is part of the unit's API.
 
     Three answers, one per group of `semantics/visibility.py`. A declaration that carries
@@ -211,7 +212,12 @@ def check_public_signatures(validator: 'TypeValidator', program: 'Program') -> N
                     name=_declared_name(site), type=origin.name), origin)
 
     for constraint in signature_constraints(program):
-        if not bool(getattr(constraint.decl, "is_public", True)):
+        if _declared_public(validator, constraint) is not True:
+            continue
+        # A perk this unit cannot NAME is the use-site rule's (CE4011), and the collect
+        # pass has answered it. The leak rule is the perk's own unit's (#692).
+        if not validator.visibility.is_visible_from(
+                "perk", constraint.perk_name, validator.current_unit_name):
             continue
         origin = _private_origin(validator, "perk", constraint.perk_name)
         if origin is not None:

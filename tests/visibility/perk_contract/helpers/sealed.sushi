@@ -1,0 +1,33 @@
+# The perk's own unit. `Sealed` is private, so the CONTRACT stays here. `Vault`
+# is public and `Ledger` is private; both implement the perk. The two extensions
+# constrain a method-level type parameter with the private perk AT HOME: one on
+# the private target, one on a builtin target. Neither target carries a marker
+# to promise with, so the leak rule has nothing to fence (visibility.md, S5).
+perk Sealed:
+    fn code() i32
+
+public struct Vault:
+    i32 seed
+
+struct Ledger:
+    i32 rows
+
+extend Vault with Sealed:
+    fn code() i32:
+        return self.seed
+
+extend Ledger with Sealed:
+    fn code() i32:
+        return self.rows
+
+extend Ledger stamp@(U: Sealed)(U key) i32:
+    return self.rows * 10 + key.code()
+
+extend i32 stamped@(U: Sealed)(U key) i32:
+    return self + key.code()
+
+public fn audit() i32:
+    let Ledger l = Ledger(4)
+    let Vault v = Vault(2)
+    let i32 base = 100
+    return Result.Ok(l.stamp(v) + base.stamped(v))

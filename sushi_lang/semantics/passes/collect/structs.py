@@ -14,8 +14,8 @@ from sushi_lang.semantics.generics.types import GenericStructType, TypeParameter
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_for_type_name,
+    record_declaration,
     reject_library_clash,
-    reject_private_perk_constraints,
 )
 
 from .utils import extract_type_param_names, note_first_declaration, reject_reference_in
@@ -129,6 +129,9 @@ class StructCollector:
             return
 
         name_span: Optional[Span] = getattr(struct, "name_span", None) or getattr(struct, "loc", None)
+        record_declaration(self.visibility, "struct", struct,
+                           unit_name=self.current_unit_name,
+                           filename=self.current_unit_file)
 
         type_params_raw = getattr(struct, "type_params", None)
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
@@ -197,10 +200,6 @@ class StructCollector:
                 else BoundedTypeParam(name=tp, constraints=[], loc=None)
                 for tp in type_params_raw
             )
-
-            reject_private_perk_constraints(
-                self.r, self.visibility, type_param_instances, name_span,
-                current_unit=self.current_unit_name, filename=self.current_unit_file)
 
             generic_struct = GenericStructType(
                 name=name,

@@ -1,0 +1,12 @@
+# CE3010, in the HELPER: the perk's own unit puts the private perk in the
+# constraint of an extension on a PUBLIC type. An extension is as visible as
+# its target (Ruling 2), so this is the leak rule, read from the target's
+# marker. The control for the cross-unit twin, which reads CE4011.
+# EXPECT_ERROR_CODE: CE3010
+
+use "helpers/leaky"
+
+fn main() i32:
+    let Safe s = Safe(3)
+    println("{s.unlock(s)}")
+    return Result.Ok(0)

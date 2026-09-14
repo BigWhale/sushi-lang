@@ -9,6 +9,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.ast import ConstDef, Program, VarDef
 from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.visibility import (
+    VisibilityTable, library_clash_for_storage_name, record_declaration)
 
 
 @dataclass
@@ -80,10 +82,10 @@ class ConstantCollector:
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
         self.current_unit_name: Optional[str] = None
-        # Which units came from a source library. A library clash is not this epic's to
-        # lift: the consumer cannot see the library's private, and CE3011 for a function
-        # narrows at the same phase as this would (section 7's table).
+        # Which units came from a source library, and who declared what: a consumer's
+        # constant of a name a library EXPORTS is the duplicate CE0105 answers.
         self.library_units: Set[str] = set()
+        self.visibility: Optional[VisibilityTable] = None
         self.constants = constants
 
     def collect(self, root: Program) -> None:
@@ -94,23 +96,20 @@ class ConstantCollector:
                 if isinstance(const, ConstDef):
                     self._collect_constant_def(const)
 
-    def _collides_with_a_library_export(self, prev: ConstSig, sig: ConstSig) -> bool:
-        """Is either declaration a name a source library EXPORTS?
+    def _shadows_a_library_export(self, name: str) -> bool:
+        """Is this a name a source library EXPORTS?
 
         A library's PUBLIC constant is a name the consumer can see and read, so taking
         it again is a duplicate. Its PRIVATE one is not: the consumer cannot see it, and
         section 9 gives each declaration its own `<unit>$<name>` global exactly as it
         does for a function -- the shape decision F made legal there and left refused
-        here (#507).
-
-        Both directions, because nothing fixes which of the two units is collected
-        first, and each direction reads the LIBRARY declaration's own marker.
+        here (#507). A library unit comes before its consumer in the compilation order,
+        so the library's record is the one the table holds when the consumer asks.
         """
-        if prev.unit_name in self.library_units:
-            return bool(prev.is_public)
-        if sig.unit_name in self.library_units:
-            return bool(sig.is_public)
-        return False
+        clash = library_clash_for_storage_name(
+            self.visibility, name,
+            current_unit=self.current_unit_name, library_units=self.library_units)
+        return clash is not None and clash.is_public
 
     def _collect_constant_def(self, const: ConstDef) -> None:
         """Collect a single constant definition."""
@@ -121,6 +120,9 @@ class ConstantCollector:
         name_span: Optional[Span] = getattr(const, "name_span", None) or getattr(
             const, "loc", None
         )
+        record_declaration(
+            self.visibility, "variable" if isinstance(const, VarDef) else "constant",
+            const, unit_name=self.current_unit_name, filename=self.current_unit_file)
         const_type: Optional[Type] = getattr(const, "ty", None)
         type_span: Optional[Span] = getattr(const, "type_span", None) or name_span
 
@@ -147,7 +149,7 @@ class ConstantCollector:
             prev_unit = getattr(prev, "unit_name", None)
             if (prev_unit is None
                     or prev_unit == self.current_unit_name
-                    or self._collides_with_a_library_export(prev, sig)):
+                    or self._shadows_a_library_export(name)):
                 er.emit_with(self.r, ERR.CE0105, name_span, name=name) \
                     .note("first defined here", prev.name_span, prev.filename).emit()
                 return

@@ -22,8 +22,8 @@ from sushi_lang.semantics.generics.types import GenericEnumType, TypeParameter
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_for_type_name,
+    record_declaration,
     reject_library_clash,
-    reject_private_perk_constraints,
 )
 
 from .utils import extract_type_param_names, note_first_declaration, reject_reference_in
@@ -288,6 +288,9 @@ class EnumCollector:
             return
 
         name_span: Optional[Span] = getattr(enum, "name_span", None) or getattr(enum, "loc", None)
+        record_declaration(self.visibility, "enum", enum,
+                           unit_name=self.current_unit_name,
+                           filename=self.current_unit_file)
 
         # Check if this enum has type parameters (e.g., enum Result<T>:)
         # Note: In the collect pass, type_params is always None -- the grammar has no syntax for it yet
@@ -375,10 +378,6 @@ class EnumCollector:
                 else BoundedTypeParam(name=tp, constraints=[], loc=None)
                 for tp in type_params_raw
             )
-
-            reject_private_perk_constraints(
-                self.r, self.visibility, type_param_instances, name_span,
-                current_unit=self.current_unit_name, filename=self.current_unit_file)
 
             generic_enum = GenericEnumType(
                 name=name,
