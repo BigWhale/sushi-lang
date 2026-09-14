@@ -779,6 +779,13 @@ class ConstantEvaluator:
             return None
 
         if self._is_integer_type(left.semantic_type):
+            # The machine divides first, so the remainder overflows exactly where the
+            # quotient does: the smallest signed value with -1. LLVM calls that srem
+            # undefined and x86 traps on it, so the quotient is what is checked here
+            # (compile-time-evaluation.md, Ruling 1).
+            quotient = _truncated_quotient(left.value, right.value)
+            if not fits_integer_type(quotient, left.semantic_type):
+                return self._checked(node, node.op, quotient, left.semantic_type, span)
             result = _truncated_remainder(left.value, right.value)
         else:
             result = math.fmod(left.value, right.value)
