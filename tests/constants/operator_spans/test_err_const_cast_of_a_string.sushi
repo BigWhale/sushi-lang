@@ -1,0 +1,7 @@
+# EXPECT_ERROR_CODE: CE0111
+# A string has no cast to an integer, in a constant.
+
+const i32 X = "a" as i32
+
+fn main() i32:
+    return Result.Ok(0)

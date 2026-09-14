@@ -1,0 +1,7 @@
+# EXPECT_ERROR_CODE: CE0110
+# An equality in a constant refuses two operands of different types.
+
+const bool X = 1 == "a"
+
+fn main() i32:
+    return Result.Ok(0)
