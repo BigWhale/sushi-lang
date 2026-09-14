@@ -19,7 +19,7 @@ def _synthesized() -> EnumTable:
     from sushi_lang.semantics.passes.collect import (
         GenericEnumTable, GenericStructTable, StructTable)
     collector = EnumCollector(Reporter(), EnumTable(), GenericEnumTable(), StructTable(),
-                              GenericStructTable(), set())
+                              GenericStructTable())
     collector.register_predefined_enums()
     return collector.enums
 
