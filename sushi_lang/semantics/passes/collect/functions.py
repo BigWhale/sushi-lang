@@ -38,7 +38,6 @@ from sushi_lang.semantics.generics.types import (
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_origin,
-    reject_private_perk_constraints,
 )
 
 from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
@@ -780,10 +779,6 @@ class FunctionCollector:
             else BoundedTypeParam(name=tp, constraints=[], loc=None)
             for tp in type_params_raw
         )
-
-        reject_private_perk_constraints(
-            self.r, self.visibility, type_param_instances, name_span,
-            current_unit=self.current_unit_name, filename=self.current_unit_file)
 
         params = []
         param_names = set()

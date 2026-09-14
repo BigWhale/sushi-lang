@@ -40,7 +40,8 @@ from .perks import (
     PerkTable)
 from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
-from sushi_lang.semantics.visibility import VisibilityTable, record_declarations
+from sushi_lang.semantics.visibility import (
+    VisibilityTable, record_declarations, reject_private_perk_constraints)
 
 __all__ = [
     'CollectorPass',
@@ -206,6 +207,13 @@ class CollectorPass:
         self.function_collector.collect_extensions(root)
         self.function_collector.register_stdlib_functions(root)
         self.external_collector.collect(root)
+
+        # The use-site half of the perk-contract rule, once per unit off the one walk
+        # over constraints. A perk declared next door is in the table already, and a
+        # unit's own perks are permitted whatever their marker.
+        reject_private_perk_constraints(
+            self.r, self.visibility, root,
+            current_unit=unit_name, filename=unit_file)
 
         record_declarations(self.visibility, root,
                             unit_name=unit_name, filename=unit_file)

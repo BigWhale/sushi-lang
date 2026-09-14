@@ -371,21 +371,25 @@ def reject_private_perk_contract(
 def reject_private_perk_constraints(
     reporter: Reporter,
     table: Optional[VisibilityTable],
-    type_params: Any,
-    loc: Any,
+    program: Any,
     *,
     current_unit: Optional[str],
     filename: Optional[str],
 ) -> None:
-    """Every constraint on every type parameter of one declaration."""
-    for param in type_params or ():
-        for constraint in getattr(param, "constraints", None) or ():
-            if isinstance(constraint, str):
-                reject_private_perk_contract(
-                    reporter, table, constraint,
-                    getattr(param, "loc", None) or loc,
-                    action="constrain a type parameter with",
-                    current_unit=current_unit, filename=filename)
+    """Every constraint one unit writes, against the use-site rule (CE4011).
+
+    Driven by `signature_constraints()`, the one walk over a unit's constraint names, so
+    the four kinds that carry a type parameter -- a function, a struct, an enum and an
+    extension -- meet one call and not one call site each. Three copied call sites left
+    the extension out, and its constraint fell through to the leak rule (#692).
+    """
+    from sushi_lang.semantics.ast_walk import signature_constraints
+
+    for site in signature_constraints(program):
+        reject_private_perk_contract(
+            reporter, table, site.perk_name, site.span,
+            action="constrain a type parameter with",
+            current_unit=current_unit, filename=filename)
 
 
 def record_declarations(
