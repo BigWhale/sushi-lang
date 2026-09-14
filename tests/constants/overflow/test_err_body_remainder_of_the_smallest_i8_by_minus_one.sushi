@@ -1,0 +1,7 @@
+# EXPECT_ERROR_CODE: CE2077
+# A literal pair in a body is read by the same evaluator, so the same case is refused.
+
+fn main() i32:
+    let i8 left = -128 % -1
+    println(left)
+    return Result.Ok(0)
