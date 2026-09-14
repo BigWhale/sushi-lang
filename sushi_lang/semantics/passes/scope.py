@@ -11,6 +11,7 @@ from sushi_lang.semantics.ast import (
     DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, Param
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
+from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.name_ladder import BareName, classify
 
 if TYPE_CHECKING:
@@ -131,12 +132,16 @@ class ScopeAnalyzer:
         """True if `name` names a namespace here and is not shadowed by a local."""
         return self.is_namespace(name) and not self._is_bound_local(name)
 
+    def _const_sig(self, name: str):
+        """What a constant or a unit `var` of this name means INSIDE this unit."""
+        return self.constants.lookup(name, self.namespaces.scope.unit,
+                                     self.namespaces.scope)
+
     def _is_unit_variable(self, name: str) -> bool:
         """True if `name` is a `var` this unit can write, and no local shadows it."""
         if self._is_bound_local(name):
             return False
-        sig = self.constants.lookup(name, self.namespaces.scope.unit,
-                                    self.namespaces.scope)
+        sig = self._const_sig(name)
         return sig is not None and sig.is_var
 
     def _names_a_type(self, name: str) -> bool:
@@ -295,8 +300,6 @@ class ScopeAnalyzer:
                 self._record_capture(name, i, usage_span)
                 return
 
-        if self._is_unit_variable(name):
-            return  # storage with an address: borrowable like a local (unit-storage.md)
         rung = self._rung_of(name)
         if rung is BareName.TYPE:
             # The same ladder the value position walks (#600). A type name reached
@@ -306,7 +309,10 @@ class ScopeAnalyzer:
         elif rung is BareName.NOTHING:
             self.err.emit(er.ERR.CE1001, usage_span, name=name)
         else:
-            self.err.emit(er.ERR.CE2400, usage_span, name=name)
+            # A unit `var` is storage with an address and passes; a constant, a function
+            # value, a stdlib constant and a namespace all have no frame slot.
+            reject_borrow_of_constant(self.err, name, self._const_sig(name),
+                                      usage_span, no_frame_slot=True)
 
     def _record_capture(self, name: str, resolved_index: int, span: Optional[Span]) -> None:
         """Record `name` as a capture for every enclosing lambda it is free in."""
@@ -492,10 +498,10 @@ class ScopeAnalyzer:
             while isinstance(root, (_DotCall, _MethodCall)):
                 root = root.receiver
             if (isinstance(root, Name)
-                    and self._rung_of(root.id) in _NOT_A_POKE_CONTAINER
-                    and not self._is_unit_variable(root.id)):
-                self.err.emit(er.ERR.CE2400, stmt.item_borrow_span or stmt.loc,
-                              name=root.id)
+                    and self._rung_of(root.id) in _NOT_A_POKE_CONTAINER):
+                reject_borrow_of_constant(
+                    self.err, root.id, self._const_sig(root.id),
+                    stmt.item_borrow_span or stmt.loc, no_frame_slot=True)
 
         self._push_scope()
         self._declare_variable(stmt.item_name, stmt.item_name_span)

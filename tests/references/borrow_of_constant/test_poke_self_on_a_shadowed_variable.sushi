@@ -1,7 +1,7 @@
 # A unit `var` is storage in the data segment, so a `poke self` method reaches it. The
 # unit next door declares a CONSTANT of this name and is collected first, so a reader
 # that asks the FLAT constant table finds a constant where this unit has storage.
-# EXPECT_STDOUT_EXACT: 1
+# EXPECT_STDOUT_EXACT: "1\n"
 
 use "helpers/rival_names"
 

@@ -52,7 +52,10 @@ def _names_an_unshadowed_constant(expr: Any, validator: Any) -> Any:
     name = expr.id
     if name in getattr(validator, 'variable_types', {}):
         return None
-    sig = validator.const_table.by_name.get(name)
+    # SCOPED, never the flat view: `by_name` holds one record per name over the whole
+    # program and is first-wins, so it answered with another unit's declaration of the
+    # same name -- a write to this unit's own constant was let through (#685).
+    sig = validator.const_sig(name)
     # A unit variable is storage with an address, so a write reaches it (unit-storage.md).
     return None if sig is None or sig.is_var else name
 

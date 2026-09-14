@@ -418,6 +418,7 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
     construction -- the same rule ruling R11 states for a match scrutinee.
     """
     from sushi_lang.semantics.ast import DotCall, MemberAccess
+    from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 
     root = call.receiver
     while isinstance(root, (MethodCall, DotCall, MemberAccess)):
@@ -429,11 +430,12 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
         return
     if root.id in validator.variable_types:
         return
-    sig = validator.const_table.by_name.get(root.id)
     # A unit variable has an address for a `poke self`; whether a `nom self` may take
-    # it is the borrow pass's rule (CE2436), not a question of storage.
-    if sig is not None and not sig.is_var:
-        er.emit(validator.reporter, er.ERR.CE2400, root.loc, name=root.id)
+    # it is the borrow pass's rule (CE2436), not a question of storage. The lookup is
+    # SCOPED: the flat view is first-wins over the whole program, so it answered with
+    # another unit's declaration of the same name (#685).
+    reject_borrow_of_constant(validator.err, root.id, validator.const_sig(root.id),
+                              root.loc)
 
 
 def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:

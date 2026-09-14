@@ -1,0 +1,13 @@
+# An indexed assignment to a constant reaches read-only memory. The unit next door
+# declares a `var` of this name and is collected first, so a reader that asks the FLAT
+# constant table finds storage where this unit has a constant.
+# EXPECT_ERROR_CODE: CE2096
+
+use "helpers/rival_table"
+
+const i32[3] SLOTS = [1, 2, 3]
+
+fn main() i32:
+    SLOTS[0] := 9
+    println("{SLOTS[0]}")
+    return Result.Ok(0)
