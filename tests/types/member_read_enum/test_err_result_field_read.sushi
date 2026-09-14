@@ -1,0 +1,14 @@
+# A call answers a `Result@(T, E)`, and a field of the payload is not a field of the
+# wrapper. This shape used to answer CE0067 (#666).
+# EXPECT_ERROR_CODE: CE2106
+struct Point:
+    i32 x
+    i32 y
+
+fn make() Point:
+    return Result.Ok(Point(11, 22))
+
+fn main() i32:
+    let i32 v = make().x
+    println("{v}")
+    return Result.Ok(0)

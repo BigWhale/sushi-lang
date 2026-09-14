@@ -310,6 +310,26 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A member read on a `Maybe@(T)` printed the enum tag** (#666). `pts.get(0).x`
+  compiled clean and answered 0 where the element held 11. The read reached the back
+  end, which unwrapped the receiver to its payload struct and read field 0 -- the tag --
+  and no pass said anything about it. `tests/array/test_struct_array.sushi` had frozen
+  the wrong number in an `EXPECT_STDOUT_EXACT`.
+
+  #661 gave every fieldless receiver a located CE2106 and left the ENUM receiver alone,
+  because the answer was a scope decision. It is settled now: an enum carries variants,
+  not fields, so every name behind an enum value's dot is **CE2106**, at the read. A
+  `Result@(T, E)` and a `Maybe@(T)` are ordinary interned enums and read the same rule;
+  the help says to take the value first, with `??`, `.realise(default)` or `match`, and
+  a user enum is told to read a payload with `match`. There is no implicit unwrap: no
+  other wrapper in the language has one, it reads against the rule that a condition is a
+  bool and nothing else (#522/#532), and the `None` arm has no answer.
+
+  The refusal also closes the three tier-1 codes the read used to reach: CE0031 off a
+  name, CE0029 through a wrapper the back end had already unwrapped, CE0067 off a call.
+  Each rendered with no file, no line and no caret, under the note that says the fault is
+  a bug in Sushi and not in your program.
+
 - **A type name where a value belongs reached the emitter and blamed the compiler**
   (#600). `let i32 x = Color`, with `Color` an enum of the program, passed all eighteen
   semantic passes and died in the LLVM emitter as CE0055, "unknown variable or

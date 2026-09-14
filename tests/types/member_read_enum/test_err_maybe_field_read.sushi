@@ -1,0 +1,12 @@
+# A member read on a `Maybe@(T)` used to compile clean and print the enum TAG: the
+# backend unwrapped the receiver to its payload struct and read field 0 (#666).
+# An enum carries variants, not fields.
+# EXPECT_ERROR_CODE: CE2106
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point[] pts = from([Point(11, 22), Point(33, 44)])
+    println("{pts.get(0).x}")
+    return Result.Ok(0)

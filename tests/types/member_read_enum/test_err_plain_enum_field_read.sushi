@@ -1,0 +1,12 @@
+# A user enum reaches the same rule. It used to answer CE0031 -- tier 1, no file,
+# no line, and the blame on the wrong person for what is a typo (#666).
+# EXPECT_ERROR_CODE: CE2106
+enum Sign:
+    Plus
+    Minus
+
+fn main() i32:
+    let Sign s = Sign.Plus
+    let i32 v = s.nope
+    println("{v}")
+    return Result.Ok(0)

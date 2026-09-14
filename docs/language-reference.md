@@ -1517,6 +1517,11 @@ whose dot holds no such member is `CE2102`, and a VALUE whose type declares no s
 is `CE2106` -- which is also what a method read without its parentheses answers, because a
 bound-method value is deferred.
 
+An ENUM value declares no field at all, so every name behind its dot is `CE2106` too. That
+covers `Result@(T, E)` and `Maybe@(T)`, which are ordinary enums: `pts.get(0).x` is
+refused, and the value is taken first with `??`, `.realise(default)` or `match`. There is
+no implicit unwrap, and a payload is read by a pattern.
+
 `List.new()`, `List.with_capacity()`, `HashMap.new()`, `Own.alloc()` and
 `f64.from_bits()` are the built-in statics — the same rule, on types the compiler
 declares. The design record is `docs/design/method-resolution.md`.
