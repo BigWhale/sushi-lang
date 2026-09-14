@@ -1,0 +1,12 @@
+# A library's PUBLIC enum is the plain duplicate, CE2046, for the reason a
+# public struct is CE0004: one name is one shape, and the consumer can see it.
+# EXPECT_ERROR_CODE: CE2046
+
+use <lib/shadow_kinds_lib>
+
+enum Mode:
+    Idle
+
+fn main() i32:
+    println("{touch().realise(0)}")
+    return Result.Ok(0)

@@ -1,0 +1,11 @@
+# The other cross-kind cell: a consumer `var` takes the name of a library's
+# public constant. The same table, the same CE0105.
+# EXPECT_ERROR_CODE: CE0105
+
+use <lib/shadow_kinds_lib>
+
+var i32 LIMIT = 1
+
+fn main() i32:
+    println("{LIMIT} {touch().realise(0)}")
+    return Result.Ok(0)
