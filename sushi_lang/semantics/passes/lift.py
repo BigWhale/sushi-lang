@@ -1,11 +1,11 @@
 """Lambda-lifting pass: turn each lambda literal into a top-level function + env."""
 from __future__ import annotations
-import dataclasses
 from typing import Callable, List, Optional
 
 from sushi_lang.semantics.ast import (
     Node, FuncDef, Lambda, Block, Return, Name, MemberAccess, Param, DotCall,
 )
+from sushi_lang.semantics.ast_walk import node_fields, walk_nodes
 from sushi_lang.semantics.typesys import StructType, ReferenceType, BorrowMode
 
 ENV_PARAM_NAME = "__closure_env"
@@ -67,17 +67,19 @@ class LambdaLifter:
 
     def _walk(self, node) -> None:
         """Find and lift Lambda nodes anywhere under `node` (not into their bodies)."""
+        walk_nodes(node, self._lift_if_lambda)
+
+    def _lift_if_lambda(self, node: Node) -> bool:
+        """Lift a lambda where the walk meets it, and stop at its body.
+
+        The body is walked again from `_lift`, AFTER the annotate hook typed it: a
+        nested lambda lifted before that carried no parameter types and no captures
+        (#629).
+        """
         if isinstance(node, Lambda):
             self._lift(node)
-            return
-        # `If.arms` holds plain (cond, Block) tuples, so tuples walk too (#400).
-        if isinstance(node, (list, tuple)):
-            for item in node:
-                self._walk(item)
-            return
-        if isinstance(node, Node):
-            for f in dataclasses.fields(node):
-                self._walk(getattr(node, f.name))
+            return False
+        return True
 
     def _lift(self, lam: Lambda) -> None:
         # The counter is per lifter instance and the tables are global, so a
@@ -153,35 +155,42 @@ class LambdaLifter:
 
 
 def _rewrite_captures(node, cap_names: set) -> None:
-    """Replace `Name(cap)` reads with `MemberAccess(Name(env), cap)` in-place."""
-    if isinstance(node, Lambda):
-        return
-    if isinstance(node, list):
-        for i, item in enumerate(node):
-            if isinstance(item, Name) and item.id in cap_names:
-                node[i] = _env_access(item)
-            elif isinstance(item, tuple):
-                # An `If.arms` element. A captured Name can BE a tuple element
-                # (the arm's condition), and a tuple cannot be mutated in
-                # place -- rebuild it into the list slot (#400).
-                rebuilt = []
-                for x in item:
-                    if isinstance(x, Name) and x.id in cap_names:
-                        rebuilt.append(_env_access(x))
-                    else:
-                        _rewrite_captures(x, cap_names)
-                        rebuilt.append(x)
-                node[i] = tuple(rebuilt)
-            else:
-                _rewrite_captures(item, cap_names)
-        return
-    if isinstance(node, Node):
-        for f in dataclasses.fields(node):
-            val = getattr(node, f.name)
-            if isinstance(val, Name) and val.id in cap_names:
-                setattr(node, f.name, _env_access(val))
-            elif isinstance(val, list) or isinstance(val, Node):
-                _rewrite_captures(val, cap_names)
+    """Replace `Name(cap)` reads with `MemberAccess(Name(env), cap)` in-place.
+
+    A nested lambda is left alone: its own captures are rewritten against its own
+    environment when it is lifted.
+    """
+    def rewrite_the_slots_of(owner: Node) -> bool:
+        if isinstance(owner, Lambda):
+            return False
+        for name, value in node_fields(owner):
+            rebuilt = _rewrite_slot(value, cap_names)
+            if rebuilt is not value:
+                setattr(owner, name, rebuilt)
+        return True
+
+    walk_nodes(node, rewrite_the_slots_of)
+
+
+def _rewrite_slot(value, cap_names: set):
+    """The new value of one field slot. A captured Name becomes a read off the env.
+
+    A list is rewritten in place; a tuple cannot be, so it is rebuilt -- an `If.arms`
+    element is a (cond, Block) tuple and the condition alone can BE a captured name
+    (#400). The original is answered unchanged when nothing moved, so a slot that holds
+    no capture keeps the object it had.
+    """
+    if isinstance(value, Name) and value.id in cap_names:
+        return _env_access(value)
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            value[index] = _rewrite_slot(item, cap_names)
+        return value
+    if isinstance(value, tuple):
+        rebuilt = tuple(_rewrite_slot(item, cap_names) for item in value)
+        if any(new is not old for new, old in zip(rebuilt, value, strict=True)):
+            return rebuilt
+    return value
 
 
 def _env_access(name_node: Name) -> MemberAccess:
