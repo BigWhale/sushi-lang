@@ -433,9 +433,8 @@ class SemanticAnalyzer:
         resolve_enum_variant_types(self.structs, self.enums)
         resolve_constant_types(self.constants, self.structs, self.enums)
 
-        # finite-types: reject types that contain themselves by value (CE2095). Must precede
-        # derive, whose topological sort would report a cycle as an internal error, and must
-        # stop on failure -- every later pass assumes finitely-sized types.
+        # finite-types: reject types that contain themselves by value (CE2095), and stop
+        # on failure -- every later pass assumes finitely-sized types.
         from sushi_lang.semantics.passes.finite_types import check_infinite_size_types
         if check_infinite_size_types(self.structs, self.enums, self.reporter):
             return
@@ -448,7 +447,7 @@ class SemanticAnalyzer:
         )
         register_all_struct_hashes(self.structs, self.tables.derived_methods)
 
-        register_all_enum_hashes(self.enums, self.tables.derived_methods, self.reporter)
+        register_all_enum_hashes(self.enums, self.tables.derived_methods)
 
         register_all_array_hashes(self.structs, self.enums, self.tables.derived_methods)
 
@@ -720,12 +719,13 @@ class SemanticAnalyzer:
         self._intern_generic_type_refs(monomorphizer, types)
 
     def _intern_generic_type_refs(self, monomorphizer, types) -> None:
-        """Monomorphize, resolve and derive every NEW instantiation `types` name.
+        """Monomorphize, resolve, size-check and derive every NEW instantiation `types` name.
 
         The one late-interning seam: the typecheck pass reaches it through
         `tables.intern_generic_ref` when a call site solves a method-level type
         argument, and the drain reaches it for the copies' bodies. The resolve and
-        derive re-runs are idempotent walks over the tables.
+        derive re-runs are idempotent walks over the tables; the finite-types re-run
+        walks from the new names alone (#677).
         """
         from sushi_lang.semantics.generics.extension_targets import instantiation_key
         from sushi_lang.semantics.generics.types import GenericTypeRef
@@ -757,6 +757,9 @@ class SemanticAnalyzer:
         if not struct_insts and not enum_insts:
             return
 
+        from sushi_lang.semantics.passes.finite_types import (
+            check_infinite_size_types, table_marks)
+        marks = table_marks(self.structs, self.enums)
         monomorphizer.monomorphize_all(self.generic_enums.by_name, enum_insts)
         monomorphizer.monomorphize_all_structs(self.generic_structs.by_name, struct_insts)
 
@@ -765,11 +768,15 @@ class SemanticAnalyzer:
         resolve_struct_field_types(self.structs, self.enums)
         resolve_enum_variant_types(self.structs, self.enums)
 
+        # A late-solved instance can hold itself by value, and the whole-program run of
+        # finite-types is over: walk it again from the new names alone (#677).
+        check_infinite_size_types(self.structs, self.enums, self.reporter, since=marks)
+
         from sushi_lang.semantics.passes.derive import (
             register_all_array_hashes, register_all_clones,
             register_all_enum_hashes, register_all_struct_hashes)
         register_all_struct_hashes(self.structs, self.tables.derived_methods)
-        register_all_enum_hashes(self.enums, self.tables.derived_methods, self.reporter)
+        register_all_enum_hashes(self.enums, self.tables.derived_methods)
         register_all_array_hashes(self.structs, self.enums, self.tables.derived_methods)
         register_all_clones(self.structs, self.enums, self.tables.derived_methods)
 

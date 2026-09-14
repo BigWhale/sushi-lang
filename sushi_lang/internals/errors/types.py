@@ -210,9 +210,13 @@ _add(ErrorMessage("CE2051", Severity.ERROR,
     "{message}",
     Category.TYPE, "Struct hashing limitation or error."))
 
-_add(ErrorMessage("CE2052", Severity.ERROR,
-    "recursive enum '{name}' requires Own@(T) indirection (example: enum IntList: Cons(i32, Own@(IntList)))",
-    Category.TYPE, "Direct recursion in enums without Own@(T) creates infinite size types."))
+# CE2052 ("recursive enum '{name}' requires Own@(T) indirection") was RETIRED by the ruling
+# on #677 (2026-09-14). The derive pass found an enum cycle in its topological sort and said
+# so with a file name and no caret, once per member, and once more for every instance a call
+# site solved late, because that sort re-ran per intern. A struct cycle was one CE2095 with
+# the chain and the span. One fault class has one code now: the finite-types pass owns every
+# inline cycle -- a struct field, a fixed-array element, an enum payload -- and an enum cycle
+# reads CE2095 at its first member. The number is not reused.
 
 # List@(T) method errors
 _add(ErrorMessage("CE2053", Severity.ERROR,

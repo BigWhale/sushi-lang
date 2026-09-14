@@ -40,8 +40,7 @@ class TypeMonomorphizer:
 
             # An abstract instantiation still names an enclosing template's type params, so
             # there is nothing to monomorphize until a call site binds them. A bogus concrete
-            # enum strands the topological sort on a type never interned, misreported as a
-            # recursive enum (CE2052).
+            # enum would sit in the table as a type that was never built.
             if self._is_abstract(type_args):
                 continue
 
@@ -255,8 +254,7 @@ class TypeMonomorphizer:
         a `Maybe@(B)` payload or a `Pair@(i32, B)` return is substituted HERE, and the
         `Box<string>` that comes out of it may be named nowhere else in the program. Left
         in the substitutor's cache alone it reached the derive pass through the outer
-        instance's field and was reported as a cycle (CE0128), a recursive enum (CE2052)
-        or a backend KeyError, depending on the shape. Publishing at creation is the
+        instance's field as a type no table held. Publishing at creation is the
         worklist: the analyzer reads the tables back for the extension and perk copies.
         An abstract instance -- a method-level `U` still unbound while a generic-target
         template is cut per receiver -- is not a type and stays out.
