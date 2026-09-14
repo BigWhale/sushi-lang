@@ -1,0 +1,14 @@
+# An enum whose payload is a FIXED array of a struct that holds the enum:
+# E -> S[2] -> S -> E. The array hop is inline, so the cycle is by value
+# throughout, and it is one CE2095 (#677).
+# EXPECT_ERROR_CODE: CE2095
+
+enum E:
+    V(S[2])
+
+struct S:
+    i32 value
+    E e
+
+fn main() i32:
+    return Result.Ok(0)

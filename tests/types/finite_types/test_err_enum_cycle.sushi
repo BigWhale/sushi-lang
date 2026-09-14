@@ -1,0 +1,14 @@
+# Two enums that hold each other by value. An enum payload is stored inline, so
+# sizeof(A) = tag + sizeof(B) and sizeof(B) = tag + sizeof(A): no finite size.
+# The finite-types pass owns this cycle as it owns the struct twin: one CE2095,
+# at the first member, with the chain A refers to B refers to A (#677).
+# EXPECT_ERROR_CODE: CE2095
+
+enum A:
+    X(B)
+
+enum B:
+    Y(A)
+
+fn main() i32:
+    return Result.Ok(0)

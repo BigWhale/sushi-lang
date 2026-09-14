@@ -1,0 +1,12 @@
+# A FIXED array of self in an enum payload is by value: `E[2]` stores two
+# inline `E`, so sizeof(E) = tag + 2 * sizeof(E). This shape compiled with exit
+# 0 before #677: the finite-types pass refused a pure enum cycle on purpose, and
+# the derive pass followed only a bare enum payload, never an array element.
+# EXPECT_ERROR_CODE: CE2095
+
+enum E:
+    V(E[2])
+    Leaf(i32)
+
+fn main() i32:
+    return Result.Ok(0)
