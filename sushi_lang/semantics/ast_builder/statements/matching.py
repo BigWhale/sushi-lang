@@ -159,13 +159,14 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> P
     bindings: List[Union[str, Pattern]] = []
     pattern_list_tree = first_tree(t.children, "pattern_list")
     if pattern_list_tree is not None:
+        # `pattern_list: pattern_item ("," pattern_item)*` and `pattern_item` carries no
+        # `?`, so every child is a Tree -- a `pattern_item`, or one of the two aliases
+        # the marked forms rename it to. A fourth shape is grammar/builder drift and is
+        # an ICE with a location: a binding dropped without a word makes
+        # `Pattern.bindings` shorter than the payload, and the arity check downstream
+        # then blames the count of the payload (#635 closed the twin of this).
         for child in pattern_list_tree.children:
-            if isinstance(child, Token):
-                if child.type == "NAME":
-                    bindings.append(str(child.value))
-                elif child.type == "UNDERSCORE":
-                    bindings.append("_")
-            elif isinstance(child, Tree):
+            if isinstance(child, Tree):
                 # A reference binding (`Variant(poke x)`): legal in a TOP-LEVEL pattern
                 # (#300 phase 3, on the aligned enum payload layout). In a NESTED pattern
                 # it stays CE2424: nested extraction walks through temporary copies, so a
@@ -205,6 +206,8 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> P
                     continue
                 if child.data == "pattern_item":
                     bindings.append(_read_pattern_item(child, ast_builder))
+                    continue
+            ice(child, "invalid pattern_list child")
 
     return Pattern(
         enum_name=str(enum_name_tok.value),

@@ -68,6 +68,8 @@ def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List
 
     bounded_params: List[BoundedTypeParam] = []
 
+    # `type_param_list: type_param ("," type_param)*` and `type_param` carries no `?`,
+    # so every child is a `type_param` Tree. A bare NAME Token never arrives here.
     for child in param_list_node.children:
         if isinstance(child, Tree) and child.data == "type_param":
             # A type pack (`...Ts`) is prefixed with an ELLIPSIS token; the NAME is
@@ -90,12 +92,6 @@ def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List
                 loc=span_of(child),
                 is_pack=is_pack,
                 constraint_namespaces=namespaces,
-            ))
-        elif isinstance(child, Token) and child.type == "NAME":
-            bounded_params.append(BoundedTypeParam(
-                name=str(child),
-                constraints=[],
-                loc=span_of(child)
             ))
 
     return bounded_params if bounded_params else None

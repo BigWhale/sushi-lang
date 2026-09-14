@@ -39,30 +39,18 @@ def expr_atom(atom: Tree | Token, ast_builder: 'ASTBuilder') -> Expr:
     if isinstance(atom, Tree) and atom.data == "f32_name":
         return Name(id="f32", loc=span_of(atom))
 
-    # Expression-body lambda literal (closure). Must precede the parenthesized-
-    # expression fallback below, which would otherwise grab the lambda's first Tree
-    # child (the params). Block-body lambdas are not atoms; they are built from the
-    # `let` statement (see statements/variables.py).
+    # Expression-body lambda literal (closure). Block-body lambdas are not atoms;
+    # they are built from the `let` statement (see statements/variables.py).
     if isinstance(atom, Tree) and atom.data == "lambda_expr":
         from sushi_lang.semantics.ast_builder.expressions import lambdas
         return lambdas.parse_lambda(atom, ast_builder)
 
-    # A parenthesized expression. `?atom` inlines `"(" expr ")"` to the expression
-    # itself, so what arrives here is an ordinary expression tree and the WHOLE node
-    # goes back to the dispatcher. Taking its first Tree child dropped the operator
-    # and every operand but the first (#496).
-    if atom.data != "atom":
-        return ast_builder._expr(atom)
-
-    inner = next((c for c in atom.children if isinstance(c, Tree)), None)
-    if inner is not None:
-        return ast_builder._expr(inner)
-
-    lone_tok = next((c for c in atom.children if isinstance(c, Token)), None)
-    if lone_tok is not None:
-        return literals.expr_from_token(lone_tok, ast_builder)
-
-    unhandled(atom)
+    # Everything else, a parenthesized expression included. `?atom` is inlined, so an
+    # `atom` Tree never arrives: what stands here is an ordinary expression tree and
+    # the WHOLE node goes back to the dispatcher, which names an unknown shape.
+    # Taking its first Tree child dropped the operator and every operand but the
+    # first (#496).
+    return ast_builder._expr(atom)
 
 
 def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:

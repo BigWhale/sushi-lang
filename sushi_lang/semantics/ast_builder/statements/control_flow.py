@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, List
 from lark import Tree
 from sushi_lang.semantics.ast import If, While, Block, Expr
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, find_tree_recursive
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import expr_and_block
 from sushi_lang.internals.report import span_of
 
@@ -21,8 +21,13 @@ def parse_if_stmt(node: Tree, ast_builder: 'ASTBuilder') -> If:
             c, b = expr_and_block(part)
             arms.append((ast_builder._expr(c), ast_builder._block(b)))
         elif isinstance(part, Tree) and part.data == "else_part":
-            eb = first_tree(part.children, "block") or find_tree_recursive(part, "block")
-            else_block = ast_builder._block(eb) if eb else None
+            # The direct child and nothing deeper. `else_part: ELSE ":" block` puts the
+            # block in a fixed position, and an `else_part`'s subtree holds the blocks of
+            # every nested `if` -- a recursive search reads one of those (#655).
+            eb = first_tree(part.children, "block")
+            if eb is None:
+                ice(part, "else_part without a block")
+            else_block = ast_builder._block(eb)
     return If(arms=arms, else_block=else_block, loc=span_of(node))
 
 

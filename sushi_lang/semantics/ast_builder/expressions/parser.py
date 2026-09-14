@@ -24,13 +24,15 @@ class ExpressionParser:
 
         tag = t.data
 
-        if tag == "expr":
-            return self.parse_expr(t.children[0])
+        # `?expr`, `?atom`, `?unary` and `?postfix` are inlined or aliased by the
+        # grammar, so a Tree under one of those four names never reaches the builder.
+        # Each arrives named after the alternative it matched -- `or_expr`, `neg`,
+        # `maybe_call` -- and a branch on the rule name itself is dead.
 
         if tag == "maybe_call":
             return chains.expr_call_chain(t, self.ast_builder)
 
-        if tag in {"neg", "not", "bitnot", "unary"}:
+        if tag in {"neg", "not", "bitnot"}:
             return operators.expr_unary(t, self.ast_builder)
 
         if tag == "borrow":
@@ -46,11 +48,5 @@ class ExpressionParser:
 
         if tag == "cast":
             return operators.handle_cast(t, self.ast_builder)
-
-        if tag == "atom":
-            return chains.expr_atom(t, self.ast_builder)
-
-        # `?postfix` is aliased to `maybe_call` in the grammar, so a `postfix` Tree
-        # never survives into the builder. The branch that handled it was dead.
 
         unhandled(t)
