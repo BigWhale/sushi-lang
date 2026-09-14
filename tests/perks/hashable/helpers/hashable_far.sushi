@@ -1,0 +1,4 @@
+# A plain struct another unit declares. The consumer constrains on `Hashable` and
+# writes no implementation for it.
+public struct Far:
+    i32 v

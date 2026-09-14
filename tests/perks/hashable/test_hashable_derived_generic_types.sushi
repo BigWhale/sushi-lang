@@ -1,0 +1,26 @@
+# A `Hashable` constraint on a generic struct and on a generic enum is satisfied by a
+# plain struct with no implementation: the derived hash is the answer (#696).
+# EXPECT_STDOUT_EXACT: "1\n2\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Container@(T: Hashable):
+    T value
+
+enum Slot@(T: Hashable):
+    Full(T)
+    Empty
+
+fn main() i32:
+    let Container@(Point) c = Container(Point(1, 2))
+    println(c.value.x)
+
+    let Slot@(Point) s = Slot.Full(Point(1, 2))
+    match s:
+        Slot.Full(p) -> println(p.y)
+        Slot.Empty -> println(0)
+
+    return Result.Ok(0)

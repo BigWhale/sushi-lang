@@ -1,0 +1,11 @@
+# The predefined perk is importless, like `Drop`: no unit declares it, so no alias
+# holds it (#696).
+# EXPECT_ERROR_CODE: CE2001
+
+use "helpers/hashable_far" as fp
+
+fn fingerprint@(T: fp.Hashable)(T value) u64:
+    return Result.Ok(value.hash())
+
+fn main() i32:
+    return Result.Ok(0)
