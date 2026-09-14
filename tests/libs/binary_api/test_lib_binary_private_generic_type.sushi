@@ -1,0 +1,12 @@
+# A private GENERIC struct that a BINARY library's public template names travels in
+# the manifest under two arms, `private_types` and `generic_structs`. The consumer
+# registers the template once and the monomorphized body finds it (#675).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "5\n"
+# EXPECT_NO_LEAKS
+use <lib/private_generic_type_lib>
+
+fn main() i32:
+    let i32 five = 5
+    println(boxed(nom five).realise(0))
+    return Result.Ok(0)

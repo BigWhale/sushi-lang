@@ -104,9 +104,11 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
 # `libraries` step reads at a consumer: a public struct and enum from the registry, a
 # concrete perk implementation, a constrained generic, a generic enum template and a
 # parameter pack. A source library reaches none of that code (#675).
+# private_generic_type_lib backs test_lib_binary_private_generic_type: a private generic
+# struct the closure ships under two manifest arms, which only the binary path reads.
 BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib", "const_lib", "var_bin_lib",
                        "mangle_closure_lib", "twolib_bin", "channel_bin_lib",
-                       "generic_perk_bin_lib", "binary_api_lib"}
+                       "generic_perk_bin_lib", "binary_api_lib", "private_generic_type_lib"}
 
 
 def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
