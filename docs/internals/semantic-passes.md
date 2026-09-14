@@ -16,7 +16,7 @@ order; this list mirrors it.
 | `collect` | constants, function headers, generic types, externals | `semantics/passes/collect/` |
 | `docs` | check each doc block against its declaration (CE7001-CE7008, CW7001), and its completeness under `--warn-missing-docs` (CW7002-CW7006) | `semantics/passes/docs.py` |
 | `externs` | extern signatures (CE5003), `CW5001`, the `ptr` unit gate (CE5009) | `semantics/passes/types/externals.py` |
-| `libraries` | register every symbol a `.slib` exports | `semantics/semantic_analyzer.py` |
+| `libraries` | register every symbol a `.slib` exports | `semantics/library_registration.py` |
 | `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds (CE3013, CE3014, CE3016, CW3004, CW3005) | `semantics/passes/namespaces.py` |
 | `ffi-clash` | reject an `unsafe external` that names a symbol this build defines (CE5013) | `semantics/passes/types/externals.py` |
 | `entrypoint` | `main()`'s signature and its `string[] args` | `semantics/semantic_analyzer.py` |
@@ -255,7 +255,7 @@ See `docs/ffi.md`.
 
 ## The `libraries` pass: library symbol registration
 
-**File:** `semantics/semantic_analyzer.py` (`_register_library_*`)
+**File:** `semantics/library_registration.py` (`LibraryRegistration`; the analyzer calls `seed_perks` ahead of the collect loop and `register` after it)
 
 Every symbol a linked `.slib` exports enters the same tables the consumer's own `collect`
 filled: structs, enums, functions, published constants, export-closure private helpers and

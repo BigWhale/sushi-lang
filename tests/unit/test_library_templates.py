@@ -5,18 +5,13 @@ from types import SimpleNamespace
 
 from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.internals.report import Reporter
-from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
+from sushi_lang.semantics.library_registration import LibraryRegistration
+from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.passes.collect import (
     CollectorPass,
     StructTable,
     EnumTable,
-    ExtensionTable,
-    GenericFunctionTable,
-    GenericStructTable,
-    GenericEnumTable,
-    PerkTable,
-    PerkImplementationTable,
 )
 from sushi_lang.compiler.pipeline import TEMPLATES_SCHEMA_VERSION
 from sushi_lang.semantics.library_templates import (
@@ -282,13 +277,11 @@ def test_closure_ships_private_helper_reference(tmp_path):
 
 
 
-def _analyzer_with_loaded_libraries(loaded: dict) -> SemanticAnalyzer:
-    """Build a bare analyzer wired with a fake library_linker + empty tables."""
+def _registration_with_loaded_libraries(loaded: dict) -> LibraryRegistration:
+    """Build a bare registration wired with a fake library linker + empty tables."""
     reporter = Reporter(source="", filename="consumer")
     fake_linker = SimpleNamespace(loaded_libraries=loaded)
-    analyzer = SemanticAnalyzer(reporter, filename="consumer", library_linker=fake_linker)
-    analyzer.generic_funcs = GenericFunctionTable()
-    return analyzer
+    return LibraryRegistration(reporter, SymbolTables(), fake_linker, None)
 
 
 def _templates_manifest(*records) -> dict:
@@ -306,15 +299,15 @@ def _templates_manifest(*records) -> dict:
 def test_register_library_generic_function_lands_in_table():
     """A templates record is rebuilt into generic_funcs with the flag set."""
     record = serialize_generic_function(parse_to_ast(MAX_SRC)[0].functions[0], MAX_SRC)
-    analyzer = _analyzer_with_loaded_libraries(
+    libraries = _registration_with_loaded_libraries(
         {"mathlib": _templates_manifest(record)}
     )
 
-    analyzer._register_library_generic_functions()
+    libraries._register_generic_functions(set())
 
-    assert "max" in analyzer.generic_funcs.by_name
-    assert "max" in analyzer.generic_funcs.order
-    gfd = analyzer.generic_funcs.by_name["max"]
+    assert "max" in libraries.tables.generic_funcs.by_name
+    assert "max" in libraries.tables.generic_funcs.order
+    gfd = libraries.tables.generic_funcs.by_name["max"]
     assert gfd.is_library_template is True
     # Constraints reconciled from the authoritative record.
     assert len(gfd.type_params) == 1
@@ -327,32 +320,32 @@ def test_register_library_generic_function_lands_in_table():
 def test_register_library_generic_function_respects_local_definition():
     """A locally-defined generic of the same name wins; the template is ignored."""
     record = serialize_generic_function(parse_to_ast(MAX_SRC)[0].functions[0], MAX_SRC)
-    analyzer = _analyzer_with_loaded_libraries(
+    libraries = _registration_with_loaded_libraries(
         {"mathlib": _templates_manifest(record)}
     )
     # Pre-seed a local definition (a different sentinel object).
     local = _collect_generic(parse_to_ast(MAX_SRC)[0], "max")
     local.is_library_template = False
-    analyzer.generic_funcs.by_name["max"] = local
-    analyzer.generic_funcs.order.append("max")
+    libraries.tables.generic_funcs.by_name["max"] = local
+    libraries.tables.generic_funcs.order.append("max")
 
-    analyzer._register_library_generic_functions()
+    libraries._register_generic_functions(set())
 
     # Still the local object, untouched (local definitions win).
-    assert analyzer.generic_funcs.by_name["max"] is local
-    assert analyzer.generic_funcs.by_name["max"].is_library_template is False
-    assert analyzer.generic_funcs.order.count("max") == 1
+    assert libraries.tables.generic_funcs.by_name["max"] is local
+    assert libraries.tables.generic_funcs.by_name["max"].is_library_template is False
+    assert libraries.tables.generic_funcs.order.count("max") == 1
 
 
 def test_register_library_generic_function_guards_missing_templates():
     """A manifest without a templates section registers nothing and does not crash."""
-    analyzer = _analyzer_with_loaded_libraries(
+    libraries = _registration_with_loaded_libraries(
         {"mathlib": {"library_name": "mathlib"}}
     )
 
-    analyzer._register_library_generic_functions()
+    libraries._register_generic_functions(set())
 
-    assert analyzer.generic_funcs.by_name == {}
+    assert libraries.tables.generic_funcs.by_name == {}
 
 
 # Phase 2 Step A: perk DEFINITION shipping (definitions only, no impls).
@@ -458,13 +451,13 @@ def _manifest_with_perks(*perk_records) -> dict:
 def test_seed_library_perks_lands_in_table():
     """A shipped perk record is rebuilt into a perk table."""
     record = serialize_perk(parse_to_ast(PERK_SRC)[0].perks[0], PERK_SRC)
-    analyzer = _analyzer_with_loaded_libraries(
+    libraries = _registration_with_loaded_libraries(
         {"mathlib": _manifest_with_perks(record)}
     )
     from sushi_lang.semantics.passes.collect import PerkTable
     table = PerkTable()
 
-    analyzer._seed_library_perks(table)
+    libraries.seed_perks(table)
 
     assert "Ord" in table.by_name
     assert "Ord" in table.order
@@ -474,7 +467,7 @@ def test_seed_library_perks_lands_in_table():
 def test_seed_library_perks_respects_local_definition():
     """A locally-defined perk of the same name wins; the shipped one is ignored."""
     record = serialize_perk(parse_to_ast(PERK_SRC)[0].perks[0], PERK_SRC)
-    analyzer = _analyzer_with_loaded_libraries(
+    libraries = _registration_with_loaded_libraries(
         {"mathlib": _manifest_with_perks(record)}
     )
     from sushi_lang.semantics.passes.collect import PerkTable
@@ -483,7 +476,7 @@ def test_seed_library_perks_respects_local_definition():
     table.by_name["Ord"] = local
     table.order.append("Ord")
 
-    analyzer._seed_library_perks(table)
+    libraries.seed_perks(table)
 
     assert table.by_name["Ord"] is local
     assert table.order.count("Ord") == 1
@@ -491,13 +484,13 @@ def test_seed_library_perks_respects_local_definition():
 
 def test_seed_library_perks_guards_missing_templates():
     """A manifest without a templates section seeds nothing and does not crash."""
-    analyzer = _analyzer_with_loaded_libraries(
+    libraries = _registration_with_loaded_libraries(
         {"mathlib": {"library_name": "mathlib"}}
     )
     from sushi_lang.semantics.passes.collect import PerkTable
     table = PerkTable()
 
-    analyzer._seed_library_perks(table)
+    libraries.seed_perks(table)
 
     assert table.by_name == {}
 
@@ -646,52 +639,49 @@ def test_closure_allows_concrete_type_field(tmp_path):
 def test_register_library_generic_struct_lands_in_table():
     """A generic-struct template is rebuilt into the consumer's struct table."""
     record = serialize_generic_struct(parse_to_ast(BOX_SRC)[0].structs[0], BOX_SRC)
-    analyzer = _analyzer_with_loaded_libraries(
+    libraries = _registration_with_loaded_libraries(
         {"mathlib": {"templates": {"version": 2, "generic_structs": [record],
                                    "generic_enums": [], "generic_functions": [],
                                    "perks": [], "perk_impls": []}}}
     )
-    analyzer.generic_structs = GenericStructTable()
 
-    analyzer._register_library_generic_structs()
+    libraries._register_generic_types("generic_structs")
 
-    assert "Box" in analyzer.generic_structs.by_name
-    assert "Box" in analyzer.generic_structs.order
+    assert "Box" in libraries.tables.generic_structs.by_name
+    assert "Box" in libraries.tables.generic_structs.order
 
 
 def test_register_library_generic_enum_lands_in_table():
     """A generic-enum template is rebuilt into the consumer's enum table."""
     record = serialize_generic_enum(parse_to_ast(OPT_SRC)[0].enums[0], OPT_SRC)
-    analyzer = _analyzer_with_loaded_libraries(
+    libraries = _registration_with_loaded_libraries(
         {"mathlib": {"templates": {"version": 2, "generic_structs": [],
                                    "generic_enums": [record], "generic_functions": [],
                                    "perks": [], "perk_impls": []}}}
     )
-    analyzer.generic_enums = GenericEnumTable()
 
-    analyzer._register_library_generic_enums()
+    libraries._register_generic_types("generic_enums")
 
-    assert "Opt" in analyzer.generic_enums.by_name
-    assert "Opt" in analyzer.generic_enums.order
+    assert "Opt" in libraries.tables.generic_enums.by_name
+    assert "Opt" in libraries.tables.generic_enums.order
 
 
 def test_register_library_generic_struct_respects_local_definition():
     """A locally-defined generic struct of the same name wins; template ignored."""
     record = serialize_generic_struct(parse_to_ast(BOX_SRC)[0].structs[0], BOX_SRC)
-    analyzer = _analyzer_with_loaded_libraries(
+    libraries = _registration_with_loaded_libraries(
         {"mathlib": {"templates": {"version": 2, "generic_structs": [record],
                                    "generic_enums": [], "generic_functions": [],
                                    "perks": [], "perk_impls": []}}}
     )
-    analyzer.generic_structs = GenericStructTable()
     sentinel = object()
-    analyzer.generic_structs.by_name["Box"] = sentinel
-    analyzer.generic_structs.order.append("Box")
+    libraries.tables.generic_structs.by_name["Box"] = sentinel
+    libraries.tables.generic_structs.order.append("Box")
 
-    analyzer._register_library_generic_structs()
+    libraries._register_generic_types("generic_structs")
 
-    assert analyzer.generic_structs.by_name["Box"] is sentinel
-    assert analyzer.generic_structs.order.count("Box") == 1
+    assert libraries.tables.generic_structs.by_name["Box"] is sentinel
+    assert libraries.tables.generic_structs.order.count("Box") == 1
 
 
 # C4a: concrete perk-impl shipping (templates.perk_impls)
@@ -793,20 +783,17 @@ def test_extract_templates_skips_impl_of_unreferenced_perk(tmp_path):
     assert templates["perk_impls"] == []
 
 
-def _impl_consumer_analyzer(record, perk_record) -> SemanticAnalyzer:
-    """Analyzer wired for _register_library_perk_impls in isolation."""
-    analyzer = _analyzer_with_loaded_libraries(
+def _impl_consumer_registration(record, perk_record) -> LibraryRegistration:
+    """A registration wired for `_register_perk_impls` in isolation."""
+    libraries = _registration_with_loaded_libraries(
         {"impllib": {"templates": {
             "version": 3, "generic_functions": [], "generic_structs": [],
             "generic_enums": [], "perks": [perk_record],
             "perk_impls": [record],
         }}}
     )
-    analyzer.perks = PerkTable()
-    analyzer.perk_impls = PerkImplementationTable()
-    analyzer.extensions = ExtensionTable()
-    analyzer._seed_library_perks(analyzer.perks)
-    return analyzer
+    libraries.seed_perks(libraries.tables.perks)
+    return libraries
 
 
 def _impl_records():
@@ -819,26 +806,26 @@ def _impl_records():
 def test_register_library_perk_impl_lands_in_table():
     """A shipped impl registers for constraint checks and dispatch."""
     impl_record, perk_record = _impl_records()
-    analyzer = _impl_consumer_analyzer(impl_record, perk_record)
+    libraries = _impl_consumer_registration(impl_record, perk_record)
 
-    analyzer._register_library_perk_impls()
+    libraries._register_perk_impls()
 
-    assert analyzer.perk_impls.implements("i32", "Doubler")
-    assert len(analyzer.library_perk_impls) == 1
+    assert libraries.tables.perk_impls.implements("i32", "Doubler")
+    assert len(libraries.shipped_perk_impls) == 1
 
 
 def test_register_library_perk_impl_respects_local_impl():
     """A consumer's own impl of the same (type, perk) wins silently."""
     impl_record, perk_record = _impl_records()
-    analyzer = _impl_consumer_analyzer(impl_record, perk_record)
+    libraries = _impl_consumer_registration(impl_record, perk_record)
     local_program, _ = parse_to_ast(IMPL_LIB_SRC)
-    analyzer.perk_impls.register(local_program.perk_impls[0], "i32")
+    libraries.tables.perk_impls.register(local_program.perk_impls[0], "i32")
 
-    analyzer._register_library_perk_impls()
+    libraries._register_perk_impls()
 
     # Registered (the local one), but nothing queued for declare-only codegen.
-    assert analyzer.perk_impls.implements("i32", "Doubler")
-    assert analyzer.library_perk_impls == []
+    assert libraries.tables.perk_impls.implements("i32", "Doubler")
+    assert libraries.shipped_perk_impls == []
 
 
 def test_register_library_perk_impl_skips_on_extension_clash():
@@ -846,10 +833,10 @@ def test_register_library_perk_impl_skips_on_extension_clash():
     CE4007 ambiguity is never created).
     """
     impl_record, perk_record = _impl_records()
-    analyzer = _impl_consumer_analyzer(impl_record, perk_record)
-    analyzer.extensions.by_type.setdefault("i32", {})["doubled"] = object()
+    libraries = _impl_consumer_registration(impl_record, perk_record)
+    libraries.tables.extensions.by_type.setdefault("i32", {})["doubled"] = object()
 
-    analyzer._register_library_perk_impls()
+    libraries._register_perk_impls()
 
-    assert not analyzer.perk_impls.implements("i32", "Doubler")
-    assert analyzer.library_perk_impls == []
+    assert not libraries.tables.perk_impls.implements("i32", "Doubler")
+    assert libraries.shipped_perk_impls == []

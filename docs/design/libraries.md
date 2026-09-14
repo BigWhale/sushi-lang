@@ -180,18 +180,18 @@ Three rules make this sound:
   `lib/<library_name>/<unit>`, so it can never collide with a consumer unit name.
 - **Privacy is the existing unit mechanism.** `semantics/units.py` already gates
   exports on `func.is_public`. Library privates stay private with no new machinery.
-- **The registry is skipped.** For `kind = "source"`, none of the
-  `_register_library_*` helpers in `semantics/semantic_analyzer.py` runs. A library
-  unit is an ordinary unit, so the ordinary passes handle it.
+- **The registry is skipped.** For `kind = "source"`, nothing in
+  `semantics/library_registration.py` runs. A library unit is an ordinary unit, so the
+  ordinary passes handle it.
 - **Library units are COLLECTED first, and the order says why.** A consumer's
   `extend i32 with Display` is checked against the perks visible when its own unit is
   collected, so a perk the library declares has to be in the table already. The
   compilation order yields every unit after the units it depends on
   (`docs/design/unit-namespaces.md` section 13.2), and `build_dependency_graph` records
   the edge a `use <lib/...>` creates, so a source library's units come first without a
-  hand-patch. Seeding them ahead of the loop the way `_seed_library_perks` does for a
-  binary library would register the same perk twice (CE4001), because this one also
-  arrives in a real unit.
+  hand-patch. Seeding them ahead of the loop the way `LibraryRegistration.seed_perks`
+  does for a binary library would register the same perk twice (CE4001), because this
+  one also arrives in a real unit.
 - **A consumer definition SHADOWS a library one, silently.** Same rule the binary path
   documents in §7, now enforced for functions, generics and perk impls by
   `passes/collect/`. Without it, `--lib-kind` would change program semantics instead of
@@ -232,9 +232,9 @@ consumer unit when a `.slib` changes. That is correct and over-rebuilds; see
 
 This is the one real cost of the design, and it needs deliberate handling.
 
-Today `_register_library_generic_functions` builds a **throwaway `Reporter`** so a
-malformed template snippet can never leak a diagnostic into the consumer's own
-compile — a parse failure is silently skipped. That trick cannot survive. When the
+Today `LibraryRegistration._register_generic_functions` builds a **throwaway
+`Reporter`** so a malformed template snippet can never leak a diagnostic into the
+consumer's own compile — a parse failure is silently skipped. That trick cannot survive. When the
 whole library is source, an error inside it must be shown, and it must be
 attributable.
 
@@ -414,9 +414,10 @@ Record shape (`generic_functions` / `generic_structs` / `generic_enums`, same sc
 onto the re-parsed node after parsing, since the record is the source of truth against
 future drift), `source`, `free_perks` (sorted perk names referenced by the bounds).
 
-At the consumer, `SemanticAnalyzer._register_library_generic_functions` /
-`_register_library_generic_types` re-parse each record's `source` through
-`parse_to_ast`, run a **throwaway** `CollectorPass` against a throwaway `Reporter` (so
+At the consumer, `LibraryRegistration._register_generic_functions` /
+`_register_generic_types` (`semantics/library_registration.py`) re-parse each record's
+`source` through `parse_to_ast`, run ONE **throwaway** `CollectorPass`, shared by every
+snippet of the analysis, against a throwaway `Reporter` (so
 a malformed template snippet can never leak a diagnostic into the consumer's own
 compile — a parse failure is silently skipped, not fatal), pull the resulting
 `GenericFuncDef`/generic type out, and register it into the consumer's own generic
@@ -483,7 +484,7 @@ called from `compile_to_bitcode` right after building the module) — `weak_odr`
 `linkonce_odr`, specifically because it must **survive** LLVM's optimizer even though
 nothing inside the library module itself calls it (an unreferenced `linkonce_odr`
 definition can be dropped as dead code; `weak_odr` cannot). At the consumer,
-`_register_library_perk_impls` rebuilds an `ExtendWithDef` via `deserialize_perk_impl`
+`LibraryRegistration._register_perk_impls` rebuilds an `ExtendWithDef` via `deserialize_perk_impl`
 and registers it in the perk-impl table for constraint checking (CE4006) and dispatch;
 codegen's `_declare_library_perk_impl_methods` declares (never defines) the method —
 the definition resolves from the library object/bitcode at link time.
@@ -505,7 +506,7 @@ unavailable unless the consumer supplies its own."
 
 Only perk *implementations* ship this way; perk *definitions* (the method-signature
 contract) ship separately and unconditionally for every perk named in an exported
-generic's constraints, via `_seed_library_perks`, which runs **before** the consumer's
+generic's constraints, via `LibraryRegistration.seed_perks`, which runs **before** the consumer's
 own units are collected (perk-impl collection validates against CE4003, so a consumer
 implementing a library-shipped perk needs the contract present at collection time, not
 after).
@@ -535,7 +536,7 @@ Three private kinds ship, each a different way:
 - **private generic function** → rides the *same* `generic_functions` list as public
   generics (§5.2), flagged `"private": True`.
 - **constant** → ships with its `source` (re-parsable), because the consumer needs the
-  compile-time *value*, not a link-time symbol. `_register_library_constants` re-parses
+  compile-time *value*, not a link-time symbol. `LibraryRegistration._register_constants` re-parses
   it, appends the reconstructed `ConstDef` onto the first consumer unit's AST (constant
   globals get internal linkage per module, so appending a duplicate-content const to a
   different module never collides).
@@ -771,7 +772,7 @@ Rules marked **binary** apply only when `kind != "source"`.
 | `sushi_lang/compiler/pipeline.py` | Library resolution and the gates: `_check_library_platform` (binary only), `_check_library_compiler_version`, and the shared source-unit injector that both the bundled source stdlib and source libraries use. Also chooses monolithic vs incremental and drives per-unit caching. |
 | `sushi_lang/semantics/library_registry.py` | `LibraryRegistry` — **binary path only**. Pre-parses a raw manifest dict into typed `FuncSig`/`StructType`/`EnumType` objects once, shared by the semantic analyzer and codegen. |
 | `sushi_lang/semantics/library_templates.py` | **Binary path only.** The re-parse-based codec: `serialize_/deserialize_generic_function/struct/enum`, `serialize_/deserialize_perk`, `serialize_/deserialize_perk_impl`, `slice_decl_source` (the line-span slicing algorithm), `impl_method_symbol` (perk-impl symbol mangling, kept in lockstep with `backend/functions/helpers.py`). |
-| `sushi_lang/semantics/semantic_analyzer.py` | **Binary path only.** Consumer-side registration: `_build_library_registry`, `_register_library_{functions,private_functions,constants,perk_impls,generic_functions,generic_structs,generic_enums,structs,enums}`, `_seed_library_perks`. This is where CE5007 fires and where local-wins is implemented for every category except perk impls. |
+| `sushi_lang/semantics/library_registration.py` | **Binary path only.** Consumer-side registration, one `LibraryRegistration` per analysis: `seed_perks` (ahead of the collect loop), `register` (`_register_types` for structs and enums, `_register_functions`, `_register_private_functions`, `_register_not_exported`, `_register_constants`, `_register_private_types`, `_register_perk_impls`, `_register_generic_perk_impls`, `_register_generic_functions`, `_register_generic_types`), and the two readers `signatures` and `kept_constant_names`. Every re-parsed record goes through the one `_collect_snippet`. This is where CE5007 fires and where local-wins is implemented for every category except perk impls. `semantics/semantic_analyzer.py` only decides WHEN the step runs. |
 | `sushi_lang/backend/codegen_llvm.py` | `compile_to_bitcode` (producer: sets `weak_odr` on perk impls, promotes export-closure private fns to `external`), `_declare_library_functions[_from_registry]`, `_declare_library_perk_impl_methods` (consumer: declares, never defines, library symbols), `compile_multi_unit` (drives `TwoPhaseLinker` when libraries are present), `compile_library_to_object` (incremental path: one `.o` per library). |
 | `sushi_lang/backend/module_linker.py` | `TwoPhaseLinker` — the monolithic-path in-memory IR merge (reachability + priority-ordered symbol resolution). Not library-specific — the main module and stdlib bitcode go through it too. |
 | `sushi_lang/backend/symbol_resolver.py` | `SymbolResolver._choose_definition` — the `MAIN > LIBRARY > STDLIB > RUNTIME` priority table used only by `TwoPhaseLinker`. |
