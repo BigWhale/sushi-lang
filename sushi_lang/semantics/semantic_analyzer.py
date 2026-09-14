@@ -2,11 +2,12 @@ from __future__ import annotations
 from typing import Dict, Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import (
-    Origin, Reporter, diagnostic_identity, in_source_order)
+    Reporter, diagnostic_identity, in_source_order)
 from sushi_lang.semantics.ast import Program, ExtendDef, ExtendWithDef
 from sushi_lang.semantics.passes.collect import CollectorPass, ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, PerkTable, PerkImplementationTable, FunctionTable, ExtensionTable, GenericExtensionTable, GenericFunctionTable
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.library_registry import LibraryRegistry
     from sushi_lang.semantics.namespaces import NamespaceTable
     from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
@@ -16,8 +17,8 @@ from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.symbol_merger import SymbolTableMerger
 from sushi_lang.semantics.generics.extensions import monomorphize_all_extension_methods
-from sushi_lang.semantics.library_registry import LibraryRegistry
-from sushi_lang.semantics.library_templates import deserialize_perk_impl
+from sushi_lang.semantics.library_registration import (
+    LibraryRegistration, LoadedLibraries)
 
 
 def enum_base_names(*tables) -> set[str]:
@@ -32,13 +33,13 @@ def enum_base_names(*tables) -> set[str]:
 class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
 
-    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[object] = None, library_registry: Optional['LibraryRegistry'] = None, warn_missing_docs: bool = False,
+    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[LoadedLibraries] = None, library_registry: Optional['LibraryRegistry'] = None, warn_missing_docs: bool = False,
                  generated_symbols: frozenset[str] = frozenset()) -> None:
         self.reporter = reporter
         self.filename = filename
         self.unit_manager = unit_manager
-        # A backend LibraryResolver, held opaquely: semantics must not import
-        # backend (Tier 4.1 layering invariant), so no tighter annotation is legal.
+        # A backend LibraryResolver, held through a Protocol: semantics must not
+        # import backend (Tier 4.1 layering invariant).
         self.library_linker = library_linker
         self.library_registry = library_registry
         # What the stdlib generators define, read from the manifest their build writes.
@@ -66,6 +67,7 @@ class SemanticAnalyzer:
         self.namespaces: Dict[str, 'NamespaceTable'] = {}
         self.monomorphized_extensions: list['ExtendDef'] = []  # Concrete ExtendDef nodes for codegen
         self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
+        self.libraries: Optional[LibraryRegistration] = None  # The `libraries` step, for its two later readers
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
 
     def check(self, program: Program) -> None:
@@ -78,7 +80,7 @@ class SemanticAnalyzer:
             collect       constants, headers, generic types      passes/collect/
             docs          doc blocks against their declarations  passes/docs.py
             externs       extern signatures, ptr unit gate       passes/types/externals.py
-            libraries     library symbol registration            _register_library_*
+            libraries     library symbol registration            library_registration.py
             namespaces    `use ... as`, one table per unit       passes/namespaces.py
             ffi-clash     an extern naming a defined symbol      passes/types/externals.py
             entrypoint    main()'s signature                     _check_main_function_args*
@@ -136,10 +138,13 @@ class SemanticAnalyzer:
 
         symbol_merger = SymbolTableMerger()
 
+        libraries = LibraryRegistration(self.reporter, global_tables,
+                                        self.library_linker, self.library_registry)
+        self.libraries = libraries
         # BEFORE the consumer's units: perk-impl collection validates each impl against
         # the visible perk definitions (CE4003), so the contract must already be here.
         if self.library_linker is not None:
-            self._seed_library_perks(collector.perks)
+            libraries.seed_perks(collector.perks)
 
         for unit in compilation_order:
             if unit.ast is None:
@@ -210,32 +215,12 @@ class SemanticAnalyzer:
             validate_ptr_unit_gate(unit_reporter, unit.ast)
             self._merge_unit(unit_reporter)
 
-        if self.library_linker is not None and self.library_registry is None:
-            self._build_library_registry()
-        if self.library_registry is not None or self.library_linker is not None:
-            self._register_library_structs()
-            self._register_library_enums()
-            self._register_library_functions()
-            # Export-closure private helpers and constants (C4b/C5): clash
-            # with a local name is CE5007 (local-wins would silently change
-            # what the library's monomorphized bodies call).
-            self._register_library_private_functions(
-                {u.name for u in compilation_order})
-            # And the complement: what the library declares and ships nowhere. These
-            # are names, not callables, so they register in no function table (#469).
-            self._register_library_not_exported()
-            self._register_library_constants(compilation_order)
-            self._register_library_private_types()
-            # Library perk IMPLEMENTATIONS register here: after the consumer's own impls
-            # (local wins) and before instantiate/monomorphize, so the constraint validator
-            # sees them. The DEFINITIONS were seeded earlier, in the collect loop above.
-            self._register_library_perk_impls()
-            self._register_library_generic_perk_impls()
-            self._register_library_generic_functions()
-            # Structs before enums (an enum payload may reference a struct), and both
-            # before instantiate so the consumer's instantiations monomorphize locally.
-            self._register_library_generic_structs()
-            self._register_library_generic_enums()
+        # libraries: every symbol a binary `.slib` exports enters the tables filled
+        # above. The order of the arms is the step's own (`library_registration.py`);
+        # the perk DEFINITIONS were seeded ahead of the collect loop.
+        libraries.register(compilation_order)
+        self.library_registry = libraries.registry
+        self.library_perk_impls = libraries.shipped_perk_impls
 
         # namespaces: what each unit may write behind a dot. After `libraries`, because
         # a BINARY library's declarations exist only once that step has read the
@@ -296,7 +281,7 @@ class SemanticAnalyzer:
         # A BINARY library's signatures name instantiations too, and no unit walk sees
         # them (#543): `fn make_box(i32 v) Box@(i32)` is a manifest record here.
         if self.library_registry is not None:
-            instantiation_collector.collect_from_signatures(self._library_signatures())
+            instantiation_collector.collect_from_signatures(libraries.signatures())
         # AFTER every unit: an extension on a generic target is read per instantiation of
         # that target, and the instantiation may come from another unit (#389).
         instantiation_collector.collect_from_generic_extensions(
@@ -520,7 +505,7 @@ class SemanticAnalyzer:
             namespaces = self.namespaces.get(unit.name)
 
             scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals,
-                                           kept_constants=self._kept_constant_names(),
+                                           kept_constants=libraries.kept_constant_names(),
                                            namespaces=namespaces)
             scope_analyzer.run(unit.ast)
 
@@ -856,565 +841,6 @@ class SemanticAnalyzer:
                     f"('extend {display_type(target_type)} with <Perk>'), which does "
                     "take precedence"
                 ).emit()
-
-    def _build_library_registry(self) -> None:
-        """Build LibraryRegistry from loaded library manifests."""
-        if self.library_linker is None:
-            return
-
-        from pathlib import Path
-
-        self.library_registry = LibraryRegistry()
-
-        for lib_name, manifest in self.library_linker.loaded_libraries.items():
-            lib_path = Path(manifest.get("library_path", lib_name))
-            self.library_registry.register_library(
-                lib_path=lib_path,
-                manifest=manifest,
-                struct_table=self.structs.by_name if self.structs else {},
-                enum_table=self.enums.by_name if self.enums else {},
-            )
-
-    def _register_library_functions(self) -> None:
-        """Register the loaded libraries' public functions into the function table.
-
-        The registry's `_parse_functions` is the ONE reader of a manifest signature. A
-        second builder lived here and read `return_type` alone, so a binary library's
-        `| E` was typed StdError at every consumer (#541).
-        """
-        if self.funcs is None or self.library_registry is None:
-            return
-        for func_name, func_sig in self.library_registry.get_all_functions().items():
-            if func_name not in self.funcs.by_name:
-                self.funcs.by_name[func_name] = func_sig
-                self.funcs.order.append(func_name)
-
-    def _register_library_private_functions(self, build_units: set[str]) -> None:
-        """Register export-closure private helpers from loaded libraries (C4b/C5).
-
-        Each record registers under ITS unit, so two of the library's own units may
-        each ship a private `helper` (#494). The CE5007 clash is measured against the
-        CONSUMER's own declarations -- a record from another library unit is a
-        coexisting declaration, not a clash. Each signature also registers under its
-        LINK SYMBOL, which is the name a template body's bindings rewrite calls to
-        (D4): `$` lies outside every user name's alphabet, so the alias can collide
-        with nothing.
-        """
-        if self.funcs is None or self.library_registry is None:
-            return
-
-        import sushi_lang.internals.errors as er
-
-        for (_unit, name), (lib_name, sig) in \
-                self.library_registry.get_all_private_functions().items():
-            existing = self.funcs.by_name.get(name)
-            if existing is not None and getattr(existing, "unit_name", None) in build_units:
-                er.emit(self.reporter, er.ERR.CE5007,
-                        getattr(existing, "name_span", None),
-                        lib=lib_name, name=name)
-                continue
-            self.funcs.declare(name, sig)
-            link_symbol = getattr(sig, "link_symbol", None)
-            if link_symbol:
-                self.funcs.declare(link_symbol, sig)
-
-    def _register_library_not_exported(self) -> None:
-        """Record what a loaded library declares and does not export (#469)."""
-        if self.tables is None or self.library_registry is None:
-            return
-
-        self.tables.library_not_exported.update(
-            self.library_registry.get_all_not_exported())
-
-    def _kept_constant_names(self) -> frozenset[str]:
-        """The constants a library declares and does not export, by name.
-
-        The scope pass asks, so a mention reaches the type pass and hears whose the
-        declaration is instead of hearing that there is none (#487).
-        """
-        kept = getattr(self.tables, "library_not_exported", None) or {}
-        return frozenset(name for name, (_lib, kind) in kept.items()
-                         if kind == "constant")
-
-    def _register_library_constants(self, compilation_order) -> None:
-        """Register a library's constants: the export closure's, and the published ones.
-
-        Both travel as SOURCE and both are registered here, because a constant has no
-        body to link: a public one is API the consumer reads (#487), a closure one is a
-        private declaration a monomorphized template body names (C4b/C5). The record
-        carries the `public` marker in its own text, so the visibility fence at the use
-        site reads the re-parsed signature and needs nothing else.
-
-        A clash is a different sentence for each. A published constant is a duplicate of
-        the consumer's own -- the answer a source library gives for the same program
-        (CE0105). A private one may not be renamed by the consumer, because the library's
-        own bodies call it (CE5007).
-        """
-        if self.constants is None or self.library_linker is None:
-            return
-
-        host_unit = next(
-            (u for u in compilation_order if u.ast is not None), None
-        )
-        if host_unit is None:
-            return
-
-        for lib_name, manifest in self.library_linker.loaded_libraries.items():
-            templates = manifest.get("templates") or {}
-            for record in manifest.get("public_constants", []) or []:
-                self._register_one_library_constant(
-                    host_unit, lib_name, record, published=True)
-            # A unit variable's record carries the symbol of the storage the library
-            # defines; the consumer's backend declares it under that name.
-            for record in manifest.get("public_variables", []) or []:
-                self._register_one_library_constant(
-                    host_unit, lib_name, record, published=True)
-            for record in templates.get("constants", []) or []:
-                self._register_one_library_constant(
-                    host_unit, lib_name, record, published=False)
-
-    def _register_one_library_constant(self, host_unit, lib_name: str, record: dict,
-                                       *, published: bool) -> None:
-        """Re-parse one constant record and register it under its own name."""
-        import sushi_lang.internals.errors as er
-        from sushi_lang.internals.parser import parse_to_ast
-        from sushi_lang.semantics.passes.collect import CollectorPass
-
-        if self.constants is None:
-            return
-
-        const_name = record.get("name")
-        source = record.get("source")
-        if not const_name or not source:
-            # A manifest written before constants carried their source. The name and the
-            # type are still printed by `--lib-info`; only the value is out of reach.
-            return
-
-        existing = self.constants.by_name.get(const_name)
-        if existing is not None:
-            if published:
-                er.emit_with(self.reporter, er.ERR.CE0105,
-                             getattr(existing, "name_span", None),
-                             getattr(existing, "filename", None),
-                             name=const_name) \
-                    .note(f"library '{lib_name}' publishes a constant of this name") \
-                    .emit()
-            else:
-                er.emit(self.reporter, er.ERR.CE5007,
-                        getattr(existing, "name_span", None),
-                        lib=lib_name, name=const_name)
-            return
-
-        program, _tree = parse_to_ast(source)
-        throwaway = Reporter(
-            source=source, filename=f"<const:{lib_name}:{const_name}>")
-        collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
-
-        sig = collected.constants.by_name.get(const_name)
-        const_defs = program.constants or []
-        if sig is None or len(const_defs) != 1:
-            return
-
-        self.constants.by_name[const_name] = sig
-        self.constants.order.append(const_name)
-        decl = const_defs[0]
-        if record.get("link_symbol") and hasattr(decl, "link_symbol"):
-            decl.link_symbol = record["link_symbol"]
-        host_unit.ast.constants.append(decl)
-
-    def _register_library_private_types(self) -> None:
-        """Register the private structs and enums the export closure ships.
-
-        A private type is not in the manifest's `structs` / `enums` index -- the marker
-        gates that -- so it travels as source beside the closure's private constants, and
-        it is re-parsed here for the same reason: a monomorphized template body names it.
-
-        The visibility table gets a PRIVATE record for each, so the consumer's own code
-        cannot name it while the transplanted body can (#468).
-        """
-        if self.structs is None or self.enums is None or self.library_linker is None:
-            return
-
-        from sushi_lang.internals.parser import parse_to_ast
-        from sushi_lang.semantics.passes.collect import CollectorPass
-        from sushi_lang.semantics.visibility import DeclOrigin
-
-        for lib_name, manifest in self.library_linker.loaded_libraries.items():
-            templates = manifest.get("templates") or {}
-            for record in templates.get("private_types", []) or []:
-                name = record.get("name")
-                source = record.get("source")
-                if not name or not source:
-                    continue
-                if name in self.structs.by_name or name in self.enums.by_name:
-                    continue
-
-                program, _tree = parse_to_ast(source)
-                throwaway = Reporter(
-                    source=source, filename=f"<type:{lib_name}:{name}>")
-                collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
-
-                for table, source_table in ((self.structs, collected.structs),
-                                            (self.enums, collected.enums)):
-                    entry = source_table.by_name.get(name)
-                    if entry is None:
-                        continue
-                    table.by_name[name] = entry
-                    table.order.append(name)
-
-                kind = "struct" if name in self.structs.by_name else "enum"
-                if self.tables is not None:
-                    self.tables.visibility.record(DeclOrigin(
-                        kind=kind, name=name, unit_name=lib_name, is_public=False))
-
-    def _seed_library_perks(self, perk_table) -> None:
-        """Seed perk DEFINITIONS shipped by loaded libraries into ``perk_table``."""
-        if perk_table is None or self.library_linker is None:
-            return
-
-        from sushi_lang.internals.parser import parse_to_ast
-        from sushi_lang.semantics.passes.collect import CollectorPass
-
-        for lib_name, manifest in self.library_linker.loaded_libraries.items():
-            templates = manifest.get("templates") or {}
-            for record in templates.get("perks", []) or []:
-                perk_name = record.get("name")
-                if not perk_name or perk_name in perk_table.by_name:
-                    continue
-
-                source = record.get("source")
-                if not source:
-                    continue
-
-                # Re-parse the self-contained perk source and run a throwaway
-                # collector so any diagnostics never pollute the consumer's
-                # reporter.
-                program, _tree = parse_to_ast(source)
-                throwaway = Reporter(source=source, filename=f"<perk:{lib_name}:{perk_name}>")
-                collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
-                template_perks = collected.perks
-
-                perk_def = template_perks.by_name.get(perk_name)
-                if perk_def is None:
-                    continue
-
-                perk_table.by_name[perk_name] = perk_def
-                perk_table.order.append(perk_name)
-
-    def _register_library_perk_impls(self) -> None:
-        """Register concrete perk IMPLEMENTATIONS shipped by loaded libraries."""
-        if self.perk_impls is None or self.perks is None or self.library_linker is None:
-            return
-
-        for _lib_name, manifest in self.library_linker.loaded_libraries.items():
-            templates = manifest.get("templates") or {}
-            for record in templates.get("perk_impls", []) or []:
-                type_name = record.get("type")
-                perk_name = record.get("perk")
-                if not type_name or not perk_name:
-                    continue
-                if perk_name not in self.perks.by_name:
-                    continue
-                if self.perk_impls.implements(type_name, perk_name):
-                    continue
-                # CE4007 interplay: skip on a method-name clash with a local
-                # extension method on the same type.
-                existing_methods = (
-                    self.extensions.by_type.get(type_name, {})
-                    if self.extensions is not None else {}
-                )
-                method_names = [
-                    m.get("name") for m in record.get("methods", []) or []
-                ]
-                if any(name in existing_methods for name in method_names):
-                    continue
-
-                try:
-                    impl = deserialize_perk_impl(record)
-                except Exception:
-                    # The snippet failed to re-parse; skip rather than crash the
-                    # consumer build (it can supply its own impl) -- but say so, or the
-                    # user later gets "no such method" on a perk the library implements.
-                    from sushi_lang.internals import errors as er
-                    er.emit(self.reporter, er.ERR.CW3506, None, type=type_name)
-                    continue
-
-                if self.perk_impls.register(impl, type_name):
-                    self.library_perk_impls.append(impl)
-
-    def _library_signatures(self):
-        """Every signature a loaded library's manifest declares: the public API, and the
-        export closure's private helpers."""
-        yield from self.library_registry.get_all_functions().values()
-        for _lib, sig in self.library_registry.get_all_private_functions().values():
-            yield sig
-
-    def _register_library_generic_perk_impls(self) -> None:
-        """Register the generic-target perk implementation TEMPLATES loaded libraries ship (#543).
-
-        `extend Box@(T) with Show` names no instantiation, so it is a template: one copy
-        per instantiation of `Box` is cut by `_monomorphize_generic_perk_impls`, exactly
-        as for a consumer's own. The re-parsed source goes through the collect pass's
-        own `PerkCollector`, so the one function that files every template files this
-        one too, under the unit that declared it at the producer. A template already in
-        the table for the same target and perk -- the consumer's own, collected first --
-        wins, as a consumer's concrete implementation does.
-        """
-        if self.perks is None or self.perk_impls is None or self.library_linker is None:
-            return
-
-        from sushi_lang.internals.parser import parse_to_ast
-        from sushi_lang.semantics.passes.collect import KNOWN_BUILTIN_TYPES
-        from sushi_lang.semantics.passes.collect.perks import PerkCollector
-        import sushi_lang.internals.errors as er
-
-        table = self.tables.generic_perk_impls
-        known_types = (set(KNOWN_BUILTIN_TYPES)
-                       | set(self.structs.by_name.values())
-                       | set(self.enums.by_name.values()))
-
-        for lib_name, manifest in self.library_linker.loaded_libraries.items():
-            templates = manifest.get("templates") or {}
-            for record in templates.get("generic_perk_impls", []) or []:
-                base = record.get("type")
-                perk_name = record.get("perk")
-                source = record.get("source")
-                if not base or not perk_name or not source:
-                    continue
-                if perk_name not in self.perks.by_name:
-                    continue
-                if any(t.impl.perk_name == perk_name for t in table.templates(base)):
-                    continue
-
-                label = f"<template:{lib_name}:{base} with {perk_name}>"
-                try:
-                    program, _tree = parse_to_ast(source)
-                except Exception:
-                    er.emit(self.reporter, er.ERR.CW3506, None, type=base)
-                    continue
-
-                collector = PerkCollector(
-                    Reporter(source=source, filename=label),
-                    perks=self.perks, perk_impls=self.perk_impls,
-                    known_types=known_types, generic_perk_impls=table)
-                collector.current_unit_name = f"lib/{lib_name}/{record.get('unit') or lib_name}"
-                collector.current_unit_file = label
-                before = len(table.templates(base))
-                collector.collect_implementations(program)
-                if len(table.templates(base)) == before:
-                    # The snippet parsed and the collector still filed nothing: say so,
-                    # or the user later gets "no such method" on a perk the library
-                    # implements.
-                    er.emit(self.reporter, er.ERR.CW3506, None, type=base)
-
-    def _register_library_generic_functions(self) -> None:
-        """Register generic function templates from loaded libraries."""
-        if self.generic_funcs is None or self.library_linker is None:
-            return
-
-        from sushi_lang.internals.parser import parse_to_ast
-        from sushi_lang.semantics.passes.collect import CollectorPass
-
-        import sushi_lang.internals.errors as er
-
-        build_units = set(self.unit_manager.units) if self.unit_manager else set()
-
-        for lib_name, manifest in self.library_linker.loaded_libraries.items():
-            templates = manifest.get("templates") or {}
-            for record in templates.get("generic_functions", []):
-                func_name = record["name"]
-                template_unit = f"lib/{lib_name}/{record.get('unit') or lib_name}"
-                existing = self.generic_funcs.by_name.get(func_name)
-                # A CONSUMER's declaration wins silently, but an export-closure
-                # PRIVATE template must keep its name: shadowing it would change what
-                # the library's other bodies call (CE5007). A declaration from
-                # ANOTHER library unit is neither: the two coexist, each under its
-                # unit (#494/#495), so the walk falls through to registration.
-                if existing is not None and \
-                        getattr(existing, "unit_name", None) in build_units:
-                    if record.get("private"):
-                        er.emit(self.reporter, er.ERR.CE5007,
-                                getattr(existing, "name_span", None),
-                                lib=lib_name, name=func_name)
-                    continue
-                if self.generic_funcs.by_unit.get(template_unit, {}).get(func_name):
-                    continue
-
-                source = record.get("source")
-                if not source:
-                    continue
-
-                # Re-parse the self-contained template source and run a
-                # throwaway collector so any diagnostics from the library snippet
-                # never pollute the consumer's reporter. The collector runs under the
-                # RECORD's unit, so the template and its instances carry the unit
-                # that declared it at the producer (#494).
-                program, _tree = parse_to_ast(source)
-                throwaway = Reporter(source=source, filename=f"<template:{lib_name}:{func_name}>")
-                collected = CollectorPass(throwaway).run(program, unit_name=template_unit)
-                template_generic_funcs = collected.generic_funcs
-
-                gfd = template_generic_funcs.by_name.get(func_name)
-                if gfd is None:
-                    continue
-
-                # D4: bind every free name the producer resolved to its symbol,
-                # before any instance is cut from this body.
-                bindings = record.get("bindings") or {}
-                if bindings:
-                    from sushi_lang.semantics.library_templates import (
-                        apply_template_bindings,
-                    )
-                    apply_template_bindings(gfd.body, bindings)
-
-                gfd.is_library_template = True
-                # Whose code the body is, and what text its spans index into. The
-                # collector above already reports against the slice; the per-unit
-                # passes check the MONOMORPHIZED instance and need the same answer,
-                # or they render a library's mistake against the consumer's file
-                # (#471). The filename shape is the throwaway reporter's, so one
-                # convention names a template everywhere.
-                gfd.library_origin = Origin(
-                    filename=f"<template:{lib_name}:{func_name}>",
-                    source=source,
-                    provenance=(
-                        f"'{lib_name}' {manifest.get('library_version') or 'unknown'} "
-                        f"ships this template; it is monomorphized here because of "
-                        f"`use <lib/{lib_name}>`"),
-                )
-
-                # The snippet already carries these, but the record is the source of
-                # truth.
-                rec_tps = record.get("type_params") or []
-                if len(rec_tps) == len(gfd.type_params):
-                    for tp, rec_tp in zip(gfd.type_params, rec_tps, strict=False):
-                        if hasattr(tp, "constraints"):
-                            tp.constraints = list(rec_tp.get("constraints") or [])
-                        if hasattr(tp, "is_pack") and "is_pack" in rec_tp:
-                            tp.is_pack = bool(rec_tp["is_pack"])
-
-                self.generic_funcs.declare(func_name, gfd)
-
-    def _register_library_generic_types(
-        self, manifest_key: str, table, collected_attr: str
-    ) -> None:
-        """Register generic struct/enum templates from loaded libraries."""
-        if table is None or self.library_linker is None:
-            return
-
-        from sushi_lang.internals.parser import parse_to_ast
-        from sushi_lang.semantics.passes.collect import CollectorPass
-
-        for lib_name, manifest in self.library_linker.loaded_libraries.items():
-            templates = manifest.get("templates") or {}
-            for record in templates.get(manifest_key, []):
-                type_name = record["name"]
-                if type_name in table.by_name:
-                    continue
-
-                source = record.get("source")
-                if not source:
-                    continue
-
-                program, _tree = parse_to_ast(source)
-                throwaway = Reporter(source=source, filename=f"<template:{lib_name}:{type_name}>")
-                collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
-                template_table = getattr(collected, collected_attr)
-
-                generic_type = template_table.by_name.get(type_name)
-                if generic_type is None:
-                    continue
-
-                table.by_name[type_name] = generic_type
-                table.order.append(type_name)
-
-    def _register_library_generic_structs(self) -> None:
-        """Register generic struct templates from loaded libraries (index 4)."""
-        self._register_library_generic_types(
-            "generic_structs", self.generic_structs, "generic_structs")
-
-    def _register_library_generic_enums(self) -> None:
-        """Register generic enum templates from loaded libraries (index 3)."""
-        self._register_library_generic_types(
-            "generic_enums", self.generic_enums, "generic_enums")
-
-    def _register_library_structs(self) -> None:
-        """Register struct definitions from loaded libraries."""
-        if self.structs is None:
-            return
-
-        if self.library_registry is not None:
-            for struct_name, struct_type in self.library_registry.get_all_structs().items():
-                if struct_name not in self.structs.by_name:
-                    self.structs.by_name[struct_name] = struct_type
-                    self.structs.order.append(struct_name)
-            return
-
-        if self.library_linker is None:
-            return
-
-        from sushi_lang.semantics.typesys import StructType
-        from sushi_lang.semantics.type_resolution import parse_type_string
-
-        for _lib_name, manifest in self.library_linker.loaded_libraries.items():
-            for struct_info in manifest.get("structs", []):
-                struct_name = struct_info["name"]
-                if struct_name in self.structs.by_name:
-                    continue
-
-                fields = []
-                for f in struct_info.get("fields", []):
-                    field_type = parse_type_string(
-                        f["type"],
-                        self.structs.by_name if self.structs else {},
-                        self.enums.by_name if self.enums else {}
-                    )
-                    fields.append((f["name"], field_type))
-
-                struct_type = StructType(name=struct_name, fields=tuple(fields))
-                self.structs.by_name[struct_name] = struct_type
-                self.structs.order.append(struct_name)
-
-    def _register_library_enums(self) -> None:
-        """Register enum definitions from loaded libraries."""
-        if self.enums is None:
-            return
-
-        if self.library_registry is not None:
-            for enum_name, enum_type in self.library_registry.get_all_enums().items():
-                if enum_name not in self.enums.by_name:
-                    self.enums.by_name[enum_name] = enum_type
-                    self.enums.order.append(enum_name)
-            return
-
-        if self.library_linker is None:
-            return
-
-        from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
-        from sushi_lang.semantics.type_resolution import parse_type_string
-
-        for _lib_name, manifest in self.library_linker.loaded_libraries.items():
-            for enum_info in manifest.get("enums", []):
-                enum_name = enum_info["name"]
-                if enum_name in self.enums.by_name:
-                    continue
-
-                variants = []
-                for v in enum_info.get("variants", []):
-                    assoc_types: tuple = ()
-                    if v.get("has_data") and v.get("data_type"):
-                        data_type = parse_type_string(
-                            v["data_type"],
-                            self.structs.by_name if self.structs else {},
-                            self.enums.by_name if self.enums else {}
-                        )
-                        assoc_types = (data_type,)
-
-                    variants.append(EnumVariantInfo(name=v["name"], associated_types=assoc_types))
-
-                enum_type = EnumType(name=enum_name, variants=tuple(variants))
-                self.enums.by_name[enum_name] = enum_type
-                self.enums.order.append(enum_name)
 
     def _check_main_function_args(self, program: Program) -> None:
         """Check if the main function has a string[] args parameter."""

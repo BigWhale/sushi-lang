@@ -1,0 +1,9 @@
+# A BINARY library whose public template names a PRIVATE generic struct. The export
+# closure ships `Cell` twice, as a private type and as a generic struct template, and
+# the consumer must register it once and monomorphize the body over it (#675).
+struct Cell@(T):
+    T item
+
+public fn boxed@(T)(nom T v) T:
+    let Cell@(T) c = Cell(v)
+    return Result.Ok(c.item)
