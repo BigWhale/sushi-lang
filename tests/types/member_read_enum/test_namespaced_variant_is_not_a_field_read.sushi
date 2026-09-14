@@ -1,0 +1,11 @@
+# `geo.Sign.Plus` is a variant behind a qualifier, and it folds to the bare form
+# before the member-read rule ever runs. The refusal must not reach it (#666).
+# EXPECT_STDOUT_EXACT: "plus\n"
+use "helpers/shapes" as geo
+
+fn main() i32:
+    let geo.Sign s = geo.Sign.Plus
+    match s:
+        geo.Sign.Plus -> println("plus")
+        geo.Sign.Minus -> println("minus")
+    return Result.Ok(0)

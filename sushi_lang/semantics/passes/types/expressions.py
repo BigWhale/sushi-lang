@@ -568,10 +568,11 @@ def _field_names_of(receiver_type: 'Type') -> Optional[list[str]]:
     """The fields a receiver type declares, or None when this position is not ours.
 
     A STRUCT answers its own list. The kinds below carry no field at all, so each answers
-    the empty list and every name behind their dot is a miss. Everything else -- an enum,
-    an unresolved name, a generic reference, a receiver the pass could not type -- is
-    somebody else's position, and a false CE2106 there would be worse than the internal
-    error it replaces.
+    the empty list and every name behind their dot is a miss. An ENUM is one of them
+    (#666): it carries variants, and a variant is reached by a pattern and not by a dot.
+    Everything else -- an unresolved name, a generic reference, a receiver the pass could
+    not type -- is somebody else's position, and a false CE2106 there would be worse than
+    the internal error it replaces.
     """
     from sushi_lang.semantics.typesys import (
         ForeignPtrType, FunctionType, PointerType,
@@ -579,7 +580,7 @@ def _field_names_of(receiver_type: 'Type') -> Optional[list[str]]:
 
     if isinstance(receiver_type, StructType):
         return [name for name, _ in receiver_type.fields]
-    if isinstance(receiver_type, (ArrayType, DynamicArrayType, BuiltinType,
+    if isinstance(receiver_type, (ArrayType, DynamicArrayType, BuiltinType, EnumType,
                                   FunctionType, PointerType, ForeignPtrType)):
         return []
     return None
@@ -609,7 +610,13 @@ def reject_unknown_field(validator: 'TypeValidator', node: MemberAccess) -> None
     primitive, a string, a closure, a `ptr` -- still reached the backend, where the shape
     of the read picked the code: CE0031 for a name, CE0044 through a field, CE0043
     through an array element. One rule answers all of them here.
+
+    #661 left the ENUM receiver alone, and that one was worse than an internal error: a
+    `Maybe@(T)` is an ordinary interned enum, so the backend unwrapped the receiver to
+    its payload struct and read field 0, which is the TAG. The program compiled clean and
+    printed a wrong number (#666). An enum is refused here with the rest.
     """
+    from sushi_lang.semantics.generics.results import is_builtin_wrapper_enum
     from sushi_lang.semantics.namespaces import suggest_member
     from sushi_lang.semantics.typesys import ReferenceType
 
@@ -632,6 +639,12 @@ def reject_unknown_field(validator: 'TypeValidator', node: MemberAccess) -> None
     if _is_a_method(validator, receiver_type, node.member):
         builder.note(f"'{shown}.{node.member}()' is a method, not a field").help(
             "call it: write the parentheses")
+    elif isinstance(receiver_type, EnumType):
+        builder.note(f"'{shown}' is an enum: it carries variants, not fields")
+        if is_builtin_wrapper_enum(receiver_type):
+            builder.help("take the value first: '??', '.realise(default)' or 'match'")
+        else:
+            builder.help("read a payload with 'match'")
     else:
         close = suggest_member(names, node.member)
         if close is not None:

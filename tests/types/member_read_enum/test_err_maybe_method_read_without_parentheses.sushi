@@ -1,0 +1,12 @@
+# `.realise` is a method of the wrapper, so the note that names it wins over the
+# help that says to unwrap: the parentheses are the whole fault (#666).
+# EXPECT_ERROR_CODE: CE2106
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point[] pts = from([Point(11, 22)])
+    let Point p = pts.get(0).realise
+    println("{p.x}")
+    return Result.Ok(0)

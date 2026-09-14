@@ -1,4 +1,7 @@
-# EXPECT_STDOUT_EXACT: "P: 0\nS: 32\n"
+# A struct element is read through the wrapper `.get()` answers, never through a dot
+# on the wrapper itself. The second read used to be `points.get(1).x`, which compiled
+# clean and printed the enum TAG -- 0, where the element's `x` is 11 (#666).
+# EXPECT_STDOUT_EXACT: "P: 11\nS: 32\n"
 struct Point:
     i32 x
     i32 y
@@ -6,7 +9,8 @@ struct Point:
 fn run_test() i32:
     let Point[] points = from([Point(10, 32), Point(11, 33), Point(12, 34)])
     let Point single = points.get(0)??
-    println("P: {points.get(1).x}")
+    let Point second = points.get(1)??
+    println("P: {second.x}")
     println("S: {single.y}")
     return Result.Ok(0)
 

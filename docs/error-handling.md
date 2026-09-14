@@ -158,6 +158,27 @@ The wrapper used to answer for its Ok tag, so `if (f())` on a `Result@(bool, E)`
 true branch for `Ok(false)` and never read the bool. Both readings were legal, so the
 compiler could not choose one (#522).
 
+**A field of the value is not a field of the wrapper either.** A `Result@(T, E)` and a
+`Maybe@(T)` are enums, and an enum carries variants, so a dot on the wrapper is
+**CE2106**. Take the value first, with the same three tools.
+
+```sushi
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point[] pts = from([Point(11, 22), Point(33, 44)])
+    # println("{pts.get(0).x}")        # CE2106 -- 'Maybe@(Point)' has no field 'x'
+    let Point first = pts.get(0).realise(Point(0, 0))
+    println("{first.x}")
+    return Result.Ok(0)
+```
+
+This one used to compile clean. The read reached the back end, which unwrapped the
+receiver to the payload struct and read field 0 -- the enum TAG. The program printed 0
+where the element held 11, with no diagnostic of any kind (#666).
+
 #### Using Pattern Matching
 
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->

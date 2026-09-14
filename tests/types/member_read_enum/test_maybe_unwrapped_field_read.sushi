@@ -1,0 +1,17 @@
+# The written form: unwrap first, then read the field. `.realise()` and `??` both
+# answer the payload, and the payload is what carries `x` (#666).
+# EXPECT_STDOUT_EXACT: "realise: 11\npropagate: 33\n"
+struct Point:
+    i32 x
+    i32 y
+
+fn second(Point[] pts) i32:
+    let Point p = pts.get(1)??
+    return Result.Ok(p.x)
+
+fn main() i32:
+    let Point[] pts = from([Point(11, 22), Point(33, 44)])
+    let Point ok = pts.get(0).realise(Point(0, 0))
+    println("realise: {ok.x}")
+    println("propagate: {second(pts).realise(0)}")
+    return Result.Ok(0)

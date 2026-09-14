@@ -5,9 +5,8 @@ the backend. A member read on an array, on a primitive, on a string or on a clos
 past each semantic pass and stopped at CE0031 -- tier 1, no file, no line, no caret, and
 the note that says the fault is a bug in the compiler. It is a typo.
 
-The refusal covers the kinds that carry NO field at all. An ENUM receiver is deliberately
-not one of them: the backend unwraps a `Maybe@(T)` receiver to its payload today, so a
-refusal here would speak for a question this issue does not settle.
+The refusal covers the kinds that carry NO field at all. The ENUM receiver joined them
+with #666; `tests/unit/test_enum_member_read_is_refused.py` is its batch.
 """
 from __future__ import annotations
 

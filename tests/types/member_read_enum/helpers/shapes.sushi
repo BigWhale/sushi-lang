@@ -1,0 +1,4 @@
+# A public enum for the alias fixture next door.
+public enum Sign:
+    Plus
+    Minus

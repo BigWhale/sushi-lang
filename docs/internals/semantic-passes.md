@@ -854,9 +854,20 @@ fieldless kind answers the empty list, and everything else answers None.
 None means the position is not this rule's. A namespace member, a bare enum variant
 (#545), an unresolved name, a generic reference and a receiver the pass could not type all
 belong elsewhere, and a false `CE2106` there would be worse than the internal error it
-replaces. An ENUM receiver is also left out on purpose: the backend unwraps a `Maybe@(T)`
-receiver to its payload struct today, so a refusal here would speak for a question #661
-does not settle.
+replaces.
+
+An ENUM receiver answers the empty list too (#666). #661 had left it out, and that one was
+worse than an internal error: a `Maybe@(T)` is an ordinary interned enum, so the backend
+unwrapped the receiver to its payload struct and read field 0, which is the TAG.
+`pts.get(0).x` compiled clean and printed 0 where the element held 11, with no diagnostic
+of any kind, and a test fixture had frozen the wrong number. An enum carries variants, and
+a variant is reached by a pattern and not by a dot, so the note says that and the help says
+how to get at the value: `??`, `.realise(default)` or `match` for a built-in wrapper
+(`is_builtin_wrapper_enum`), `match` for a user enum. The refusal closes the three tier-1
+codes the read used to reach -- `CE0031` off a name, `CE0029` through a wrapper the backend
+had already unwrapped, `CE0067` off a call. A `Maybe@(T)` gets no implicit unwrap: nothing
+else in the language has one, it reads against the rule that a condition is a bool and
+nothing else (#522/#532), and the `None` arm has no answer.
 
 A METHOD is not a field, and a bound-method value is deferred to Tier 2, so `v.probe` with
 no parentheses is the same refusal with a note that says so. `_is_a_method` asks the
