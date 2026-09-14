@@ -21,6 +21,7 @@ the typecheck pass, so it fits its type.
 """
 from __future__ import annotations
 
+import ast
 import ctypes
 import inspect
 import itertools
@@ -179,11 +180,16 @@ def test_the_backend_folds_no_integer_operator():
     new `ir.Constant` from Python arithmetic. Either is a second statement of the
     language's integer semantics, one that no diagnostic guards (#681).
     """
-    src = inspect.getsource(operators)
-    assert "_fold_" not in src, "a constant fold is back in the backend's operator emitter"
-    assert ".constant" not in src, (
-        "the backend's operator emitter reads an ir.Constant's Python value, which is "
-        "how a second home for the integer semantics starts"
+    tree = ast.parse(inspect.getsource(operators))
+    folds = [node.name for node in ast.walk(tree)
+             if isinstance(node, ast.FunctionDef) and node.name.startswith("_fold")]
+    assert not folds, f"a constant fold is back in the backend's operator emitter: {folds}"
+
+    reads = [node.lineno for node in ast.walk(tree)
+             if isinstance(node, ast.Attribute) and node.attr == "constant"]
+    assert not reads, (
+        f"the backend's operator emitter reads an ir.Constant's Python value at line(s) "
+        f"{reads}, which is how a second home for the integer semantics starts"
     )
 
 

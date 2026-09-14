@@ -67,9 +67,9 @@ const u8 A = 200 + 100
 ```
 
 The program still prints 44. llvmlite writes the text `i8 300`, and the LLVM IR parser
-truncates it to `i8 44`. A body prints 44 as well, because `_fold_arithmetic_constants`
-(`backend/expressions/operators.py:166-193`) masks the result and restores the sign at the
-width of the type.
+truncates it to `i8 44`. A body printed 44 as well, because the backend then held a fold of
+its own, `_fold_arithmetic_constants` in `backend/expressions/operators.py`, which masked
+the result and restored the sign at the width of the type. That fold is gone (#681, below).
 
 The printed value is correct, and this is why every test passes today. Truncation gives the
 same answer for `+`, `-`, `*`, `<<` and `~`. It gives a different answer for `/`, `%`, `>>`,
@@ -149,6 +149,21 @@ Run time does not change. Two locals still wrap, because no check is inserted th
 let u8 a = 200 + 100      # the compiler reports this
 let u8 s = x + y          # this wraps at run time, with no check
 ```
+
+**One compile-time home (#681).** The evaluator is the only place in the compiler that
+computes an integer operator. The backend held a second one until #681: a fold over two
+constant operands in `backend/expressions/operators.py` that covered `+ - *` and
+`& | ^ <<`, re-derived two's complement by hand, wrapped in silence where the evaluator
+reports CE2077, and left `/ % >>` to LLVM. It was measured before it went: it was reached
+only by a pair of literals, and every such pair has already passed
+`reject_overflowing_operation`, so it never wrapped anything and folded what LLVM folds
+itself. The backend now emits the instruction for two constants as for two locals, and
+LLVM is the run-time home by definition. The gate is
+`tests/unit/test_integer_operator_semantics_agree.py`: per operator and per width, the
+evaluator's value and the value a JIT-compiled copy of the emitted instruction computes
+are one bit pattern, and a constant fold in the backend's operator emitter is refused
+by its source. Building that matrix is what found the `%` half of the row above: the
+evaluator answered 0 for the smallest signed value `% -1`, and it reports CE2077 now.
 
 ### What this costs
 
