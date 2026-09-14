@@ -426,8 +426,11 @@ def _provable_shift_count(validator: 'TypeValidator', count: Expr) -> Optional[i
     the answer is wanted here, never the evaluator's complaint about not finding
     one.
     """
+    from sushi_lang.semantics.const_eval import ScalarConstant
+
     value = validator.constant_evaluator().evaluate(count, BuiltinType.I64, None)
-    if value is None or not isinstance(value.value, int) or isinstance(value.value, bool):
+    if (value is None or not isinstance(value, ScalarConstant)
+            or not isinstance(value.value, int) or isinstance(value.value, bool)):
         return None
     return value.value
 

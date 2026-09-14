@@ -1,18 +1,27 @@
-"""Compile-time constant expression evaluator."""
+"""Compile-time constant expression evaluator.
+
+A helper and not a pass: the typecheck pass, the AST builder and the backend each call
+it (`docs/design/compile-time-evaluation.md`). `evaluate` decides every `Expr` kind
+through one table, `HANDLERS`, and the kinds that are not a constant are named in
+`NOT_CONSTANT`; `tests/unit/test_const_eval_dispatch_is_total.py` keeps the two sets
+and the `Expr` union in step.
+"""
 from __future__ import annotations
 import math
 import operator
 from dataclasses import dataclass
 from contextlib import contextmanager
-from typing import Callable, Iterator, List, Mapping, Optional, Tuple, Union, TYPE_CHECKING
+from typing import (Callable, Iterator, List, Mapping, Optional, Tuple, TypeGuard, Union,
+                    TYPE_CHECKING)
 
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
-    Call, DotCall, DynamicArrayFrom, DynamicArrayNew, Expr, IntLit, FloatLit,
-    BoolLit, StringLit, ArrayLiteral, BinaryOp, UnaryOp, Name, CastExpr, IndexAccess,
-    InterpolatedString, MemberAccess
+    BlankLit, Borrow, Call, DotCall, DynamicArrayFrom, DynamicArrayNew, EnumConstructor,
+    Expr, IntLit, FloatLit, BoolLit, StringLit, ArrayLiteral, BinaryOp, UnaryOp, Name,
+    CastExpr, IndexAccess, InterpolatedString, Lambda, MemberAccess, MethodCall, RangeExpr,
+    Spread, TryExpr
 )
 from sushi_lang.semantics.integer_width import (
     fits_integer_type, integer_bit_width, wrap_to_integer_type)
@@ -41,6 +50,32 @@ _ARITHMETIC: Mapping[str, Callable[[object, object], object]] = {
 _BITWISE: Mapping[str, Callable[[int, int], int]] = {
     "&": operator.and_, "|": operator.or_, "^": operator.xor,
 }
+
+_LOGICAL: Mapping[str, Callable[[bool, bool], bool]] = {
+    "and": lambda left, right: left and right,
+    "or": lambda left, right: left or right,
+    "xor": operator.ne,
+}
+
+_COMPARISON: Mapping[str, Callable[[object, object], bool]] = {
+    "==": operator.eq, "!=": operator.ne,
+    "<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge,
+}
+_ORDERINGS = ("<", "<=", ">", ">=")
+
+_INTEGER_TYPES = (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
+                  BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64)
+_FLOAT_TYPES = (BuiltinType.F32, BuiltinType.F64)
+
+# The expression kinds that are never a constant. Each answers CE0108 through the one
+# backstop in `evaluate`; naming them here is what lets the gate tell a decision from a
+# fall-through. A `MethodCall` and an `EnumConstructor` never arrive from the parser in
+# an initializer (both are spelled as a `DotCall` there) and a `Spread` is an argument,
+# but the union holds them, so the table says what they would be.
+NOT_CONSTANT: frozenset[type] = frozenset({
+    MethodCall, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, Borrow, TryExpr,
+    RangeExpr, Spread, Lambda, BlankLit,
+})
 
 
 @dataclass
@@ -77,18 +112,46 @@ def emit_string_plus(reporter: Reporter, span: Optional[Span]) -> None:
 
 
 @dataclass
-class ConstantValue:
-    """Compile-time constant value with type information.
+class ScalarConstant:
+    """One compile-time value with its type: a number, a bool or a string."""
+    value: Union[int, float, bool, str]
+    semantic_type: Type  # Sushi type (i32, f64, bool, string)
 
-    A LIST value is an aggregate, and `semantic_type` says which kind: a `StructType`
-    makes it the fields in declaration order, an `EnumType` makes it the payload of
-    `variant` in declaration order (empty for a payload-free variant), and anything else
-    makes it array elements. Every reader of an aggregate asks the type first, never the
-    shape of the list.
+
+@dataclass
+class AggregateConstant:
+    """Compile-time elements with their type, and `semantic_type` says which kind.
+
+    A `StructType` makes them the fields in declaration order, an `EnumType` makes them
+    the payload of `variant` in declaration order (empty for a payload-free variant),
+    and anything else makes them array elements. Every reader of an aggregate asks the
+    type first, never the shape of the list.
     """
-    value: Union[int, float, bool, str, List['ConstantValue']]  # Python value
-    semantic_type: Type  # Sushi type (i32, f64, bool, string, a struct, an enum, ...)
+    elements: List['ConstantValue']
+    semantic_type: Type  # a struct, an enum, a fixed array
     variant: Optional[str] = None  # the variant an EnumType value constructs
+
+
+ConstantValue = Union[ScalarConstant, AggregateConstant]
+
+
+def is_integer_constant(value: ConstantValue) -> TypeGuard[ScalarConstant]:
+    """A scalar of an integer type."""
+    return isinstance(value, ScalarConstant) and value.semantic_type in _INTEGER_TYPES
+
+
+def is_numeric_constant(value: ConstantValue) -> TypeGuard[ScalarConstant]:
+    """A scalar of an integer or a float type."""
+    return isinstance(value, ScalarConstant) and (
+        value.semantic_type in _INTEGER_TYPES or value.semantic_type in _FLOAT_TYPES)
+
+
+def is_bool_constant(value: ConstantValue) -> TypeGuard[ScalarConstant]:
+    return isinstance(value, ScalarConstant) and value.semantic_type == BuiltinType.BOOL
+
+
+def is_string_constant(value: ConstantValue) -> TypeGuard[ScalarConstant]:
+    return isinstance(value, ScalarConstant) and value.semantic_type == BuiltinType.STRING
 
 
 def allocates_nothing(expr: Expr) -> bool:
@@ -174,50 +237,16 @@ class ConstantEvaluator:
         for a node that carries no location of its own. The caller of a `const` passes
         the declaration's span, and a handler that reported with it put the caret
         under the whole line (#682).
+
+        The kind decides the handler, and a kind with none -- one of `NOT_CONSTANT`,
+        or one the table has never met -- is CE0108, the one backstop.
         """
         span = expr.loc or span
-        if isinstance(expr, IntLit):
-            return self._evaluate_int_lit(expr, expected_type)
-        elif isinstance(expr, FloatLit):
-            return self._evaluate_float_lit(expr, expected_type)
-        elif isinstance(expr, BoolLit):
-            return ConstantValue(expr.value, BuiltinType.BOOL)
-        elif isinstance(expr, StringLit):
-            return ConstantValue(expr.value, BuiltinType.STRING)
-
-        elif isinstance(expr, BinaryOp):
-            return self._evaluate_binary_op(expr, expected_type, span)
-
-        elif isinstance(expr, UnaryOp):
-            return self._evaluate_unary_op(expr, expected_type, span)
-
-        elif isinstance(expr, ArrayLiteral):
-            return self._evaluate_array_literal(expr, expected_type, span)
-
-        elif isinstance(expr, Name):
-            return self._evaluate_name(expr, span)
-
-        elif isinstance(expr, CastExpr):
-            return self._evaluate_cast(expr, span)
-
-        elif isinstance(expr, IndexAccess):
-            return self._evaluate_index(expr, span)
-
-        elif isinstance(expr, InterpolatedString):
-            return self._evaluate_interpolation(expr, span)
-
-        elif isinstance(expr, Call):
-            return self._evaluate_struct_construction(expr, expected_type, span)
-
-        elif isinstance(expr, MemberAccess):
-            return self._evaluate_member_access(expr, expected_type, span)
-
-        elif isinstance(expr, DotCall):
-            return self._evaluate_dot_call(expr, expected_type, span)
-
-        else:
+        handler = self.HANDLERS.get(type(expr))
+        if handler is None:
             er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
             return None
+        return handler(self, expr, expected_type, span)
 
     def _evaluate_member_access(self, expr: MemberAccess, expected_type: Type,
                                 span: Optional[Span]) -> Optional[ConstantValue]:
@@ -307,9 +336,9 @@ class ConstantEvaluator:
         sig = self.const_table.lookup(ref.name, ref.origin)
         return None if sig is None else self._fold_constant(sig, span)
 
-    def _stdlib_value(self, record: 'StdlibFunction') -> ConstantValue:
+    def _stdlib_value(self, record: 'StdlibFunction') -> ScalarConstant:
         """A registry constant folds from the value its record carries (#560)."""
-        return ConstantValue(record.value, record.get_return_type())
+        return ScalarConstant(record.value, record.get_return_type())
 
     def _evaluate_struct_construction(self, expr: Call, expected_type: Type,
                                      span: Optional[Span]) -> Optional[ConstantValue]:
@@ -338,7 +367,7 @@ class ConstantEvaluator:
             if value is None:
                 return None  # the recursion reported it
             field_values.append(value)
-        return ConstantValue(field_values, struct_type)
+        return AggregateConstant(field_values, struct_type)
 
     def _evaluate_enum_construction(self, expr: Union[DotCall, MemberAccess],
                                     expected_type: Type,
@@ -376,7 +405,7 @@ class ConstantEvaluator:
             if value is None:
                 return None  # the recursion reported it
             payload.append(value)
-        return ConstantValue(payload, enum_type, variant=variant_name)
+        return AggregateConstant(payload, enum_type, variant=variant_name)
 
     def _named_type(self, receiver: Expr, expected_type: Type, table: object, kind: type):
         """The `StructType` or `EnumType` a constructor's receiver names, or None.
@@ -415,20 +444,27 @@ class ConstantEvaluator:
             return None
         return [by_name[name] for name, _ty in fields]
 
-    def _evaluate_int_lit(self, expr: IntLit, expected_type: Type) -> ConstantValue:
+    def _evaluate_int_lit(self, expr: IntLit, expected_type: Type,
+                          span: Optional[Span]) -> ScalarConstant:
         """Evaluate integer literal with type inference."""
-        if expected_type in (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-                             BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64):
-            return ConstantValue(expr.value, expected_type)
-        else:
-            return ConstantValue(expr.value, BuiltinType.I32)
+        if expected_type in _INTEGER_TYPES:
+            return ScalarConstant(expr.value, expected_type)
+        return ScalarConstant(expr.value, BuiltinType.I32)
 
-    def _evaluate_float_lit(self, expr: FloatLit, expected_type: Type) -> ConstantValue:
+    def _evaluate_float_lit(self, expr: FloatLit, expected_type: Type,
+                            span: Optional[Span]) -> ScalarConstant:
         """Evaluate float literal with type inference."""
-        if expected_type in (BuiltinType.F32, BuiltinType.F64):
-            return ConstantValue(expr.value, expected_type)
-        else:
-            return ConstantValue(expr.value, BuiltinType.F64)
+        if expected_type in _FLOAT_TYPES:
+            return ScalarConstant(expr.value, expected_type)
+        return ScalarConstant(expr.value, BuiltinType.F64)
+
+    def _evaluate_bool_lit(self, expr: BoolLit, expected_type: Type,
+                           span: Optional[Span]) -> ScalarConstant:
+        return ScalarConstant(expr.value, BuiltinType.BOOL)
+
+    def _evaluate_string_lit(self, expr: StringLit, expected_type: Type,
+                             span: Optional[Span]) -> ScalarConstant:
+        return ScalarConstant(expr.value, BuiltinType.STRING)
 
     def _format_hole(self, value: ConstantValue,
                      span: Optional[Span]) -> Optional[str]:
@@ -441,23 +477,24 @@ class ConstantEvaluator:
         every constant operation is range-checked (CE2070/CE2077), so the
         held value is the printed value.
         """
-        t = value.semantic_type
-        if t == BuiltinType.STRING:
-            return value.value
-        if t == BuiltinType.BOOL:
-            return "true" if value.value else "false"
-        if t == BuiltinType.F32:
-            import struct
-            return "%g" % struct.unpack("f", struct.pack("f", value.value))[0]
-        if t == BuiltinType.F64:
-            return "%g" % value.value
-        if self._is_integer_type(t):
-            return str(value.value)
+        if isinstance(value, ScalarConstant):
+            t = value.semantic_type
+            if t == BuiltinType.STRING:
+                return str(value.value)
+            if t == BuiltinType.BOOL:
+                return "true" if value.value else "false"
+            if t == BuiltinType.F32:
+                import struct
+                return "%g" % struct.unpack("f", struct.pack("f", value.value))[0]
+            if t == BuiltinType.F64:
+                return "%g" % value.value
+            if t in _INTEGER_TYPES:
+                return str(value.value)
         er.emit(self.reporter, er.ERR.CE0108, span,
-                expr_type=f"interpolation of {display_type(t)}")
+                expr_type=f"interpolation of {display_type(value.semantic_type)}")
         return None
 
-    def _evaluate_interpolation(self, expr: InterpolatedString,
+    def _evaluate_interpolation(self, expr: InterpolatedString, expected_type: Type,
                                 span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate an interpolated string constant (#447).
 
@@ -478,7 +515,7 @@ class ConstantEvaluator:
             if text is None:
                 return None
             rendered.append(text)
-        return ConstantValue("".join(rendered), BuiltinType.STRING)
+        return ScalarConstant("".join(rendered), BuiltinType.STRING)
 
     def _evaluate_binary_op(self, expr: BinaryOp, expected_type: Type, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate binary operation."""
@@ -507,10 +544,10 @@ class ConstantEvaluator:
         elif expr.op == '>>':
             return self._eval_shift_right(left_val, right_val, span)
 
-        elif expr.op in ('and', 'or', 'xor'):
+        elif expr.op in _LOGICAL:
             return self._eval_logical(left_val, right_val, expr.op, span)
 
-        elif expr.op in ('==', '!=', '<', '<=', '>', '>='):
+        elif expr.op in _COMPARISON:
             return self._eval_comparison(left_val, right_val, expr.op, span)
 
         else:
@@ -524,11 +561,11 @@ class ConstantEvaluator:
             return None
 
         if expr.op == 'neg':
-            if self._is_numeric_type(operand.semantic_type):
+            if is_numeric_constant(operand):
                 # A negated literal is ONE leaf, and the range of a leaf is CE2073's
                 # question -- that is what makes -128 an i8 while 128 is not.
                 if isinstance(expr.expr, (IntLit, FloatLit)):
-                    return ConstantValue(-operand.value, operand.semantic_type)
+                    return ScalarConstant(-operand.value, operand.semantic_type)
                 return self._checked(expr, '-', -operand.value,
                                      operand.semantic_type, span)
             else:
@@ -536,16 +573,16 @@ class ConstantEvaluator:
                 return None
 
         elif expr.op == '~':
-            if self._is_integer_type(operand.semantic_type):
+            if is_integer_constant(operand):
                 result = wrap_to_integer_type(~operand.value, operand.semantic_type)
-                return ConstantValue(result, operand.semantic_type)
+                return ScalarConstant(result, operand.semantic_type)
             else:
                 er.emit(self.reporter, er.ERR.CE0110, span, op='bitwise NOT on non-integer type')
                 return None
 
         elif expr.op == 'not':
-            if operand.semantic_type == BuiltinType.BOOL:
-                return ConstantValue(not operand.value, BuiltinType.BOOL)
+            if is_bool_constant(operand):
+                return ScalarConstant(not operand.value, BuiltinType.BOOL)
             else:
                 er.emit(self.reporter, er.ERR.CE0110, span, op='logical NOT on non-boolean type')
                 return None
@@ -577,13 +614,13 @@ class ConstantEvaluator:
         if array_runs.require_readable_length(runs, self.reporter) is None:
             return None
 
-        element_values = []
+        element_values: List[ConstantValue] = []
         for run in runs:
             if run.plan is not None:
                 # A readable range expands to literals, so the table lands in .rodata with
                 # no arithmetic behind it.
                 element_values.extend(
-                    ConstantValue(value, element_type) for value in run.plan.values())
+                    ScalarConstant(value, element_type) for value in run.plan.values())
                 continue
             run_val = self.evaluate(run.value, element_type, span)
             if run_val is None:
@@ -594,9 +631,10 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0108, span, expr_type='empty array')
             return None
 
-        return ConstantValue(element_values, expected_type)
+        return AggregateConstant(element_values, expected_type)
 
-    def _evaluate_name(self, expr: Name, span: Optional[Span]) -> Optional[ConstantValue]:
+    def _evaluate_name(self, expr: Name, expected_type: Type,
+                       span: Optional[Span]) -> Optional[ConstantValue]:
         """A bare name: a constant this unit may write, else a stdlib constant in scope."""
         const_name = expr.id
 
@@ -654,7 +692,8 @@ class ConstantEvaluator:
             self.const_table.folded[key] = result
         return result
 
-    def _evaluate_cast(self, expr: CastExpr, span: Optional[Span]) -> Optional[ConstantValue]:
+    def _evaluate_cast(self, expr: CastExpr, expected_type: Type,
+                       span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate type cast."""
         value = self.evaluate(expr.expr, expr.target_type, span)
         if value is None:
@@ -665,29 +704,32 @@ class ConstantEvaluator:
 
         # A cast asks for the bit pattern, so it truncates and never reports: it is the
         # escape from the overflow rule and cannot be subject to it.
-        if self._is_integer_type(from_type) and self._is_integer_type(to_type):
-            return ConstantValue(wrap_to_integer_type(value.value, to_type), to_type)
+        if is_integer_constant(value) and self._is_integer_type(to_type):
+            return ScalarConstant(wrap_to_integer_type(value.value, to_type), to_type)
 
-        elif self._is_integer_type(from_type) and self._is_float_type(to_type):
-            return ConstantValue(float(value.value), to_type)
+        elif is_integer_constant(value) and self._is_float_type(to_type):
+            return ScalarConstant(float(value.value), to_type)
 
-        elif self._is_float_type(from_type) and self._is_integer_type(to_type):
-            return ConstantValue(wrap_to_integer_type(int(value.value), to_type), to_type)
+        elif isinstance(value, ScalarConstant) and self._is_float_type(from_type) \
+                and self._is_integer_type(to_type):
+            return ScalarConstant(wrap_to_integer_type(int(value.value), to_type), to_type)
 
-        elif self._is_integer_type(from_type) and to_type == BuiltinType.BOOL:
-            return ConstantValue(value.value != 0, BuiltinType.BOOL)
+        elif is_integer_constant(value) and to_type == BuiltinType.BOOL:
+            return ScalarConstant(value.value != 0, BuiltinType.BOOL)
 
-        elif from_type == BuiltinType.BOOL and self._is_integer_type(to_type):
-            return ConstantValue(1 if value.value else 0, to_type)
+        elif is_bool_constant(value) and self._is_integer_type(to_type):
+            return ScalarConstant(1 if value.value else 0, to_type)
 
-        elif self._is_float_type(from_type) and self._is_float_type(to_type):
-            return ConstantValue(value.value, to_type)
+        elif isinstance(value, ScalarConstant) and self._is_float_type(from_type) \
+                and self._is_float_type(to_type):
+            return ScalarConstant(value.value, to_type)
 
         else:
             er.emit(self.reporter, er.ERR.CE0111, span, from_type=display_type(from_type), to_type=display_type(to_type))
             return None
 
-    def _evaluate_index(self, expr: IndexAccess, span: Optional[Span]) -> Optional[ConstantValue]:
+    def _evaluate_index(self, expr: IndexAccess, expected_type: Type,
+                        span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate an index into an array constant.
 
         A constant cannot trap, so the bounds a body leaves to run time (RE2020) are
@@ -697,7 +739,7 @@ class ConstantEvaluator:
         if base is None:
             return None
 
-        if not isinstance(base.value, list):
+        if not isinstance(base, AggregateConstant):
             er.emit(self.reporter, er.ERR.CE0110, span, op='index of a non-array constant')
             return None
 
@@ -705,7 +747,8 @@ class ConstantEvaluator:
         if index is None:
             return None
 
-        if not self._is_integer_type(index.semantic_type):
+        if not is_integer_constant(index) or isinstance(index.value, bool) \
+                or not isinstance(index.value, int):
             er.emit(self.reporter, er.ERR.CE0110, span, op='array index that is not an integer')
             return None
 
@@ -713,12 +756,12 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE2056, expr.index.loc, index=index.value)
             return None
 
-        if index.value >= len(base.value):
+        if index.value >= len(base.elements):
             er.emit(self.reporter, er.ERR.CE2012, expr.index.loc,
-                    index=index.value, size=len(base.value))
+                    index=index.value, size=len(base.elements))
             return None
 
-        return base.value[index.value]
+        return base.elements[index.value]
 
     def _checked(self, node: Expr, op: str, value: Union[int, float], semantic_type: Type,
                  span: Optional[Span]) -> Optional[ConstantValue]:
@@ -737,22 +780,22 @@ class ConstantEvaluator:
             emit_overflow(self.reporter, record)
             return None
 
-        return ConstantValue(value, semantic_type)
+        return ScalarConstant(value, semantic_type)
 
     def _eval_arithmetic(self, node: BinaryOp, left: ConstantValue, right: ConstantValue,
                          span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate arithmetic operation."""
-        if not self._is_numeric_type(left.semantic_type) or not self._is_numeric_type(right.semantic_type):
+        if not is_numeric_constant(left) or not is_numeric_constant(right):
             er.emit(self.reporter, er.ERR.CE0110, span, op='arithmetic on non-numeric type')
             return None
 
         result = _ARITHMETIC[node.op](left.value, right.value)
-        return self._checked(node, node.op, result, left.semantic_type, span)
+        return self._checked(node, node.op, result, left.semantic_type, span)  # type: ignore[arg-type]
 
     def _eval_division(self, node: BinaryOp, left: ConstantValue, right: ConstantValue,
                        span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate division with zero check."""
-        if not self._is_numeric_type(left.semantic_type) or not self._is_numeric_type(right.semantic_type):
+        if not is_numeric_constant(left) or not is_numeric_constant(right):
             er.emit(self.reporter, er.ERR.CE0110, span, op='division on non-numeric type')
             return None
 
@@ -760,17 +803,18 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0112, span)
             return None
 
-        if self._is_integer_type(left.semantic_type):
-            result = _truncated_quotient(left.value, right.value)
+        result: Union[int, float]
+        if is_integer_constant(left):
+            result = _truncated_quotient(left.value, right.value)  # type: ignore[arg-type]
         else:
-            result = left.value / right.value
+            result = left.value / right.value  # type: ignore[operator]
 
         return self._checked(node, node.op, result, left.semantic_type, span)
 
     def _eval_modulo(self, node: BinaryOp, left: ConstantValue, right: ConstantValue,
                      span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate modulo with zero check."""
-        if not self._is_numeric_type(left.semantic_type) or not self._is_numeric_type(right.semantic_type):
+        if not is_numeric_constant(left) or not is_numeric_constant(right):
             er.emit(self.reporter, er.ERR.CE0110, span, op='modulo on non-numeric type')
             return None
 
@@ -778,87 +822,82 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0112, span)
             return None
 
-        if self._is_integer_type(left.semantic_type):
+        result: Union[int, float]
+        if is_integer_constant(left):
             # The machine divides first, so the remainder overflows exactly where the
             # quotient does: the smallest signed value with -1. LLVM calls that srem
             # undefined and x86 traps on it, so the quotient is what is checked here
             # (compile-time-evaluation.md, Ruling 1).
-            quotient = _truncated_quotient(left.value, right.value)
+            quotient = _truncated_quotient(left.value, right.value)  # type: ignore[arg-type]
             if not fits_integer_type(quotient, left.semantic_type):
                 return self._checked(node, node.op, quotient, left.semantic_type, span)
-            result = _truncated_remainder(left.value, right.value)
+            result = _truncated_remainder(left.value, right.value)  # type: ignore[arg-type]
         else:
-            result = math.fmod(left.value, right.value)
+            result = math.fmod(left.value, right.value)  # type: ignore[arg-type]
 
         return self._checked(node, node.op, result, left.semantic_type, span)
 
     def _eval_bitwise(self, left: ConstantValue, right: ConstantValue, op: str, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate bitwise operation."""
-        if not self._is_integer_type(left.semantic_type) or not self._is_integer_type(right.semantic_type):
+        if not is_integer_constant(left) or not is_integer_constant(right):
             er.emit(self.reporter, er.ERR.CE0110, span, op=f'bitwise {op} on non-integer type')
             return None
 
-        result = _BITWISE[op](left.value, right.value)
-        return ConstantValue(wrap_to_integer_type(result, left.semantic_type),
-                             left.semantic_type)
+        result = _BITWISE[op](left.value, right.value)  # type: ignore[arg-type]
+        return ScalarConstant(wrap_to_integer_type(result, left.semantic_type),
+                              left.semantic_type)
 
     def _eval_shift_left(self, left: ConstantValue, right: ConstantValue, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate left shift."""
         shift = self._shift_count(left, right, span)
         if shift is None:
             return None
-        count, width = shift
+        value, count, width = shift
 
-        result = 0 if count >= width else left.value << count
-        return ConstantValue(wrap_to_integer_type(result, left.semantic_type),
-                             left.semantic_type)
+        result = 0 if count >= width else value << count
+        return ScalarConstant(wrap_to_integer_type(result, left.semantic_type),
+                              left.semantic_type)
 
     def _eval_shift_right(self, left: ConstantValue, right: ConstantValue, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate right shift (arithmetic for signed, logical for unsigned)."""
         shift = self._shift_count(left, right, span)
         if shift is None:
             return None
-        count, width = shift
+        value, count, width = shift
 
         # A held value is in its own range, so Python's shift IS the machine's: it fills
         # from the sign bit of a negative value, and a value of an unsigned type has none.
-        return ConstantValue(left.value >> min(count, width), left.semantic_type)
+        return ScalarConstant(value >> min(count, width), left.semantic_type)
 
     def _shift_count(self, left: ConstantValue, right: ConstantValue,
-                     span: Optional[Span]) -> Optional[tuple]:
-        """A shift's count and the width it moves bits in, or None with the reason reported.
+                     span: Optional[Span]) -> Optional[Tuple[int, int, int]]:
+        """The shifted value, the count and the width it moves bits in, or None with the
+        reason reported.
 
         A count past the width is defined and not checked (Go's rule, and CE2512 covers
         the one a body writes), so the width is handed back to clamp with: a Python shift
         by a count of millions builds the number it names.
         """
-        if not self._is_integer_type(left.semantic_type) or not self._is_integer_type(right.semantic_type):
+        if not is_integer_constant(left) or not is_integer_constant(right):
             er.emit(self.reporter, er.ERR.CE0110, span, op='shift on non-integer type')
             return None
 
-        if right.value < 0:
+        if right.value < 0:  # type: ignore[operator]
             er.emit(self.reporter, er.ERR.CE0110, span, op='shift by negative amount')
             return None
 
-        return right.value, integer_bit_width(left.semantic_type)
+        width = integer_bit_width(left.semantic_type)
+        assert width is not None
+        return int(left.value), int(right.value), width
 
     def _eval_logical(self, left: ConstantValue, right: ConstantValue, op: str, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate logical operation (and, or, xor)."""
-        if left.semantic_type != BuiltinType.BOOL or right.semantic_type != BuiltinType.BOOL:
+        if not is_bool_constant(left) or not is_bool_constant(right):
             er.emit(self.reporter, er.ERR.CE0110, span, op=f'logical {op} on non-boolean type')
             return None
 
-        if op == 'and':
-            result = left.value and right.value
-        elif op == 'or':
-            result = left.value or right.value
-        elif op == 'xor':
-            result = left.value != right.value  # XOR for booleans
-        else:
-            er.emit(self.reporter, er.ERR.CE0110, span, op=op)
-            return None
-
-        return ConstantValue(result, BuiltinType.BOOL)
+        return ScalarConstant(_LOGICAL[op](bool(left.value), bool(right.value)),
+                              BuiltinType.BOOL)
 
     def _eval_comparison(self, left: ConstantValue, right: ConstantValue, op: str, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate comparison operation.
@@ -867,67 +906,63 @@ class ConstantEvaluator:
         what a body gets (#449). The typecheck pass owns that rule for a body; this
         evaluator has to agree with it, or a constant refuses what a local accepts.
         """
-        if op in ('==', '!=') and self._is_equatable_pair(left, right):
-            same = left.value == right.value
-            return ConstantValue(same if op == '==' else not same, BuiltinType.BOOL)
+        compare = _COMPARISON[op]
 
-        if op in ('<', '<=', '>', '>=') and self._is_orderable_pair(left, right):
+        if op not in _ORDERINGS and self._is_equatable_pair(left, right):
+            return ScalarConstant(compare(left.value, right.value), BuiltinType.BOOL)
+
+        if op in _ORDERINGS and is_string_constant(left) and is_string_constant(right):
             # Compare the UTF-8 bytes, which is what emit_string_order does at run time.
             # Python's str orders by code point and UTF-8 keeps code points in numerical
             # order, so the two agree; encoding first makes them agree by construction.
-            lhs = left.value.encode('utf-8')
-            rhs = right.value.encode('utf-8')
-            ordered = {'<': lhs < rhs, '<=': lhs <= rhs,
-                       '>': lhs > rhs, '>=': lhs >= rhs}[op]
-            return ConstantValue(ordered, BuiltinType.BOOL)
+            lhs = str(left.value).encode('utf-8')
+            rhs = str(right.value).encode('utf-8')
+            return ScalarConstant(compare(lhs, rhs), BuiltinType.BOOL)
 
-        if not self._is_numeric_type(left.semantic_type) or not self._is_numeric_type(right.semantic_type):
+        if not is_numeric_constant(left) or not is_numeric_constant(right):
             er.emit(self.reporter, er.ERR.CE0110, span, op=f'comparison {op} on non-comparable types')
             return None
 
-        if op == '==':
-            result = left.value == right.value
-        elif op == '!=':
-            result = left.value != right.value
-        elif op == '<':
-            result = left.value < right.value
-        elif op == '<=':
-            result = left.value <= right.value
-        elif op == '>':
-            result = left.value > right.value
-        elif op == '>=':
-            result = left.value >= right.value
-        else:
-            er.emit(self.reporter, er.ERR.CE0110, span, op=op)
-            return None
+        return ScalarConstant(compare(left.value, right.value), BuiltinType.BOOL)
 
-        return ConstantValue(result, BuiltinType.BOOL)
-
-    def _is_equatable_pair(self, left: ConstantValue, right: ConstantValue) -> bool:
+    def _is_equatable_pair(self, left: ConstantValue,
+                           right: ConstantValue) -> TypeGuard[ScalarConstant]:
         """Whether two non-numeric values of the same type compare for equality."""
-        return left.semantic_type == right.semantic_type and left.semantic_type in (
-            BuiltinType.BOOL, BuiltinType.STRING)
-
-    def _is_orderable_pair(self, left: ConstantValue, right: ConstantValue) -> bool:
-        """Whether two non-numeric values of the same type carry an order.
-
-        A string does and a bool does not, which is the rule a body follows.
-        """
-        return (left.semantic_type == right.semantic_type
-                and left.semantic_type == BuiltinType.STRING)
+        return (isinstance(left, ScalarConstant) and isinstance(right, ScalarConstant)
+                and left.semantic_type == right.semantic_type
+                and left.semantic_type in (BuiltinType.BOOL, BuiltinType.STRING))
 
     def _is_integer_type(self, ty: Type) -> bool:
         """Check if type is an integer type."""
-        return ty in (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-                     BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64)
+        return ty in _INTEGER_TYPES
 
     def _is_float_type(self, ty: Type) -> bool:
         """Check if type is a float type."""
-        return ty in (BuiltinType.F32, BuiltinType.F64)
+        return ty in _FLOAT_TYPES
 
     def _is_numeric_type(self, ty: Type) -> bool:
         """Check if type is numeric (integer or float)."""
         return self._is_integer_type(ty) or self._is_float_type(ty)
+
+    # The one dispatch. A kind absent here is CE0108 in `evaluate`; `NOT_CONSTANT` names
+    # which kinds that is meant for, and the totality gate holds the two sets against the
+    # `Expr` union.
+    HANDLERS: Mapping[type, Callable[..., Optional[ConstantValue]]] = {
+        IntLit: _evaluate_int_lit,
+        FloatLit: _evaluate_float_lit,
+        BoolLit: _evaluate_bool_lit,
+        StringLit: _evaluate_string_lit,
+        BinaryOp: _evaluate_binary_op,
+        UnaryOp: _evaluate_unary_op,
+        ArrayLiteral: _evaluate_array_literal,
+        Name: _evaluate_name,
+        CastExpr: _evaluate_cast,
+        IndexAccess: _evaluate_index,
+        InterpolatedString: _evaluate_interpolation,
+        Call: _evaluate_struct_construction,
+        MemberAccess: _evaluate_member_access,
+        DotCall: _evaluate_dot_call,
+    }
 
 
 def _truncated_quotient(left: int, right: int) -> int:

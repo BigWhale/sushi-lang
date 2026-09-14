@@ -1111,34 +1111,33 @@ class LLVMCodegen:
         to live in, and the evaluator has none, which is why `const_value_to_llvm` hands
         back None for one.
         """
-        from sushi_lang.semantics.typesys import BuiltinType
-
-        if value.semantic_type == BuiltinType.STRING:
-            return self._constant_string_value(value.value, data_name)
+        from sushi_lang.semantics.typesys import BuiltinType, StructType, EnumType
+        from sushi_lang.semantics.const_eval import AggregateConstant
 
         # An aggregate asks its TYPE which kind it is, never the shape of the list: a
         # struct's fields have types of their own, so `ArrayType(elements[0].type, ...)`
         # would build a homogeneous array out of them and mis-type the initializer.
-        from sushi_lang.semantics.typesys import StructType, EnumType
+        if isinstance(value, AggregateConstant):
+            if isinstance(value.semantic_type, StructType):
+                fields = [self._materialize_constant(field, f"{data_name}.{i}")
+                          for i, field in enumerate(value.elements)]
+                if any(f is None for f in fields):
+                    return None
+                return ir.Constant(self.types.ll_type(value.semantic_type), fields)
 
-        if isinstance(value.semantic_type, StructType):
-            fields = [self._materialize_constant(field, f"{data_name}.{i}")
-                      for i, field in enumerate(value.value)]
-            if any(f is None for f in fields):
-                return None
-            return ir.Constant(self.types.ll_type(value.semantic_type), fields)
+            if isinstance(value.semantic_type, EnumType):
+                from sushi_lang.backend.constants.enum_initializers import enum_initializer
+                return enum_initializer(value, self.types, self._constant_string_value,
+                                        data_name)
 
-        if isinstance(value.semantic_type, EnumType):
-            from sushi_lang.backend.constants.enum_initializers import enum_initializer
-            return enum_initializer(value, self.types, self._constant_string_value,
-                                    data_name)
-
-        if isinstance(value.value, list):
             elements = [self._materialize_constant(element, f"{data_name}.{i}")
-                        for i, element in enumerate(value.value)]
+                        for i, element in enumerate(value.elements)]
             if not elements or any(e is None for e in elements):
                 return None
             return ir.Constant(ir.ArrayType(elements[0].type, len(elements)), elements)
+
+        if value.semantic_type == BuiltinType.STRING:
+            return self._constant_string_value(value.value, data_name)
 
         from sushi_lang.backend.constants.llvm_values import const_value_to_llvm
         return const_value_to_llvm(value, self.types)

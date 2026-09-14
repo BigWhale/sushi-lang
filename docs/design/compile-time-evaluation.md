@@ -14,12 +14,17 @@ Read `docs/language-reference.md` for the constant rules that hold today.
 
 ## 1. What the compiler does today
 
-`semantics/const_eval.py` is an expression walker. `evaluate` (`const_eval.py:73-104`)
-sends work to nine node kinds: an integer, a float, a bool, a string, a binary operator, a
-unary operator, an array literal, a name, a cast and an index. Every other node gets CE0108.
+`semantics/const_eval.py` is an expression walker. `evaluate` decides every `Expr` kind
+through one table, `ConstantEvaluator.HANDLERS`: a literal of each kind, a binary and a
+unary operator, an array literal, a name, a cast, an index, an interpolated string, a
+struct construction, a member access and a dot call each have a handler, and the ten
+kinds named in `NOT_CONSTANT` -- a method call, a range, a lambda, a `??`, a borrow, a
+spread, a dynamic array, a blank -- answer CE0108 through the one backstop.
+`tests/unit/test_const_eval_dispatch_is_total.py` holds the two sets against the `Expr`
+union, so a kind added to the language cannot fall through in silence (#683).
 
-The evaluator has no environment. `_evaluate_name` (`const_eval.py:219-242`) reads a global
-constant and nothing else. There is no statement, and there is no control flow.
+The evaluator has no environment. `_evaluate_name` reads a global constant and nothing
+else. There is no statement, and there is no control flow.
 
 The evaluator is a helper and not a pass (`semantics/semantic_analyzer.py:112-113`). Four
 places call it:
@@ -55,9 +60,8 @@ breaking change: no test in the suite needed a change.
 
 ### The behaviour this replaces
 
-The evaluator holds a Python integer of unlimited size. `_eval_arithmetic`
-(`const_eval.py:308-315`) marks the exact result with the type of the left operand. Nothing
-compares that result against the type.
+The evaluator holds a Python integer of unlimited size. `_eval_arithmetic` marks the exact
+result with the type of the left operand. Nothing compares that result against the type.
 
 So this constant holds 300:
 
@@ -355,7 +359,7 @@ When one of these arrives, the cost is already known. Record it here so the deci
   follows: a bare `return`, and no `??` in the body. CE2091 and CE0131 are the codes that
   hold that rule for an extension.
 - **A constant cannot be a struct or an enum.** So a constant function returns a number, a
-  bool, a string, or a fixed array of those. `ConstantValue` (`const_eval.py:20-24`) holds
+  bool, a string, or a fixed array of those. `ScalarConstant` and `AggregateConstant` (`const_eval.py`) hold
   exactly those shapes.
 - **The pass order fights it.** The evaluator runs from the typecheck pass and from the back
   end, and the typecheck pass runs per unit and late. A constant function body must be
