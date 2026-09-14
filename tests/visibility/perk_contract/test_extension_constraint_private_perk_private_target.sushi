@@ -1,0 +1,12 @@
+# Ruling 2 applied to a constraint: an extension is as visible as its TARGET.
+# `Ledger` is private and `i32` carries no marker, so neither extension in the
+# helper promises anything to another unit, and the private perk in their
+# constraints is legal at home (visibility.md, S5). The program runs.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "144\n"
+
+use "helpers/sealed"
+
+fn main() i32:
+    println("{audit().realise(0)}")
+    return Result.Ok(0)

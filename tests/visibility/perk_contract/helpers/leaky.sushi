@@ -1,0 +1,16 @@
+# The perk's own unit, with the LEAK: `Hidden` is private and `Safe` is public,
+# so an extension on `Safe` is public too (Ruling 2), and its constraint hands
+# the private perk to every unit that holds a `Safe`. That is CE3010 here, in
+# the unit that can name the perk, and not CE4011.
+perk Hidden:
+    fn code() i32
+
+public struct Safe:
+    i32 seed
+
+extend Safe with Hidden:
+    fn code() i32:
+        return self.seed
+
+extend Safe unlock@(U: Hidden)(U key) i32:
+    return self.seed + key.code()
