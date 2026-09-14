@@ -370,6 +370,19 @@ _add(ErrorMessage("CE0132", Severity.ERROR,
     "the receiver and reported nothing, which is the silent no-op #480 records. Same "
     "treatment CE0129 gives a consuming use with no ownership decision."))
 
+_add(ErrorMessage("CE0137", Severity.ERROR,
+    "lifted lambda name '{name}' is already registered",
+    Category.INTERNAL,
+    "The lambda lifter claims its index before it builds anything: it steps past every "
+    "__lambda_<n> already in the function table and every __closure_env_<n> already in the "
+    "struct table, so the name it then registers is free in both. A registration that "
+    "fails anyway means the name entered a table between that search and the "
+    "registration, and the closure that loses the race silently aliases another unit's "
+    "body and environment layout -- which is the #402 fault the search exists to prevent. "
+    "It is fatal ON PURPOSE. It was a bare RuntimeError, so it reached the user as CE0000 "
+    "with no explanation of what had gone wrong (#687). Same treatment derive.py gives an "
+    "unsortable struct cycle with CE0128."))
+
 _add(ErrorMessage("CE0126", Severity.ERROR,
     "poisoned intern of '{name}': already interned as {existing}, rebuilt as {rebuilt}",
     Category.INTERNAL,

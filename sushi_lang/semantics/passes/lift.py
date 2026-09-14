@@ -1,7 +1,8 @@
 """Lambda-lifting pass: turn each lambda literal into a top-level function + env."""
 from __future__ import annotations
-from typing import Callable, List, Optional
+from typing import List, Optional, Protocol, runtime_checkable
 
+from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.ast import (
     Node, FuncDef, Lambda, Block, Return, Name, MemberAccess, Param, DotCall,
 )
@@ -11,8 +12,25 @@ from sushi_lang.semantics.typesys import StructType, ReferenceType, BorrowMode
 ENV_PARAM_NAME = "__closure_env"
 
 
+@runtime_checkable
+class Annotator(Protocol):
+    """What this pass needs from the typecheck pass, and nothing more.
+
+    A lifted lambda is a function the typecheck pass has never seen, and it has to be
+    typed before this pass looks inside its body for the next lambda (#629). The pass
+    names the CAPABILITY instead of the provider: it used to take
+    `TypeValidator._validate_function`, a PRIVATE method of another pass, so this pass
+    could not run or be tested without a `TypeValidator`, and a rename over there broke
+    this pass with no diagnostic (#687).
+    """
+
+    def annotate_function(self, func: FuncDef) -> None:
+        ...
+
+
 class LambdaLifter:
-    def __init__(self, structs, func_table, program, annotate: Optional[Callable] = None):
+    def __init__(self, structs, func_table, program,
+                 annotate: Optional[Annotator] = None):
         self.structs = structs
         self.func_table = func_table
         self.program = program
@@ -82,76 +100,100 @@ class LambdaLifter:
         return True
 
     def _lift(self, lam: Lambda) -> None:
-        # The counter is per lifter instance and the tables are global, so a
-        # taken index means another unit's lifter got there first -- advance
-        # past it, or this closure silently aliases that unit's body and env
-        # layout (#402).
+        """Turn one lambda literal into a top-level function plus an environment."""
+        index = self._claim_index()
+        env_struct = self._synthesize_env_struct(f"__closure_env_{index}", lam)
+
+        body = _normalized_body(lam)
+        _rewrite_captures(body, {c.name for c in (lam.captures or [])})
+
+        lifted = _build_lifted_function(lam, f"__lambda_{index}", env_struct, body)
+        self._register(lifted)
+
+        lam.lifted_name = lifted.name
+        lam.env_struct = env_struct
+        self._annotate_then_walk(lifted)
+
+    def _claim_index(self) -> int:
+        """The next index no other unit's lifter has taken.
+
+        The counter is per lifter instance and the tables are global, so a taken index
+        means another unit's lifter got there first -- step past it, or this closure
+        silently aliases that unit's body and environment layout (#402).
+        """
         while (f"__lambda_{self._counter}" in self.func_table.by_name
                or f"__closure_env_{self._counter}" in self.structs.by_name):
             self._counter += 1
-        idx = self._counter
+        index = self._counter
         self._counter += 1
-        env_name = f"__closure_env_{idx}"
-        lifted_name = f"__lambda_{idx}"
-        captures = lam.captures or []
+        return index
 
-        env_struct = StructType(name=env_name,
-                                fields=tuple((c.name, c.ty) for c in captures))
+    def _synthesize_env_struct(self, env_name: str, lam: Lambda) -> StructType:
+        """The closure's own storage: one field per capture, in capture order."""
+        env_struct = StructType(
+            name=env_name,
+            fields=tuple((c.name, c.ty) for c in (lam.captures or [])))
         self.structs.by_name[env_name] = env_struct
         self.structs.order.append(env_name)
+        return env_struct
 
-        if lam.is_block_body:
-            body = lam.body
-        else:
-            ok = DotCall(receiver=Name(id="Result", loc=lam.loc), method="Ok",
-                         args=[lam.body], loc=lam.loc)
-            body = Block(statements=[Return(value=ok, loc=lam.loc)], loc=lam.loc)
-
-        cap_names = {c.name for c in captures}
-        _rewrite_captures(body, cap_names)
-
-        ok_type = lam.resolved_type.ok_type if lam.resolved_type is not None else lam.ret
-        err_type = lam.resolved_type.err_type if lam.resolved_type is not None else lam.err_type
-        # The env borrow is `poke`, and the mode is not decoration: a move-captured
-        # `List@(T)` is MUTABLE inside the body by design, so the write must persist across
-        # calls. Spelled `peek`, it made the language's own closure semantics a CE2408 once
-        # the write gate became total. The environment is the closure's own storage.
-        env_param = Param(
-            name=ENV_PARAM_NAME,
-            ty=ReferenceType(referenced_type=env_struct, mutability=BorrowMode.POKE),
-            loc=lam.loc,
-        )
-        lifted = FuncDef(
-            name=lifted_name,
-            params=[env_param] + list(lam.params),
-            ret=ok_type,
-            body=body,
-            err_type=err_type,
-            loc=lam.loc,
-        )
+    def _register(self, lifted: FuncDef) -> None:
+        """Park the lifted function in the global table, under the claimed name."""
         from sushi_lang.semantics.generics.synthesis import register_synthesized_function
         if not register_synthesized_function(
                 self.func_table, lifted, program=self.program,
                 from_library_template=self._owner_is_library,
                 origin=self._owner_origin):
-            # Unreachable after the free-name search above; a silent False
-            # here is exactly the #402 aliasing, so fail loud instead.
-            raise RuntimeError(f"lifted lambda name '{lifted_name}' already registered")
+            # Unreachable after `_claim_index`, which answers a name that is free in
+            # both tables. A silent False here is exactly the #402 aliasing.
+            raise_internal_error("CE0137", name=lifted.name)
         self._lifted.append(lifted)
-
         lifted.instance_of = self._owner_instance_of
 
-        lam.lifted_name = lifted_name
-        lam.env_struct = env_struct
+    def _annotate_then_walk(self, lifted: FuncDef) -> None:
+        """Type the lifted body, THEN look in it for the next lambda.
 
-        # Annotate FIRST, then look for a lambda nested in this body. The hook is the
-        # typecheck pass's `_validate_function`, and it is what types a Lambda node --
-        # so a nested one lifted before it ran carried no parameter types, no captures
-        # and no channel, and its own body went unchecked (#629). The order is the
-        # dependency: type this body, then lift what the typing found in it.
+        The order is the dependency and not a preference. The annotator is what types a
+        Lambda node, so a nested one lifted before it ran carried no parameter types, no
+        captures and no channel, and its own body went unchecked (#629).
+        """
         if self.annotate is not None:
-            self.annotate(lifted)
-        self._walk(body)
+            self.annotate.annotate_function(lifted)
+        self._walk(lifted.body)
+
+
+def _normalized_body(lam: Lambda) -> Block:
+    """A lambda's body as a Block. An expression body returns `Result.Ok` of itself."""
+    if lam.is_block_body:
+        return lam.body
+    ok = DotCall(receiver=Name(id="Result", loc=lam.loc), method="Ok",
+                 args=[lam.body], loc=lam.loc)
+    return Block(statements=[Return(value=ok, loc=lam.loc)], loc=lam.loc)
+
+
+def _build_lifted_function(lam: Lambda, lifted_name: str, env_struct: StructType,
+                           body: Block) -> FuncDef:
+    """The top-level function a lambda becomes: the environment, then its own params."""
+    ok_type = lam.resolved_type.ok_type if lam.resolved_type is not None else lam.ret
+    err_type = (lam.resolved_type.err_type if lam.resolved_type is not None
+                else lam.err_type)
+    # The env borrow is `poke`, and the mode is not decoration: a move-captured
+    # `List@(T)` is MUTABLE inside the body by design, so the write must persist across
+    # calls. Spelled `peek`, it made the language's own closure semantics a CE2408 once
+    # the write gate became total. The environment is the closure's own storage.
+    env_param = Param(
+        name=ENV_PARAM_NAME,
+        ty=ReferenceType(referenced_type=env_struct, mutability=BorrowMode.POKE),
+        loc=lam.loc,
+    )
+    return FuncDef(
+        name=lifted_name,
+        params=[env_param] + list(lam.params),
+        ret=ok_type,
+        body=body,
+        err_type=err_type,
+        loc=lam.loc,
+    )
 
 
 def _rewrite_captures(node, cap_names: set) -> None:

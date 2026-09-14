@@ -533,7 +533,7 @@ class SemanticAnalyzer:
 
             from sushi_lang.semantics.passes.lift import LambdaLifter
             LambdaLifter(self.structs, self.funcs, unit.ast,
-                         annotate=type_validator._validate_function).run()
+                         annotate=type_validator).run()
 
             # borrow. The enum names let the checker tell `Box.Full(a)` from a method call
             # -- both are DotCall here. BASE names only: the receiver is written bare.
@@ -808,7 +808,7 @@ class SemanticAnalyzer:
         if lift_target is not None:
             from sushi_lang.semantics.passes.lift import LambdaLifter
             lifter = LambdaLifter(self.structs, self.funcs, lift_target,
-                                  annotate=type_validator._validate_function)
+                                  annotate=type_validator)
 
         for extend_def in (only if only is not None else self.monomorphized_extensions):
             capture_scope._check_extension_method(extend_def)
