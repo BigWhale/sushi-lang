@@ -118,14 +118,12 @@ families, `visitor.py` prefers a perk method during inference, and the codegen d
 its perk step before the auto-derived ones. `tests/perks/test_perk_override_hash.sushi` pins it.
 
 ```sushi
-perk Hashable:
-    fn hash() u64
-
 struct Point:
     i32 x
     i32 y
 
-# The supported way to replace the compiler-derived hash.
+# The supported way to replace the compiler-derived hash. `Hashable` is predefined
+# (#696): every type with a derived hash satisfies it, and this is the override.
 extend Point with Hashable:
     fn hash() u64:
         return 999999 as u64
