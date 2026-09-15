@@ -170,8 +170,9 @@ def monomorphize_perk_impl(
 
     The same substitution `monomorphize_extension_method` applies to one method, applied
     to every method of the implementation and to the target it names. The copy is an
-    ordinary `ExtendWithDef` over a concrete type: nothing downstream -- the typecheck
-    pass, the backend, the perk-impl table -- can tell it from a hand-written one.
+    ordinary `ExtendWithDef` over a concrete type -- the typecheck pass, the backend and
+    the perk-impl table read it as one -- and it carries `is_synthesized`, so a walk over
+    a unit's DECLARATIONS can tell it from the one a person wrote (#657).
     """
     import copy as _copy
     from sushi_lang.semantics.ast import ExtendWithDef
@@ -216,6 +217,7 @@ def monomorphize_perk_impl(
         perk_name_span=template.impl.perk_name_span,
         loc=template.impl.loc,
         doc=template.impl.doc,
+        is_synthesized=True,
     )
 
 

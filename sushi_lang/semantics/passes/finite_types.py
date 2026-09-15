@@ -75,6 +75,18 @@ def table_marks(struct_table: 'StructTable', enum_table: 'EnumTable') -> Marks:
     return len(struct_table.order), len(enum_table.order)
 
 
+def names_since(struct_table: 'StructTable', enum_table: 'EnumTable',
+                since: Optional[Marks] = None) -> Tuple[List[str], List[str]]:
+    """The struct names and the enum names each table gained after `since`.
+
+    One reader of the marks. This pass walks from these names, and the late interner
+    narrows its resolve and derive runs to the same ones (#676), so the two cannot
+    disagree about which instances a round added.
+    """
+    struct_from, enum_from = since if since is not None else (0, 0)
+    return struct_table.order[struct_from:], enum_table.order[enum_from:]
+
+
 def check_infinite_size_types(struct_table: 'StructTable', enum_table: 'EnumTable',
                               reporter: 'Reporter',
                               since: Optional[Marks] = None) -> bool:
@@ -93,9 +105,9 @@ def check_infinite_size_types(struct_table: 'StructTable', enum_table: 'EnumTabl
     reported: Set[frozenset] = set()
     found = False
 
-    struct_from, enum_from = since if since is not None else (0, 0)
-    roots: List[Node] = [("struct", n) for n in struct_table.order[struct_from:]]
-    roots += [("enum", n) for n in enum_table.order[enum_from:]]
+    new_structs, new_enums = names_since(struct_table, enum_table, since)
+    roots: List[Node] = [("struct", n) for n in new_structs]
+    roots += [("enum", n) for n in new_enums]
 
     for root in roots:
         if root in state:

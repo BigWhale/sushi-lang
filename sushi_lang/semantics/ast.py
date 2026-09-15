@@ -343,6 +343,11 @@ class ExtendWithDef(Node):
     target_type_span: Optional[Span] = None
     perk_name_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
+    # True for a copy the compiler cut per instantiation, the meaning `FuncDef`
+    # carries. The copy goes home to the unit that declared its template, so without
+    # the mark a walk over that unit reads one written declaration once for each
+    # instantiation (#657).
+    is_synthesized: bool = False
 
 @dataclass(slots=True)
 class TypeConstraint:

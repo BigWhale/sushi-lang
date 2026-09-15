@@ -1,8 +1,9 @@
 """The resolve pass: every struct field, enum variant and constant type made concrete."""
 
-from typing import Callable, Set
+from typing import Callable, Iterable, Optional, Set
 
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
+from sushi_lang.semantics.passes.collect.utils import types_to_walk
 from sushi_lang.semantics.type_resolution import resolve_type_recursively
 from sushi_lang.semantics.typesys import StructType, EnumType, Type
 
@@ -22,14 +23,17 @@ def table_resolver(struct_table: StructTable,
 
 def resolve_struct_field_types(
     struct_table: StructTable,
-    enum_table: EnumTable
+    enum_table: EnumTable,
+    only: Optional[Iterable[str]] = None
 ) -> None:
-    """Resolve UnknownType references in struct fields to concrete types."""
+    """Resolve UnknownType references in struct fields to concrete types.
+
+    `only` narrows the run to the named entries; `None` is the whole table. The pass
+    itself walks it whole, and the late-interning seam names what it interned (#676).
+    """
     structs, enums = struct_table.by_name, enum_table.by_name
 
-    for struct_name in list(structs.keys()):
-        struct_type = structs[struct_name]
-
+    for struct_type in types_to_walk(struct_table, only):
         if not isinstance(struct_type, StructType):
             continue  # Skip if not a regular StructType
 
@@ -47,14 +51,16 @@ def resolve_struct_field_types(
 
 def resolve_enum_variant_types(
     struct_table: StructTable,
-    enum_table: EnumTable
+    enum_table: EnumTable,
+    only: Optional[Iterable[str]] = None
 ) -> None:
-    """Resolve UnknownType references in enum variant associated types to concrete types."""
+    """Resolve UnknownType references in enum variant associated types to concrete types.
+
+    `only` narrows the run the way `resolve_struct_field_types` does.
+    """
     structs, enums = struct_table.by_name, enum_table.by_name
 
-    for enum_name in list(enums.keys()):
-        enum_type = enums[enum_name]
-
+    for enum_type in types_to_walk(enum_table, only):
         if not isinstance(enum_type, EnumType):
             continue  # Skip if not a regular EnumType
 

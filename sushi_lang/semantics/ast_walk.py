@@ -5,6 +5,11 @@ a diagnostic call each kind by". The `docs` pass reads it to check blocks, and
 `tests/docs_sweep.py` reads it to number its generated examples. Two walks would drift, and a kind missing from the walk
 would be silently missing from every consumer.
 
+A monomorphized instance goes home to the unit that declared its template, so a list
+here can hold a copy of a declaration the source wrote once. `is_written()` is the one
+predicate that tells the two apart, and `declarations()` and `bodied()` answer with the
+written ones alone (#657).
+
 A GENERIC target keeps a list of its own: the `collect` pass re-files
 `extend Box@(T)` and `extend Box@(T) with P` out of the concrete list, because every
 later walk over that one assumes a concrete `self`. Each walk here therefore reads BOTH
@@ -97,6 +102,22 @@ class TypeSite:
     at: Optional[InnerDecl] = None
 
 
+def is_written(decl: object) -> bool:
+    """Whether the SOURCE wrote this declaration, or the compiler cut it.
+
+    A monomorphized instance goes home to the unit that declared its template: a
+    generic function's copy joins `functions`, a generic-target perk implementation's
+    copy joins `perk_impls`. So a walk over a unit's declarations meets one written
+    declaration once for each instantiation, and a rule that reports a source line
+    reports it that many times (#657).
+
+    The predicate lives here because this is the one walk. `declarations()` and
+    `bodied()` answer with the written declarations alone; `signature_types()` yields
+    both on purpose -- see its own note.
+    """
+    return not getattr(decl, "is_synthesized", False)
+
+
 def _bodied_kinds(program: 'Program') -> Iterator[Tuple[str, BodiedDecl]]:
     """Every declaration with a body, with the word a diagnostic calls it by.
 
@@ -104,10 +125,13 @@ def _bodied_kinds(program: 'Program') -> Iterator[Tuple[str, BodiedDecl]]:
     inside it, and it is why these come last in both walks.
     """
     for func in program.functions:
-        yield "function", func
+        if is_written(func):
+            yield "function", func
     for extension in [*program.extensions, *program.generic_extensions]:
         yield "extension", extension
     for impl in [*program.perk_impls, *program.generic_perk_impls]:
+        if not is_written(impl):
+            continue
         for method in impl.methods:
             yield "perk method", method
 
@@ -138,7 +162,8 @@ def declarations(program: 'Program') -> Iterator[Declaration]:
         for method in perk.methods:
             yield "perk method", method
     for impl in [*program.perk_impls, *program.generic_perk_impls]:
-        yield "perk implementation", impl
+        if is_written(impl):
+            yield "perk implementation", impl
     for block in program.externals:
         yield "external block", block
         for decl in block.decls:
@@ -219,6 +244,11 @@ def signature_types(program: 'Program') -> Iterator[TypeSite]:
 
     A body is deliberately absent. A private type is perfectly legal in a local variable,
     and CE5009 -- which does care -- reads `body_types()` beside this one.
+
+    A SYNTHESIZED declaration is yielded here, unlike in `declarations()`: a generic's
+    own signature names type parameters that are in no table, so `validate_declared_types`
+    skips the template and reads the name off the instance instead. A rule that must
+    report one source line once filters with `is_written` (#657).
     """
     for const in program.constants:
         yield TypeSite("variable" if isinstance(const, VarDef) else "constant",
