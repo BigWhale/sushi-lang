@@ -728,6 +728,32 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **A late intern resolves and derives the names it interned** (#676). The typecheck pass
+  discovers a generic instance late, and the seam that picks it up re-ran the two resolve
+  entry points and the four derive ones over the WHOLE struct and enum tables, once per
+  round of a loop bounded at eight. The six take an `only` parameter now, the shape
+  `_check_monomorphized_extensions` already used, and one selector in the collect pass
+  narrows them all. Measured on a synthetic program with four late instances: 336 type
+  visits against 28 with a 25-name table, and 1616 against 28 with a 105-name table -- the
+  cost was linear in the table and is now constant in it. The reach is narrower than it
+  sounds on today's corpus: the seam returns early when a call interns nothing, so a
+  representative program reaches the re-run rarely (one stdlib fixture calls it 133 times
+  and re-runs none), and the fixtures that do reach it hold tables under 20 names.
+  Resolve and derive take every name interned since they last ran, not this round's alone:
+  a `Result` interned during the typecheck pass derives a hash and no clone, and the wider
+  window is what has been supplying the missing clone.
+- **One walk tells a monomorphized copy from a written declaration** (#657). A generic
+  perk implementation's monomorphized copy goes home to the unit that declared its
+  template, which it must -- the copy's methods take that unit's symbol prefix -- so a walk
+  over the unit's declarations met one WRITTEN declaration once for every instantiation.
+  `ExtendWithDef` carries `is_synthesized` now, the field a monomorphized `FuncDef` already
+  had, and `ast_walk.is_written` is the one predicate: `declarations()` and `bodied()`
+  answer with the written declarations alone. `signature_types()` yields both on purpose,
+  because a generic's own signature names type parameters that are in no table and the
+  declared-type check reads the name off the instance instead -- filtering there would drop
+  a real CE2001. Nothing reports differently today: a copy carries its template's spans, so
+  every diagnostic it raises is identical and the channel collapses the repeat. The trap was
+  the next rule written over that seam.
 - **One resolver answers what a written type is** (#678, #679). The resolve pass had a
   four-arm resolver of its own beside `resolve_type_recursively`, and the two had
   complementary blind spots. The pass calls the shared one now, so a struct field, an enum
