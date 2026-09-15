@@ -224,7 +224,7 @@ class PerkCollector:
 
     def collect_definitions(self, root: Program) -> None:
         """Collect all perk definitions from program AST."""
-        perks = getattr(root, "perks", None)
+        perks = root.perks
         if isinstance(perks, list):
             for perk in perks:
                 if isinstance(perk, PerkDef):
@@ -238,7 +238,7 @@ class PerkCollector:
         walk over `perk_impls` -- the typecheck pass, the backend's declaration and
         definition loops, the fingerprint -- assumes a concrete `self`.
         """
-        perk_impls = getattr(root, "perk_impls", None)
+        perk_impls = root.perk_impls
         if isinstance(perk_impls, list):
             moved = []
             for impl in perk_impls:
@@ -296,7 +296,7 @@ class PerkCollector:
 
     def _collect_perk_def(self, perk: PerkDef) -> None:
         """Collect perk definition and register in perk table."""
-        name = getattr(perk, "name", None)
+        name = perk.name
         if not isinstance(name, str):
             return
         record_declaration(self.visibility, "perk", perk,
@@ -309,23 +309,23 @@ class PerkCollector:
         if self.perks.get(name) is perk:
             return
 
-        name_span: Optional[Span] = getattr(perk, "name_span", None) or getattr(perk, "loc", None)
+        name_span: Optional[Span] = perk.name_span or perk.loc
 
         # Perks cannot be generic (CE4010). The grammar parses `perk Name<T>:`
         # and the AST builder stores the params, but nothing consumes them - so
         # before this check a generic perk was silently accepted and inert.
-        if getattr(perk, "type_params", None):
+        if perk.type_params:
             er.emit(self.r, ERR.CE4010, name_span, name=name)
             return
 
         # Variadic parameters are not allowed in perk methods (CE0115).
         # The pack half is unreachable today, but the guard must match its
         # documented contract and stay correct by construction (#246).
-        for method in getattr(perk, "methods", []) or []:
-            for p in getattr(method, "params", []) or []:
-                if getattr(p, "is_variadic", False) or getattr(p, "is_pack", False):
+        for method in perk.methods or []:
+            for p in method.params or []:
+                if p.is_variadic or p.is_pack:
                     er.emit(self.r, ERR.CE0115,
-                            getattr(p, "name_span", None) or name_span,
+                            p.name_span or name_span,
                             context="a perk method")
                     break
 
@@ -333,17 +333,17 @@ class PerkCollector:
         # plain function returning one (CE2417, #314): the implementation would hand out a
         # view of its own frame. Perk method PARAMETERS stay legal -- that is the one
         # supported reference position.
-        for method in getattr(perk, "methods", []) or []:
-            reject_reference_in(self.r, getattr(method, "ret", None),
-                                getattr(method, "ret_span", None)
-                                or getattr(method, "name_span", None) or name_span,
+        for method in perk.methods or []:
+            reject_reference_in(self.r, method.ret,
+                                method.ret_span
+                                or method.name_span or name_span,
                                 ERR.CE2417)
 
         if self.perks.register(perk):
             self.perks.files[name] = self.current_unit_file
         else:
             prev = self.perks.get(name)
-            prev_span = getattr(prev, "name_span", None) if prev else None
+            prev_span = prev.name_span if prev else None
             diag = er.emit_with(self.r, ERR.CE4001, name_span, name=name)
             if prev_span is not None:
                 diag.note("first defined here", prev_span, self.perks.files.get(name))
@@ -353,12 +353,12 @@ class PerkCollector:
     def _reject_static_in_impl(self, impl: ExtendWithDef, perk_name: str) -> bool:
         """CE4014: a perk implementation may not declare a static method (#542, R1)."""
         refused = False
-        for method in getattr(impl, "methods", []) or []:
-            span = getattr(method, "static_span", None)
+        for method in impl.methods or []:
+            span = method.static_span
             if span is None:
                 continue
             er.emit_with(self.r, ERR.CE4014, span,
-                         perk=perk_name, method=getattr(method, "name", "?")) \
+                         perk=perk_name, method=method.name) \
                 .help("declare it as a plain extension method on the type "
                       "('extend T static name(...)'); a perk contracts instance "
                       "methods only").emit()
@@ -416,8 +416,8 @@ class PerkCollector:
         shape = classify_extension_target(target_type, self.is_declared_type)
         if shape.is_mixed:
             er.emit_with(self.r, ERR.CE2098,
-                         getattr(impl, "target_type_span", None)
-                         or getattr(impl, "perk_name_span", None),
+                         impl.target_type_span
+                         or impl.perk_name_span,
                          target=display_type(target_type)) \
                 .help("name every type parameter, or make every argument concrete -- "
                       "there is no partial specialization").emit()
@@ -425,10 +425,10 @@ class PerkCollector:
         if not shape.param_names:
             return False
 
-        for method in getattr(impl, "methods", []) or []:
+        for method in impl.methods or []:
             method.ret = deep_type_params(method.ret, shape.param_names)
             method.err_type = deep_type_params(
-                getattr(method, "err_type", None), shape.param_names)
+                method.err_type, shape.param_names)
             for param in method.params:
                 param.ty = deep_type_params(param.ty, shape.param_names)
 
@@ -447,16 +447,16 @@ class PerkCollector:
         A template is re-filed by the caller: its target names a type parameter, so it
         registers nothing here and one copy per instantiation is registered later.
         """
-        perk_name = getattr(impl, "perk_name", None)
+        perk_name = impl.perk_name
         if not isinstance(perk_name, str):
             return False
 
         # A `??` has no error channel in a BARE perk-impl body (CE0131, #398). A
         # declared `| E` IS the channel (ruling R1), so the reject does not apply
         # there -- the same three lines the extension arm runs.
-        for method in getattr(impl, "methods", []) or []:
-            if getattr(method, "err_type", None) is None:
-                reject_try_in_body(self.r, getattr(method, "body", None), "a perk method")
+        for method in impl.methods or []:
+            if method.err_type is None:
+                reject_try_in_body(self.r, method.body, "a perk method")
 
         # A perk has no `Self` (HANDLES.md R7), so a contract cannot hold a
         # constructor. The grammar admits the marker here only so this diagnostic can
@@ -464,15 +464,15 @@ class PerkCollector:
         if self._reject_static_in_impl(impl, perk_name):
             return False
 
-        perk_name_span: Optional[Span] = getattr(impl, "perk_name_span", None) or getattr(impl, "loc", None)
-        target_type: Optional[Type] = getattr(impl, "target_type", None)
+        perk_name_span: Optional[Span] = impl.perk_name_span or impl.loc
+        target_type: Optional[Type] = impl.target_type
 
         # `extend peek T with P` has the same problem as a reference extension target
         # (CE2420, #319): the implementation is registered against a type no receiver ever
         # resolves to, so it is unreachable.
         if reject_reference_in(self.r, target_type,
-                               getattr(impl, "target_type_span", None)
-                               or getattr(impl, "loc", None), ERR.CE2420):
+                               impl.target_type_span
+                               or impl.loc, ERR.CE2420):
             return False
 
         type_name = _get_type_name(target_type)
@@ -503,7 +503,7 @@ class PerkCollector:
             owner = self.perk_impls.owner(type_name, perk_name)
             if not taken_by_a_library(owner, current_unit=self.current_unit_name,
                                       library_units=self.library_units):
-                er.emit(self.r, ERR.CE4002, getattr(impl, "loc", None),
+                er.emit(self.r, ERR.CE4002, impl.loc,
                         type=type_name, perk=perk_name)
                 return False
             previous = self.perk_impls.replace(impl, type_name,

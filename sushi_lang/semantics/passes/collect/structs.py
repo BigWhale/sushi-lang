@@ -7,9 +7,9 @@ from typing import Dict, List, Optional, Set, Tuple
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
-from sushi_lang.semantics.ast import StructDef, Program, BoundedTypeParam
+from sushi_lang.semantics.ast import StructDef, Program
 from sushi_lang.semantics.typesys import Type, StructType
-from sushi_lang.semantics.generics.types import GenericStructType, TypeParameter
+from sushi_lang.semantics.generics.types import GenericStructType
 
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
@@ -80,7 +80,7 @@ class StructCollector:
 
     def collect(self, root: Program) -> None:
         """Collect all struct definitions from program AST."""
-        structs = getattr(root, "structs", None)
+        structs = root.structs
         if isinstance(structs, list):
             for struct in structs:
                 if isinstance(struct, StructDef):
@@ -124,16 +124,16 @@ class StructCollector:
 
     def _collect_struct_def(self, struct: StructDef) -> None:
         """Collect struct definition and create StructType or GenericStructType."""
-        name = getattr(struct, "name", None)
+        name = struct.name
         if not isinstance(name, str):
             return
 
-        name_span: Optional[Span] = getattr(struct, "name_span", None) or getattr(struct, "loc", None)
+        name_span: Optional[Span] = struct.name_span or struct.loc
         record_declaration(self.visibility, "struct", struct,
                            unit_name=self.current_unit_name,
                            filename=self.current_unit_file)
 
-        type_params_raw = getattr(struct, "type_params", None)
+        type_params_raw = struct.type_params
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
         if name in self.structs.by_name or name in self.generic_structs.by_name:
@@ -159,11 +159,11 @@ class StructCollector:
         fields_list: List[Tuple[str, Type]] = []
         field_spans: Dict[str, Optional[Span]] = {}
 
-        struct_fields = getattr(struct, "fields", [])
+        struct_fields = struct.fields
         for field_node in struct_fields:
-            field_name = getattr(field_node, "name", None)
-            field_type = getattr(field_node, "ty", None)
-            field_loc = getattr(field_node, "loc", None)
+            field_name = field_node.name
+            field_type = field_node.ty
+            field_loc = field_node.loc
 
             if not isinstance(field_name, str):
                 continue
@@ -194,12 +194,7 @@ class StructCollector:
 
         if type_params and len(type_params) > 0:
 
-            type_param_instances = tuple(
-                tp if isinstance(tp, BoundedTypeParam)
-                else TypeParameter(name=tp) if isinstance(tp, TypeParameter)
-                else BoundedTypeParam(name=tp, constraints=[], loc=None)
-                for tp in type_params_raw
-            )
+            type_param_instances = tuple(type_params_raw)
 
             generic_struct = GenericStructType(
                 name=name,

@@ -61,7 +61,7 @@ class ConstantTable:
         if name not in self.by_name:
             self.order.append(name)
             self.by_name[name] = sig
-        unit = getattr(sig, "unit_name", None)
+        unit = sig.unit_name
         if unit is not None:
             self.by_unit.setdefault(unit, {})[name] = sig
 
@@ -90,7 +90,7 @@ class ConstantCollector:
 
     def collect(self, root: Program) -> None:
         """Collect all constant definitions from program AST."""
-        constants = getattr(root, "constants", None)
+        constants = root.constants
         if isinstance(constants, list):
             for const in constants:
                 if isinstance(const, ConstDef):
@@ -113,18 +113,16 @@ class ConstantCollector:
 
     def _collect_constant_def(self, const: ConstDef) -> None:
         """Collect a single constant definition."""
-        name = getattr(const, "name", None)
+        name = const.name
         if not isinstance(name, str):
             return
 
-        name_span: Optional[Span] = getattr(const, "name_span", None) or getattr(
-            const, "loc", None
-        )
+        name_span: Optional[Span] = const.name_span or const.loc
         record_declaration(
             self.visibility, "variable" if isinstance(const, VarDef) else "constant",
             const, unit_name=self.current_unit_name, filename=self.current_unit_file)
-        const_type: Optional[Type] = getattr(const, "ty", None)
-        type_span: Optional[Span] = getattr(const, "type_span", None) or name_span
+        const_type: Optional[Type] = const.ty
+        type_span: Optional[Span] = const.type_span or name_span
 
         if const_type is None:
             er.emit(self.r, ERR.CE0104, name_span, name=name)
@@ -136,7 +134,7 @@ class ConstantCollector:
             type_span=type_span,
             filename=self.current_unit_file,
             unit_name=self.current_unit_name,
-            is_public=getattr(const, "is_public", True),
+            is_public=const.is_public,
             is_var=isinstance(const, VarDef),
             decl=const,
         )
@@ -146,7 +144,7 @@ class ConstantCollector:
             # Another unit's declaration COEXISTS: each takes its own `<unit>$<name>`
             # global, so neither has to lose. The same name twice inside ONE unit is
             # the duplicate CE0105 still answers.
-            prev_unit = getattr(prev, "unit_name", None)
+            prev_unit = prev.unit_name
             if (prev_unit is None
                     or prev_unit == self.current_unit_name
                     or self._shadows_a_library_export(name)):

@@ -1,11 +1,14 @@
 """Shared utilities for collection passes."""
 
 from __future__ import annotations
-from typing import Any, List, Optional
+from typing import Any, List, Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import BoundedTypeParam, Param
 from sushi_lang.semantics.typesys import Type
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.passes.collect.functions import Param as CollectedParam
 
 
 def extract_type_param_names(type_params_raw: Optional[List]) -> Optional[List[str]]:
@@ -28,27 +31,27 @@ def extract_type_param_names(type_params_raw: Optional[List]) -> Optional[List[s
     return names if names else None
 
 
-def param_from_node(p: Any, idx: int) -> 'Param':
-    """Convert AST parameter node to Param dataclass."""
-    from .functions import Param  # Import here to avoid circular dependency
+def param_from_node(p: Param, idx: int) -> 'CollectedParam':
+    """Convert AST parameter node to the collected Param dataclass."""
+    from .functions import Param as CollectedParam  # avoids a circular import
 
-    pname = getattr(p, "name", None)
-    pty: Optional[Type] = getattr(p, "ty", None)
-    pname_span: Optional[Span] = getattr(p, "name_span", None)
-    ptype_span: Optional[Span] = getattr(p, "type_span", None)
+    pname = p.name
+    pty: Optional[Type] = p.ty
+    pname_span: Optional[Span] = p.name_span
+    ptype_span: Optional[Span] = p.type_span
 
     if not isinstance(pname, str):
         pname = str(pname) if pname is not None else f"_p{idx}"
 
-    return Param(
+    return CollectedParam(
         name=pname,
         ty=pty,
         name_span=pname_span,
         type_span=ptype_span,
         index=idx,
-        is_variadic=bool(getattr(p, "is_variadic", False)),
-        is_pack=bool(getattr(p, "is_pack", False)),
-        is_nom=bool(getattr(p, "is_nom", False)),
+        is_variadic=bool(p.is_variadic),
+        is_pack=bool(p.is_pack),
+        is_nom=bool(p.is_nom),
     )
 
 
@@ -107,7 +110,7 @@ def reject_try_in_body(reporter, body: Any, context: str) -> None:
             return False
         if isinstance(node, TryExpr):
             er.emit_with(reporter, er.ERR.CE0131,
-                         getattr(node, "loc", None), context=context) \
+                         node.loc, context=context) \
                 .help("handle the Result in the body: match on it, or use "
                       ".realise(default)").emit()
         return True
@@ -129,7 +132,7 @@ def reject_self_in_body(reporter, body: Any, name: str) -> None:
     def refuse_a_self(node: Node) -> bool:
         if isinstance(node, Name) and node.id == "self":
             er.emit_with(reporter, er.ERR.CE0134,
-                         getattr(node, "loc", None), name=name) \
+                         node.loc, name=name) \
                 .help("a static has no receiver: take what it needs as a "
                       "parameter, or drop the `static` marker").emit()
         return True

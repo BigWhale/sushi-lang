@@ -1,7 +1,7 @@
 """Function and extension method collection."""
 
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
@@ -70,7 +70,7 @@ def is_explicit_result_type(ty: Optional[Type]) -> bool:
 
 def validate_variadic_params(reporter: 'Reporter', params: List['Param']) -> None:
     """Validate native variadic '...T' parameter placement and element type."""
-    variadic_indices = [i for i, p in enumerate(params) if getattr(p, "is_variadic", False)]
+    variadic_indices = [i for i, p in enumerate(params) if p.is_variadic]
     if not variadic_indices:
         return
 
@@ -110,7 +110,7 @@ def validate_type_pack_params(
     type_params = type_params_raw if isinstance(type_params_raw, list) else []
     pack_type_param_indices = [
         i for i, tp in enumerate(type_params)
-        if isinstance(tp, BoundedTypeParam) and getattr(tp, "is_pack", False)
+        if isinstance(tp, BoundedTypeParam) and tp.is_pack
     ]
     pack_type_param_names = {
         type_params[i].name for i in pack_type_param_indices
@@ -118,17 +118,17 @@ def validate_type_pack_params(
 
     if len(pack_type_param_indices) > 1:
         offending = type_params[pack_type_param_indices[1]]
-        er.emit(reporter, ERR.CE0117, getattr(offending, "loc", None) or fallback_span,
+        er.emit(reporter, ERR.CE0117, offending.loc or fallback_span,
                 message=f"a function may declare at most one type-pack parameter '...{offending.name}'")
     elif len(pack_type_param_indices) == 1:
         idx = pack_type_param_indices[0]
         if idx != len(type_params) - 1:
             offending = type_params[idx]
-            er.emit(reporter, ERR.CE0117, getattr(offending, "loc", None) or fallback_span,
+            er.emit(reporter, ERR.CE0117, offending.loc or fallback_span,
                     message=f"a type-pack parameter '...{offending.name}' must be the last type parameter")
 
     pack_value_indices = [
-        i for i, p in enumerate(params) if getattr(p, "is_pack", False)
+        i for i, p in enumerate(params) if p.is_pack
     ]
 
     if len(pack_value_indices) > 1:
@@ -144,7 +144,7 @@ def validate_type_pack_params(
                     message=f"a type-pack value parameter '...{pack_param.name}' must be the last parameter")
 
         # No mixing with a v1 native variadic (CE0118).
-        if any(getattr(p, "is_variadic", False) for p in params):
+        if any(p.is_variadic for p in params):
             er.emit(reporter, ERR.CE0118, pack_param.name_span or fallback_span,
                     message="a type-pack parameter '...Ts' cannot be combined with a native variadic '...T'")
 
@@ -166,6 +166,17 @@ class Param:
     is_pack: bool = False             # True for a v2 type-pack value-param (...Ts args);
     is_nom: bool = False              # `nom T name`: the CALLEE takes ownership. Read it
                                       # through semantics/param_modes.py, never directly.
+
+
+def convert_param_types(
+        params: List['Param'],
+        convert: Callable[[Optional[Type]], Optional[Type]]) -> List['Param']:
+    """Rebuild each parameter with its type converted and every other field kept.
+
+    `dataclasses.replace` and not a field list: a rebuild that spells out what it
+    copies drops what it forgets, and that is how `is_pack` was lost (#694).
+    """
+    return [replace(p, ty=convert(p.ty)) for p in params]
 
 
 @dataclass
@@ -248,7 +259,7 @@ class FunctionTable:
         if name not in self.by_name:
             self.order.append(name)
             self.by_name[name] = sig
-        unit = getattr(sig, "unit_name", None)
+        unit = sig.unit_name
         if unit is not None:
             self.by_unit.setdefault(unit, {})[name] = sig
 
@@ -322,7 +333,7 @@ class GenericFunctionTable:
         if name not in self.by_name:
             self.order.append(name)
             self.by_name[name] = definition
-        unit = getattr(definition, "unit_name", None)
+        unit = definition.unit_name
         if unit is not None:
             self.by_unit.setdefault(unit, {})[name] = definition
 
@@ -559,7 +570,7 @@ class FunctionCollector:
 
     def collect_functions(self, root: Program) -> None:
         """Collect all function definitions from program AST."""
-        funcs = getattr(root, "functions", None)
+        funcs = root.functions
         if isinstance(funcs, list):
             for fn in funcs:
                 if isinstance(fn, FuncDef):
@@ -567,13 +578,13 @@ class FunctionCollector:
 
     def collect_extensions(self, root: Program) -> None:
         """Collect all extension method definitions from program AST."""
-        generic_extensions = getattr(root, "generic_extensions", None)
+        generic_extensions = root.generic_extensions
         if isinstance(generic_extensions, list):
             for ext in list(generic_extensions):
                 if isinstance(ext, ExtendDef):
                     self._collect_extension_def(ext)
 
-        extensions = getattr(root, "extensions", None)
+        extensions = root.extensions
         if isinstance(extensions, list):
             for ext in extensions:
                 if isinstance(ext, ExtendDef):
@@ -586,8 +597,8 @@ class FunctionCollector:
             # that assume a concrete `self`.
             moved = [e for e in extensions
                      if isinstance(e, ExtendDef)
-                     and (getattr(e, "type_params", None)
-                          or (isinstance(getattr(e, "target_type", None), DynamicArrayType)
+                     and (e.type_params
+                          or (isinstance(e.target_type, DynamicArrayType)
                               and (e.target_shape is None or e.target_shape.param_names)))]
             if moved:
                 moved_ids = {id(e) for e in moved}
@@ -600,7 +611,7 @@ class FunctionCollector:
 
         registry = get_stdlib_registry()
 
-        uses = getattr(root, "uses", None)
+        uses = root.uses
         if not isinstance(uses, list):
             return
 
@@ -626,7 +637,8 @@ class FunctionCollector:
             for _const_name, stdlib_const in module.constants.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_const)
 
-    def _redeclaration(self, name: str, name_span: Optional[Span], prev,
+    def _redeclaration(self, name: str, name_span: Optional[Span],
+                       prev: 'FuncSig | GenericFuncDef',
                        *, may_coexist: bool) -> Redeclaration:
         """A name already taken. What that means for the declaration taking it again.
 
@@ -654,13 +666,13 @@ class FunctionCollector:
         if clash is not None and clash.is_public:
             self._warn_shadowed_export(name, name_span, clash)
             return Redeclaration.REPLACE
-        prev_unit = getattr(prev, "unit_name", None)
+        prev_unit = prev.unit_name
         if may_coexist and prev_unit is not None and prev_unit != self.current_unit_name:
             return Redeclaration.COEXIST
         er.emit_with(self.r, ERR.CE0101, name_span,
                      filename=self.current_unit_file, name=name) \
             .note("first defined here", prev.name_span,
-                  getattr(prev, "filename", None)).emit()
+                  prev.filename).emit()
         return Redeclaration.REFUSED
 
     def _warn_shadowed_export(self, name: str, name_span: Optional[Span],
@@ -695,7 +707,7 @@ class FunctionCollector:
 
     def _collect_function_def(self, fn: FuncDef) -> None:
         """Dispatch function collection based on whether it's generic."""
-        name = getattr(fn, "name", None)
+        name = fn.name
         if not isinstance(name, str):
             return
         record_declaration(self.visibility, "function", fn,
@@ -705,11 +717,11 @@ class FunctionCollector:
         # A receiver parameter has no meaning on a plain top-level function (#327):
         # there is no receiver. The builder lifts the marker onto the FuncDef, so this
         # is the one place the plain-function context can say no.
-        if getattr(fn, "self_mode", None) is not None:
+        if fn.self_mode is not None:
             er.emit(self.r, ERR.CE2425, fn.self_mode_span or fn.name_span)
             return
 
-        type_params_raw = getattr(fn, "type_params", None)
+        type_params_raw = fn.type_params
         type_params = extract_type_param_names(type_params_raw)
 
         if type_params and len(type_params) > 0:
@@ -719,16 +731,14 @@ class FunctionCollector:
 
     def _collect_concrete_function_def(self, fn: FuncDef) -> None:
         """Collect concrete (non-generic) function definition."""
-        name = getattr(fn, "name", None)
+        name = fn.name
         if not isinstance(name, str):
             return
 
-        name_span: Optional[Span] = getattr(fn, "name_span", None) or getattr(
-            fn, "loc", None
-        )
-        ret_ty: Optional[Type] = getattr(fn, "ret", None)
-        ret_span: Optional[Span] = getattr(fn, "ret_span", None) or name_span
-        is_public: bool = getattr(fn, "is_public", False)
+        name_span: Optional[Span] = fn.name_span or fn.loc
+        ret_ty: Optional[Type] = fn.ret
+        ret_span: Optional[Span] = fn.ret_span or name_span
+        is_public: bool = fn.is_public
 
         if ret_ty is None:
             er.emit(self.r, ERR.CE0103, name_span, name=name)
@@ -739,7 +749,7 @@ class FunctionCollector:
         # which is built structurally and never passes the enum-payload check.
         reject_reference_in(self.r, ret_ty, ret_span, ERR.CE2417)
 
-        err_ty: Optional[Type] = getattr(fn, "err_type", None)
+        err_ty: Optional[Type] = fn.err_type
         if is_explicit_result_type(ret_ty) and err_ty is not None:
             # User wrote: fn foo() Result<T, E1> | E2
             # This is an error because it's ambiguous and implies nesting
@@ -748,7 +758,7 @@ class FunctionCollector:
 
         params: List[Param] = []
         param_names: Set[str] = set()
-        for idx, p in enumerate(getattr(fn, "params", []) or []):
+        for idx, p in enumerate(fn.params or []):
             param = param_from_node(p, idx)
 
             if param.name in param_names:
@@ -765,7 +775,7 @@ class FunctionCollector:
         # (CE0117/CE0118). A concrete (non-generic) function has no type-pack
         # type-params, so this fires only if a pack value-param leaked in here
         # without a matching type-pack type-param (malformed -> CE0117).
-        validate_type_pack_params(self.r, getattr(fn, "type_params", None), params, name_span)
+        validate_type_pack_params(self.r, fn.type_params, params, name_span)
 
         if name in self.funcs.by_name:
             verdict = self._redeclaration(name, name_span, self.funcs.by_name[name],
@@ -813,7 +823,7 @@ class FunctionCollector:
     ) -> None:
         """Collect generic function definition."""
         name = fn.name
-        name_span = getattr(fn, "name_span", None) or getattr(fn, "loc", None)
+        name_span = fn.name_span or fn.loc
 
         if name in self.generic_funcs.by_name:
             verdict = self._redeclaration(name, name_span,
@@ -832,15 +842,11 @@ class FunctionCollector:
             if verdict is Redeclaration.REPLACE:
                 self._drop(self.funcs, name)
 
-        type_param_instances = tuple(
-            tp if isinstance(tp, BoundedTypeParam)
-            else BoundedTypeParam(name=tp, constraints=[], loc=None)
-            for tp in type_params_raw
-        )
+        type_param_instances = tuple(type_params_raw)
 
         params = []
         param_names = set()
-        for idx, p in enumerate(getattr(fn, "params", []) or []):
+        for idx, p in enumerate(fn.params or []):
             param = param_from_node(p, idx)
 
             if param.name in param_names:
@@ -852,8 +858,8 @@ class FunctionCollector:
 
         # Generic variadics are out of scope for v1: reject a variadic parameter
         # in a generic function (also covers misplacement) with CE0114.
-        if any(getattr(p, "is_variadic", False) for p in params):
-            vparam = next(p for p in params if getattr(p, "is_variadic", False))
+        if any(p.is_variadic for p in params):
+            vparam = next(p for p in params if p.is_variadic)
             er.emit(self.r, ERR.CE0114, vparam.name_span,
                     message="variadic '...T' parameters are not supported in generic functions")
 
@@ -863,22 +869,22 @@ class FunctionCollector:
         # blanket above (which keys on `is_variadic`).
         validate_type_pack_params(self.r, type_params_raw, params, name_span)
 
-        ret_ty = getattr(fn, "ret", None)
-        ret_span = getattr(fn, "ret_span", None) or name_span
+        ret_ty = fn.ret
+        ret_span = fn.ret_span or name_span
 
         if ret_ty is None:
             er.emit(self.r, ERR.CE0103, name_span, name=name)
 
         reject_reference_in(self.r, ret_ty, ret_span, ERR.CE2417)
 
-        err_ty = getattr(fn, "err_type", None)
+        err_ty = fn.err_type
         if is_explicit_result_type(ret_ty) and err_ty is not None:
             # User wrote: fn foo<T>() Result<T, E1> | E2
             # This is an error because it's ambiguous and implies nesting
             err_type_name = getattr(err_ty, "name", str(err_ty))
             er.emit(self.r, ERR.CE2085, ret_span, err_type=err_type_name)
 
-        body = getattr(fn, "body", None)
+        body = fn.body
         if body is None:
             return
 
@@ -888,8 +894,8 @@ class FunctionCollector:
             params=params,
             ret=ret_ty,
             body=body,
-            is_public=getattr(fn, "is_public", False),
-            loc=getattr(fn, "loc", None),
+            is_public=fn.is_public,
+            loc=fn.loc,
             name_span=name_span,
             ret_span=ret_span,
             err_type=fn.err_type,
@@ -1159,11 +1165,7 @@ class FunctionCollector:
             name_span=h.name_span,
             ret_type=convert(h.ret_ty),
             ret_span=h.ret_span,
-            params=[Param(
-                name=p.name, ty=convert(p.ty), name_span=p.name_span,
-                type_span=p.type_span, index=p.index,
-                is_variadic=p.is_variadic, is_nom=p.is_nom,
-            ) for p in h.params],
+            params=convert_param_types(h.params, convert),
             body=h.body,
             self_mode=h.ext.self_mode,
             filename=self.current_unit_file,
