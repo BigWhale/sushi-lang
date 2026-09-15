@@ -55,8 +55,8 @@ def test_a_generic_target_leaves_perk_impls_and_becomes_one_copy_per_instantiati
     assert targets == {"Box<i32>", "Box<string>"}, targets
 
     for name in ("Box<i32>", "Box<string>"):
-        assert analyzer.perk_impls.implements(name, "Show"), name
-        method = analyzer.perk_impls.get(name, "Show").methods[0]
+        assert analyzer.tables.perk_impls.implements(name, "Show"), name
+        method = analyzer.tables.perk_impls.get(name, "Show").methods[0]
         assert method.name == "show"
 
 
@@ -67,7 +67,7 @@ def test_a_concrete_instantiation_target_stays_where_it_was_written(analyze_prog
         [item.code for item in reporter.items]
     assert program.generic_perk_impls == []
     assert [str(impl.target_type) for impl in program.perk_impls] == ["Box<i32>"]
-    assert analyzer.perk_impls.implements("Box<i32>", "Show")
+    assert analyzer.tables.perk_impls.implements("Box<i32>", "Show")
 
 
 def test_an_uninstantiated_template_costs_nothing(analyze_program):
@@ -77,4 +77,4 @@ def test_an_uninstantiated_template_costs_nothing(analyze_program):
     analyzer, program = analysis.analyzer, analysis.program
     targets = {str(impl.target_type) for impl in program.perk_impls}
     assert targets == {"Box<i32>"}, targets
-    assert not analyzer.perk_impls.implements("Box<string>", "Show")
+    assert not analyzer.tables.perk_impls.implements("Box<string>", "Show")

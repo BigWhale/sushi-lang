@@ -17,6 +17,7 @@ from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 from sushi_lang.semantics.units import Unit, UnitManager
 
 if TYPE_CHECKING:
+    from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.backend.library_paths import LibraryResolver
 
 
@@ -454,26 +455,32 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     )
 
 
-def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
-                        is_library, stdlib_units, library_imports, library_linker) -> int:
-    """Original single-module compilation path."""
+def codegen_for(analyzer: SemanticAnalyzer) -> 'LLVMCodegen':
+    """One `LLVMCodegen` over the analyzer's program tables.
+
+    The ONE hand-off from the front end to the back end. Both build paths need the same
+    five tables, the externals and the per-unit namespaces, and each used to read them
+    off the analyzer by attribute name with a silent default -- two copies of one list,
+    where a name the analyzer stopped carrying would have answered None in both (#673).
+    """
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
-    struct_table = getattr(analyzer, 'structs', None)
-    enum_table = getattr(analyzer, 'enums', None)
-    func_table = getattr(analyzer, 'funcs', None)
-    const_table = getattr(analyzer, 'constants', None)
-    perk_impl_table = getattr(analyzer, 'perk_impls', None)
-    cg = LLVMCodegen(struct_table=struct_table, enum_table=enum_table,
-                     func_table=func_table, perk_impl_table=perk_impl_table,
-                     const_table=const_table)
-    external_table = getattr(analyzer, 'externals', None)
-    if external_table is not None:
-        cg.external_table = external_table
+    tables = analyzer.tables
+    cg = LLVMCodegen(struct_table=tables.structs, enum_table=tables.enums,
+                     func_table=tables.funcs, perk_impl_table=tables.perk_impls,
+                     const_table=tables.constants)
+    cg.external_table = tables.externals
     # Section 8's ladder, as the back end has to walk it: a bare callee is resolved
     # through the same per-unit scope the typecheck pass accepted it under, and a
     # constant's initializer through the aliases of the unit that wrote it (#561).
-    cg.unit_namespaces = dict(getattr(analyzer, 'namespaces', {}))
+    cg.unit_namespaces = dict(tables.namespaces)
+    return cg
+
+
+def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
+                        is_library, stdlib_units, library_imports, library_linker) -> int:
+    """Original single-module compilation path."""
+    cg = codegen_for(analyzer)
 
     effective_cwd = get_effective_cwd()
     if args.out:
@@ -580,7 +587,6 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
                          stdlib_units, library_imports, library_linker,
                          unit_manager) -> int:
     """Incremental compilation path: per-unit .o caching."""
-    from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.compiler.cache import CacheManager
     from sushi_lang.compiler.fingerprint import (
         compute_unit_fingerprint,
@@ -603,21 +609,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
 
     monomorphized_extensions = getattr(analyzer, 'monomorphized_extensions', [])
 
-    struct_table = getattr(analyzer, 'structs', None)
-    enum_table = getattr(analyzer, 'enums', None)
-    func_table = getattr(analyzer, 'funcs', None)
-    const_table = getattr(analyzer, 'constants', None)
-    perk_impl_table = getattr(analyzer, 'perk_impls', None)
-    cg = LLVMCodegen(struct_table=struct_table, enum_table=enum_table,
-                     func_table=func_table, perk_impl_table=perk_impl_table,
-                     const_table=const_table)
-    external_table = getattr(analyzer, 'externals', None)
-    if external_table is not None:
-        cg.external_table = external_table
-    # Section 8's ladder, as the back end has to walk it: a bare callee is resolved
-    # through the same per-unit scope the typecheck pass accepted it under, and a
-    # constant's initializer through the aliases of the unit that wrote it (#561).
-    cg.unit_namespaces = dict(getattr(analyzer, 'namespaces', {}))
+    cg = codegen_for(analyzer)
     cg.main_expects_args = analyzer.main_expects_args
     cg.monomorphized_extensions = monomorphized_extensions
     cg.library_linker = library_linker

@@ -188,8 +188,7 @@ class LibraryRegistration:
 
     def _type_tables(self) -> tuple[dict, dict]:
         """The struct and enum tables a manifest type string is parsed against."""
-        return (self.tables.structs.by_name if self.tables.structs else {},
-                self.tables.enums.by_name if self.tables.enums else {})
+        return self.tables.structs.by_name, self.tables.enums.by_name
 
     def _build_registry(self) -> None:
         """Build the `LibraryRegistry` from the loaded manifests."""

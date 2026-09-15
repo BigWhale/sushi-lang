@@ -111,7 +111,7 @@ def _errors(reporter):
 def test_nested_instance_lands_in_its_table(analyze_program, src, table, name):
     analysis = analyze_program(src)
     assert _errors(analysis.reporter) == []
-    by_name = getattr(analysis.analyzer, table).by_name
+    by_name = getattr(analysis.analyzer.tables, table).by_name
     assert name in by_name
     instance = by_name[name]
     # The interned object is the one the OUTER instance's field or payload holds, so
@@ -122,8 +122,8 @@ def test_nested_instance_lands_in_its_table(analyze_program, src, table, name):
 def test_the_outer_instance_holds_the_table_object(analyze_program):
     analysis = analyze_program(BOX_IN_STRUCT)
     assert _errors(analysis.reporter) == []
-    pair = analysis.analyzer.structs.by_name["Pair<i32, string>"]
-    box = analysis.analyzer.structs.by_name["Box<string>"]
+    pair = analysis.analyzer.tables.structs.by_name["Pair<i32, string>"]
+    box = analysis.analyzer.tables.structs.by_name["Box<string>"]
     fields = dict(pair.fields)
     assert fields["second"] is box
 
@@ -146,4 +146,4 @@ fn main() i32:
     src = src.replace("Box@(i32>", "Box@(i32)")
     analysis = analyze_program(src)
     assert _errors(analysis.reporter) == []
-    assert not [n for n in analysis.analyzer.structs.by_name if n == "Box<U>"]
+    assert not [n for n in analysis.analyzer.tables.structs.by_name if n == "Box<U>"]

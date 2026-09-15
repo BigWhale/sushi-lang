@@ -97,6 +97,7 @@ def test_ptr_exposing_private_helper_still_rejected(tmp_path):
     from sushi_lang.internals.report import Reporter
     from sushi_lang.semantics.units import Unit
     from sushi_lang.semantics.passes.collect import StructTable, EnumTable
+    from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
     from types import SimpleNamespace
 
@@ -115,7 +116,8 @@ def test_ptr_exposing_private_helper_still_rejected(tmp_path):
                 dependencies=[], public_symbols={})
     reporter = Reporter(source="", filename="ptrlib")
     analyzer = SimpleNamespace(
-        reporter=reporter, structs=StructTable(), enums=EnumTable())
+        reporter=reporter,
+        tables=SymbolTables(structs=StructTable(), enums=EnumTable()))
     gen = LibraryManifestGenerator(analyzer)
 
     # Emits and returns; the pipeline's has_errors gate is what stops the build (#436).
