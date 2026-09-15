@@ -32,6 +32,17 @@ from sushi_lang.semantics.typesys import (
 TERMINAL_KINDS = frozenset({"BuiltinType", "ForeignPtrType", "TypeParameter"})
 
 
+# A kind whose contents are stored INLINE, i.e. that contribute to the size of the value.
+# `inline_only=True` enters these alone: a heap buffer, a pointer and a fat pointer are an
+# indirection, and a rule about SIZE stops at one. An `UnknownType` is a NAME rather than a
+# kind of storage, so it is entered too -- it resolves to the declaration the name means,
+# and that declaration is stored inline wherever the name is written.
+INLINE_KINDS = frozenset(
+    {"ArrayType", "StructType", "EnumType", "GenericStructType", "GenericEnumType",
+     "UnknownType"}
+)
+
+
 # A kind that DECLARES a name, as opposed to one that merely spells it. The cycle guard
 # keys on these alone: an `UnknownType("Node")` also carries the name, and letting it
 # consume the name would stop the walk before the declaration it resolves to is entered.
@@ -59,6 +70,7 @@ def walk_named_types(
     _visited: Optional[Set[str]] = None,
     *,
     through_declarations: bool = True,
+    inline_only: bool = False,
 ) -> Iterator[Type]:
     """Every type reachable from `ty`, `ty` itself first.
 
@@ -70,6 +82,10 @@ def walk_named_types(
     fields and variants are not entered. A rule about what a signature hands out wants
     that, because what a named type holds is its own declaration's business and is fenced
     there; a rule about what a type CONTAINS wants the default.
+
+    `inline_only=True` enters `INLINE_KINDS` alone, so the walk reaches what the value
+    STORES and stops at every indirection. A rule about SIZE wants that: `Node[]` owns a
+    heap buffer and holds no `Node` by value, while `Node[2]` holds two.
     """
     if ty is None:
         return
@@ -86,9 +102,13 @@ def walk_named_types(
 
     yield ty
 
+    if inline_only and type(ty).__name__ not in INLINE_KINDS:
+        return
+
     def below(inner: Optional[Type]) -> Iterator[Type]:
         yield from walk_named_types(inner, structs, enums, _visited,
-                                    through_declarations=through_declarations)
+                                    through_declarations=through_declarations,
+                                    inline_only=inline_only)
 
     if isinstance(ty, (ArrayType, DynamicArrayType)):
         yield from below(ty.base_type)
