@@ -95,6 +95,11 @@ into a single `global_tables` once per unit, which is what
 (`passes/types/calls/user_defined.py:171`). A `use` statement today does not decide what
 this unit can see. It decides what gets compiled.
 
+> The merger itself is gone since #672: the collect pass fills one set of tables and the
+> analyzer takes them, so there is no second set to fold into. Every mention of
+> `semantics/symbol_merger.py` below reads the tree as it stood when this record was
+> written.
+
 It is NOT `build_global_symbol_table` (`semantics/units.py:219`), which is easy to blame
 and does nothing of the sort. It fills `UnitManager.global_symbols`, and that dict is
 **write-only**: its one reader, `find_symbol` (`:268`), has no callers anywhere in the tree

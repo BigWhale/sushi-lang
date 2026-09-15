@@ -100,8 +100,8 @@ class LibraryRegistration:
 
         Called BEFORE the collect loop: perk-impl collection validates each impl
         against the visible definitions (CE4003), so the contract must already be
-        there. `perk_table` is the collector's own and not `tables.perks` for that
-        reason.
+        there. The analyzer names the table, as it names the moment: this module owns
+        the registration and nothing about the order.
         """
         if perk_table is None:
             return

@@ -15,7 +15,6 @@ from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.passes.borrow import BorrowChecker
 from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
-from sushi_lang.semantics.symbol_merger import SymbolTableMerger
 from sushi_lang.semantics.generics.extensions import monomorphize_all_extension_methods
 from sushi_lang.semantics.library_registration import (
     LibraryRegistration, LoadedLibraries)
@@ -133,10 +132,10 @@ class SemanticAnalyzer:
             self.reporter,
             library_units={u.name for u in compilation_order if u.provenance is not None},
         )
-        from sushi_lang.semantics.tables import SymbolTables
-        global_tables = SymbolTables()
-
-        symbol_merger = SymbolTableMerger()
+        # The collect pass fills ONE set of tables, in place, once per unit -- so what
+        # it holds IS the whole program's answer and nothing copies it into a second
+        # set (#672).
+        global_tables = collector.tables
 
         libraries = LibraryRegistration(self.reporter, global_tables,
                                         self.library_linker, self.library_registry)
@@ -144,16 +143,14 @@ class SemanticAnalyzer:
         # BEFORE the consumer's units: perk-impl collection validates each impl against
         # the visible perk definitions (CE4003), so the contract must already be here.
         if self.library_linker is not None:
-            libraries.seed_perks(collector.perks)
+            libraries.seed_perks(global_tables.perks)
 
         for unit in compilation_order:
             if unit.ast is None:
                 continue
 
-            unit_tables = collector.run(unit.ast, unit_name=unit.name,
-                                        unit_file=str(unit.file_path))
-
-            symbol_merger.merge_all(unit_tables, global_tables)
+            collector.run(unit.ast, unit_name=unit.name,
+                          unit_file=str(unit.file_path))
 
         # A library impl the consumer replaced must not be emitted: both bodies are
         # ordinary Sushi in ordinary units, so leaving it in place defines the method
@@ -179,11 +176,10 @@ class SemanticAnalyzer:
         self.extensions = global_tables.extensions
         self.generic_extensions = global_tables.generic_extensions
         self.generic_funcs = global_tables.generic_funcs
-        self.externals = collector.externals
-        global_tables.externals = collector.externals
+        self.externals = global_tables.externals
 
         # docs: check each doc block against the declaration beside it. Here because
-        # the pass needs the merged tables and nothing later, and because it must run
+        # the pass needs the collected tables and nothing later, and because it must run
         # ahead of instantiate/monomorphize -- a generic's block is written once, and
         # checking it afterwards would report one mistake once per instantiation. A
         # library unit is skipped: a consumer must not be told about the library
