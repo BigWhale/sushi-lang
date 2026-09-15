@@ -339,6 +339,31 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **The entrypoint pass holds main's whole rule** (#674). The rule had three homes: the
+  pipeline asked whether `main` exists (CE3007) and whether a `--lib` build declares one
+  (CE3501), the collect pass asked whether it returns an integer (CE0106), and the pass
+  NAMED for the rule set one bool and checked nothing. The four checks run in the pass now,
+  in that order, and the pass reads the one `is_integer_type` predicate where the collect
+  pass spelled the set inline. CE3007 reaches the reporter during the analysis, one step
+  earlier than before, and it no longer fires a second time on a build whose compilation
+  order cannot be resolved -- that build reports its own fault. The caller-less single-file
+  twin is deleted, and `check()` no longer takes the program it ignored.
+- **A merged symbol table could answer with a record the collect pass had replaced**
+  (#672). The analyzer merged the collector's tables into a second set once per unit, and
+  every merge arm was first-wins while the collect pass OVERWRITES in two places: an
+  extension method of one name, and a consumer's `extend X with P` over a library's. So
+  the merged table could hold what the first unit's merge saw where the collector held the
+  current record. There is now one set of tables, which the two cannot disagree about.
+- **A struct field of function type kept an unresolved name** (#678). The resolve pass had
+  its own four-arm resolver with no `FunctionType` arm and no cycle guard, so `fn(Node) ->
+  i32` in a field kept `UnknownType("Node")` where every other reader had the table entry.
+  Two spellings of one interned name is the hazard the intern seam exists to prevent.
+- **An `Own@(T)` pattern was refused and bound by two tests that disagreed** (#680). The
+  typecheck pass read the payload twice -- once to refuse a pattern, once to bind its
+  names -- and the first accepted any struct while the second matched the interned prefix.
+  Both read the pointer FIELD now, never the name. The two CE2048 texts, "Invalid Own@(T)
+  type arguments" and "Invalid Own@(T) type structure", are one text: a reader cannot tell
+  the two apart and the fault is the same.
 - **A borrow of a constant is refused by one gate, and the gate asks what the name means
   HERE** (#685). A `poke self` method call on a unit `var` was refused, and one on a
   constant was permitted, when another unit declared a private name that agreed: the
@@ -703,6 +728,66 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One resolver answers what a written type is** (#678, #679). The resolve pass had a
+  four-arm resolver of its own beside `resolve_type_recursively`, and the two had
+  complementary blind spots. The pass calls the shared one now, so a struct field, an enum
+  payload and a constant type all get the `FunctionType` arm, the nominal cycle guard, and
+  the `dataclasses.replace` that keeps a function type's parameter modes and captures. The
+  work the pass repeated is gone with it: it built three lookup dictionaries per analysis
+  (two more per late intern) where it now reads the two tables live, it resolved every
+  constant twice because a record sits in both views of its table, and it rebuilt every
+  array-bearing struct's frozen field tuple on every run. The 14 builtin names the deleted
+  lookup carried resolved nothing: measured over 2,639 fixtures, the arm never fired.
+  `walk_named_types` gained an `inline_only` parameter, so the `finite-types` pass asks
+  the one walk for inline containment instead of keeping a private copy, and the totality
+  gate covers it. The backend's homonym `resolve_unknown_type` is renamed
+  `require_named_type`: one name covered two opposite contracts at the call sites, and the
+  strict one is for a caller about to emit.
+- **One predicate answers whether a type is an `Own@(T)`** (#680). Three lived in
+  `semantics` and a fourth in the backend, and they disagreed: an `UnknownType("Own<T>")`
+  was an `Own` to two of them and not to the third. The home is
+  `semantics/ownership.py:is_own_type`, which strips a reference first, and the four sites
+  call it.
+- **The collect pass fills one set of tables, and the analyzer takes them** (#672, #673).
+  `symbol_merger.py` is deleted, 153 lines. The collector's tables were never reset between
+  units, so the analyzer merged the accumulated set once per unit and the cost was
+  triangular in the unit count; the merger also copied 13 of `SymbolTables`' 19 fields,
+  with one field repaired by a direct assignment beside it. The analyzer no longer carries
+  every table twice either: the eleven `Optional[...] = None` shadows, the rebind block and
+  the guards that could not fire after it are gone, and every read is `self.tables.X`. The
+  back end is built through one typed hand-off, `codegen_for(analyzer)`, where two
+  byte-identical blocks of seven `getattr(..., None)` lookups would each have answered
+  `None` for a table the analyzer stopped carrying.
+- **The AST builder folds a fixed array's size on one table per unit** (#684). The builder
+  is the third caller of the constant evaluator -- it reads a size while the unit is parsed
+  -- and it built a fresh `ConstantTable`, re-declared every constant of the unit into it,
+  and constructed an evaluator with a throwaway reporter on EVERY size. A unit with three
+  constants and four sizes built four tables and four evaluators; it builds one table and
+  one evaluator per distinct name. The three callers are named in the `check()` docstring
+  and in `docs/internals/semantic-passes.md`.
+- **The extension collector is a header reader and one collector per target kind** (#693).
+  `_collect_extension_def` was 203 lines at cyclomatic complexity 28, the worst in the
+  package, beside two 12-parameter near-clones that held the same inner conversion and the
+  same 18-field construction. It is ten callables and one `_ExtensionHeader` record now,
+  complexity 4, with one build of a `GenericExtensionMethod` and one five-type target
+  guard that the two readers outside the package share. Both hand-rolled `UnknownType`
+  arms call the real resolver. A characterization probe over 40 declarations -- every
+  target kind, every refusal code, statics, channels, modes -- recorded byte-identical
+  diagnostics and tables before and after each step.
+- **The collect pass reads a declared field as a field** (#694). 109 `getattr(node,
+  "field", default)` reads over declared dataclass fields became field reads, and the
+  package went from 138 to 6; every survivor reads a union arm or a variable attribute
+  name. A renamed AST field is a type error now instead of a silent default, which is what
+  #596 shipped as. Three faults the habit hid: the three `Param` rebuilds dropped
+  `is_pack`, and are one `dataclasses.replace` seam whose gate walks the field list, so a
+  field added tomorrow is covered without anyone remembering; three type-parameter
+  comprehensions carried arms that no producer can reach, one of which would have passed a
+  `TypeParameter` where a `str` was declared.
+- **The collect tables share one two-view home** (#695). `declare` was copied three times
+  and `view_for` twice across `FunctionTable`, `GenericFunctionTable` and `ConstantTable`,
+  with a docstring in two of them stating the copy as a design note. They subclass
+  `UnitOwnedSymbols` now, which reads the unit off the value through one hook, so no
+  caller can name a unit that disagrees with the record.
 - **Integer operators have one compile-time home** (#681). The backend no longer folds
   `+ - * & | ^ <<` over two constants; the instruction is emitted and LLVM folds it. Gate:
   `tests/unit/test_integer_operator_semantics_agree.py`, the evaluator against a
