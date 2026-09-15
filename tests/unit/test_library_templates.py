@@ -54,8 +54,7 @@ class _StubAnalyzer:
     """Minimal analyzer surface for LibraryManifestGenerator."""
     def __init__(self, reporter):
         self.reporter = reporter
-        self.structs = StructTable()
-        self.enums = EnumTable()
+        self.tables = SymbolTables(structs=StructTable(), enums=EnumTable())
 
 
 def _collect_generic(program, name: str):

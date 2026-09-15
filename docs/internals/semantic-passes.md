@@ -19,7 +19,7 @@ order; this list mirrors it.
 | `libraries` | register every symbol a `.slib` exports | `semantics/library_registration.py` |
 | `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds (CE3013, CE3014, CE3016, CW3004, CW3005) | `semantics/passes/namespaces.py` |
 | `ffi-clash` | reject an `unsafe external` that names a symbol this build defines (CE5013) | `semantics/passes/types/externals.py` |
-| `entrypoint` | `main()`'s signature and its `string[] args` | `semantics/semantic_analyzer.py` |
+| `entrypoint` | main's whole rule: it exists (CE3007), a library carries none (CE3501), it returns an integer (CE0106), and it takes `string[] args` or nothing | `semantics/semantic_analyzer.py` |
 | `instantiate` | collect every generic instantiation the program asks for | `semantics/generics/instantiate/` |
 | `monomorphize` | generic definitions become concrete instances | `semantics/generics/monomorphize/` |
 | `resolve` | struct field and enum variant types become concrete | `semantics/passes/resolve.py` |
@@ -35,8 +35,10 @@ order; this list mirrors it.
 The last four run per unit, in one loop, so the whole-program passes above them see every
 unit before any function body is walked.
 
-`semantics/const_eval.py` is **not** a pass. The `typecheck` pass and the backend
-both call it as a helper.
+`semantics/const_eval.py` is **not** a pass. Three callers reach it as a helper: the
+**AST builder**, which reads a fixed array's size while the unit is parsed (Known
+Limitation 12) and keeps a constant table of its own for it; the `typecheck` pass; and
+the backend. The last two share the collect pass's table, and with it the fold memo.
 
 ### The word "phase"
 
@@ -353,12 +355,25 @@ The typecheck pass reads the table through `TypeValidator.resolve_namespaced`, a
 `scope` pass through `_is_namespace`. Both used to carry their own copy of the
 local-wins rule.
 
-## The `entrypoint` pass: `main()`'s signature
+## The `entrypoint` pass: main's rule
 
-**File:** `semantics/semantic_analyzer.py` (`_check_main_function_args_multi_file`)
+**File:** `semantics/semantic_analyzer.py` (`_check_entrypoint`)
 
-`main` takes no parameters or exactly one `string[] args`. The `args` array is a BORROWED
-view of argv, so moving it is `CE2410`.
+The ONE home of main's rule. It checks four things, in this order:
+
+1. an executable carries a `main` -- `CE3007`;
+2. a library carries none -- `CE3501`;
+3. `main` returns an integer type (i8-i64, u8-u64) -- `CE0106`;
+4. `main` takes no parameters or exactly one `string[] args`, which answers
+   `main_expects_args` for the back end.
+
+The build kind reaches the analyzer as the `is_library` keyword, the way the library
+linker does. The `args` array is a BORROWED view of argv, so moving it is `CE2410`.
+
+The first three used to live elsewhere -- `CE3007` and `CE3501` in `compiler/pipeline.py`
+after the analysis, `CE0106` in the collect pass -- so the pass named for the rule held
+the least of it. The `CW3003` foreign-extension warning stays in the pipeline: it is not
+about main.
 
 ## The `instantiate` pass: generic instantiation collection
 

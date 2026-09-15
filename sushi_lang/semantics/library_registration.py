@@ -100,8 +100,8 @@ class LibraryRegistration:
 
         Called BEFORE the collect loop: perk-impl collection validates each impl
         against the visible definitions (CE4003), so the contract must already be
-        there. `perk_table` is the collector's own and not `tables.perks` for that
-        reason.
+        there. The analyzer names the table, as it names the moment: this module owns
+        the registration and nothing about the order.
         """
         if perk_table is None:
             return
@@ -188,8 +188,7 @@ class LibraryRegistration:
 
     def _type_tables(self) -> tuple[dict, dict]:
         """The struct and enum tables a manifest type string is parsed against."""
-        return (self.tables.structs.by_name if self.tables.structs else {},
-                self.tables.enums.by_name if self.tables.enums else {})
+        return self.tables.structs.by_name, self.tables.enums.by_name
 
     def _build_registry(self) -> None:
         """Build the `LibraryRegistry` from the loaded manifests."""

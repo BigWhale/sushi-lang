@@ -53,6 +53,9 @@ ALLOWED = {
     # "`generics/active_generics.py` is deleted, not converted" -- unit-namespaces.md
     # section 4.3.1, and the note in `semantics/namespaces.py` that says what replaced it.
     "generics/active_generics.py",
+    # The symbol merger, retired by #672. unit-namespaces.md is the record of a shipped
+    # epic and analyses the tree as it stood; its section 1.3 says the module is gone.
+    "semantics/symbol_merger.py",
 }
 
 

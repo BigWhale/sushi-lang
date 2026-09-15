@@ -44,7 +44,8 @@ def make_unit(tmp_path):
 
 
 def _analyze_source(tmp_path, src: str, name: str,
-                    warn_missing_docs: bool = False) -> "Analysis":
+                    warn_missing_docs: bool = False,
+                    is_library: bool = False) -> "Analysis":
     """Run the production semantic flow over `src` and return everything it produced."""
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
 
@@ -66,9 +67,10 @@ def _analyze_source(tmp_path, src: str, name: str,
     unit_manager.get_compilation_order()
 
     analyzer = SemanticAnalyzer(reporter, filename=name, unit_manager=unit_manager,
-                                warn_missing_docs=warn_missing_docs)
+                                warn_missing_docs=warn_missing_docs,
+                                is_library=is_library)
     try:
-        analyzer.check(program)
+        analyzer.check()
     except ValueError:
         pass
     return Analysis(reporter=reporter, program=program, analyzer=analyzer)
@@ -85,8 +87,10 @@ class Analysis(NamedTuple):
 def analyze(tmp_path):
     """Factory that semantically analyzes `src`, returning the Reporter."""
     def _analyze(src: str, name: str = "main",
-                 warn_missing_docs: bool = False) -> Reporter:
-        return _analyze_source(tmp_path, src, name, warn_missing_docs).reporter
+                 warn_missing_docs: bool = False,
+                 is_library: bool = False) -> Reporter:
+        return _analyze_source(tmp_path, src, name, warn_missing_docs,
+                               is_library).reporter
 
     return _analyze
 
@@ -95,7 +99,8 @@ def analyze(tmp_path):
 def analyze_program(tmp_path):
     """Factory that semantically analyzes `src`, returning the whole `Analysis`."""
     def _analyze(src: str, name: str = "main",
-                 warn_missing_docs: bool = False) -> Analysis:
-        return _analyze_source(tmp_path, src, name, warn_missing_docs)
+                 warn_missing_docs: bool = False,
+                 is_library: bool = False) -> Analysis:
+        return _analyze_source(tmp_path, src, name, warn_missing_docs, is_library)
 
     return _analyze

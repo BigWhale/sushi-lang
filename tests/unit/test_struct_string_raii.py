@@ -23,7 +23,7 @@ def _analysis_codes(tmp_path, src: str) -> list[str]:
     assert unit_manager.load_unit("main", program) is not None
     unit_manager.get_compilation_order()
 
-    SemanticAnalyzer(reporter, filename="main", unit_manager=unit_manager).check(program)
+    SemanticAnalyzer(reporter, filename="main", unit_manager=unit_manager).check()
     return [i.code for i in reporter.items]
 
 

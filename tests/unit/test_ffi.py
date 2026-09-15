@@ -24,9 +24,9 @@ def _make_unit(tmp_path, src: str, name: str = "main") -> Unit:
 class _StubAnalyzer:
     """Minimal analyzer surface for LibraryManifestGenerator."""
     def __init__(self, reporter, structs, enums):
+        from sushi_lang.semantics.tables import SymbolTables
         self.reporter = reporter
-        self.structs = structs
-        self.enums = enums
+        self.tables = SymbolTables(structs=structs, enums=enums)
 
 
 def test_ce5002_public_foreign_ptr_aborts_manifest(tmp_path):
@@ -342,13 +342,13 @@ def _emit_ir(tmp_path, src: str) -> str:
     order = unit_manager.get_compilation_order()
 
     analyzer = SemanticAnalyzer(reporter, filename="main", unit_manager=unit_manager)
-    analyzer.check(program)
+    analyzer.check()
     assert not reporter.has_errors, [i.code for i in reporter.items]
 
-    cg = LLVMCodegen(struct_table=analyzer.structs, enum_table=analyzer.enums,
-                     func_table=analyzer.funcs, perk_impl_table=analyzer.perk_impls,
-                     const_table=analyzer.constants)
-    cg.external_table = analyzer.externals
+    cg = LLVMCodegen(struct_table=analyzer.tables.structs, enum_table=analyzer.tables.enums,
+                     func_table=analyzer.tables.funcs, perk_impl_table=analyzer.tables.perk_impls,
+                     const_table=analyzer.tables.constants)
+    cg.external_table = analyzer.tables.externals
     module = cg.build_module_multi_unit(order)
     return str(module)
 

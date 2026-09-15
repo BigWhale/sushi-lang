@@ -80,7 +80,7 @@ def test_own_get_receiver_carries_its_struct_type(analyze_program):
     assert isinstance(stamped, StructType), f"expected a StructType, got {type(stamped)}"
     assert stamped.name == "Holder"
     # Nominal identity (#240): the stamp must BE the table entry.
-    assert stamped is analysis.analyzer.structs.by_name["Holder"]
+    assert stamped is analysis.analyzer.tables.structs.by_name["Holder"]
 
 
 def test_list_get_receiver_carries_its_interned_maybe(analyze_program):
@@ -93,7 +93,7 @@ def test_list_get_receiver_carries_its_interned_maybe(analyze_program):
     assert stamped is not None, "the typecheck pass left the receiver of .clone() untyped"
     assert isinstance(stamped, EnumType), f"expected an EnumType, got {type(stamped)}"
     assert stamped.name == "Maybe<i32>"
-    assert stamped is analysis.analyzer.enums.by_name["Maybe<i32>"]
+    assert stamped is analysis.analyzer.tables.enums.by_name["Maybe<i32>"]
 
 
 @pytest.mark.parametrize("src", [OWN_GET, LIST_GET], ids=["own", "list"])
@@ -152,7 +152,7 @@ def test_indexed_struct_receiver_carries_its_element_type(analyze_program):
     assert stamped is not None, "the typecheck pass left the indexed receiver untyped"
     assert isinstance(stamped, StructType), f"expected a StructType, got {type(stamped)}"
     assert stamped.name == "Row"
-    assert stamped is analysis.analyzer.structs.by_name["Row"]
+    assert stamped is analysis.analyzer.tables.structs.by_name["Row"]
 
 
 def test_indexed_enum_receiver_carries_its_element_type(analyze_program):
@@ -165,4 +165,4 @@ def test_indexed_enum_receiver_carries_its_element_type(analyze_program):
     assert stamped is not None, "the typecheck pass left the indexed receiver untyped"
     assert isinstance(stamped, EnumType), f"expected an EnumType, got {type(stamped)}"
     assert stamped.name == "E"
-    assert stamped is analysis.analyzer.enums.by_name["E"]
+    assert stamped is analysis.analyzer.tables.enums.by_name["E"]

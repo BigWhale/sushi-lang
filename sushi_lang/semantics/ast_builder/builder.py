@@ -1,6 +1,6 @@
 """Main ASTBuilder orchestrator for Sushi language compiler."""
 from __future__ import annotations
-from typing import List, Optional, TypeVar
+from typing import Dict, List, Optional, TYPE_CHECKING, TypeVar
 
 from lark import Tree, Token
 
@@ -12,6 +12,10 @@ from sushi_lang.semantics.ast import Block, DocBlock, Expr, Program
 from sushi_lang.internals.report import Reporter, Span, span_of
 
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import expect
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.ast import ConstDef
+    from sushi_lang.semantics.passes.collect.constants import ConstantTable
 
 T = TypeVar("T")
 
@@ -46,6 +50,12 @@ class ASTBuilder:
         # 14). One unit, so no unit key: `declare` with none and the flat view is
         # the whole answer.
         self.unit_constants: UnitKeyedSymbols = UnitKeyedSymbols()
+        # Those same constants as the evaluator reads them, and the integer each name
+        # answered. Both are built on demand and dropped whenever a constant joins:
+        # a unit used to pay one table, one evaluator and one empty memo for EVERY
+        # fixed-array size it spelled (#684).
+        self._constant_table: Optional['ConstantTable'] = None
+        self._size_values: Dict[str, Optional[int]] = {}
         # Doc blocks the builder does not report on: a block that documents nothing
         # is the `docs` pass's warning to raise, because only that pass knows which
         # declaration each block reached. Every block ends up attached, lifted, or
@@ -94,6 +104,34 @@ class ASTBuilder:
         for diagnostic in pending:
             er.emit_exception(self.reporter, diagnostic)
 
+    def declare_constant(self, const: 'ConstDef') -> None:
+        """Register one constant of this unit. The ONE insert.
+
+        Here and not on `unit_constants` directly, because what the builder has already
+        folded is only good while the set of constants stands still.
+        """
+        self.unit_constants.declare(const.name, const)
+        self._constant_table = None
+        self._size_values = {}
+
+    def constant_table(self) -> 'ConstantTable':
+        """This unit's constants as the evaluator reads them. Built once.
+
+        The evaluator memoizes a fold on the TABLE, so one table per unit is also one
+        memo per unit -- which is what makes a chain of constants cheap (#597). The
+        `typecheck` pass and the back end share the collect pass's table the same way;
+        this is the third caller and it shares the builder's.
+        """
+        from sushi_lang.semantics.passes.collect.constants import ConstantTable, ConstSig
+
+        if self._constant_table is None:
+            table = ConstantTable()
+            for known in self.unit_constants.by_name.values():
+                table.declare(known.name, ConstSig(name=known.name, loc=known.loc,
+                                                   const_type=known.ty, decl=known))
+            self._constant_table = table
+        return self._constant_table
+
     def integer_constant(self, name: str) -> Optional[int]:
         """The value of an integer constant of this unit, None when there is none.
 
@@ -101,9 +139,17 @@ class ASTBuilder:
         (`HALF * 2`) or that names another constant counts exactly as a literal one
         does. Its reporter is silent: a name that is not a constant here is the
         caller's diagnostic to raise, with the array size in hand to name.
+
+        One answer per NAME, however many sizes spell it: a name reference is the one
+        thing a fold may be remembered by, because it stamps nothing on the AST.
         """
+        if name not in self._size_values:
+            self._size_values[name] = self._fold_integer_constant(name)
+        return self._size_values[name]
+
+    def _fold_integer_constant(self, name: str) -> Optional[int]:
+        """Fold one named constant to an integer, on this unit's own table."""
         from sushi_lang.internals.report import Reporter
-        from sushi_lang.semantics.passes.collect.constants import ConstantTable, ConstSig
         from sushi_lang.semantics.const_eval import ConstantEvaluator, ScalarConstant
         from sushi_lang.semantics.type_predicates import is_integer_type
 
@@ -111,12 +157,7 @@ class ASTBuilder:
         if const_def is None or const_def.ty is None or not is_integer_type(const_def.ty):
             return None
 
-        table = ConstantTable()
-        for known in self.unit_constants.by_name.values():
-            table.declare(known.name, ConstSig(name=known.name, loc=known.loc,
-                                               const_type=known.ty, decl=known))
-
-        evaluated = ConstantEvaluator(Reporter(), table).evaluate(
+        evaluated = ConstantEvaluator(Reporter(), self.constant_table()).evaluate(
             const_def.value, const_def.ty, const_def.loc)
         if (evaluated is None or not isinstance(evaluated, ScalarConstant)
                 or not isinstance(evaluated.value, int) or isinstance(evaluated.value, bool)):

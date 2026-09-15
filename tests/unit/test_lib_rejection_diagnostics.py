@@ -141,6 +141,7 @@ def _generator(tmp_path, src: str, name: str):
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.internals.report import Reporter
     from sushi_lang.semantics.passes.collect import EnumTable, StructTable
+    from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.units import Unit
 
     file_path = tmp_path / f"{name}.sushi"
@@ -150,7 +151,8 @@ def _generator(tmp_path, src: str, name: str):
                 dependencies=[], public_symbols={})
     reporter = Reporter(source=src, filename=name)
     gen = LibraryManifestGenerator(SimpleNamespace(
-        reporter=reporter, structs=StructTable(), enums=EnumTable()))
+        reporter=reporter,
+        tables=SymbolTables(structs=StructTable(), enums=EnumTable())))
     return gen, unit, reporter
 
 

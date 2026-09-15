@@ -17,6 +17,7 @@ from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 from sushi_lang.semantics.units import Unit, UnitManager
 
 if TYPE_CHECKING:
+    from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.backend.library_paths import LibraryResolver
 
 
@@ -400,38 +401,20 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         reporter, filename=main_unit_name, unit_manager=unit_manager,
         library_linker=library_linker,
         warn_missing_docs=bool(getattr(args, "warn_missing_docs", False)),
-        generated_symbols=generated_symbols)
-    multi_file_analyzer.check(main_ast)
+        generated_symbols=generated_symbols, is_library=is_library)
+    multi_file_analyzer.check()
 
-    # A library must not carry main(): --lib used to embed it into the .slib silently,
-    # where it collides at link time in every consumer. Reject it here (CE3501).
-    #
-    # An executable must carry one, and that is the mirror image (CE3007). Without the
-    # check the missing `_main` symbol reached the LINKER, so the user got raw `cc`
-    # stderr and then a CE0000 "this is a compiler bug" -- for a condition in their own
-    # program (#251).
-    from sushi_lang.internals import errors as er
+    # Main's rule -- CE3007 and CE3501 among it -- is the `entrypoint` pass's and is
+    # already answered by here (#674). This one is not about main: a library that
+    # extends a type it does not declare claims the method name for every consumer
+    # (CW3003). The build proceeds; a warning names the hazard and stops nothing.
     if is_library:
-        for unit in compilation_order:
-            if unit.ast is None:
-                continue
-            for func in unit.ast.functions:
-                if func.name == "main":
-                    er.emit(reporter, er.ERR.CE3501, func.name_span)
-        # A library that extends a type it does not declare claims the method
-        # name for every consumer (CW3003). The build proceeds: a warning names
-        # the hazard and stops nothing.
+        from sushi_lang.internals import errors as er
         from sushi_lang.backend.library_manifest import own_units
         from sushi_lang.semantics.foreign_extensions import foreign_extension_claims
         for claim in foreign_extension_claims(own_units(compilation_order)):
             er.emit_with(reporter, er.ERR.CW3003, claim.span,
                          filename=claim.filename, type=claim.target).emit()
-    elif not any(func.name == "main"
-                 for unit in compilation_order if unit.ast is not None
-                 for func in unit.ast.functions):
-        er.emit_with(reporter, er.ERR.CE3007, None) \
-            .help("add `fn main() i32:` to the program, or compile it as a library "
-                  "with `--lib`").emit()
 
     if reporter.has_errors:
         return 2
@@ -454,26 +437,32 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     )
 
 
-def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
-                        is_library, stdlib_units, library_imports, library_linker) -> int:
-    """Original single-module compilation path."""
+def codegen_for(analyzer: SemanticAnalyzer) -> 'LLVMCodegen':
+    """One `LLVMCodegen` over the analyzer's program tables.
+
+    The ONE hand-off from the front end to the back end. Both build paths need the same
+    five tables, the externals and the per-unit namespaces, and each used to read them
+    off the analyzer by attribute name with a silent default -- two copies of one list,
+    where a name the analyzer stopped carrying would have answered None in both (#673).
+    """
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
-    struct_table = getattr(analyzer, 'structs', None)
-    enum_table = getattr(analyzer, 'enums', None)
-    func_table = getattr(analyzer, 'funcs', None)
-    const_table = getattr(analyzer, 'constants', None)
-    perk_impl_table = getattr(analyzer, 'perk_impls', None)
-    cg = LLVMCodegen(struct_table=struct_table, enum_table=enum_table,
-                     func_table=func_table, perk_impl_table=perk_impl_table,
-                     const_table=const_table)
-    external_table = getattr(analyzer, 'externals', None)
-    if external_table is not None:
-        cg.external_table = external_table
+    tables = analyzer.tables
+    cg = LLVMCodegen(struct_table=tables.structs, enum_table=tables.enums,
+                     func_table=tables.funcs, perk_impl_table=tables.perk_impls,
+                     const_table=tables.constants)
+    cg.external_table = tables.externals
     # Section 8's ladder, as the back end has to walk it: a bare callee is resolved
     # through the same per-unit scope the typecheck pass accepted it under, and a
     # constant's initializer through the aliases of the unit that wrote it (#561).
-    cg.unit_namespaces = dict(getattr(analyzer, 'namespaces', {}))
+    cg.unit_namespaces = dict(tables.namespaces)
+    return cg
+
+
+def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
+                        is_library, stdlib_units, library_imports, library_linker) -> int:
+    """Original single-module compilation path."""
+    cg = codegen_for(analyzer)
 
     effective_cwd = get_effective_cwd()
     if args.out:
@@ -580,7 +569,6 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
                          stdlib_units, library_imports, library_linker,
                          unit_manager) -> int:
     """Incremental compilation path: per-unit .o caching."""
-    from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.compiler.cache import CacheManager
     from sushi_lang.compiler.fingerprint import (
         compute_unit_fingerprint,
@@ -603,21 +591,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
 
     monomorphized_extensions = getattr(analyzer, 'monomorphized_extensions', [])
 
-    struct_table = getattr(analyzer, 'structs', None)
-    enum_table = getattr(analyzer, 'enums', None)
-    func_table = getattr(analyzer, 'funcs', None)
-    const_table = getattr(analyzer, 'constants', None)
-    perk_impl_table = getattr(analyzer, 'perk_impls', None)
-    cg = LLVMCodegen(struct_table=struct_table, enum_table=enum_table,
-                     func_table=func_table, perk_impl_table=perk_impl_table,
-                     const_table=const_table)
-    external_table = getattr(analyzer, 'externals', None)
-    if external_table is not None:
-        cg.external_table = external_table
-    # Section 8's ladder, as the back end has to walk it: a bare callee is resolved
-    # through the same per-unit scope the typecheck pass accepted it under, and a
-    # constant's initializer through the aliases of the unit that wrote it (#561).
-    cg.unit_namespaces = dict(getattr(analyzer, 'namespaces', {}))
+    cg = codegen_for(analyzer)
     cg.main_expects_args = analyzer.main_expects_args
     cg.monomorphized_extensions = monomorphized_extensions
     cg.library_linker = library_linker

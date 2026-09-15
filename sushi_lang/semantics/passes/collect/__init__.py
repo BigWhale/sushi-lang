@@ -156,6 +156,27 @@ class CollectorPass:
             collector.library_units = set(library_units or ())
             collector.visibility = self.visibility
 
+        # The whole-program tables, built here and filled in place. A unit's `run`
+        # adds to what the units before it left, so this IS the program's answer and
+        # nothing copies it into a second set (#672).
+        from sushi_lang.semantics.tables import SymbolTables
+        self.tables = SymbolTables(
+            constants=self.constants,
+            structs=self.structs,
+            enums=self.enums,
+            generic_enums=self.generic_enums,
+            generic_structs=self.generic_structs,
+            perks=self.perks,
+            perk_impls=self.perk_impls,
+            generic_perk_impls=self.generic_perk_impls,
+            funcs=self.funcs,
+            extensions=self.extensions,
+            generic_extensions=self.generic_extensions,
+            generic_funcs=self.generic_funcs,
+            externals=self.externals,
+            visibility=self.visibility,
+        )
+
         self._register_predefined_structs()
         self._register_predefined_enums()
         self._register_predefined_perks()
@@ -163,7 +184,12 @@ class CollectorPass:
 
     def run(self, root: Program, unit_name: Optional[str] = None,
             unit_file: Optional[str] = None) -> 'SymbolTables':
-        """Run all collection passes in dependency order."""
+        """Run all collection passes in dependency order, over ONE set of tables.
+
+        The answer is `self.tables` every time: a unit is collected INTO what the
+        units before it left, and the caller reads the whole program off the same
+        object (#672).
+        """
         # This pass walks every unit through ONE reporter, unlike the per-unit passes,
         # which build their own. Naming the unit here is what keeps a span from being
         # rendered against the entry file, and it answers for every emit site in the
@@ -207,23 +233,7 @@ class CollectorPass:
             self.r, self.visibility, root,
             current_unit=unit_name, filename=unit_file)
 
-        from sushi_lang.semantics.tables import SymbolTables
-        return SymbolTables(
-            constants=self.constants,
-            structs=self.structs,
-            enums=self.enums,
-            generic_enums=self.generic_enums,
-            generic_structs=self.generic_structs,
-            perks=self.perks,
-            perk_impls=self.perk_impls,
-            generic_perk_impls=self.generic_perk_impls,
-            funcs=self.funcs,
-            extensions=self.extensions,
-            generic_extensions=self.generic_extensions,
-            generic_funcs=self.generic_funcs,
-            externals=self.externals,
-            visibility=self.visibility,
-        )
+        return self.tables
 
     def _register_predefined_structs(self) -> None:
         """Register predefined structs (ProcessOutput, etc.)."""

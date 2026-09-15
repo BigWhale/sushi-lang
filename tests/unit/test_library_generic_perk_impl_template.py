@@ -9,6 +9,7 @@ from sushi_lang.semantics.library_templates import (
     serialize_generic_perk_impl,
 )
 from sushi_lang.semantics.passes.collect import CollectorPass, EnumTable, StructTable
+from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.units import Unit
 
 LIB_SRC = (
@@ -71,8 +72,7 @@ def test_the_record_reads_back_as_a_generic_target_implementation():
 class _StubAnalyzer:
     def __init__(self, reporter):
         self.reporter = reporter
-        self.structs = StructTable()
-        self.enums = EnumTable()
+        self.tables = SymbolTables(structs=StructTable(), enums=EnumTable())
 
 
 def test_the_manifest_ships_every_public_perk_and_the_template(tmp_path):

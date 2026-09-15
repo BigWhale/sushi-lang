@@ -744,14 +744,6 @@ class FunctionCollector:
             err_type=fn.err_type,
         )
 
-        if name == "main" and ret_ty is not None:
-            valid_integer_types = {
-                BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-                BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64
-            }
-            if ret_ty not in valid_integer_types:
-                er.emit(self.r, ERR.CE0106, ret_span, type=display_type(ret_ty))
-
         self.funcs.declare(name, sig)
 
     def _collect_generic_function_def(

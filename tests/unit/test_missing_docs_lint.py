@@ -255,7 +255,7 @@ def test_a_library_unit_is_skipped(analyze_program, tmp_path):
     analyzer = SemanticAnalyzer(reporter, filename="main", unit_manager=manager,
                                 warn_missing_docs=True)
     try:
-        analyzer.check(program)
+        analyzer.check()
     except ValueError:
         pass
     assert [item.code for item in reporter.items if item.code.startswith("CW70")] == []
