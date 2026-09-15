@@ -28,7 +28,7 @@ fn main() i32:
     return Result.Ok(0)
 """
     )
-    sink = analysis.analyzer.structs.by_name["Sink"]
+    sink = analysis.analyzer.tables.structs.by_name["Sink"]
     handler = dict(sink.fields)["handler"]
 
     unresolved = [p for p in handler.param_types if isinstance(p, UnknownType)]
@@ -58,11 +58,11 @@ fn main() i32:
 """
     )
     analyzer = analysis.analyzer
-    before = analyzer.structs.by_name["Holder"].fields
+    before = analyzer.tables.structs.by_name["Holder"].fields
 
-    resolve_pass.resolve_struct_field_types(analyzer.structs, analyzer.enums)
+    resolve_pass.resolve_struct_field_types(analyzer.tables.structs, analyzer.tables.enums)
 
-    after = analyzer.structs.by_name["Holder"].fields
+    after = analyzer.tables.structs.by_name["Holder"].fields
     rebuilt = [name for (name, was), (_, now) in zip(before, after, strict=True)
                if was is not now]
     assert not rebuilt, (
