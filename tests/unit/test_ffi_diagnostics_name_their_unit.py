@@ -44,7 +44,7 @@ def _analyze_two_units(tmp_path: Path, helper_src: str) -> Reporter:
     analyzer = SemanticAnalyzer(reporter, filename="main",
                                 unit_manager=unit_manager)
     try:
-        analyzer.check(main_ast)
+        analyzer.check()
     except ValueError:
         pass
     return reporter

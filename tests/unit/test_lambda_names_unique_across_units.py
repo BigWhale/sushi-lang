@@ -59,7 +59,7 @@ def test_two_units_get_distinct_lifted_names(tmp_path: Path):
     assert order is not None and len(order) == 2
 
     analyzer = SemanticAnalyzer(reporter, filename="main", unit_manager=unit_manager)
-    analyzer.check(main_program)
+    analyzer.check()
     assert not reporter.has_errors, [d.code for d in reporter.items]
 
     all_names: list[str] = []

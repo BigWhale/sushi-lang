@@ -115,7 +115,7 @@ def _analyze_program_of(tmp_path, units: dict[str, str], main: str = "main") -> 
     manager.get_compilation_order()
     analyzer = SemanticAnalyzer(reporter, filename=main, unit_manager=manager)
     try:
-        analyzer.check(manager.units[main].ast)
+        analyzer.check()
     except ValueError:
         pass
     return Analysis(reporter=reporter, analyzer=analyzer)

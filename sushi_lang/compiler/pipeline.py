@@ -401,38 +401,20 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         reporter, filename=main_unit_name, unit_manager=unit_manager,
         library_linker=library_linker,
         warn_missing_docs=bool(getattr(args, "warn_missing_docs", False)),
-        generated_symbols=generated_symbols)
-    multi_file_analyzer.check(main_ast)
+        generated_symbols=generated_symbols, is_library=is_library)
+    multi_file_analyzer.check()
 
-    # A library must not carry main(): --lib used to embed it into the .slib silently,
-    # where it collides at link time in every consumer. Reject it here (CE3501).
-    #
-    # An executable must carry one, and that is the mirror image (CE3007). Without the
-    # check the missing `_main` symbol reached the LINKER, so the user got raw `cc`
-    # stderr and then a CE0000 "this is a compiler bug" -- for a condition in their own
-    # program (#251).
-    from sushi_lang.internals import errors as er
+    # Main's rule -- CE3007 and CE3501 among it -- is the `entrypoint` pass's and is
+    # already answered by here (#674). This one is not about main: a library that
+    # extends a type it does not declare claims the method name for every consumer
+    # (CW3003). The build proceeds; a warning names the hazard and stops nothing.
     if is_library:
-        for unit in compilation_order:
-            if unit.ast is None:
-                continue
-            for func in unit.ast.functions:
-                if func.name == "main":
-                    er.emit(reporter, er.ERR.CE3501, func.name_span)
-        # A library that extends a type it does not declare claims the method
-        # name for every consumer (CW3003). The build proceeds: a warning names
-        # the hazard and stops nothing.
+        from sushi_lang.internals import errors as er
         from sushi_lang.backend.library_manifest import own_units
         from sushi_lang.semantics.foreign_extensions import foreign_extension_claims
         for claim in foreign_extension_claims(own_units(compilation_order)):
             er.emit_with(reporter, er.ERR.CW3003, claim.span,
                          filename=claim.filename, type=claim.target).emit()
-    elif not any(func.name == "main"
-                 for unit in compilation_order if unit.ast is not None
-                 for func in unit.ast.functions):
-        er.emit_with(reporter, er.ERR.CE3007, None) \
-            .help("add `fn main() i32:` to the program, or compile it as a library "
-                  "with `--lib`").emit()
 
     if reporter.has_errors:
         return 2

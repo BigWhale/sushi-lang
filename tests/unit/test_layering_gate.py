@@ -123,7 +123,7 @@ _ISOLATION_SCRIPT = textwrap.dedent('''
     unit_manager.get_compilation_order()
 
     analyzer = SemanticAnalyzer(reporter, filename="main", unit_manager=unit_manager)
-    analyzer.check(program)
+    analyzer.check()
 
     print(json.dumps({
         "codes": sorted(d.code for d in reporter.items),

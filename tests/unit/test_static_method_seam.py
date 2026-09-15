@@ -105,6 +105,9 @@ struct Vec:
 
 extend Vec static at(poke self) Vec:
     return Vec(1)
+
+fn main() i32:
+    return Result.Ok(0)
 """
 
 SELF_IN_BODY = """\
@@ -113,6 +116,9 @@ struct Vec:
 
 extend Vec static at() Vec:
     return Vec(self.x)
+
+fn main() i32:
+    return Result.Ok(0)
 """
 
 IN_PERK_IMPL = """\
@@ -125,6 +131,9 @@ struct Vec:
 extend Vec with Named:
     static fn name() string:
         return "vec"
+
+fn main() i32:
+    return Result.Ok(0)
 """
 
 VARIANT_COLLISION = """\
@@ -133,6 +142,9 @@ enum Shape:
 
 extend Shape static Circle() Shape:
     return Shape.Circle
+
+fn main() i32:
+    return Result.Ok(0)
 """
 
 NO_SUCH_STATIC = """\
@@ -175,11 +187,17 @@ fn main() i32:
 ARRAY_TARGET = """\
 extend i32[] static two() i32[]:
     return from([1, 2])
+
+fn main() i32:
+    return Result.Ok(0)
 """
 
 ARRAY_TEMPLATE_TARGET = """\
 extend T[] static two() T[]:
     return from([])
+
+fn main() i32:
+    return Result.Ok(0)
 """
 
 # No parameter names T and the position declares no type: neither source reaches it

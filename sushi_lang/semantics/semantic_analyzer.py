@@ -3,7 +3,7 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import (
     Reporter, diagnostic_identity, in_source_order)
-from sushi_lang.semantics.ast import Program, ExtendDef, ExtendWithDef
+from sushi_lang.semantics.ast import ExtendDef, ExtendWithDef
 from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.tables import SymbolTables
 
@@ -32,7 +32,8 @@ class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
 
     def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[LoadedLibraries] = None, library_registry: Optional['LibraryRegistry'] = None, warn_missing_docs: bool = False,
-                 generated_symbols: frozenset[str] = frozenset()) -> None:
+                 generated_symbols: frozenset[str] = frozenset(),
+                 is_library: bool = False) -> None:
         self.reporter = reporter
         self.filename = filename
         self.unit_manager = unit_manager
@@ -48,6 +49,9 @@ class SemanticAnalyzer:
         # the compiler's FIRST warning-control flag, and a second one is what earns the
         # object (documentation.md section 6).
         self.warn_missing_docs = warn_missing_docs
+        # `--lib`. The `entrypoint` pass is the one home of main's rule and the rule
+        # turns on the build kind: an executable needs a main, a library refuses one.
+        self.is_library = is_library
         # The whole program's symbol tables, and the ONE home of each of them: the
         # `namespaces` a unit may write behind a dot are `tables.namespaces`, and so on
         # for the other eighteen. Empty until the collect loop replaces them with what
@@ -58,7 +62,7 @@ class SemanticAnalyzer:
         self.libraries: Optional[LibraryRegistration] = None  # The `libraries` step, for its two later readers
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
 
-    def check(self, program: Program) -> None:
+    def check(self) -> None:
         """Entry point for semantic analysis. Runs every pass in sequence.
 
         This docstring is the authority on the pass order. The passes have NAMES, not
@@ -71,7 +75,7 @@ class SemanticAnalyzer:
             libraries     library symbol registration            library_registration.py
             namespaces    `use ... as`, one table per unit       passes/namespaces.py
             ffi-clash     an extern naming a defined symbol      passes/types/externals.py
-            entrypoint    main()'s signature                     _check_main_function_args*
+            entrypoint    main(): it exists, returns i32        _check_entrypoint
             instantiate   generic instantiation collection       generics/instantiate/
             monomorphize  generic -> concrete                    generics/monomorphize/
             resolve       field and variant type resolution      passes/resolve.py
@@ -228,7 +232,7 @@ class SemanticAnalyzer:
                 self.generated_symbols)
             self._merge_unit(unit_reporter)
 
-        self._check_main_function_args_multi_file(compilation_order)
+        self._check_entrypoint(compilation_order)
 
         from sushi_lang.semantics.generics.instantiate import InstantiationCollector
         instantiation_collector = InstantiationCollector(
@@ -823,44 +827,48 @@ class SemanticAnalyzer:
                     "take precedence"
                 ).emit()
 
-    def _check_main_function_args(self, program: Program) -> None:
-        """Check if the main function has a string[] args parameter."""
-        main_func = None
-        for func in program.functions:
-            if func.name == "main":
-                main_func = func
-                break
+    def _check_entrypoint(self, compilation_order: list[Unit]) -> None:
+        """Main's rule, whole. The ONE home of it (#674).
 
-        self._process_main_function_for_args(main_func)
+        It used to have three: the pipeline asked whether a main exists (CE3007) and
+        whether a library carries one (CE3501), the collect pass read its return type
+        (CE0106), and this pass -- named for main's signature -- checked no signature at
+        all and set one bool.
 
-    def _check_main_function_args_multi_file(self, compilation_order: list[Unit]) -> None:
-        """Check if the main function has a string[] args parameter in multi-file mode."""
-        main_func = None
-        for unit in compilation_order:
-            if unit.ast is None:
-                continue
-            for func in unit.ast.functions:
-                if func.name == "main":
-                    main_func = func
-                    break
-            if main_func is not None:
-                break
-
-        self._process_main_function_for_args(main_func)
-
-    def _process_main_function_for_args(self, main_func) -> None:
-        """Process a main function to check if it has a string[] args parameter."""
+        The order is the ruling's: the entry point exists, a library refuses one, the
+        return is an integer, and the parameter is `string[] args` or nothing. The last
+        answers `main_expects_args`, which the back end reads to hand argv on.
+        """
+        from sushi_lang.internals import errors as er
+        from sushi_lang.semantics.generics.type_display import display_type
+        from sushi_lang.semantics.type_predicates import is_integer_type
         from sushi_lang.semantics.typesys import DynamicArrayType
 
-        if main_func is None:
-            self.main_expects_args = False
-            return
+        mains = [func for unit in compilation_order if unit.ast is not None
+                 for func in unit.ast.functions if func.name == "main"]
 
-        for param in main_func.params:
-            if (param.name == "args" and
-                isinstance(param.ty, DynamicArrayType) and
-                param.ty.base_type == BuiltinType.STRING):
-                self.main_expects_args = True
-                return
+        if self.is_library:
+            # A library must not carry main(): `--lib` used to embed it into the .slib
+            # silently, where it collides at link time in every consumer.
+            for func in mains:
+                er.emit(self.reporter, er.ERR.CE3501, func.name_span)
+        elif not mains:
+            # Without this the missing `_main` symbol reached the LINKER, so the user
+            # got raw `cc` stderr and then a CE0000 "this is a compiler bug" -- for a
+            # condition in their own program (#251).
+            er.emit_with(self.reporter, er.ERR.CE3007, None) \
+                .help("add `fn main() i32:` to the program, or compile it as a library "
+                      "with `--lib`").emit()
 
-        self.main_expects_args = False
+        for func in mains:
+            ret_ty = func.ret
+            if ret_ty is not None and not is_integer_type(ret_ty):
+                er.emit(self.reporter, er.ERR.CE0106,
+                        getattr(func, "ret_span", None) or func.name_span,
+                        type=display_type(ret_ty))
+
+        self.main_expects_args = any(
+            param.name == "args"
+            and isinstance(param.ty, DynamicArrayType)
+            and param.ty.base_type == BuiltinType.STRING
+            for param in (mains[0].params if mains else ()))

@@ -342,7 +342,7 @@ def _emit_ir(tmp_path, src: str) -> str:
     order = unit_manager.get_compilation_order()
 
     analyzer = SemanticAnalyzer(reporter, filename="main", unit_manager=unit_manager)
-    analyzer.check(program)
+    analyzer.check()
     assert not reporter.has_errors, [i.code for i in reporter.items]
 
     cg = LLVMCodegen(struct_table=analyzer.tables.structs, enum_table=analyzer.tables.enums,
