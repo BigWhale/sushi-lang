@@ -126,12 +126,12 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
 
 
 def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
-    """Emit arithmetic operations on integer or floating-point values."""
-    if isinstance(left, ir.Constant) and isinstance(right, ir.Constant):
-        folded = _fold_arithmetic_constants(op, left, right)
-        if folded is not None:
-            return folded
+    """Emit arithmetic operations on integer or floating-point values.
 
+    Two constant operands are emitted as the instruction too. The backend computes no
+    integer operator of its own: the constant evaluator is the one compile-time home
+    of the semantics, and LLVM folds the instruction at run time's level (#681).
+    """
     is_float = str(left.type) in ('double', 'float')
 
     if is_float:
@@ -163,45 +163,8 @@ def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.V
     raise NotImplementedError(f"arithmetic op not supported yet: {op!r}")
 
 
-def _fold_arithmetic_constants(op: str, left: ir.Constant, right: ir.Constant) -> 'Optional[ir.Constant]':
-    """Fold arithmetic operations on constant values at compile time."""
-    if not isinstance(left.type, ir.IntType) or not isinstance(right.type, ir.IntType):
-        return None
-
-    try:
-        lval = left.constant
-        rval = right.constant
-    except (AttributeError, TypeError):
-        return None
-
-    result = None
-    if op == "+":
-        result = lval + rval
-    elif op == "-":
-        result = lval - rval
-    elif op == "*":
-        result = lval * rval
-
-    if result is None:
-        return None
-
-    width = left.type.width
-    mask = (1 << width) - 1
-    result = result & mask
-
-    if result >= (1 << (width - 1)):
-        result -= (1 << width)
-
-    return ir.Constant(left.type, result)
-
-
 def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
-    """Emit bitwise operations on integer values."""
-    if isinstance(left, ir.Constant) and isinstance(right, ir.Constant):
-        folded = _fold_bitwise_constants(op, left, right)
-        if folded is not None:
-            return folded
-
+    """Emit bitwise operations on integer values. Two constants are an instruction too."""
     if (op in ("<<", ">>")
             and isinstance(left.type, ir.IntType) and isinstance(right.type, ir.IntType)):
         return _emit_shift(codegen, op, left, right, left_type)
@@ -244,7 +207,7 @@ def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Valu
     - the shift instruction is given a masked count, so LLVM never emits an
       out-of-range shift, whose result is poison it may then use as it likes;
     - a count the compiler can read never arrives out of range. That is CE2512,
-      and a constant in range folds this whole sequence back to one shift.
+      and LLVM folds this whole sequence back to one shift for a constant in range.
     """
     from .type_utils import is_unsigned_type
 
@@ -272,40 +235,6 @@ def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Valu
         emptied = builder.ashr(value, ir.Constant(value.type, width - 1))
 
     return builder.select(leaves_the_type, emptied, shifted)
-
-
-def _fold_bitwise_constants(op: str, left: ir.Constant, right: ir.Constant) -> 'Optional[ir.Constant]':
-    """Fold bitwise operations on constant values at compile time."""
-    if not isinstance(left.type, ir.IntType) or not isinstance(right.type, ir.IntType):
-        return None
-
-    try:
-        lval = left.constant
-        rval = right.constant
-    except (AttributeError, TypeError):
-        return None
-
-    width = left.type.width
-    mask = (1 << width) - 1
-
-    result = None
-    if op == "&":
-        result = lval & rval
-    elif op == "|":
-        result = lval | rval
-    elif op == "^":
-        result = lval ^ rval
-    elif op == "<<":
-        if not 0 <= rval < width:
-            return ir.Constant(left.type, 0)
-        result = (lval << rval) & mask
-
-    if result is None:
-        return None
-
-    result = result & mask
-
-    return ir.Constant(left.type, result)
 
 
 def emit_logic(codegen: 'LLVMCodegen', op: str, left_expr: Expr, right_expr: Expr, to_i1: bool = False) -> ir.Value:

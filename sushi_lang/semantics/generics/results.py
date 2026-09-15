@@ -281,8 +281,8 @@ def ensure_result_type_in_table(
     variants = (ok_variant, err_variant)
 
     # An abstract Result, whose payloads still name an enclosing template's type params, is
-    # not a real type: hand it back but keep it OUT of the table. Interning it strands the
-    # topological sort on a type never interned, misreported as CE2052. A PROVISIONAL one
+    # not a real type: hand it back but keep it OUT of the table, or every later walk of
+    # the tables reads a type that was never built. A PROVISIONAL one
     # is the same answer for the same reason (#556): the walk above leaves a
     # `GenericTypeRef` exactly when the instance it names has not been built yet, so
     # storing the Result over one parks an unresolved payload under a name whose resolved

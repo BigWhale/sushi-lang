@@ -1,0 +1,11 @@
+# The cross-kind cell: a consumer CONSTANT takes the name of a library's public
+# `var`. One table holds both, so the answer is the same CE0105.
+# EXPECT_ERROR_CODE: CE0105
+
+use <lib/shadow_kinds_lib>
+
+const i32 counter = 1
+
+fn main() i32:
+    println("{counter} {touch().realise(0)}")
+    return Result.Ok(0)

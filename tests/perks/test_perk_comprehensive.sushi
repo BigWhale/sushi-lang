@@ -3,9 +3,6 @@
 # Comprehensive perk test covering multiple features
 
 # Define multiple perks
-perk Hashable:
-    fn hash() u64
-
 perk Displayable:
     fn display() string
 

@@ -1,0 +1,12 @@
+# A consumer declares `hidden_counter`, which the library declares PRIVATELY.
+# The shape a private constant already has: each declaration takes its own
+# global, and each body reads its own.
+# EXPECT_STDOUT_EXACT: "5 41\n"
+
+use <lib/shadow_kinds_lib>
+
+var i32 hidden_counter = 5
+
+fn main() i32:
+    println("{hidden_counter} {touch().realise(0)}")
+    return Result.Ok(0)

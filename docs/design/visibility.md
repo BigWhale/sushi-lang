@@ -67,8 +67,9 @@ reach was a struct field, an enum payload or an extern signature, and
 Two total walks and their gates hold the whole thing up:
 `semantics/ast_walk.py:74` — `declarations` — yields every declaration of a unit, and
 `semantics/type_walk.py:55` yields every type inside a type. The visibility seam is filled
-from the first (`semantics/visibility.py:359` — `record_declarations`) and every predicate
-over types is one line over the second.
+by the collectors as each meets a declaration (`semantics/visibility.py` --
+`record_declaration`, one record whether the declaration is kept or refused), and every
+predicate over types is one line over the second.
 
 ### Only functions carried a unit of origin
 
@@ -465,7 +466,7 @@ widening somebody else's:
 | **Public enum variant payload** | yes | the enum's own marker |
 | Extension return and parameter | yes | the TARGET type's marker |
 | Perk method return and parameter | yes | the perk's, or the target type's |
-| Public generic constraint | yes (CE3010) | the declaring function's, struct's or enum's marker |
+| Public generic constraint | yes (CE3010) | the declaring function's, struct's or enum's marker; an extension's TARGET type's, so a builtin target is not fenced |
 | Extension or perk-implementation RECEIVER | no | it IS the gate; asking would answer itself |
 | A GENERIC target (`extend Box@(T) with P`) | yes | the BASE type's marker, which is where it is written |
 | A target with no declaration (`extend i32`) | no | there is no marker to inherit |
@@ -496,6 +497,20 @@ CE3010 and CE4011 both involve a private perk and are not the same error. CE4011
 **use-site** rule: the perk is not nameable in that unit at all. CE3010 is a **leak** rule:
 the perk is nameable right there, in its own unit, and the signature would hand it to a unit
 where it is not.
+
+The two partition on that one question -- may the declaring unit NAME the perk -- and a
+constraint answers one code or none, for every kind that carries one (#692):
+
+| where the constraint is written | the declaration's visibility | answer |
+|---|---|---|
+| another unit than the perk's | any | CE4011, from the collect pass |
+| the perk's own unit | public | CE3010 |
+| the perk's own unit | private, or an extension on a builtin | allowed |
+
+An extension's visibility in that table is its TARGET type's (Ruling 2), a generic
+target's its BASE type's. The collect pass drives the use-site rule once per unit off
+`signature_constraints()`, the same walk the leak rule reads, so the four kinds that carry
+a type parameter meet one call.
 
 The implicit `Result` wrap needs no special case. `fn origin() Point` becomes
 `Result@(Point, StdError)`, but the fence runs on `func.ret` before the wrap.

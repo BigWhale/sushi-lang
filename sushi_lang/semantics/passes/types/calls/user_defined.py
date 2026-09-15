@@ -295,10 +295,12 @@ def validate_call_arguments(validator: 'TypeValidator', function_name: str, func
             if struct_name in validator.generic_struct_table.by_name:
                 arg.callee.id = param.ty.name
 
-        validator.validate_expression(arg)
+        # `validate_expression` walks the argument AND returns its type, so asking the
+        # inference a second time here told the user twice about any fault an inference
+        # arm reports -- `poke geo.SIZE` read its CE2400 twice (#685).
+        arg_type = validator.validate_expression(arg)
 
         if param.ty is not None:  # Skip if parameter has unknown type
-            arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
                 emit_argument_mismatch(validator, arg, i + 1, param.ty, arg_type)
 

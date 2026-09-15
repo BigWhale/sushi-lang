@@ -1,6 +1,5 @@
 """String processing utilities for handling escape sequences and interpolation."""
 from __future__ import annotations
-import dataclasses
 from typing import List, Optional, Tuple, Union, TYPE_CHECKING
 from pathlib import Path
 from lark import Lark, Token
@@ -134,48 +133,36 @@ def get_interpolation_parser() -> Lark:
     return _interpolation_parser
 
 
-def apply_location_offset(node: object, base_span: 'Span', visited: set = None) -> None:
-    """Recursively adjust locations in AST nodes parsed from interpolation expressions."""
+def apply_location_offset(node: object, base_span: 'Span') -> None:
+    """Move every span under `node` by where the interpolation hole starts.
+
+    The nodes come from a second parse of the hole's text alone, so every span they
+    carry counts from the hole and not from the file.
+    """
     from sushi_lang.semantics.ast import Node
     from sushi_lang.internals.report import Span
-
-    if visited is None:
-        visited = set()
-
-    node_id = id(node)
-    if node_id in visited:
-        return
-
-    if isinstance(node, (str, int, float, bool, type(None))):
-        return
-
-    visited.add(node_id)
+    from sushi_lang.semantics.ast_walk import walk_nodes
 
     line_offset = base_span.line - 1
     col_offset = base_span.col - 1
+    # One node reached twice would be offset twice. The walk carries no guard of its
+    # own, because it is a tree for every other reader; this one keeps its own.
+    moved: set[int] = set()
 
-    if isinstance(node, Node) and hasattr(node, 'loc') and node.loc is not None:
-        old_loc = node.loc
-        node.loc = Span(
-            line=old_loc.line + line_offset,
-            col=old_loc.col + col_offset,
-            end_line=old_loc.end_line + line_offset,
-            end_col=old_loc.end_col + col_offset
-        )
+    def move_the_span_of(current: Node) -> bool:
+        if id(current) in moved:
+            return False
+        moved.add(id(current))
+        if current.loc is not None:
+            current.loc = Span(
+                line=current.loc.line + line_offset,
+                col=current.loc.col + col_offset,
+                end_line=current.loc.end_line + line_offset,
+                end_col=current.loc.end_col + col_offset
+            )
+        return True
 
-    if isinstance(node, Node):
-        # A node is slotted, so it has no __dict__ to walk (IR.md section 5). Its
-        # declared fields are the same set the old walk reached, minus the stray
-        # attributes it could never have recursed into anyway.
-        for f in dataclasses.fields(node):
-            if f.name == 'loc':
-                continue
-            attr_value = getattr(node, f.name, None)
-            if isinstance(attr_value, list):
-                for item in attr_value:
-                    apply_location_offset(item, base_span, visited)
-            elif isinstance(attr_value, Node):
-                apply_location_offset(attr_value, base_span, visited)
+    walk_nodes(node, move_the_span_of)
 
 
 def parse_interpolation_expr(expr_text: str, ast_builder: 'ASTBuilder', fallback_span: 'Span') -> 'Expr':

@@ -1,0 +1,14 @@
+# An array target's element position reads the same predicate: a perk name is a
+# declared name, so `Named[]` is a concrete target over a name that is not a type, and
+# not a template over every element type. It used to compile as `extend T[]` does,
+# with the perk shadowed inside the method (#653).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2001
+perk Named:
+    fn name() string
+
+extend Named[] g() i32:
+    return 1
+
+fn main() i32:
+    return Result.Ok(0)

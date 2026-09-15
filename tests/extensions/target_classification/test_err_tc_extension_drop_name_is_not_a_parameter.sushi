@@ -1,0 +1,14 @@
+# The predefined perk `Drop` is a declared name in every program, so `Box@(Drop)` is a
+# constraint on the extension path and `Box@(i32)` has no `g` (#653).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2008
+struct Box@(T):
+    T item
+
+extend Box@(Drop) g() i32:
+    return 1
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println("{b.g()}")
+    return Result.Ok(0)

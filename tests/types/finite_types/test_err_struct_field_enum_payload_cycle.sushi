@@ -1,0 +1,14 @@
+# A struct whose field is an enum whose payload is the struct, the struct
+# declared first. The cycle S -> E -> S is by value at both hops. The
+# diagnostic stands at the struct, the first root the walk visits (#677).
+# EXPECT_ERROR_CODE: CE2095
+
+struct S:
+    i32 value
+    E e
+
+enum E:
+    V(S)
+
+fn main() i32:
+    return Result.Ok(0)

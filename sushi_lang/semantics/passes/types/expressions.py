@@ -408,7 +408,7 @@ def reject_overflowing_operation(validator: 'TypeValidator', expr: Expr,
     the node that computed it: the inner operation of `(200 + 100) / 2` reports once,
     and a constant that overflows is reported where it is declared and not at every use.
     """
-    from sushi_lang.semantics.passes.const_eval import emit_overflow
+    from sushi_lang.semantics.const_eval import emit_overflow
 
     evaluator = validator.constant_evaluator()
     evaluator.evaluate(expr, result_type, expr.loc)
@@ -426,8 +426,11 @@ def _provable_shift_count(validator: 'TypeValidator', count: Expr) -> Optional[i
     the answer is wanted here, never the evaluator's complaint about not finding
     one.
     """
+    from sushi_lang.semantics.const_eval import ScalarConstant
+
     value = validator.constant_evaluator().evaluate(count, BuiltinType.I64, None)
-    if value is None or not isinstance(value.value, int) or isinstance(value.value, bool):
+    if (value is None or not isinstance(value, ScalarConstant)
+            or not isinstance(value.value, int) or isinstance(value.value, bool)):
         return None
     return value.value
 

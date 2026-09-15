@@ -9,7 +9,6 @@ if TYPE_CHECKING:
 from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.typesys import (
-    Type,
     BuiltinType,
     EnumVariantInfo,
     PointerType,
@@ -40,7 +39,9 @@ from .perks import (
     PerkTable)
 from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
-from sushi_lang.semantics.visibility import VisibilityTable, record_declarations
+from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
+from sushi_lang.semantics.visibility import (
+    VisibilityTable, reject_private_perk_constraints)
 
 __all__ = [
     'CollectorPass',
@@ -67,16 +68,6 @@ __all__ = [
     'GenericExtensionMethod',
     'extract_type_param_names',
 ]
-
-
-# The builtins a target's argument position may name. Read by the collect pass and by the
-# analyzer when it files a library's shipped template (#543), so the two agree on what a
-# bare name in `extend Box@(X)` means.
-KNOWN_BUILTIN_TYPES: frozenset = frozenset({
-    BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-    BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING,
-})
 
 
 class CollectorPass:
@@ -106,7 +97,12 @@ class CollectorPass:
         self.externals = ExternalTable()
         self.visibility = VisibilityTable()
 
-        self.known_types: Set[Type] = set(KNOWN_BUILTIN_TYPES)
+        # Which bare names are declared, for reading a target's arguments (#653). One
+        # predicate for every collector that classifies a target.
+        self.is_declared_type = DeclaredTypeNamer(
+            structs=self.structs, enums=self.enums,
+            generic_structs=self.generic_structs, generic_enums=self.generic_enums,
+            perks=self.perks)
 
         self.constant_collector = ConstantCollector(
             reporter=reporter,
@@ -117,7 +113,6 @@ class CollectorPass:
             reporter=reporter,
             structs=self.structs,
             generic_structs=self.generic_structs,
-            known_types=self.known_types
         )
 
         self.enum_collector = EnumCollector(
@@ -126,14 +121,13 @@ class CollectorPass:
             generic_enums=self.generic_enums,
             structs=self.structs,
             generic_structs=self.generic_structs,
-            known_types=self.known_types
         )
 
         self.perk_collector = PerkCollector(
             reporter=reporter,
             perks=self.perks,
             perk_impls=self.perk_impls,
-            known_types=self.known_types,
+            is_declared_type=self.is_declared_type,
             generic_perk_impls=self.generic_perk_impls,
         )
 
@@ -151,19 +145,15 @@ class CollectorPass:
             structs=self.structs,
             enums=self.enums,
             generic_structs=self.generic_structs,
-            generic_enums=self.generic_enums
+            generic_enums=self.generic_enums,
+            is_declared_type=self.is_declared_type,
         )
-        # Which units came from a library, for every collector that has to know.
-        for collector in (self.struct_collector, self.enum_collector,
-                          self.perk_collector, self.function_collector,
-                          self.constant_collector):
-            collector.library_units = set(library_units or ())
-
-        # And who declared what, for the four that ask it: three refuse a library clash
-        # with CE3011, and all four refuse a promise about a private perk with CE4011. A
+        # Which units came from a library, and who declared what, for all six: each
+        # collector files the declarations it meets, and the ones that refuse a library
+        # clash (CE3011, CE0105, CW3002, the perk-impl override) read the same table. A
         # struct table carries a file and not a unit, so the answer comes from here.
-        for collector in (self.struct_collector, self.enum_collector,
-                          self.function_collector, self.perk_collector):
+        for collector in self._collectors:
+            collector.library_units = set(library_units or ())
             collector.visibility = self.visibility
 
         self._register_predefined_structs()
@@ -187,12 +177,16 @@ class CollectorPass:
         finally:
             self.r.origin = previous_origin
 
+    @property
+    def _collectors(self) -> tuple:
+        """All six, in collection order. One list, so no binding reaches five of them."""
+        return (self.constant_collector, self.struct_collector, self.enum_collector,
+                self.perk_collector, self.external_collector, self.function_collector)
+
     def _collect(self, root: Program, unit_name: Optional[str],
                  unit_file: Optional[str]) -> 'SymbolTables':
         # One way in for all six: the fields, not a parameter on one collector's method.
-        for collector in (self.constant_collector, self.struct_collector,
-                          self.enum_collector, self.perk_collector,
-                          self.external_collector, self.function_collector):
+        for collector in self._collectors:
             collector.current_unit_file = unit_file
             collector.current_unit_name = unit_name
 
@@ -201,14 +195,17 @@ class CollectorPass:
         self.enum_collector.collect(root)
         self.perk_collector.collect_definitions(root)
         self.perk_collector.collect_implementations(root)
-        self.perk_collector.register_synthetic_impls()
         self.function_collector.collect_functions(root)
         self.function_collector.collect_extensions(root)
         self.function_collector.register_stdlib_functions(root)
         self.external_collector.collect(root)
 
-        record_declarations(self.visibility, root,
-                            unit_name=unit_name, filename=unit_file)
+        # The use-site half of the perk-contract rule, once per unit off the one walk
+        # over constraints. A perk declared next door is in the table already, and a
+        # unit's own perks are permitted whatever their marker.
+        reject_private_perk_constraints(
+            self.r, self.visibility, root,
+            current_unit=unit_name, filename=unit_file)
 
         from sushi_lang.semantics.tables import SymbolTables
         return SymbolTables(
@@ -237,7 +234,7 @@ class CollectorPass:
         self.enum_collector.register_predefined_enums()
 
     def _register_predefined_perks(self) -> None:
-        """Register predefined perks (Drop)."""
+        """Register predefined perks (Drop, Hashable)."""
         self.perk_collector.register_predefined_perks()
 
     def _register_predefined_generics(self) -> None:
@@ -310,4 +307,3 @@ class CollectorPass:
         self.generic_structs.by_name["List"] = list_generic
         self.generic_structs.order.append("List")
 
-        # Note: Generic enums and structs are not added to known_types until they are instantiated with concrete types

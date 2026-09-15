@@ -1,7 +1,7 @@
 """Collection of FFI `unsafe external` declarations into an ExternalTable."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, Optional, Set, Tuple, TYPE_CHECKING
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -10,6 +10,7 @@ from sushi_lang.semantics.externs_manifest import RESERVED_EXTERNS
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
+    from sushi_lang.semantics.visibility import VisibilityTable
 
 
 @dataclass
@@ -56,6 +57,11 @@ class ExternalCollector:
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
         self.current_unit_name: Optional[str] = None
+        # Bound with the other five so one loop reaches all six. An external carries
+        # no visibility (`NO_VISIBILITY`), so this collector files nothing and asks
+        # nothing; the binding is there so a collector cannot be left out by omission.
+        self.library_units: Set[str] = set()
+        self.visibility: Optional[VisibilityTable] = None
         self.externals = externals
 
     def collect(self, root: 'Program') -> None:

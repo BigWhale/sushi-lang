@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 
 Node = Tuple[str, str]
+Marks = Tuple[int, int]
 
 
 def _inline_targets(ty: 'Type') -> List[Node]:
@@ -52,11 +53,6 @@ def _successors(node: Node, struct_table: 'StructTable',
     return out
 
 
-def _is_ours(cycle: List[Node]) -> bool:
-    """Whether this cycle is CE2095's to report."""
-    return any(kind == "struct" for kind, _name in cycle)
-
-
 def _format_chain(cycle: List[Node]) -> str:
     """Render a cycle the way Go does: 'A refers to B refers to A'."""
     names = [name for _kind, name in cycle]
@@ -64,9 +60,26 @@ def _format_chain(cycle: List[Node]) -> str:
     return " refers to ".join(names)
 
 
+def table_marks(struct_table: 'StructTable', enum_table: 'EnumTable') -> Marks:
+    """How many names each table holds now.
+
+    `check_infinite_size_types(since=marks)` then walks from the names appended after
+    this point alone: the instances a late intern adds (#677).
+    """
+    return len(struct_table.order), len(enum_table.order)
+
+
 def check_infinite_size_types(struct_table: 'StructTable', enum_table: 'EnumTable',
-                              reporter: 'Reporter') -> bool:
-    """Report CE2095 for every by-value containment cycle."""
+                              reporter: 'Reporter',
+                              since: Optional[Marks] = None) -> bool:
+    """Report CE2095 for every by-value containment cycle, once per cycle.
+
+    Every kind the walk reaches is reported here: a struct field, a fixed-array element
+    and an enum payload are all stored inline, so a pure enum cycle is the same fault as
+    a struct one (#677). With `since`, the roots are the declarations appended after
+    those marks. A cycle among older declarations stopped the analysis the first time,
+    so a walk from the new names finds every new cycle and repeats none.
+    """
     # Iterative DFS with an explicit path so the diagnostic can name the chain.
     # Recursion is not an option here: the graph is exactly the one that used to
     # blow the Python stack.
@@ -74,8 +87,9 @@ def check_infinite_size_types(struct_table: 'StructTable', enum_table: 'EnumTabl
     reported: Set[frozenset] = set()
     found = False
 
-    roots: List[Node] = [("struct", n) for n in struct_table.order]
-    roots += [("enum", n) for n in enum_table.order]
+    struct_from, enum_from = since if since is not None else (0, 0)
+    roots: List[Node] = [("struct", n) for n in struct_table.order[struct_from:]]
+    roots += [("enum", n) for n in enum_table.order[enum_from:]]
 
     for root in roots:
         if root in state:
@@ -102,7 +116,7 @@ def check_infinite_size_types(struct_table: 'StructTable', enum_table: 'EnumTabl
             if state.get(successor) == 0:
                 cycle = path[path.index(successor):]
                 key = frozenset(cycle)
-                if key not in reported and _is_ours(cycle):
+                if key not in reported:
                     reported.add(key)
                     found = True
                     _report(cycle, struct_table, enum_table, reporter)

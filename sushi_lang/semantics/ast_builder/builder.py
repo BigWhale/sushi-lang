@@ -104,7 +104,7 @@ class ASTBuilder:
         """
         from sushi_lang.internals.report import Reporter
         from sushi_lang.semantics.passes.collect.constants import ConstantTable, ConstSig
-        from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+        from sushi_lang.semantics.const_eval import ConstantEvaluator, ScalarConstant
         from sushi_lang.semantics.type_predicates import is_integer_type
 
         const_def = self.unit_constants.get(name)
@@ -118,7 +118,8 @@ class ASTBuilder:
 
         evaluated = ConstantEvaluator(Reporter(), table).evaluate(
             const_def.value, const_def.ty, const_def.loc)
-        if evaluated is None or not isinstance(evaluated.value, int) or isinstance(evaluated.value, bool):
+        if (evaluated is None or not isinstance(evaluated, ScalarConstant)
+                or not isinstance(evaluated.value, int) or isinstance(evaluated.value, bool)):
             return None
         return evaluated.value
 

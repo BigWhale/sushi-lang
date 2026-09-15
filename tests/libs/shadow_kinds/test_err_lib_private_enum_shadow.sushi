@@ -1,0 +1,13 @@
+# A TYPE is one per program, so the consumer may not declare a name the library
+# declares privately: the enum twin of the struct rule (CE3011), because one
+# namespace holds both kinds.
+# EXPECT_ERROR_CODE: CE3011
+
+use <lib/shadow_kinds_lib>
+
+enum Gear:
+    Park
+
+fn main() i32:
+    println("{touch().realise(0)}")
+    return Result.Ok(0)

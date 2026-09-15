@@ -10,14 +10,15 @@ A kind in none of them is a kind whose rule nobody decided, which is how a hole 
 from __future__ import annotations
 
 from sushi_lang.internals.parser import parse_to_ast
+from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast_walk import declarations
+from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.visibility import (
     CARRIES_MARKER,
     FOLLOWS_DECLARATION,
     FOLLOWS_TARGET_TYPE,
     NO_VISIBILITY,
     VisibilityTable,
-    record_declarations,
 )
 
 # One unit that declares every kind the walk yields.
@@ -65,6 +66,13 @@ def _walked_kinds() -> set[str]:
     return {kind for kind, _node in declarations(_program(EVERY_KIND))}
 
 
+def _recorded(source: str) -> VisibilityTable:
+    """The table the collect pass fills for one unit, as the collectors file it (#691)."""
+    reporter = Reporter(source=source, filename="seam.sushi")
+    return CollectorPass(reporter).run(_program(source), unit_name="seam",
+                                       unit_file="seam.sushi").visibility
+
+
 def test_every_walked_kind_is_classified():
     unclassified = sorted(_walked_kinds() - _CLASSIFIED)
     assert not unclassified, (
@@ -97,9 +105,7 @@ def test_the_four_sets_do_not_overlap():
 
 
 def test_a_marker_carrying_kind_is_recorded_with_its_origin():
-    table = VisibilityTable()
-    record_declarations(table, _program(EVERY_KIND),
-                        unit_name="seam", filename="seam.sushi")
+    table = _recorded(EVERY_KIND)
 
     for kind in CARRIES_MARKER:
         recorded = {name for (k, name) in table.by_key if k == kind}
@@ -114,9 +120,7 @@ def test_a_marker_carrying_kind_is_recorded_with_its_origin():
 
 def test_a_kind_that_carries_no_marker_is_not_recorded():
     """Recording one would invite a fence to read it and enforce a rule nobody ruled."""
-    table = VisibilityTable()
-    record_declarations(table, _program(EVERY_KIND),
-                        unit_name="seam", filename="seam.sushi")
+    table = _recorded(EVERY_KIND)
 
     recorded_kinds = {kind for (kind, _name) in table.by_key}
     unexpected = sorted(recorded_kinds - CARRIES_MARKER)

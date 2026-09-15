@@ -14,8 +14,8 @@ from sushi_lang.semantics.generics.types import GenericStructType, TypeParameter
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_for_type_name,
+    record_declaration,
     reject_library_clash,
-    reject_private_perk_constraints,
 )
 
 from .utils import extract_type_param_names, note_first_declaration, reject_reference_in
@@ -55,7 +55,6 @@ class StructCollector:
         reporter: Reporter,
         structs: StructTable,
         generic_structs: GenericStructTable,
-        known_types: Set[Type]
     ) -> None:
         """Initialize struct collector."""
         self.r = reporter
@@ -67,7 +66,6 @@ class StructCollector:
         self.visibility: Optional[VisibilityTable] = None
         self.structs = structs
         self.generic_structs = generic_structs
-        self.known_types = known_types
 
     def _reject_library_clash(self, name: str, name_span: Optional[Span]) -> bool:
         """CE3011 when a library already took this name. True when it was refused."""
@@ -105,7 +103,6 @@ class StructCollector:
         if "ProcessOutput" not in self.structs.by_name:
             self.structs.order.append("ProcessOutput")
             self.structs.by_name["ProcessOutput"] = process_output
-            self.known_types.add(process_output)
 
         # Datagram - what one recv_from() answers with. It is a predefined
         # struct rather than a <net/udp> one because the .bc layer builds it,
@@ -124,7 +121,6 @@ class StructCollector:
         if "Datagram" not in self.structs.by_name:
             self.structs.order.append("Datagram")
             self.structs.by_name["Datagram"] = datagram
-            self.known_types.add(datagram)
 
     def _collect_struct_def(self, struct: StructDef) -> None:
         """Collect struct definition and create StructType or GenericStructType."""
@@ -133,6 +129,9 @@ class StructCollector:
             return
 
         name_span: Optional[Span] = getattr(struct, "name_span", None) or getattr(struct, "loc", None)
+        record_declaration(self.visibility, "struct", struct,
+                           unit_name=self.current_unit_name,
+                           filename=self.current_unit_file)
 
         type_params_raw = getattr(struct, "type_params", None)
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
@@ -202,10 +201,6 @@ class StructCollector:
                 for tp in type_params_raw
             )
 
-            reject_private_perk_constraints(
-                self.r, self.visibility, type_param_instances, name_span,
-                current_unit=self.current_unit_name, filename=self.current_unit_file)
-
             generic_struct = GenericStructType(
                 name=name,
                 type_params=type_param_instances,
@@ -216,8 +211,6 @@ class StructCollector:
             self.generic_structs.by_name[name] = generic_struct
             self.generic_structs.spans[name] = name_span
             self.generic_structs.files[name] = self.current_unit_file
-
-            # Note: Generic structs are not added to known_types until instantiated
         else:
             struct_type = StructType(
                 name=name,
@@ -228,8 +221,6 @@ class StructCollector:
             self.structs.by_name[name] = struct_type
             self.structs.spans[name] = name_span
             self.structs.files[name] = self.current_unit_file
-
-            self.known_types.add(struct_type)
 
             # Hash registration is deferred to the derive pass (passes/derive.py), which runs
             # after the resolve pass resolved every type and the monomorphize pass made every

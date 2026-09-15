@@ -1,0 +1,31 @@
+# One declaration of each KIND a consumer may declare again, public and
+# private: a struct, an enum, a `var`, and a public constant for the cross-kind
+# cells. The function kind is pinned from override_lib and private_names_lib,
+# the constant kind from private_names_lib, and the perk implementation from
+# perk_impl_lib. `touch()` reads every private one, so none is dead.
+public struct Shown:
+    i32 n
+
+struct Kept:
+    i32 n
+
+public enum Mode:
+    On
+    Off
+
+enum Gear:
+    Low
+    High
+
+public const i32 LIMIT = 9
+
+public var i32 counter = 0
+
+var i32 hidden_counter = 0
+
+public fn touch() i32:
+    let Kept k = Kept(1)
+    let Gear g = Gear.Low
+    match g:
+        Gear.Low -> return Result.Ok(k.n + hidden_counter + 40)
+        Gear.High -> return Result.Ok(0)

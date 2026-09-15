@@ -1,6 +1,3 @@
-perk Hashable:
-    fn hash() u64
-
 struct Point:
     i32 x
     i32 y
@@ -19,6 +16,6 @@ fn main() i32:
 
     let u64 hi = fingerprint(42).realise(0 as u64)
     let u64 hb = fingerprint(true).realise(0 as u64)
-    println("i32 and bool hashed via synthetic Hashable: {hi}, {hb}")
+    println("i32 and bool hashed through the predefined Hashable: {hi}, {hb}")
 
     return Result.Ok(0)

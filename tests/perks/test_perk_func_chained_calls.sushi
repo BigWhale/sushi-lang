@@ -2,9 +2,6 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test chained generic function calls with constraints
 
-perk Hashable:
-    fn hash() u64
-
 perk Displayable:
     fn display() string
 

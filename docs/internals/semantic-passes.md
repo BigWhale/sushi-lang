@@ -16,7 +16,7 @@ order; this list mirrors it.
 | `collect` | constants, function headers, generic types, externals | `semantics/passes/collect/` |
 | `docs` | check each doc block against its declaration (CE7001-CE7008, CW7001), and its completeness under `--warn-missing-docs` (CW7002-CW7006) | `semantics/passes/docs.py` |
 | `externs` | extern signatures (CE5003), `CW5001`, the `ptr` unit gate (CE5009) | `semantics/passes/types/externals.py` |
-| `libraries` | register every symbol a `.slib` exports | `semantics/semantic_analyzer.py` |
+| `libraries` | register every symbol a `.slib` exports | `semantics/library_registration.py` |
 | `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds (CE3013, CE3014, CE3016, CW3004, CW3005) | `semantics/passes/namespaces.py` |
 | `ffi-clash` | reject an `unsafe external` that names a symbol this build defines (CE5013) | `semantics/passes/types/externals.py` |
 | `entrypoint` | `main()`'s signature and its `string[] args` | `semantics/semantic_analyzer.py` |
@@ -35,7 +35,7 @@ order; this list mirrors it.
 The last four run per unit, in one loop, so the whole-program passes above them see every
 unit before any function body is walked.
 
-`semantics/passes/const_eval.py` is **not** a pass. The `typecheck` pass and the backend
+`semantics/const_eval.py` is **not** a pass. The `typecheck` pass and the backend
 both call it as a helper.
 
 ### The word "phase"
@@ -84,6 +84,10 @@ collect loop, and every unit's perk DEFINITIONS were swept up ahead of the loop 
 implementation could meet the two rules that read the perk table -- the perk exists
 (`CE4003`), and its marker lets this unit implement it (`CE4011`). A perk declared next
 door is in the table when the implementing unit is reached, so neither patch is needed.
+Two perks are in the table before any unit is collected: `Drop` and `Hashable`, the
+compiler's own (`register_predefined_perks`). The constraint check reads `Hashable`
+through the derive pass's predicate, `hashability_of`, so no implementation table
+entry stands for a derived hash (#696).
 
 ### Example
 
@@ -255,7 +259,7 @@ See `docs/ffi.md`.
 
 ## The `libraries` pass: library symbol registration
 
-**File:** `semantics/semantic_analyzer.py` (`_register_library_*`)
+**File:** `semantics/library_registration.py` (`LibraryRegistration`; the analyzer calls `seed_perks` ahead of the collect loop and `register` after it)
 
 Every symbol a linked `.slib` exports enters the same tables the consumer's own `collect`
 filled: structs, enums, functions, published constants, export-closure private helpers and
@@ -592,9 +596,35 @@ struct Chain:
 ```
 
 Placement is load-bearing on both sides. It runs AFTER `resolve`, because it needs the
-resolved field types, and BEFORE `derive`, whose topological sort would report the same
-cycle as an internal error (`CE0128`). It is also the one pass that STOPS the analysis on
-failure: every later pass assumes a finitely-sized type.
+resolved field types, and BEFORE `derive`, because a derived hash walks a type by value.
+It is also the one pass that STOPS the analysis on failure: every later pass assumes a
+finitely-sized type.
+
+The pass owns EVERY inline cycle (#677): a struct field, a fixed-size array element and an
+enum payload are all stored inline. A pure enum cycle reads the same `CE2095` as the struct
+twin -- once per cycle, at the first member's declaration, with the chain:
+
+<!-- docs-sweep: error CE2095 -->
+```sushi
+enum A:
+    X(B)               # CE2095: A refers to B refers to A
+
+enum B:
+    Y(A)
+```
+
+The walk visits every struct before any enum, so a mixed cycle is reported at its struct
+whatever the declaration order. An enum cycle used to be `CE2052` from the `derive` pass: a
+file name with no caret, once per member, and once more for every instance a call site
+solved late. `CE2052` and `CE0128` (the sort's internal guard) are retired, and the
+`derive` pass has no sort left: the table it writes holds a lazy emitter per type, and no
+reader depends on an order.
+
+A late-interned instance -- a `Tree@(bool)` a call site solves from an argument and no
+annotation spells -- is created after this pass ran, so the late interner
+(`SemanticAnalyzer._intern_generic_type_refs`) runs the check again from the NEW names
+alone. A cycle among older declarations stopped the analysis the first time, so the walk
+from the new roots finds every new cycle and repeats none.
 
 ## The `derive` pass: hash and clone auto-derivation
 
@@ -1087,8 +1117,8 @@ order.
 - `resolve` needs `monomorphize` (every struct and enum a generic produced must exist)
 - `finite-types` needs `resolve` (the resolved field types), and STOPS the analysis on
   failure
-- `derive` needs `finite-types` (a cycle would otherwise reach its topological sort as
-  `CE0128`)
+- `derive` needs `finite-types` (a derived hash walks a type by value, so the type must
+  have a finite size)
 - `shadowing` needs `derive` (the auto-derived pair must be registered before a collision
   can be seen)
 - `scope` needs `collect` (function signatures), and runs AFTER every whole-program pass,

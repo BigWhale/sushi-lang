@@ -339,13 +339,13 @@ _add(ErrorMessage("CE0091", Severity.ERROR,
     "Result type not found: {type}",
     Category.INTERNAL, "Result enum type not found in symbol table."))
 
-_add(ErrorMessage("CE0128", Severity.ERROR,
-    "circular struct dependency reached hash registration: {names}",
-    Category.INTERNAL,
-    "The derive pass topologically sorts the struct graph so a nested struct's hash is registered "
-    "before its parent's. A cycle there means a by-value containment cycle survived the finite-types pass, "
-    "which reports it as CE2095 and stops the analysis -- so reaching this is a gap in that "
-    "check, not a user error. It used to be a bare ValueError rendered as CE0000."))
+# CE0128 ("circular struct dependency reached hash registration: {names}") was RETIRED by
+# the ruling on #677 (2026-09-14). It guarded the derive pass's topological sort of the struct
+# graph. Its doc said the sort registered a nested struct's hash before its parent's; that was
+# never so: the table holds a lazy emitter per type and the hashability walk reads the fields
+# itself, so the order was consumed by nothing. Both sorts are deleted, and a by-value cycle is
+# CE2095 from the finite-types pass, which stops the analysis before the derive pass runs. The
+# number is not reused.
 
 _add(ErrorMessage("CE0129", Severity.ERROR,
     "no ownership decision for the {use} consuming use of a {node}",
@@ -369,6 +369,19 @@ _add(ErrorMessage("CE0132", Severity.ERROR,
     "error. It is fatal ON PURPOSE: the `alloca` fallback that stood here filled a COPY of "
     "the receiver and reported nothing, which is the silent no-op #480 records. Same "
     "treatment CE0129 gives a consuming use with no ownership decision."))
+
+_add(ErrorMessage("CE0137", Severity.ERROR,
+    "lifted lambda name '{name}' is already registered",
+    Category.INTERNAL,
+    "The lambda lifter claims its index before it builds anything: it steps past every "
+    "__lambda_<n> already in the function table and every __closure_env_<n> already in the "
+    "struct table, so the name it then registers is free in both. A registration that "
+    "fails anyway means the name entered a table between that search and the "
+    "registration, and the closure that loses the race silently aliases another unit's "
+    "body and environment layout -- which is the #402 fault the search exists to prevent. "
+    "It is fatal ON PURPOSE. It was a bare RuntimeError, so it reached the user as CE0000 "
+    "with no explanation of what had gone wrong (#687). Same treatment derive.py gives an "
+    "unsortable struct cycle with CE0128."))
 
 _add(ErrorMessage("CE0126", Severity.ERROR,
     "poisoned intern of '{name}': already interned as {existing}, rebuilt as {rebuilt}",

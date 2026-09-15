@@ -1,8 +1,5 @@
 # Test: Generic functions with perk constraints parse correctly
 
-perk Hashable:
-    fn hash() u64
-
 fn compute_hash@(T: Hashable)(T value) u64:
     return value.hash()
 

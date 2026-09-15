@@ -1,20 +1,18 @@
 # Test constraint violation on generic struct (should emit CE4006)
 # EXPECT_ERROR_CODE: CE4006
 
-perk Hashable:
-    fn hash() u64
+use <collections/hashmap>
 
-struct Point:
-    i32 x
-    i32 y
+struct Index:
+    HashMap@(i32, string) slots
 
-# Point does NOT implement Hashable
+# Index holds a HashMap, which has no derived hash, so it does not satisfy Hashable
 
 # Generic struct with perk constraint
 struct Container@(T: Hashable):
     T value
 
 fn main() i32:
-    # Error CE4006: Point does not implement perk Hashable
-    let Container@(Point) c = Container(Point(10, 20))
+    # Error CE4006: Index does not implement perk Hashable
+    let Container@(Index) c = Container(Index(HashMap.new()))
     return Result.Ok(0)

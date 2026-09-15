@@ -199,7 +199,7 @@ class TypeValidator:
 
     def constant_evaluator(self, reporter: Optional[Reporter] = None):
         """The evaluator for this unit's constant expressions. Silent with no reporter."""
-        from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
+        from sushi_lang.semantics.const_eval import ConstantEvaluator
         return ConstantEvaluator(reporter if reporter is not None else Reporter(),
                                  self.const_table, self.current_unit_name,
                                  self.namespaces_of, self.struct_table, self.enum_table)
@@ -285,6 +285,17 @@ class TypeValidator:
     def _validate_function(self, func: FuncDef) -> None:
         """Delegate to signatures module."""
         validate_function(self, func)
+
+    def annotate_function(self, func: FuncDef) -> None:
+        """Type one function the lambda lifter built (the `Annotator` contract, #687).
+
+        A lifted lambda is an ordinary function from here on, so it is typed by the path
+        an ordinary one takes. Public because the lift pass runs after this one and
+        depends on it: a lifted body carries no parameter types and no channel until
+        this runs over it. The lift pass used to name `_validate_function` instead, so a
+        rename of a PRIVATE method here broke a different pass with no diagnostic.
+        """
+        self._validate_function(func)
 
     def _validate_extension_method(self, ext: ExtendDef) -> None:
         """Delegate to signatures module."""

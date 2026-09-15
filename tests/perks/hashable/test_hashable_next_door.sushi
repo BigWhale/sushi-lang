@@ -1,0 +1,14 @@
+# A struct another unit declares satisfies the predefined `Hashable` by derivation too:
+# the derive pass reads the whole program's tables, and the perk needs no import (#696).
+# EXPECT_STDOUT_EXACT: "true\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+use "helpers/hashable_far"
+
+fn fingerprint@(T: Hashable)(T value) u64:
+    return Result.Ok(value.hash())
+
+fn main() i32:
+    let Far f = Far(4)
+    println(fingerprint(f).realise(0 as u64) == f.hash())
+    return Result.Ok(0)

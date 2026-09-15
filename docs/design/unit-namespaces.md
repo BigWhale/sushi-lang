@@ -329,7 +329,7 @@ Four constraints fix it there, and each names the step that supplies something:
 |---|---|---|
 | a unit's own declarations (`UnitNamespace`) | `collect` | the collect loop, `semantic_analyzer.py:174-181`. Its tables are cumulative today; phase 1 is what gives them a unit key |
 | an FFI block's foreign functions (`ExternalNamespace`) | `collect` as well — NOT the `externs` pass | `external_collector.collect(root)`, `passes/collect/__init__.py:216`. The `externs` pass validates the signatures it finds; it does not fill the table |
-| a BINARY library's declarations (`UnitNamespace` over a `.slib`) | `libraries` | the twelve `_register_library_*` methods, `semantic_analyzer.py:242-262` |
+| a BINARY library's declarations (`UnitNamespace` over a `.slib`) | `libraries` | `LibraryRegistration.register`, `semantics/library_registration.py` |
 | a registry module's functions (`StdlibNamespace`) | `collect` | `register_stdlib_functions`, `passes/collect/__init__.py:215` |
 
 The third row is the one that pushes the pass past `libraries` and is easy to miss: a

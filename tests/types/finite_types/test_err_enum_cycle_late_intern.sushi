@@ -1,0 +1,18 @@
+# The same A -> B -> A cycle beside a call whose result type, List@(bool), is
+# spelled nowhere. The call site solves it and the late interner re-runs the
+# derive pass for it. The cycle is found once, by the finite-types pass, before
+# any of that runs, so the re-run adds no second diagnostic (#677).
+# EXPECT_ERROR_CODE: CE2095
+use <collections/iter>
+
+enum A:
+    X(B)
+
+enum B:
+    Y(A)
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    let i32 n = xs.map(|i32 x| x > 0).realise(List.new()).len()
+    return Result.Ok(n)

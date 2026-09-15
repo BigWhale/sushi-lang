@@ -3,9 +3,6 @@
 # Test generic function with perk constraint - ACTUALLY CALL IT
 # This is critical: we define AND call the generic function
 
-perk Hashable:
-    fn hash() u64
-
 struct Point:
     i32 x
     i32 y

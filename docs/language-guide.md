@@ -1124,12 +1124,9 @@ extend i32 hash() u64:      # error [CE2097]: extension method 'hash()' conflict
 
 This covers every built-in family: the `hash()` and `clone()` the compiler derives for every struct and enum, the primitive and string methods (`to_str`, `to_bits`, `len`, `trim`, ...), the array methods, and the methods of `Result`, `Maybe`, `Own`, `List` and `HashMap`. Pick a different name, or use a perk.
 
-**Perks are the way to replace a built-in**: a perk implementation takes precedence at every layer, by design.
+**Perks are the way to replace a built-in**: a perk implementation takes precedence at every layer, by design. `Hashable` is predefined -- it is the contract of the derived `hash()`, and every type with a derived hash satisfies it -- so the implementation below is the override and nothing is declared.
 
 ```sushi
-perk Hashable:
-    fn hash() u64
-
 struct Point:
     i32 x
     i32 y

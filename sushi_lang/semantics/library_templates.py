@@ -397,22 +397,14 @@ def apply_template_bindings(body, bindings: dict) -> None:
     FUNCTIONS in the map, and a bare reference to one is not expressible for a
     library-private name.
     """
-    import dataclasses
     from sushi_lang.semantics import ast as A
+    from sushi_lang.semantics.ast_walk import walk_nodes
 
-    def _walk(node) -> None:
-        if node is None:
-            return
-        if isinstance(node, (list, tuple)):
-            for item in node:
-                _walk(item)
-            return
+    def rebind_the_callee(node: A.Node) -> bool:
         if isinstance(node, A.Call) and isinstance(node.callee, A.Name):
             symbol = bindings.get(node.callee.id)
             if symbol is not None:
                 node.callee.id = symbol
-        if dataclasses.is_dataclass(node) and not isinstance(node, type):
-            for f in dataclasses.fields(node):
-                _walk(getattr(node, f.name, None))
+        return True
 
-    _walk(body)
+    walk_nodes(body, rebind_the_callee)

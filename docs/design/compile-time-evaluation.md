@@ -14,12 +14,17 @@ Read `docs/language-reference.md` for the constant rules that hold today.
 
 ## 1. What the compiler does today
 
-`semantics/passes/const_eval.py` is an expression walker. `evaluate` (`const_eval.py:73-104`)
-sends work to nine node kinds: an integer, a float, a bool, a string, a binary operator, a
-unary operator, an array literal, a name, a cast and an index. Every other node gets CE0108.
+`semantics/const_eval.py` is an expression walker. `evaluate` decides every `Expr` kind
+through one table, `ConstantEvaluator.HANDLERS`: a literal of each kind, a binary and a
+unary operator, an array literal, a name, a cast, an index, an interpolated string, a
+struct construction, a member access and a dot call each have a handler, and the ten
+kinds named in `NOT_CONSTANT` -- a method call, a range, a lambda, a `??`, a borrow, a
+spread, a dynamic array, a blank -- answer CE0108 through the one backstop.
+`tests/unit/test_const_eval_dispatch_is_total.py` holds the two sets against the `Expr`
+union, so a kind added to the language cannot fall through in silence (#683).
 
-The evaluator has no environment. `_evaluate_name` (`const_eval.py:219-242`) reads a global
-constant and nothing else. There is no statement, and there is no control flow.
+The evaluator has no environment. `_evaluate_name` reads a global constant and nothing
+else. There is no statement, and there is no control flow.
 
 The evaluator is a helper and not a pass (`semantics/semantic_analyzer.py:112-113`). Four
 places call it:
@@ -55,9 +60,8 @@ breaking change: no test in the suite needed a change.
 
 ### The behaviour this replaces
 
-The evaluator holds a Python integer of unlimited size. `_eval_arithmetic`
-(`const_eval.py:308-315`) marks the exact result with the type of the left operand. Nothing
-compares that result against the type.
+The evaluator holds a Python integer of unlimited size. `_eval_arithmetic` marks the exact
+result with the type of the left operand. Nothing compares that result against the type.
 
 So this constant holds 300:
 
@@ -67,9 +71,9 @@ const u8 A = 200 + 100
 ```
 
 The program still prints 44. llvmlite writes the text `i8 300`, and the LLVM IR parser
-truncates it to `i8 44`. A body prints 44 as well, because `_fold_arithmetic_constants`
-(`backend/expressions/operators.py:166-193`) masks the result and restores the sign at the
-width of the type.
+truncates it to `i8 44`. A body printed 44 as well, because the backend then held a fold of
+its own, `_fold_arithmetic_constants` in `backend/expressions/operators.py`, which masked
+the result and restored the sign at the width of the type. That fold is gone (#681, below).
 
 The printed value is correct, and this is why every test passes today. Truncation gives the
 same answer for `+`, `-`, `*`, `<<` and `~`. It gives a different answer for `/`, `%`, `>>`,
@@ -149,6 +153,21 @@ Run time does not change. Two locals still wrap, because no check is inserted th
 let u8 a = 200 + 100      # the compiler reports this
 let u8 s = x + y          # this wraps at run time, with no check
 ```
+
+**One compile-time home (#681).** The evaluator is the only place in the compiler that
+computes an integer operator. The backend held a second one until #681: a fold over two
+constant operands in `backend/expressions/operators.py` that covered `+ - *` and
+`& | ^ <<`, re-derived two's complement by hand, wrapped in silence where the evaluator
+reports CE2077, and left `/ % >>` to LLVM. It was measured before it went: it was reached
+only by a pair of literals, and every such pair has already passed
+`reject_overflowing_operation`, so it never wrapped anything and folded what LLVM folds
+itself. The backend now emits the instruction for two constants as for two locals, and
+LLVM is the run-time home by definition. The gate is
+`tests/unit/test_integer_operator_semantics_agree.py`: per operator and per width, the
+evaluator's value and the value a JIT-compiled copy of the emitted instruction computes
+are one bit pattern, and a constant fold in the backend's operator emitter is refused
+by its source. Building that matrix is what found the `%` half of the row above: the
+evaluator answered 0 for the smallest signed value `% -1`, and it reports CE2077 now.
 
 ### What this costs
 
@@ -340,7 +359,7 @@ When one of these arrives, the cost is already known. Record it here so the deci
   follows: a bare `return`, and no `??` in the body. CE2091 and CE0131 are the codes that
   hold that rule for an extension.
 - **A constant cannot be a struct or an enum.** So a constant function returns a number, a
-  bool, a string, or a fixed array of those. `ConstantValue` (`const_eval.py:20-24`) holds
+  bool, a string, or a fixed array of those. `ScalarConstant` and `AggregateConstant` (`const_eval.py`) hold
   exactly those shapes.
 - **The pass order fights it.** The evaluator runs from the typecheck pass and from the back
   end, and the typecheck pass runs per unit and late. A constant function body must be

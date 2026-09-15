@@ -1,0 +1,19 @@
+# A library template constrained on the predefined `Hashable` is instantiated by the
+# consumer at a primitive and at a plain struct the consumer declares. Neither side
+# declares the perk and neither writes an implementation: the derived hash satisfies
+# the constraint on both sides of the library boundary (#696).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\ntrue\n"
+
+use <lib/hashable_lib>
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let i32 n = 5
+    println(lib_fingerprint(n).realise(0 as u64) == n.hash())
+    let Point p = Point(1, 2)
+    println(lib_fingerprint(p).realise(0 as u64) == p.hash())
+    return Result.Ok(0)

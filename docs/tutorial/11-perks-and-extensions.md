@@ -125,27 +125,30 @@ Robot Marvin (battery: 42%)
 Ship Heart of Gold (crew: 5)
 ```
 
-## Primitives satisfy perks for free
+## `Hashable` is predefined
 
-Some perks describe behaviour the compiler already derives for the built-in types. The prime
-example is hashing: every type in Sushi gets an auto-derived `.hash() -> u64`. That means
-primitives **automatically satisfy** a `Hashable` perk without you writing any
-`extend ... with Hashable` — they pick up a *synthetic* implementation.
+One perk describes behaviour the compiler already derives: hashing. Nearly every type in
+Sushi gets an auto-derived `.hash() -> u64`, and the perk `Hashable` (`fn hash() u64`)
+ships with the compiler beside `Drop`. You never declare it — a `perk Hashable:` of your
+own is a duplicate (CE4001) — and every type with a derived hash **satisfies it
+automatically**: the primitives, `string`, and a plain struct or enum alike.
 
 ```sushi
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/synthetic-hash.sushi"
 ```
 
-`fingerprint@(T: Hashable)` needs its argument to be hashable. For `Point` we provide an
-explicit `extend Point with Hashable`. But for `42` (an `i32`) and `true` (a `bool`) we
-write nothing — the compiler supplies the `Hashable` implementation from the auto-derived
-hash. The same generic function therefore works on our struct and on raw primitives alike.
+`fingerprint@(T: Hashable)` needs its argument to be hashable. `Point` would satisfy the
+constraint on its own, through its derived hash; the explicit `extend Point with Hashable`
+here is the **override**, and it is what makes the fingerprint `30` rather than the
+derived value. For `42` (an `i32`) and `true` (a `bool`) we write nothing. A type the
+compiler cannot hash — a struct holding a `HashMap`, say — does not satisfy `Hashable`
+unless it implements the perk, and the constraint refuses it with CE4006.
 
 Output:
 
 ```
 Point fingerprint: 30
-i32 and bool hashed via synthetic Hashable: 6807129317463932018, 1
+i32 and bool hashed through the predefined Hashable: 6807129317463932018, 1
 ```
 
 (The large number is the real FxHash of the integer `42`; we are not making it up. Yours
@@ -178,8 +181,8 @@ compile time, which is what makes the whole thing zero-cost.
 - A **perk** is a contract of method signatures; types opt in with `extend Type with Perk:`.
 - Perks shine as **generic constraints** (`<T: Perk>`), checked at compile time and
   monomorphized away.
-- Primitives get **synthetic** perk implementations (e.g. `Hashable`) from their auto-derived
-  methods, so generic code works on them without extra boilerplate.
+- `Hashable` is **predefined**, like `Drop`: every type with a derived `hash()` satisfies it,
+  and `extend T with Hashable` replaces the derived hash.
 - Perks have no type parameters, no inheritance, and no default methods.
 
 Next we'll look at how Sushi manages memory — ownership, RAII, and borrowing — without a

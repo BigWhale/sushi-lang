@@ -8,7 +8,9 @@ from sushi_lang.semantics.typesys import BuiltinType, EnumType, UnknownType, Str
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import (
     Match, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
+    MemberAccess, Name, RefBinding,
 )
+from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -46,9 +48,59 @@ def validate_match_statement(validator: 'TypeValidator', stmt: Match) -> None:
     # do; a miss there silently drops pattern bindings and surfaces as CE0055).
     stmt.resolved_scrutinee_type = scrutinee_type
 
+    reject_poke_binding_into_a_constant(validator, stmt)
+
     covered_variants, has_wildcard = collect_and_validate_patterns(validator, stmt, scrutinee_type)
 
     check_match_exhaustiveness(validator, stmt, scrutinee_type, covered_variants, has_wildcard)
+
+
+def reject_poke_binding_into_a_constant(validator: 'TypeValidator',
+                                        stmt: Match) -> None:
+    """A `poke` pattern binding needs a scrutinee with storage (#685).
+
+    `Variant(poke x)` binds a POINTER into the scrutinee's payload, and a write through
+    it reaches that storage. A constant is folded into read-only memory and has none, so
+    the write landed there and the program stopped -- the same question a `poke self`
+    call asks, at the one position that never asked it. A `peek` and a bare binding READ
+    the payload, and reading a constant is legal.
+    """
+    root = stmt.scrutinee
+    while isinstance(root, MemberAccess):
+        root = root.receiver
+    if not isinstance(root, Name) or root.id in validator.variable_types:
+        return
+    binding = _first_poke_binding(stmt)
+    if binding is None:
+        return
+    reject_borrow_of_constant(validator.err, root.id,
+                              validator.const_sig(root.id),
+                              binding.loc or stmt.loc)
+
+
+def _first_poke_binding(stmt: Match) -> Optional[RefBinding]:
+    """The first `poke` binding any arm of this match declares, at any depth."""
+    def walk(pattern) -> Optional[RefBinding]:
+        for binding in getattr(pattern, "bindings", ()):
+            if isinstance(binding, RefBinding) and binding.mode == "poke":
+                return binding
+            if isinstance(binding, Pattern):
+                found = walk(binding)
+                if found is not None:
+                    return found
+            elif isinstance(binding, OwnPattern):
+                inner = binding.inner_pattern
+                if isinstance(inner, Pattern):
+                    found = walk(inner)
+                    if found is not None:
+                        return found
+        return None
+
+    for arm in stmt.arms:
+        found = walk(arm.pattern)
+        if found is not None:
+            return found
+    return None
 
 
 def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optional[EnumType | BuiltinType]:

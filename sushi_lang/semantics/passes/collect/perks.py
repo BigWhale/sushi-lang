@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.visibility import (
-    VisibilityTable, reject_private_perk_contract)
+    VisibilityTable, record_declaration, reject_private_perk_contract,
+    taken_by_a_library)
 from sushi_lang.semantics.ast import (
     PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
@@ -83,8 +84,8 @@ class PerkImplementationTable:
 
     # Which unit declared each implementation. Here and not on the collector, because
     # the question "may this implementation be replaced?" is asked of the table
-    # (decision 11 of `docs/design/visibility.md`). A synthetic implementation and a
-    # library manifest record have no declaring unit, so the answer may be None.
+    # (decision 11 of `docs/design/visibility.md`). A library manifest record has no
+    # declaring unit, so the answer may be None.
     units: Dict[Tuple[str, str], Optional[str]] = field(default_factory=dict)
 
     def register(self, impl: ExtendWithDef, type_name: str,
@@ -153,24 +154,6 @@ class PerkImplementationTable:
 
         return None
 
-    def register_synthetic(self, type_name: str, perk_name: str) -> bool:
-        """Register a synthetic perk implementation for primitives."""
-        key = (type_name, perk_name)
-        if key in self.implementations:
-            return False  # Already registered (explicit or synthetic)
-
-        self.implementations[key] = None  # type: ignore
-
-        if type_name not in self.by_type:
-            self.by_type[type_name] = set()
-        self.by_type[type_name].add(perk_name)
-
-        if perk_name not in self.by_perk:
-            self.by_perk[perk_name] = set()
-        self.by_perk[perk_name].add(type_name)
-
-        return True
-
 
 def _get_type_name(ty: Optional[Type]) -> Optional[str]:
     """Extract a string name from a Type for use in perk implementation tables."""
@@ -207,14 +190,14 @@ class PerkCollector:
         reporter: Reporter,
         perks: PerkTable,
         perk_impls: PerkImplementationTable,
-        known_types: Optional[Set[Type]] = None,
+        is_declared_type: Callable[[str], bool],
         generic_perk_impls: Optional[GenericPerkImplTable] = None,
     ) -> None:
         """Initialize perk collector."""
         self.r = reporter
         # Which bare names are declared types, for reading a generic target's arguments:
         # `Box@(T)` and `Box@(Point)` are spelled identically and mean opposite things.
-        self.known_types: Set[Type] = known_types if known_types is not None else set()
+        self.is_declared_type = is_declared_type
         # The unit being collected. This pass shares one reporter across every
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
@@ -272,51 +255,53 @@ class PerkCollector:
     # `poke self`, because a destructor writes, and the return must be blank, because a
     # destructor has nowhere to put a Result (CE4012).
     DROP_PERK = "Drop"
+    # `Hashable` is the contract of the derived `hash()`: every type the derive pass can
+    # hash satisfies it with no implementation, and `extend T with Hashable` is the one
+    # override of the derived hash (#696). The constraint check reads this name.
+    HASHABLE_PERK = "Hashable"
 
-    def register_predefined_perks(self) -> None:
-        """Register `Drop`, the perk that declares a resource (HANDLES.md ruling R2).
-
-        A type that implements it owns something RAII must release, whatever its fields
-        say. It ships with the compiler, beside the synthesized enums, so it needs no
-        import -- `owns_resource` asks every program the question, so the answer has to
-        exist in every program.
-        """
-        if self.perks.get(self.DROP_PERK) is not None:
-            return
-        drop = PerkDef(
-            loc=None,
-            name=self.DROP_PERK,
-            methods=[PerkMethodSignature(
-                name="drop", params=[], ret=BuiltinType.BLANK, self_mode="poke")],
-            is_public=True,
-        )
-        self.perks.register(drop)
-        self.perks.files[self.DROP_PERK] = None
-
-    def register_synthetic_impls(self) -> None:
-        """Auto-register synthetic perk implementations for primitive types."""
-        hashable_primitives = [
-            "i8", "i16", "i32", "i64",
-            "u8", "u16", "u32", "u64",
-            "f32", "f64", "bool", "string"
+    def _predefined_perks(self) -> List[PerkDef]:
+        """The perks that ship with the compiler, public and importless."""
+        return [
+            PerkDef(
+                loc=None,
+                name=self.DROP_PERK,
+                methods=[PerkMethodSignature(
+                    name="drop", params=[], ret=BuiltinType.BLANK, self_mode="poke")],
+                is_public=True,
+            ),
+            PerkDef(
+                loc=None,
+                name=self.HASHABLE_PERK,
+                methods=[PerkMethodSignature(name="hash", params=[], ret=BuiltinType.U64)],
+                is_public=True,
+            ),
         ]
 
-        hashable_perk = self.perks.get("Hashable")
-        if hashable_perk:
-            has_hash_method = any(
-                method.name == "hash" and method.ret == BuiltinType.U64
-                for method in hashable_perk.methods
-            )
+    def register_predefined_perks(self) -> None:
+        """Register the two perks that ship with the compiler.
 
-            if has_hash_method:
-                for prim_type in hashable_primitives:
-                    self.perk_impls.register_synthetic(prim_type, "Hashable")
+        `Drop` declares a resource (HANDLES.md ruling R2): a type that implements it owns
+        something RAII must release, whatever its fields say. `Hashable` names the
+        derived hash (#696): a type satisfies it when the derive pass can hash it, and
+        an implementation is the override. Both stand beside the synthesized enums, so
+        they need no import -- `owns_resource` and a `@(T: Hashable)` constraint ask
+        every program the question, so the answer has to exist in every program.
+        """
+        for perk in self._predefined_perks():
+            if self.perks.get(perk.name) is not None:
+                continue
+            self.perks.register(perk)
+            self.perks.files[perk.name] = None
 
     def _collect_perk_def(self, perk: PerkDef) -> None:
         """Collect perk definition and register in perk table."""
         name = getattr(perk, "name", None)
         if not isinstance(name, str):
             return
+        record_declaration(self.visibility, "perk", perk,
+                           unit_name=self.current_unit_name,
+                           filename=self.current_unit_file)
 
         # The definition sweep collected this same declaration already, and the unit it
         # belongs to is being collected now. One node twice is not two perks, so the
@@ -380,11 +365,6 @@ class PerkCollector:
             refused = True
         return refused
 
-    def _is_declared_type(self, name: str) -> bool:
-        """Does this bare name in a target's argument position name a TYPE?"""
-        return (name in self.perks.by_name
-                or any(str(t) == name for t in self.known_types))
-
     def _reject_bad_drop_target(self, impl: ExtendWithDef, target_type: Optional[Type],
                                 type_name: str, span: Optional[Span]) -> bool:
         """The one target `Drop` refuses: a FOREIGN one. True when it was reported.
@@ -433,7 +413,7 @@ class PerkCollector:
 
         if not isinstance(target_type, GenericTypeRef):
             return False
-        shape = classify_extension_target(target_type, self._is_declared_type)
+        shape = classify_extension_target(target_type, self.is_declared_type)
         if shape.is_mixed:
             er.emit_with(self.r, ERR.CE2098,
                          getattr(impl, "target_type_span", None)
@@ -521,9 +501,8 @@ class PerkCollector:
         if not self.perk_impls.register(impl, type_name,
                                         unit_name=self.current_unit_name):
             owner = self.perk_impls.owner(type_name, perk_name)
-            shadows_library = (owner is not None and owner in self.library_units
-                               and self.current_unit_name not in self.library_units)
-            if not shadows_library:
+            if not taken_by_a_library(owner, current_unit=self.current_unit_name,
+                                      library_units=self.library_units):
                 er.emit(self.r, ERR.CE4002, getattr(impl, "loc", None),
                         type=type_name, perk=perk_name)
                 return False

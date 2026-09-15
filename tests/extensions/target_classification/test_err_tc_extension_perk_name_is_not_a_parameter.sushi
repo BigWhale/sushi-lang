@@ -1,0 +1,20 @@
+# A PERK name is a declared name, so it does not bind a type parameter. `Box@(Named)`
+# is a constraint on the extension path exactly as it is on the perk-implementation
+# path, so `Box@(i32)` has no `g`. The function collector used to read the perk name
+# as a fresh parameter, so `g` was on every Box and `Named` was shadowed inside the
+# method's signature (#653).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2008
+perk Named:
+    fn name() string
+
+struct Box@(T):
+    T item
+
+extend Box@(Named) g() i32:
+    return 1
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println("{b.g()}")
+    return Result.Ok(0)

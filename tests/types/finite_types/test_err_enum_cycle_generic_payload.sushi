@@ -1,0 +1,13 @@
+# A generic enum whose payload is its own instantiation. The template alone is
+# not a type; the instance Tree@(i32) is, and it holds itself by value (#677).
+# EXPECT_ERROR_CODE: CE2095
+
+enum Tree@(T):
+    Leaf(T)
+    Node(Tree@(T))
+
+fn main() i32:
+    let Tree@(i32) t = Tree.Leaf(1)
+    match t:
+        Tree.Leaf(v) -> return Result.Ok(v)
+        Tree.Node(_) -> return Result.Ok(0)

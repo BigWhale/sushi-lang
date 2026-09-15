@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 from sushi_lang.semantics.ast import EnumDef, Program, BoundedTypeParam
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.typesys import (
-    Type,
     BuiltinType,
     EnumType,
     EnumVariantInfo,
@@ -23,8 +22,8 @@ from sushi_lang.semantics.generics.types import GenericEnumType, TypeParameter
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_for_type_name,
+    record_declaration,
     reject_library_clash,
-    reject_private_perk_constraints,
 )
 
 from .utils import extract_type_param_names, note_first_declaration, reject_reference_in
@@ -91,7 +90,6 @@ class EnumCollector:
         generic_enums: GenericEnumTable,
         structs: 'StructTable',
         generic_structs: 'GenericStructTable',
-        known_types: Set[Type]
     ) -> None:
         """Initialize enum collector."""
         self.r = reporter
@@ -105,7 +103,6 @@ class EnumCollector:
         self.generic_enums = generic_enums
         self.structs = structs
         self.generic_structs = generic_structs
-        self.known_types = known_types
 
     def collect(self, root: Program) -> None:
         """Collect all enum definitions from program AST."""
@@ -116,10 +113,9 @@ class EnumCollector:
                     self._collect_enum_def(enum)
 
     def _register_predefined(self, enum: EnumType) -> None:
-        """One of the nine synthesized enums: in the table, in order, a known type."""
+        """One of the nine synthesized enums: in the table, in order."""
         self.enums.by_name[enum.name] = enum
         self.enums.order.append(enum.name)
-        self.known_types.add(enum)
 
     def register_predefined_enums(self) -> None:
         """Register predefined enums for file operations and error handling.
@@ -292,6 +288,9 @@ class EnumCollector:
             return
 
         name_span: Optional[Span] = getattr(enum, "name_span", None) or getattr(enum, "loc", None)
+        record_declaration(self.visibility, "enum", enum,
+                           unit_name=self.current_unit_name,
+                           filename=self.current_unit_file)
 
         # Check if this enum has type parameters (e.g., enum Result<T>:)
         # Note: In the collect pass, type_params is always None -- the grammar has no syntax for it yet
@@ -380,10 +379,6 @@ class EnumCollector:
                 for tp in type_params_raw
             )
 
-            reject_private_perk_constraints(
-                self.r, self.visibility, type_param_instances, name_span,
-                current_unit=self.current_unit_name, filename=self.current_unit_file)
-
             generic_enum = GenericEnumType(
                 name=name,
                 type_params=type_param_instances,
@@ -394,8 +389,6 @@ class EnumCollector:
             self.generic_enums.by_name[name] = generic_enum
             self.generic_enums.spans[name] = name_span
             self.generic_enums.files[name] = self.current_unit_file
-
-            # Note: Generic enums are not added to known_types until instantiated
         else:
             enum_type = EnumType(
                 name=name,
@@ -406,5 +399,3 @@ class EnumCollector:
             self.enums.by_name[name] = enum_type
             self.enums.spans[name] = name_span
             self.enums.files[name] = self.current_unit_file
-
-            self.known_types.add(enum_type)

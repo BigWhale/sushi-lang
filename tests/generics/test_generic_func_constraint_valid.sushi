@@ -1,9 +1,6 @@
 # Test valid perk constraint satisfaction for generic functions
 # Point struct implements Hashable, so it should satisfy the constraint
 
-perk Hashable:
-    fn hash() u64
-
 struct Point:
     i32 x
     i32 y

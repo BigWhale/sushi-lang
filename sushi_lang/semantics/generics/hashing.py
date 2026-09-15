@@ -85,12 +85,18 @@ class _Walk:
     nothing else, so remembering one would refuse a type that a different reader can
     hash. `cycles` counts the hits, and an unchanged count over a subtree is what says
     its answer is the type's own.
+
+    `resolve` maps a WRITTEN name to its table entry, for a reader that runs before the
+    resolve pass: the constraint check in monomorphize asks about a struct whose
+    fields still spell their types (#696). The derive pass runs after that pass and
+    hands over none.
     """
 
     path: List[str] = field(default_factory=list)
     on_path: Set[str] = field(default_factory=set)
     decided: Dict[Tuple[str, str], Tuple[bool, str]] = field(default_factory=dict)
     cycles: int = 0
+    resolve: Optional[Callable[[Type], Type]] = None
 
 
 @contextmanager
@@ -129,14 +135,21 @@ def _decide(walk: _Walk, kind: str, name: str,
     return answer
 
 
-def hashability_of(ty: Type, walk: Optional[_Walk] = None) -> tuple[bool, str]:
+def hashability_of(ty: Type, walk: Optional[_Walk] = None, *,
+                   resolve: Optional[Callable[[Type], Type]] = None) -> tuple[bool, str]:
     """Can a derived hash read a value of `ty`? One reader for every position.
 
     A struct field, an enum payload and an array element all ask this, so a kind is
     answered once and every position inherits the answer. The dispatch is total over the
     type kinds, and `tests/unit/test_hashability_dispatch_is_total.py` is the gate.
+
+    `resolve` is for a reader that runs BEFORE the resolve pass -- the `Hashable`
+    constraint check (#696): it maps a written name to its table entry at every step
+    of the walk, so a field that spells `Point` is read as the struct it names.
     """
-    walk = walk if walk is not None else _Walk()
+    walk = walk if walk is not None else _Walk(resolve=resolve)
+    if walk.resolve is not None:
+        ty = walk.resolve(ty)
 
     if isinstance(ty, UnknownType):
         return False, f"unresolved type '{ty.name}'"

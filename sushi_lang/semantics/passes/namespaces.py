@@ -21,7 +21,9 @@ the same chain through `Provider.reaches`, so the dot and the bare name agree.
 """
 from __future__ import annotations
 
-from typing import AbstractSet, Any, Dict, Iterable, Optional, Tuple
+from typing import (
+    TYPE_CHECKING, AbstractSet, Callable, Dict, Iterable, Optional, Tuple, cast,
+)
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
@@ -39,6 +41,14 @@ from sushi_lang.semantics.namespaces import (
     homed_enums,
 )
 
+if TYPE_CHECKING:
+    # Type information only. None of the three reaches this pass again, so no cycle is
+    # being broken here: the guard keeps a pass the analyzer imports inside its own
+    # body from pulling the table graph in at run time.
+    from sushi_lang.semantics.library_registry import LibraryMetadata, LibraryRegistry
+    from sushi_lang.semantics.tables import SymbolTables
+    from sushi_lang.semantics.units import Unit
+
 # The kinds a namespace holds that a qualified form cannot reach yet. They are members
 # all the same, so an alias over a unit of nothing but types is not an empty namespace.
 _MEMBER_ONLY_KINDS = frozenset({"struct", "enum", "perk"})
@@ -49,13 +59,16 @@ _MEMBER_ONLY_KINDS = frozenset({"struct", "enum", "perk"})
 _INNER_KINDS = frozenset({"field", "variant", "perk method", "external declaration"})
 
 
-def build_namespaces(reporter: Reporter, unit: Any, tables: Any, *,
-                     units: Dict[str, Any],
-                     library_registry: Any = None) -> NamespaceTable:
+def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,
+                     units: Dict[str, Unit],
+                     library_registry: Optional[LibraryRegistry] = None
+                     ) -> NamespaceTable:
     """Bind every namespace `unit` may write, and report what its imports get wrong."""
-    program: Program = unit.ast
+    # `Unit.ast` is optional, but the analyzer's loop skips a unit that has none, so
+    # the pass never sees one. The cast says that and emits no code.
+    program: Program = cast(Program, unit.ast)
 
-    _reject_use_below_declaration(reporter, unit)
+    _reject_use_below_declaration(reporter, unit, program)
 
     table = NamespaceTable()
 
@@ -94,8 +107,9 @@ def build_namespaces(reporter: Reporter, unit: Any, tables: Any, *,
     return table
 
 
-def _scope_of(unit: Any, flat: Iterable[Tuple[UseStatement, Provider]],
-              units: Dict[str, Any], library_registry: Any = None) -> UnitScope:
+def _scope_of(unit: Unit, flat: Iterable[Tuple[UseStatement, Provider]],
+              units: Dict[str, Unit],
+              library_registry: Optional[LibraryRegistry] = None) -> UnitScope:
     """What this unit may write with no qualifier, from its FLAT imports alone.
 
     An import brings what it names AND what that re-exports (section 8.1): the walk is
@@ -127,7 +141,8 @@ def _scope_of(unit: Any, flat: Iterable[Tuple[UseStatement, Provider]],
                      generics=tuple(dict.fromkeys(generics)), everything=False)
 
 
-def _binary_library_units(origin: str, library_registry: Any) -> Iterable[str]:
+def _binary_library_units(origin: str,
+                          library_registry: Optional[LibraryRegistry]) -> Iterable[str]:
     """Every unit of the binary library `origin` belongs to, under its `lib/` key.
 
     A binary library's declarations register under `lib/<library>/<unit>` and the
@@ -148,7 +163,7 @@ def _binary_library_units(origin: str, library_registry: Any) -> Iterable[str]:
     return tuple(f"lib/{lib_name}/{u}" for u in manifest_units)
 
 
-def _library_units(unit_name: str, units: Dict[str, Any]) -> Iterable[str]:
+def _library_units(unit_name: str, units: Dict[str, Unit]) -> Iterable[str]:
     """Every unit of the source library `unit_name` belongs to, if it is one."""
     if not unit_name.startswith("lib/"):
         return ()
@@ -156,7 +171,8 @@ def _library_units(unit_name: str, units: Dict[str, Any]) -> Iterable[str]:
     return tuple(name for name in units if name.startswith(f"{library}/"))
 
 
-def _reject_use_below_declaration(reporter: Reporter, unit: Any) -> None:
+def _reject_use_below_declaration(reporter: Reporter, unit: Unit,
+                                  program: Program) -> None:
     """CE3014: every import stands above the first declaration (section 2.1).
 
     The span comes from the AST BUILDER, which is the only place source order survives:
@@ -168,10 +184,10 @@ def _reject_use_below_declaration(reporter: Reporter, unit: Any) -> None:
     # the rule can be acted on.
     if unit.provenance is not None:
         return
-    first = unit.ast.first_declaration_span
+    first = program.first_declaration_span
     if first is None:
         return
-    for use_stmt in unit.ast.uses or ():
+    for use_stmt in program.uses or ():
         if use_stmt.loc is not None and use_stmt.loc.line > first.line:
             er.emit_with(reporter, er.ERR.CE3014, use_stmt.loc) \
                 .note("this declaration comes first", first).emit()
@@ -224,8 +240,9 @@ def _reject_alias_collision(reporter: Reporter, table: NamespaceTable,
     return False
 
 
-def _provider_for(use_stmt: UseStatement, tables: Any, units: Dict[str, Any],
-                  library_registry: Any, host: Any = None,
+def _provider_for(use_stmt: UseStatement, tables: SymbolTables, units: Dict[str, Unit],
+                  library_registry: Optional[LibraryRegistry],
+                  host: Optional[Unit] = None,
                   visited: AbstractSet[str] = frozenset()) -> Provider:
     """What one `use` brings. A provider, never a written path (section 3.1).
 
@@ -242,7 +259,7 @@ def _provider_for(use_stmt: UseStatement, tables: Any, units: Dict[str, Any],
                           visited=visited)
 
 
-def _imported_unit(path: str, host: Any, units: Dict[str, Any]) -> str:
+def _imported_unit(path: str, host: Optional[Unit], units: Dict[str, Unit]) -> str:
     """Which UNIT a `use "path"` names, from the unit that wrote it.
 
     A path is main-relative and is the unit name for every unit the consumer wrote.
@@ -259,10 +276,10 @@ def _imported_unit(path: str, host: Any, units: Dict[str, Any]) -> str:
     return candidate if candidate in units else path
 
 
-def _unit_provider(unit_name: str, tables: Any,
+def _unit_provider(unit_name: str, tables: SymbolTables,
                    homed: Optional[Dict[str, str]] = None, *,
-                   units: Optional[Dict[str, Any]] = None,
-                   library_registry: Any = None,
+                   units: Optional[Dict[str, Unit]] = None,
+                   library_registry: Optional[LibraryRegistry] = None,
                    visited: AbstractSet[str] = frozenset()) -> UnitNamespace:
     """A compilation unit's own declarations, from the collect pass's tables.
 
@@ -288,8 +305,9 @@ def _unit_provider(unit_name: str, tables: Any,
     )
 
 
-def _reexports_of(unit_name: str, tables: Any, units: Optional[Dict[str, Any]],
-                  library_registry: Any,
+def _reexports_of(unit_name: str, tables: SymbolTables,
+                  units: Optional[Dict[str, Unit]],
+                  library_registry: Optional[LibraryRegistry],
                   visited: AbstractSet[str]) -> Tuple[Provider, ...]:
     """The providers a unit's `public use` statements name, in written order.
 
@@ -312,8 +330,8 @@ def _reexports_of(unit_name: str, tables: Any, units: Optional[Dict[str, Any]],
     )
 
 
-def _stdlib_provider(path: str, tables: Any, units: Dict[str, Any],
-                     library_registry: Any = None,
+def _stdlib_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
+                     library_registry: Optional[LibraryRegistry] = None,
                      visited: AbstractSet[str] = frozenset()) -> Provider:
     """One of the standard library's four shapes (section 4.3)."""
     from sushi_lang.semantics.stdlib_registry import (
@@ -346,8 +364,8 @@ def _stdlib_provider(path: str, tables: Any, units: Dict[str, Any],
     return UnitNamespace(path, functions={}, constants={}, others=homed)
 
 
-def _library_provider(path: str, tables: Any, units: Dict[str, Any],
-                      library_registry: Any,
+def _library_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
+                      library_registry: Optional[LibraryRegistry],
                       visited: AbstractSet[str] = frozenset()) -> Provider:
     """One unit of a library. The namespace is the unit, never the library (section 8)."""
     wanted = path.rsplit("/", 1)[-1]
@@ -366,8 +384,8 @@ def _library_provider(path: str, tables: Any, units: Dict[str, Any],
     return UnitNamespace(path, functions={}, constants={})
 
 
-def _binary_library_provider(path: str, tables: Any, units: Dict[str, Any],
-                             library_registry: Any,
+def _binary_library_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
+                             library_registry: Optional[LibraryRegistry],
                              visited: AbstractSet[str] = frozenset()
                              ) -> Optional[UnitNamespace]:
     """A binary library has no AST: its records name their unit in the manifest.
@@ -391,7 +409,8 @@ def _binary_library_provider(path: str, tables: Any, units: Dict[str, Any],
     return None
 
 
-def _named_library(path: str, library_registry: Any) -> Any:
+def _named_library(path: str,
+                   library_registry: LibraryRegistry) -> Optional[LibraryMetadata]:
     """The loaded library the written path names, by its first segment after `lib/`."""
     parts = [part for part in path.split("/") if part]
     if parts and parts[0] == "lib":
@@ -399,8 +418,9 @@ def _named_library(path: str, library_registry: Any) -> Any:
     return library_registry.get_library(parts[0]) if parts else None
 
 
-def _binary_unit_provider(metadata: Any, unit_name: str, tables: Any,
-                          units: Optional[Dict[str, Any]], library_registry: Any,
+def _binary_unit_provider(metadata: LibraryMetadata, unit_name: str,
+                          tables: SymbolTables, units: Optional[Dict[str, Unit]],
+                          library_registry: Optional[LibraryRegistry],
                           visited: AbstractSet[str]) -> UnitNamespace:
     """One unit of one binary library, from that library's manifest alone."""
     manifest = metadata.raw_manifest or {}
@@ -424,8 +444,9 @@ def _binary_unit_provider(metadata: Any, unit_name: str, tables: Any,
     )
 
 
-def _binary_reexports(metadata: Any, unit_name: str, tables: Any,
-                      units: Optional[Dict[str, Any]], library_registry: Any,
+def _binary_reexports(metadata: LibraryMetadata, unit_name: str, tables: SymbolTables,
+                      units: Optional[Dict[str, Unit]],
+                      library_registry: Optional[LibraryRegistry],
                       visited: AbstractSet[str]) -> Tuple[Provider, ...]:
     """The providers one compiled unit's `public use` statements name (#585).
 
@@ -487,7 +508,7 @@ def _manifest_types(manifest: dict, unit_name: str) -> Dict[str, str]:
     }
 
 
-def _one_of(items: Iterable[str], predicate) -> Optional[str]:
+def _one_of(items: Iterable[str], predicate: Callable[[str], bool]) -> Optional[str]:
     """The single item the predicate accepts, or None when it is not exactly one."""
     matches: Tuple[str, ...] = tuple(name for name in items if predicate(name))
     return matches[0] if len(matches) == 1 else None

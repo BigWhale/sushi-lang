@@ -1,0 +1,12 @@
+# A library's PUBLIC `var` is a name the consumer can see and read, so taking
+# it again is the duplicate a public constant is (CE0105): one table holds both
+# kinds of unit-level storage.
+# EXPECT_ERROR_CODE: CE0105
+
+use <lib/shadow_kinds_lib>
+
+var i32 counter = 1
+
+fn main() i32:
+    println("{counter} {touch().realise(0)}")
+    return Result.Ok(0)

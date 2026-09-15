@@ -152,6 +152,7 @@ def validate_let_reference(validator: 'TypeValidator', stmt: Let) -> None:
     pass's; here the place is checked to HAVE an address, and a constant is refused
     because it has none (CE2400) where a unit variable has one.
     """
+    from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
     from sushi_lang.semantics.typesys import ReferenceType
     from .resolution import resolve_variable_type
     from .propagation import propagate_types_to_value
@@ -166,9 +167,8 @@ def validate_let_reference(validator: 'TypeValidator', stmt: Let) -> None:
             .emit()
         return
     if root.id not in validator.variable_types:
-        sig = validator.const_sig(root.id)
-        if sig is not None and not sig.is_var:
-            er.emit(validator.reporter, er.ERR.CE2400, root.loc, name=root.id)
+        if reject_borrow_of_constant(validator.err, root.id,
+                                     validator.const_sig(root.id), root.loc):
             return
 
     referent = resolve_variable_type(validator, stmt.ty.referenced_type, stmt.type_span)

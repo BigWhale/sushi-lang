@@ -1,0 +1,7 @@
+# EXPECT_ERROR_CODE: CE0110
+# An arithmetic operator in a constant refuses a bool operand.
+
+const i32 X = 1 + true
+
+fn main() i32:
+    return Result.Ok(0)

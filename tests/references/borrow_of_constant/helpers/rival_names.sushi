@@ -1,0 +1,12 @@
+# A unit collected before the one that imports it. Each name here is PRIVATE, so the
+# importer cannot see it, and each is also declared in the importer with the OTHER
+# kind. The flat view of the constant table is first-wins, so this unit's record is
+# the one a reader that skips the unit scope finds.
+
+var i32 GUARD = 0
+
+const i32 SCRATCH = 1
+
+public fn rival_sum() i32:
+    GUARD := GUARD + SCRATCH
+    return Result.Ok(GUARD)

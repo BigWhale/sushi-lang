@@ -1,21 +1,20 @@
 # Test perk constraint violation for generic structs
 # EXPECT_ERROR_CODE: CE4006
-# NoHash struct does NOT implement Hashable, so instantiating
-# Container@(NoHash) should fail with CE4006
+# NoHash holds a HashMap, which has no derived hash, so it does not satisfy the
+# predefined Hashable and instantiating Container@(NoHash) fails with CE4006
 
-perk Hashable:
-    fn hash() u64
+use <collections/hashmap>
 
 struct NoHash:
-    i32 value
+    HashMap@(i32, i32) slots
 
 struct Container@(T: Hashable):
     T item
 
 fn main() i32:
-    let NoHash nh = NoHash(42)
+    let NoHash nh = NoHash(HashMap.new())
 
-    # This should fail with CE4006 - NoHash does not implement Hashable
+    # This should fail with CE4006 - NoHash has no derived hash
     let Container@(NoHash) c = Container(nh)
 
     return Result.Ok(0)

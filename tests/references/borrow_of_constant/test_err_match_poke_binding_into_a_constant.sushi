@@ -1,0 +1,16 @@
+# A `poke` pattern binding points into the scrutinee's payload storage. A constant
+# lives in read-only memory and has no such storage, so the binding has nothing to
+# point at and the write through it cannot stand.
+# EXPECT_ERROR_CODE: CE2400
+
+enum Shade:
+    Dim(i32)
+    Bright(i32)
+
+const Shade TONE = Shade.Dim(2)
+
+fn main() i32:
+    match TONE:
+        Shade.Dim(poke r) -> r := r + 1
+        Shade.Bright(_) -> println("bright")
+    return Result.Ok(0)

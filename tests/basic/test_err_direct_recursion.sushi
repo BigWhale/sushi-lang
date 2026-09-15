@@ -1,7 +1,8 @@
-# Test error: direct recursion without Own@(T)
-# EXPECT_ERROR_CODE: CE2052
+# An enum that holds itself by value has no finite size. The finite-types pass
+# reports it as CE2095, the struct rule, since #677 (CE2052 is retired).
+# EXPECT_ERROR_CODE: CE2095
 enum BadList:
-    Cons(i32, BadList)  # ERROR: direct recursion not allowed
+    Cons(i32, BadList)
     Nil()
 
 fn main() i32:

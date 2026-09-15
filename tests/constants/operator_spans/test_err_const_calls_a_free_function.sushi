@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODE: CE0108
+# A constant cannot call a function.
+
+fn seven() i32:
+    return Result.Ok(7)
+
+const i32 X = seven()
+
+fn main() i32:
+    return Result.Ok(0)

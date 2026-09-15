@@ -3,9 +3,6 @@
 # Test that custom perk implementation OVERRIDES auto-derived hash
 # This was the critical bug that was just fixed
 
-perk Hashable:
-    fn hash() u64
-
 struct Point:
     i32 x
     i32 y

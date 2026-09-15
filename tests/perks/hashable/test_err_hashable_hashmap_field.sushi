@@ -1,0 +1,18 @@
+# A struct holding a HashMap has no derived hash: the map's slot order is not its entry
+# order. So the struct does not satisfy the predefined `Hashable`, and the constraint
+# refuses it (#696).
+# EXPECT_ERROR_CODE: CE4006
+
+use <collections/hashmap>
+
+struct Index:
+    HashMap@(i32, string) slots
+
+fn fingerprint@(T: Hashable)(T value) u64:
+    return Result.Ok(value.hash())
+
+fn main() i32:
+    let Index ix = Index(HashMap.new())
+    let u64 h = fingerprint(ix).realise(0 as u64)
+    println(h)
+    return Result.Ok(0)

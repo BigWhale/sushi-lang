@@ -1,8 +1,7 @@
 # Test constraint violation error reporting with multiple types
 # EXPECT_ERROR_CODE: CE4006
 
-perk Hashable:
-    fn hash() u64
+use <collections/hashmap>
 
 struct Point:
     i32 x
@@ -15,8 +14,8 @@ extend Point with Hashable:
         return hx + hy
 
 struct NoHash:
-    i32 value
-# NoHash does NOT implement Hashable
+    HashMap@(i32, i32) slots
+# NoHash has no derived hash, so it does not satisfy Hashable
 
 struct Container@(T: Hashable):
     T data
@@ -26,7 +25,7 @@ fn main() i32:
     let Container@(Point) good = Container(Point(10, 20))
     println(good.data.x)
 
-    # This should fail with CE4006 (NoHash doesn't implement Hashable)
-    let Container@(NoHash) bad = Container(NoHash(42))
+    # This should fail with CE4006 (NoHash has no derived hash)
+    let Container@(NoHash) bad = Container(NoHash(HashMap.new()))
 
     return Result.Ok(0)

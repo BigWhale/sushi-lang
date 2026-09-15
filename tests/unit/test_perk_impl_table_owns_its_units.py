@@ -45,10 +45,3 @@ def test_the_owner_survives_the_merge():
     global_table = PerkImplementationTable()
     SymbolTableMerger()._merge_perk_impls(unit_table, global_table)
     assert global_table.owner("Box", "Loud") == "main"
-
-
-def test_a_synthetic_implementation_has_no_owner():
-    """Nothing declared `i32 with Hashable`, so no unit owns it."""
-    table = PerkImplementationTable()
-    assert table.register_synthetic("i32", "Hashable")
-    assert table.owner("i32", "Hashable") is None

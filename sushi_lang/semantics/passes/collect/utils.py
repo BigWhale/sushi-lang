@@ -98,31 +98,21 @@ def reject_try_in_body(reporter, body: Any, context: str) -> None:
     instantiates. The walk SKIPS lambda subtrees: a lambda has
     its own Result channel, so a `??` inside one is legal (#399).
     """
-    import dataclasses
-
     from sushi_lang.internals import errors as er
     from sushi_lang.semantics.ast import Lambda, Node, TryExpr
+    from sushi_lang.semantics.ast_walk import walk_nodes
 
-    def walk(node: Any) -> None:
+    def refuse_a_try(node: Node) -> bool:
         if isinstance(node, Lambda):
-            return
+            return False
         if isinstance(node, TryExpr):
             er.emit_with(reporter, er.ERR.CE0131,
                          getattr(node, "loc", None), context=context) \
                 .help("handle the Result in the body: match on it, or use "
                       ".realise(default)").emit()
-            walk(node.expr)
-            return
-        # `If.arms` holds plain (cond, Block) tuples, so tuples walk too.
-        if isinstance(node, (list, tuple)):
-            for item in node:
-                walk(item)
-            return
-        if isinstance(node, Node):
-            for f in dataclasses.fields(node):
-                walk(getattr(node, f.name))
+        return True
 
-    walk(body)
+    walk_nodes(body, refuse_a_try)
 
 
 def reject_self_in_body(reporter, body: Any, name: str) -> None:
@@ -132,25 +122,16 @@ def reject_self_in_body(reporter, body: Any, name: str) -> None:
     no receiver to read. Structural, so the collect pass owns it, and a lambda inside
     the body is walked too -- it has no receiver either.
     """
-    import dataclasses
-
     from sushi_lang.internals import errors as er
     from sushi_lang.semantics.ast import Name, Node
+    from sushi_lang.semantics.ast_walk import walk_nodes
 
-    def walk(node: Any) -> None:
-        if isinstance(node, Name):
-            if node.id == "self":
-                er.emit_with(reporter, er.ERR.CE0134,
-                             getattr(node, "loc", None), name=name) \
-                    .help("a static has no receiver: take what it needs as a "
-                          "parameter, or drop the `static` marker").emit()
-            return
-        if isinstance(node, (list, tuple)):
-            for item in node:
-                walk(item)
-            return
-        if isinstance(node, Node):
-            for f in dataclasses.fields(node):
-                walk(getattr(node, f.name))
+    def refuse_a_self(node: Node) -> bool:
+        if isinstance(node, Name) and node.id == "self":
+            er.emit_with(reporter, er.ERR.CE0134,
+                         getattr(node, "loc", None), name=name) \
+                .help("a static has no receiver: take what it needs as a "
+                      "parameter, or drop the `static` marker").emit()
+        return True
 
-    walk(body)
+    walk_nodes(body, refuse_a_self)

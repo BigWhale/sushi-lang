@@ -1,0 +1,16 @@
+# CE4011: an extension in another unit constrains a method-level type parameter
+# with the helper's private perk. This is the USE-SITE rule, the same one a
+# function's constraint reads (visibility.md, Ruling 3): the perk is not
+# nameable here, whatever the target's marker says. `Vault` is public, which
+# is what once made this read as a leak from a "public extension method".
+# EXPECT_ERROR_CODE: CE4011
+
+use "helpers/sealed"
+
+extend Vault reseal@(U: Sealed)(U key) i32:
+    return self.seed + key.code()
+
+fn main() i32:
+    let Vault v = Vault(1)
+    println("{v.reseal(v)}")
+    return Result.Ok(0)

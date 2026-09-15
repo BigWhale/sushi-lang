@@ -466,27 +466,19 @@ class LibraryManifestGenerator:
     def _scan_referenced_symbols(self, node, acc: set[str]) -> None:
         """Walk a body AST collecting referenced free symbol names."""
         from sushi_lang.semantics import ast as A
+        from sushi_lang.semantics.ast_walk import walk_nodes
 
-        if node is None:
-            return
-        if isinstance(node, (list, tuple)):
-            for item in node:
-                self._scan_referenced_symbols(item, acc)
-            return
+        def collect(current: A.Node) -> bool:
+            if isinstance(current, A.Name):
+                acc.add(current.id)
+            elif isinstance(current, A.Call):
+                if isinstance(current.callee, A.Name):
+                    acc.add(current.callee.id)
+            elif isinstance(current, A.EnumConstructor):
+                acc.add(current.enum_name)
+            return True
 
-        if isinstance(node, A.Name):
-            acc.add(node.id)
-        elif isinstance(node, A.Call):
-            callee = node.callee
-            if isinstance(callee, A.Name):
-                acc.add(callee.id)
-        elif isinstance(node, A.EnumConstructor):
-            acc.add(node.enum_name)
-
-        import dataclasses
-        if dataclasses.is_dataclass(node) and not isinstance(node, type):
-            for f in dataclasses.fields(node):
-                self._scan_referenced_symbols(getattr(node, f.name, None), acc)
+        walk_nodes(node, collect)
 
     def _scan_referenced_type_names(self, node, acc: set[str]) -> None:
         """Walk a declaration collecting referenced user-TYPE names."""
