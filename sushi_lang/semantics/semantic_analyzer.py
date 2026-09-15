@@ -87,8 +87,11 @@ class SemanticAnalyzer:
         The last four run per unit, in one loop. `_check_monomorphized_extensions` repeats
         those four for each instantiation of a generic-target extension.
 
-        `semantics/const_eval.py` is NOT a pass: the typecheck pass and the backend both call
-        it as a helper.
+        `semantics/const_eval.py` is NOT a pass. THREE callers reach it as a helper: the
+        AST BUILDER, which reads a fixed array's size while the unit is parsed (Known
+        Limitation 12) and keeps a constant table of its own for it; the `typecheck`
+        pass; and the backend. The last two share the collect pass's table, and with it
+        the fold memo (#597).
         """
         self._check_multi_file()
 
