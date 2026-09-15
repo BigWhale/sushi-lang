@@ -1,7 +1,7 @@
 """Shared utilities for collection passes."""
 
 from __future__ import annotations
-from typing import Any, List, Optional, TYPE_CHECKING
+from typing import Any, Iterable, List, Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import BoundedTypeParam, Param
@@ -138,3 +138,17 @@ def reject_self_in_body(reporter, body: Any, name: str) -> None:
         return True
 
     walk_nodes(body, refuse_a_self)
+
+
+def types_to_walk(table: Any, only: Optional[Iterable[str]] = None) -> List[Any]:
+    """The entries of one type table a pass run covers.
+
+    `only` is the names the run is narrowed to, and `None` is the whole table. One name
+    list serves both tables: a type name is one per program, so each table answers with
+    the names it holds and steps over the rest. The late-interning seam narrows its
+    resolve and derive runs this way, because the passes already walked the table whole
+    and an instance interned late is the only thing that changed (#676).
+    """
+    if only is None:
+        return list(table.by_name.values())
+    return [table.by_name[name] for name in only if name in table.by_name]

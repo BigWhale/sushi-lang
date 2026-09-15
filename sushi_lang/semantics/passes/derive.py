@@ -1,8 +1,9 @@
 """The derive pass: auto-derived hash() and clone() for every struct and enum."""
 
-from typing import Set
+from typing import Iterable, Optional, Set
 
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
+from sushi_lang.semantics.passes.collect.utils import types_to_walk
 from sushi_lang.semantics.generics.hashing import can_struct_be_hashed, register_struct_hash_method
 from sushi_lang.semantics.generics.hashing import can_enum_be_hashed, register_enum_hash_method
 from sushi_lang.semantics.generics.hashing import can_array_be_hashed, register_array_hash_method
@@ -13,23 +14,30 @@ from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type
 
 
 def register_all_struct_hashes(struct_table: StructTable,
-                               derived: DerivedMethodTable) -> None:
-    """Register hash() for every struct a derived hash can read."""
-    for struct_type in struct_table.by_name.values():
+                               derived: DerivedMethodTable,
+                               only: Optional[Iterable[str]] = None) -> None:
+    """Register hash() for every struct a derived hash can read.
+
+    `only` narrows the run to the named entries; `None` is the whole table. The pass
+    walks it whole once, and the late-interning seam names what it interned (#676).
+    """
+    for struct_type in types_to_walk(struct_table, only):
         can_hash, _ = can_struct_be_hashed(struct_type)
         if can_hash:
             register_struct_hash_method(struct_type, derived)
 
 
-def register_all_enum_hashes(enum_table: EnumTable, derived: DerivedMethodTable) -> None:
+def register_all_enum_hashes(enum_table: EnumTable, derived: DerivedMethodTable,
+                             only: Optional[Iterable[str]] = None) -> None:
     """Register hash() for every enum a derived hash can read."""
-    for enum_type in enum_table.by_name.values():
+    for enum_type in types_to_walk(enum_table, only):
         can_hash, _ = can_enum_be_hashed(enum_type)
         if can_hash:
             register_enum_hash_method(enum_type, derived)
 
 
-def collect_array_types(struct_table: StructTable, enum_table: EnumTable) -> Set[Type]:
+def collect_array_types(struct_table: StructTable, enum_table: EnumTable,
+                        only: Optional[Iterable[str]] = None) -> Set[Type]:
     """Every array type a struct field or an enum payload names."""
     array_types: Set[Type] = set()
 
@@ -37,11 +45,11 @@ def collect_array_types(struct_table: StructTable, enum_table: EnumTable) -> Set
         if isinstance(ty, (ArrayType, DynamicArrayType)):
             array_types.add(ty)
 
-    for struct_type in struct_table.by_name.values():
+    for struct_type in types_to_walk(struct_table, only):
         for _field_name, field_type in struct_type.fields:
             note(field_type)
 
-    for enum_type in enum_table.by_name.values():
+    for enum_type in types_to_walk(enum_table, only):
         for variant in enum_type.variants:
             for assoc_type in variant.associated_types:
                 note(assoc_type)
@@ -50,23 +58,25 @@ def collect_array_types(struct_table: StructTable, enum_table: EnumTable) -> Set
 
 
 def register_all_array_hashes(struct_table: StructTable, enum_table: EnumTable,
-                              derived: DerivedMethodTable) -> None:
+                              derived: DerivedMethodTable,
+                              only: Optional[Iterable[str]] = None) -> None:
     """Register hash() for every array type a derived hash can read."""
-    for array_type in collect_array_types(struct_table, enum_table):
+    for array_type in collect_array_types(struct_table, enum_table, only):
         can_hash, _ = can_array_be_hashed(array_type)
         if can_hash:
             register_array_hash_method(array_type, derived)
 
 
 def register_all_clones(struct_table: StructTable, enum_table: EnumTable,
-                        derived: DerivedMethodTable) -> None:
+                        derived: DerivedMethodTable,
+                        only: Optional[Iterable[str]] = None) -> None:
     """Auto-derive clone() for every struct and enum (#134).
 
     No ordering constraint -- the clone emitter resolves nested and recursive types at
     emission time -- so a flat walk over both tables is enough.
     """
-    for struct_type in struct_table.by_name.values():
+    for struct_type in types_to_walk(struct_table, only):
         register_struct_clone_method(struct_type, derived)
 
-    for enum_type in enum_table.by_name.values():
+    for enum_type in types_to_walk(enum_table, only):
         register_enum_clone_method(enum_type, derived)
