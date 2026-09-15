@@ -907,7 +907,7 @@ class LLVMCodegen:
         """Declare (never define) library-shipped perk-impl methods (C4a)."""
         from sushi_lang.semantics.ast import ExtendDef
         from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.backend.types.core.resolution import resolve_unknown_type
+        from sushi_lang.backend.types.core.resolution import require_named_type
 
         struct_table = self.struct_table.by_name if self.struct_table else {}
         enum_table = self.enum_table.by_name if self.enum_table else {}
@@ -917,7 +917,7 @@ class LLVMCodegen:
             # as UnknownType; resolve against the consumer's tables (which
             # include library-registered concrete types).
             if isinstance(ty, UnknownType):
-                return resolve_unknown_type(ty, struct_table, enum_table)
+                return require_named_type(ty, struct_table, enum_table)
             return ty
 
         for perk_impl in self.library_perk_impls:

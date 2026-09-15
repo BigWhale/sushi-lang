@@ -24,7 +24,7 @@ from sushi_lang.semantics.typesys import (
     FunctionType,
 )
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.backend.types.core.resolution import resolve_unknown_type, resolve_generic_type_ref
+from sushi_lang.backend.types.core.resolution import require_named_type, resolve_generic_type_ref
 
 
 class TypeMapper:
@@ -134,7 +134,7 @@ class TypeMapper:
                 # the semantic FunctionType at the call site, not from this opaque type.
                 return self.closure_struct
             case UnknownType():
-                resolved = resolve_unknown_type(
+                resolved = require_named_type(
                     t, self.struct_table.by_name, self.enum_table.by_name
                 )
                 if isinstance(resolved, StructType):
