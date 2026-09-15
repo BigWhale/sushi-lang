@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from sushi_lang.backend.destructors import destroy_old_value
 from sushi_lang.backend.ownership import ConsumingUse, bind, consume
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.ownership import is_own_type
 
 if TYPE_CHECKING:
     from llvmlite import ir
@@ -92,7 +93,7 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
         if owns:
             codegen.memory.register_local_cleanup(stmt.name, semantic_type, slot)
             if isinstance(semantic_type, StructType) and hasattr(codegen, 'dynamic_arrays'):
-                if codegen.dynamic_arrays.is_own_type(semantic_type):
+                if is_own_type(semantic_type):
                     codegen.dynamic_arrays.register_own(stmt.name, semantic_type, slot)
                 elif codegen.dynamic_arrays.is_list_type(semantic_type):
                     codegen.dynamic_arrays.register_list(stmt.name, semantic_type, slot)

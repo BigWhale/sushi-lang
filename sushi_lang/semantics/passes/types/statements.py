@@ -7,6 +7,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
 from sushi_lang.semantics.ast import Let, Return, Rebind, If, While, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
+from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
 from .compatibility import (validate_assignment_compatibility,
@@ -107,15 +108,6 @@ def reject_unhandled_result(validator: 'TypeValidator', stmt: Let, resolved_type
     return True
 
 
-def _is_own_type(validator: 'TypeValidator', ty) -> bool:
-    """Is `ty` an `Own@(T)`, in either spelling the passes keep?"""
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-    if isinstance(ty, GenericTypeRef):
-        return ty.base_name == "Own"
-    name = getattr(ty, "name", None)
-    return isinstance(name, str) and name.startswith("Own<")
-
-
 def place_root(validator: 'TypeValidator', expr) -> Optional[Name]:
     """The name at the root of a PLACE, or None when `expr` names no storage.
 
@@ -136,7 +128,7 @@ def place_root(validator: 'TypeValidator', expr) -> Optional[Name]:
             continue
         if (isinstance(expr, (MethodCall, DotCall)) and expr.method == "get"
                 and not expr.args
-                and _is_own_type(validator, validator.infer_expression_type(expr.receiver))):
+                and is_own_type(validator.infer_expression_type(expr.receiver))):
             expr = expr.receiver
             continue
         return None
