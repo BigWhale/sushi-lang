@@ -10,14 +10,14 @@ from sushi_lang.internals.errors import ERR
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.structs import StructTable, GenericStructTable
-from sushi_lang.semantics.ast import EnumDef, Program, BoundedTypeParam
+from sushi_lang.semantics.ast import EnumDef, Program
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.typesys import (
     BuiltinType,
     EnumType,
     EnumVariantInfo,
 )
-from sushi_lang.semantics.generics.types import GenericEnumType, TypeParameter
+from sushi_lang.semantics.generics.types import GenericEnumType
 
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
@@ -106,7 +106,7 @@ class EnumCollector:
 
     def collect(self, root: Program) -> None:
         """Collect all enum definitions from program AST."""
-        enums = getattr(root, "enums", None)
+        enums = root.enums
         if isinstance(enums, list):
             for enum in enums:
                 if isinstance(enum, EnumDef):
@@ -283,18 +283,18 @@ class EnumCollector:
 
     def _collect_enum_def(self, enum: EnumDef) -> None:
         """Collect enum definition and create EnumType or GenericEnumType."""
-        name = getattr(enum, "name", None)
+        name = enum.name
         if not isinstance(name, str):
             return
 
-        name_span: Optional[Span] = getattr(enum, "name_span", None) or getattr(enum, "loc", None)
+        name_span: Optional[Span] = enum.name_span or enum.loc
         record_declaration(self.visibility, "enum", enum,
                            unit_name=self.current_unit_name,
                            filename=self.current_unit_file)
 
         # Check if this enum has type parameters (e.g., enum Result<T>:)
         # Note: In the collect pass, type_params is always None -- the grammar has no syntax for it yet
-        type_params_raw = getattr(enum, "type_params", None)
+        type_params_raw = enum.type_params
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
         if (name in self.enums.by_name or name in self.structs.by_name
@@ -339,11 +339,11 @@ class EnumCollector:
         variants_list: List[EnumVariantInfo] = []
         variant_names: Set[str] = set()
 
-        enum_variants = getattr(enum, "variants", [])
+        enum_variants = enum.variants
         for variant in enum_variants:
-            variant_name = getattr(variant, "name", None)
-            variant_types = getattr(variant, "associated_types", [])
-            variant_loc = getattr(variant, "loc", None)
+            variant_name = variant.name
+            variant_types = variant.associated_types
+            variant_loc = variant.loc
 
             if not isinstance(variant_name, str):
                 continue
@@ -369,15 +369,7 @@ class EnumCollector:
             ))
 
         if type_params and len(type_params) > 0:
-            # Generic enum - store in generic_enums table
-            # Preserve BoundedTypeParam objects -- the monomorphize pass validates the constraints
-            # Convert to tuple, handling both BoundedTypeParam and legacy string formats
-            type_param_instances = tuple(
-                tp if isinstance(tp, BoundedTypeParam)
-                else TypeParameter(name=tp) if isinstance(tp, TypeParameter)
-                else BoundedTypeParam(name=tp, constraints=[], loc=None)
-                for tp in type_params_raw
-            )
+            type_param_instances = tuple(type_params_raw)
 
             generic_enum = GenericEnumType(
                 name=name,

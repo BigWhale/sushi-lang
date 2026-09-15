@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.ast import ConstDef, Program, VarDef
 from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.unit_symbols import UnitOwnedSymbols
 from sushi_lang.semantics.visibility import (
     VisibilityTable, library_clash_for_storage_name, record_declaration)
 
@@ -35,18 +36,15 @@ class ConstSig:
     # Note: value is validated later in type checking pass
 
 
-@dataclass
-class ConstantTable:
+@dataclass(eq=False)
+class ConstantTable(UnitOwnedSymbols[ConstSig]):
     """Registry of all constants collected by the collect pass.
 
-    Two views, the same pair and the same rule as `FunctionTable`: `by_name` is the FLAT
-    one, and `by_unit` keeps every declaration under the unit that wrote it. Two units
-    may each declare a private `SCRATCH`, so a bare name is no longer an answer on its
-    own (`docs/design/unit-namespaces.md` section 9).
+    The two views are `UnitOwnedSymbols`': two units may each declare a private
+    `SCRATCH`, so a bare name is no answer on its own
+    (`docs/design/unit-namespaces.md` section 9).
     """
-    by_name: Dict[str, ConstSig] = field(default_factory=dict)
-    by_unit: Dict[str, Dict[str, ConstSig]] = field(default_factory=dict)
-    order: List[str] = field(default_factory=list)
+
     # What each declaration's initializer folded to, keyed by (unit, name). The value
     # of a constant is the DECLARING unit's answer and nothing else -- the initializer
     # is folded in that unit's scope and with its aliases -- so one fold serves every
@@ -55,21 +53,6 @@ class ConstantTable:
     # this table: with no cache a chain of constants that each name the one before
     # them twice doubles per link, and 22 of them cost a minute (#597).
     folded: Dict[Tuple[Optional[str], str], object] = field(default_factory=dict)
-
-    def declare(self, name: str, sig: ConstSig) -> None:
-        """Register one declaration in both views. The ONE insert."""
-        if name not in self.by_name:
-            self.order.append(name)
-            self.by_name[name] = sig
-        unit = getattr(sig, "unit_name", None)
-        if unit is not None:
-            self.by_unit.setdefault(unit, {})[name] = sig
-
-    def lookup(self, name: str, unit_name: Optional[str] = None,
-               scope: object = None) -> Optional[ConstSig]:
-        """What the name means inside `unit_name`. One name, no dict built."""
-        from sushi_lang.semantics.unit_symbols import lookup_in_unit
-        return lookup_in_unit(name, self.by_unit, self.by_name, unit_name, scope)
 
 
 class ConstantCollector:
@@ -90,7 +73,7 @@ class ConstantCollector:
 
     def collect(self, root: Program) -> None:
         """Collect all constant definitions from program AST."""
-        constants = getattr(root, "constants", None)
+        constants = root.constants
         if isinstance(constants, list):
             for const in constants:
                 if isinstance(const, ConstDef):
@@ -113,18 +96,16 @@ class ConstantCollector:
 
     def _collect_constant_def(self, const: ConstDef) -> None:
         """Collect a single constant definition."""
-        name = getattr(const, "name", None)
+        name = const.name
         if not isinstance(name, str):
             return
 
-        name_span: Optional[Span] = getattr(const, "name_span", None) or getattr(
-            const, "loc", None
-        )
+        name_span: Optional[Span] = const.name_span or const.loc
         record_declaration(
             self.visibility, "variable" if isinstance(const, VarDef) else "constant",
             const, unit_name=self.current_unit_name, filename=self.current_unit_file)
-        const_type: Optional[Type] = getattr(const, "ty", None)
-        type_span: Optional[Span] = getattr(const, "type_span", None) or name_span
+        const_type: Optional[Type] = const.ty
+        type_span: Optional[Span] = const.type_span or name_span
 
         if const_type is None:
             er.emit(self.r, ERR.CE0104, name_span, name=name)
@@ -136,7 +117,7 @@ class ConstantCollector:
             type_span=type_span,
             filename=self.current_unit_file,
             unit_name=self.current_unit_name,
-            is_public=getattr(const, "is_public", True),
+            is_public=const.is_public,
             is_var=isinstance(const, VarDef),
             decl=const,
         )
@@ -146,7 +127,7 @@ class ConstantCollector:
             # Another unit's declaration COEXISTS: each takes its own `<unit>$<name>`
             # global, so neither has to lose. The same name twice inside ONE unit is
             # the duplicate CE0105 still answers.
-            prev_unit = getattr(prev, "unit_name", None)
+            prev_unit = prev.unit_name
             if (prev_unit is None
                     or prev_unit == self.current_unit_name
                     or self._shadows_a_library_export(name)):
