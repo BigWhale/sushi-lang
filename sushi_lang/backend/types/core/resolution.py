@@ -14,12 +14,19 @@ if TYPE_CHECKING:
     pass
 
 
-def resolve_unknown_type(
+def require_named_type(
     semantic_type: UnknownType,
     struct_table: dict[str, StructType],
     enum_table: dict[str, EnumType],
 ) -> StructType | EnumType:
-    """Resolve UnknownType to its actual struct or enum type."""
+    """The declaration `semantic_type` names, or the internal error CE0020.
+
+    Named for its CONTRACT, not for its lookup. `semantics/type_resolution.py` has a
+    `resolve_unknown_type` whose contract is the opposite -- a name it cannot place comes
+    back UNCHANGED -- and the back end imports both, so one name for the two read alike at
+    a call site and hid which one applied (#678). Here the caller is about to emit, a
+    name with no declaration cannot be lowered, and the seam says so.
+    """
     if semantic_type.name in struct_table:
         return struct_table[semantic_type.name]
     if semantic_type.name in enum_table:

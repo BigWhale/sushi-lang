@@ -12,7 +12,7 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.constants import FAT_POINTER_SIZE_BYTES, DYNAMIC_ARRAY_SIZE_BYTES, ITERATOR_SIZE_BYTES, ENUM_TAG_SIZE_BYTES
-from sushi_lang.backend.types.core.resolution import resolve_unknown_type, resolve_generic_type_ref
+from sushi_lang.backend.types.core.resolution import require_named_type, resolve_generic_type_ref
 
 
 def align_up(offset: int, alignment: int) -> int:
@@ -31,7 +31,7 @@ class TypeSizing:
     def get_type_size_bytes(self, semantic_type: Ty) -> int:
         """Get the size in bytes of a Sushi semantic type."""
         if isinstance(semantic_type, UnknownType):
-            semantic_type = resolve_unknown_type(
+            semantic_type = require_named_type(
                 semantic_type, self.struct_table.by_name, self.enum_table.by_name
             )
 

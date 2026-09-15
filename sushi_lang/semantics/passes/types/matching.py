@@ -4,13 +4,14 @@ from typing import TYPE_CHECKING, Optional, Set, Tuple
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.passes.types.visibility import name_is_contested
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, UnknownType, StructType
-from sushi_lang.semantics.generics.types import GenericTypeRef
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, UnknownType
 from sushi_lang.semantics.ast import (
     Match, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
     MemberAccess, Name, RefBinding,
 )
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
+from sushi_lang.semantics.ownership import is_own_type
+from sushi_lang.semantics.generics.own import own_payload_type
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -325,34 +326,18 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
             if isinstance(binding_type, UnknownType):
                 resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
 
-            is_own_type = False
-            if isinstance(resolved_type, StructType) and resolved_type.name.startswith("Own<"):
-                is_own_type = True
-            elif isinstance(resolved_type, GenericTypeRef) and resolved_type.base_name == "Own":
-                is_own_type = True
-
-            if not is_own_type:
+            if not is_own_type(resolved_type):
                 er.emit(validator.reporter, er.ERR.CE2048, binding.loc,
                        got=f"Own(...) pattern requires Own@(T) type, got {display_type(resolved_type)}")
                 return False
 
             if isinstance(binding.inner_pattern, Pattern):
-                element_type = None
-                if isinstance(resolved_type, GenericTypeRef):
-                    if len(resolved_type.type_args) == 1:
-                        element_type = resolved_type.type_args[0]
-                    else:
-                        er.emit(validator.reporter, er.ERR.CE2048, binding.loc,
-                               got=f"Invalid Own@(T) type arguments: {display_type(resolved_type)}")
-                        return False
-                elif isinstance(resolved_type, StructType):
-                    from sushi_lang.semantics.generics import own as own_module
-                    try:
-                        element_type = own_module.get_own_element_type(resolved_type)
-                    except (TypeError, IndexError):
-                        er.emit(validator.reporter, er.ERR.CE2048, binding.loc,
-                               got=f"Invalid Own@(T) type structure: {display_type(resolved_type)}")
-                        return False
+                element_type = own_payload_type(resolved_type)
+                if element_type is None:
+                    er.emit(validator.reporter, er.ERR.CE2048, binding.loc,
+                           got=f"Own@(T) with no readable payload type: "
+                               f"{display_type(resolved_type)}")
+                    return False
 
                 if isinstance(element_type, UnknownType):
                     element_type = resolve_unknown_type(element_type, validator.struct_table.by_name, validator.enum_table.by_name)
@@ -424,16 +409,7 @@ def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
             if isinstance(binding_type, UnknownType):
                 resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
 
-            element_type = None
-            if isinstance(resolved_type, GenericTypeRef) and resolved_type.base_name == "Own":
-                if len(resolved_type.type_args) == 1:
-                    element_type = resolved_type.type_args[0]
-            elif isinstance(resolved_type, StructType) and resolved_type.name.startswith("Own<"):
-                from sushi_lang.semantics.generics import own as own_module
-                try:
-                    element_type = own_module.get_own_element_type(resolved_type)
-                except (TypeError, IndexError):
-                    pass
+            element_type = own_payload_type(resolved_type)
 
             if element_type is not None:
                 if isinstance(element_type, UnknownType):

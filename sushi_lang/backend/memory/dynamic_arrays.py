@@ -276,12 +276,6 @@ class DynamicArrayManager:
             descriptor.llvm_alloca,
             lambda: emit_list_destroy(self.codegen, descriptor.llvm_alloca, descriptor.list_type))
 
-    def is_own_type(self, ty: Type) -> bool:
-        """Check if a type is Own<T>."""
-        if isinstance(ty, StructType):
-            return ty.name.startswith("Own<")
-        return False
-
     def register_own(self, var_name: str, own_type: StructType, slot: ir.Instruction) -> None:
         """Register Own<T> variable for automatic RAII cleanup."""
         depth = self.codegen.memory._scope_depth

@@ -112,3 +112,69 @@ def test_a_cycle_terminates():
     assert sum(1 for t in reached if isinstance(t, StructType)) == 1, (
         "a cyclic type was entered more than once"
     )
+
+
+# --- inline_only: the walk the finite-types pass reads (#679) ----------------------
+
+
+def test_every_kind_is_inline_or_an_indirection():
+    """`inline_only` must have an answer for every kind, the way the walk itself does."""
+    from sushi_lang.semantics.type_walk import INLINE_KINDS
+
+    known = _type_union_members() | OFF_UNION_KINDS
+    strays = sorted(INLINE_KINDS - known)
+    assert not strays, f"INLINE_KINDS names something that is not a type kind: {strays}"
+
+
+def test_inline_only_enters_what_a_value_stores_by_value():
+    """A fixed array and a declaration hold their contents inline."""
+    from sushi_lang.semantics.type_walk import INLINE_KINDS
+
+    for kind, value in _every_composite().items():
+        if kind not in INLINE_KINDS:
+            continue
+        reached = list(walk_named_types(value, inline_only=True))
+        assert any(isinstance(t, ForeignPtrType) for t in reached), (
+            f"inline_only skipped what {kind} stores by value"
+        )
+
+
+def test_inline_only_stops_at_an_indirection():
+    """A heap buffer, a pointer and a fat pointer are not size; the walk stops there."""
+    from sushi_lang.semantics.type_walk import INLINE_KINDS
+
+    for kind, value in _every_composite().items():
+        if kind in INLINE_KINDS:
+            continue
+        reached = list(walk_named_types(value, inline_only=True))
+        assert reached == [value], (
+            f"inline_only entered {kind}, which holds what it names behind an "
+            f"indirection. Reached: {[str(t) for t in reached]}"
+        )
+
+
+def test_the_finite_types_pass_reads_the_shared_walk():
+    """Its exclusion is a parameter on the one walk, not a private reimplementation."""
+    import inspect
+
+    from sushi_lang.semantics.passes import finite_types
+
+    source = inspect.getsource(finite_types)
+    assert "walk_named_types" in source, (
+        "passes/finite_types.py recurses over a type by hand again"
+    )
+    assert "inline_only=True" in source, (
+        "passes/finite_types.py must say which walk it wants, on the shared walk"
+    )
+
+
+def test_a_dynamic_array_of_a_struct_is_not_inline_containment():
+    """The rule the finite-types pass depends on: `Node[]` does not contain `Node`."""
+    node = StructType(name="Node", fields=())
+    inline = list(walk_named_types(ArrayType(base_type=node, size=2), inline_only=True,
+                                   through_declarations=False))
+    assert node in inline, "a FIXED array stores its elements inline"
+
+    indirect = list(walk_named_types(DynamicArrayType(base_type=node), inline_only=True,
+                                     through_declarations=False))
+    assert node not in indirect, "a dynamic array owns a heap buffer, which is an indirection"

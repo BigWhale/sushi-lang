@@ -1,8 +1,10 @@
 """Validation and pure helpers for the built-in Own<T> methods."""
-from typing import Any
+from typing import Any, Optional
 
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import StructType, Type, PointerType
+from sushi_lang.semantics.generics.types import GenericTypeRef
+from sushi_lang.semantics.ownership import is_own_type
+from sushi_lang.semantics.typesys import ReferenceType, StructType, Type, PointerType
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -84,3 +86,27 @@ def get_own_element_type(own_type: StructType) -> Type:
         return value_field_type.pointee_type
     else:
         raise_internal_error("CE0081", type=str(value_field_type))
+
+
+def own_payload_type(ty: Type) -> Optional[Type]:
+    """The `T` of an `Own@(T)`, in every spelling, or None when there is none to read.
+
+    ONE reader, because the pattern rule asks twice -- once to refuse a pattern and once
+    to bind its names -- and two readers is how the two could disagree. A
+    `GenericTypeRef` still carries the argument; an interned `StructType` carries the
+    pointer field the argument was lowered into, and the field is what is read. The
+    interned NAME is never sliced: type identity is nominal, and a name is looked up and
+    not rebuilt (docs/design/type-identity.md).
+    """
+    if isinstance(ty, ReferenceType):
+        ty = ty.referenced_type
+    if not is_own_type(ty):
+        return None
+    if isinstance(ty, GenericTypeRef):
+        return ty.type_args[0] if len(ty.type_args) == 1 else None
+    if isinstance(ty, StructType):
+        try:
+            return get_own_element_type(ty)
+        except (TypeError, IndexError):
+            return None
+    return None

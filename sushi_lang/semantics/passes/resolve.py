@@ -1,29 +1,23 @@
 """The resolve pass: every struct field, enum variant and constant type made concrete."""
 
-from typing import Callable, Dict, Optional
+from typing import Callable, Set
+
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
-from sushi_lang.semantics.typesys import StructType, EnumType, UnknownType, Type, BuiltinType
-
-
-def _type_lookup(struct_table: StructTable, enum_table: EnumTable) -> Dict[str, Type]:
-    """Every name a written type may spell, mapped to the table entry it means."""
-    lookup: Dict[str, Type] = {str(builtin).lower(): builtin for builtin in BuiltinType}
-    lookup.update(struct_table.by_name)
-    lookup.update(enum_table.by_name)
-    return lookup
+from sushi_lang.semantics.type_resolution import resolve_type_recursively
+from sushi_lang.semantics.typesys import StructType, EnumType, Type
 
 
 def table_resolver(struct_table: StructTable,
                    enum_table: EnumTable) -> Callable[[Type], Type]:
-    """One resolver over the tables as they stand NOW, for a reader before this pass.
+    """One resolver over the tables, for a reader that runs before this pass.
 
     The `Hashable` constraint check in the monomorphize pass walks a struct whose
-    fields still spell their types (#696). It takes one of these per question,
-    because monomorphization publishes instances while it runs, and a lookup taken
-    earlier would miss them.
+    fields still spell their types (#696). It reads the two tables LIVE, because
+    monomorphization publishes instances while it runs and a copy taken earlier
+    would miss them.
     """
-    lookup = _type_lookup(struct_table, enum_table)
-    return lambda ty: _resolve_type(ty, lookup)
+    structs, enums = struct_table.by_name, enum_table.by_name
+    return lambda ty: resolve_type_recursively(ty, structs, enums)
 
 
 def resolve_struct_field_types(
@@ -31,10 +25,10 @@ def resolve_struct_field_types(
     enum_table: EnumTable
 ) -> None:
     """Resolve UnknownType references in struct fields to concrete types."""
-    type_lookup = _type_lookup(struct_table, enum_table)
+    structs, enums = struct_table.by_name, enum_table.by_name
 
-    for struct_name in list(struct_table.by_name.keys()):
-        struct_type = struct_table.by_name[struct_name]
+    for struct_name in list(structs.keys()):
+        struct_type = structs[struct_name]
 
         if not isinstance(struct_type, StructType):
             continue  # Skip if not a regular StructType
@@ -42,7 +36,7 @@ def resolve_struct_field_types(
         resolved_fields = []
         needs_update = False
         for field_name, field_type in struct_type.fields:
-            resolved_type = _resolve_type(field_type, type_lookup)
+            resolved_type = resolve_type_recursively(field_type, structs, enums)
             resolved_fields.append((field_name, resolved_type))
             if resolved_type is not field_type:
                 needs_update = True
@@ -56,10 +50,10 @@ def resolve_enum_variant_types(
     enum_table: EnumTable
 ) -> None:
     """Resolve UnknownType references in enum variant associated types to concrete types."""
-    type_lookup = _type_lookup(struct_table, enum_table)
+    structs, enums = struct_table.by_name, enum_table.by_name
 
-    for enum_name in list(enum_table.by_name.keys()):
-        enum_type = enum_table.by_name[enum_name]
+    for enum_name in list(enums.keys()):
+        enum_type = enums[enum_name]
 
         if not isinstance(enum_type, EnumType):
             continue  # Skip if not a regular EnumType
@@ -70,7 +64,7 @@ def resolve_enum_variant_types(
             resolved_assoc_types = []
             variant_needs_update = False
             for assoc_type in variant.associated_types:
-                resolved_type = _resolve_type(assoc_type, type_lookup)
+                resolved_type = resolve_type_recursively(assoc_type, structs, enums)
                 resolved_assoc_types.append(resolved_type)
                 if resolved_type is not assoc_type:
                     variant_needs_update = True
@@ -105,46 +99,27 @@ def resolve_constant_types(constants, struct_table: StructTable,
     resolved type is written back there, the way a `let`'s is, once the name has been
     checked in the unit that wrote it (#561). Every reader after that pass -- the
     borrow pass, the back end -- sees the resolved type on both.
+
+    Both views are walked, and each RECORD is read once. `ConstantTable.declare` files
+    one record in both views, so a plain walk of each resolves most constants twice;
+    but `by_name` is FIRST-wins, so the second record of a name that two units both
+    declare lives in `by_unit` alone and a walk of `by_name` would miss it.
     """
-    type_lookup = _type_lookup(struct_table, enum_table)
+    if constants is None:
+        return
 
-    def resolved(ty: Optional[Type]) -> Optional[Type]:
-        return None if ty is None else _resolve_type(ty, type_lookup)
+    structs, enums = struct_table.by_name, enum_table.by_name
+    seen: Set[int] = set()
 
-    if constants is not None:
-        for sig in constants.by_name.values():
-            sig.const_type = resolved(sig.const_type)
-        for unit_sigs in constants.by_unit.values():
-            for sig in unit_sigs.values():
-                sig.const_type = resolved(sig.const_type)
+    def resolve_one(sig) -> None:
+        if id(sig) in seen:
+            return
+        seen.add(id(sig))
+        if sig.const_type is not None:
+            sig.const_type = resolve_type_recursively(sig.const_type, structs, enums)
 
-
-def _resolve_type(ty: Type, type_lookup: Dict[str, Type]) -> Type:
-    """Resolve a single type, recursively handling compound types."""
-    from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    if isinstance(ty, UnknownType):
-        type_name = ty.name
-        if type_name in type_lookup:
-            return type_lookup[type_name]
-        else:
-            return ty
-
-    elif isinstance(ty, GenericTypeRef):
-        full_name = str(ty)
-        if full_name in type_lookup:
-            return type_lookup[full_name]
-        else:
-            return ty
-
-    elif isinstance(ty, ArrayType):
-        resolved_base = _resolve_type(ty.base_type, type_lookup)
-        return ArrayType(base_type=resolved_base, size=ty.size)
-
-    elif isinstance(ty, DynamicArrayType):
-        resolved_base = _resolve_type(ty.base_type, type_lookup)
-        return DynamicArrayType(base_type=resolved_base)
-
-    else:
-        return ty
+    for sig in constants.by_name.values():
+        resolve_one(sig)
+    for unit_sigs in constants.by_unit.values():
+        for sig in unit_sigs.values():
+            resolve_one(sig)
