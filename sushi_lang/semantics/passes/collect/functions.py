@@ -21,7 +21,6 @@ from sushi_lang.semantics.ast import (
 )
 from sushi_lang.semantics.typesys import (
     Type,
-    BuiltinType,
     ArrayType,
     DynamicArrayType,
     ReferenceType,
