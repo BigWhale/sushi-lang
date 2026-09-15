@@ -32,6 +32,7 @@ from sushi_lang.semantics.generics.types import (
     TypeParam,
 )
 
+from sushi_lang.semantics.unit_symbols import UnitOwnedSymbols
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_origin,
@@ -233,52 +234,16 @@ class Redeclaration(Enum):
     COEXIST = "coexist"   # both stand: two units, two symbols
 
 
-@dataclass
-class FunctionTable:
+@dataclass(eq=False)
+class FunctionTable(UnitOwnedSymbols[FuncSig]):
     """Table of function signatures collected by the collect pass.
 
-    `by_name` is the FLAT view: one declaration per name for the whole program, and the
-    winner of a shadowed name. `by_unit` keeps every declaration under the unit that wrote
-    it, and it is what `view_for` reads. A name a consumer shadows leaves the flat view
-    (`_drop`), so without the second index a library's own body has no way back to its own
-    signature -- which is issue #487 (`docs/design/unit-namespaces.md` section 13.1).
+    The two views are `UnitOwnedSymbols`'. A name a consumer shadows leaves the flat
+    view (`_drop`), so without the second index a library's own body has no way back
+    to its own signature -- issue #487 (`docs/design/unit-namespaces.md` section 13.1).
     """
-    by_name: Dict[str, FuncSig] = field(default_factory=dict)
-    by_unit: Dict[str, Dict[str, FuncSig]] = field(default_factory=dict)
-    order: List[str] = field(default_factory=list)
+
     _stdlib_functions: Dict[Tuple[str, str], Any] = field(default_factory=dict)
-
-    def declare(self, name: str, sig: FuncSig) -> None:
-        """Register one declaration in both views. The ONE insert.
-
-        The flat view is FIRST-wins, which is what it always was: a caller that means
-        to take a name another unit holds drops it first (`_drop`). Two units that
-        merely both declare `helper` leave the flat answer alone and each read their
-        own through `by_unit`.
-        """
-        if name not in self.by_name:
-            self.order.append(name)
-            self.by_name[name] = sig
-        unit = sig.unit_name
-        if unit is not None:
-            self.by_unit.setdefault(unit, {})[name] = sig
-
-    def lookup(self, name: str, unit_name: Optional[str] = None,
-               scope: object = None) -> Optional[FuncSig]:
-        """What the name means inside `unit_name`. One name, no dict built."""
-        from sushi_lang.semantics.unit_symbols import lookup_in_unit
-        return lookup_in_unit(name, self.by_unit, self.by_name, unit_name, scope)
-
-    def view_for(self, unit_name: Optional[str],
-                 scope: object = None) -> Dict[str, FuncSig]:
-        """What the name of a function means INSIDE `unit_name`, as one mapping."""
-        if scope is not None:
-            return scope.view(self.by_unit, self.by_name)
-        if unit_name is None:
-            return dict(self.by_name)
-        view = dict(self.by_name)
-        view.update(self.by_unit.get(unit_name, {}))
-        return view
 
     def register_stdlib_function(self, module_path: str, stdlib_func: Any) -> None:
         """Register a stdlib function."""
@@ -315,44 +280,13 @@ class FunctionTable:
         return {name: func for (_module, name), func in self._stdlib_functions.items()}
 
 
-@dataclass
-class GenericFunctionTable:
+@dataclass(eq=False)
+class GenericFunctionTable(UnitOwnedSymbols[GenericFuncDef]):
     """Table of generic function definitions collected by the collect pass.
 
     The same two views `FunctionTable` carries, for the same reason: two units may
-    each declare `twin@(T)` (#495). `by_name` is the FLAT view, first-wins; `by_unit`
-    keeps every declaration under the unit that wrote it, and `lookup` reads both
-    through the one ladder in `unit_symbols.lookup_in_unit`.
+    each declare `twin@(T)` (#495).
     """
-    by_name: Dict[str, GenericFuncDef] = field(default_factory=dict)
-    by_unit: Dict[str, Dict[str, GenericFuncDef]] = field(default_factory=dict)
-    order: List[str] = field(default_factory=list)
-
-    def declare(self, name: str, definition: GenericFuncDef) -> None:
-        """Register one declaration in both views. The ONE insert."""
-        if name not in self.by_name:
-            self.order.append(name)
-            self.by_name[name] = definition
-        unit = definition.unit_name
-        if unit is not None:
-            self.by_unit.setdefault(unit, {})[name] = definition
-
-    def lookup(self, name: str, unit_name: Optional[str] = None,
-               scope: object = None) -> Optional[GenericFuncDef]:
-        """What the name means inside `unit_name`. One name, no dict built."""
-        from sushi_lang.semantics.unit_symbols import lookup_in_unit
-        return lookup_in_unit(name, self.by_unit, self.by_name, unit_name, scope)
-
-    def view_for(self, unit_name: Optional[str],
-                 scope: object = None) -> Dict[str, GenericFuncDef]:
-        """What the name of a generic means INSIDE `unit_name`, as one mapping."""
-        if scope is not None:
-            return scope.view(self.by_unit, self.by_name)
-        if unit_name is None:
-            return dict(self.by_name)
-        view = dict(self.by_name)
-        view.update(self.by_unit.get(unit_name, {}))
-        return view
 
     def has_function(self, name: str) -> bool:
         """Check if generic function exists."""
