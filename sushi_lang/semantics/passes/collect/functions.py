@@ -1,7 +1,7 @@
 """Function and extension method collection."""
 
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
@@ -21,11 +21,7 @@ from sushi_lang.semantics.ast import (
 )
 from sushi_lang.semantics.typesys import (
     Type,
-    BuiltinType,
-    UnknownType,
     ArrayType,
-    StructType,
-    EnumType,
     DynamicArrayType,
     ReferenceType,
 )
@@ -35,6 +31,7 @@ from sushi_lang.semantics.generics.types import (
     TypeParam,
 )
 
+from sushi_lang.semantics.unit_symbols import UnitOwnedSymbols
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_origin,
@@ -43,7 +40,9 @@ from sushi_lang.semantics.visibility import (
 
 from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
                     reject_self_in_body, reject_try_in_body)
-from sushi_lang.semantics.generics.extension_targets import classify_extension_target
+from sushi_lang.semantics.generics.extension_targets import (
+    CONCRETE_EXTENSION_TARGETS, classify_extension_target)
+from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.generics.type_display import display_type
 
 
@@ -71,7 +70,7 @@ def is_explicit_result_type(ty: Optional[Type]) -> bool:
 
 def validate_variadic_params(reporter: 'Reporter', params: List['Param']) -> None:
     """Validate native variadic '...T' parameter placement and element type."""
-    variadic_indices = [i for i, p in enumerate(params) if getattr(p, "is_variadic", False)]
+    variadic_indices = [i for i, p in enumerate(params) if p.is_variadic]
     if not variadic_indices:
         return
 
@@ -111,7 +110,7 @@ def validate_type_pack_params(
     type_params = type_params_raw if isinstance(type_params_raw, list) else []
     pack_type_param_indices = [
         i for i, tp in enumerate(type_params)
-        if isinstance(tp, BoundedTypeParam) and getattr(tp, "is_pack", False)
+        if isinstance(tp, BoundedTypeParam) and tp.is_pack
     ]
     pack_type_param_names = {
         type_params[i].name for i in pack_type_param_indices
@@ -119,17 +118,17 @@ def validate_type_pack_params(
 
     if len(pack_type_param_indices) > 1:
         offending = type_params[pack_type_param_indices[1]]
-        er.emit(reporter, ERR.CE0117, getattr(offending, "loc", None) or fallback_span,
+        er.emit(reporter, ERR.CE0117, offending.loc or fallback_span,
                 message=f"a function may declare at most one type-pack parameter '...{offending.name}'")
     elif len(pack_type_param_indices) == 1:
         idx = pack_type_param_indices[0]
         if idx != len(type_params) - 1:
             offending = type_params[idx]
-            er.emit(reporter, ERR.CE0117, getattr(offending, "loc", None) or fallback_span,
+            er.emit(reporter, ERR.CE0117, offending.loc or fallback_span,
                     message=f"a type-pack parameter '...{offending.name}' must be the last type parameter")
 
     pack_value_indices = [
-        i for i, p in enumerate(params) if getattr(p, "is_pack", False)
+        i for i, p in enumerate(params) if p.is_pack
     ]
 
     if len(pack_value_indices) > 1:
@@ -145,7 +144,7 @@ def validate_type_pack_params(
                     message=f"a type-pack value parameter '...{pack_param.name}' must be the last parameter")
 
         # No mixing with a v1 native variadic (CE0118).
-        if any(getattr(p, "is_variadic", False) for p in params):
+        if any(p.is_variadic for p in params):
             er.emit(reporter, ERR.CE0118, pack_param.name_span or fallback_span,
                     message="a type-pack parameter '...Ts' cannot be combined with a native variadic '...T'")
 
@@ -167,6 +166,17 @@ class Param:
     is_pack: bool = False             # True for a v2 type-pack value-param (...Ts args);
     is_nom: bool = False              # `nom T name`: the CALLEE takes ownership. Read it
                                       # through semantics/param_modes.py, never directly.
+
+
+def convert_param_types(
+        params: List['Param'],
+        convert: Callable[[Optional[Type]], Optional[Type]]) -> List['Param']:
+    """Rebuild each parameter with its type converted and every other field kept.
+
+    `dataclasses.replace` and not a field list: a rebuild that spells out what it
+    copies drops what it forgets, and that is how `is_pack` was lost (#694).
+    """
+    return [replace(p, ty=convert(p.ty)) for p in params]
 
 
 @dataclass
@@ -223,52 +233,16 @@ class Redeclaration(Enum):
     COEXIST = "coexist"   # both stand: two units, two symbols
 
 
-@dataclass
-class FunctionTable:
+@dataclass(eq=False)
+class FunctionTable(UnitOwnedSymbols[FuncSig]):
     """Table of function signatures collected by the collect pass.
 
-    `by_name` is the FLAT view: one declaration per name for the whole program, and the
-    winner of a shadowed name. `by_unit` keeps every declaration under the unit that wrote
-    it, and it is what `view_for` reads. A name a consumer shadows leaves the flat view
-    (`_drop`), so without the second index a library's own body has no way back to its own
-    signature -- which is issue #487 (`docs/design/unit-namespaces.md` section 13.1).
+    The two views are `UnitOwnedSymbols`'. A name a consumer shadows leaves the flat
+    view (`_drop`), so without the second index a library's own body has no way back
+    to its own signature -- issue #487 (`docs/design/unit-namespaces.md` section 13.1).
     """
-    by_name: Dict[str, FuncSig] = field(default_factory=dict)
-    by_unit: Dict[str, Dict[str, FuncSig]] = field(default_factory=dict)
-    order: List[str] = field(default_factory=list)
+
     _stdlib_functions: Dict[Tuple[str, str], Any] = field(default_factory=dict)
-
-    def declare(self, name: str, sig: FuncSig) -> None:
-        """Register one declaration in both views. The ONE insert.
-
-        The flat view is FIRST-wins, which is what it always was: a caller that means
-        to take a name another unit holds drops it first (`_drop`). Two units that
-        merely both declare `helper` leave the flat answer alone and each read their
-        own through `by_unit`.
-        """
-        if name not in self.by_name:
-            self.order.append(name)
-            self.by_name[name] = sig
-        unit = getattr(sig, "unit_name", None)
-        if unit is not None:
-            self.by_unit.setdefault(unit, {})[name] = sig
-
-    def lookup(self, name: str, unit_name: Optional[str] = None,
-               scope: object = None) -> Optional[FuncSig]:
-        """What the name means inside `unit_name`. One name, no dict built."""
-        from sushi_lang.semantics.unit_symbols import lookup_in_unit
-        return lookup_in_unit(name, self.by_unit, self.by_name, unit_name, scope)
-
-    def view_for(self, unit_name: Optional[str],
-                 scope: object = None) -> Dict[str, FuncSig]:
-        """What the name of a function means INSIDE `unit_name`, as one mapping."""
-        if scope is not None:
-            return scope.view(self.by_unit, self.by_name)
-        if unit_name is None:
-            return dict(self.by_name)
-        view = dict(self.by_name)
-        view.update(self.by_unit.get(unit_name, {}))
-        return view
 
     def register_stdlib_function(self, module_path: str, stdlib_func: Any) -> None:
         """Register a stdlib function."""
@@ -305,44 +279,13 @@ class FunctionTable:
         return {name: func for (_module, name), func in self._stdlib_functions.items()}
 
 
-@dataclass
-class GenericFunctionTable:
+@dataclass(eq=False)
+class GenericFunctionTable(UnitOwnedSymbols[GenericFuncDef]):
     """Table of generic function definitions collected by the collect pass.
 
     The same two views `FunctionTable` carries, for the same reason: two units may
-    each declare `twin@(T)` (#495). `by_name` is the FLAT view, first-wins; `by_unit`
-    keeps every declaration under the unit that wrote it, and `lookup` reads both
-    through the one ladder in `unit_symbols.lookup_in_unit`.
+    each declare `twin@(T)` (#495).
     """
-    by_name: Dict[str, GenericFuncDef] = field(default_factory=dict)
-    by_unit: Dict[str, Dict[str, GenericFuncDef]] = field(default_factory=dict)
-    order: List[str] = field(default_factory=list)
-
-    def declare(self, name: str, definition: GenericFuncDef) -> None:
-        """Register one declaration in both views. The ONE insert."""
-        if name not in self.by_name:
-            self.order.append(name)
-            self.by_name[name] = definition
-        unit = getattr(definition, "unit_name", None)
-        if unit is not None:
-            self.by_unit.setdefault(unit, {})[name] = definition
-
-    def lookup(self, name: str, unit_name: Optional[str] = None,
-               scope: object = None) -> Optional[GenericFuncDef]:
-        """What the name means inside `unit_name`. One name, no dict built."""
-        from sushi_lang.semantics.unit_symbols import lookup_in_unit
-        return lookup_in_unit(name, self.by_unit, self.by_name, unit_name, scope)
-
-    def view_for(self, unit_name: Optional[str],
-                 scope: object = None) -> Dict[str, GenericFuncDef]:
-        """What the name of a generic means INSIDE `unit_name`, as one mapping."""
-        if scope is not None:
-            return scope.view(self.by_unit, self.by_name)
-        if unit_name is None:
-            return dict(self.by_name)
-        view = dict(self.by_name)
-        view.update(self.by_unit.get(unit_name, {}))
-        return view
 
     def has_function(self, name: str) -> bool:
         """Check if generic function exists."""
@@ -466,6 +409,59 @@ class GenericExtensionTable:
                 or methods.get((method_name, "")))
 
 
+
+@dataclass
+class _ExtensionHeader:
+    """What one `extend` declaration says, read once (#693).
+
+    The three per-target collectors used to take twelve parameters each and to read
+    the same fifteen fields off the node again. `target_type` is the one field that
+    moves: the array arm answers the element-resolved target, and the concrete arm
+    files under it.
+    """
+
+    ext: ExtendDef
+    name: str
+    params: List[Param]
+    target_type: Optional[Type]
+    ret_ty: Optional[Type]
+    err_ty: Optional[Type]
+    body: Optional[Block]
+    name_span: Optional[Span]
+    target_type_span: Optional[Span]
+    ret_span: Optional[Span]
+    err_span: Optional[Span]
+    # Method-level type parameters (`name@(U)`, ruling on identity). Their names join
+    # the receiver-derived ones in the deep signature conversion; a name that repeats a
+    # receiver parameter is CE2064, refused where the receiver's own names are known.
+    method_type_params: Tuple[str, ...]
+    is_static: bool
+
+
+def _read_extension_header(ext: ExtendDef) -> Optional[_ExtensionHeader]:
+    """Read one `extend` declaration. None when it names no method to collect."""
+    if not isinstance(ext.name, str):
+        return None
+
+    name_span = ext.name_span or ext.loc
+    return _ExtensionHeader(
+        ext=ext,
+        name=ext.name,
+        params=[param_from_node(p, idx)
+                for idx, p in enumerate(ext.params or [])],
+        target_type=ext.target_type,
+        ret_ty=ext.ret,
+        err_ty=ext.err_type,
+        body=ext.body,
+        name_span=name_span,
+        target_type_span=ext.target_type_span,
+        ret_span=ext.ret_span or name_span,
+        err_span=ext.err_span,
+        method_type_params=tuple(tp.name for tp in (ext.type_params or ())),
+        is_static=ext.is_static,
+    )
+
+
 class FunctionCollector:
     """Collector for function and extension method definitions."""
 
@@ -507,7 +503,7 @@ class FunctionCollector:
 
     def collect_functions(self, root: Program) -> None:
         """Collect all function definitions from program AST."""
-        funcs = getattr(root, "functions", None)
+        funcs = root.functions
         if isinstance(funcs, list):
             for fn in funcs:
                 if isinstance(fn, FuncDef):
@@ -515,13 +511,13 @@ class FunctionCollector:
 
     def collect_extensions(self, root: Program) -> None:
         """Collect all extension method definitions from program AST."""
-        generic_extensions = getattr(root, "generic_extensions", None)
+        generic_extensions = root.generic_extensions
         if isinstance(generic_extensions, list):
             for ext in list(generic_extensions):
                 if isinstance(ext, ExtendDef):
                     self._collect_extension_def(ext)
 
-        extensions = getattr(root, "extensions", None)
+        extensions = root.extensions
         if isinstance(extensions, list):
             for ext in extensions:
                 if isinstance(ext, ExtendDef):
@@ -534,8 +530,8 @@ class FunctionCollector:
             # that assume a concrete `self`.
             moved = [e for e in extensions
                      if isinstance(e, ExtendDef)
-                     and (getattr(e, "type_params", None)
-                          or (isinstance(getattr(e, "target_type", None), DynamicArrayType)
+                     and (e.type_params
+                          or (isinstance(e.target_type, DynamicArrayType)
                               and (e.target_shape is None or e.target_shape.param_names)))]
             if moved:
                 moved_ids = {id(e) for e in moved}
@@ -548,7 +544,7 @@ class FunctionCollector:
 
         registry = get_stdlib_registry()
 
-        uses = getattr(root, "uses", None)
+        uses = root.uses
         if not isinstance(uses, list):
             return
 
@@ -574,7 +570,8 @@ class FunctionCollector:
             for _const_name, stdlib_const in module.constants.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_const)
 
-    def _redeclaration(self, name: str, name_span: Optional[Span], prev,
+    def _redeclaration(self, name: str, name_span: Optional[Span],
+                       prev: 'FuncSig | GenericFuncDef',
                        *, may_coexist: bool) -> Redeclaration:
         """A name already taken. What that means for the declaration taking it again.
 
@@ -602,13 +599,13 @@ class FunctionCollector:
         if clash is not None and clash.is_public:
             self._warn_shadowed_export(name, name_span, clash)
             return Redeclaration.REPLACE
-        prev_unit = getattr(prev, "unit_name", None)
+        prev_unit = prev.unit_name
         if may_coexist and prev_unit is not None and prev_unit != self.current_unit_name:
             return Redeclaration.COEXIST
         er.emit_with(self.r, ERR.CE0101, name_span,
                      filename=self.current_unit_file, name=name) \
             .note("first defined here", prev.name_span,
-                  getattr(prev, "filename", None)).emit()
+                  prev.filename).emit()
         return Redeclaration.REFUSED
 
     def _warn_shadowed_export(self, name: str, name_span: Optional[Span],
@@ -643,7 +640,7 @@ class FunctionCollector:
 
     def _collect_function_def(self, fn: FuncDef) -> None:
         """Dispatch function collection based on whether it's generic."""
-        name = getattr(fn, "name", None)
+        name = fn.name
         if not isinstance(name, str):
             return
         record_declaration(self.visibility, "function", fn,
@@ -653,11 +650,11 @@ class FunctionCollector:
         # A receiver parameter has no meaning on a plain top-level function (#327):
         # there is no receiver. The builder lifts the marker onto the FuncDef, so this
         # is the one place the plain-function context can say no.
-        if getattr(fn, "self_mode", None) is not None:
+        if fn.self_mode is not None:
             er.emit(self.r, ERR.CE2425, fn.self_mode_span or fn.name_span)
             return
 
-        type_params_raw = getattr(fn, "type_params", None)
+        type_params_raw = fn.type_params
         type_params = extract_type_param_names(type_params_raw)
 
         if type_params and len(type_params) > 0:
@@ -667,16 +664,14 @@ class FunctionCollector:
 
     def _collect_concrete_function_def(self, fn: FuncDef) -> None:
         """Collect concrete (non-generic) function definition."""
-        name = getattr(fn, "name", None)
+        name = fn.name
         if not isinstance(name, str):
             return
 
-        name_span: Optional[Span] = getattr(fn, "name_span", None) or getattr(
-            fn, "loc", None
-        )
-        ret_ty: Optional[Type] = getattr(fn, "ret", None)
-        ret_span: Optional[Span] = getattr(fn, "ret_span", None) or name_span
-        is_public: bool = getattr(fn, "is_public", False)
+        name_span: Optional[Span] = fn.name_span or fn.loc
+        ret_ty: Optional[Type] = fn.ret
+        ret_span: Optional[Span] = fn.ret_span or name_span
+        is_public: bool = fn.is_public
 
         if ret_ty is None:
             er.emit(self.r, ERR.CE0103, name_span, name=name)
@@ -687,7 +682,7 @@ class FunctionCollector:
         # which is built structurally and never passes the enum-payload check.
         reject_reference_in(self.r, ret_ty, ret_span, ERR.CE2417)
 
-        err_ty: Optional[Type] = getattr(fn, "err_type", None)
+        err_ty: Optional[Type] = fn.err_type
         if is_explicit_result_type(ret_ty) and err_ty is not None:
             # User wrote: fn foo() Result<T, E1> | E2
             # This is an error because it's ambiguous and implies nesting
@@ -696,7 +691,7 @@ class FunctionCollector:
 
         params: List[Param] = []
         param_names: Set[str] = set()
-        for idx, p in enumerate(getattr(fn, "params", []) or []):
+        for idx, p in enumerate(fn.params or []):
             param = param_from_node(p, idx)
 
             if param.name in param_names:
@@ -713,7 +708,7 @@ class FunctionCollector:
         # (CE0117/CE0118). A concrete (non-generic) function has no type-pack
         # type-params, so this fires only if a pack value-param leaked in here
         # without a matching type-pack type-param (malformed -> CE0117).
-        validate_type_pack_params(self.r, getattr(fn, "type_params", None), params, name_span)
+        validate_type_pack_params(self.r, fn.type_params, params, name_span)
 
         if name in self.funcs.by_name:
             verdict = self._redeclaration(name, name_span, self.funcs.by_name[name],
@@ -744,14 +739,6 @@ class FunctionCollector:
             err_type=fn.err_type,
         )
 
-        if name == "main" and ret_ty is not None:
-            valid_integer_types = {
-                BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-                BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64
-            }
-            if ret_ty not in valid_integer_types:
-                er.emit(self.r, ERR.CE0106, ret_span, type=display_type(ret_ty))
-
         self.funcs.declare(name, sig)
 
     def _collect_generic_function_def(
@@ -761,7 +748,7 @@ class FunctionCollector:
     ) -> None:
         """Collect generic function definition."""
         name = fn.name
-        name_span = getattr(fn, "name_span", None) or getattr(fn, "loc", None)
+        name_span = fn.name_span or fn.loc
 
         if name in self.generic_funcs.by_name:
             verdict = self._redeclaration(name, name_span,
@@ -780,15 +767,11 @@ class FunctionCollector:
             if verdict is Redeclaration.REPLACE:
                 self._drop(self.funcs, name)
 
-        type_param_instances = tuple(
-            tp if isinstance(tp, BoundedTypeParam)
-            else BoundedTypeParam(name=tp, constraints=[], loc=None)
-            for tp in type_params_raw
-        )
+        type_param_instances = tuple(type_params_raw)
 
         params = []
         param_names = set()
-        for idx, p in enumerate(getattr(fn, "params", []) or []):
+        for idx, p in enumerate(fn.params or []):
             param = param_from_node(p, idx)
 
             if param.name in param_names:
@@ -800,8 +783,8 @@ class FunctionCollector:
 
         # Generic variadics are out of scope for v1: reject a variadic parameter
         # in a generic function (also covers misplacement) with CE0114.
-        if any(getattr(p, "is_variadic", False) for p in params):
-            vparam = next(p for p in params if getattr(p, "is_variadic", False))
+        if any(p.is_variadic for p in params):
+            vparam = next(p for p in params if p.is_variadic)
             er.emit(self.r, ERR.CE0114, vparam.name_span,
                     message="variadic '...T' parameters are not supported in generic functions")
 
@@ -811,22 +794,22 @@ class FunctionCollector:
         # blanket above (which keys on `is_variadic`).
         validate_type_pack_params(self.r, type_params_raw, params, name_span)
 
-        ret_ty = getattr(fn, "ret", None)
-        ret_span = getattr(fn, "ret_span", None) or name_span
+        ret_ty = fn.ret
+        ret_span = fn.ret_span or name_span
 
         if ret_ty is None:
             er.emit(self.r, ERR.CE0103, name_span, name=name)
 
         reject_reference_in(self.r, ret_ty, ret_span, ERR.CE2417)
 
-        err_ty = getattr(fn, "err_type", None)
+        err_ty = fn.err_type
         if is_explicit_result_type(ret_ty) and err_ty is not None:
             # User wrote: fn foo<T>() Result<T, E1> | E2
             # This is an error because it's ambiguous and implies nesting
             err_type_name = getattr(err_ty, "name", str(err_ty))
             er.emit(self.r, ERR.CE2085, ret_span, err_type=err_type_name)
 
-        body = getattr(fn, "body", None)
+        body = fn.body
         if body is None:
             return
 
@@ -836,8 +819,8 @@ class FunctionCollector:
             params=params,
             ret=ret_ty,
             body=body,
-            is_public=getattr(fn, "is_public", False),
-            loc=getattr(fn, "loc", None),
+            is_public=fn.is_public,
+            loc=fn.loc,
             name_span=name_span,
             ret_span=ret_span,
             err_type=fn.err_type,
@@ -849,300 +832,219 @@ class FunctionCollector:
         self.generic_funcs.declare(name, generic_func)
 
     def _collect_extension_def(self, ext: ExtendDef) -> None:
-        """Collect extension method definition (both regular and generic)."""
-        name = getattr(ext, "name", None)
-        if not isinstance(name, str):
+        """Collect one `extend` declaration: read it, refuse it, then file it.
+
+        The three steps stay apart (#693). The header reads what the declaration says,
+        once; the refusals that hold whatever the target is come next, in source order;
+        and one collector per target KIND -- array, generic, concrete -- files the rest.
+        """
+        header = _read_extension_header(ext)
+        if header is None:
             return
 
-        # Method-level type parameters (`name@(U)`, ruling on identity). Their names
-        # join the receiver-derived ones in the deep signature conversion; a name that
-        # repeats a receiver parameter is CE2064, checked where the receiver's own
-        # names are known (the generic branch and the array arm below).
-        method_type_params: Tuple[str, ...] = tuple(
-            tp.name for tp in (getattr(ext, "type_params", None) or ()))
+        self._reject_signature_faults(header)
+        if header.is_static and self._reject_static_faults(header):
+            return
 
-        target_type: Optional[Type] = getattr(ext, "target_type", None)
-        name_span: Optional[Span] = getattr(ext, "name_span", None) or getattr(ext, "loc", None)
-        target_type_span: Optional[Span] = getattr(ext, "target_type_span", None)
-        ret_ty: Optional[Type] = getattr(ext, "ret", None)
-        ret_span: Optional[Span] = getattr(ext, "ret_span", None) or name_span
-        body = getattr(ext, "body", None)
+        # A `??` has no error channel in a BARE extension body (CE0131, #398). A
+        # declared `| E` IS the channel (ruling 1), so the reject does not apply there.
+        if header.err_ty is None:
+            reject_try_in_body(self.r, header.body, "an extension method")
 
-        if ret_ty is None:
-            er.emit(self.r, ERR.CE0103, name_span, name=f"extension method '{name}'")
+        self._collect_for_target(header)
 
-        reject_reference_in(self.r, ret_ty, ret_span, ERR.CE2417)
+    def _reject_signature_faults(self, h: '_ExtensionHeader') -> None:
+        """Every refusal the signature carries, whatever the target kind is."""
+        if h.ret_ty is None:
+            er.emit(self.r, ERR.CE0103, h.name_span,
+                    name=f"extension method '{h.name}'")
 
-        # A reference TARGET falls through both isinstance filters below, so the method is
-        # collected and then unreachable: every call reports "no such method" and the body
-        # is dead code (CE2420, #319).
-        reject_reference_in(self.r, target_type, target_type_span or name_span, ERR.CE2420)
+        reject_reference_in(self.r, h.ret_ty, h.ret_span, ERR.CE2417)
 
-        params: List[Param] = []
-        param_names: Set[str] = set()
-        for idx, p in enumerate(getattr(ext, "params", []) or []):
-            param = param_from_node(p, idx)
+        # A reference TARGET falls through every target filter below, so the method is
+        # collected and then unreachable: every call reports "no such method" and the
+        # body is dead code (CE2420, #319).
+        reject_reference_in(self.r, h.target_type,
+                            h.target_type_span or h.name_span, ERR.CE2420)
 
-            if param.name == "self":
-                er.emit(self.r, ERR.CE0102, param.name_span, name=param.name)
-            elif param.name in param_names:
+        seen: Set[str] = set()
+        for param in h.params:
+            if param.name == "self" or param.name in seen:
                 er.emit(self.r, ERR.CE0102, param.name_span, name=param.name)
             else:
-                param_names.add(param.name)
-
-            params.append(param)
+                seen.add(param.name)
 
         # Variadic parameters are not allowed in extension methods (CE0115).
         # The pack half is unreachable today, but the guard must match its
         # documented contract and stay correct by construction (#246).
-        for p in params:
-            if getattr(p, "is_variadic", False) or getattr(p, "is_pack", False):
-                er.emit(self.r, ERR.CE0115, p.name_span, context="an extension method")
+        for param in h.params:
+            if param.is_variadic or param.is_pack:
+                er.emit(self.r, ERR.CE0115, param.name_span,
+                        context="an extension method")
                 break
 
-        # A static method has no receiver, so neither position may name one (CE0134,
-        # #542): a receiver MODE in the signature, or a `self` in the body. One fault,
-        # one code, and the caret sits on whichever was written.
-        is_static = bool(getattr(ext, "is_static", False))
-        if is_static:
-            if getattr(ext, "self_mode", None) is not None:
-                er.emit_with(self.r, ERR.CE0134,
-                             getattr(ext, "self_mode_span", None) or name_span,
-                             name=name) \
-                    .help("a static is called on the type name; drop the receiver, "
-                          "or drop the `static` marker to get an instance method") \
-                    .emit()
-            reject_self_in_body(self.r, body, name)
-            if self._reject_variant_collision(target_type, name, name_span):
-                return
-            # An array type has no spelling in an expression position, so a static on
-            # one could never be called (CE2104). An unreachable declaration is a
-            # diagnostic, exactly as CE2097 rules for a colliding built-in.
-            if isinstance(target_type, (ArrayType, DynamicArrayType)):
-                er.emit_with(self.r, ERR.CE2104,
-                             target_type_span or name_span) \
-                    .help("write a free function, or a static on a struct that holds "
-                          "the array").emit()
-                return
+    def _reject_static_faults(self, h: '_ExtensionHeader') -> bool:
+        """The refusals a `static` marker brings; True when the declaration is dropped.
 
-        # A `??` has no error channel in a BARE extension body (CE0131, #398). A
-        # declared `| E` IS the channel (ruling 1), so the reject does not apply there.
-        err_ty: Optional[Type] = getattr(ext, "err_type", None)
-        err_span: Optional[Span] = getattr(ext, "err_span", None)
-        if err_ty is None:
-            reject_try_in_body(self.r, body, "an extension method")
+        A static has no receiver, so neither position may name one (CE0134, #542): a
+        receiver MODE in the signature, or a `self` in the body. One fault, one code,
+        and the caret sits on whichever was written.
+        """
+        if h.ext.self_mode is not None:
+            er.emit_with(self.r, ERR.CE0134,
+                         h.ext.self_mode_span or h.name_span, name=h.name) \
+                .help("a static is called on the type name; drop the receiver, "
+                      "or drop the `static` marker to get an instance method") \
+                .emit()
+        reject_self_in_body(self.r, h.body, h.name)
 
-        if target_type is not None and isinstance(target_type, DynamicArrayType):
-            target_type = self._collect_array_extension(
-                ext, target_type, name, params, ret_ty, body,
-                name_span, target_type_span, ret_span, err_ty, err_span,
-                method_type_params)
-            if target_type is None:
-                return
+        if self._reject_variant_collision(h.target_type, h.name, h.name_span):
+            return True
 
-        if target_type is not None and isinstance(target_type, GenericTypeRef):
-            base_type_name = target_type.base_name
+        # An array type has no spelling in an expression position, so a static on one
+        # could never be called (CE2104). An unreachable declaration is a diagnostic,
+        # exactly as CE2097 rules for a colliding built-in.
+        if isinstance(h.target_type, (ArrayType, DynamicArrayType)):
+            er.emit_with(self.r, ERR.CE2104,
+                         h.target_type_span or h.name_span) \
+                .help("write a free function, or a static on a struct that holds "
+                      "the array").emit()
+            return True
 
-            # A concrete argument is a CONSTRAINT, a bare name is a type PARAMETER, and a mix
-            # of the two is partial specialization, which Sushi does not have (#393). The collect pass
-            # is the pass that can tell them apart, because the struct and enum tables say
-            # which names are declared types -- so the answer is decided here and carried.
-            shape = classify_extension_target(target_type, self.is_declared_type)
-            ext.target_shape = shape
-            if shape.is_mixed:
-                er.emit_with(self.r, ERR.CE2098, target_type_span or name_span,
-                             target=display_type(target_type)) \
-                    .help("name every type parameter, or make every argument concrete -- "
-                          "there is no partial specialization").emit()
-                return
+        return False
 
-            shadowed = [m for m in method_type_params if m in shape.param_names]
-            if shadowed:
-                er.emit(self.r, ERR.CE2064, name_span, name=shadowed[0])
-                return
+    def _collect_for_target(self, h: '_ExtensionHeader') -> None:
+        """File the declaration with the collector its target KIND names."""
+        if isinstance(h.target_type, DynamicArrayType):
+            concrete_array = self._collect_array_extension(h, h.target_type)
+            if concrete_array is None:
+                return              # filed as a template, or refused
+            h.target_type = concrete_array
 
-            all_names = (*shape.param_names, *method_type_params)
-
-            def convert_unknown_to_typeparam(ty: Optional[Type]) -> Optional[Type]:
-                """Deep name-to-TypeParameter conversion through the signature."""
-                return deep_type_params(ty, all_names)
-
-            concrete_ret_ty = convert_unknown_to_typeparam(ret_ty)
-            concrete_params = []
-            for param in params:
-                concrete_param_ty = convert_unknown_to_typeparam(param.ty)
-                concrete_params.append(Param(
-                    name=param.name,
-                    ty=concrete_param_ty,
-                    name_span=param.name_span,
-                    type_span=param.type_span,
-                    index=param.index,
-                    is_variadic=getattr(param, "is_variadic", False),
-                    is_nom=getattr(param, "is_nom", False),
-                ))
-
-            generic_method = GenericExtensionMethod(
-                base_type_name=base_type_name,
-                type_params=shape.param_names,
-                target_key=shape.target_key,
-                name=name,
-                loc=getattr(ext, "loc", None),
-                target_type_span=target_type_span,
-                name_span=name_span,
-                ret_type=concrete_ret_ty,
-                ret_span=ret_span,
-                params=concrete_params,
-                body=body,
-                self_mode=getattr(ext, "self_mode", None),
-                filename=self.current_unit_file,
-                unit_name=self.current_unit_name,
-                err_type=convert_unknown_to_typeparam(err_ty),
-                err_span=err_span,
-                method_type_params=method_type_params,
-                is_static=is_static,
-            )
-
-            if self._reject_overlapping_target(generic_method, target_type, name_span):
-                return
-
-            self.generic_extensions.add_method(generic_method)
+        if isinstance(h.target_type, GenericTypeRef):
+            self._collect_generic_extension(h, h.target_type)
         else:
-            resolved_type = target_type
-            if target_type is not None and isinstance(target_type, UnknownType):
-                type_name = target_type.name
-                if type_name in self.structs.by_name:
-                    resolved_type = self.structs.by_name[type_name]
-                elif type_name in self.enums.by_name:
-                    resolved_type = self.enums.by_name[type_name]
+            self._collect_concrete_extension(h)
 
-            if method_type_params and resolved_type is not None:
-                self._collect_concrete_method_generic(
-                    ext, resolved_type, name, params, ret_ty, body,
-                    name_span, target_type_span, ret_span, err_ty, err_span,
-                    method_type_params)
-                return
+    def _collect_generic_extension(self, h: '_ExtensionHeader',
+                                   target_type: GenericTypeRef) -> None:
+        """A `@(...)` target: a template, or the one instantiation it constrains.
 
-            method = ExtensionMethod(
-                target_type=resolved_type,
-                name=name,
-                loc=getattr(ext, "loc", None),
-                target_type_span=target_type_span,
-                name_span=name_span,
-                ret_type=ret_ty,
-                ret_span=ret_span,
-                params=params,
-                self_mode=getattr(ext, "self_mode", None),
-                filename=self.current_unit_file,
-                unit_name=self.current_unit_name,
-                err_type=err_ty,
-                err_span=err_span,
-                is_static=is_static,
-            )
+        A concrete argument is a CONSTRAINT, a bare name is a type PARAMETER, and a mix
+        of the two is partial specialization, which Sushi does not have (#393). The
+        collect pass is the pass that can tell them apart, because the struct and enum
+        tables say which names are declared types -- so the answer is decided here and
+        carried.
+        """
+        shape = classify_extension_target(target_type, self.is_declared_type)
+        h.ext.target_shape = shape
+        if shape.is_mixed:
+            er.emit_with(self.r, ERR.CE2098, h.target_type_span or h.name_span,
+                         target=display_type(target_type)) \
+                .help("name every type parameter, or make every argument concrete -- "
+                      "there is no partial specialization").emit()
+            return
 
-            if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
-                existing = self.extensions.get_method(resolved_type, name)
-                if existing is not None:
-                    self._emit_duplicate_extension(
-                        f"extension method '{name}' for '{display_type(resolved_type)}'",
-                        name_span, existing.unit_name, existing.name_span,
-                        existing.filename)
-                    return
+        shadowed = [m for m in h.method_type_params if m in shape.param_names]
+        if shadowed:
+            er.emit(self.r, ERR.CE2064, h.name_span, name=shadowed[0])
+            return
 
-            if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
-                self.extensions.add_method(method)
+        method = self._generic_method(
+            h, base_type_name=target_type.base_name,
+            type_params=shape.param_names, target_key=shape.target_key,
+            type_param_names=(*shape.param_names, *h.method_type_params))
 
-    def _collect_array_extension(self, ext: ExtendDef, target_type: DynamicArrayType,
-                                 name: str, params: List[Param],
-                                 ret_ty: Optional[Type], body,
-                                 name_span: Optional[Span],
-                                 target_type_span: Optional[Span],
-                                 ret_span: Optional[Span],
-                                 err_ty: Optional[Type] = None,
-                                 err_span: Optional[Span] = None,
-                                 method_type_params: Tuple[str, ...] = ()) -> Optional[Type]:
+        if self._reject_overlapping_target(method, target_type, h.name_span):
+            return
+
+        self.generic_extensions.add_method(method)
+
+    def _collect_array_extension(self, h: '_ExtensionHeader',
+                                 target_type: DynamicArrayType) -> Optional[Type]:
         """Classify a dynamic-array target (ruling 3): template, concrete, or CE2101.
 
-        Returns the (possibly element-resolved) concrete target type, or None when the
-        declaration is fully handled here -- registered as a template, or rejected.
+        Answers the element-resolved concrete target type, or None when the declaration
+        is fully handled here -- filed as a template, or refused.
         """
         from sushi_lang.semantics.generics.extension_targets import (
             ARRAY_BASE_KEY, classify_array_extension_target)
 
         element = target_type.base_type
         shape = classify_array_extension_target(element, self.is_declared_type)
-        ext.target_shape = shape
+        h.ext.target_shape = shape
         if shape is None:
-            er.emit_with(self.r, ERR.CE2101, target_type_span or name_span,
+            er.emit_with(self.r, ERR.CE2101, h.target_type_span or h.name_span,
                          element=display_type(element)) \
                 .help("write a bare type-parameter name ('extend T[]') or a plain "
                       "declared type ('extend i32[]')").emit()
             return None
 
         if not shape.param_names:
-            if isinstance(element, UnknownType):
-                resolved = (self.structs.by_name.get(element.name)
-                            or self.enums.by_name.get(element.name))
-                if resolved is not None:
-                    target_type = DynamicArrayType(base_type=resolved)
-                    ext.target_type = target_type
+            resolved = resolve_unknown_type(
+                element, self.structs.by_name, self.enums.by_name)
+            if resolved is not element:
+                target_type = DynamicArrayType(base_type=resolved)
+                h.ext.target_type = target_type
             return target_type
 
         param_name = shape.param_names[0]
 
-        if param_name in method_type_params:
-            er.emit(self.r, ERR.CE2064, name_span, name=param_name)
+        if param_name in h.method_type_params:
+            er.emit(self.r, ERR.CE2064, h.name_span, name=param_name)
             return None
 
-        all_names = (param_name, *method_type_params)
-
-        def convert(ty: Optional[Type]) -> Optional[Type]:
-            return deep_type_params(ty, all_names)
-
-        converted_params = [Param(
-            name=p.name, ty=convert(p.ty), name_span=p.name_span,
-            type_span=p.type_span, index=p.index,
-            is_variadic=getattr(p, "is_variadic", False),
-            is_nom=getattr(p, "is_nom", False),
-        ) for p in params]
-
-        for existing in self.generic_extensions.declarations(ARRAY_BASE_KEY, name):
+        for existing in self.generic_extensions.declarations(ARRAY_BASE_KEY, h.name):
             self._emit_duplicate_extension(
-                f"extension method '{name}' for an array target",
-                name_span, existing.unit_name, existing.name_span,
+                f"extension method '{h.name}' for an array target",
+                h.name_span, existing.unit_name, existing.name_span,
                 existing.filename)
             return None
 
-        self.generic_extensions.add_method(GenericExtensionMethod(
-            base_type_name=ARRAY_BASE_KEY,
-            type_params=(param_name,),
-            target_key="",
-            name=name,
-            loc=getattr(ext, "loc", None),
-            target_type_span=target_type_span,
-            name_span=name_span,
-            ret_type=convert(ret_ty),
-            ret_span=ret_span,
-            params=converted_params,
-            body=body,
-            self_mode=getattr(ext, "self_mode", None),
-            filename=self.current_unit_file,
-            unit_name=self.current_unit_name,
-            err_type=convert(err_ty),
-            err_span=err_span,
-            method_type_params=method_type_params,
-            is_static=bool(getattr(ext, "is_static", False)),
-        ))
+        self.generic_extensions.add_method(self._generic_method(
+            h, base_type_name=ARRAY_BASE_KEY, type_params=(param_name,),
+            target_key="", type_param_names=(param_name, *h.method_type_params)))
         return None
 
-    def _collect_concrete_method_generic(self, ext: ExtendDef, resolved_type: Type,
-                                         name: str, params: List[Param],
-                                         ret_ty: Optional[Type], body,
-                                         name_span: Optional[Span],
-                                         target_type_span: Optional[Span],
-                                         ret_span: Optional[Span],
-                                         err_ty: Optional[Type],
-                                         err_span: Optional[Span],
-                                         method_type_params: Tuple[str, ...]) -> None:
+    def _collect_concrete_extension(self, h: '_ExtensionHeader') -> None:
+        """A target that names ONE type: the extension table keys on the type itself."""
+        resolved_type = resolve_unknown_type(
+            h.target_type, self.structs.by_name, self.enums.by_name)
+
+        if h.method_type_params and resolved_type is not None:
+            self._collect_method_generic(h, resolved_type)
+            return
+
+        if not isinstance(resolved_type, CONCRETE_EXTENSION_TARGETS):
+            return
+
+        existing = self.extensions.get_method(resolved_type, h.name)
+        if existing is not None:
+            self._emit_duplicate_extension(
+                f"extension method '{h.name}' for '{display_type(resolved_type)}'",
+                h.name_span, existing.unit_name, existing.name_span,
+                existing.filename)
+            return
+
+        self.extensions.add_method(ExtensionMethod(
+            target_type=resolved_type,
+            name=h.name,
+            loc=h.ext.loc,
+            target_type_span=h.target_type_span,
+            name_span=h.name_span,
+            ret_type=h.ret_ty,
+            ret_span=h.ret_span,
+            params=h.params,
+            self_mode=h.ext.self_mode,
+            filename=self.current_unit_file,
+            unit_name=self.current_unit_name,
+            err_type=h.err_ty,
+            err_span=h.err_span,
+            is_static=h.is_static,
+        ))
+
+    def _collect_method_generic(self, h: '_ExtensionHeader',
+                                resolved_type: Type) -> None:
         """A method-generic on a CONCRETE receiver (`extend i32 pick@(U)`).
 
         The margs dimension makes it a template: it files under the receiver's display
@@ -1152,47 +1054,52 @@ class FunctionCollector:
         """
         base = display_type(resolved_type)
 
-        for existing in self.generic_extensions.declarations(base, name):
+        for existing in self.generic_extensions.declarations(base, h.name):
             self._emit_duplicate_extension(
-                f"extension method '{name}' for '{base}'",
-                name_span, existing.unit_name, existing.name_span,
+                f"extension method '{h.name}' for '{base}'",
+                h.name_span, existing.unit_name, existing.name_span,
                 existing.filename)
             return
 
-        def convert(ty: Optional[Type]) -> Optional[Type]:
-            return deep_type_params(ty, method_type_params)
-
-        converted_params = [Param(
-            name=p.name, ty=convert(p.ty), name_span=p.name_span,
-            type_span=p.type_span, index=p.index,
-            is_variadic=getattr(p, "is_variadic", False),
-            is_nom=getattr(p, "is_nom", False),
-        ) for p in params]
-
-        self.generic_extensions.add_method(GenericExtensionMethod(
-            base_type_name=base,
-            type_params=(),
-            target_key="",
-            name=name,
-            loc=getattr(ext, "loc", None),
-            target_type_span=target_type_span,
-            name_span=name_span,
-            ret_type=convert(ret_ty),
-            ret_span=ret_span,
-            params=converted_params,
-            body=body,
-            self_mode=getattr(ext, "self_mode", None),
-            filename=self.current_unit_file,
-            unit_name=self.current_unit_name,
-            err_type=convert(err_ty),
-            err_span=err_span,
-            method_type_params=method_type_params,
-            is_static=bool(getattr(ext, "is_static", False)),
-        ))
+        self.generic_extensions.add_method(self._generic_method(
+            h, base_type_name=base, type_params=(), target_key="",
+            type_param_names=h.method_type_params))
         # The declaration itself must not be walked as a concrete extension: stash the
         # receiver so the drain can rebuild the target, and let collect_extensions
         # re-file the node under generic_extensions.
-        ext.target_type = resolved_type
+        h.ext.target_type = resolved_type
+
+    def _generic_method(self, h: '_ExtensionHeader', *, base_type_name: str,
+                        type_params: Tuple[str, ...], target_key: str,
+                        type_param_names: Tuple[str, ...]) -> GenericExtensionMethod:
+        """The ONE `GenericExtensionMethod` build, for all three template shapes.
+
+        `type_param_names` are the names the signature converts into a `TypeParameter`:
+        the receiver's, the method's own, or both.
+        """
+        def convert(ty: Optional[Type]) -> Optional[Type]:
+            return deep_type_params(ty, type_param_names)
+
+        return GenericExtensionMethod(
+            base_type_name=base_type_name,
+            type_params=type_params,
+            target_key=target_key,
+            name=h.name,
+            loc=h.ext.loc,
+            target_type_span=h.target_type_span,
+            name_span=h.name_span,
+            ret_type=convert(h.ret_ty),
+            ret_span=h.ret_span,
+            params=convert_param_types(h.params, convert),
+            body=h.body,
+            self_mode=h.ext.self_mode,
+            filename=self.current_unit_file,
+            unit_name=self.current_unit_name,
+            err_type=convert(h.err_ty),
+            err_span=h.err_span,
+            method_type_params=h.method_type_params,
+            is_static=h.is_static,
+        )
 
     def _reject_variant_collision(self, target_type: Optional[Type], name: str,
                                   name_span: Optional[Span]) -> bool:

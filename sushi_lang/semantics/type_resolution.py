@@ -23,10 +23,6 @@ class TypeResolver:
         """Single entry point for all type resolution."""
         return resolve_unknown_type(ty, self.struct_table, self.enum_table)
 
-    def resolve_recursively(self, ty: 'Type') -> 'Type':
-        """Recursively resolve UnknownType in nested type structures."""
-        return resolve_type_recursively(ty, self.struct_table, self.enum_table)
-
     def resolve_type_args(self, type_args: Tuple['Type', ...]) -> Tuple['Type', ...]:
         """Resolve all UnknownType instances in type_args tuple."""
         from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType

@@ -92,7 +92,7 @@ class TopLevelDeclarations:
             if decl.data == "const_def":
                 const = constants.parse_constdef(decl, builder)
                 self.constants.append(const)
-                builder.unit_constants.declare(const.name, const)
+                builder.declare_constant(const)
             elif decl.data == "var_def":
                 self.constants.append(constants.parse_vardef(decl, builder))
 

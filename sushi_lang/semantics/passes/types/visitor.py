@@ -4,12 +4,14 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.generics.extension_targets import (
+    CONCRETE_EXTENSION_TARGETS)
 from sushi_lang.semantics.name_ladder import BareName, classify
 
 if TYPE_CHECKING:
     from . import TypeValidator
 from sushi_lang.semantics.visitors import NodeVisitor, RecursiveVisitor
-from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, StructType, ForeignPtrType
+from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType, StructType, ForeignPtrType
 from sushi_lang.semantics.type_predicates import is_string_convertible
 from sushi_lang.semantics.passes.types.visibility import (
     reject_ambiguous_name, reject_private_kept, reject_private_name)
@@ -417,7 +419,7 @@ class ExpressionValidator(RecursiveVisitor):
 
         # CE2094: capturing a peek/poke borrow is deferred to Tier 2. A captured
         # name whose enclosing type is a reference is a borrow capture.
-        from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, DynamicArrayType, owns_resource
+        from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, owns_resource
         drops = tv.drop_type_names
         for cap in (node.captures or []):
             if isinstance(cap.ty, ReferenceType):
@@ -1115,7 +1117,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 return None
 
         receiver_type = self.type_validator.infer_expression_type(node.receiver)
-        from sushi_lang.semantics.typesys import StructType, EnumType, ReferenceType
+        from sushi_lang.semantics.typesys import ReferenceType
 
         actual_type = receiver_type
         if isinstance(receiver_type, ReferenceType):
@@ -1130,7 +1132,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             elif type_name in self.type_validator.enum_table.by_name:
                 actual_type = self.type_validator.enum_table.by_name[type_name]
 
-        if actual_type is not None and isinstance(actual_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
+        if isinstance(actual_type, CONCRETE_EXTENSION_TARGETS):
             from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
             inferred_type = METHOD_TYPE_REGISTRY.infer_method_type(
                 actual_type, node.method, self.type_validator

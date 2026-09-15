@@ -117,8 +117,8 @@ class LibraryManifestGenerator:
     def __init__(self, analyzer: 'SemanticAnalyzer'):
         """Initialize manifest generator."""
         self.analyzer = analyzer
-        self.structs = analyzer.structs
-        self.enums = analyzer.enums
+        self.structs = analyzer.tables.structs
+        self.enums = analyzer.tables.enums
 
     def generate(self, units: list['Unit'], output_path: Path, bitcode: bytes,
                  templates: dict | None = None, library_version: str = "0.0.0",

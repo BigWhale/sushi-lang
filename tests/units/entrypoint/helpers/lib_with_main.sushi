@@ -1,0 +1,8 @@
+# A library must not carry main(): the symbol collides at link time in every
+# consumer, so `--lib` refuses it (CE3501). Built by
+# tests/unit/test_entrypoint_is_one_pass.py, never by the fixture runner.
+public fn answer() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    return Result.Ok(0)

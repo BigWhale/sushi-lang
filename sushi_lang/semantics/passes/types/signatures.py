@@ -4,12 +4,14 @@ from __future__ import annotations
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, PerkDef
 from sushi_lang.semantics.typesys import (
-    BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType
+    BuiltinType, UnknownType, EnumType
 )
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.generics.results import (
     is_builtin_wrapper_enum, signature_result_arms)
 from sushi_lang.semantics.generics.types import TypeParameter
+from sushi_lang.semantics.generics.extension_targets import (
+    CONCRETE_EXTENSION_TARGETS)
 
 from .utils import validate_type_name, validate_and_register_parameters
 from .perks import validate_perk_implementation, check_no_conflicts_with_regular_methods
@@ -164,8 +166,7 @@ def _register_self(self, target_type, self_mode) -> None:
     auto-dereferences.
     """
     self_type = None
-    if isinstance(target_type,
-                  (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
+    if isinstance(target_type, CONCRETE_EXTENSION_TARGETS):
         self_type = target_type
     elif isinstance(target_type, UnknownType):
         resolved = resolve_unknown_type(

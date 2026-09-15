@@ -65,7 +65,7 @@ class ExternalCollector:
         self.externals = externals
 
     def collect(self, root: 'Program') -> None:
-        blocks = getattr(root, "externals", None)
+        blocks = root.externals
         if not isinstance(blocks, list):
             return
         for block in blocks:

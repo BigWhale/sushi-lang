@@ -23,8 +23,24 @@ from dataclasses import dataclass
 from typing import Callable, Mapping, Optional, Protocol, Tuple
 
 from sushi_lang.semantics.statics import names_a_type
-from sushi_lang.semantics.typesys import Type, UnknownType
+from sushi_lang.semantics.typesys import (
+    ArrayType,
+    BuiltinType,
+    DynamicArrayType,
+    EnumType,
+    StructType,
+    Type,
+    UnknownType,
+)
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
+
+
+# A target the concrete extension table can key on. A named type is nominal, so the
+# table holds the type object itself -- and a name that resolved to nothing, a
+# reference, or a `@(...)` reference is not one of these and belongs to another
+# collector. ONE tuple: four readers asked the same question with four copies of it.
+CONCRETE_EXTENSION_TARGETS = (
+    BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)
 
 
 class NameTable(Protocol):
@@ -118,8 +134,6 @@ def classify_array_extension_target(
     else -- a generic instantiation, an array -- returns None, which the collect pass
     reports as CE2101.
     """
-    from sushi_lang.semantics.typesys import BuiltinType, StructType, EnumType
-
     if isinstance(element, TypeParameter):
         return ExtensionTarget(base_name=ARRAY_BASE_KEY, args=(element,),
                                param_names=(element.name,), target_key="")

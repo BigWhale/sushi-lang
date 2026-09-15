@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 from llvmlite import ir
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory import allocas
+from sushi_lang.semantics.ownership import is_own_type
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -328,7 +329,7 @@ class ScopeManager:
         self.register_local_cleanup(name, resolved, slot)
 
         if isinstance(resolved, StructType) and arrays is not None:
-            if arrays.is_own_type(resolved):
+            if is_own_type(resolved):
                 arrays.register_own(name, resolved, slot)
             elif arrays.is_list_type(resolved):
                 arrays.register_list(name, resolved, slot)

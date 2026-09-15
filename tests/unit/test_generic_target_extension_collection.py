@@ -78,7 +78,7 @@ def _interned_names(analysis) -> set[str]:
     """Every struct and enum name the analysis interned."""
     analyzer = analysis.analyzer
     assert analyzer is not None, "analysis produced no analyzer"
-    return set(analyzer.enums.by_name) | set(analyzer.structs.by_name)
+    return set(analyzer.tables.enums.by_name) | set(analyzer.tables.structs.by_name)
 
 
 @pytest.mark.parametrize("case_id,declaration,interned", _CASES,
@@ -204,7 +204,7 @@ def test_an_array_template_files_under_the_synthetic_base_key(analyze_program):
     assert not analysis.reporter.has_errors, (
         "semantic analysis reported an error:\n"
         + "\n".join(str(d) for d in analysis.reporter.diagnostics))
-    declarations = analysis.analyzer.generic_extensions.declarations(
+    declarations = analysis.analyzer.tables.generic_extensions.declarations(
         ARRAY_BASE_KEY, "count_plus_one")
     assert len(declarations) == 1
     assert declarations[0].type_params == ("T",)

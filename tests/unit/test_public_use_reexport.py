@@ -115,7 +115,7 @@ def _analyze_program_of(tmp_path, units: dict[str, str], main: str = "main") -> 
     manager.get_compilation_order()
     analyzer = SemanticAnalyzer(reporter, filename=main, unit_manager=manager)
     try:
-        analyzer.check(manager.units[main].ast)
+        analyzer.check()
     except ValueError:
         pass
     return Analysis(reporter=reporter, analyzer=analyzer)
@@ -162,7 +162,7 @@ def test_a_struct_is_one_object_whatever_the_path(identity):
     The qualifier folds into the bare name before the table lookup, so the three
     written forms resolve to ONE table entry and never to a second `Vec`.
     """
-    table_entry = identity.analyzer.structs.by_name["Vec"]
+    table_entry = identity.analyzer.tables.structs.by_name["Vec"]
     assert isinstance(table_entry, StructType)
     resolved = _let_types(identity, "Vec")
     assert len(resolved) >= 3, "one `let` per path at least"
@@ -171,7 +171,7 @@ def test_a_struct_is_one_object_whatever_the_path(identity):
 
 def test_a_predefined_enum_is_one_object_whatever_the_path(identity):
     """`IoError`, `ioa.IoError` and `iob.IoError` are the one synthesized enum."""
-    table_entry = identity.analyzer.enums.by_name["IoError"]
+    table_entry = identity.analyzer.tables.enums.by_name["IoError"]
     assert isinstance(table_entry, EnumType)
     resolved = _let_types(identity, "IoError")
     assert len(resolved) >= 3, "one `let` per path at least"
@@ -180,7 +180,7 @@ def test_a_predefined_enum_is_one_object_whatever_the_path(identity):
 
 def test_a_result_over_a_reexported_name_interns_once(identity):
     """Three spellings of the error arm, one `Result<i32, IoError>` in the table."""
-    interned = [name for name in identity.analyzer.enums.by_name
+    interned = [name for name in identity.analyzer.tables.enums.by_name
                 if name.startswith("Result<i32, ") and "IoError" in name]
     assert interned == ["Result<i32, IoError>"], interned
     codes = [getattr(d, "code", None) for d in identity.reporter.items]

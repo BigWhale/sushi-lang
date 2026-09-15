@@ -16,18 +16,24 @@ Marks = Tuple[int, int]
 
 
 def _inline_targets(ty: 'Type') -> List[Node]:
-    """Named types that `ty` stores INLINE, i.e. that contribute to its size."""
-    from sushi_lang.semantics.typesys import ArrayType, EnumType, StructType
+    """Named types that `ty` stores INLINE, i.e. that contribute to its size.
 
-    if isinstance(ty, StructType):
-        return [("struct", ty.name)]
-    if isinstance(ty, EnumType):
-        return [("enum", ty.name)]
-    if isinstance(ty, ArrayType):
-        # FIXED array: N elements stored inline. DynamicArrayType is deliberately
-        # absent -- it owns a heap buffer, which is an indirection.
-        return _inline_targets(ty.base_type)
-    return []
+    The ONE type walk, with the two parameters this rule needs (#679): `inline_only`
+    stops at every indirection, so a `DynamicArrayType` contributes nothing while a
+    FIXED array contributes its element; `through_declarations=False` stops AT a named
+    type, because the search below enters it as the next node and reads its own
+    successors then.
+    """
+    from sushi_lang.semantics.type_walk import walk_named_types
+    from sushi_lang.semantics.typesys import EnumType, StructType
+
+    out: List[Node] = []
+    for reached in walk_named_types(ty, inline_only=True, through_declarations=False):
+        if isinstance(reached, StructType):
+            out.append(("struct", reached.name))
+        elif isinstance(reached, EnumType):
+            out.append(("enum", reached.name))
+    return out
 
 
 def _successors(node: Node, struct_table: 'StructTable',

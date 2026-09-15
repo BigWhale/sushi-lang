@@ -38,7 +38,7 @@ def _program(decls: str, value: str, setup: str = "") -> str:
 
 def test_hashable_is_predefined_beside_drop(analyze_program):
     analysis = analyze_program("fn main() i32:\n    return Result.Ok(0)\n")
-    perks = analysis.analyzer.perks
+    perks = analysis.analyzer.tables.perks
     for name in (PerkCollector.DROP_PERK, PerkCollector.HASHABLE_PERK):
         assert perks.get(name) is not None, f"'{name}' is not predefined"
         assert perks.files.get(name) is None, "a predefined perk has no declaring file"
