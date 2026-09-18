@@ -42,27 +42,22 @@ def reject_qualified_type(validator: 'TypeValidator', type_obj: Optional['Type']
 def check_qualified_constraints(validator: 'TypeValidator', program: Any) -> None:
     """Check the qualifier on every perk constraint this unit writes.
 
-    Driven by `ast_walk.declarations()`, the one walk over a unit's declarations, so a
-    kind that gains type parameters is covered by having been added there. The bare
-    constraint's own rules -- the perk exists, and its contract is not private
+    Reads `signature_constraints()`, the one walk over a unit's constraint names, as
+    `semantics/visibility.py`, `perks.py` and `public_signatures.py` do: a kind that
+    gains type parameters is covered by having been added there. The span is the
+    constraint's own, so the caret lands on the name the user wrote and not on the type
+    parameter, which is the one name in `@(T: h.Hidden)` the user cannot change (#706).
+
+    The bare constraint's own rules -- the perk exists, and its contract is not private
     (CE4011) -- are the collect pass's and are untouched: this reads the qualifier and
     nothing else.
     """
-    from sushi_lang.semantics.ast_walk import declarations
+    from sushi_lang.semantics.ast_walk import signature_constraints
 
-    for _kind, decl in declarations(program):
-        type_params = getattr(decl, "type_params", None)
-        if not type_params:
-            continue
-        fallback = getattr(decl, "name_span", None) or getattr(decl, "loc", None)
-        for param in type_params:
-            namespaces = getattr(param, "constraint_namespaces", None) or ()
-            for name, namespace in zip(getattr(param, "constraints", None) or (),
-                                       namespaces, strict=False):
-                if namespace is not None:
-                    reject_qualified_name(validator, namespace, name,
-                                          getattr(param, "loc", None) or fallback,
-                                          kind="perk")
+    for site in signature_constraints(program):
+        if site.namespace is not None:
+            reject_qualified_name(validator, site.namespace, site.perk_name,
+                                  site.span, kind="perk")
 
 
 def reject_qualified_name(validator: 'TypeValidator', namespace: str, name: str,
