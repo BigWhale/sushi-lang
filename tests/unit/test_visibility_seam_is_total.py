@@ -9,10 +9,16 @@ A kind in none of them is a kind whose rule nobody decided, which is how a hole 
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast_walk import declarations
 from sushi_lang.semantics.passes.collect import CollectorPass
+from sushi_lang.semantics.passes.types.visibility import (
+    reject_out_of_scope_type,
+    reject_private_type,
+)
 from sushi_lang.semantics.visibility import (
     CARRIES_MARKER,
     FOLLOWS_DECLARATION,
@@ -168,3 +174,64 @@ def test_an_unrecorded_name_is_visible_from_anywhere():
     table = VisibilityTable()
     assert table.is_visible_from("struct", "List<i32>", "some_unit")
     assert table.origin("struct", "List<i32>") is None
+
+
+class _WrittenNameValidator:
+    """The facts the two written-name fences read, and nothing else.
+
+    Both fences take the validator they run inside. A real `TypeValidator` needs a whole
+    compilation to exist, and the fences read four things from it, so the stub carries
+    those four.
+    """
+
+    class _Scope:
+        def holds_generic(self, name: str) -> bool:
+            return True
+
+        def holds_home(self, home: str) -> bool:
+            return True
+
+        def holds_unit(self, unit) -> bool:
+            return False
+
+    def __init__(self, table: VisibilityTable, *, synthesized: bool) -> None:
+        self.visibility = table
+        self.reporter = Reporter(source=EVERY_KIND, filename="consumer.sushi")
+        self.current_unit_name = "consumer"
+        self.in_library_body = False
+        self.in_synthesized_body = synthesized
+        self.scope = self._Scope()
+        self.enum_table = SimpleNamespace(by_name={})
+
+
+# Every fence in `passes/types/visibility.py` that refuses a WRITTEN type name.
+_WRITTEN_NAME_FENCES = (reject_out_of_scope_type, reject_private_type)
+
+
+def test_a_written_name_fence_refuses_a_name_this_unit_may_not_write():
+    """The control: each fence still answers for a body somebody wrote."""
+    table = _recorded(EVERY_KIND)
+
+    for fence in _WRITTEN_NAME_FENCES:
+        validator = _WrittenNameValidator(table, synthesized=False)
+        assert fence(validator, "Point", None) is True, (
+            f"{fence.__name__} let another unit's private struct through"
+        )
+
+
+def test_no_written_name_fence_reads_a_synthesized_body():
+    """A monomorphized copy names nothing (#702, #725).
+
+    The copy is parked in the unit that DECLARES the template, so its body reads as that
+    unit's, but every type in it came from the CALL SITE and that site's own unit
+    validated the written name. A fence that answers here refuses the template's unit for
+    a name the consumer wrote, which is a fault reported in the wrong unit and against a
+    unit that wrote nothing.
+    """
+    table = _recorded(EVERY_KIND)
+
+    for fence in _WRITTEN_NAME_FENCES:
+        validator = _WrittenNameValidator(table, synthesized=True)
+        assert fence(validator, "Point", None) is False, (
+            f"{fence.__name__} reads a synthesized body"
+        )

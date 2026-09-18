@@ -1,0 +1,15 @@
+# A monomorphized copy is parked in the unit that DECLARES the template, but the type
+# argument was written HERE. The private fence must not read the copy, or an ordinary
+# two-unit program cannot call a public generic with its own struct (#725).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "5\n"
+
+use "helpers/picker"
+
+struct Point:
+    i32 x
+
+fn main() i32:
+    let Point p = picked(Point(5)).realise(Point(0))
+    println("{p.x}")
+    return Result.Ok(0)
