@@ -237,18 +237,26 @@ class PerkCollector:
         `generic_perk_impls`, for the same reason a generic extension is: every later
         walk over `perk_impls` -- the typecheck pass, the backend's declaration and
         definition loops, the fingerprint -- assumes a concrete `self`.
+
+        A REFUSED implementation leaves both lists. A method that declares its own type
+        parameters can match no contract, so every later reader would tell the same
+        fault again in its own words -- which is what the CE4004 and CE2001 beside the
+        real answer were (#704).
         """
         perk_impls = root.perk_impls
         if isinstance(perk_impls, list):
-            moved = []
+            moved, refused = [], []
             for impl in perk_impls:
-                if isinstance(impl, ExtendWithDef):
-                    if self._collect_perk_impl(impl):
-                        moved.append(impl)
-            if moved:
-                moved_ids = {id(i) for i in moved}
+                if not isinstance(impl, ExtendWithDef):
+                    continue
+                if self._reject_type_params_in_impl(impl):
+                    refused.append(impl)
+                elif self._collect_perk_impl(impl):
+                    moved.append(impl)
+            if moved or refused:
+                dropped = {id(i) for i in (*moved, *refused)}
                 root.perk_impls[:] = [i for i in perk_impls
-                                      if id(i) not in moved_ids]
+                                      if id(i) not in dropped]
                 root.generic_perk_impls.extend(moved)
 
     # `Drop`'s contract is fixed, and both halves of it are checked: the RECEIVER must be
@@ -362,6 +370,31 @@ class PerkCollector:
                 .help("declare it as a plain extension method on the type "
                       "('extend T static name(...)'); a perk contracts instance "
                       "methods only").emit()
+            refused = True
+        return refused
+
+    def _reject_type_params_in_impl(self, impl: ExtendWithDef) -> bool:
+        """CE4010: an implementation method declares no type parameters of its own.
+
+        A perk cannot be generic, and a CONTRACT method has no `@(...)` slot in the
+        grammar at all, so an implementation has no contract to match with one. The
+        list was read by nothing: `@(U)` compiled and did nothing when the rest of the
+        signature matched, and named an unknown type `U` when it did not (#704).
+
+        The methods ride the shared `function_def`, which admits the list here for the
+        reason it admits `public` and `static`: so this diagnostic can point at it.
+        """
+        perk_name = impl.perk_name if isinstance(impl.perk_name, str) else "?"
+        refused = False
+        for method in impl.methods or []:
+            params = method.type_params or ()
+            if not params:
+                continue
+            span = params[0].loc or method.name_span or method.loc
+            er.emit_with(self.r, ERR.CE4010, span, name=perk_name) \
+                .help("a perk contract declares no type parameters, so neither does "
+                      "its implementation; a generic method is a plain extension "
+                      "method ('extend T name@(U)(...)')").emit()
             refused = True
         return refused
 
