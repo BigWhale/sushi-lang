@@ -1,0 +1,16 @@
+# A struct instance and an enum in one cycle. The walk's roots are every struct and
+# then every enum, so the diagnostic stands at the STRUCT and not at the member that
+# is declared first. Every hop of the chain reads in the surface spelling (#700).
+# EXPECT_ERROR_CODE: CE2095
+# EXPECT_STDERR_CONTAINS: recursive type 'Hold@(Ring)'
+# EXPECT_STDERR_CONTAINS: Hold@(Ring) refers to Ring refers to Hold@(Ring)
+# EXPECT_STDERR_CONTAINS: test_err_mixed_cycle_starts_at_the_struct.sushi:9:8
+
+struct Hold@(T):
+    T item
+
+enum Ring:
+    R(Hold@(Ring))
+
+fn main() i32:
+    return Result.Ok(0)

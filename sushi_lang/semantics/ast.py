@@ -153,12 +153,24 @@ class BoundedTypeParam:
     # and None where it was written bare. The perk name stays the table key: a
     # qualifier picks WHICH declaration is meant and never makes a second perk.
     constraint_namespaces: List[Optional[str]] = None
+    # Where each constraint is WRITTEN, index-aligned with `constraints` and covering
+    # the qualifier with it. `loc` marks the whole `T: Hidden + Loud`, and a rule about
+    # a constraint is a rule about the perk name (#706).
+    constraint_spans: List[Optional[Span]] = None
 
     def __post_init__(self):
         if self.constraints is None:
             self.constraints = []
         if self.constraint_namespaces is None:
             self.constraint_namespaces = [None] * len(self.constraints)
+        if self.constraint_spans is None:
+            self.constraint_spans = [None] * len(self.constraints)
+
+    def constraint_span(self, index: int) -> Optional[Span]:
+        """Where constraint `index` is written, or None when nothing recorded it."""
+        if 0 <= index < len(self.constraint_spans):
+            return self.constraint_spans[index]
+        return None
 
     def written_constraints(self) -> List[str]:
         """Each constraint as the user wrote it, for a diagnostic to quote."""

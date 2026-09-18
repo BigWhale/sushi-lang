@@ -1,0 +1,13 @@
+# CE4001 keeps the case it was written for: two declarations the consumer CAN see.
+# The library exports `Loud`, so the note points at a file the consumer may read and
+# the ordinary duplicate rule applies (#705).
+# EXPECT_ERROR_CODE: CE4001
+
+use <lib/private_perk_lib>
+
+perk Loud:
+    fn shout() string
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

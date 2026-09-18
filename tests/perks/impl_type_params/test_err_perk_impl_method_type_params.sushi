@@ -1,0 +1,18 @@
+# A perk CONTRACT declares no type parameters (CE4010), so an implementation method
+# declares none either. Nothing read a perk-impl method's `@(U)`: the parameter type
+# `U` then named no type and the reader got a cascade about that instead (#704).
+# EXPECT_ERROR_CODE: CE4010
+
+perk Shown:
+    fn show() i32
+
+struct Box:
+    i32 n
+
+extend Box with Shown:
+    fn show@(U)(U x) i32:
+        return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

@@ -52,7 +52,16 @@ class ConstraintValidator:
         `note` is `(span, filename)` of the constraint it violates (#579): the caret goes
         on the user's type, and the note on the `@(T: Loud)` that refused it, which may
         stand in another file -- a stdlib template's.
+
+        "Does the perk EXIST" is asked first. A name no unit declares is not a contract
+        any type can fail, and this answer arrives before the unit's own -- the
+        whole-program stop below ends the analysis here -- so CE4006 named a perk the
+        program has not got, and only an UNCALLED generic ever reached the CE4003 that
+        says so (#703).
         """
+        if self.perk_table.get(constraint_name) is None:
+            return True
+
         type_name = self._get_type_name(type_arg)
 
         if not (self.perk_impl_table.implements(type_name, constraint_name)

@@ -5,6 +5,42 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **A take of a CONSTANT is refused, the rule a `var` already reads** (#726). A `nom`
+  argument, a `let` bound straight from the name, a `return` of it, a `nom self` call and a
+  `nom` pattern binding all hand a value away, and a constant has no owner to hand it from.
+  The refusal is **CE2436**, the code a unit `var` already answers, and it fires on the same
+  line: only a type that OWNS a resource, so `nom` of a `const i32` stays the copy it always
+  was. The read-only kind used to permit the take while the writable kind refused it, which
+  was the wrong way round. `.clone()` is the escape, and CE2436's help already named it.
+  CE2400 is now purely the WRITE rule #713 made it: its `nom` arm and its "no owner" help
+  are gone, and a `nom self` receiver on a constant answers CE2436 alone instead of two
+  diagnostics for one fault. A `nom` pattern binding over a constant reads CE2432, because a
+  constant is no longer treated as a FRESH value a `match` owns.
+- **A perk contract's return type and parameter types are checked** (#667). `perk Source:
+  fn read_one(peek self) NoSuchType` compiled clean, and so did an unknown type in a
+  parameter. A contract has no BODY, so the loop that checks a function's written types
+  never reached it, and the walk over the body-less kinds knew only the struct field and the
+  enum payload. It is CE2001 now, the answer the same name gets on a free function or an
+  extension method. `signature_types()` already yielded all three positions -- the hole was
+  a position the PASS ignored, not one the walk left out.
+- **Type parameters on a perk-implementation method are refused** (#704). `fn show@(U:
+  Hidden)(U x) i32:` inside `extend Box with Shown:` parsed, and answered CE4004 plus a
+  cascade of CE2001 and CW1001 -- or, when the signature happened to match, compiled and ran
+  with a type parameter no walk reads. A contract cannot declare `@(U)`, so the
+  implementation cannot either: it is **CE4010**, the code that already says a perk cannot
+  have type parameters, read from the other end, with a help line that names the escape. The
+  refused implementation is dropped, so the cascade is gone. The grammar still admits the
+  list, which is how `static` (CE4014) and `public` (CE6103) are answered in the same
+  position -- a marker admitted is a marker a diagnostic can point at.
+- **A concrete extension target's arguments are validated once, for both paths** (#698). The
+  extension path never checked them: `extend Box@(Cage) g()` on a generic `Cage` written
+  without its arguments, and `extend Box@(Show) g()` on a PERK, both compiled and left a
+  dead constraint. The perk path checked something else -- it refused
+  `extend Box@(Point) with Named:` outright when `Box@(Point)` was spelled nowhere else,
+  which is an unused implementation and not a fault. One predicate and one emitter answer
+  both paths now: an argument that names no type is one CE2001 at the declaration, with a
+  help that says which mistake it was (a generic that needs its arguments, or a perk where a
+  type belongs), and an instantiation the program never names is accepted on both paths.
 - **A constant takes a `peek` borrow and refuses a `poke` one** (#713). A constant is
   read-only storage, not a value with no address: it is one object in `.rodata`, so a
   pointer into it exists. `let peek T x = C` and `f(peek C)` are legal now, and they join
@@ -350,6 +386,53 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A generic called with the calling unit's own private type compiles** (#725). `use
+  "gen"` and then `first_of(Point(1), Point(2))` on a plain `struct Point` answered CE3005
+  twice, with the caret on the TEMPLATE in the other unit, and exit 2 -- and private is the
+  DEFAULT for a struct, so this is what an ordinary two-unit program looks like. A
+  monomorphized copy is parked in the unit that DECLARES the template, which it must, so the
+  copy's body was validated as that unit's and the fence asked whether that unit may name
+  the caller's type. It no longer reads a synthesized body, the guard its sibling
+  `reject_out_of_scope_type` already carried. Nothing is lost: the type argument came from
+  the CALL SITE, and a unit that cannot name the type is still refused at its own call.
+- **A chained `.clone()` on a `Maybe` works** (#721). `a.get(0).clone().realise(...)` read
+  `CE2515: 'clone' is not a method of 'Maybe@(Cell)' -- the call before it returns a channel
+  that is still unhandled`. A `Maybe` carries no channel, so the reason was false and no
+  `??` could have helped. `Maybe@(Cell)` HAS `clone`; the lookup missed because the instance
+  carried no derived clone, and the "no such method" path then fell through to the channel
+  explanation. The bound spelling always worked, which is what pinned it to the chain.
+  CE2515's own rule is unchanged and still answers a real unhandled channel.
+- **A cycle through a generic instance carries a location and its written spelling** (#700).
+  `recursive type 'Box<i32>' has infinite size: Box<i32> refers to Box<i32>` printed the
+  file name alone -- no line, no caret -- and showed the internal `<...>` name. The
+  monomorphizer stamps the TEMPLATE's span and file on an instance now, because an instance
+  has no source of its own, and the report renders the name and every chain hop through
+  `display_type_name`. It reads `Box@(i32)` with the caret under `struct Box@(T):`. A MIXED
+  cycle is still reported at the first STRUCT, because the walk's roots are every struct and
+  then every enum; that is recorded where the walk is and pinned by a fixture.
+- **A constraint that names no perk answers CE4003 whether or not the function is called**
+  (#703). `fn need@(T: Nothing)(T x) u64:` read CE4006 "type i32 does not implement perk
+  Nothing" when it was called -- naming a perk that does not exist -- and CE4003 when it was
+  not. The constraint validator asks whether the perk EXISTS before it asks who implements
+  it, so the instantiation can no longer answer first. One fault, one code, both ways.
+- **A perk a library declares privately reads CE3011** (#705). A consumer declaring
+  `perk Quiet:` beside a library's private one heard CE4001 "duplicate perk definition",
+  with a note into a file the visibility rules say it cannot see. A private library STRUCT
+  of the same shape already answered CE3011, and the perk follows the type's rule now. The
+  substance is unchanged -- one perk name per program, as one type name per program --
+  and CE4001 keeps the case it was written for, two declarations the consumer CAN see.
+- **CE4011 and CE3010 caret the perk name** (#706). Both put the caret under the type
+  PARAMETER, because a `BoundedTypeParam` stored its constraints as bare strings with no
+  span each, so two constraints on one parameter got one location twice. Each constraint
+  carries its own span now, index-aligned with the names the way the namespaces already
+  were, and the type parameter stays the fallback for a constraint the source did not write.
+  One seam, so CE4003 and CE2001 moved with them. No grammar change was needed.
+- **An alias collision cannot render a note with no location** (#714). `_names_declared_by`
+  was typed `Dict[str, Span]` and stored `name_span or loc`, so a span-less declaration
+  would have given CE3013 a note with no `file:line:col` -- the shape a relational
+  diagnostic must never take. It is typed honestly now, and a missing span gives a `help`
+  instead of a located `note`, which is what the `unsafe external` arm beside it already
+  did.
 - **Arithmetic reads its operands, and a readable zero divisor is refused in a body**
   (#709). The typecheck pass asked nothing about an operand of `+ - * / %` or of the unary
   minus, so everything reached the backend: a `bool` or an unhandled `Result` / `Maybe`
@@ -782,6 +865,18 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One seam supplies a derived clone** (#720). An instance interned during the `typecheck`
+  pass got a derived hash and no derived clone, because the `derive` pass runs before
+  `typecheck` and the interning seams derived a hash alone. The missing clone was then
+  repaired -- or not -- by a whole-table walk a later round happened to run, which is two
+  producers for one fact where the second is an accident of loop order. Measured over
+  **1,915 programs**: 76 type names end analysis with a hash and no clone and every one is a
+  built-in generic, with `List`, `Own` and `HashMap` deliberately excluded at both ends and
+  `Maybe` and `Result` genuinely missing. Exactly ONE type depended on the wide window. Both
+  intern seams derive the clone beside the hash now, the monomorphizer's publish step does
+  too, and the late interner's two windows collapse to one -- so the window is a performance
+  choice again and not a correctness dependency. The deliberate `List`/`Own`/`HashMap`
+  exclusion is written down where the next census will read it.
 - **One arm table answers both directions of the type walk** (#716, #717, #718).
   `walk_named_types` and `resolve_type_recursively` walked one structure for one reason,
   and only the walk was total: thirteen arms against four. A name nested in a `peek`/`poke`

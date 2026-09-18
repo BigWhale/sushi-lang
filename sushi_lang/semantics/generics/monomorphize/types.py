@@ -107,7 +107,7 @@ class TypeMonomorphizer:
             generic_args=type_args
         )
         self.monomorphizer.cache[cache_key] = concrete
-        self._publish(self.monomorphizer.enum_table, concrete)
+        self._publish(self.monomorphizer.enum_table, concrete, "enum")
 
         with self.monomorphizer._monomorphize_depth_guard(generic.name):
             concrete_variants = []
@@ -203,7 +203,7 @@ class TypeMonomorphizer:
             generic_args=type_args
         )
         self.monomorphizer.struct_cache[cache_key] = concrete
-        self._publish(self.monomorphizer.struct_table, concrete)
+        self._publish(self.monomorphizer.struct_table, concrete, "struct")
 
         with self.monomorphizer._monomorphize_depth_guard(generic.name):
             concrete_fields = []
@@ -247,7 +247,7 @@ class TypeMonomorphizer:
             return None
         return table.by_name.get(name)
 
-    def _publish(self, table, concrete) -> None:
+    def _publish(self, table, concrete, kind: str) -> None:
         """Intern a new instance at creation, in the one place every producer passes (#577).
 
         The instantiate pass collects what annotations and calls SPELL. A `Box@(B)` field,
@@ -265,6 +265,47 @@ class TypeMonomorphizer:
             return
         table.by_name[concrete.name] = concrete
         table.order.append(concrete.name)
+        self._stamp_template_origin(table, concrete, kind)
+        self._derive_clone(concrete, kind)
+
+    def _derive_clone(self, concrete, kind: str) -> None:
+        """Derive clone() for the instance here, as the Result and Maybe seams do (#720).
+
+        The derive pass walks both tables once, before typecheck, so an instance minted
+        while a copy's body is substituted arrives behind it. A clone that waits for a
+        later whole-table walk is an accident of loop order: a program that drives none
+        never gets one, and `.clone()` on the instance is then refused with a reason
+        that is not true (#721). The emitter is lazy, so the shell published above is
+        all this needs; `Own`, `List` and `HashMap` keep their own method paths and the
+        struct registration excludes them.
+        """
+        from sushi_lang.semantics.generics.cloning import (
+            register_enum_clone_method, register_struct_clone_method)
+
+        derived = getattr(self.monomorphizer.enum_table, "derived", None)
+        if derived is None:
+            return
+        if kind == "enum":
+            register_enum_clone_method(concrete, derived)
+        else:
+            register_struct_clone_method(concrete, derived)
+
+    def _stamp_template_origin(self, table, concrete, kind: str) -> None:
+        """Where a diagnostic about this instance points: the TEMPLATE's declaration.
+
+        An instance is spelled in no declaration -- `Box@(i32)` is minted from a field,
+        a return or an annotation -- so it has a name and no source of its own, and a
+        diagnostic that carries no span renders with the file name alone and no caret
+        (#700). The template is the one declaration the reader can act on.
+        """
+        base = concrete.generic_base
+        if base is None:
+            return
+        span = self.monomorphizer.template_span(kind, base)
+        if span is None:
+            return
+        table.spans[concrete.name] = span
+        table.files[concrete.name] = self.monomorphizer.template_file(kind, base)
 
     def reached_instances(self) -> Tuple[Dict[Tuple[str, Tuple[Type, ...]], EnumType],
                                          Dict[Tuple[str, Tuple[Type, ...]], StructType]]:

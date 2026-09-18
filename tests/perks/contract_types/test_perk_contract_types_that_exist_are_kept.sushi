@@ -1,0 +1,22 @@
+# The mirror of the two refusals: a contract that names types which exist stays
+# legal, in both positions, and the implementation answers through it (#667).
+# EXPECT_STDOUT_EXACT: "7\n"
+
+struct Load:
+    i32 weight
+
+perk Scale:
+    fn weigh(peek self, Load l) i32
+
+struct Crane:
+    i32 boost
+
+extend Crane with Scale:
+    fn weigh(peek self, Load l) i32:
+        return self.boost + l.weight
+
+fn main() i32:
+    let Crane c = Crane(3)
+    let Load l = Load(4)
+    println("{c.weigh(l)}")
+    return Result.Ok(0)

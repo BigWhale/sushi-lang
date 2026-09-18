@@ -1,4 +1,4 @@
-# Test undefined constant reference (CE1002)
+# An initializer that names a constant nobody declared (CE1001).
 # EXPECT_ERROR_CODE: CE1001
 
 const i32 X = UNDEFINED + 1

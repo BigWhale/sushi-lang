@@ -1,0 +1,11 @@
+# The fence stands where the name is WRITTEN. This unit cannot name the other unit's
+# private struct, so the refusal is at its own call site and not in the template.
+# EXPECT_ERROR_CODE: CE3005
+
+use "helpers/picker"
+use "helpers/shades"
+
+fn main() i32:
+    let Shade s = picked(Shade(2)).realise(Shade(0))
+    println("{s.tone}")
+    return Result.Ok(0)

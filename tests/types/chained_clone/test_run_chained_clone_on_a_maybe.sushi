@@ -1,0 +1,18 @@
+# A `.clone()` in the MIDDLE of a chain, on a wrapper the program spells nowhere.
+# `List.get` answers Maybe@(Cell), which carries no error channel, so CE2515 was
+# never the right refusal here -- the wrapper was interned after the derive pass
+# and simply had no clone registered (#721, #720).
+# EXPECT_STDOUT_EXACT: "v=one\nkept=one\n"
+# EXPECT_NO_LEAKS
+
+struct Cell:
+    string tag
+
+fn main() i32:
+    let List@(Cell) a = List.new()
+    a.push(Cell("one"))
+    let string v = a.get(0).clone().realise(Cell("-")).tag
+    println("v={v}")
+    let Cell kept = a.get(0).realise(Cell("-"))
+    println("kept={kept.tag}")
+    return Result.Ok(0)

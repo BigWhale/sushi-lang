@@ -1,0 +1,14 @@
+# The extension path reads the base the same way the perk path does. It read it not
+# at all: a concrete `@(...)` target went straight into the generic table, where no
+# later walk asks what the base is (#698).
+# EXPECT_ERROR_CODE: CE2001
+
+struct Box@(T):
+    T v
+
+extend NoSuchBase@(i32) g() i32:
+    return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

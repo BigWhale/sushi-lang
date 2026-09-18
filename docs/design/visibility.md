@@ -686,6 +686,12 @@ the function rule's shape and it takes the function rule's answer, so the two co
 each unit reads its own (#507). A library's PUBLIC constant stays a duplicate, because
 that name is one the consumer can see and read.
 
+A PERK follows the type's rule (#705). `PerkTable.by_name` is flat with no per-unit view,
+so one perk name is one perk per program exactly as one type name is one shape, and the
+answer follows the substance: a library's private perk is **CE3011** and a public one
+stays the plain duplicate (CE4001). CE4001's note used to point into a file the consumer
+cannot see, which is the information leak CE3011 exists to avoid.
+
 ### 9.2 The perk-implementation override stays, and its record moved onto the table
 
 A consumer's `extend X with P` wins over a library's, the library's goes to

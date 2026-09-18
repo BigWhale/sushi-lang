@@ -409,14 +409,14 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
                                  mode) -> None:
     """A MARKED receiver must name storage the call can reach (#327, ruling R25).
 
-    One check for both marked kinds, because they refuse the same thing for one reason:
-    a `const` is read-only storage, so a `poke` cannot write it and a `nom` has no owner
-    to take it from. `stdout.close()` is the case that matters. A `peek self` receiver
-    only reads, so it never arrives here.
+    A `poke self` writes the receiver, so read-only storage cannot take it and a
+    TEMPORARY has no address the caller keeps (CE2404). A `peek self` receiver only
+    reads, so it never arrives here.
 
-    They differ on a TEMPORARY. A `poke self` needs an address the caller keeps, so a
-    call result is CE2404; a `nom self` takes ownership, and a temporary is owned by
-    construction -- the same rule ruling R11 states for a match scrutinee.
+    A `nom self` TAKES the receiver, and that is the borrow pass's rule for storage of
+    either kind (CE2436, #726): `stdout.close()` and a constant's `release()` read one
+    code. A temporary is owned by construction, so it is legal there -- the same rule
+    ruling R11 states for a match scrutinee.
     """
     from sushi_lang.semantics.ast import DotCall, MemberAccess
     from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
@@ -429,10 +429,10 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
             er.emit(validator.reporter, er.ERR.CE2404, call.receiver.loc,
                     expr=f"<expression>.{call.method}() receiver")
         return
-    if root.id in validator.variable_types:
+    if root.id in validator.variable_types or mode.consumes:
         return
-    # A unit variable has an address for a `poke self`; whether a `nom self` may take
-    # it is the borrow pass's rule (CE2436), not a question of storage. The lookup is
+    # Only the WRITE asks the borrow gate. A unit variable has an address for a `poke
+    # self`, and a take of either kind of unit-level storage is CE2436. The lookup is
     # SCOPED: the flat view is first-wins over the whole program, so it answered with
     # another unit's declaration of the same name (#685).
     reject_borrow_of_constant(validator.err, root.id, validator.const_sig(root.id),

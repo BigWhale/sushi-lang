@@ -1,0 +1,25 @@
+# An implementation nothing uses is not a fault. `Box@(Point)` is spelled nowhere
+# else, so no instance of it exists; the extension path already accepted that shape
+# and the perk path refused it with CE2001 (#698). Both accept it now.
+# EXPECT_STDOUT_EXACT: "5\n"
+
+struct Box@(T):
+    T v
+
+struct Point:
+    i32 x
+
+perk Named:
+    fn named() i32
+
+extend Box@(Point) with Named:
+    fn named() i32:
+        return 1
+
+extend Box@(Point) g() i32:
+    return 2
+
+fn main() i32:
+    let Box@(i32) b = Box(5)
+    println("{b.v}")
+    return Result.Ok(0)

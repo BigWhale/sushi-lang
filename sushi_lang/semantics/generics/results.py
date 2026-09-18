@@ -4,6 +4,7 @@ from typing import Any, Optional
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type
 from sushi_lang.semantics.generics.hashing import can_enum_be_hashed, register_enum_hash_method
+from sushi_lang.semantics.generics.cloning import register_enum_clone_method
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
@@ -323,5 +324,6 @@ def ensure_result_type_in_table(
     can_hash, _ = can_enum_be_hashed(result_enum)
     if can_hash:
         register_enum_hash_method(result_enum, enum_table.derived)
+    register_enum_clone_method(result_enum, enum_table.derived)
 
     return result_enum

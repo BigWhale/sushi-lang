@@ -61,9 +61,6 @@ class SemanticAnalyzer:
         self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
         self.libraries: Optional[LibraryRegistration] = None  # The `libraries` step, for its two later readers
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
-        # How far the two type tables are resolved and derived. The `derive` pass sets
-        # it, and the late-interning seam reads and advances it (#676).
-        self._derived_marks: tuple[int, int] = (0, 0)
 
     def check(self) -> None:
         """Entry point for semantic analysis. Runs every pass in sequence.
@@ -388,6 +385,10 @@ class SemanticAnalyzer:
             monomorphizer, compilation_order, concrete_extension_defs,
             struct_instantiations, enum_instantiations)
 
+        # Every instantiation the program names now exists, so an implementation whose
+        # target still names none is one the program never reached.
+        self._drop_unreached_perk_impls(compilation_order)
+
         # A constraint violation STOPS the whole-program analysis here (#579, Ruling 4),
         # as CE2095 does below. CE4006 stands at the type that named the refused
         # instantiation, no copy was cut for it, and the per-unit passes would only
@@ -404,8 +405,7 @@ class SemanticAnalyzer:
 
         # finite-types: reject types that contain themselves by value (CE2095), and stop
         # on failure -- every later pass assumes finitely-sized types.
-        from sushi_lang.semantics.passes.finite_types import (
-            check_infinite_size_types, table_marks)
+        from sushi_lang.semantics.passes.finite_types import check_infinite_size_types
         if check_infinite_size_types(self.tables.structs, self.tables.enums, self.reporter):
             return
 
@@ -422,12 +422,6 @@ class SemanticAnalyzer:
         register_all_array_hashes(self.tables.structs, self.tables.enums, self.tables.derived_methods)
 
         register_all_clones(self.tables.structs, self.tables.enums, self.tables.derived_methods)
-
-        # How far the tables are resolved and derived. Every later intern -- a copy's
-        # instantiation, a `Result` the typecheck pass interns, a closure environment
-        # the lifter files -- is named past this point, and the late-interning seam
-        # takes those names alone (#676).
-        self._derived_marks = table_marks(self.tables.structs, self.tables.enums)
 
         for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
             self.monomorphized_extensions.append(extend_def)
@@ -581,6 +575,31 @@ class SemanticAnalyzer:
         if fn_instantiations:
             monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
 
+    def _drop_unreached_perk_impls(self, compilation_order) -> None:
+        """Forget an implementation whose `@(...)` target names no instance (#698).
+
+        `extend Box@(Point) with Named` is a CONSTRAINT on one instantiation: it holds
+        for `Box@(Point)` and for nothing else. Where the program never names that
+        instantiation there is no type to check a body against and no method to emit,
+        which is the state a generic EXTENSION on the same target is already left in --
+        its copy is simply never cut. Leaving the implementation in the walks reached
+        the typecheck pass as a CE2001 about the target and the backend as a CE0045.
+        """
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+
+        for unit in compilation_order:
+            impls = unit.ast.perk_impls if unit.ast is not None else None
+            if not impls:
+                continue
+            unit.ast.perk_impls = [
+                impl for impl in impls
+                if not isinstance(impl.target_type, GenericTypeRef)
+                or not isinstance(
+                    resolve_unknown_type(impl.target_type, self.tables.structs.by_name,
+                                         self.tables.enums.by_name),
+                    GenericTypeRef)]
+
     def _monomorphize_generic_perk_impls(self, monomorphizer, compilation_order,
                                          struct_instantiations, concrete_structs,
                                          enum_instantiations, concrete_enums,
@@ -705,10 +724,11 @@ class SemanticAnalyzer:
         tables whole once already, and this seam sits inside a fixpoint loop, so a
         whole-table re-run cost O(all types) for each instance and changed nothing but
         the new names (#676). `names_since` is the one answer to what a table gained.
-        The two windows differ on purpose: resolve and derive take every name interned
-        since they last ran -- which covers a `Result` the typecheck pass interned
-        between two rounds -- while the finite-types walk takes this round's own
-        instances, because an older cycle stopped the analysis already (#677).
+
+        ONE window serves resolve, derive and the finite-types walk: this round's own
+        instances. A `Result` or a `Maybe` the typecheck pass interns between two rounds
+        derives its hash AND its clone at the intern itself (#720), so no later walk has
+        to repair it, and an older cycle stopped the analysis already (#677).
         """
         from sushi_lang.semantics.generics.extension_targets import instantiation_key
         from sushi_lang.semantics.generics.types import GenericTypeRef
@@ -748,10 +768,8 @@ class SemanticAnalyzer:
 
         # One list for both tables: a type name is one per program, so each table takes
         # the names it holds.
-        new_structs, new_enums = names_since(self.tables.structs, self.tables.enums,
-                                             self._derived_marks)
+        new_structs, new_enums = names_since(self.tables.structs, self.tables.enums, marks)
         interned = [*new_structs, *new_enums]
-        self._derived_marks = table_marks(self.tables.structs, self.tables.enums)
 
         from sushi_lang.semantics.passes.resolve import (
             resolve_enum_variant_types, resolve_struct_field_types)

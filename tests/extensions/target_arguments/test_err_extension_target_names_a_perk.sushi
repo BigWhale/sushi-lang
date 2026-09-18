@@ -1,0 +1,16 @@
+# A perk is a declared name and not a type, so it binds no type parameter and it
+# names no instantiation either. The extension path accepted `Box@(Show)` (#698).
+# EXPECT_ERROR_CODE: CE2001
+
+struct Box@(T):
+    T v
+
+perk Show:
+    fn show() i32
+
+extend Box@(Show) g() i32:
+    return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

@@ -41,7 +41,7 @@ from sushi_lang.semantics.visibility import (
 from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
                     reject_self_in_body, reject_try_in_body)
 from sushi_lang.semantics.generics.extension_targets import (
-    CONCRETE_EXTENSION_TARGETS, classify_extension_target)
+    CONCRETE_EXTENSION_TARGETS, classify_extension_target, reject_unwritable_target)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -943,6 +943,10 @@ class FunctionCollector:
                          target=display_type(target_type)) \
                 .help("name every type parameter, or make every argument concrete -- "
                       "there is no partial specialization").emit()
+            return
+
+        if reject_unwritable_target(self.r, shape, self.is_declared_type,
+                                    h.target_type_span or h.name_span):
             return
 
         shadowed = [m for m in h.method_type_params if m in shape.param_names]

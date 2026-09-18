@@ -164,6 +164,20 @@ def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
     return checker.types.element_type(read_type(checker, receiver))
 
 
+def constant_sig(checker: 'BorrowChecker', name: str):
+    """The record a bare name reaches in the constant table, a `const` or a `var`.
+
+    The lookup is SCOPED and never `by_name`: the flat view holds one record per name
+    over the whole program and is first-wins, so it answers with another unit's
+    declaration of the same name (#685, `docs/design/unit-namespaces.md` section 9).
+    """
+    tables = getattr(checker, "tables", None)
+    constants = getattr(tables, "constants", None) if tables is not None else None
+    if constants is None:
+        return None
+    return constants.lookup(name, checker.unit_name, checker.scope)
+
+
 def constant_type(checker: 'BorrowChecker', name: str) -> Optional[Type]:
     """The declared type of a CONSTANT or a unit variable, for a bare name that is no local.
 
@@ -172,12 +186,7 @@ def constant_type(checker: 'BorrowChecker', name: str) -> Optional[Type]:
     type", the class came back PLAIN, and the consuming use passed a check the backend
     then answered with CE0129 (#498).
     """
-    tables = getattr(checker, "tables", None)
-    constants = getattr(tables, "constants", None) if tables is not None else None
-    if constants is None:
-        return None
-    sig = constants.lookup(name, checker.unit_name, checker.scope)
-    return getattr(sig, "const_type", None)
+    return getattr(constant_sig(checker, name), "const_type", None)
 
 
 def unit_variables(checker: 'BorrowChecker'):

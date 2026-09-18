@@ -23,6 +23,13 @@ from sushi_lang.semantics.generics.type_display import display_type
 # or an enum has none, so its written types were checked nowhere (#504).
 _DECLARED_TYPE_POSITIONS = frozenset({"field", "variant"})
 
+# The same hole one declaration further in: a perk CONTRACT is a callable with no body,
+# so no body walk reaches what it writes either (#667). `signature_types()` already
+# yields all three of its positions -- the channel came here with #663, and these are
+# the other two -- so the leak fence (CE3009) and the `ptr` quarantine (CE5008/CE5009)
+# already policed them while nothing asked whether the name is a type at all.
+_CONTRACT_TYPE_POSITIONS = frozenset({"return", "parameter"})
+
 
 def validate_declared_types(self, program) -> None:
     """Check every type a declaration WITHOUT a body writes down.
@@ -45,10 +52,14 @@ def validate_declared_types(self, program) -> None:
             continue
         if site.position in _DECLARED_TYPE_POSITIONS:
             validate_type_name(self, site.ty, site.span)
-        elif site.position == "error" and isinstance(site.decl, PerkDef):
-            # The CONTRACT's channel. Its implementation is reached through its body,
-            # and every other kind writes one too, so the rule comes here (#663).
-            validate_error_channel(self, site.at.ret, site.ty, site.span)
+        elif isinstance(site.decl, PerkDef):
+            # The CONTRACT. Its implementation is reached through its body, and every
+            # other kind writes the same three positions, so the rule comes here
+            # (#663 for the channel, #667 for the return and the parameters).
+            if site.position in _CONTRACT_TYPE_POSITIONS:
+                validate_type_name(self, site.ty, site.span)
+            elif site.position == "error":
+                validate_error_channel(self, site.at.ret, site.ty, site.span)
 
 
 def validate_error_channel(self, ret, err_type, span) -> None:
