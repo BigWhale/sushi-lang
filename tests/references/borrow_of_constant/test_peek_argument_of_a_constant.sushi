@@ -1,0 +1,14 @@
+# The argument position reads the same rule the `let` binding reads: a `peek` argument
+# hands the callee a pointer, and the callee cannot write through it (#713).
+# EXPECT_STDOUT_EXACT: "20\n"
+
+const i32 LIMIT = 10
+
+fn doubled(peek i32 v) i32:
+    return Result.Ok(v * 2)
+
+fn main() i32:
+    match doubled(peek LIMIT):
+        Result.Ok(seen) -> println("{seen}")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

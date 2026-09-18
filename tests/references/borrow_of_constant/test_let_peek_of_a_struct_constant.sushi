@@ -1,0 +1,14 @@
+# A struct constant lives in read-only memory, and a `peek` binding points at it. The
+# field reads go through the pointer, so the address has to be a real one (#713).
+# EXPECT_STDOUT_EXACT: "3 4\n"
+
+struct Point:
+    i32 x
+    i32 y
+
+const Point ORIGIN = Point(3, 4)
+
+fn main() i32:
+    let peek Point p = ORIGIN
+    println("{p.x} {p.y}")
+    return Result.Ok(0)

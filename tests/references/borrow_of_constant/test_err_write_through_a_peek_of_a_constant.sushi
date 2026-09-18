@@ -1,0 +1,11 @@
+# A `peek` binding of a constant reads, and it stays read-only: the write through it is
+# the ordinary CE2408, the code every read-only reference answers.
+# EXPECT_ERROR_CODE: CE2408
+
+const i32 LIMIT = 10
+
+fn main() i32:
+    let peek i32 seen = LIMIT
+    seen := seen + 1
+    println("{seen}")
+    return Result.Ok(0)

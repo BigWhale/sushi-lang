@@ -305,7 +305,8 @@ One `poke` binding of an owner at a time (**CE2403**); a `peek` beside a live `p
 the reverse, is **CE2407**; a write through a `peek` binding is **CE2408**; a `poke`
 binding out of a `peek` parameter is **CE2408** too. Consuming the binding stays
 **CE2411** -- it names storage the owner still frees -- and `.clone()` is the escape. A
-constant has no address to bind (**CE2400**); a unit variable has one.
+constant is read-only storage: `let peek` reads it, and `let poke` is **CE2400**. A unit
+variable takes both.
 
 ### Scope
 
@@ -1904,12 +1905,13 @@ const Segment ALSO_BAD = Segment(Point(pick(), 2), 3)   # CE0108, one level down
 ```
 
 A struct constant lives in read-only memory like every other constant. Writing a field
-is **CE2096**, and calling a `poke self` method on one is **CE2400** -- that method takes
-its receiver's address, and a constant has no frame slot to point at:
+is **CE2096**, and calling a `poke self` or a `nom self` method on one is **CE2400** --
+the first writes the receiver and the second takes it away. A `peek self` method reads
+it, and it is legal:
 
 ```sushi
 OUT.fd := 7          # CE2096: cannot assign to a field of constant 'OUT'
-OUT.release()        # CE2400: cannot borrow 'OUT': only a local variable can be borrowed
+OUT.release()        # CE2400: cannot borrow 'OUT' with `nom`
 ```
 
 ### Enum Constants

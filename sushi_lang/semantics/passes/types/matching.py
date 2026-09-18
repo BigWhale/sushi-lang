@@ -61,10 +61,10 @@ def reject_poke_binding_into_a_constant(validator: 'TypeValidator',
     """A `poke` pattern binding needs a scrutinee with storage (#685).
 
     `Variant(poke x)` binds a POINTER into the scrutinee's payload, and a write through
-    it reaches that storage. A constant is folded into read-only memory and has none, so
-    the write landed there and the program stopped -- the same question a `poke self`
-    call asks, at the one position that never asked it. A `peek` and a bare binding READ
-    the payload, and reading a constant is legal.
+    it reaches that storage. A constant is read-only there, so the write landed in
+    `.rodata` and the program stopped -- the same question a `poke self` call asks, at
+    the one position that never asked it. A `peek` and a bare binding READ the payload,
+    and reading a constant is legal.
     """
     root = stmt.scrutinee
     while isinstance(root, MemberAccess):
@@ -76,7 +76,7 @@ def reject_poke_binding_into_a_constant(validator: 'TypeValidator',
         return
     reject_borrow_of_constant(validator.err, root.id,
                               validator.const_sig(root.id),
-                              binding.loc or stmt.loc)
+                              binding.loc or stmt.loc, mode=binding.mode)
 
 
 def _first_poke_binding(stmt: Match) -> Optional[RefBinding]:

@@ -176,7 +176,9 @@ class ConstantEvaluator:
     def __init__(self, reporter: Reporter, const_table: ConstantTable,
                  unit_name: Optional[str] = None,
                  namespaces_of: Optional[NamespacesOf] = None,
-                 struct_table: object = None, enum_table: object = None):
+                 struct_table: object = None, enum_table: object = None, *,
+                 reported_cycles: Optional[
+                     set[frozenset[Tuple[Optional[str], str]]]] = None):
         """Initialize the evaluator.
 
         `unit_name` is the unit whose constant expression is being evaluated. Two units
@@ -187,6 +189,11 @@ class ConstantEvaluator:
         foreign constant's initializer is read in the scope of the unit that WROTE it,
         so folding one switches unit (#561); a reader that passes None sees every name
         and no alias, which is the scratch reader's view.
+
+        `reported_cycles` is the store CE0109 dedupes against. The table's own store is
+        the default, because it is what every evaluator of one compilation shares; a
+        SILENT twin takes a store of its own, so a cycle it swallows is still reported to
+        the reader that speaks (#710).
         """
         self.reporter = reporter
         self.const_table = const_table
@@ -202,6 +209,8 @@ class ConstantEvaluator:
         # For cycle detection. Keyed by DECLARATION, not by name: this unit's SIZE may be
         # built from another unit's SIZE, and that is two constants and not a cycle.
         self.evaluation_stack: List[Tuple[Optional[str], str]] = []
+        self.reported_cycles = (const_table.reported_cycles if reported_cycles is None
+                                else reported_cycles)
         # The FIRST operation that left its type, for a caller whose reporter is silent.
         self.overflow: Optional[ConstOverflow] = None
 
@@ -212,9 +221,14 @@ class ConstantEvaluator:
                 else UnitScope.unrestricted())
 
     def silent(self) -> "ConstantEvaluator":
-        """A twin that reports nothing, for a reader that only wants the answer."""
+        """A twin that reports nothing, for a reader that only wants the answer.
+
+        Its cycle store is its own: what it swallows must still reach the reader that
+        speaks, and this twin reads an expression the caller reads again (#710).
+        """
         return ConstantEvaluator(Reporter(), self.const_table, self.unit_name,
-                                 self.namespaces_of, self.struct_table, self.enum_table)
+                                 self.namespaces_of, self.struct_table, self.enum_table,
+                                 reported_cycles=set())
 
     def _namespaces_for(self, unit_name: Optional[str]) -> Optional[NamespaceTable]:
         return None if self.namespaces_of is None else self.namespaces_of(unit_name)
@@ -647,7 +661,12 @@ class ConstantEvaluator:
             stdlib_const = lookup_stdlib_constant(const_name, self.scope)
             if stdlib_const is not None:
                 return self._stdlib_value(stdlib_const)
-            er.emit(self.reporter, er.ERR.CE1002, span, name=const_name)
+            # Silent. The scope pass walks every initializer and owns "what kind of name
+            # is this": a name that reaches nothing is CE1001 and a TYPE name is CE2105,
+            # both at this same token. The CE1002 that stood here was the second
+            # diagnostic for one fault, and it read "assignment to" about a READ (#710).
+            # A name the scope pass lets through -- a function -- is a value of the wrong
+            # type, and the assignment rule below says so.
             return None
         return self._fold_constant(const_sig, span)
 
@@ -671,8 +690,8 @@ class ConstantEvaluator:
             return cached
 
         if key in self.evaluation_stack:
-            chain = " -> ".join(name for _unit, name in self.evaluation_stack + [key])
-            er.emit(self.reporter, er.ERR.CE0109, span, chain=chain)
+            self._report_cycle(self.evaluation_stack[self.evaluation_stack.index(key):],
+                               key, span)
             return None
 
         if sig.decl is None:
@@ -691,6 +710,22 @@ class ConstantEvaluator:
         if result is not None and len(self.reporter.items) == said:
             self.const_table.folded[key] = result
         return result
+
+    def _report_cycle(self, cycle: List[Tuple[Optional[str], str]],
+                      key: Tuple[Optional[str], str], span: Optional[Span]) -> None:
+        """CE0109 for one cycle, once (#710).
+
+        The typecheck pass validates every constant in turn, so each member of a cycle is
+        an entry point and each walk meets the same loop from its own side. The set of
+        declarations IS the cycle, which is how `finite_types` tells one type cycle from
+        the next.
+        """
+        members = frozenset(cycle)
+        if members in self.reported_cycles:
+            return
+        self.reported_cycles.add(members)
+        chain = " -> ".join(name for _unit, name in cycle + [key])
+        er.emit(self.reporter, er.ERR.CE0109, span, chain=chain)
 
     def _evaluate_cast(self, expr: CastExpr, expected_type: Type,
                        span: Optional[Span]) -> Optional[ConstantValue]:

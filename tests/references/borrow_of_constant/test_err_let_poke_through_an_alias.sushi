@@ -1,0 +1,12 @@
+# A `let poke` binds a pointer into a place. Behind an alias the place roots in the
+# DECLARATION the alias holds and not in the alias, which names a namespace and no
+# storage at all. A constant has no storage to write, so the binding is CE2400 -- the
+# same answer the argument spelling `takes(poke o.ALIAS_LIMIT)` gives.
+# EXPECT_ERROR_CODE: CE2400
+
+use "helpers/alias_store" as o
+
+fn main() i32:
+    let poke i32 ref = o.ALIAS_LIMIT
+    ref := ref + 1
+    return Result.Ok(0)

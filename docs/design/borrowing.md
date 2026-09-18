@@ -96,7 +96,8 @@ borrow. The owner is frozen until the end of the block that declares the binding
 **3b — the reference-typed `let`** (#409) binds a POINTER into a place the owner keeps:
 `let poke T x = <place>` writes through, `let peek T x = <place>` reads through. The place
 is a name, a member or index chain off one, or an `Own@(T).get()` (the payload's cell);
-a temporary is **CE2404**, a constant **CE2400**. The state carries the full
+a temporary is **CE2404**, and a `poke` of a constant is **CE2400** while a `peek` of one
+reads its `.rodata` (#713). The state carries the full
 `ReferenceType`, so the write gates answer by construction (CE2408 through a `peek`
 binding or out of a `peek` owner; CE2411 on a consuming use), the owner is frozen exactly
 as in mechanism 3, and the binding is released at block exit. Two rules are its own:

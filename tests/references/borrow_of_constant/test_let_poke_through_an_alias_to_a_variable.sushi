@@ -1,0 +1,11 @@
+# A unit `var` is storage in the data segment, so a `let poke` behind an alias binds
+# a pointer into it and the write lands in that storage.
+# EXPECT_STDOUT_EXACT: "4\n"
+
+use "helpers/alias_store" as o
+
+fn main() i32:
+    let poke i32 ref = o.ALIAS_SLOT
+    ref := ref + 1
+    println("{o.ALIAS_SLOT}")
+    return Result.Ok(0)

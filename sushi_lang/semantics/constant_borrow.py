@@ -1,10 +1,18 @@
-"""THE gate: may a borrow take the address of what this name denotes? (#685)
+"""THE gate: what may a borrow of this name do? (#685, #713)
 
-A `const` is a folded value with no address, so nothing can point at it -- a `peek` or
-`poke` argument, a `let peek` / `let poke` binding, a `poke self` call, a `poke` pattern
-binding and a `poke` foreach item all ask the same question, and CE2400 is the one
-answer. A unit `var` is storage in the data segment and HAS an address, which is the
-line `docs/design/unit-storage.md` draws, so it is borrowable like a local.
+A `const` is READ-ONLY storage. It is one object in `.rodata`, so a pointer into it
+exists and a `peek` reads through it; a `poke` writes, and a write there is undefined
+behaviour and not a diagnostic, while a `nom` takes and a constant has no owner to take
+it from. A unit `var` is storage in the data segment and takes every mode, which is the
+line `docs/design/unit-storage.md` draws. A name that reaches storage of NO kind -- a
+top-level function, a registry stdlib constant, an FFI namespace -- refuses every mode.
+CE2400 is the one answer for all of them.
+
+The DECLARATION decides, never the position. Until #713 a `peek` was refused in a `let`
+binding and in an argument and allowed in a match arm, while a bare pattern binding --
+which the ownership model also calls a borrow -- was allowed everywhere. The reason line
+said a constant has no FRAME slot, which is true and is the wrong test: nothing here
+needs a frame slot, and the match arm already took the address.
 
 The rule was written five times with four predicates, and one of them read the FLAT
 constant table. `ConstantTable.by_name` holds one record per NAME over the whole
@@ -29,30 +37,55 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.error_reporter import PassErrorReporter
     from sushi_lang.semantics.passes.collect import ConstSig
 
+# The mode that only READS through the pointer. Every other mode reaches the value:
+# `poke` writes it and `nom` takes it away.
+READ_ONLY_MODE = "peek"
+
+_READ_ONLY_HELP = (
+    "a constant is read-only storage: `peek` reads it, and `poke` writes it; "
+    "declare a `var` for storage that you can write")
+_NO_OWNER_HELP = (
+    "a constant has no owner, so nothing can take it away; copy it with a `let`, "
+    "or declare a `var`")
+_NO_STORAGE_HELP = (
+    "only storage can be borrowed, and this name has none; read the value, or copy "
+    "it into a local first")
+
 
 def has_an_address(sig: Optional['ConstSig']) -> bool:
     """Does the record this name reaches denote storage a borrow can point at?
 
-    One predicate, and it is `is_var` alone. A `const` is folded into every reader, so
-    there is nothing to point at; a `var` is one object in the data segment.
+    Both kinds do: a `const` is one object in `.rodata` and a `var` is one object in the
+    data segment. What separates them is the WRITE, and `may_be_written` answers that.
     """
+    return sig is not None
+
+
+def may_be_written(sig: Optional['ConstSig']) -> bool:
+    """May a borrow of this record write through the pointer? A `var` alone."""
     return sig is not None and bool(sig.is_var)
 
 
 def reject_borrow_of_constant(err: 'PassErrorReporter', name: str,
                               sig: Optional['ConstSig'], span: Optional[Span],
-                              *, no_frame_slot: bool = False) -> bool:
-    """Report CE2400 when `name` has no address here. True when it was reported.
+                              *, mode: str, no_frame_slot: bool = False) -> bool:
+    """Report CE2400 when a `mode` borrow of `name` is refused. True when it was.
 
-    `sig` is what the SCOPED constant lookup answered for `name`. `no_frame_slot` is for
-    a caller that has already read the name ladder and knows the name reaches something
-    with no frame slot even though no constant record holds it -- a top-level function,
-    a registry stdlib constant, an FFI namespace. Only the scope pass can tell those
-    apart, so only the scope pass passes it.
+    `sig` is what the SCOPED constant lookup answered for `name`. `mode` is the word the
+    position writes -- `peek`, `poke` or `nom` -- because the record permits a read and
+    refuses a write. `no_frame_slot` is for a caller that has already read the name
+    ladder and knows the name reaches something with no storage even though no constant
+    record holds it -- a top-level function, a registry stdlib constant, an FFI
+    namespace. Only the scope pass can tell those apart, so only the scope pass passes
+    it.
     """
     if has_an_address(sig):
+        if mode == READ_ONLY_MODE or may_be_written(sig):
+            return False
+        help_line = _NO_OWNER_HELP if mode == "nom" else _READ_ONLY_HELP
+    elif no_frame_slot:
+        help_line = _NO_STORAGE_HELP
+    else:
         return False
-    if sig is None and not no_frame_slot:
-        return False
-    err.emit(er.ERR.CE2400, span, name=name)
+    err.emit_with(er.ERR.CE2400, span, name=name, mode=mode).help(help_line).emit()
     return True
