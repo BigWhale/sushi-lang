@@ -1,0 +1,12 @@
+# A qualified constraint whose alias is bound to nothing. The caret belongs under
+# the name the user wrote wrong, `nope.Loud`, and not under the type parameter --
+# which is the one name in the constraint the user cannot change (#729).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: test_err_qualified_constraint_unbound_alias.sushi:8:14
+# EXPECT_STDERR_CONTAINS: no namespace 'nope' is bound in this unit
+
+fn noise@(T: nope.Loud)(T thing) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(0)
