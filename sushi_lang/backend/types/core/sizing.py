@@ -12,7 +12,7 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.constants import FAT_POINTER_SIZE_BYTES, DYNAMIC_ARRAY_SIZE_BYTES, ITERATOR_SIZE_BYTES, ENUM_TAG_SIZE_BYTES
-from sushi_lang.backend.types.core.resolution import require_named_type, resolve_generic_type_ref
+from sushi_lang.backend.types.core.resolution import require_named_type, require_generic_instance
 
 
 def align_up(offset: int, alignment: int) -> int:
@@ -76,7 +76,7 @@ class TypeSizing:
                 from sushi_lang.backend.constants.sizes import CLOSURE_FAT_POINTER_SIZE_BYTES
                 return CLOSURE_FAT_POINTER_SIZE_BYTES
             case _:
-                resolved = resolve_generic_type_ref(
+                resolved = require_generic_instance(
                     semantic_type, self.struct_table.by_name, self.enum_table.by_name
                 )
                 if resolved is not None:

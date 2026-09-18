@@ -7,29 +7,42 @@ a CE0020 "compiler bug"; `contains_foreign_ptr` fell through a `FunctionType`, s
 line over this generator, and `tests/unit/test_type_walk_is_total.py` is the gate.
 
 The walk yields the type it is given before anything it holds, so a predicate that asks
-about the type itself needs no special case.
+about the type itself needs no special case. `map_named_types` is the other direction over
+the SAME arm table: it REBUILDS what the walk yields, so a resolver can neither enter a
+kind the walk misses nor miss a kind the walk enters (#718).
 """
 from __future__ import annotations
 
-from typing import Iterator, Optional, Set
+from dataclasses import replace
+from typing import Callable, Iterator, Optional, Set
 
-from sushi_lang.semantics.typesys import (
-    ArrayType,
-    DynamicArrayType,
-    EnumType,
-    FunctionType,
-    IteratorType,
-    PointerType,
-    ReferenceType,
-    StructType,
-    Type,
-    UnknownType,
-)
+from sushi_lang.semantics.typesys import Type, UnknownType
 
 
 # A kind with nothing inside it. Named rather than implied, so the gate can tell a
 # deliberate leaf from a forgotten arm.
 TERMINAL_KINDS = frozenset({"BuiltinType", "ForeignPtrType", "TypeParameter"})
+
+
+# The ARM TABLE: each composite kind, and the attributes that carry the types it holds.
+# An attribute holds one type or a tuple of them. The walk reads the table to descend and
+# `map_named_types` reads it to rebuild, so a kind added here is answered in both
+# directions at once. A kind that is not here is a declaration, a terminal or the bare
+# name, and the gate refuses a fourth answer.
+#
+# A kind is keyed by NAME, so a type that lives in `semantics/generics` needs no import:
+# a template is not in the `Type` union, and importing one here for an `isinstance` is
+# what kept the generic kinds in a dispatch of their own.
+COMPOSITE_KINDS: dict[str, tuple[str, ...]] = {
+    "ArrayType": ("base_type",),
+    "DynamicArrayType": ("base_type",),
+    "ReferenceType": ("referenced_type",),
+    "PointerType": ("pointee_type",),
+    "IteratorType": ("element_type",),
+    "FunctionType": ("param_types", "ok_type", "err_type"),
+    "GenericTypeRef": ("type_args",),
+    "TypePack": ("types",),
+}
 
 
 # A kind whose contents are stored INLINE, i.e. that contribute to the size of the value.
@@ -46,7 +59,7 @@ INLINE_KINDS = frozenset(
 # A kind that DECLARES a name, as opposed to one that merely spells it. The cycle guard
 # keys on these alone: an `UnknownType("Node")` also carries the name, and letting it
 # consume the name would stop the walk before the declaration it resolves to is entered.
-_DECLARATION_KINDS = frozenset(
+DECLARATION_KINDS = frozenset(
     {"StructType", "EnumType", "GenericStructType", "GenericEnumType"}
 )
 
@@ -57,10 +70,35 @@ def _nominal_name(ty: Type) -> Optional[str]:
     Type identity is nominal (`docs/design/type-identity.md`), so a name is what the cycle
     guard keys on -- two spellings of one name are one type.
     """
-    if type(ty).__name__ not in _DECLARATION_KINDS:
+    if type(ty).__name__ not in DECLARATION_KINDS:
         return None
     name = getattr(ty, "name", None)
     return name if isinstance(name, str) else None
+
+
+def _held_types(ty: Type) -> Iterator[Type]:
+    """The types a composite kind holds, in the order its arm names them."""
+    for slot in COMPOSITE_KINDS[type(ty).__name__]:
+        held = getattr(ty, slot)
+        if isinstance(held, tuple):
+            yield from held
+        elif held is not None:
+            yield held
+
+
+def _declared_types(ty: Type) -> Iterator[Type]:
+    """What a declaration holds: a struct's field types, or an enum's payload types.
+
+    A template spells these the way the type it instantiates does, so one reader serves
+    `StructType` with `GenericStructType` and `EnumType` with `GenericEnumType`.
+    """
+    fields = getattr(ty, "fields", None)
+    if fields is not None:
+        for _field_name, field_type in fields:
+            yield field_type
+        return
+    for variant in getattr(ty, "variants", ()) or ():
+        yield from variant.associated_types
 
 
 def walk_named_types(
@@ -102,7 +140,8 @@ def walk_named_types(
 
     yield ty
 
-    if inline_only and type(ty).__name__ not in INLINE_KINDS:
+    kind = type(ty).__name__
+    if inline_only and kind not in INLINE_KINDS:
         return
 
     def below(inner: Optional[Type]) -> Iterator[Type]:
@@ -110,28 +149,13 @@ def walk_named_types(
                                     through_declarations=through_declarations,
                                     inline_only=inline_only)
 
-    if isinstance(ty, (ArrayType, DynamicArrayType)):
-        yield from below(ty.base_type)
-    elif isinstance(ty, ReferenceType):
-        yield from below(ty.referenced_type)
-    elif isinstance(ty, PointerType):
-        yield from below(ty.pointee_type)
-    elif isinstance(ty, IteratorType):
-        yield from below(ty.element_type)
-    elif isinstance(ty, FunctionType):
-        for param in ty.param_types or ():
-            yield from below(param)
-        yield from below(ty.ok_type)
-        yield from below(ty.err_type)
-    elif isinstance(ty, StructType):
+    if kind in COMPOSITE_KINDS:
+        for held in _held_types(ty):
+            yield from below(held)
+    elif kind in DECLARATION_KINDS:
         if through_declarations:
-            for _field_name, field_type in ty.fields:
-                yield from below(field_type)
-    elif isinstance(ty, EnumType):
-        if through_declarations:
-            for variant in ty.variants:
-                for associated in variant.associated_types:
-                    yield from below(associated)
+            for held in _declared_types(ty):
+                yield from below(held)
     elif isinstance(ty, UnknownType):
         resolved = None
         if structs and ty.name in structs:
@@ -140,36 +164,48 @@ def walk_named_types(
             resolved = enums[ty.name]
         if resolved is not None:
             yield from below(resolved)
-    else:
-        yield from _walk_generic(ty, below, through_declarations)
 
 
-def _walk_generic(ty: Type, below, through_declarations: bool = True) -> Iterator[Type]:
-    """The kinds that live in `semantics/generics`, kept out of the main dispatch.
+def map_named_types(
+    ty: Optional[Type],
+    resolve: Callable[[Type], Type],
+) -> Optional[Type]:
+    """`ty` rebuilt with `resolve` applied to it and to every type it holds.
 
-    A generic TEMPLATE and a type PACK are not in the `Type` union, but both hold types and
-    both sit in the symbol tables, so a walk that skipped them would let a private type
-    hide in a template's field.
+    The REBUILDING direction over the arm table the walk reads. The resolver used to carry
+    an arm set of its own, four against the walk's thirteen, so a name in a reference, a
+    pointer or an iterator came back unresolved while the same name in an array came back
+    as the table entry (#716).
+
+    A DECLARATION is where the map stops. Type identity is nominal, so a named type is
+    looked up and never rebuilt: a second instance of one name is a second spelling of one
+    type, and it cannot terminate for a self-reference (#240,
+    `docs/design/type-identity.md`). That is also why the map needs no cycle guard.
+
+    Nothing moved means nothing is rebuilt and the same object comes back, because the
+    resolve pass runs again at every late intern.
     """
-    from sushi_lang.semantics.generics.types import (
-        GenericEnumType,
-        GenericStructType,
-        GenericTypeRef,
-        TypePack,
-    )
+    if ty is None:
+        return None
 
-    if isinstance(ty, GenericTypeRef):
-        for arg in ty.type_args or ():
-            yield from below(arg)
-    elif isinstance(ty, TypePack):
-        for member in ty.types or ():
-            yield from below(member)
-    elif isinstance(ty, GenericStructType):
-        if through_declarations:
-            for _field_name, field_type in ty.fields:
-                yield from below(field_type)
-    elif isinstance(ty, GenericEnumType):
-        if through_declarations:
-            for variant in ty.variants:
-                for associated in variant.associated_types:
-                    yield from below(associated)
+    mapped = resolve(ty)
+    slots = COMPOSITE_KINDS.get(type(mapped).__name__)
+    if slots is None:
+        return mapped
+
+    changed = {}
+    for slot in slots:
+        held = getattr(mapped, slot)
+        if isinstance(held, tuple):
+            new_held: object = tuple(map_named_types(item, resolve) for item in held)
+        else:
+            new_held = map_named_types(held, resolve)
+        if new_held != held:
+            changed[slot] = new_held
+
+    if not changed:
+        return mapped
+    # `replace`, so what a kind carries BESIDE the types it holds rides along: a fixed
+    # array's size, a reference's borrow mode, and a fn type's `captures` and
+    # `param_modes` (#368).
+    return replace(mapped, **changed)

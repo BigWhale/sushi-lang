@@ -1,6 +1,5 @@
 """Type resolution utilities for UnknownType to StructType/EnumType conversion."""
 from __future__ import annotations
-from dataclasses import replace
 from typing import Dict, Optional, Set, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -155,80 +154,25 @@ def _resolve_type_name(
 def resolve_type_recursively(
     ty: 'Type',
     struct_table: Dict[str, 'StructType'],
-    enum_table: Dict[str, 'EnumType'],
-    visited: Optional[frozenset] = None
+    enum_table: Dict[str, 'EnumType']
 ) -> 'Type':
     """Recursively resolve UnknownType in nested type structures.
+
+    One call into `type_walk.map_named_types`, which rebuilds through the arm table
+    `walk_named_types` reads. A resolver with an arm set of its own had four arms against
+    the walk's thirteen, and a name in a reference, a pointer or an iterator came back
+    unresolved (#716, #718).
 
     A named type resolves to its TABLE ENTRY and stops there: the table is the sole
     authority for its contents, so rebuilding one manufactures a second instance of a type
     that already exists (#240) and cannot terminate for a self-reference.
     See docs/design/type-identity.md.
     """
-    from sushi_lang.semantics.typesys import (
-        ArrayType, DynamicArrayType, StructType, EnumType, FunctionType
+    from sushi_lang.semantics.type_walk import map_named_types
+
+    return map_named_types(
+        ty, lambda held: resolve_unknown_type(held, struct_table, enum_table)
     )
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    if visited is None:
-        visited = frozenset()
-
-    resolved_ty = resolve_unknown_type(ty, struct_table, enum_table)
-
-    type_key = None
-    if isinstance(resolved_ty, StructType):
-        type_key = ("struct", resolved_ty.name)
-    elif isinstance(resolved_ty, EnumType):
-        type_key = ("enum", resolved_ty.name)
-    if type_key is not None:
-        if type_key in visited:
-            return resolved_ty
-        visited = visited | {type_key}
-
-    if isinstance(resolved_ty, FunctionType):
-        new_params = tuple(
-            resolve_type_recursively(p, struct_table, enum_table, visited)
-            for p in resolved_ty.param_types
-        )
-        new_ok = resolve_type_recursively(
-            resolved_ty.ok_type, struct_table, enum_table, visited)
-        new_err = resolve_type_recursively(
-            resolved_ty.err_type, struct_table, enum_table, visited)
-        if (new_params != resolved_ty.param_types or
-                new_ok != resolved_ty.ok_type or
-                new_err != resolved_ty.err_type):
-            # `replace`, so `captures` and `param_modes` ride along. Building a fresh
-            # FunctionType here dropped the declared `nom` of an annotated fn type (#368).
-            return replace(resolved_ty, param_types=new_params, ok_type=new_ok,
-                           err_type=new_err)
-        return resolved_ty
-
-    if isinstance(resolved_ty, ArrayType):
-        resolved_base = resolve_type_recursively(
-            resolved_ty.base_type, struct_table, enum_table, visited
-        )
-        if resolved_base != resolved_ty.base_type:
-            return ArrayType(base_type=resolved_base, size=resolved_ty.size)
-
-    elif isinstance(resolved_ty, DynamicArrayType):
-        resolved_base = resolve_type_recursively(
-            resolved_ty.base_type, struct_table, enum_table, visited
-        )
-        if resolved_base != resolved_ty.base_type:
-            return DynamicArrayType(base_type=resolved_base)
-
-    elif isinstance(resolved_ty, GenericTypeRef):
-        resolved_args = tuple(
-            resolve_type_recursively(arg, struct_table, enum_table, visited)
-            for arg in resolved_ty.type_args
-        )
-        if resolved_args != resolved_ty.type_args:
-            return GenericTypeRef(
-                base_name=resolved_ty.base_name,
-                type_args=resolved_args
-            )
-
-    return resolved_ty
 
 
 def contains_unresolvable_unknown_type(
