@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Set, Tuple
+from typing import Dict, FrozenSet, Optional, Set, Tuple
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -53,6 +53,14 @@ class ConstantTable(UnitOwnedSymbols[ConstSig]):
     # this table: with no cache a chain of constants that each name the one before
     # them twice doubles per link, and 22 of them cost a minute (#597).
     folded: Dict[Tuple[Optional[str], str], object] = field(default_factory=dict)
+
+    # The cycles CE0109 has already named, each as the SET of declarations it runs
+    # through. One cycle is one fault, and every member of it is an entry point the
+    # typecheck pass validates in turn, so each walk meets the same loop from its own
+    # side. The store sits here for the reason `folded` does: a fresh evaluator is built
+    # for every constant, so nothing on the evaluator survives the next one (#710).
+    reported_cycles: Set[FrozenSet[Tuple[Optional[str], str]]] = field(
+        default_factory=set)
 
 
 class ConstantCollector:
