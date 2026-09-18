@@ -22,6 +22,7 @@ from sushi_lang.semantics.typesys import BuiltinType, Type
 
 from sushi_lang.backend.constants.llvm_values import ZERO_I32
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend.string_constants import content_digest
 
 
 def _text_global(codegen: Any, name: str, text: str) -> ir.GlobalVariable:
@@ -40,7 +41,7 @@ def _text_global(codegen: Any, name: str, text: str) -> ir.GlobalVariable:
 
 def emit_debug_string(codegen: Any, builder: Any, text: str) -> None:
     """Write a literal to the console. The count is known here, so nothing formats."""
-    const = _text_global(codegen, f".str_debug_{abs(hash(text)) % 1000000}", text)
+    const = _text_global(codegen, f".str_debug_{content_digest(text)}", text)
     data = builder.gep(const, [ZERO_I32, ZERO_I32], name="str_ptr")
     length = ir.Constant(codegen.i32, len(text.encode('utf-8')))
     codegen.runtime.formatting.emit_console_write(data, length, builder=builder)
