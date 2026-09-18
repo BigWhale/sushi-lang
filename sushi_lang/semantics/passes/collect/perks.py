@@ -437,9 +437,13 @@ class PerkCollector:
         The signature of every method is rewritten in `TypeParameter`s over the names
         the target declares, exactly as `_collect_extension_def` does for a generic
         extension method, so one substitution answers the whole signature later.
+
+        True also when the target was REFUSED. The implementation then leaves
+        `perk_impls` and registers nowhere, which is what keeps one fault to one
+        diagnostic -- the CE2098 arm above reads the same way.
         """
         from sushi_lang.semantics.generics.extension_targets import (
-            classify_extension_target)
+            classify_extension_target, reject_unwritable_target)
         from sushi_lang.semantics.generics.type_display import display_type
         from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.passes.collect.functions import deep_type_params
@@ -454,6 +458,9 @@ class PerkCollector:
                          target=display_type(target_type)) \
                 .help("name every type parameter, or make every argument concrete -- "
                       "there is no partial specialization").emit()
+            return True
+        if reject_unwritable_target(self.r, shape, self.is_declared_type,
+                                    impl.target_type_span or impl.perk_name_span):
             return True
         if not shape.param_names:
             return False

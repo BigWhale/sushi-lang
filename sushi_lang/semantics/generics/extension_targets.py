@@ -73,6 +73,24 @@ class DeclaredTypeNamer:
                              generic_enums=self.generic_enums.by_name.keys())
                 or name in self.perks.by_name)
 
+    def names_a_whole_type(self, name: str) -> bool:
+        """Does the bare name denote a type ON ITS OWN, arguments and all? (#698)
+
+        The question above is "does this name bind a fresh parameter", and every
+        declared name answers no to that. It is not the same question: `Cage` is a
+        generic and needs its own arguments, and `Show` is a perk and is no type at
+        all, so `Box@(Cage)` and `Box@(Show)` name a constraint on an instantiation
+        that can never exist.
+        """
+        return names_a_type(name,
+                            structs=self.structs.by_name.keys(),
+                            enums=self.enums.by_name.keys())
+
+    def names_a_generic(self, name: str) -> bool:
+        """Does the bare name denote a generic type, which a `@(...)` target needs?"""
+        return (name in self.generic_structs.by_name
+                or name in self.generic_enums.by_name)
+
 
 @dataclass(frozen=True)
 class ExtensionTarget:
@@ -115,6 +133,49 @@ def classify_extension_target(
         param_names=param_names,
         target_key=instantiation_key(target.base_name, args) if concrete else "",
     )
+
+
+def reject_unwritable_target(
+    reporter,
+    shape: ExtensionTarget,
+    namer: DeclaredTypeNamer,
+    span,
+) -> bool:
+    """CE2001 for a `@(...)` target that names no type it could apply to (#698).
+
+    Both paths ask here, so one header reads one way. Every argument names a type on
+    its own, and the base names the generic they instantiate. A declared name that is
+    neither -- a generic without its arguments, a perk -- binds no parameter either, so
+    it constrains an instantiation that can never exist.
+
+    A TEMPLATE is not asked at all: a bare undeclared argument there IS the parameter it
+    binds, which is the whole of #393, and the base of one is read while the tables are
+    still filling -- a library's own template is collected before the library's types.
+
+    What this does NOT ask is whether the instantiation the target names was ever
+    written. A target is a CONSTRAINT and not a use: an implementation nothing reaches
+    is dead code, exactly as an unused extension is.
+    """
+    from sushi_lang.internals import errors as er
+
+    if not shape.is_concrete:
+        return False
+
+    if not namer.names_a_generic(shape.base_name):
+        er.emit(reporter, er.ERR.CE2001, span, name=shape.base_name)
+        return True
+
+    refused = False
+    for arg in shape.args:
+        if not isinstance(arg, UnknownType) or namer.names_a_whole_type(arg.name):
+            continue
+        help_line = ("write its type arguments, as in '{0}@(i32)'".format(arg.name)
+                     if namer.names_a_generic(arg.name)
+                     else f"'{arg.name}' is a perk, and a target argument names a type")
+        er.emit_with(reporter, er.ERR.CE2001, span, name=arg.name) \
+            .help(help_line).emit()
+        refused = True
+    return refused
 
 
 # The synthetic base name under which array-target templates live in the
