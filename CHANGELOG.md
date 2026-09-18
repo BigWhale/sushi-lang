@@ -339,6 +339,19 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **Arithmetic reads its operands, and a readable zero divisor is refused in a body**
+  (#709). The typecheck pass asked nothing about an operand of `+ - * / %` or of the unary
+  minus, so everything reached the backend: a `bool` or an unhandled `Result` / `Maybe`
+  beside a number became a CE0000 out of `emit_arithmetic`, a `string`, a struct, an enum
+  or an array operand failed the LLVM IR parse with the same code, and `-true` compiled
+  and printed `true`. One rule answers the whole group now -- **CE2518**, pointed at the
+  first operand that is not a number, and it names `??`, `.realise(default)` and `match`
+  when that operand is a wrapper. `+` with a `string` operand stays CE2509, the one
+  carve-out, and a mixed numeric pair stays CE2510. A divisor the compiler can read and
+  that holds zero is **CE0112** in a body exactly as in a constant -- a literal, a
+  constant and a fold alike, where `10 / 0` used to emit `sdiv i32 1, 0` and print
+  whatever the optimizer left behind. CE0112 no longer says "in constant expression",
+  because it now answers in both positions. A computed divisor is untouched.
 - **The entrypoint pass holds main's whole rule** (#674). The rule had three homes: the
   pipeline asked whether `main` exists (CE3007) and whether a `--lib` build declares one
   (CE3501), the collect pass asked whether it returns an integer (CE0106), and the pass

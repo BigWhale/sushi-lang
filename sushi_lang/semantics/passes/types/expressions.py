@@ -307,6 +307,79 @@ _EQUALITY_OPS = ("==", "!=")
 _EQUALITY_NON_NUMERIC = frozenset({BuiltinType.BOOL, BuiltinType.STRING})
 _ORDER_NON_NUMERIC = frozenset({BuiltinType.STRING})
 
+# Arithmetic accepts no non-numeric type at all, so its set needs no name. The
+# operators it covers do: the unary minus arrives as '-' and not as 'neg'.
+ARITHMETIC_OPS = ("+", "-", "*", "/", "%")
+DIVISION_OPS = ("/", "%")
+COMPARISON_OPS = _EQUALITY_OPS + ("<", "<=", ">", ">=")
+
+
+def is_string_plus(op: str, left_type: 'Optional[Type]',
+                   right_type: 'Optional[Type]') -> bool:
+    """Is this the '+' that CE2509 owns -- the one with a string operand?
+
+    Sushi has no concatenation operator, so CE2509 names the interpolation that
+    replaces it. The arithmetic operand rule steps over exactly this pair, because
+    one fault reads better as one diagnostic.
+    """
+    return op == "+" and BuiltinType.STRING in (left_type, right_type)
+
+
+def reject_non_numeric_arithmetic(validator: 'TypeValidator', op: str,
+                                  operands: 'list[Tuple[Expr, Optional[Type]]]') -> None:
+    """CE2518 for the first arithmetic operand that is not a number.
+
+    One rule for the whole group: + - * / % and the unary minus, which is why the
+    operands arrive as a list rather than as a pair. Arithmetic combines numbers and
+    Sushi converts nothing on its own, so the permitted set is exactly the numeric
+    types and there is no non-numeric escape to name -- where a comparison needs two
+    allow-lists, this needs none.
+
+    The first bad operand is enough: `a - b` on two strings is one fault. A wrapper
+    is told how to take its value out, because a missing '??' is the common way here.
+
+    Before #709 the pass asked nothing, so every operand reached the backend: a bool
+    or a wrapper became a CE0000 out of `emit_arithmetic`, a struct, an enum or an
+    array failed the LLVM IR parse, and `-true` compiled and printed `true`.
+    """
+    if len(operands) == 2 and is_string_plus(op, operands[0][1], operands[1][1]):
+        return
+
+    for operand, operand_type in operands:
+        if operand_type is None or is_numeric_type(operand_type):
+            continue
+        report = er.emit_with(validator.reporter, er.ERR.CE2518, operand.loc,
+                              op=op, type_name=display_type(operand_type))
+        if _wrapper_of(operand_type) is not None:
+            report = report.help("take the value with '??', '.realise(default)' "
+                                 "or match")
+        report.emit()
+        return
+
+
+def reject_zero_divisor(validator: 'TypeValidator', expr: BinaryOp,
+                        left_type: 'Optional[Type]') -> None:
+    """CE0112 when the compiler can read the divisor of '/' or '%' and it is zero.
+
+    The same code the constant evaluator emits, because it is the same rule: one
+    compile-time arithmetic, and a body cannot disagree with a constant. A divisor
+    the compiler cannot read is ordinary code and is left alone, exactly as a
+    computed shift count is (CE2512).
+
+    A left operand that is not numeric belongs to CE2518, which has already spoken;
+    reporting a zero divisor as well would make one expression two faults.
+    """
+    from sushi_lang.semantics.const_eval import is_numeric_constant
+
+    if left_type is None or not is_numeric_type(left_type):
+        return
+
+    divisor = validator.constant_evaluator().evaluate(expr.right, left_type, None)
+    if divisor is None or not is_numeric_constant(divisor) or divisor.value != 0:
+        return
+
+    er.emit(validator.reporter, er.ERR.CE0112, expr.right.loc)
+
 
 def has_builtin_equality(ty: 'Type') -> bool:
     """Can two values of `ty` meet `==`? THE closed equality set, in one place.

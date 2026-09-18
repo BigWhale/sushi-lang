@@ -495,6 +495,34 @@ constant.
 - `/` - Division (integer division for int types)
 - `%` - Modulo (remainder)
 
+Every operand is a number, unary minus included: an integer or a float and nothing else.
+A `bool`, a `string`, a struct, an enum, an array or an unhandled `Result@(T, E)` /
+`Maybe@(T)` is **CE2518**, and two numeric types of different widths are CE2510. There is
+no concatenation operator, so `+` with a `string` operand is CE2509 and the escape is
+interpolation. Add the fields of a struct one at a time, use `match` to read an enum, and
+take the value out of a wrapper with `??`, `.realise(default)` or `match`.
+
+<!-- docs-sweep: error CE2518 -->
+```sushi
+fn main() i32:
+    let bool flag = true
+    let i32 x = 1 + flag      # CE2518: '+' takes a numeric operand, and 'bool' is not one
+    println("{x}")
+    return Result.Ok(0)
+```
+
+**A divisor the compiler can read must not be zero.** A literal zero, a constant that
+holds one and a fold that gives one are each **CE0112**, in a body exactly as in a
+constant. A computed divisor is ordinary code and is left alone.
+
+<!-- docs-sweep: error CE0112 -->
+```sushi
+fn main() i32:
+    let i32 x = 10 / 0        # CE0112: division by zero
+    println("{x}")
+    return Result.Ok(0)
+```
+
 ### Overflow
 
 An expression whose value the compiler reads is computed at the **declared width**, and an
