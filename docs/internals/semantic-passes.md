@@ -9,7 +9,8 @@ Detailed documentation of Sushi's multi-pass semantic analysis pipeline.
 The passes have NAMES, not numbers. A number goes out of order the moment a pass is
 inserted between two others, which is what the old numbered scheme did to itself.
 `SemanticAnalyzer.check()` (`semantics/semantic_analyzer.py`) is the code authority on the
-order; this list mirrors it.
+order; this list mirrors it. `_check_multi_file` runs that order, one call per stage,
+each named for the stage it runs.
 
 | Pass | What it does | Where |
 |---|---|---|

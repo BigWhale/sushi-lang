@@ -9,6 +9,8 @@ from sushi_lang.semantics.tables import SymbolTables
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.library_registry import LibraryRegistry
+    from sushi_lang.semantics.generics.instantiate import InstantiationCollector
+    from sushi_lang.semantics.generics.monomorphize import Monomorphizer
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
 from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.passes.borrow import BorrowChecker
@@ -17,6 +19,11 @@ from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.extensions import monomorphize_all_extension_methods
 from sushi_lang.semantics.library_registration import (
     LibraryRegistration, LoadedLibraries)
+
+
+# What `monomorphize_all_extension_methods` answers: one concrete ExtendDef per
+# (target type, method name, type arguments).
+ExtensionCopies = dict[tuple[str, str, tuple], ExtendDef]
 
 
 def enum_base_names(*tables) -> set[str]:
@@ -69,27 +76,36 @@ class SemanticAnalyzer:
         numbers -- a number goes out of order the moment a pass is inserted, which is how
         the old scheme ended up running the scope pass after the derive pass.
 
-            collect       constants, headers, generic types      passes/collect/
-            docs          doc blocks against their declarations  passes/docs.py
-            externs       extern signatures, ptr unit gate       passes/types/externals.py
-            libraries     library symbol registration            library_registration.py
-            namespaces    `use ... as`, one table per unit       passes/namespaces.py
-            ffi-clash     an extern naming a defined symbol      passes/types/externals.py
-            entrypoint    main(): it exists, returns i32        _check_entrypoint
-            instantiate   generic instantiation collection       generics/instantiate/
-            monomorphize  generic -> concrete                    generics/monomorphize/
-            resolve       field and variant type resolution      passes/resolve.py
-            finite-types  reject by-value containment cycles     passes/finite_types.py
-            derive        auto-derived hash() and clone()        passes/derive.py
-            shadowing     reject an extension over a built-in    _check_extension_shadows_builtin
-            effects       destroy-effect summary                 passes/borrow/destroy_effects.py
-            scope         scope and variable analysis            passes/scope.py
-            typecheck     type validation and inference          passes/types/
-            lift          lambda lifting                         passes/lift.py
-            borrow        borrow checking                        passes/borrow/
+        `_check_multi_file` IS this order in code: one call per stage, named for it.
+
+            stage         what it does                           method                            where it lives
+            collect       constants, headers, generic types      _collect                          passes/collect/
+            docs          doc blocks against their declarations  _check_docs                       passes/docs.py
+            externs       extern signatures, ptr unit gate       _check_externs                    passes/types/externals.py
+            libraries     library symbol registration            _register_libraries               library_registration.py
+            namespaces    `use ... as`, one table per unit       _build_namespaces                 passes/namespaces.py
+            ffi-clash     an extern naming a defined symbol      _check_ffi_clash                  passes/types/externals.py
+            entrypoint    main(): it exists, returns i32         _check_entrypoint                 here
+            instantiate   generic instantiation collection       _collect_instantiations           generics/instantiate/
+            monomorphize  generic -> concrete                    _monomorphize                     generics/monomorphize/
+            resolve       field and variant type resolution      _resolve_types                    passes/resolve.py
+            finite-types  reject by-value containment cycles     _check_finite_types               passes/finite_types.py
+            derive        auto-derived hash() and clone()        _derive                           passes/derive.py
+            shadowing     reject an extension over a built-in    _check_extension_shadows_builtin  here
+            effects       destroy-effect summary                 _compute_effects                  passes/borrow/destroy_effects.py
+            scope         scope and variable analysis            _check_units                      passes/scope.py
+            typecheck     type validation and inference          _check_units                      passes/types/
+            lift          lambda lifting                         _check_units                      passes/lift.py
+            borrow        borrow checking                        _check_units                      passes/borrow/
 
         The last four run per unit, in one loop. `_check_monomorphized_extensions` repeats
-        those four for each instantiation of a generic-target extension.
+        those four for each instantiation of a generic-target extension, and
+        `_check_array_extensions` drives that to a fixpoint.
+
+        One call in `_check_multi_file` carries no row, because it is not a pass:
+        `_register_monomorphized_extensions` merges the generic-target extension copies
+        into the extension table. It is the `monomorphize` stage's tail and both ends of
+        its placement -- after `derive`, before `shadowing` -- are load-bearing.
 
         `semantics/const_eval.py` is NOT a pass. THREE callers reach it as a helper: the
         AST BUILDER, which reads a fixed array's size while the unit is parsed (Known
@@ -116,7 +132,11 @@ class SemanticAnalyzer:
         self.reporter.items.extend(in_source_order(unit_reporter.items))
 
     def _check_multi_file(self) -> None:
-        """Multi-file semantic analysis with cross-unit symbol resolution."""
+        """Multi-file semantic analysis with cross-unit symbol resolution.
+
+        One call per named stage, in the order `check()`'s docstring states. A stage
+        that stops the analysis says so with its return value.
+        """
         if self.unit_manager is None:
             return
 
@@ -124,6 +144,49 @@ class SemanticAnalyzer:
         if compilation_order is None:
             return  # Error already reported
 
+        libraries = self._collect(compilation_order)
+        self._check_docs(compilation_order)
+        self._check_externs(compilation_order)
+        self._register_libraries(compilation_order, libraries)
+        self._build_namespaces(compilation_order)
+        self._check_ffi_clash(compilation_order)
+        self._check_entrypoint(compilation_order)
+
+        instantiations = self._collect_instantiations(compilation_order, libraries)
+        monomorphizer, concrete_extension_defs = self._monomorphize(
+            compilation_order, instantiations)
+
+        # A constraint violation STOPS the whole-program analysis here (#579, Ruling 4),
+        # as CE2095 does below. CE4006 stands at the type that named the refused
+        # instantiation, no copy was cut for it, and the per-unit passes would only
+        # read the same fault back as a CE2008 from inside a template body.
+        if monomorphizer.constraint_violations:
+            return
+
+        self._resolve_types()
+        if self._check_finite_types():
+            return
+        self._derive()
+        self._register_monomorphized_extensions(concrete_extension_defs)
+        self._check_extension_shadows_builtin()
+
+        destroy_effects = self._compute_effects(compilation_order)
+        # Enum type names for the borrow pass's ownership-sink test, stripped to their
+        # base name: a monomorphized generic enum is interned as "Result<i32, StdError>"
+        # while its constructor is written `Result.Ok(...)`.
+        enum_names = enum_base_names(self.tables.enums, self.tables.generic_enums)
+
+        self._check_units(compilation_order, monomorphizer, libraries,
+                          destroy_effects, enum_names)
+        self._check_array_extensions(compilation_order, monomorphizer,
+                                     destroy_effects, enum_names)
+
+    def _collect(self, compilation_order: list[Unit]) -> LibraryRegistration:
+        """collect: constants, headers and generic types, from every unit.
+
+        It answers the `libraries` step's registration, which is built here because the
+        perk definitions it seeds have to reach the tables before the first unit.
+        """
         collector = CollectorPass(
             self.reporter,
             library_units={u.name for u in compilation_order if u.provenance is not None},
@@ -160,13 +223,15 @@ class SemanticAnalyzer:
                                            if id(i) not in dropped]
 
         self.tables = global_tables
+        return libraries
 
-        # docs: check each doc block against the declaration beside it. Here because
-        # the pass needs the collected tables and nothing later, and because it must run
-        # ahead of instantiate/monomorphize -- a generic's block is written once, and
-        # checking it afterwards would report one mistake once per instantiation. A
-        # library unit is skipped: a consumer must not be told about the library
-        # author's doc typos.
+    def _check_docs(self, compilation_order: list[Unit]) -> None:
+        """docs: check each doc block against the declaration beside it."""
+        # Here because the pass needs the collected tables and nothing later, and because
+        # it must run ahead of instantiate/monomorphize -- a generic's block is written
+        # once, and checking it afterwards would report one mistake once per
+        # instantiation. A library unit is skipped: a consumer must not be told about the
+        # library author's doc typos.
         from sushi_lang.semantics.passes.docs import check_docs, check_missing_docs
         for unit in compilation_order:
             if unit.ast is None or unit.provenance is not None:
@@ -181,8 +246,8 @@ class SemanticAnalyzer:
                 check_missing_docs(unit_reporter, unit.ast)
             self._merge_unit(unit_reporter)
 
-        # FFI: validate external signatures (CE5003), emit CW5001, and enforce
-        # the ptr unit gate (CE5009) per unit.
+    def _check_externs(self, compilation_order: list[Unit]) -> None:
+        """externs: extern signatures (CE5003), CW5001, and the ptr unit gate (CE5009)."""
         from sushi_lang.semantics.passes.types.externals import (
             validate_external_signatures, validate_ptr_unit_gate,
         )
@@ -194,17 +259,20 @@ class SemanticAnalyzer:
             validate_ptr_unit_gate(unit_reporter, unit.ast)
             self._merge_unit(unit_reporter)
 
-        # libraries: every symbol a binary `.slib` exports enters the tables filled
-        # above. The order of the arms is the step's own (`library_registration.py`);
-        # the perk DEFINITIONS were seeded ahead of the collect loop.
+    def _register_libraries(self, compilation_order: list[Unit],
+                            libraries: LibraryRegistration) -> None:
+        """libraries: every symbol a binary `.slib` exports enters the collected tables."""
+        # The order of the arms is the step's own (`library_registration.py`); the perk
+        # DEFINITIONS were seeded ahead of the collect loop.
         libraries.register(compilation_order)
         self.library_registry = libraries.registry
         self.library_perk_impls = libraries.shipped_perk_impls
 
-        # namespaces: what each unit may write behind a dot. After `libraries`, because
-        # a BINARY library's declarations exist only once that step has read the
-        # manifest, and before `ffi-clash`, which is the first step that asks whether a
-        # name is already taken (`unit-namespaces.md` section 3.2).
+    def _build_namespaces(self, compilation_order: list[Unit]) -> None:
+        """namespaces: what each unit may write behind a dot."""
+        # After `libraries`, because a BINARY library's declarations exist only once that
+        # step has read the manifest, and before `ffi-clash`, which is the first step that
+        # asks whether a name is already taken (`unit-namespaces.md` section 3.2).
         from sushi_lang.semantics.passes.namespaces import build_namespaces
         all_units = self.unit_manager.units if self.unit_manager is not None else {}
         for unit in compilation_order:
@@ -216,10 +284,12 @@ class SemanticAnalyzer:
                 library_registry=self.library_registry)
             self._merge_unit(unit_reporter)
 
-        # ffi-clash: an `unsafe external` may name a FOREIGN symbol, never one this
-        # build defines (#470). It reads the whole program's symbols, the linked
-        # libraries included, so it cannot run with the per-unit extern validation
-        # above -- the registry does not exist yet up there.
+    def _check_ffi_clash(self, compilation_order: list[Unit]) -> None:
+        """ffi-clash: an extern naming a symbol this build defines (CE5013)."""
+        # An `unsafe external` may name a FOREIGN symbol, never one this build defines
+        # (#470). It reads the whole program's symbols, the linked libraries included, so
+        # it cannot run with the per-unit extern validation above -- the registry does
+        # not exist yet up there.
         from sushi_lang.semantics.passes.types.externals import (
             reject_external_naming_a_defined_symbol,
         )
@@ -232,8 +302,9 @@ class SemanticAnalyzer:
                 self.generated_symbols)
             self._merge_unit(unit_reporter)
 
-        self._check_entrypoint(compilation_order)
-
+    def _collect_instantiations(self, compilation_order: list[Unit],
+                                libraries: LibraryRegistration) -> 'InstantiationCollector':
+        """instantiate: every generic instantiation the program asks for."""
         from sushi_lang.semantics.generics.instantiate import InstantiationCollector
         instantiation_collector = InstantiationCollector(
             struct_table=self.tables.structs.by_name,
@@ -266,9 +337,59 @@ class SemanticAnalyzer:
         instantiation_collector.collect_from_generic_extensions(
             [unit.ast for unit in compilation_order if unit.ast is not None]
         )
-        type_instantiations = instantiation_collector.instantiations
-        func_instantiations = instantiation_collector.function_instantiations
+        return instantiation_collector
 
+    def _monomorphize(self, compilation_order: list[Unit],
+                      instantiations: 'InstantiationCollector',
+                      ) -> tuple['Monomorphizer', ExtensionCopies]:
+        """monomorphize: every generic the program names becomes a concrete declaration."""
+        type_instantiations = instantiations.instantiations
+        func_instantiations = instantiations.function_instantiations
+
+        monomorphizer = self._new_monomorphizer(instantiations)
+        enum_instantiations, struct_instantiations = self._resolved_instantiations(
+            type_instantiations)
+
+        # Both publish into the tables at creation (`TypeMonomorphizer._publish`), the
+        # nested instances included.
+        concrete_enums = monomorphizer.monomorphize_all(
+            self.tables.generic_enums.by_name, enum_instantiations)
+        concrete_structs = monomorphizer.monomorphize_all_structs(
+            self.tables.generic_structs.by_name, struct_instantiations)
+
+        self._adopt_reached_instances(monomorphizer,
+                                      enum_instantiations, concrete_enums,
+                                      struct_instantiations, concrete_structs)
+
+        # A perk implementation on a GENERIC target is instantiated BEFORE the functions
+        # are, and that order is load-bearing: a `@(S: Show)` constraint is checked while
+        # a generic function is monomorphized, so `Box@(i32)` has to already say it
+        # implements `Show` or the call is CE4006 for a type that does.
+        perk_impl_fn_instantiations: set = set()
+        self._monomorphize_generic_perk_impls(
+            monomorphizer, compilation_order, struct_instantiations, concrete_structs,
+            enum_instantiations, concrete_enums, perk_impl_fn_instantiations)
+
+        monomorphizer.monomorphize_all_functions(func_instantiations, compilation_order)
+
+        concrete_extension_defs = self._monomorphize_generic_extensions(
+            monomorphizer, compilation_order, struct_instantiations, concrete_structs,
+            enum_instantiations, concrete_enums, perk_impl_fn_instantiations)
+
+        # monomorphize (cont.): a LATE instantiation -- one the instantiate pass never
+        # saw, interned while a generic body was substituted -- gets its generic-target
+        # extension and perk-implementation copies exactly as an early one did (#555).
+        self._cut_templates_for_late_instantiations(
+            monomorphizer, compilation_order, concrete_extension_defs,
+            struct_instantiations, enum_instantiations)
+
+        # Every instantiation the program names now exists, so an implementation whose
+        # target still names none is one the program never reached.
+        self._drop_unreached_perk_impls(compilation_order)
+        return monomorphizer, concrete_extension_defs
+
+    def _new_monomorphizer(self, instantiations: 'InstantiationCollector') -> 'Monomorphizer':
+        """The monomorphizer, its constraint validator, and the late-intern seam."""
         from sushi_lang.semantics.generics.monomorphize import Monomorphizer
         from sushi_lang.semantics.generics.constraints import ConstraintValidator
 
@@ -291,16 +412,19 @@ class SemanticAnalyzer:
             enum_table=self.tables.enums,
             struct_table=self.tables.structs,
             tables=self.tables,
-            sites=instantiation_collector.sites,
+            sites=instantiations.sites,
         )
 
-        # The late-interning seam (risk 1 of the UFCS epic): when the per-unit
-        # typecheck solves a method-level type argument, the substituted signature can
-        # name an instantiation nothing else names -- reachable from the pass through
-        # the tables, because the pass has no monomorphizer of its own.
+        # The late-interning seam (risk 1 of the UFCS epic): when the per-unit typecheck
+        # solves a method-level type argument, the substituted signature can name an
+        # instantiation nothing else names -- reachable from the pass through the tables,
+        # because the pass has no monomorphizer of its own.
         self.tables.intern_generic_ref = (
             lambda ty: self._intern_generic_type_refs(monomorphizer, (ty,)))
+        return monomorphizer
 
+    def _resolved_instantiations(self, type_instantiations) -> tuple[set, set]:
+        """Split the collected type instantiations into enums and structs, arguments resolved."""
         # Type arguments are resolved FIRST. `str(UnknownType("Point"))` and
         # `str(StructType("Point"))` are both "Point", so the two spellings mangle to one
         # enum name while carrying different payloads -- and EnumType hashes on the name but
@@ -322,12 +446,11 @@ class SemanticAnalyzer:
                 enum_instantiations.add((base_name, _resolve_args(type_args)))
             elif base_name in self.tables.generic_structs.by_name:
                 struct_instantiations.add((base_name, _resolve_args(type_args)))
+        return enum_instantiations, struct_instantiations
 
-        # Both publish into the tables at creation (`TypeMonomorphizer._publish`), the
-        # nested instances included.
-        concrete_enums = monomorphizer.monomorphize_all(self.tables.generic_enums.by_name, enum_instantiations)
-        concrete_structs = monomorphizer.monomorphize_all_structs(self.tables.generic_structs.by_name, struct_instantiations)
-
+    def _adopt_reached_instances(self, monomorphizer, enum_instantiations, concrete_enums,
+                                 struct_instantiations, concrete_structs) -> None:
+        """Treat an instance a substitution REACHED as an instantiation the program named."""
         # The worklist (#577): an instance a substitution REACHED -- `Box<string>` from a
         # `Box@(B)` field of `Pair<i32, string>`, `Maybe<string>` from a payload -- is an
         # instantiation like a spelled one, so the extension and perk copies below are cut
@@ -346,17 +469,11 @@ class SemanticAnalyzer:
                 instantiations.add((base, args))
                 concrete[ty.name] = ty
 
-        # A perk implementation on a GENERIC target is instantiated BEFORE the functions
-        # are, and that order is load-bearing: a `@(S: Show)` constraint is checked while
-        # a generic function is monomorphized, so `Box@(i32)` has to already say it
-        # implements `Show` or the call is CE4006 for a type that does.
-        perk_impl_fn_instantiations: set = set()
-        self._monomorphize_generic_perk_impls(
-            monomorphizer, compilation_order, struct_instantiations, concrete_structs,
-            enum_instantiations, concrete_enums, perk_impl_fn_instantiations)
-
-        monomorphizer.monomorphize_all_functions(func_instantiations, compilation_order)
-
+    def _monomorphize_generic_extensions(self, monomorphizer, compilation_order,
+                                         struct_instantiations, concrete_structs,
+                                         enum_instantiations, concrete_enums,
+                                         fn_instantiations) -> ExtensionCopies:
+        """Cut every generic-target extension's copy, and monomorphize what its body names."""
         # monomorphize (cont.): extensions on generic targets, BEFORE resolve and derive. A
         # generic call in a substituted body has its argument types only now -- they come
         # from `self` (#392) -- and what the second function round below interns must still
@@ -371,46 +488,34 @@ class SemanticAnalyzer:
             substitutor=monomorphizer.substitutor,
         )
 
-        extension_fn_instantiations = set(perk_impl_fn_instantiations)
+        extension_fn_instantiations = set(fn_instantiations)
         for extend_def in concrete_extension_defs.values():
             extension_fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
 
         if extension_fn_instantiations:
             monomorphizer.monomorphize_all_functions(extension_fn_instantiations, compilation_order)
+        return concrete_extension_defs
 
-        # monomorphize (cont.): a LATE instantiation -- one the instantiate pass never
-        # saw, interned while a generic body was substituted -- gets its generic-target
-        # extension and perk-implementation copies exactly as an early one did (#555).
-        self._cut_templates_for_late_instantiations(
-            monomorphizer, compilation_order, concrete_extension_defs,
-            struct_instantiations, enum_instantiations)
-
-        # Every instantiation the program names now exists, so an implementation whose
-        # target still names none is one the program never reached.
-        self._drop_unreached_perk_impls(compilation_order)
-
-        # A constraint violation STOPS the whole-program analysis here (#579, Ruling 4),
-        # as CE2095 does below. CE4006 stands at the type that named the refused
-        # instantiation, no copy was cut for it, and the per-unit passes would only
-        # read the same fault back as a CE2008 from inside a template body.
-        if monomorphizer.constraint_violations:
-            return
-
-        # resolve: AFTER monomorphization, so every struct/enum exists in the tables.
+    def _resolve_types(self) -> None:
+        """resolve: struct field, enum variant and constant types become concrete."""
+        # AFTER monomorphization, so every struct/enum exists in the tables.
         from sushi_lang.semantics.passes.resolve import (
             resolve_constant_types, resolve_struct_field_types, resolve_enum_variant_types)
         resolve_struct_field_types(self.tables.structs, self.tables.enums)
         resolve_enum_variant_types(self.tables.structs, self.tables.enums)
         resolve_constant_types(self.tables.constants, self.tables.structs, self.tables.enums)
 
-        # finite-types: reject types that contain themselves by value (CE2095), and stop
-        # on failure -- every later pass assumes finitely-sized types.
+    def _check_finite_types(self) -> bool:
+        """finite-types: reject a type that contains itself by value (CE2095)."""
+        # True stops the analysis -- every later pass assumes finitely-sized types.
         from sushi_lang.semantics.passes.finite_types import check_infinite_size_types
-        if check_infinite_size_types(self.tables.structs, self.tables.enums, self.reporter):
-            return
+        return check_infinite_size_types(self.tables.structs, self.tables.enums,
+                                         self.reporter)
 
-        # derive: AFTER type resolution, and structs/enums before arrays, which may
-        # contain them. The clone half carries no ordering constraint (#134).
+    def _derive(self) -> None:
+        """derive: the auto-derived hash() and clone() for every type."""
+        # AFTER type resolution, and structs/enums before arrays, which may contain them.
+        # The clone half carries no ordering constraint (#134).
         from sushi_lang.semantics.passes.derive import (
             register_all_struct_hashes, register_all_enum_hashes, register_all_array_hashes,
             register_all_clones,
@@ -423,6 +528,9 @@ class SemanticAnalyzer:
 
         register_all_clones(self.tables.structs, self.tables.enums, self.tables.derived_methods)
 
+    def _register_monomorphized_extensions(
+            self, concrete_extension_defs: ExtensionCopies) -> None:
+        """Hand every generic-target extension copy to the extension table and to codegen."""
         for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
             self.monomorphized_extensions.append(extend_def)
             # Add to extension table for method lookup during type validation.
@@ -451,35 +559,21 @@ class SemanticAnalyzer:
             )
             self.tables.extensions.add_method(extension_method)
 
-        # An extension method colliding with a BUILT-IN can never run, because all three
-        # layers resolve the built-in first -- so it is CE2097 rather than silent dead code
-        # (#239). See docs/design/method-resolution.md.
-        #
-        # Placement is load-bearing at BOTH ends: after derive, which registers the
-        # struct/enum hash/clone, and after the generic-extension merge above, which is
-        # where a monomorphized `extend Box@(i32) hash()` enters the extension table.
-        #
-        # A perk impl is unaffected by construction: an ExtendWithDef never enters
-        # ExtensionTable. It is the sanctioned way to replace a built-in.
-        self._check_extension_shadows_builtin()
-
-        # The per-unit passes run below: scope, typecheck, lift, borrow. Every unit is
-        # analysed with the global context, because units reference each other, but each
-        # gets its own reporter so a diagnostic names the right file.
-
-        # effects: which functions destroy a `poke` parameter, transitively (#168).
+    def _compute_effects(self, compilation_order: list[Unit]):
+        """effects: which functions destroy a `poke` parameter, transitively (#168)."""
         # Computed ONCE across EVERY unit -- the borrow pass runs per unit, so a per-unit
         # summary would make a cross-unit callee invisible.
         from sushi_lang.semantics.passes.borrow import compute_destroy_effects
-        destroy_effects = compute_destroy_effects(
+        return compute_destroy_effects(
             unit.ast for unit in compilation_order if unit.ast is not None
         )
 
-        # Enum type names for the borrow pass's ownership-sink test, stripped to their
-        # base name: a monomorphized generic enum is interned as "Result<i32, StdError>"
-        # while its constructor is written `Result.Ok(...)`.
-        enum_names = enum_base_names(self.tables.enums, self.tables.generic_enums)
-
+    def _check_units(self, compilation_order: list[Unit], monomorphizer,
+                     libraries: LibraryRegistration, destroy_effects,
+                     enum_names: set[str]) -> None:
+        """scope, typecheck, lift and borrow, per unit, in one loop."""
+        # Every unit is analysed with the global context, because units reference each
+        # other, but each gets its own reporter so a diagnostic names the right file.
         for unit in compilation_order:
             if unit.ast is None:
                 continue
@@ -514,9 +608,12 @@ class SemanticAnalyzer:
 
             self._merge_unit(unit_reporter)
 
-        # The ENTRY unit, for the same reason `generics/synthesis.py` names it: a
-        # lifted body belongs to the unit the compiler was pointed at, not to
-        # whichever unit the compilation order happens to put first.
+    @staticmethod
+    def _lift_target(compilation_order: list[Unit]):
+        """The AST a monomorphized extension's lifted lambdas belong to."""
+        # The ENTRY unit, for the same reason `generics/synthesis.py` names it: a lifted
+        # body belongs to the unit the compiler was pointed at, not to whichever unit the
+        # compilation order happens to put first.
         lift_target = next(
             (u.ast for u in compilation_order
              if u.ast is not None and getattr(u, "is_entry", False)),
@@ -524,12 +621,17 @@ class SemanticAnalyzer:
         if lift_target is None:
             lift_target = next(
                 (u.ast for u in compilation_order if u.ast is not None), None)
+        return lift_target
 
-        # Fixpoint: an array-target template instantiates at the CALL SITE (the
-        # typecheck pass queued it), and checking one monomorphized body can resolve a
-        # call that queues another. The bound mirrors MAX_EXPANSION_ROUNDS in the
-        # instantiate pass: reaching it drops an instantiation, which surfaces as the
-        # ordinary CE2008, never as a hang.
+    def _check_array_extensions(self, compilation_order: list[Unit], monomorphizer,
+                                destroy_effects, enum_names: set[str]) -> None:
+        """Check each call-site-driven extension copy, to a fixpoint."""
+        # An array-target template instantiates at the CALL SITE (the typecheck pass
+        # queued it), and checking one monomorphized body can resolve a call that queues
+        # another. The bound mirrors MAX_EXPANSION_ROUNDS in the instantiate pass:
+        # reaching it drops an instantiation, which surfaces as the ordinary CE2008,
+        # never as a hang.
+        lift_target = self._lift_target(compilation_order)
         checked = 0
         for _round in range(self.MAX_ARRAY_EXPANSION_ROUNDS):
             self._drain_pending_array_extensions(monomorphizer, compilation_order)
