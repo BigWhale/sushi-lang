@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import inspect
 
+import pytest
+
 from sushi_lang.semantics.passes import resolve as resolve_pass
 from sushi_lang.semantics.passes.collect import EnumTable, StructTable
 from sushi_lang.semantics.typesys import StructType, UnknownType
@@ -156,4 +158,31 @@ def test_the_backend_keeps_no_homonym_of_the_semantics_resolver():
         "backend/types/core/resolution.py spells `resolve_unknown_type` again. The "
         "semantics one returns the type unchanged on a miss; this one raises CE0020, and "
         "a reader cannot tell them apart by the name."
+    )
+
+
+def test_the_backend_keeps_no_homonym_of_the_semantics_generic_resolver():
+    """The second homonym of the pair: one name, two opposite contracts (#717)."""
+    from sushi_lang.backend.types.core import resolution
+
+    assert not hasattr(resolution, "resolve_generic_type_ref"), (
+        "backend/types/core/resolution.py spells `resolve_generic_type_ref` again. The "
+        "semantics one returns the type unchanged on a miss; this one raises CE0045, and "
+        "a reader cannot tell them apart by the name."
+    )
+
+
+def test_the_backend_seam_says_a_generic_instance_is_required():
+    """The name states the contract: the caller is about to emit, so a miss is a fault."""
+    from sushi_lang.backend.types.core.resolution import require_generic_instance
+    from sushi_lang.internals.errors import InternalCompilerError
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.typesys import BuiltinType
+
+    with pytest.raises(InternalCompilerError):
+        require_generic_instance(
+            GenericTypeRef(base_name="Box", type_args=(BuiltinType.I32,)), {}, {})
+
+    assert require_generic_instance(UnknownType("Node"), {}, {}) is None, (
+        "a type that is not a generic reference is not this seam's business"
     )
