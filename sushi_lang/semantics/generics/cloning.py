@@ -68,9 +68,15 @@ def _register_clone_method(target_type: Type, derived: DerivedMethodTable, kind:
 
 def register_struct_clone_method(struct_type: StructType,
                                  derived: DerivedMethodTable) -> None:
-    """Register the auto-derived clone() method for a user struct type."""
+    """Register the auto-derived clone() method for a user struct type.
+
+    `Own`, `List` and `HashMap` get NO entry, and the absence is deliberate at both
+    ends: each keeps its own method path, and the backend asks for a struct clone with
+    `exclude_containers=True`. A census of the derived table therefore reads those three
+    as empty by design and not as a registration that went missing (#720).
+    """
     if struct_type.name.startswith(CONTAINER_PREFIXES):
-        return  # Own/List/HashMap keep their own method paths
+        return
     _register_clone_method(
         struct_type, derived, "struct", _validate_struct_clone,
         f"Auto-derived clone for struct {struct_type}",

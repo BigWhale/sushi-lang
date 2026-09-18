@@ -1,0 +1,15 @@
+# A generic struct whose field is its own instantiation. Box@(i32) is the type that
+# holds itself, and it has no source of its own, so the caret stands at the template
+# that produced it. The name is the user's spelling and not the interned key (#700).
+# EXPECT_ERROR_CODE: CE2095
+# EXPECT_STDERR_CONTAINS: recursive type 'Box@(i32)'
+# EXPECT_STDERR_CONTAINS: Box@(i32) refers to Box@(i32)
+# EXPECT_STDERR_CONTAINS: test_err_generic_struct_instance_cycle_spelling.sushi:9:8
+
+struct Box@(T):
+    T v
+    Box@(T) again
+
+fn main() i32:
+    let Box@(i32) b = Box(1, Box(2, 3))
+    return Result.Ok(0)

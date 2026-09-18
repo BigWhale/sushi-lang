@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type_name
 
 if TYPE_CHECKING:
     from sushi_lang.internals.report import Reporter
@@ -60,9 +61,13 @@ def _successors(node: Node, struct_table: 'StructTable',
 
 
 def _format_chain(cycle: List[Node]) -> str:
-    """Render a cycle the way Go does: 'A refers to B refers to A'."""
-    names = [name for _kind, name in cycle]
-    names.append(cycle[0][1])
+    """Render a cycle the way Go does: 'A refers to B refers to A'.
+
+    Every hop reads in the surface `@(...)` spelling: an instance is keyed by its
+    internal `List<i32>` name, and no user-facing text carries that form.
+    """
+    names = [display_type_name(name) for _kind, name in cycle]
+    names.append(display_type_name(cycle[0][1]))
     return " refers to ".join(names)
 
 
@@ -97,6 +102,12 @@ def check_infinite_size_types(struct_table: 'StructTable', enum_table: 'EnumTabl
     a struct one (#677). With `since`, the roots are the declarations appended after
     those marks. A cycle among older declarations stopped the analysis the first time,
     so a walk from the new names finds every new cycle and repeats none.
+
+    The roots are every STRUCT and then every enum, which is what decides where a MIXED
+    cycle is reported: a struct whose field is an enum whose payload is the struct reads
+    at the struct, whichever of the two is declared first (#700). Declaration order is
+    the other answer and is not the one taken -- a cycle has no first member, so the
+    walk's order is as good a rule and it is the one the fixtures pin.
     """
     # Iterative DFS with an explicit path so the diagnostic can name the chain.
     # Recursion is not an option here: the graph is exactly the one that used to
@@ -148,11 +159,14 @@ def check_infinite_size_types(struct_table: 'StructTable', enum_table: 'EnumTabl
 
 def _report(cycle: List[Node], struct_table: 'StructTable', enum_table: 'EnumTable',
             reporter: 'Reporter') -> None:
-    """Emit CE2095 against the declaration the cycle starts at."""
-    kind, name = cycle[0]
-    span: Optional[object] = (
-        struct_table.spans.get(name) if kind == "struct"
-        else enum_table.spans.get(name)
-    )
+    """Emit CE2095 against the declaration the cycle starts at.
 
-    er.emit(reporter, er.ERR.CE2095, span, name=name, chain=_format_chain(cycle))
+    A generic instance carries the span of the TEMPLATE it was minted from, stamped at
+    the intern, because the instance itself is spelled in no declaration (#700).
+    """
+    kind, name = cycle[0]
+    table = struct_table if kind == "struct" else enum_table
+
+    er.emit(reporter, er.ERR.CE2095, table.spans.get(name),
+            filename=table.files.get(name),
+            name=display_type_name(name), chain=_format_chain(cycle))

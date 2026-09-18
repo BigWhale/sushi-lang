@@ -1,0 +1,25 @@
+# The same refusal inside a generic body, where the enclosing extension DOES carry a
+# channel: the copy interns Maybe@(string) while the typecheck pass runs, so the clone
+# has to come from the intern and not from a later whole-table walk (#721, #720).
+# EXPECT_STDOUT_EXACT: "n1\nn2\n"
+# EXPECT_NO_LEAKS
+
+extend List@(T) dup@(U)(fn(T) -> U f) List@(U) | StdError:
+    let List@(U) out = List.new()
+    foreach(x in self.iter()):
+        let U mapped = f(x)??
+        let Maybe@(U) held = Maybe.Some(mapped)
+        let Maybe@(U) copy = held.clone()
+        out.push(copy??)
+    return out
+
+fn main() i32:
+    let List@(i32) a = List.new()
+    a.push(1)
+    a.push(2)
+    match a.dup(|i32 n| "n{n}"):
+        Result.Ok(nom b) ->
+            foreach(s in b.iter()):
+                println(s)
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)
