@@ -579,153 +579,175 @@ class ScopeAnalyzer:
         self._pop_scope()
 
     def _check_expression(self, expr: Expr) -> None:
-        """Check an expression for variable usage."""
-        match expr:
-            case Name():
-                # A bare name in a VALUE position: the receiver arms below take the
-                # written-name positions, so section 8's ladder answers here (#600).
-                rung = self._rung_of(expr.id)
-                if rung is BareName.LOCAL or rung is BareName.NOTHING:
-                    self._use_variable(expr.id, expr.loc)   # CE1001 when it is NOTHING
-                elif rung is BareName.TYPE:
-                    self._reject_type_as_value(expr.id, expr.loc)
-                # A constant, a stdlib constant, a function value and a namespace are
-                # all names with no frame slot: not a variable, and not undeclared. The
-                # typecheck pass types the three that are values.
-            case IntLit() | FloatLit() | BoolLit() | StringLit():
+        """Check an expression. The table below says which arm, and it is keyed on the TYPE.
+
+        The statement dispatch above and this one read the same shape, for the same
+        reason (#686): a table keyed on the class object answers a rename at import
+        time, and the backstop below is the one answer for a kind with no row.
+        """
+        handler = _EXPRESSION_HANDLERS.get(type(expr))
+        if handler is not None:
+            handler(self, expr)
+            return
+        # NOT a silent fall-through (#245): an expression node with no row got no usage
+        # tracking, invisibly. The CI gate is
+        # tests/unit/test_scope_dispatch_is_total.py; this is the backstop.
+        er.raise_internal_error("CE0130", span=getattr(expr, "loc", None),
+                                node=type(expr).__name__)
+
+    def _check_leaf_expression(self, expr: Expr) -> None:
+        """A kind with no sub-expression and no name to resolve: nothing to walk.
+
+        `_LEAF_EXPRS` names every row that points here, and the gate holds each of them
+        to it: a field that can hold an expression makes the node a subtree, not a leaf.
+        """
+
+    def _check_name(self, expr: Name) -> None:
+        """A bare name in a VALUE position.
+
+        The receiver arms below take the written-name positions, so section 8's ladder
+        answers here (#600). A constant, a stdlib constant, a function value and a
+        namespace are all names with no frame slot: not a variable, and not undeclared.
+        The typecheck pass types the three that are values.
+        """
+        rung = self._rung_of(expr.id)
+        if rung is BareName.LOCAL or rung is BareName.NOTHING:
+            self._use_variable(expr.id, expr.loc)   # CE1001 when it is NOTHING
+        elif rung is BareName.TYPE:
+            self._reject_type_as_value(expr.id, expr.loc)
+
+    def _check_interpolated_string(self, expr: InterpolatedString) -> None:
+        """Walk every hole; the literal parts between them are plain strings."""
+        for part in expr.parts:
+            if not isinstance(part, str):  # part is an Expr
+                self._check_expression(part)
+
+    def _check_array_literal(self, expr: ArrayLiteral) -> None:
+        """Walk every element, and the repeat count an element may carry."""
+        for element in expr.elements:
+            self._check_expression(element.value)
+            if element.count is not None:
+                self._check_expression(element.count)
+
+    def _check_index_access(self, expr: IndexAccess) -> None:
+        self._check_expression(expr.array)
+        self._check_expression(expr.index)
+
+    def _check_unary_op(self, expr: UnaryOp) -> None:
+        self._check_expression(expr.expr)
+
+    def _check_binary_op(self, expr: BinaryOp) -> None:
+        self._check_expression(expr.left)
+        self._check_expression(expr.right)
+
+    def _check_call(self, expr: Call) -> None:
+        """A callee that is a bound local is a function VALUE, so it is a use."""
+        if isinstance(expr.callee, Name) and self._is_bound_local(expr.callee.id):
+            self._use_variable(expr.callee.id, expr.callee.loc)
+        for arg in expr.args:
+            self._check_expression(arg)
+
+    def _check_method_call(self, expr: MethodCall) -> None:
+        """A TYPE name as receiver is a written-name position, not a value.
+
+        The call is then a variant construction (`Result.Ok()`) or a static. The same
+        test the `DotCall` arm applies, and for the same reason.
+        """
+        if not (isinstance(expr.receiver, Name)
+                and self._names_a_type(expr.receiver.id)):
+            self._check_expression(expr.receiver)
+
+        for arg in expr.args:
+            self._check_expression(arg)
+
+    def _check_dot_call(self, expr: DotCall) -> None:
+        """The unified `X.Y(args)` node: a constructor, a static, or a method call."""
+        if isinstance(expr.receiver, Name):
+            receiver_name = expr.receiver.id
+            # Local-wins (#296): a bound local shadows an enum or generic-struct
+            # name, so the receiver is a variable use.
+            if self._is_bound_local(receiver_name):
+                self._check_expression(expr.receiver)
+            elif self._is_namespace(receiver_name):
                 pass
-            case InterpolatedString():
-                for part in expr.parts:
-                    if not isinstance(part, str):  # part is an Expr
-                        self._check_expression(part)
-            case ArrayLiteral():
-                for element in expr.elements:
-                    self._check_expression(element.value)
-                    if element.count is not None:
-                        self._check_expression(element.count)
-            case IndexAccess():
-                self._check_expression(expr.array)
-                self._check_expression(expr.index)
-            case UnaryOp():
-                self._check_expression(expr.expr)
-            case BinaryOp():
-                self._check_expression(expr.left)
-                self._check_expression(expr.right)
-            case Call():
-                if isinstance(expr.callee, Name) and self._is_bound_local(expr.callee.id):
-                    self._use_variable(expr.callee.id, expr.callee.loc)
-                for arg in expr.args:
-                    self._check_expression(arg)
-            case MethodCall():
-                # A TYPE name as receiver is a written-name position, not a value: the
-                # call is a variant construction (`Result.Ok()`) or a static. The same
-                # test the DotCall arm below applies, and for the same reason.
-                if isinstance(expr.receiver, Name) and self._names_a_type(expr.receiver.id):
-                    pass
-                else:
-                    self._check_expression(expr.receiver)
-
-                for arg in expr.args:
-                    self._check_expression(arg)
-            case DotCall():
-                # DotCall is the unified X.Y(args) node
-                # Check if receiver is an enum/struct type name - if so, it's a constructor
-                # Otherwise, it's a method call
-                if isinstance(expr.receiver, Name):
-                    receiver_name = expr.receiver.id
-                    # Local-wins (#296): a bound local shadows an enum or generic-struct
-                    # name, so the receiver is a variable use.
-                    if self._is_bound_local(receiver_name):
-                        self._check_expression(expr.receiver)
-                    elif self._is_namespace(receiver_name):
-                        pass
-                    elif self._names_a_type(receiver_name):
-                        # A TYPE name in a receiver position: the call is a variant
-                        # construction or a static method (#542, ruling Q1). Whether
-                        # this type has one is the typecheck pass's answer (CE2102 /
-                        # CE2045) -- "undeclared identifier" was wrong about the one
-                        # thing it named, because the fault is the POSITION.
-                        pass
-                    else:
-                        self._check_expression(expr.receiver)
-                else:
-                    self._check_expression(expr.receiver)
-
-                for arg in expr.args:
-                    self._check_expression(arg)
-            case DynamicArrayNew():
+            elif self._names_a_type(receiver_name):
+                # A TYPE name in a receiver position: the call is a variant
+                # construction or a static method (#542, ruling Q1). Whether
+                # this type has one is the typecheck pass's answer (CE2102 /
+                # CE2045) -- "undeclared identifier" was wrong about the one
+                # thing it named, because the fault is the POSITION.
                 pass
-            case DynamicArrayFrom():
-                self._check_expression(expr.elements)
-            case CastExpr():
-                self._check_expression(expr.expr)
-            case MemberAccess():
-                # Two written-name receivers, and neither is a value. `geo.MAX_DEPTH`
-                # reads a namespace; `Color.Red` names a payload-less VARIANT, which is
-                # the position CE2105 must not reach. A local named `geo` or `Color`
-                # wins, which is what both tests ask.
-                #
-                # Only an ENUM name, and not every type name: a struct's dot in a
-                # MEMBER position reaches nothing at all -- a field needs an instance
-                # and a static needs a call -- so `Point.x` is a value position after
-                # all, and letting it through reached the emitter as CE0056.
-                if not (isinstance(expr.receiver, Name)
-                        and (self._is_namespace(expr.receiver.id)
-                             or self._names_an_enum(expr.receiver.id))):
-                    self._check_expression(expr.receiver)
-            case EnumConstructor():
-                # The AST builder parses both `Result.Ok(42)` and `x.realise(0)` as an
-                # EnumConstructor, so a receiver naming a VARIABLE is really a method call.
+            else:
+                self._check_expression(expr.receiver)
+        else:
+            self._check_expression(expr.receiver)
 
-                enum_name = expr.enum_name
-                is_variable = False
-                for scope in reversed(self.scopes):
-                    if enum_name in scope:
-                        is_variable = True
-                        break
+        for arg in expr.args:
+            self._check_expression(arg)
 
-                if is_variable:
-                    # A method call on a variable. The AST cannot be rewritten mid-walk, so
-                    # mark the receiver used and check the arguments.
-                    self._use_variable(enum_name, expr.enum_name_span)
-                else:
-                    pass
+    def _check_dynamic_array_from(self, expr: DynamicArrayFrom) -> None:
+        self._check_expression(expr.elements)
 
-                for arg in expr.args:
-                    self._check_expression(arg)
-            case TryExpr():
-                self._check_expression(expr.expr)
-            case Borrow():
-                # What is borrowed is the ROOT of the place -- `peek cfg.port` borrows out
-                # of `cfg` -- so the whole chain resolves through this one arm. That is what
-                # gives `peek nope.x` a single diagnostic instead of two.
-                base = expr.expr
-                while isinstance(base, MemberAccess):
-                    base = base.receiver
-                if (isinstance(base, Name)
-                        and not (base is not expr.expr and self._is_namespace(base.id))):
-                    self._borrow_variable(base.id, expr.mutability, base.loc)
-                else:
-                    # `poke geo.count` reads a namespace: the MemberAccess arm resolves
-                    # it, and the typecheck pass says whether the member has an address.
-                    # Not a place at all (a call result, a literal). The borrow pass rejects it as
-                    # CE2404; here it is just an ordinary expression to walk.
-                    self._check_expression(expr.expr)
-            case RangeExpr():
-                self._check_expression(expr.start)
-                self._check_expression(expr.end)
-            case Spread():
-                self._check_expression(expr.value)
-            case Lambda():
-                self._check_lambda(expr)
-            case BlankLit():
-                pass
-            case _:
-                # NOT a silent fall-through (#245). An expression node with no case got
-                # no usage tracking, invisibly. The CI gate is
-                # tests/unit/test_scope_dispatch_is_total.py; this is the backstop.
-                er.raise_internal_error("CE0130", span=getattr(expr, "loc", None),
-                                        node=type(expr).__name__)
+    def _check_cast(self, expr: CastExpr) -> None:
+        self._check_expression(expr.expr)
+
+    def _check_member_access(self, expr: MemberAccess) -> None:
+        """Two written-name receivers, and neither is a value.
+
+        `geo.MAX_DEPTH` reads a namespace; `Color.Red` names a payload-less VARIANT,
+        which is the position CE2105 must not reach. A local named `geo` or `Color`
+        wins, which is what both tests ask.
+
+        Only an ENUM name, and not every type name: a struct's dot in a MEMBER position
+        reaches nothing at all -- a field needs an instance and a static needs a call --
+        so `Point.x` is a value position after all, and letting it through reached the
+        emitter as CE0056.
+        """
+        if not (isinstance(expr.receiver, Name)
+                and (self._is_namespace(expr.receiver.id)
+                     or self._names_an_enum(expr.receiver.id))):
+            self._check_expression(expr.receiver)
+
+    def _check_enum_constructor(self, expr: EnumConstructor) -> None:
+        """The AST builder spells `Result.Ok(42)` and `x.realise(0)` with one node.
+
+        So a receiver naming a VARIABLE is really a method call. The AST cannot be
+        rewritten mid-walk, so the receiver is marked used and the arguments are walked.
+        """
+        if self._is_bound_local(expr.enum_name):
+            self._use_variable(expr.enum_name, expr.enum_name_span)
+
+        for arg in expr.args:
+            self._check_expression(arg)
+
+    def _check_try(self, expr: TryExpr) -> None:
+        self._check_expression(expr.expr)
+
+    def _check_borrow(self, expr: Borrow) -> None:
+        """What is borrowed is the ROOT of the place.
+
+        `peek cfg.port` borrows out of `cfg`, so the whole chain resolves through this
+        one arm. That is what gives `peek nope.x` a single diagnostic instead of two.
+        """
+        base = expr.expr
+        while isinstance(base, MemberAccess):
+            base = base.receiver
+        if (isinstance(base, Name)
+                and not (base is not expr.expr and self._is_namespace(base.id))):
+            self._borrow_variable(base.id, expr.mutability, base.loc)
+        else:
+            # `poke geo.count` reads a namespace: the MemberAccess arm resolves
+            # it, and the typecheck pass says whether the member has an address.
+            # Not a place at all (a call result, a literal). The borrow pass rejects it as
+            # CE2404; here it is just an ordinary expression to walk.
+            self._check_expression(expr.expr)
+
+    def _check_range(self, expr: RangeExpr) -> None:
+        self._check_expression(expr.start)
+        self._check_expression(expr.end)
+
+    def _check_spread(self, expr: Spread) -> None:
+        self._check_expression(expr.value)
 
 
 # The statement dispatch, keyed on the node CLASS (#686). One row per direct subclass of
@@ -746,4 +768,36 @@ _STATEMENT_HANDLERS: Dict[type, Callable[[ScopeAnalyzer, Any], None]] = {
     Match: ScopeAnalyzer._check_match,
     Break: ScopeAnalyzer._check_break,
     Continue: ScopeAnalyzer._check_continue,
+}
+
+# The expression kinds with nothing to walk: no sub-expression field, and no name this
+# pass resolves. They share one arm, and the gate holds each of them to being a leaf --
+# a field added to one that can hold an expression is a subtree this walk would skip.
+_LEAF_EXPRS: frozenset[type] = frozenset({
+    IntLit, FloatLit, BoolLit, StringLit, BlankLit, DynamicArrayNew,
+})
+
+# The expression dispatch, the statement table's shape. One row per member of the `Expr`
+# union, and `tests/unit/test_scope_dispatch_is_total.py` keeps it complete in both
+# directions.
+_EXPRESSION_HANDLERS: Dict[type, Callable[[ScopeAnalyzer, Any], None]] = {
+    Name: ScopeAnalyzer._check_name,
+    InterpolatedString: ScopeAnalyzer._check_interpolated_string,
+    ArrayLiteral: ScopeAnalyzer._check_array_literal,
+    IndexAccess: ScopeAnalyzer._check_index_access,
+    UnaryOp: ScopeAnalyzer._check_unary_op,
+    BinaryOp: ScopeAnalyzer._check_binary_op,
+    Call: ScopeAnalyzer._check_call,
+    MethodCall: ScopeAnalyzer._check_method_call,
+    DotCall: ScopeAnalyzer._check_dot_call,
+    DynamicArrayFrom: ScopeAnalyzer._check_dynamic_array_from,
+    CastExpr: ScopeAnalyzer._check_cast,
+    MemberAccess: ScopeAnalyzer._check_member_access,
+    EnumConstructor: ScopeAnalyzer._check_enum_constructor,
+    TryExpr: ScopeAnalyzer._check_try,
+    Borrow: ScopeAnalyzer._check_borrow,
+    RangeExpr: ScopeAnalyzer._check_range,
+    Spread: ScopeAnalyzer._check_spread,
+    Lambda: ScopeAnalyzer._check_lambda,
+    **{kind: ScopeAnalyzer._check_leaf_expression for kind in _LEAF_EXPRS},
 }
