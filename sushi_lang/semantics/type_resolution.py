@@ -166,7 +166,8 @@ def resolve_type_recursively(
     See docs/design/type-identity.md.
     """
     from sushi_lang.semantics.typesys import (
-        ArrayType, DynamicArrayType, StructType, EnumType, FunctionType
+        ArrayType, DynamicArrayType, StructType, EnumType, FunctionType, IteratorType,
+        PointerType, ReferenceType
     )
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
@@ -216,6 +217,28 @@ def resolve_type_recursively(
         )
         if resolved_base != resolved_ty.base_type:
             return DynamicArrayType(base_type=resolved_base)
+
+    elif isinstance(resolved_ty, ReferenceType):
+        resolved_referent = resolve_type_recursively(
+            resolved_ty.referenced_type, struct_table, enum_table, visited
+        )
+        if resolved_referent != resolved_ty.referenced_type:
+            # `replace`, so the declared `peek`/`poke` rides along.
+            return replace(resolved_ty, referenced_type=resolved_referent)
+
+    elif isinstance(resolved_ty, PointerType):
+        resolved_pointee = resolve_type_recursively(
+            resolved_ty.pointee_type, struct_table, enum_table, visited
+        )
+        if resolved_pointee != resolved_ty.pointee_type:
+            return replace(resolved_ty, pointee_type=resolved_pointee)
+
+    elif isinstance(resolved_ty, IteratorType):
+        resolved_element = resolve_type_recursively(
+            resolved_ty.element_type, struct_table, enum_table, visited
+        )
+        if resolved_element != resolved_ty.element_type:
+            return replace(resolved_ty, element_type=resolved_element)
 
     elif isinstance(resolved_ty, GenericTypeRef):
         resolved_args = tuple(
