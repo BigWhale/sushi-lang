@@ -1,0 +1,6 @@
+struct Shade:
+    i32 tone
+
+public fn shade_tone() i32:
+    let Shade s = Shade(9)
+    return Result.Ok(s.tone)

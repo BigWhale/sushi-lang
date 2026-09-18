@@ -1,0 +1,16 @@
+# The second spelling of the take: a `nom` pattern binding. A plain `match` only
+# borrows its scrutinee, and a constant gives the match nothing to own, so the arm
+# reads the same CE2432 a unit variable reads.
+# EXPECT_ERROR_CODE: CE2432
+
+enum Shade:
+    Dim(string)
+    Bright(string)
+
+const Shade TONE = Shade.Dim("grey")
+
+fn main() i32:
+    match TONE:
+        Shade.Dim(nom d) -> println(d)
+        Shade.Bright(_) -> println("bright")
+    return Result.Ok(0)

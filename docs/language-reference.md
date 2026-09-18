@@ -1854,7 +1854,7 @@ const string[2] NAMES = ["ford", "arthur"]
 
 fn main() i32:
     println(NAMES[1])                   # arthur
-    let string[2] copy = NAMES          # an ordinary local
+    let string[2] copy = NAMES.clone()  # a local of its own (CE2436 without the clone)
     println(copy[0])                    # ford
     return Result.Ok(0)
 ```
@@ -1905,13 +1905,14 @@ const Segment ALSO_BAD = Segment(Point(pick(), 2), 3)   # CE0108, one level down
 ```
 
 A struct constant lives in read-only memory like every other constant. Writing a field
-is **CE2096**, and calling a `poke self` or a `nom self` method on one is **CE2400** --
-the first writes the receiver and the second takes it away. A `peek self` method reads
-it, and it is legal:
+is **CE2096** and calling a `poke self` method on one is **CE2400**, because read-only
+storage cannot take a write. A `nom self` method TAKES the receiver, and unit-level
+storage is never moved out of, so it is **CE2436** -- the same code a `var` reads. A
+`peek self` method reads it, and it is legal:
 
 ```sushi
 OUT.fd := 7          # CE2096: cannot assign to a field of constant 'OUT'
-OUT.release()        # CE2400: cannot borrow 'OUT' with `nom`
+OUT.release()        # CE2436: cannot move 'OUT': it is a constant
 ```
 
 ### Enum Constants
@@ -2064,11 +2065,12 @@ address to a function, one `poke` at a time (**CE2403**), and `foreach(poke r in
 table.iter())` points into its elements. A `let` bound from a read out of it
 (`let string first = names[0]`) borrows and freezes it, exactly as it would a local.
 
-A unit variable is **never moved out of**. It owns its storage for the whole run, so a
-`nom` argument, a `let` bound straight from it, a `return` of it and a `nom self` method
-such as `close()` are all **CE2436** when the type owns a resource. A plain value copies
-out freely, and a rebind is the one way to change what the variable holds: the old value
-is dropped, the new one is stored.
+Unit-level storage is **never moved out of**, and a `const` reads the same rule as a
+`var`. Each is one object the program keeps for its whole run, so a `nom` argument, a
+`let` bound straight from it, a `return` of it and a `nom self` method such as `close()`
+are all **CE2436** when the type owns a resource. Take an independent value with
+`.clone()`. A plain value copies out freely, and a rebind is the one way to change what a
+variable holds: the old value is dropped, the new one is stored.
 
 <!-- docs-sweep: skip (declarations only; the sweep compiles a block with a main) -->
 ```sushi
