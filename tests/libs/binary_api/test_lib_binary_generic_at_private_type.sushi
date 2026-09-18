@@ -1,0 +1,15 @@
+# A BINARY library's public template, instantiated at the CONSUMER's own private
+# type. The monomorphized copy is the consumer's and reaches no other unit, so the
+# leak fence must not read it as a public function of the library (#702).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "5\n"
+# EXPECT_NO_LEAKS
+use <lib/private_generic_type_lib>
+
+struct Point:
+    i32 x
+
+fn main() i32:
+    let Point p = boxed(nom Point(5)).realise(Point(0))
+    println(p.x)
+    return Result.Ok(0)
