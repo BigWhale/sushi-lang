@@ -70,15 +70,6 @@ def note_first_declaration(builder: Any, spans: dict, name: str,
     return builder.note("defined by the compiler")
 
 
-def get_span(node: Any, *attrs: str) -> Optional[Span]:
-    """Get first non-None span from node attributes."""
-    for attr in attrs:
-        span = getattr(node, attr, None)
-        if span is not None:
-            return span
-    return None
-
-
 def reject_reference_in(reporter, ty: Optional[Type], span: Optional[Span],
                         code) -> bool:
     """Reject a reference type in a position that has no semantics for one (R4)."""

@@ -130,10 +130,6 @@ class PerkImplementationTable:
         """Check if a type implements a perk."""
         return (type_name, perk_name) in self.implementations
 
-    def get_implementations(self, type_name: str) -> Set[str]:
-        """Get all perks implemented by a type."""
-        return self.by_type.get(type_name, set())
-
     def get(self, type_name: str, perk_name: str) -> Optional[ExtendWithDef]:
         """Get a specific perk implementation."""
         return self.implementations.get((type_name, perk_name))
