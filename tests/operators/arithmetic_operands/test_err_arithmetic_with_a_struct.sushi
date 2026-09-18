@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODE: CE2518
+# A struct has no arithmetic. Add the fields one at a time.
+
+struct Point:
+    i32 x
+
+fn main() i32:
+    let Point a = Point(1)
+    let Point b = Point(2)
+    let Point c = a * b
+    println("{c.x}")
+    return Result.Ok(0)

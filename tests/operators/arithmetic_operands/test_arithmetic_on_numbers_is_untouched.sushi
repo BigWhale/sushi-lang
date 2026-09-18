@@ -1,0 +1,26 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n3\n-1\n6\n3\n1\n2.5\n1\n200\n25\n"
+# Every arithmetic operator on every numeric width keeps working. The rule
+# narrows the operand set and nothing else.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let i32 a = 1
+    let i32 b = 2
+    println("{a + b}")
+    println("{a - b}")
+    println("{(a + b) * b}")
+    println("{(a + b) / a}")
+    println("{(a + b) % b}")
+
+    let f64 x = 5.0
+    let f64 y = 2.0
+    println("{x / y}")
+    println("{x % y}")
+
+    let u8 low = 100
+    let u8 high = 2
+    println("{low * high}")
+    println("{low / (high * high)}")
+
+    return Result.Ok(0)

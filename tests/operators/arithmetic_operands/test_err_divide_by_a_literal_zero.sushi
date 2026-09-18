@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE0112
+# The same refusal a constant gets. This emitted 'sdiv i32 1, 0' and printed
+# whatever the optimizer left behind.
+
+fn main() i32:
+    let i32 x = 10 / 0
+    println("{x}")
+    return Result.Ok(0)

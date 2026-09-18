@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODE: CE2518
+# A forgotten '??' is the common way to land here, so the diagnostic names the
+# escape.
+
+fn twice(i32 n) i32:
+    return Result.Ok(n * 2)
+
+fn main() i32:
+    let i32 x = twice(2) + 1
+    println("{x}")
+    return Result.Ok(0)
