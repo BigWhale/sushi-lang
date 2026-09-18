@@ -27,8 +27,8 @@ shape -- a marker, a type, a name, an initializer -- and a different kind:
 The console handles were the forcing case. `stdout`, `stderr` and `stdin` were `File`
 CONSTANTS, and nothing writes a constant: the moment the `Writer` contract took
 `poke self` (so that a `BufWriter@(W)` could implement it), `stdout.write(...)` would have
-stopped compiling (CE2400). A `var` gives the console handle an address, so the spelling
-stays and the contract can move.
+stopped compiling (CE2400). A `var` gives the console handle storage the contract can
+write, so the spelling stays and the contract can move.
 
 A private `var` is the common case in Go and Zig code, and it is what keeps `public var`
 honest:
