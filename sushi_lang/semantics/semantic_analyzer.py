@@ -76,27 +76,36 @@ class SemanticAnalyzer:
         numbers -- a number goes out of order the moment a pass is inserted, which is how
         the old scheme ended up running the scope pass after the derive pass.
 
-            collect       constants, headers, generic types      passes/collect/
-            docs          doc blocks against their declarations  passes/docs.py
-            externs       extern signatures, ptr unit gate       passes/types/externals.py
-            libraries     library symbol registration            library_registration.py
-            namespaces    `use ... as`, one table per unit       passes/namespaces.py
-            ffi-clash     an extern naming a defined symbol      passes/types/externals.py
-            entrypoint    main(): it exists, returns i32        _check_entrypoint
-            instantiate   generic instantiation collection       generics/instantiate/
-            monomorphize  generic -> concrete                    generics/monomorphize/
-            resolve       field and variant type resolution      passes/resolve.py
-            finite-types  reject by-value containment cycles     passes/finite_types.py
-            derive        auto-derived hash() and clone()        passes/derive.py
-            shadowing     reject an extension over a built-in    _check_extension_shadows_builtin
-            effects       destroy-effect summary                 passes/borrow/destroy_effects.py
-            scope         scope and variable analysis            passes/scope.py
-            typecheck     type validation and inference          passes/types/
-            lift          lambda lifting                         passes/lift.py
-            borrow        borrow checking                        passes/borrow/
+        `_check_multi_file` IS this order in code: one call per stage, named for it.
+
+            stage         what it does                           method                            where it lives
+            collect       constants, headers, generic types      _collect                          passes/collect/
+            docs          doc blocks against their declarations  _check_docs                       passes/docs.py
+            externs       extern signatures, ptr unit gate       _check_externs                    passes/types/externals.py
+            libraries     library symbol registration            _register_libraries               library_registration.py
+            namespaces    `use ... as`, one table per unit       _build_namespaces                 passes/namespaces.py
+            ffi-clash     an extern naming a defined symbol      _check_ffi_clash                  passes/types/externals.py
+            entrypoint    main(): it exists, returns i32         _check_entrypoint                 here
+            instantiate   generic instantiation collection       _collect_instantiations           generics/instantiate/
+            monomorphize  generic -> concrete                    _monomorphize                     generics/monomorphize/
+            resolve       field and variant type resolution      _resolve_types                    passes/resolve.py
+            finite-types  reject by-value containment cycles     _check_finite_types               passes/finite_types.py
+            derive        auto-derived hash() and clone()        _derive                           passes/derive.py
+            shadowing     reject an extension over a built-in    _check_extension_shadows_builtin  here
+            effects       destroy-effect summary                 _compute_effects                  passes/borrow/destroy_effects.py
+            scope         scope and variable analysis            _check_units                      passes/scope.py
+            typecheck     type validation and inference          _check_units                      passes/types/
+            lift          lambda lifting                         _check_units                      passes/lift.py
+            borrow        borrow checking                        _check_units                      passes/borrow/
 
         The last four run per unit, in one loop. `_check_monomorphized_extensions` repeats
-        those four for each instantiation of a generic-target extension.
+        those four for each instantiation of a generic-target extension, and
+        `_check_array_extensions` drives that to a fixpoint.
+
+        One call in `_check_multi_file` carries no row, because it is not a pass:
+        `_register_monomorphized_extensions` merges the generic-target extension copies
+        into the extension table. It is the `monomorphize` stage's tail and both ends of
+        its placement -- after `derive`, before `shadowing` -- are load-bearing.
 
         `semantics/const_eval.py` is NOT a pass. THREE callers reach it as a helper: the
         AST BUILDER, which reads a fixed array's size while the unit is parsed (Known
