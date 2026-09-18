@@ -1,0 +1,6 @@
+# A unit an importer reaches behind a `use ... as` alias. One name is a constant and
+# one is storage, so a reader that asks the alias has to let the RECORD decide.
+
+public const i32 ALIAS_LIMIT = 7
+
+public var i32 ALIAS_SLOT = 3
