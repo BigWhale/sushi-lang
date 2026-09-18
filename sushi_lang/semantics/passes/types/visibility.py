@@ -210,7 +210,15 @@ def reject_private_type(validator: 'TypeValidator', name: str, loc: Any) -> bool
     `Mood` is refused whether the private declaration next door is a struct or an enum.
     A name with no record -- every monomorphized instance, `Result`, `FileMode`, a lifted
     closure environment -- is public by absence.
+
+    A SYNTHESIZED body names nothing (#725, and #702's ruling on this second seam). A
+    monomorphized copy is parked in the unit that declares the template, so the copy's
+    body reads as that unit's, but the type argument was written at the CALL SITE and
+    that site's own unit validated it. The guard is the one its sibling
+    `reject_out_of_scope_type` already carries.
     """
+    if getattr(validator, "in_synthesized_body", False):
+        return False
     table = getattr(validator, "visibility", None)
     if table is None:
         return False
