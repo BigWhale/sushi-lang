@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODE: CE2518
+# An enum is a tag and a payload, not a number. Use match to read it.
+
+enum Colour:
+    Red
+    Green
+
+fn main() i32:
+    let Colour a = Colour.Red()
+    let Colour b = Colour.Green()
+    let Colour c = a - b
+    match c:
+        Colour.Red -> println("red")
+        Colour.Green -> println("green")
+    return Result.Ok(0)

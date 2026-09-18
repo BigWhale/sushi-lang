@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE0112
+# One compile-time arithmetic: the evaluator reads the divisor, so a folded zero
+# is refused as a spelled one is.
+
+fn main() i32:
+    let i32 x = 10 / (3 - 3)
+    println("{x}")
+    return Result.Ok(0)

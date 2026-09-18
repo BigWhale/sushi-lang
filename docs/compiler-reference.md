@@ -668,11 +668,20 @@ const i32 INVALID = "hello" as i32
 
 **Fix:** Only cast between compatible numeric types.
 
-#### CE0112: Division by Zero in Constant
+#### CE0112: Division by Zero
+
+The compiler reads the divisor and it is zero. One compile-time arithmetic answers a
+constant and a body alike, so both spellings below are refused. A divisor the compiler
+cannot read is ordinary code and is left alone.
 
 ```sushi
-# ERROR CE0112: Division by zero in constant expression
+# ERROR CE0112: Division by zero
 const i32 INVALID = 100 / 0
+```
+
+```sushi
+# ERROR CE0112: Division by zero
+let i32 x = 100 / 0
 ```
 
 **Fix:** Ensure divisor is non-zero.

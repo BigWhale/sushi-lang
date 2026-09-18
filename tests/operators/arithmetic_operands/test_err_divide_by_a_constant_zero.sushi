@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE0112
+# A divisor spelled as a constant is as readable as a literal one.
+
+const i32 NONE_LEFT = 0
+
+fn main() i32:
+    let i32 x = 10 / NONE_LEFT
+    println("{x}")
+    return Result.Ok(0)
