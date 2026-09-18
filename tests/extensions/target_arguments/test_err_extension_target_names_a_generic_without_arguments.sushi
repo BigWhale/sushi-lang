@@ -1,0 +1,18 @@
+# `Cage` is a declared generic and names no type on its own, so `Box@(Cage)` names
+# no instantiation. The extension path read the argument as a CONSTRAINT and
+# validated it against nothing, so the declaration compiled and constrained a target
+# that can never exist (#698).
+# EXPECT_ERROR_CODE: CE2001
+
+struct Box@(T):
+    T v
+
+struct Cage@(T):
+    T v
+
+extend Box@(Cage) g() i32:
+    return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

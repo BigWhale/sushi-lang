@@ -385,6 +385,10 @@ class SemanticAnalyzer:
             monomorphizer, compilation_order, concrete_extension_defs,
             struct_instantiations, enum_instantiations)
 
+        # Every instantiation the program names now exists, so an implementation whose
+        # target still names none is one the program never reached.
+        self._drop_unreached_perk_impls(compilation_order)
+
         # A constraint violation STOPS the whole-program analysis here (#579, Ruling 4),
         # as CE2095 does below. CE4006 stands at the type that named the refused
         # instantiation, no copy was cut for it, and the per-unit passes would only
@@ -570,6 +574,31 @@ class SemanticAnalyzer:
             fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
         if fn_instantiations:
             monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
+
+    def _drop_unreached_perk_impls(self, compilation_order) -> None:
+        """Forget an implementation whose `@(...)` target names no instance (#698).
+
+        `extend Box@(Point) with Named` is a CONSTRAINT on one instantiation: it holds
+        for `Box@(Point)` and for nothing else. Where the program never names that
+        instantiation there is no type to check a body against and no method to emit,
+        which is the state a generic EXTENSION on the same target is already left in --
+        its copy is simply never cut. Leaving the implementation in the walks reached
+        the typecheck pass as a CE2001 about the target and the backend as a CE0045.
+        """
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+
+        for unit in compilation_order:
+            impls = unit.ast.perk_impls if unit.ast is not None else None
+            if not impls:
+                continue
+            unit.ast.perk_impls = [
+                impl for impl in impls
+                if not isinstance(impl.target_type, GenericTypeRef)
+                or not isinstance(
+                    resolve_unknown_type(impl.target_type, self.tables.structs.by_name,
+                                         self.tables.enums.by_name),
+                    GenericTypeRef)]
 
     def _monomorphize_generic_perk_impls(self, monomorphizer, compilation_order,
                                          struct_instantiations, concrete_structs,

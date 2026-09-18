@@ -8,8 +8,8 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.visibility import (
-    VisibilityTable, record_declaration, reject_private_perk_contract,
-    taken_by_a_library)
+    VisibilityTable, library_clash_origin, record_declaration,
+    reject_library_clash, reject_private_perk_contract, taken_by_a_library)
 from sushi_lang.semantics.ast import (
     PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
@@ -237,18 +237,26 @@ class PerkCollector:
         `generic_perk_impls`, for the same reason a generic extension is: every later
         walk over `perk_impls` -- the typecheck pass, the backend's declaration and
         definition loops, the fingerprint -- assumes a concrete `self`.
+
+        A REFUSED implementation leaves both lists. A method that declares its own type
+        parameters can match no contract, so every later reader would tell the same
+        fault again in its own words -- which is what the CE4004 and CE2001 beside the
+        real answer were (#704).
         """
         perk_impls = root.perk_impls
         if isinstance(perk_impls, list):
-            moved = []
+            moved, refused = [], []
             for impl in perk_impls:
-                if isinstance(impl, ExtendWithDef):
-                    if self._collect_perk_impl(impl):
-                        moved.append(impl)
-            if moved:
-                moved_ids = {id(i) for i in moved}
+                if not isinstance(impl, ExtendWithDef):
+                    continue
+                if self._reject_type_params_in_impl(impl):
+                    refused.append(impl)
+                elif self._collect_perk_impl(impl):
+                    moved.append(impl)
+            if moved or refused:
+                dropped = {id(i) for i in (*moved, *refused)}
                 root.perk_impls[:] = [i for i in perk_impls
-                                      if id(i) not in moved_ids]
+                                      if id(i) not in dropped]
                 root.generic_perk_impls.extend(moved)
 
     # `Drop`'s contract is fixed, and both halves of it are checked: the RECEIVER must be
@@ -342,6 +350,8 @@ class PerkCollector:
         if self.perks.register(perk):
             self.perks.files[name] = self.current_unit_file
         else:
+            if self._reject_library_clash(name, name_span):
+                return
             prev = self.perks.get(name)
             prev_span = prev.name_span if prev else None
             diag = er.emit_with(self.r, ERR.CE4001, name_span, name=name)
@@ -349,6 +359,25 @@ class PerkCollector:
                 diag.note("first defined here", prev_span, self.perks.files.get(name))
             diag.emit()
             return
+
+    def _reject_library_clash(self, name: str, name_span: Optional[Span]) -> bool:
+        """CE3011 when a library already took this name PRIVATELY (#705).
+
+        The perk follows the type's rule, because the substance already matches one: the
+        table is flat and one perk name is one perk per program. CE4001's note pointed
+        into a file the visibility rules say the consumer cannot see, and the user's two
+        options -- rename, or ask the library to export the perk -- are the ones CE3011
+        leads to. A PUBLIC library perk keeps CE4001: the consumer can read both
+        declarations, which is the case that code was written for.
+        """
+        clash = library_clash_origin(
+            self.visibility, "perk", name,
+            current_unit=self.current_unit_name, library_units=self.library_units)
+        if clash is None or clash.is_public:
+            return False
+        reject_library_clash(self.r, clash, name_span, kind="perk", name=name,
+                             filename=self.current_unit_file)
+        return True
 
     def _reject_static_in_impl(self, impl: ExtendWithDef, perk_name: str) -> bool:
         """CE4014: a perk implementation may not declare a static method (#542, R1)."""
@@ -362,6 +391,31 @@ class PerkCollector:
                 .help("declare it as a plain extension method on the type "
                       "('extend T static name(...)'); a perk contracts instance "
                       "methods only").emit()
+            refused = True
+        return refused
+
+    def _reject_type_params_in_impl(self, impl: ExtendWithDef) -> bool:
+        """CE4010: an implementation method declares no type parameters of its own.
+
+        A perk cannot be generic, and a CONTRACT method has no `@(...)` slot in the
+        grammar at all, so an implementation has no contract to match with one. The
+        list was read by nothing: `@(U)` compiled and did nothing when the rest of the
+        signature matched, and named an unknown type `U` when it did not (#704).
+
+        The methods ride the shared `function_def`, which admits the list here for the
+        reason it admits `public` and `static`: so this diagnostic can point at it.
+        """
+        perk_name = impl.perk_name if isinstance(impl.perk_name, str) else "?"
+        refused = False
+        for method in impl.methods or []:
+            params = method.type_params or ()
+            if not params:
+                continue
+            span = params[0].loc or method.name_span or method.loc
+            er.emit_with(self.r, ERR.CE4010, span, name=perk_name) \
+                .help("a perk contract declares no type parameters, so neither does "
+                      "its implementation; a generic method is a plain extension "
+                      "method ('extend T name@(U)(...)')").emit()
             refused = True
         return refused
 
@@ -404,9 +458,13 @@ class PerkCollector:
         The signature of every method is rewritten in `TypeParameter`s over the names
         the target declares, exactly as `_collect_extension_def` does for a generic
         extension method, so one substitution answers the whole signature later.
+
+        True also when the target was REFUSED. The implementation then leaves
+        `perk_impls` and registers nowhere, which is what keeps one fault to one
+        diagnostic -- the CE2098 arm above reads the same way.
         """
         from sushi_lang.semantics.generics.extension_targets import (
-            classify_extension_target)
+            classify_extension_target, reject_unwritable_target)
         from sushi_lang.semantics.generics.type_display import display_type
         from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.passes.collect.functions import deep_type_params
@@ -421,6 +479,9 @@ class PerkCollector:
                          target=display_type(target_type)) \
                 .help("name every type parameter, or make every argument concrete -- "
                       "there is no partial specialization").emit()
+            return True
+        if reject_unwritable_target(self.r, shape, self.is_declared_type,
+                                    impl.target_type_span or impl.perk_name_span):
             return True
         if not shape.param_names:
             return False

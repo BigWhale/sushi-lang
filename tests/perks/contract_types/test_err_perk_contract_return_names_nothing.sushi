@@ -1,0 +1,11 @@
+# A perk CONTRACT has no body, so the per-declaration loop never reads its written
+# types. The return position named a type that does not exist and the program
+# compiled clean (#667). The same name on a free function is CE2001.
+# EXPECT_ERROR_CODE: CE2001
+
+perk Source:
+    fn read_one(peek self) NoSuchType
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

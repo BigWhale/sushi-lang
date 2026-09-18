@@ -463,6 +463,11 @@ perk Iterator@(Item):
 **Status:** Planned for future release. The compiler rejects the declaration outright
 (**CE4010**) — it used to be silently accepted and ignored.
 
+The rule reaches the other end too: an implementation method may not declare type
+parameters of its own (`fn show@(U)(U x) i32:` inside `extend Box with Shown:`), because
+the contract has no slot to match them against. That is the same **CE4010**, at the list
+itself. A generic method is a plain extension method — `extend Box pick@(U)(U x) i32:`.
+
 **This example is not a missing feature, though.** Iteration needs no perk: `foreach`
 walks any type carrying `next()` that answers `Maybe@(T)`, resolved as a method rather
 than through a contract. That is a PROTOCOL, and it exists precisely because a perk
