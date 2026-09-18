@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2518
+# Only '+' with a string is CE2509. The other four operators carry no message of
+# their own and reached emit_arithmetic with a fat pointer.
+
+fn main() i32:
+    let string name = "Mostly Harmless"
+    let i32 x = 1 - name
+    println("{x}")
+    return Result.Ok(0)

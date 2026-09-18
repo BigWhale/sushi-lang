@@ -34,12 +34,19 @@ def require_named_type(
     raise_internal_error("CE0020", type=semantic_type.name)
 
 
-def resolve_generic_type_ref(
+def require_generic_instance(
     semantic_type,
     struct_table: dict[str, StructType],
     enum_table: dict[str, EnumType],
 ) -> StructType | EnumType | None:
-    """Resolve GenericTypeRef to its monomorphized type."""
+    """The monomorphized instance `semantic_type` names, or the internal error CE0045.
+
+    Named for its CONTRACT, like `require_named_type` above. `TypeResolver` has a
+    `resolve_generic_type_ref` whose contract is the opposite -- a reference it cannot
+    place comes back UNCHANGED -- so one name for the two read alike at a call site and
+    hid which one applied (#717). A type that is not a generic reference is not this
+    seam's business, and answers None.
+    """
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     if not isinstance(semantic_type, GenericTypeRef):

@@ -323,15 +323,24 @@ class ExpressionValidator(RecursiveVisitor):
                 reject_non_bool_condition)
             reject_non_bool_condition(self.type_validator, node.expr, operand_type)
 
-        # Unary minus is overflow-checked: the smallest signed value has no positive
-        # twin. `~` is width-defined and never reports.
+        # Unary minus is arithmetic, so it takes a number like the binary half, and it
+        # is overflow-checked because the smallest signed value has no positive twin.
+        # `~` is width-defined and never reports.
         if node.op == "neg":
             from sushi_lang.semantics.passes.types.expressions import (
-                reject_overflowing_operation)
+                reject_non_numeric_arithmetic, reject_overflowing_operation)
+            reject_non_numeric_arithmetic(self.type_validator, "-",
+                                          [(node.expr, operand_type)])
             reject_overflowing_operation(self.type_validator, node, operand_type)
 
     def visit_binaryop(self, node: BinaryOp) -> None:
         """Validate binary operation."""
+        from sushi_lang.semantics.passes.types.expressions import (
+            ARITHMETIC_OPS, COMPARISON_OPS, DIVISION_OPS, is_string_plus,
+            reject_mixed_numeric_operands, reject_non_bool_condition,
+            reject_non_numeric_arithmetic, reject_overflowing_operation,
+            reject_uncomparable_operands, reject_zero_divisor)
+
         self.type_validator.validate_expression(node.left)
         self.type_validator.validate_expression(node.right)
 
@@ -349,19 +358,23 @@ class ExpressionValidator(RecursiveVisitor):
             er.emit(self.type_validator.reporter, er.ERR.CE5010, node.loc, op=node.op)
             return
 
-        if node.op == "+":
-            if left_type == BuiltinType.STRING or right_type == BuiltinType.STRING:
-                from sushi_lang.semantics.const_eval import emit_string_plus
-                emit_string_plus(self.type_validator.reporter, node.loc)
+        if is_string_plus(node.op, left_type, right_type):
+            from sushi_lang.semantics.const_eval import emit_string_plus
+            emit_string_plus(self.type_validator.reporter, node.loc)
 
-        if node.op in ["==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "%"]:
-            from sushi_lang.semantics.passes.types.expressions import (
-                reject_mixed_numeric_operands)
+        if node.op in COMPARISON_OPS or node.op in ARITHMETIC_OPS:
             reject_mixed_numeric_operands(self.type_validator, node, left_type, right_type)
 
-        if node.op in ["==", "!=", "<", "<=", ">", ">="]:
-            from sushi_lang.semantics.passes.types.expressions import (
-                reject_uncomparable_operands)
+        # Arithmetic takes a number on every side, and a divisor it can read must not
+        # be zero -- the rule a constant has always obeyed (#709).
+        if node.op in ARITHMETIC_OPS:
+            reject_non_numeric_arithmetic(self.type_validator, node.op,
+                                          [(node.left, left_type), (node.right, right_type)])
+
+        if node.op in DIVISION_OPS:
+            reject_zero_divisor(self.type_validator, node, left_type)
+
+        if node.op in COMPARISON_OPS:
             reject_uncomparable_operands(self.type_validator, node, left_type, right_type)
 
         if node.op in ["&", "|", "^", "<<", ">>"]:
@@ -369,16 +382,12 @@ class ExpressionValidator(RecursiveVisitor):
 
         # Both operands of a logical operator are conditions (#532).
         if node.op in ["and", "or", "xor"]:
-            from sushi_lang.semantics.passes.types.expressions import (
-                reject_non_bool_condition)
             reject_non_bool_condition(self.type_validator, node.left, left_type)
             reject_non_bool_condition(self.type_validator, node.right, right_type)
 
         # The overflow-checked operators. A width-defined one cannot leave its type,
         # so it is not asked (Ruling 1 of docs/design/compile-time-evaluation.md).
-        if node.op in ["+", "-", "*", "/", "%"]:
-            from sushi_lang.semantics.passes.types.expressions import (
-                reject_overflowing_operation)
+        if node.op in ARITHMETIC_OPS:
             reject_overflowing_operation(self.type_validator, node, left_type)
 
     def _context_type_operand_from_sibling(self, node: BinaryOp) -> None:
@@ -1283,13 +1292,14 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         ref = getattr(node.expr, "namespace_ref", None)
         if ref is not None and ref.kind == "constant":
-            # `poke geo.SIZE`: the alias reaches the record, and the record decides. A
-            # constant has no address behind an alias either (CE2400); a `var` has one.
+            # `poke geo.SIZE`: the alias reaches the record, and the record decides. The
+            # spelling changes nothing -- a write to a constant is CE2400 here too, and
+            # a `peek` reads it as it reads the bare name (#713).
             from sushi_lang.semantics.constant_borrow import (
                 reject_borrow_of_constant)
             sig = self.type_validator.const_table.lookup(ref.name, ref.origin)
             if reject_borrow_of_constant(self.type_validator.err, ref.name, sig,
-                                         node.expr.loc):
+                                         node.expr.loc, mode=node.mutability):
                 return None
 
         mutability = BorrowMode.PEEK if node.mutability == "peek" else BorrowMode.POKE

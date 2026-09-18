@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 import time
 from pathlib import Path
 
@@ -437,13 +437,23 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     )
 
 
-def codegen_for(analyzer: SemanticAnalyzer) -> 'LLVMCodegen':
+def codegen_for(analyzer: SemanticAnalyzer,
+                library_linker: Optional['LibraryResolver'] = None) -> 'LLVMCodegen':
     """One `LLVMCodegen` over the analyzer's program tables.
 
     The ONE hand-off from the front end to the back end. Both build paths need the same
     five tables, the externals and the per-unit namespaces, and each used to read them
     off the analyzer by attribute name with a silent default -- two copies of one list,
     where a name the analyzer stopped carrying would have answered None in both (#673).
+
+    What a loaded library brings travels the same way and for the same reason: the
+    PROGRAM path took the resolver, the registry and the shipped perk implementations
+    and the LIBRARY path took none, so a compiled library over a binary dependency
+    declared no prototype for the dependency's symbols and the dispatcher answered a
+    KeyError (#645). The resolver comes as an argument because the analyzer holds it
+    through a Protocol that names its manifests alone -- the back end also resolves a
+    path with it -- and the registry and the implementations come off the analyzer,
+    which is where the `libraries` step files them.
     """
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
@@ -452,6 +462,9 @@ def codegen_for(analyzer: SemanticAnalyzer) -> 'LLVMCodegen':
                      func_table=tables.funcs, perk_impl_table=tables.perk_impls,
                      const_table=tables.constants)
     cg.external_table = tables.externals
+    cg.library_linker = library_linker
+    cg.library_registry = analyzer.library_registry
+    cg.library_perk_impls = analyzer.library_perk_impls
     # Section 8's ladder, as the back end has to walk it: a bare callee is resolved
     # through the same per-unit scope the typecheck pass accepted it under, and a
     # constant's initializer through the aliases of the unit that wrote it (#561).
@@ -462,7 +475,7 @@ def codegen_for(analyzer: SemanticAnalyzer) -> 'LLVMCodegen':
 def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
                         is_library, stdlib_units, library_imports, library_linker) -> int:
     """Original single-module compilation path."""
-    cg = codegen_for(analyzer)
+    cg = codegen_for(analyzer, library_linker)
 
     effective_cwd = get_effective_cwd()
     if args.out:
@@ -541,14 +554,11 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
 
         print(f"Success! Wrote library: {out_path}")
     else:
-        cg.library_perk_impls = getattr(analyzer, 'library_perk_impls', [])
         cg.compile_multi_unit(compilation_order, out=out_path, cc="cc",
                               debug=bool(args.dump_ll), opt=args.opt,
                               verify=not args.no_verify, keep_object=args.keep_object,
                               main_expects_args=analyzer.main_expects_args,
-                              monomorphized_extensions=monomorphized_extensions,
-                              library_linker=library_linker,
-                              library_registry=analyzer.library_registry)
+                              monomorphized_extensions=monomorphized_extensions)
 
         if args.write_ll:
             try:
@@ -591,12 +601,9 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
 
     monomorphized_extensions = getattr(analyzer, 'monomorphized_extensions', [])
 
-    cg = codegen_for(analyzer)
+    cg = codegen_for(analyzer, library_linker)
     cg.main_expects_args = analyzer.main_expects_args
     cg.monomorphized_extensions = monomorphized_extensions
-    cg.library_linker = library_linker
-    cg.library_registry = getattr(analyzer, 'library_registry', None)
-    cg.library_perk_impls = getattr(analyzer, 'library_perk_impls', [])
 
     obj_paths: list[Path] = []
     rebuilt = []

@@ -60,8 +60,8 @@ _add(ErrorMessage("CE0111", Severity.ERROR,
     Category.FUNC, "Type cast is not allowed in constant expressions."))
 
 _add(ErrorMessage("CE0112", Severity.ERROR,
-    "division by zero in constant expression",
-    Category.FUNC, "Constant expressions cannot divide by zero."))
+    "division by zero",
+    Category.FUNC, "The compiler can read this divisor, and it is zero. One compile-time arithmetic answers a constant and a body alike, so '10 / 0' is refused in both positions. Only a divisor the compiler can read is an error: a computed one -- a variable, a loop index, a call -- is ordinary code and no check is emitted around it. The message named the constant position until #709, where the body half was added: a body divided by a literal zero, emitted 'sdiv i32 1, 0' and printed whatever the optimizer left behind -- 2 at --opt none and a different number at O2, because LLVM makes the result poison."))
 
 _add(ErrorMessage("CE0113", Severity.ERROR,
     "{message}",

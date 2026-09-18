@@ -1,0 +1,7 @@
+# EXPECT_ERROR_CODE: CE0112
+# A remainder divides first, so a zero divisor is the same fault.
+
+fn main() i32:
+    let i32 x = 10 % 0
+    println("{x}")
+    return Result.Ok(0)

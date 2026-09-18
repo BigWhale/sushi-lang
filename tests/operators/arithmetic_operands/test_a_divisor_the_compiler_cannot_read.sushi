@@ -1,0 +1,15 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n5\n1\n"
+# Only a readable zero is a diagnostic. A computed divisor is ordinary code and
+# stays legal, whatever it holds at run time.
+
+fn main() i32:
+    println("Mostly Harmless")
+
+    let i32[] divisors = from([2, 7])
+    let i32 first = divisors.get(0).realise(1)
+    println("{10 / first}")
+
+    let i32 second = divisors.get(1).realise(1)
+    println("{10 / second}")
+
+    return Result.Ok(0)

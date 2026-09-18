@@ -24,7 +24,7 @@ from sushi_lang.semantics.typesys import (
     FunctionType,
 )
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.backend.types.core.resolution import require_named_type, resolve_generic_type_ref
+from sushi_lang.backend.types.core.resolution import require_named_type, require_generic_instance
 
 
 class TypeMapper:
@@ -145,7 +145,7 @@ class TypeMapper:
                 if isinstance(t, TypeParameter):
                     raise_internal_error("CE0045", type=t.name)
 
-                resolved = resolve_generic_type_ref(
+                resolved = require_generic_instance(
                     t, self.struct_table.by_name, self.enum_table.by_name
                 )
                 if resolved is not None:

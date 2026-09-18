@@ -5,6 +5,17 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **A constant takes a `peek` borrow and refuses a `poke` one** (#713). A constant is
+  read-only storage, not a value with no address: it is one object in `.rodata`, so a
+  pointer into it exists. `let peek T x = C` and `f(peek C)` are legal now, and they join
+  the match arm `V(peek x)`, which always was. The POSITION used to decide -- three of the
+  four `peek` positions refused and the fourth allowed it, while a bare pattern binding,
+  which the ownership model also calls a borrow, was allowed in every one. Every `poke`
+  refusal stays, because a write to `.rodata` is the hazard, and `nom` stays refused
+  because a constant cannot be taken away. CE2400 is a WRITE rule now and its text says so;
+  `var` is the spelling for storage that may be written. A name that reaches storage of no
+  kind -- a function, a registry stdlib constant, an FFI namespace -- still refuses every
+  mode, `peek` included.
 - **`Hashable` is a predefined perk, satisfied by the derived hash** (#696). It ships
   beside `Drop`, public and importless, with one method `fn hash() u64`. Every type the
   compiler derives a `hash()` for satisfies a `@(T: Hashable)` constraint with no
@@ -339,6 +350,49 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **Arithmetic reads its operands, and a readable zero divisor is refused in a body**
+  (#709). The typecheck pass asked nothing about an operand of `+ - * / %` or of the unary
+  minus, so everything reached the backend: a `bool` or an unhandled `Result` / `Maybe`
+  beside a number became a CE0000 out of `emit_arithmetic`, a `string`, a struct, an enum
+  or an array operand failed the LLVM IR parse with the same code, and `-true` compiled
+  and printed `true`. One rule answers the whole group now -- **CE2518**, pointed at the
+  first operand that is not a number, and it names `??`, `.realise(default)` and `match`
+  when that operand is a wrapper. `+` with a `string` operand stays CE2509, the one
+  carve-out, and a mixed numeric pair stays CE2510. A divisor the compiler can read and
+  that holds zero is **CE0112** in a body exactly as in a constant -- a literal, a
+  constant and a fold alike, where `10 / 0` used to emit `sdiv i32 1, 0` and print
+  whatever the optimizer left behind. CE0112 no longer says "in constant expression",
+  because it now answers in both positions. A computed divisor is untouched.
+- **A compiled library that calls into a compiled dependency builds** (#645). A `--lib-kind
+  binary` or `hybrid` build whose unit called a function of a loaded BINARY `.slib` was
+  CE0000 -- `KeyError: 'unknown function'` out of the call dispatcher, exit 2, no library
+  written. The front-end hand-off carries the resolver, the registry and the shipped perk
+  implementations now: the program path took them as arguments and the library path took
+  none, so no prototype was declared for the dependency's symbols. A method whose perk
+  implementation the dependency ships was the same fault in a second position, and read
+  CE0024 from the same guard. A `source` build escaped because it compiles no bitcode.
+- **A generic instance at the caller's private type is not a leak** (#702). A public
+  generic instantiated at the calling unit's own private struct answered CE3009, with the
+  caret on the `use` line for a library template. The leak fence reads the WRITTEN
+  declarations alone now, through the `is_written` predicate: a monomorphized instance
+  promises nothing, no unit can name it, and the template it was cut from is fenced where
+  it is written. The `ptr` quarantine keeps reading both, because the instance is the one
+  position where a quarantined pointer in a public signature can be seen. The fault was
+  wider than the `.slib` path: a public generic declared in the SAME unit and instantiated
+  at that unit's private type read the same three CE3009s.
+- **A `let` reference through an alias reads the borrow rule** (#712). `use "other" as o`
+  and then `let poke i32 r = o.ALIAS_CONST` answered `CE0056 cannot determine type for
+  variable: o`, with no location, and called the namespace a variable. The walk down a
+  member chain stopped at the leading name; it stops one step above the alias now and
+  hands back the member plus the unit it is written in, so the same seam answers that the
+  bare and the argument spellings already read.
+- **One constant fault gets one diagnostic** (#710). `const i32 X = missing` answered
+  CE1002 "assignment to undeclared variable" from the evaluator, which is the wrong words
+  for a READ, beside the scope pass's CE1001 at the same token. The evaluator is silent on
+  a name that reaches nothing now: the pass owns what kind of name it is and answers
+  CE1001, or CE2105 for a type. A cycle gets one CE0109 and not one per member -- the SET
+  of declarations in the loop is the cycle, which is how the `finite-types` pass tells one
+  type cycle from the next.
 - **The entrypoint pass holds main's whole rule** (#674). The rule had three homes: the
   pipeline asked whether `main` exists (CE3007) and whether a `--lib` build declares one
   (CE3501), the collect pass asked whether it returns an integer (CE0106), and the pass
@@ -728,6 +782,32 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One arm table answers both directions of the type walk** (#716, #717, #718).
+  `walk_named_types` and `resolve_type_recursively` walked one structure for one reason,
+  and only the walk was total: thirteen arms against four. A name nested in a `peek`/`poke`
+  reference, in a pointer or in an iterator came back UNRESOLVED, while the same name in an
+  array came back as the table entry -- two spellings of one interned name, which is what
+  the intern seam exists to prevent, on the path every struct field, enum payload and
+  constant type takes. One table names each composite kind and the attributes that carry
+  the types it holds; the walk yields through it and the new `map_named_types` rebuilds
+  through it, so a kind added tomorrow is answered in both directions at once and one gate
+  covers them together. `resolve_type_recursively` is one call into the map, and its
+  `visited` parameter is gone: the map stops at a declaration, because type identity is
+  nominal, and the guard fired 0 times in 124,238 calls measured over the unit layer and
+  two compile chunks. The backend's `resolve_generic_type_ref` is `require_generic_instance`
+  now -- the name said nothing about which of two opposite contracts applied, where the
+  sibling `require_named_type` says it.
+- **The libraries step records a shipped private type under its own kind** (#707). A
+  private GENERIC type lands in neither concrete table, so the record said enum for a
+  struct. One table names the snippet tables, the kind each makes, and which arm registers
+  the type. The manifest-parse branch of the same step went with it: a probe over the
+  library, namespace, visibility and FFI fixtures and 1115 unit tests never reached it, and
+  the invariant that makes it unreachable is pinned by a test now.
+- **A library's bitcode is reproducible** (#708). Two builds of one binary library named
+  the global of one string literal differently, because the name carried a Python `hash()`
+  of the process. One stable digest answers for the string constants and for the debug
+  writer alike, and a gate builds one library twice under two hash seeds and compares the
+  bytes.
 - **A late intern resolves and derives the names it interned** (#676). The typecheck pass
   discovers a generic instance late, and the seam that picks it up re-ran the two resolve
   entry points and the four derive ones over the WHOLE struct and enum tables, once per

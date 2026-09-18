@@ -1,11 +1,23 @@
 """String constant management and deduplication."""
 from __future__ import annotations
+import hashlib
 from typing import TYPE_CHECKING, Dict, Tuple
 
 from llvmlite import ir
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+
+
+def content_digest(text: str) -> str:
+    """A STABLE digest of `text`, for a global named after what it holds.
+
+    Python randomizes `hash()` per process, so one library built two times named the
+    same literal two ways and its bitcode could not be compared byte for byte, nor
+    addressed by its content (#708). Every global whose name carries its text reads
+    this one digest.
+    """
+    return hashlib.blake2b(text.encode("utf-8"), digest_size=4).hexdigest()
 
 
 class StringConstantManager:
@@ -19,8 +31,7 @@ class StringConstantManager:
     def _make_global_name(self, value: str, null_terminated: bool) -> str:
         """Generate a content-based unique name for a string constant."""
         suffix = "nt" if null_terminated else "raw"
-        content_hash = hash(value) & 0xFFFFFFFF
-        return f".str.{len(value)}_{content_hash}_{suffix}"
+        return f".str.{len(value)}_{content_digest(value)}_{suffix}"
 
     def get_or_create(self, value: str, null_terminated: bool = False) -> ir.GlobalVariable:
         """Get existing or create new string constant with deduplication."""

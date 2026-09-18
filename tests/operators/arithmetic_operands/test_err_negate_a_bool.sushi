@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE2518
+# Unary minus is arithmetic too. This compiled and printed 'true'.
+
+fn main() i32:
+    let bool flag = true
+    let bool other = -flag
+    println("{other}")
+    return Result.Ok(0)

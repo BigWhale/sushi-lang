@@ -410,8 +410,9 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
     """A MARKED receiver must name storage the call can reach (#327, ruling R25).
 
     One check for both marked kinds, because they refuse the same thing for one reason:
-    a `const` lives in read-only memory, so there is no frame slot to point a `poke` at
-    and no owner to hand a `nom` away from. `stdout.close()` is the case that matters.
+    a `const` is read-only storage, so a `poke` cannot write it and a `nom` has no owner
+    to take it from. `stdout.close()` is the case that matters. A `peek self` receiver
+    only reads, so it never arrives here.
 
     They differ on a TEMPORARY. A `poke self` needs an address the caller keeps, so a
     call result is CE2404; a `nom self` takes ownership, and a temporary is owned by
@@ -435,7 +436,7 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
     # SCOPED: the flat view is first-wins over the whole program, so it answered with
     # another unit's declaration of the same name (#685).
     reject_borrow_of_constant(validator.err, root.id, validator.const_sig(root.id),
-                              root.loc)
+                              root.loc, mode=mode.value)
 
 
 def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:

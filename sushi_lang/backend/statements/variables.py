@@ -33,7 +33,8 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
         # keeps, exactly as a reference parameter's does, and is never registered for
         # cleanup -- the owner frees the pointee.
         from sushi_lang.backend.expressions.borrow import emit_place_address
-        place_ptr = emit_place_address(codegen, stmt.value)
+        place_ptr = emit_place_address(codegen, stmt.value,
+                                       writable=stmt.ty.is_poke())
         codegen.memory.create_local(stmt.name, place_ptr.type, place_ptr, stmt.ty,
                                     register_cleanup=False)
         return

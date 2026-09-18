@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2518
+# A bool is not 0 and 1 here. The backend used to meet an i8 beside an i32 and
+# answer with a CE0000 internal error.
+
+fn main() i32:
+    let bool flag = true
+    let i32 x = 1 + flag
+    println("{x}")
+    return Result.Ok(0)

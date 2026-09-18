@@ -305,7 +305,8 @@ One `poke` binding of an owner at a time (**CE2403**); a `peek` beside a live `p
 the reverse, is **CE2407**; a write through a `peek` binding is **CE2408**; a `poke`
 binding out of a `peek` parameter is **CE2408** too. Consuming the binding stays
 **CE2411** -- it names storage the owner still frees -- and `.clone()` is the escape. A
-constant has no address to bind (**CE2400**); a unit variable has one.
+constant is read-only storage: `let peek` reads it, and `let poke` is **CE2400**. A unit
+variable takes both.
 
 ### Scope
 
@@ -494,6 +495,34 @@ constant.
 - `*` - Multiplication
 - `/` - Division (integer division for int types)
 - `%` - Modulo (remainder)
+
+Every operand is a number, unary minus included: an integer or a float and nothing else.
+A `bool`, a `string`, a struct, an enum, an array or an unhandled `Result@(T, E)` /
+`Maybe@(T)` is **CE2518**, and two numeric types of different widths are CE2510. There is
+no concatenation operator, so `+` with a `string` operand is CE2509 and the escape is
+interpolation. Add the fields of a struct one at a time, use `match` to read an enum, and
+take the value out of a wrapper with `??`, `.realise(default)` or `match`.
+
+<!-- docs-sweep: error CE2518 -->
+```sushi
+fn main() i32:
+    let bool flag = true
+    let i32 x = 1 + flag      # CE2518: '+' takes a numeric operand, and 'bool' is not one
+    println("{x}")
+    return Result.Ok(0)
+```
+
+**A divisor the compiler can read must not be zero.** A literal zero, a constant that
+holds one and a fold that gives one are each **CE0112**, in a body exactly as in a
+constant. A computed divisor is ordinary code and is left alone.
+
+<!-- docs-sweep: error CE0112 -->
+```sushi
+fn main() i32:
+    let i32 x = 10 / 0        # CE0112: division by zero
+    println("{x}")
+    return Result.Ok(0)
+```
 
 ### Overflow
 
@@ -1876,12 +1905,13 @@ const Segment ALSO_BAD = Segment(Point(pick(), 2), 3)   # CE0108, one level down
 ```
 
 A struct constant lives in read-only memory like every other constant. Writing a field
-is **CE2096**, and calling a `poke self` method on one is **CE2400** -- that method takes
-its receiver's address, and a constant has no frame slot to point at:
+is **CE2096**, and calling a `poke self` or a `nom self` method on one is **CE2400** --
+the first writes the receiver and the second takes it away. A `peek self` method reads
+it, and it is legal:
 
 ```sushi
 OUT.fd := 7          # CE2096: cannot assign to a field of constant 'OUT'
-OUT.release()        # CE2400: cannot borrow 'OUT': only a local variable can be borrowed
+OUT.release()        # CE2400: cannot borrow 'OUT' with `nom`
 ```
 
 ### Enum Constants

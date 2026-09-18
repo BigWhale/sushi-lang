@@ -23,7 +23,6 @@ from sushi_lang.semantics.library_templates import (
 from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
 from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
-from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo, StructType
 from sushi_lang.semantics.visibility import DeclOrigin
 
 if TYPE_CHECKING:
@@ -39,6 +38,18 @@ class LoadedLibraries(Protocol):
     A Protocol and not the class, because semantics must not import backend.
     """
     loaded_libraries: dict[str, dict]
+
+
+# Where a private type the export closure ships can land in the snippet's tables, what
+# KIND of declaration each landing makes it, and whether this arm registers it. A
+# CONCRETE type is registered here; a template is registered from the manifest's own
+# `generic_structs` / `generic_enums` arm, so only its kind is read here.
+_PRIVATE_TYPE_TABLES = (
+    ("structs", "struct", True),
+    ("enums", "enum", True),
+    ("generic_structs", "struct", False),
+    ("generic_enums", "enum", False),
+)
 
 
 class _Snippet:
@@ -137,10 +148,8 @@ class LibraryRegistration:
         if self.registry is None and self.linker is None:
             return
         build_units = {u.name for u in compilation_order}
-        self._register_types("structs", LibraryRegistry.get_all_structs,
-                             self._struct_from_manifest)
-        self._register_types("enums", LibraryRegistry.get_all_enums,
-                             self._enum_from_manifest)
+        self._register_types("structs", LibraryRegistry.get_all_structs)
+        self._register_types("enums", LibraryRegistry.get_all_enums)
         self._register_functions()
         self._register_private_functions(build_units)
         self._register_not_exported()
@@ -225,50 +234,18 @@ class LibraryRegistration:
 
     # -- the registry arms ---------------------------------------------------------
 
-    def _register_types(self, key: str, exported: Callable[[LibraryRegistry], dict],
-                        build: Callable[[dict], Any]) -> None:
+    def _register_types(self, key: str, exported: Callable[[LibraryRegistry], dict]) -> None:
         """Register the concrete structs or enums the libraries export.
 
-        The registry answers when there is one. A linker with no registry is the
-        manifest-parse fallback, which builds each type from its record.
+        The registry is the one reader of a manifest type record, and there is always
+        one: `register()` builds it whenever a library is loaded. A second arm here
+        parsed the same records a second way and no build could reach it (#707).
         """
         table = getattr(self.tables, key)
-        if self.registry is not None:
-            for name, ty in exported(self.registry).items():
-                if name not in table.by_name:
-                    table.by_name[name] = ty
-                    table.order.append(name)
-            return
-        for _lib_name, manifest in self._manifests():
-            for info in manifest.get(key, []):
-                name = info["name"]
-                if name in table.by_name:
-                    continue
-                table.by_name[name] = build(info)
+        for name, ty in exported(self.registry).items():
+            if name not in table.by_name:
+                table.by_name[name] = ty
                 table.order.append(name)
-
-    def _struct_from_manifest(self, info: dict) -> StructType:
-        from sushi_lang.semantics.type_resolution import parse_type_string
-
-        struct_table, enum_table = self._type_tables()
-        fields = []
-        for f in info.get("fields", []):
-            field_type = parse_type_string(f["type"], struct_table, enum_table)
-            fields.append((f["name"], field_type))
-        return StructType(name=info["name"], fields=tuple(fields))
-
-    def _enum_from_manifest(self, info: dict) -> EnumType:
-        from sushi_lang.semantics.type_resolution import parse_type_string
-
-        struct_table, enum_table = self._type_tables()
-        variants = []
-        for v in info.get("variants", []):
-            assoc_types: tuple = ()
-            if v.get("has_data") and v.get("data_type"):
-                data_type = parse_type_string(v["data_type"], struct_table, enum_table)
-                assoc_types = (data_type,)
-            variants.append(EnumVariantInfo(name=v["name"], associated_types=assoc_types))
-        return EnumType(name=info["name"], variants=tuple(variants))
 
     def _register_functions(self) -> None:
         """Register the libraries' public functions into the function table.
@@ -400,25 +377,36 @@ class LibraryRegistration:
 
         The visibility table gets a PRIVATE record for each, so the consumer's own code
         cannot name it while the transplanted body can (#468).
+
+        A GENERIC private type travels under two arms: here as source, and in the
+        `generic_structs` / `generic_enums` index, which is what `_register_generic_types`
+        reads. Only the record is this arm's, and the SNIPPET says which kind it is --
+        reading the concrete tables answered "enum" for a generic struct, because a
+        template lands in neither of them (#707).
         """
-        structs, enums = self.tables.structs, self.tables.enums
         for lib_name, _manifest, record in self._template_records("private_types"):
             name = record.get("name")
             source = record.get("source")
             if not name or not source:
                 continue
-            if name in structs.by_name or name in enums.by_name:
+            if name in self.tables.structs.by_name or name in self.tables.enums.by_name:
                 continue
 
             snippet = self._collect_snippet(source, f"<type:{lib_name}:{name}>", lib_name)
-            for table_name, table in (("structs", structs), ("enums", enums)):
+            kind = None
+            for table_name, declared_kind, concrete in _PRIVATE_TYPE_TABLES:
                 entry = snippet.declared(table_name, name)
                 if entry is None:
                     continue
-                table.by_name[name] = entry
-                table.order.append(name)
+                kind = declared_kind
+                if concrete:
+                    table = getattr(self.tables, table_name)
+                    table.by_name[name] = entry
+                    table.order.append(name)
+                break
+            if kind is None:
+                continue
 
-            kind = "struct" if name in structs.by_name else "enum"
             self.tables.visibility.record(DeclOrigin(
                 kind=kind, name=name, unit_name=lib_name, is_public=False))
 

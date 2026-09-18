@@ -1,0 +1,10 @@
+# A constant is READ-ONLY storage: it is one object in `.rodata`, so a pointer into it
+# exists and a `peek` binding reads through it. Only a write is the fault (#713).
+# EXPECT_STDOUT_EXACT: "10\n"
+
+const i32 LIMIT = 10
+
+fn main() i32:
+    let peek i32 seen = LIMIT
+    println("{seen}")
+    return Result.Ok(0)

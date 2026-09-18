@@ -1,0 +1,10 @@
+# The spelling does not decide either: behind a `use ... as` alias the record is the
+# same constant, and a read through it is the same read (#713).
+# EXPECT_STDOUT_EXACT: "7\n"
+
+use "helpers/alias_store" as o
+
+fn main() i32:
+    let peek i32 seen = o.ALIAS_LIMIT
+    println("{seen}")
+    return Result.Ok(0)

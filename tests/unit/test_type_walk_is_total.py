@@ -178,3 +178,169 @@ def test_a_dynamic_array_of_a_struct_is_not_inline_containment():
     indirect = list(walk_named_types(DynamicArrayType(base_type=node), inline_only=True,
                                      through_declarations=False))
     assert node not in indirect, "a dynamic array owns a heap buffer, which is an indirection"
+
+
+# --- the resolver rebuilds the same shape the walk reads (#716) --------------------
+
+# Each kind that HOLDS one type, with the way to build one and the way to read what it
+# holds back. `resolve_type_recursively` had no arm for any of the three, so a name
+# nested in one came back unresolved while the same name in an array came back as the
+# table entry -- two spellings of one interned name (docs/design/type-identity.md).
+HOLDS_ONE_TYPE = {
+    "ReferenceType": (
+        lambda held: ReferenceType(held, typesys.BorrowMode.PEEK),
+        lambda ty: ty.referenced_type,
+    ),
+    "PointerType": (
+        lambda held: PointerType(pointee_type=held),
+        lambda ty: ty.pointee_type,
+    ),
+    "IteratorType": (
+        lambda held: IteratorType(element_type=held),
+        lambda ty: ty.element_type,
+    ),
+}
+
+
+def _node_tables() -> tuple[StructType, dict, dict]:
+    node = StructType(name="Node", fields=())
+    return node, {"Node": node}, {}
+
+
+def test_the_resolver_resolves_a_name_every_kind_holds():
+    from sushi_lang.semantics.type_resolution import resolve_type_recursively
+
+    node, structs, enums = _node_tables()
+    unresolved = []
+    for kind, (build, held_of) in HOLDS_ONE_TYPE.items():
+        resolved = resolve_type_recursively(build(UnknownType("Node")), structs, enums)
+        if held_of(resolved) is not node:
+            unresolved.append(f"{kind} holds {held_of(resolved)!r}")
+    assert not unresolved, (
+        "the resolver left a written name unresolved: " + "; ".join(unresolved) + ".\n"
+        "The same name in an array resolves to the table entry, so one type has two "
+        "spellings, which is what the intern seam exists to prevent."
+    )
+
+
+def test_the_resolver_keeps_what_a_reference_declares():
+    """`dataclasses.replace`, so the borrow mode rides along (#368 is the same rule)."""
+    from sushi_lang.semantics.type_resolution import resolve_type_recursively
+
+    node, structs, enums = _node_tables()
+    for mode in (typesys.BorrowMode.PEEK, typesys.BorrowMode.POKE):
+        resolved = resolve_type_recursively(
+            ReferenceType(UnknownType("Node"), mode), structs, enums)
+        assert resolved.mutability is mode, (
+            f"a rebuilt reference lost its {mode} marker"
+        )
+
+
+def test_the_resolver_rebuilds_nothing_that_is_already_resolved():
+    """The resolve pass runs again at every late intern; an unchanged type stays itself."""
+    from sushi_lang.semantics.type_resolution import resolve_type_recursively
+
+    node, structs, enums = _node_tables()
+    for kind, (build, _held_of) in HOLDS_ONE_TYPE.items():
+        already = build(node)
+        assert resolve_type_recursively(already, structs, enums) is already, (
+            f"a {kind} that holds the table entry was rebuilt anyway"
+        )
+
+
+# --- the map: the same arm table, the other direction (#718) -----------------------
+
+
+def _swap_the_marker(ty):
+    """A resolve function with a visible answer: the marker becomes a builtin."""
+    return BuiltinType.I64 if isinstance(ty, ForeignPtrType) else ty
+
+
+def test_the_arm_table_has_an_answer_for_every_kind():
+    """One table, both directions. A kind it does not name is walked by neither."""
+    from sushi_lang.semantics.type_walk import COMPOSITE_KINDS, DECLARATION_KINDS
+
+    known = _type_union_members() | OFF_UNION_KINDS
+    covered = set(COMPOSITE_KINDS) | set(DECLARATION_KINDS) | set(TERMINAL_KINDS)
+    missing = sorted(known - covered - {"UnknownType"})
+    assert not missing, (
+        f"the arm table has no answer for: {missing}. The walk and the map both read it, "
+        "so a kind it misses is skipped in both directions."
+    )
+    strays = sorted(covered - known)
+    assert not strays, f"the arm table names something that is not a type kind: {strays}"
+
+
+def test_the_map_rebuilds_what_a_composite_holds():
+    """The map must arrive everywhere the walk does."""
+    from sushi_lang.semantics.type_walk import COMPOSITE_KINDS, map_named_types
+
+    for kind, value in _every_composite().items():
+        if kind not in COMPOSITE_KINDS:
+            continue
+        mapped = map_named_types(value, _swap_the_marker)
+        reached = list(walk_named_types(mapped))
+        assert BuiltinType.I64 in reached, (
+            f"map_named_types({kind}) never reached the type it holds. "
+            f"Reached: {[str(t) for t in reached]}"
+        )
+        assert not any(isinstance(t, ForeignPtrType) for t in reached), (
+            f"map_named_types({kind}) rebuilt around what it holds and kept the old type"
+        )
+
+
+def test_the_map_stops_at_a_declaration():
+    """Type identity is NOMINAL: a named type is looked up, never rebuilt."""
+    from sushi_lang.semantics.type_walk import DECLARATION_KINDS, map_named_types
+
+    for kind, value in _every_composite().items():
+        if kind not in DECLARATION_KINDS:
+            continue
+        assert map_named_types(value, _swap_the_marker) is value, (
+            f"map_named_types rebuilt a {kind}. The table is the sole authority for what "
+            "a named type holds, and a second instance of one name is the #240 hazard."
+        )
+
+
+def test_the_map_answers_the_same_object_when_nothing_moves():
+    """The resolve pass runs again at every late intern; an unchanged type stays itself."""
+    from sushi_lang.semantics.type_walk import map_named_types
+
+    for kind, value in _every_composite().items():
+        assert map_named_types(value, lambda ty: ty) is value, (
+            f"map_named_types rebuilt an unchanged {kind}"
+        )
+
+
+def test_the_map_carries_what_a_kind_declares_beside_its_types():
+    """`dataclasses.replace`, so a borrow mode and a fn type's metadata ride along (#368)."""
+    from sushi_lang.semantics.param_modes import ParamMode
+    from sushi_lang.semantics.type_walk import map_named_types
+
+    reference = ReferenceType(_marker(), typesys.BorrowMode.PEEK)
+    assert map_named_types(reference, _swap_the_marker).mutability is (
+        typesys.BorrowMode.PEEK)
+
+    fn = FunctionType(param_types=(_marker(),), ok_type=BuiltinType.I32,
+                      err_type=BuiltinType.I32, captures=("c",),
+                      param_modes=(ParamMode.NOM,))
+    mapped = map_named_types(fn, _swap_the_marker)
+    assert mapped.captures == ("c",)
+    assert mapped.modes == (ParamMode.NOM,)
+
+
+def test_the_resolver_is_one_call_into_the_map():
+    """One walk, two directions. Two arm sets is how the resolver grew its holes."""
+    import inspect
+
+    from sushi_lang.semantics import type_resolution
+
+    source = inspect.getsource(type_resolution.resolve_type_recursively)
+    assert "map_named_types" in source, (
+        "type_resolution.resolve_type_recursively recurses over a type by hand again"
+    )
+    for built in ("ArrayType(", "ReferenceType(", "IteratorType(", "GenericTypeRef(",
+                  "replace("):
+        assert built not in source, (
+            f"the resolver builds a {built[:-1]} itself; the shared map owns that arm"
+        )
