@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import ExtendWithDef
 from sushi_lang.semantics.ast_walk import (
-    ConstraintSite, TypeSite, signature_constraints, signature_types)
+    ConstraintSite, TypeSite, is_written, signature_constraints, signature_types)
 from sushi_lang.semantics.type_predicates import contains_foreign_ptr
 from .visibility import name_is_contested
 
@@ -202,7 +202,17 @@ def check_public_signatures(validator: 'TypeValidator', program: 'Program') -> N
         # -- which is what `docs/design/visibility.md` section 6 undertakes. The residue is
         # covered where it matters: a consumer that receives such a value cannot write the
         # type down, because the type funnel refuses the name.
-        if (public is True and site.kind in _LEAK_RULE_KINDS
+        #
+        # And it reads the WRITTEN declarations alone. A monomorphized instance promises
+        # nothing: no unit can name it, its type arguments came from the call site, and
+        # the template it was cut from is fenced where it is written -- at the producer
+        # for a library template, and in this walk for a generic of this program. Read as
+        # a written declaration, `first_of__Point` refused the caller's own private type
+        # (#702). The `ptr` rule keeps reading both, because the template's own signature
+        # says `T`: the instance is the one position where a quarantined pointer crossing
+        # a public boundary can be seen.
+        if (public is True and is_written(site.decl)
+                and site.kind in _LEAK_RULE_KINDS
                 and site.position in _LEAK_RULE_POSITIONS):
             origin = _leaked_type(validator, site.ty)
             if origin is not None:

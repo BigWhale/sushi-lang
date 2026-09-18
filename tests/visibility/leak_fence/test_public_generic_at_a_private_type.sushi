@@ -8,7 +8,7 @@
 struct Point:
     i32 x
 
-public fn first_of@(T)(T a, T b) T:
+public fn keep@(T)(nom T a) T:
     return Result.Ok(a)
 
 public perk Loud:
@@ -22,8 +22,6 @@ public fn loudest@(T: Loud)(T thing) i32:
     return Result.Ok(thing.shout())
 
 fn main() i32:
-    let Point a = Point(3)
-    let Point b = Point(9)
-    let Point kept = first_of(a, b).realise(Point(0))
+    let Point kept = keep(nom Point(3)).realise(Point(0))
     println("{kept.x} {loudest(Point(4)).realise(0)}")
     return Result.Ok(0)
