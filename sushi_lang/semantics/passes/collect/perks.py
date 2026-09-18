@@ -8,8 +8,8 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.visibility import (
-    VisibilityTable, record_declaration, reject_private_perk_contract,
-    taken_by_a_library)
+    VisibilityTable, library_clash_origin, record_declaration,
+    reject_library_clash, reject_private_perk_contract, taken_by_a_library)
 from sushi_lang.semantics.ast import (
     PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
@@ -350,6 +350,8 @@ class PerkCollector:
         if self.perks.register(perk):
             self.perks.files[name] = self.current_unit_file
         else:
+            if self._reject_library_clash(name, name_span):
+                return
             prev = self.perks.get(name)
             prev_span = prev.name_span if prev else None
             diag = er.emit_with(self.r, ERR.CE4001, name_span, name=name)
@@ -357,6 +359,25 @@ class PerkCollector:
                 diag.note("first defined here", prev_span, self.perks.files.get(name))
             diag.emit()
             return
+
+    def _reject_library_clash(self, name: str, name_span: Optional[Span]) -> bool:
+        """CE3011 when a library already took this name PRIVATELY (#705).
+
+        The perk follows the type's rule, because the substance already matches one: the
+        table is flat and one perk name is one perk per program. CE4001's note pointed
+        into a file the visibility rules say the consumer cannot see, and the user's two
+        options -- rename, or ask the library to export the perk -- are the ones CE3011
+        leads to. A PUBLIC library perk keeps CE4001: the consumer can read both
+        declarations, which is the case that code was written for.
+        """
+        clash = library_clash_origin(
+            self.visibility, "perk", name,
+            current_unit=self.current_unit_name, library_units=self.library_units)
+        if clash is None or clash.is_public:
+            return False
+        reject_library_clash(self.r, clash, name_span, kind="perk", name=name,
+                             filename=self.current_unit_file)
+        return True
 
     def _reject_static_in_impl(self, impl: ExtendWithDef, perk_name: str) -> bool:
         """CE4014: a perk implementation may not declare a static method (#542, R1)."""
