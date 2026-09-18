@@ -1,0 +1,13 @@
+# The alias is bound and the unit behind it declares no such perk. The caret is on
+# the whole written name, qualifier included, because that is what the user wrote
+# (#729).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: test_err_qualified_constraint_unknown_member.sushi:9:14
+# EXPECT_STDERR_CONTAINS: declares no 'Quiet'
+use "helpers/geo" as geo
+
+fn noise@(T: geo.Quiet)(T thing) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(0)
