@@ -125,8 +125,6 @@ class EnumCollector:
                            unit_name=self.current_unit_name,
                            filename=self.current_unit_file)
 
-        # Check if this enum has type parameters (e.g., enum Result<T>:)
-        # Note: In the collect pass, type_params is always None -- the grammar has no syntax for it yet
         type_params_raw = enum.type_params
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 

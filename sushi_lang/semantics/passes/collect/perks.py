@@ -175,6 +175,12 @@ def _get_type_name(ty: Optional[Type]) -> Optional[str]:
     if isinstance(ty, GenericTypeRef):
         return instantiation_key(ty.base_name, tuple(ty.type_args))
 
+    # Every other written target -- a struct or enum name the collect pass has not
+    # resolved yet, an array, a function type, `ptr`. `str` and not `display_type`: this
+    # answer is a table KEY and has to be the INTERNAL identity name, the same `<...>`
+    # the three arms above answer. `extend List@(i32)[] with P` is the case that shows
+    # it -- the display form keys it `List@(i32)[]` while the receiver resolves to
+    # `List<i32>[]`, which is #393 again.
     return str(ty)
 
 
