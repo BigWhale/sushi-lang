@@ -1559,9 +1559,10 @@ A **perk method** takes the same error channel, and the perk states it in the co
 `fn read(poke u8[] into) i32 | IoError`. Every implementation repeats the channel
 exactly; a channel one side declares and the other does not, and two channels over
 different error types, are both `CE0133`, which points at the contract and the
-implementation together. A perk method has no method-level type parameters (`CE4010`
-covers the perk itself) and no `Self` type, so a contract cannot promise to return
-another one of the implementing type.
+implementation together. A perk method has no method-level type parameters and no `Self`
+type, so a contract cannot promise to return another one of the implementing type.
+`CE4010` covers both ends: a perk that declares `@(...)`, and an implementation method
+that declares its own. Write a plain extension method for a generic one.
 
 A **private perk** hides the CONTRACT, not the method. Another unit may not implement it
 (`extend X with Loud`) and may not constrain a type parameter with it (`@(T: Loud)`) --
