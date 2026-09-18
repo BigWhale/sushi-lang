@@ -131,6 +131,12 @@ class Monomorphizer:
         files = getattr(table, "files", None) or {}
         return files.get(name)
 
+    def template_span(self, kind: str, name: str):
+        """Where the generic template `name` is declared, when the tables know it."""
+        table = getattr(self.tables, f"generic_{kind}s", None)
+        spans = getattr(table, "spans", None) or {}
+        return spans.get(name)
+
     # Ceiling on nested type monomorphization. Real programs stay well under this
     # (a deeply nested Result<Maybe<HashMap<...>>> is only a handful of levels);
     # exceeding it means the instantiation is growing without bound.

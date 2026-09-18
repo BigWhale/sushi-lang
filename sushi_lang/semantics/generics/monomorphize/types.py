@@ -107,7 +107,7 @@ class TypeMonomorphizer:
             generic_args=type_args
         )
         self.monomorphizer.cache[cache_key] = concrete
-        self._publish(self.monomorphizer.enum_table, concrete)
+        self._publish(self.monomorphizer.enum_table, concrete, "enum")
 
         with self.monomorphizer._monomorphize_depth_guard(generic.name):
             concrete_variants = []
@@ -203,7 +203,7 @@ class TypeMonomorphizer:
             generic_args=type_args
         )
         self.monomorphizer.struct_cache[cache_key] = concrete
-        self._publish(self.monomorphizer.struct_table, concrete)
+        self._publish(self.monomorphizer.struct_table, concrete, "struct")
 
         with self.monomorphizer._monomorphize_depth_guard(generic.name):
             concrete_fields = []
@@ -247,7 +247,7 @@ class TypeMonomorphizer:
             return None
         return table.by_name.get(name)
 
-    def _publish(self, table, concrete) -> None:
+    def _publish(self, table, concrete, kind: str) -> None:
         """Intern a new instance at creation, in the one place every producer passes (#577).
 
         The instantiate pass collects what annotations and calls SPELL. A `Box@(B)` field,
@@ -265,6 +265,24 @@ class TypeMonomorphizer:
             return
         table.by_name[concrete.name] = concrete
         table.order.append(concrete.name)
+        self._stamp_template_origin(table, concrete, kind)
+
+    def _stamp_template_origin(self, table, concrete, kind: str) -> None:
+        """Where a diagnostic about this instance points: the TEMPLATE's declaration.
+
+        An instance is spelled in no declaration -- `Box@(i32)` is minted from a field,
+        a return or an annotation -- so it has a name and no source of its own, and a
+        diagnostic that carries no span renders with the file name alone and no caret
+        (#700). The template is the one declaration the reader can act on.
+        """
+        base = concrete.generic_base
+        if base is None:
+            return
+        span = self.monomorphizer.template_span(kind, base)
+        if span is None:
+            return
+        table.spans[concrete.name] = span
+        table.files[concrete.name] = self.monomorphizer.template_file(kind, base)
 
     def reached_instances(self) -> Tuple[Dict[Tuple[str, Tuple[Type, ...]], EnumType],
                                          Dict[Tuple[str, Tuple[Type, ...]], StructType]]:
