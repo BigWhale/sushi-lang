@@ -246,3 +246,101 @@ def test_the_resolver_rebuilds_nothing_that_is_already_resolved():
         assert resolve_type_recursively(already, structs, enums) is already, (
             f"a {kind} that holds the table entry was rebuilt anyway"
         )
+
+
+# --- the map: the same arm table, the other direction (#718) -----------------------
+
+
+def _swap_the_marker(ty):
+    """A resolve function with a visible answer: the marker becomes a builtin."""
+    return BuiltinType.I64 if isinstance(ty, ForeignPtrType) else ty
+
+
+def test_the_arm_table_has_an_answer_for_every_kind():
+    """One table, both directions. A kind it does not name is walked by neither."""
+    from sushi_lang.semantics.type_walk import COMPOSITE_KINDS, DECLARATION_KINDS
+
+    known = _type_union_members() | OFF_UNION_KINDS
+    covered = set(COMPOSITE_KINDS) | set(DECLARATION_KINDS) | set(TERMINAL_KINDS)
+    missing = sorted(known - covered - {"UnknownType"})
+    assert not missing, (
+        f"the arm table has no answer for: {missing}. The walk and the map both read it, "
+        "so a kind it misses is skipped in both directions."
+    )
+    strays = sorted(covered - known)
+    assert not strays, f"the arm table names something that is not a type kind: {strays}"
+
+
+def test_the_map_rebuilds_what_a_composite_holds():
+    """The map must arrive everywhere the walk does."""
+    from sushi_lang.semantics.type_walk import COMPOSITE_KINDS, map_named_types
+
+    for kind, value in _every_composite().items():
+        if kind not in COMPOSITE_KINDS:
+            continue
+        mapped = map_named_types(value, _swap_the_marker)
+        reached = list(walk_named_types(mapped))
+        assert BuiltinType.I64 in reached, (
+            f"map_named_types({kind}) never reached the type it holds. "
+            f"Reached: {[str(t) for t in reached]}"
+        )
+        assert not any(isinstance(t, ForeignPtrType) for t in reached), (
+            f"map_named_types({kind}) rebuilt around what it holds and kept the old type"
+        )
+
+
+def test_the_map_stops_at_a_declaration():
+    """Type identity is NOMINAL: a named type is looked up, never rebuilt."""
+    from sushi_lang.semantics.type_walk import DECLARATION_KINDS, map_named_types
+
+    for kind, value in _every_composite().items():
+        if kind not in DECLARATION_KINDS:
+            continue
+        assert map_named_types(value, _swap_the_marker) is value, (
+            f"map_named_types rebuilt a {kind}. The table is the sole authority for what "
+            "a named type holds, and a second instance of one name is the #240 hazard."
+        )
+
+
+def test_the_map_answers_the_same_object_when_nothing_moves():
+    """The resolve pass runs again at every late intern; an unchanged type stays itself."""
+    from sushi_lang.semantics.type_walk import map_named_types
+
+    for kind, value in _every_composite().items():
+        assert map_named_types(value, lambda ty: ty) is value, (
+            f"map_named_types rebuilt an unchanged {kind}"
+        )
+
+
+def test_the_map_carries_what_a_kind_declares_beside_its_types():
+    """`dataclasses.replace`, so a borrow mode and a fn type's metadata ride along (#368)."""
+    from sushi_lang.semantics.param_modes import ParamMode
+    from sushi_lang.semantics.type_walk import map_named_types
+
+    reference = ReferenceType(_marker(), typesys.BorrowMode.PEEK)
+    assert map_named_types(reference, _swap_the_marker).mutability is (
+        typesys.BorrowMode.PEEK)
+
+    fn = FunctionType(param_types=(_marker(),), ok_type=BuiltinType.I32,
+                      err_type=BuiltinType.I32, captures=("c",),
+                      param_modes=(ParamMode.NOM,))
+    mapped = map_named_types(fn, _swap_the_marker)
+    assert mapped.captures == ("c",)
+    assert mapped.modes == (ParamMode.NOM,)
+
+
+def test_the_resolver_is_one_call_into_the_map():
+    """One walk, two directions. Two arm sets is how the resolver grew its holes."""
+    import inspect
+
+    from sushi_lang.semantics import type_resolution
+
+    source = inspect.getsource(type_resolution.resolve_type_recursively)
+    assert "map_named_types" in source, (
+        "type_resolution.resolve_type_recursively recurses over a type by hand again"
+    )
+    for built in ("ArrayType(", "ReferenceType(", "IteratorType(", "GenericTypeRef(",
+                  "replace("):
+        assert built not in source, (
+            f"the resolver builds a {built[:-1]} itself; the shared map owns that arm"
+        )
