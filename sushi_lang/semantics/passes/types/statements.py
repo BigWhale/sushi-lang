@@ -1,5 +1,6 @@
 """Statement validation for type validation."""
 from __future__ import annotations
+from dataclasses import dataclass
 from itertools import count
 from typing import TYPE_CHECKING, Optional
 
@@ -108,19 +109,39 @@ def reject_unhandled_result(validator: 'TypeValidator', stmt: Let, resolved_type
     return True
 
 
-def place_root(validator: 'TypeValidator', expr) -> Optional[Name]:
-    """The name at the root of a PLACE, or None when `expr` names no storage.
+@dataclass(frozen=True)
+class PlaceRoot:
+    """The name a place roots in, and the unit that name is written in.
+
+    Two facts from one walk. `unit` is None for a bare root, which the asking unit's own
+    scope holds; behind a `use ... as` alias it is the unit the alias names, because an
+    alias puts nothing into the asking unit's flat scope (#712).
+    """
+
+    name: Name
+    unit: Optional[str] = None
+
+
+def place_root(validator: 'TypeValidator', expr) -> Optional[PlaceRoot]:
+    """The root of a PLACE, or None when `expr` names no storage.
 
     A `let poke` / `let peek` binds a pointer, so its initializer must have an address a
     frame keeps: a bare name, a member or index chain off one, or an `Own@(T).get()` on
     one (the payload's heap cell). A call result, a `??`, a literal or a constructor is a
     temporary, and binding a pointer into one is CE2404 -- the rule a `poke self` call
     answers to as well.
+
+    A chain behind an alias roots in the DECLARATION the alias holds, so the walk stops
+    one step above the alias: a namespace is storage of no kind, and walking into it
+    answered with the alias name itself, which the pass then typed as a variable (#712).
     """
     while True:
         if isinstance(expr, Name):
-            return expr
+            return PlaceRoot(expr)
         if isinstance(expr, MemberAccess):
+            unit = _alias_origin(validator, expr)
+            if unit is not None:
+                return PlaceRoot(Name(id=expr.member, loc=expr.loc), unit)
             expr = expr.receiver
             continue
         if isinstance(expr, IndexAccess):
@@ -132,6 +153,19 @@ def place_root(validator: 'TypeValidator', expr) -> Optional[Name]:
             expr = expr.receiver
             continue
         return None
+
+
+def _alias_origin(validator: 'TypeValidator', expr: MemberAccess) -> Optional[str]:
+    """The unit `<alias>.<member>` names, or None when the receiver is a value."""
+    binding = validator.resolve_namespaced(expr.receiver, expr.member)
+    return None if binding is None else binding.provider.origin
+
+
+def _root_sig(validator: 'TypeValidator', root: PlaceRoot):
+    """The constant record this root reaches, read in the scope it is WRITTEN in."""
+    if root.unit is None:
+        return validator.const_sig(root.name.id)
+    return validator.const_table.lookup(root.name.id, root.unit)
 
 
 def validate_let_reference(validator: 'TypeValidator', stmt: Let) -> None:
@@ -158,9 +192,10 @@ def validate_let_reference(validator: 'TypeValidator', stmt: Let) -> None:
                   f"`let T {stmt.name} = ...`") \
             .emit()
         return
-    if root.id not in validator.variable_types:
-        if reject_borrow_of_constant(validator.err, root.id,
-                                     validator.const_sig(root.id), root.loc):
+    name = root.name
+    if name.id not in validator.variable_types:
+        if reject_borrow_of_constant(validator.err, name.id,
+                                     _root_sig(validator, root), name.loc):
             return
 
     referent = resolve_variable_type(validator, stmt.ty.referenced_type, stmt.type_span)
