@@ -1,0 +1,14 @@
+# A PERK is one per program, as a type is, so the consumer may not declare a name
+# the library declares privately. The answer must read as CE3011 does for a struct
+# and an enum: CE4001 named a declaration in a file the visibility rules say the
+# consumer cannot see (#705).
+# EXPECT_ERROR_CODE: CE3011
+
+use <lib/private_perk_lib>
+
+perk Quiet:
+    fn hush() string
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)
