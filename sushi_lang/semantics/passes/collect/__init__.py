@@ -171,9 +171,9 @@ class CollectorPass:
             visibility=self.visibility,
         )
 
-        self._register_predefined_structs()
-        self._register_predefined_enums()
-        self._register_predefined_perks()
+        self.struct_collector.register_predefined_structs()
+        self.enum_collector.register_predefined_enums()
+        self.perk_collector.register_predefined_perks()
         self._register_predefined_generics()
 
     def run(self, root: Program, unit_name: Optional[str] = None,
@@ -228,18 +228,6 @@ class CollectorPass:
             current_unit=unit_name, filename=unit_file)
 
         return self.tables
-
-    def _register_predefined_structs(self) -> None:
-        """Register predefined structs (ProcessOutput, etc.)."""
-        self.struct_collector.register_predefined_structs()
-
-    def _register_predefined_enums(self) -> None:
-        """Register predefined enums (FileMode, SeekFrom, FileError, etc.)."""
-        self.enum_collector.register_predefined_enums()
-
-    def _register_predefined_perks(self) -> None:
-        """Register predefined perks (Drop, Hashable)."""
-        self.perk_collector.register_predefined_perks()
 
     def _register_predefined_generics(self) -> None:
         """The five generics the compiler builds in: Result, Maybe, Own, HashMap, List."""
