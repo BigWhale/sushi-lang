@@ -1,17 +1,21 @@
-# A borrow takes the address of storage a frame owns, so a constant cannot be borrowed --
-# CE2400, which had ZERO tests until now.
+# A constant is read-only storage, so a `poke` borrow cannot write through it -- CE2400,
+# which had ZERO tests before #685.
 #
 # This used to report CE1001, "use of undeclared identifier 'LIMIT'", about a constant
 # declared two lines above, AND CE2400 for the same token: the borrow arm of the scope pass
 # was a copy of the plain-use arm that had lost every non-variable case, and the borrow
 # checker asked the same question again from state that cannot tell the two apart.
+#
+# The spelling was `peek` until the ruling on #713, which made the DECLARATION decide
+# instead of the position: a read of `.rodata` is safe, and only the write is the fault.
 # EXPECT_ERROR_CODE: CE2400
 const i32 LIMIT = 10
 
-fn read_value(peek i32 x) i32:
-    return Result.Ok(x)
+fn bump_value(poke i32 x) ~:
+    x := x + 1
+    return Result.Ok(~)
 
 fn main() i32:
-    let i32 y = read_value(peek LIMIT).realise(0)
-    println("{y}")
+    bump_value(poke LIMIT)
+    println("{LIMIT}")
     return Result.Ok(0)
