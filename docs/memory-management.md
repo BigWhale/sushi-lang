@@ -750,7 +750,8 @@ read-only twin. The binding is block-scoped and freezes its owner exactly as the
 borrow above does (`CE2412`); one `poke` binding of an owner at a time (`CE2403`), a `peek`
 beside a live `poke` is `CE2407`, a write through a `peek` binding is `CE2408`, and
 consuming the binding is `CE2411` as before. The place must have an address: a call
-result is `CE2404`, a constant is `CE2400`.
+result is `CE2404`. A constant is read-only storage, so `let peek` reads it and
+`let poke` is `CE2400`.
 
 ```sushi
 struct Wrapper:

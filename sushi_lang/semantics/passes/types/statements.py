@@ -175,8 +175,8 @@ def validate_let_reference(validator: 'TypeValidator', stmt: Let) -> None:
     the binding is recorded with its full `ReferenceType` so that every later reader -- the
     borrow pass's write gates, the backend's dereference -- answers by construction. The
     owner's freeze, the one-`poke` rule and the consuming-use refusal are the borrow
-    pass's; here the place is checked to HAVE an address, and a constant is refused
-    because it has none (CE2400) where a unit variable has one.
+    pass's; here the place is checked to be storage the binding's MODE may use, and a
+    `poke` of a constant is refused (CE2400) where a `peek` of one reads it (#713).
     """
     from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
     from sushi_lang.semantics.typesys import ReferenceType
@@ -195,7 +195,7 @@ def validate_let_reference(validator: 'TypeValidator', stmt: Let) -> None:
     name = root.name
     if name.id not in validator.variable_types:
         if reject_borrow_of_constant(validator.err, name.id,
-                                     _root_sig(validator, root), name.loc):
+                                     _root_sig(validator, root), name.loc, mode=mode):
             return
 
     referent = resolve_variable_type(validator, stmt.ty.referenced_type, stmt.type_span)

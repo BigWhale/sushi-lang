@@ -292,8 +292,9 @@ class ScopeAnalyzer:
         return next((sig.unit_name for sig in declared.values()
                      if sig.unit_name is not None), None)
 
-    def _borrow_variable(self, name: str, usage_span: Optional[Span] = None) -> None:
-        """A borrow needs a LOCAL. Mark it used, or say which way it is not one."""
+    def _borrow_variable(self, name: str, mode: str,
+                         usage_span: Optional[Span] = None) -> None:
+        """A borrow needs storage. Mark it used, or say which way this name is none."""
         for i in range(len(self.scopes) - 1, -1, -1):
             if name in self.scopes[i]:
                 self.scopes[i][name].used = True
@@ -309,10 +310,10 @@ class ScopeAnalyzer:
         elif rung is BareName.NOTHING:
             self.err.emit(er.ERR.CE1001, usage_span, name=name)
         else:
-            # A unit `var` is storage with an address and passes; a constant, a function
-            # value, a stdlib constant and a namespace all have no frame slot.
+            # A unit `var` takes every mode and a constant takes a read (#713); a
+            # function value, a stdlib constant and a namespace are storage of no kind.
             reject_borrow_of_constant(self.err, name, self._const_sig(name),
-                                      usage_span, no_frame_slot=True)
+                                      usage_span, mode=mode, no_frame_slot=True)
 
     def _record_capture(self, name: str, resolved_index: int, span: Optional[Span]) -> None:
         """Record `name` as a capture for every enclosing lambda it is free in."""
@@ -501,7 +502,8 @@ class ScopeAnalyzer:
                     and self._rung_of(root.id) in _NOT_A_POKE_CONTAINER):
                 reject_borrow_of_constant(
                     self.err, root.id, self._const_sig(root.id),
-                    stmt.item_borrow_span or stmt.loc, no_frame_slot=True)
+                    stmt.item_borrow_span or stmt.loc, mode=stmt.item_borrow,
+                    no_frame_slot=True)
 
         self._push_scope()
         self._declare_variable(stmt.item_name, stmt.item_name_span)
@@ -702,7 +704,7 @@ class ScopeAnalyzer:
                     base = base.receiver
                 if (isinstance(base, Name)
                         and not (base is not expr.expr and self._is_namespace(base.id))):
-                    self._borrow_variable(base.id, base.loc)
+                    self._borrow_variable(base.id, expr.mutability, base.loc)
                 else:
                     # `poke geo.count` reads a namespace: the MemberAccess arm resolves
                     # it, and the typecheck pass says whether the member has an address.

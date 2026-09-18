@@ -16,8 +16,9 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
     from sushi_lang.semantics.typesys import ReferenceType
 
     if isinstance(expr.expr, Name):
-        # A local's slot, or the global backing a unit variable (unit-storage.md); a
-        # constant never reaches here (CE2400 in the scope pass).
+        # A local's slot, or the global backing a unit variable or a constant: a `peek`
+        # reads `.rodata` through the pointer (#713), and a `poke` of a constant never
+        # reaches here (CE2400 in the scope pass).
         from sushi_lang.backend.expressions.names import resolve_name_slot
         var_name = expr.expr.id
         slot = resolve_name_slot(codegen, var_name)
@@ -33,7 +34,8 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
 
     elif isinstance(expr.expr, MemberAccess):
         from sushi_lang.backend.expressions.names import namespaced_storage
-        storage = namespaced_storage(codegen, expr.expr)
+        storage = namespaced_storage(codegen, expr.expr,
+                                     writable=expr.mutability != "peek")
         if storage is not None:
             return storage[1]  # `poke geo.count`: the variable's own address
         return emit_member_access_borrow(codegen, expr.expr)
@@ -43,21 +45,25 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
         raise_internal_error("CE0100", expr=type(expr.expr).__name__)
 
 
-def emit_place_address(codegen: 'LLVMCodegen', expr) -> ir.Value:
+def emit_place_address(codegen: 'LLVMCodegen', expr, *,
+                       writable: bool = True) -> ir.Value:
     """The address of a PLACE: what a `let poke` / `let peek` binding stores (#409).
 
     A name is its slot (or the pointer a reference slot holds, or a unit variable's
     global); a member chain is a GEP; an index is the bounds-checked element pointer; an
     `Own@(T).get()` is the payload's heap cell. The typecheck pass refused every other
-    shape (CE2404), so there is no fallback here.
+    shape (CE2404), so there is no fallback here. `writable` is the binding's own mode:
+    a `peek` of a constant reads `.rodata` through the pointer, behind an alias too.
     """
     from sushi_lang.semantics.ast import DotCall, IndexAccess, MemberAccess, MethodCall, Name
 
+    mutability = "poke" if writable else "peek"
     if isinstance(expr, Name):
-        return emit_borrow(codegen, Borrow(expr=expr, mutability="poke", loc=expr.loc))
+        return emit_borrow(codegen, Borrow(expr=expr, mutability=mutability,
+                                           loc=expr.loc))
     if isinstance(expr, MemberAccess):
         from sushi_lang.backend.expressions.names import namespaced_storage
-        storage = namespaced_storage(codegen, expr)
+        storage = namespaced_storage(codegen, expr, writable=writable)
         if storage is not None:
             return storage[1]
         return emit_member_access_borrow(codegen, expr)

@@ -25,7 +25,7 @@ shape -- a marker, a type, a name, an initializer -- and a different kind:
 ## What it is for
 
 The console handles were the forcing case. `stdout`, `stderr` and `stdin` were `File`
-CONSTANTS, and a constant has no address: the moment the `Writer` contract took
+CONSTANTS, and nothing writes a constant: the moment the `Writer` contract took
 `poke self` (so that a `BufWriter@(W)` could implement it), `stdout.write(...)` would have
 stopped compiling (CE2400). A `var` gives the console handle an address, so the spelling
 stays and the contract can move.

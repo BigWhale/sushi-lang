@@ -31,18 +31,21 @@ def resolve_name_semantic_type(codegen: 'LLVMCodegen', name: str) -> Optional['T
     return const_sig.const_type if const_sig is not None else None
 
 
-def namespaced_storage(codegen: 'LLVMCodegen', expr) -> Optional[tuple]:
-    """`(name, global, type)` when `expr` is `alias.name` reaching a UNIT VARIABLE, else None.
+def namespaced_storage(codegen: 'LLVMCodegen', expr,
+                       *, writable: bool = True) -> Optional[tuple]:
+    """`(name, global, type)` when `expr` is `alias.name` reaching unit storage, else None.
 
-    The alias fold keeps a constant as a `MemberAccess` with a `namespace_ref`; a
-    constant behind it is read by value, and a variable behind it is STORAGE the writers
-    reach -- a rebind, a `poke`, a field write, a mutating method (unit-storage.md).
+    The alias fold keeps both kinds as a `MemberAccess` with a `namespace_ref`. `writable`
+    is what the CALLER does with the address: a rebind, a `poke`, a field write and a
+    mutating method all write, and a `var` is the only storage they may reach
+    (unit-storage.md). A `peek` reads, and a constant is one object in `.rodata` that a
+    read may point at (#713).
     """
     ref = getattr(expr, "namespace_ref", None)
     if ref is None or ref.kind != "constant":
         return None
     sig = codegen.const_table.lookup(ref.name, ref.origin)
-    if sig is None or not sig.is_var:
+    if sig is None or (writable and not sig.is_var):
         return None
     slot = codegen.constants.lookup(ref.name, ref.origin)
     if slot is None:
