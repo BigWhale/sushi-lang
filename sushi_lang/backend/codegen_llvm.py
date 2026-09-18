@@ -427,17 +427,16 @@ class LLVMCodegen:
         keep_object: bool = False,
         main_expects_args: bool = False,
         monomorphized_extensions: list['ExtendDef'] = None,
-        library_linker: 'LibraryResolver' = None,
-        library_registry: Optional[LibraryRegistry] = None,
     ) -> Path:
-        """Complete multi-unit compilation pipeline from multiple ASTs to native executable."""
+        """Complete multi-unit compilation pipeline from multiple ASTs to native executable.
+
+        The loaded libraries are read off `self`, where the pipeline's one hand-off put
+        them (#645); taking them as arguments here gave the library build path no way to
+        supply them.
+        """
         self.main_expects_args = main_expects_args
 
         self.monomorphized_extensions = monomorphized_extensions or []
-
-        self.library_linker = library_linker
-
-        self.library_registry = library_registry
 
         mod_ir: ir.Module = self.build_module_multi_unit(units)
 
@@ -460,6 +459,7 @@ class LLVMCodegen:
                     elif use_stmt.is_stdlib:
                         stdlib_units.add(use_stmt.path)
 
+        library_linker = self.library_linker
         if library_linker is not None and library_paths:
             from sushi_lang.backend.module_linker import TwoPhaseLinker
 

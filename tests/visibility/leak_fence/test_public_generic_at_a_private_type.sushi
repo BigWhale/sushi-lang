@@ -1,0 +1,27 @@
+# The leak fence measures a PROMISE, and a monomorphized instance makes none: it
+# has no written signature, no other unit can name it, and the template it came
+# from is fenced where it is written. A public generic instantiated at this unit's
+# own private type is therefore legal (#702).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3 4\n"
+
+struct Point:
+    i32 x
+
+public fn keep@(T)(nom T a) T:
+    return Result.Ok(a)
+
+public perk Loud:
+    fn shout() i32
+
+extend Point with Loud:
+    fn shout() i32:
+        return self.x
+
+public fn loudest@(T: Loud)(T thing) i32:
+    return Result.Ok(thing.shout())
+
+fn main() i32:
+    let Point kept = keep(nom Point(3)).realise(Point(0))
+    println("{kept.x} {loudest(Point(4)).realise(0)}")
+    return Result.Ok(0)
