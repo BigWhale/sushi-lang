@@ -47,11 +47,10 @@ def test_undeclared_member_base_reports_exactly_one_diagnostic(analyze):
     assert "CE2400" not in codes
 
 
-# The names that EXIST but are not storage a frame owns. Each used to be reported as an
+# The names that EXIST and are storage of NO kind. Each used to be reported as an
 # undeclared identifier, which is plainly false, and then reported a second time.
 
 NON_LOCALS = {
-    "constant":      ("const i32 LIMIT = 10\n\n", "LIMIT"),
     "function":      ("fn helper() i32:\n    return Result.Ok(1)\n\n", "helper"),
 }
 
@@ -62,6 +61,35 @@ def test_borrowing_a_non_local_is_CE2400_only(analyze, kind):
     codes = _codes(analyze(_borrowing(setup, borrowed)))
     assert codes.count("CE2400") == 1, f"{kind}: got {codes}"
     assert "CE1001" not in codes, f"{kind}: got {codes}"
+
+
+def test_a_peek_of_a_constant_is_clean(analyze):
+    """A constant is read-only STORAGE, so a read through a pointer is legal (#713).
+
+    It sat in the table above until then, and that row measured the POSITION and not the
+    declaration: the same read in a match arm was legal all along.
+    """
+    codes = _codes(analyze(_borrowing("const i32 LIMIT = 10\n\n", "LIMIT")))
+    assert "CE2400" not in codes, codes
+    assert "CE1001" not in codes, codes
+
+
+def test_a_poke_of_a_constant_is_CE2400_only(analyze):
+    """The write is the fault, and it is still classified once."""
+    src = (
+        "const i32 LIMIT = 10\n"
+        "\n"
+        "fn bump(poke i32 x) ~:\n"
+        "    x := x + 1\n"
+        "    return Result.Ok(~)\n"
+        "\n"
+        "fn main() i32:\n"
+        "    bump(poke LIMIT)\n"
+        "    return Result.Ok(0)\n"
+    )
+    codes = _codes(analyze(src))
+    assert codes.count("CE2400") == 1, codes
+    assert "CE1001" not in codes, codes
 
 
 def test_borrowing_a_local_is_clean(analyze):
