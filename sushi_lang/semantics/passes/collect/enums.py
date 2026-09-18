@@ -12,8 +12,8 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.structs import StructTable, GenericStructTable
 from sushi_lang.semantics.ast import EnumDef, Program
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
+from sushi_lang.semantics.predefined_types import PREDEFINED_ENUMS, predefined_enums
 from sushi_lang.semantics.typesys import (
-    BuiltinType,
     EnumType,
     EnumVariantInfo,
 )
@@ -26,7 +26,8 @@ from sushi_lang.semantics.visibility import (
     reject_library_clash,
 )
 
-from .utils import extract_type_param_names, note_first_declaration, reject_reference_in
+from .utils import (
+    TakenName, extract_type_param_names, reject_duplicate_type_name, reject_reference_in)
 
 
 @dataclass
@@ -57,27 +58,11 @@ class GenericEnumTable:
     files: Dict[str, Optional[str]] = field(default_factory=dict)
 
 
-# The HOME of every predefined enum (#574, Ruling 3). No unit declares these -- they are
-# synthesized below -- and `docs/design/unit-namespaces.md` section 4 says a name no import
-# brings can sit in no namespace. So each is given a module: the import GATES the bare
-# name, as `<collections/hashmap>` gates `HashMap` (#506), and the alias holds it
-# (`fs.FileMode`). `StdError` is the implicit Result arm and stays global.
-#
-# `SeekFrom` is homed at `<io/contracts>` and not at `<io/fs>`: `Seek.seek(SeekFrom)` is
-# declared there, and `<io/fs>` imports `<io/contracts>` to implement the contracts, so
-# the other way round would be a cycle. `NetError` gets `<net/error>`, a module created
-# for it. `IoError` is `<io/contracts>`'s because every contract method answers it.
+# The HOME of every predefined enum, derived from the one table that holds them
+# (#574, Ruling 3). The `namespaces` pass reads the stamp off the `EnumType`; this view
+# answers the same question by name.
 PREDEFINED_ENUM_HOMES: dict[str, Optional[str]] = {
-    "FileMode": "io/fs",
-    "SeekFrom": "io/contracts",
-    "FileError": "io/error",
-    "IoError": "io/error",
-    "NetError": "net/error",
-    "StdError": None,
-    "ProcessError": "sys/process",
-    "EnvError": "sys/env",
-    "MathError": "math",
-}
+    predefined.name: predefined.home_module for predefined in PREDEFINED_ENUMS}
 
 
 class EnumCollector:
@@ -112,163 +97,11 @@ class EnumCollector:
                 if isinstance(enum, EnumDef):
                     self._collect_enum_def(enum)
 
-    def _register_predefined(self, enum: EnumType) -> None:
-        """One of the nine synthesized enums: in the table, in order."""
-        self.enums.by_name[enum.name] = enum
-        self.enums.order.append(enum.name)
-
     def register_predefined_enums(self) -> None:
-        """Register predefined enums for file operations and error handling.
-
-        Each carries its HOME module (`PREDEFINED_ENUM_HOMES`), the stamp the
-        `namespaces` pass reads: the import gates the bare name and the alias holds it.
-        """
-        file_mode_enum = EnumType(
-            name="FileMode",
-            home_module=PREDEFINED_ENUM_HOMES["FileMode"],
-            variants=(
-                EnumVariantInfo(name="Read", associated_types=()),      # Text read mode ("r")
-                EnumVariantInfo(name="Write", associated_types=()),     # Text write mode ("w")
-                EnumVariantInfo(name="Append", associated_types=()),    # Text append mode ("a")
-                EnumVariantInfo(name="ReadB", associated_types=()),     # Binary read mode ("rb")
-                EnumVariantInfo(name="WriteB", associated_types=()),    # Binary write mode ("wb")
-                EnumVariantInfo(name="AppendB", associated_types=()),   # Binary append mode ("ab")
-            )
-        )
-        self._register_predefined(file_mode_enum)
-
-        seek_from_enum = EnumType(
-            name="SeekFrom",
-            home_module=PREDEFINED_ENUM_HOMES["SeekFrom"],
-            variants=(
-                EnumVariantInfo(name="Start", associated_types=()),     # SEEK_SET (0)
-                EnumVariantInfo(name="Current", associated_types=()),   # SEEK_CUR (1)
-                EnumVariantInfo(name="End", associated_types=()),       # SEEK_END (2)
-            )
-        )
-        self._register_predefined(seek_from_enum)
-
-        file_error_enum = EnumType(
-            name="FileError",
-            home_module=PREDEFINED_ENUM_HOMES["FileError"],
-            variants=(
-                EnumVariantInfo(name="NotFound", associated_types=()),          # ENOENT - File does not exist
-                EnumVariantInfo(name="PermissionDenied", associated_types=()),  # EACCES, EPERM - Insufficient permissions
-                EnumVariantInfo(name="AlreadyExists", associated_types=()),     # EEXIST - File already exists
-                EnumVariantInfo(name="IsDirectory", associated_types=()),       # EISDIR - Path refers to a directory
-                EnumVariantInfo(name="DiskFull", associated_types=()),          # ENOSPC - No space left on device
-                EnumVariantInfo(name="TooManyOpen", associated_types=()),       # EMFILE, ENFILE - Too many open files
-                EnumVariantInfo(name="InvalidPath", associated_types=()),       # ENAMETOOLONG - Invalid path or filename
-                EnumVariantInfo(name="IOError", associated_types=()),           # EIO - Generic I/O error
-                EnumVariantInfo(name="Other", associated_types=()),             # Any other error
-            )
-        )
-        self._register_predefined(file_error_enum)
-
-        # NetError - the <net/socket> errors. The variant ORDER is the ABI: the
-        # index is the runtime tag that errno_to_net_error_table stores into a
-        # Result payload, so a variant is only ever APPENDED. ResolveFailed is
-        # the one variant no errno reaches -- getaddrinfo answers with an EAI_*
-        # code, whose sign even flips between the platforms.
-        net_error_enum = EnumType(
-            name="NetError",
-            home_module=PREDEFINED_ENUM_HOMES["NetError"],
-            variants=(
-                EnumVariantInfo(name="ConnectionRefused", associated_types=()),    # ECONNREFUSED
-                EnumVariantInfo(name="ConnectionReset", associated_types=()),      # ECONNRESET, ECONNABORTED
-                EnumVariantInfo(name="TimedOut", associated_types=()),             # ETIMEDOUT, EAGAIN on a blocking socket
-                EnumVariantInfo(name="Closed", associated_types=()),               # EPIPE, ENOTCONN, EBADF
-                EnumVariantInfo(name="AddressInUse", associated_types=()),         # EADDRINUSE
-                EnumVariantInfo(name="AddressNotAvailable", associated_types=()),  # EADDRNOTAVAIL
-                EnumVariantInfo(name="NetworkUnreachable", associated_types=()),   # ENETUNREACH, ENETDOWN, ENETRESET
-                EnumVariantInfo(name="HostUnreachable", associated_types=()),      # EHOSTUNREACH
-                EnumVariantInfo(name="ResolveFailed", associated_types=()),        # a getaddrinfo answer that is not EAI_SYSTEM
-                EnumVariantInfo(name="PermissionDenied", associated_types=()),     # EACCES, EPERM
-                EnumVariantInfo(name="TooManyOpen", associated_types=()),          # EMFILE, ENFILE
-                EnumVariantInfo(name="InvalidAddress", associated_types=()),       # EAFNOSUPPORT, EINVAL, a text that is no address
-                EnumVariantInfo(name="Interrupted", associated_types=()),          # EINTR
-                EnumVariantInfo(name="MessageTooLarge", associated_types=()),      # EMSGSIZE
-                EnumVariantInfo(name="Other", associated_types=()),                # Any other error
-            )
-        )
-        self._register_predefined(net_error_enum)
-
-        std_error_enum = EnumType(
-            name="StdError",
-            home_module=PREDEFINED_ENUM_HOMES["StdError"],
-            variants=(
-                EnumVariantInfo(name="Error", associated_types=()),  # Generic error
-            )
-        )
-        self._register_predefined(std_error_enum)
-
-        # IoError - the ONE channel every io contract method answers (HANDLES.md, rulings
-        # R4 and R20). A perk contract carries one signature and there is no Self type, so
-        # `Reader.read` cannot answer FileError on a File and NetError on a TcpStream. The
-        # detailed enums stay on the concrete constructors, whose variants are the ones
-        # this vocabulary drops -- every FileError and NetError variant with no twin here
-        # belongs to an open, a connect or a bind, and never to a read or a write.
-        #
-        # The variant ORDER is the ABI, exactly as NetError's is: a variant is only ever
-        # APPENDED. `Os` carries the raw errno, which is the thread-safe way to keep the
-        # detail -- a global last_errno() is not, and that is why the payload arm is here
-        # from the start rather than added later, when it would change every match a user
-        # has written.
-        io_error_enum = EnumType(
-            name="IoError",
-            home_module=PREDEFINED_ENUM_HOMES["IoError"],
-            variants=(
-                EnumVariantInfo(name="NotFound", associated_types=()),          # ENOENT
-                EnumVariantInfo(name="PermissionDenied", associated_types=()),  # EACCES, EPERM
-                EnumVariantInfo(name="AlreadyExists", associated_types=()),     # EEXIST
-                EnumVariantInfo(name="IsDirectory", associated_types=()),       # EISDIR
-                EnumVariantInfo(name="ConnectionReset", associated_types=()),   # ECONNRESET, ECONNABORTED
-                EnumVariantInfo(name="TimedOut", associated_types=()),          # ETIMEDOUT
-                EnumVariantInfo(name="Closed", associated_types=()),            # EPIPE, ENOTCONN, EBADF
-                EnumVariantInfo(name="Interrupted", associated_types=()),       # EINTR
-                EnumVariantInfo(name="WouldBlock", associated_types=()),        # EAGAIN, EWOULDBLOCK
-                EnumVariantInfo(name="DiskFull", associated_types=()),          # ENOSPC
-                EnumVariantInfo(name="TooManyOpen", associated_types=()),       # EMFILE, ENFILE
-                EnumVariantInfo(name="InvalidInput", associated_types=()),      # EINVAL, ENAMETOOLONG
-                EnumVariantInfo(name="Os", associated_types=(BuiltinType.I32,)),  # the raw errno
-                EnumVariantInfo(name="Other", associated_types=()),             # anything else
-            )
-        )
-        self._register_predefined(io_error_enum)
-
-        process_error_enum = EnumType(
-            name="ProcessError",
-            home_module=PREDEFINED_ENUM_HOMES["ProcessError"],
-            variants=(
-                EnumVariantInfo(name="SpawnFailed", associated_types=()),     # Failed to spawn process
-                EnumVariantInfo(name="ExitFailure", associated_types=()),     # Process exited with error
-                EnumVariantInfo(name="SignalReceived", associated_types=()),  # Process received signal
-            )
-        )
-        self._register_predefined(process_error_enum)
-
-        env_error_enum = EnumType(
-            name="EnvError",
-            home_module=PREDEFINED_ENUM_HOMES["EnvError"],
-            variants=(
-                EnumVariantInfo(name="NotFound", associated_types=()),          # Environment variable not found
-                EnumVariantInfo(name="InvalidValue", associated_types=()),      # Invalid value
-                EnumVariantInfo(name="PermissionDenied", associated_types=()),  # Insufficient permissions
-            )
-        )
-        self._register_predefined(env_error_enum)
-
-        math_error_enum = EnumType(
-            name="MathError",
-            home_module=PREDEFINED_ENUM_HOMES["MathError"],
-            variants=(
-                EnumVariantInfo(name="DivisionByZero", associated_types=()),  # Division by zero
-                EnumVariantInfo(name="Overflow", associated_types=()),        # Arithmetic overflow
-                EnumVariantInfo(name="Underflow", associated_types=()),       # Arithmetic underflow
-                EnumVariantInfo(name="InvalidInput", associated_types=()),    # Invalid input to math function
-            )
-        )
-        self._register_predefined(math_error_enum)
+        """The nine synthesized enums: in the table, in order, each with its stamp."""
+        for enum in predefined_enums():
+            self.enums.by_name[enum.name] = enum
+            self.enums.order.append(enum.name)
 
     def _reject_library_clash(self, name: str, name_span: Optional[Span]) -> bool:
         """CE3011 when a library already took this name. True when it was refused."""
@@ -292,48 +125,17 @@ class EnumCollector:
                            unit_name=self.current_unit_name,
                            filename=self.current_unit_file)
 
-        # Check if this enum has type parameters (e.g., enum Result<T>:)
-        # Note: In the collect pass, type_params is always None -- the grammar has no syntax for it yet
         type_params_raw = enum.type_params
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
-        if (name in self.enums.by_name or name in self.structs.by_name
-                or name in self.generic_structs.by_name
-                or name in self.generic_enums.by_name):
-            if self._reject_library_clash(name, name_span):
-                return
-
-        if name in self.enums.by_name:
-            note_first_declaration(
-                er.emit_with(self.r, ERR.CE2046, name_span, name=name),
-                self.enums.spans, name, files=self.enums.files,
-            ).emit()
-            return
-
-        if name in self.structs.by_name:
-            note_first_declaration(
-                er.emit_with(self.r, ERR.CE0006, name_span, name=name),
-                self.structs.spans, name,
-                what="already defined as a struct here", files=self.structs.files,
-            ).emit()
-            return
-
-        if name in self.generic_structs.by_name:
-            note_first_declaration(
-                er.emit_with(self.r, ERR.CE0006, name_span, name=name),
-                self.generic_structs.spans, name,
-                what="already defined as a generic struct here",
-                files=self.generic_structs.files,
-            ).emit()
-            return
-
-        if name in self.generic_enums.by_name:
-            note_first_declaration(
-                er.emit_with(self.r, ERR.CE2046, name_span, name=name),
-                self.generic_enums.spans, name,
-                what="first defined here, as a generic enum",
-                files=self.generic_enums.files,
-            ).emit()
+        if reject_duplicate_type_name(self.r, name, name_span, (
+            TakenName(self.enums, ERR.CE2046),
+            TakenName(self.structs, ERR.CE0006, "already defined as a struct here"),
+            TakenName(self.generic_structs, ERR.CE0006,
+                      "already defined as a generic struct here"),
+            TakenName(self.generic_enums, ERR.CE2046,
+                      "first defined here, as a generic enum"),
+        ), library_clash=self._reject_library_clash):
             return
 
         variants_list: List[EnumVariantInfo] = []

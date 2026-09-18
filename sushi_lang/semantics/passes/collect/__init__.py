@@ -8,15 +8,9 @@ if TYPE_CHECKING:
 
 from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import Program
-from sushi_lang.semantics.typesys import (
-    BuiltinType,
-    EnumVariantInfo,
-    PointerType,
-)
-from sushi_lang.semantics.generics.types import (
-    TypeParameter,
-    GenericEnumType,
-    GenericStructType,
+from sushi_lang.semantics.predefined_types import (
+    builtin_generic_enums,
+    builtin_generic_structs,
 )
 
 from .constants import ConstantCollector, ConstantTable, ConstSig
@@ -177,9 +171,9 @@ class CollectorPass:
             visibility=self.visibility,
         )
 
-        self._register_predefined_structs()
-        self._register_predefined_enums()
-        self._register_predefined_perks()
+        self.struct_collector.register_predefined_structs()
+        self.enum_collector.register_predefined_enums()
+        self.perk_collector.register_predefined_perks()
         self._register_predefined_generics()
 
     def run(self, root: Program, unit_name: Optional[str] = None,
@@ -235,85 +229,12 @@ class CollectorPass:
 
         return self.tables
 
-    def _register_predefined_structs(self) -> None:
-        """Register predefined structs (ProcessOutput, etc.)."""
-        self.struct_collector.register_predefined_structs()
-
-    def _register_predefined_enums(self) -> None:
-        """Register predefined enums (FileMode, SeekFrom, FileError, etc.)."""
-        self.enum_collector.register_predefined_enums()
-
-    def _register_predefined_perks(self) -> None:
-        """Register predefined perks (Drop, Hashable)."""
-        self.perk_collector.register_predefined_perks()
-
     def _register_predefined_generics(self) -> None:
-        """Register predefined generic enums and structs."""
-        # Result<T, E>: Ok(T) / Err(E).
-        result_generic = GenericEnumType(
-            name="Result",
-            type_params=(TypeParameter(name="T"), TypeParameter(name="E")),
-            variants=(
-                EnumVariantInfo(
-                    name="Ok",
-                    associated_types=(TypeParameter(name="T"),)
-                ),
-                EnumVariantInfo(
-                    name="Err",
-                    associated_types=(TypeParameter(name="E"),)
-                ),
-            )
-        )
-        self.generic_enums.by_name["Result"] = result_generic
-        self.generic_enums.order.append("Result")
+        """The five generics the compiler builds in: Result, Maybe, Own, HashMap, List."""
+        for generic_enum in builtin_generic_enums():
+            self.generic_enums.by_name[generic_enum.name] = generic_enum
+            self.generic_enums.order.append(generic_enum.name)
 
-        # Maybe<T>: Some(T) / None().
-        maybe_generic = GenericEnumType(
-            name="Maybe",
-            type_params=(TypeParameter(name="T"),),
-            variants=(
-                EnumVariantInfo(
-                    name="Some",
-                    associated_types=(TypeParameter(name="T"),)
-                ),
-                EnumVariantInfo(
-                    name="None",
-                    # None variant has no associated data
-                    associated_types=()
-                ),
-            )
-        )
-        self.generic_enums.by_name["Maybe"] = maybe_generic
-        self.generic_enums.order.append("Maybe")
-
-        # Own<T>: unique ownership of a heap T. The field is really a PointerType.
-        own_generic = GenericStructType(
-            name="Own",
-            type_params=(TypeParameter(name="T"),),
-            fields=(("value", PointerType(pointee_type=TypeParameter(name="T"))),)
-        )
-        self.generic_structs.by_name["Own"] = own_generic
-        self.generic_structs.order.append("Own")
-
-        # HashMap unconditionally: the table holds the type and the per-unit SCOPE
-        # decides who may write the name (`unit-namespaces.md` section 4.3.1). The gate
-        # that used to stand here was a process-global set, kept because there was no
-        # scope to ask.
-        from sushi_lang.semantics.generics.hashmap import hashmap_generic_struct
-        self.generic_structs.by_name["HashMap"] = hashmap_generic_struct()
-        self.generic_structs.order.append("HashMap")
-
-        # List<T>: `{i32 len, i32 capacity, T* data}`, 2x growth, lazily allocated.
-        # See docs/stdlib/collections/list.md.
-        list_generic = GenericStructType(
-            name="List",
-            type_params=(TypeParameter(name="T"),),
-            fields=(
-                ("len", BuiltinType.I32),
-                ("capacity", BuiltinType.I32),
-                ("data", PointerType(BuiltinType.I32)),  # Placeholder for T*
-            )
-        )
-        self.generic_structs.by_name["List"] = list_generic
-        self.generic_structs.order.append("List")
-
+        for generic_struct in builtin_generic_structs():
+            self.generic_structs.by_name[generic_struct.name] = generic_struct
+            self.generic_structs.order.append(generic_struct.name)

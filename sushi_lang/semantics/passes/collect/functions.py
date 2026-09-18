@@ -270,10 +270,6 @@ class FunctionTable(UnitOwnedSymbols[FuncSig]):
             return module_path, func
         return None
 
-    def is_stdlib_function(self, module_path: str, function_name: str) -> bool:
-        """Check if a function is a stdlib function."""
-        return (module_path, function_name) in self._stdlib_functions
-
     def stdlib_by_name(self) -> Dict[str, Any]:
         """Every imported stdlib function, keyed by its BARE name."""
         return {name: func for (_module, name), func in self._stdlib_functions.items()}
@@ -286,14 +282,6 @@ class GenericFunctionTable(UnitOwnedSymbols[GenericFuncDef]):
     The same two views `FunctionTable` carries, for the same reason: two units may
     each declare `twin@(T)` (#495).
     """
-
-    def has_function(self, name: str) -> bool:
-        """Check if generic function exists."""
-        return name in self.by_name
-
-    def get_function(self, name: str) -> Optional[GenericFuncDef]:
-        """Lookup generic function by name."""
-        return self.by_name.get(name)
 
 
 def _target_base_name(target_type: Optional[Type]) -> Optional[str]:
