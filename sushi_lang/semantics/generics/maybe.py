@@ -119,6 +119,7 @@ def ensure_maybe_type_in_table(
     """Ensure ``Maybe<value_type>`` exists in ``enum_table``, creating it if needed."""
     from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
     from sushi_lang.semantics.generics.hashing import can_enum_be_hashed, register_enum_hash_method
+    from sushi_lang.semantics.generics.cloning import register_enum_clone_method
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
     enums = enum_table.by_name
@@ -160,5 +161,6 @@ def ensure_maybe_type_in_table(
     can_hash, _ = can_enum_be_hashed(maybe_enum)
     if can_hash:
         register_enum_hash_method(maybe_enum, enum_table.derived)
+    register_enum_clone_method(maybe_enum, enum_table.derived)
 
     return maybe_enum
