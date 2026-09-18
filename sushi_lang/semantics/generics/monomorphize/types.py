@@ -266,6 +266,29 @@ class TypeMonomorphizer:
         table.by_name[concrete.name] = concrete
         table.order.append(concrete.name)
         self._stamp_template_origin(table, concrete, kind)
+        self._derive_clone(concrete, kind)
+
+    def _derive_clone(self, concrete, kind: str) -> None:
+        """Derive clone() for the instance here, as the Result and Maybe seams do (#720).
+
+        The derive pass walks both tables once, before typecheck, so an instance minted
+        while a copy's body is substituted arrives behind it. A clone that waits for a
+        later whole-table walk is an accident of loop order: a program that drives none
+        never gets one, and `.clone()` on the instance is then refused with a reason
+        that is not true (#721). The emitter is lazy, so the shell published above is
+        all this needs; `Own`, `List` and `HashMap` keep their own method paths and the
+        struct registration excludes them.
+        """
+        from sushi_lang.semantics.generics.cloning import (
+            register_enum_clone_method, register_struct_clone_method)
+
+        derived = getattr(self.monomorphizer.enum_table, "derived", None)
+        if derived is None:
+            return
+        if kind == "enum":
+            register_enum_clone_method(concrete, derived)
+        else:
+            register_struct_clone_method(concrete, derived)
 
     def _stamp_template_origin(self, table, concrete, kind: str) -> None:
         """Where a diagnostic about this instance points: the TEMPLATE's declaration.
