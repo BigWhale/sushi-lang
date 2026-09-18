@@ -11,7 +11,8 @@ from sushi_lang.semantics.ownership import Ownership, Provenance, classify
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
 from .diagnostics import emit_consume_of_borrow, emit_consume_of_read
-from .reads import read_type, reads_through_owner, root_owner, unwrap_try
+from .reads import (
+    constant_sig, read_type, reads_through_owner, root_owner, unwrap_try)
 from .state import BorrowState
 from .takes import field_take, spend
 from .writes import check_owner_not_borrowed
@@ -98,7 +99,12 @@ def name_provenance(checker: 'BorrowChecker', name: str) -> Provenance:
     """The `Provenance` of a source that is a bare name."""
     state = checker.borrow_state.get(name)
     if state is None:
-        return Provenance.FRESH
+        # A name with no state may still reach unit-level STORAGE: a `const` gets no
+        # `BorrowState`, where a `var` gets one at function entry. It is one object the
+        # program keeps, so it is not FRESH, and calling it fresh told a plain `match`
+        # that it owned its scrutinee and could take a payload out of it (#726).
+        return (Provenance.OWNED if constant_sig(checker, name) is not None
+                else Provenance.FRESH)
     if state.owns_no_heap:
         # Nothing to borrow: this binding's value owns no heap, so every position may
         # have it. Only a `string` bound straight from a literal answers True (#338
@@ -153,11 +159,32 @@ def consume_each(checker: 'BorrowChecker', args, use) -> None:
         consume(checker, arg, use)
 
 
+def reject_move_of_constant(checker: 'BorrowChecker', name: str,
+                            provenance: Provenance,
+                            use_span: Optional[Span]) -> bool:
+    """CE2436 for a take of a CONSTANT. True when it was refused (#726).
+
+    The `const` half of the unit-storage rule the `var` arm below states: each is one
+    object the program keeps for its whole run, and neither has an owner that can hand
+    it away. A constant gets no `BorrowState`, so the record has to be read from the
+    table, and a plain value still copies out.
+    """
+    sig = constant_sig(checker, name)
+    if sig is None or sig.is_var:
+        return False
+    if classify(provenance,
+                checker.types.type_class(sig.const_type)) is not Ownership.MOVE:
+        return False
+    checker.err.emit(er.ERR.CE2436, use_span, name=name, kind="a constant")
+    return True
+
+
 def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
                   use_span: Optional[Span]) -> None:
     """Apply the ownership decision to a source that is a bare name."""
     state = checker.borrow_state.get(name)
     if state is None:
+        reject_move_of_constant(checker, name, provenance, use_span)
         return
 
     if state.is_argv_view:
@@ -171,7 +198,8 @@ def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
     if state.is_unit_var:
         # Storage the program keeps is never moved out of; a plain value copies.
         if decision is Ownership.MOVE:
-            checker.err.emit(er.ERR.CE2436, use_span, name=name)
+            checker.err.emit(er.ERR.CE2436, use_span, name=name,
+                             kind="a unit variable")
         return
     if decision is Ownership.MOVE:
         # The same value cannot be borrowed and handed away in ONE statement (CE2401).
@@ -219,6 +247,12 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
 
     src_state = checker.borrow_state.get(expr.id) if isinstance(expr, Name) else None
 
+    # The `let` twin of the constant arm in `consume_named`: a binding straight from an
+    # owning constant would be a move, and unit-level storage has no owner to move from.
+    if (src_state is None and isinstance(expr, Name)
+            and reject_move_of_constant(checker, expr.id, provenance, expr.loc)):
+        return
+
     if src_state is not None and src_state.is_argv_view:
         # Binding main's argv view by value would make the new binding free argv
         # (N2). The same hard error as any other move of it, and more specific than
@@ -235,7 +269,8 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
         # The `let` twin of the rule in `consume_named`: a binding straight from an
         # owning unit variable would be a move, and there is none (CE2436).
         if decision is Ownership.MOVE:
-            checker.err.emit(er.ERR.CE2436, expr.loc, name=expr.id)
+            checker.err.emit(er.ERR.CE2436, expr.loc, name=expr.id,
+                             kind="a unit variable")
         return
     if decision is Ownership.MOVE:
         src_state.is_moved = True

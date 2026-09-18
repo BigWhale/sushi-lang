@@ -15,9 +15,9 @@ fn run_test() i32:
     println("get: {NAMES.get(1)??}")
     println("index: {NAMES[2]}")
 
-    # The copy is an ordinary local. Every element carries owned = 0, so RAII never
-    # frees the bytes in .rodata.
-    let string[3] copy = NAMES
+    # A constant is unit-level storage and is never moved out of (CE2436), so the
+    # copy is `.clone()`'s: an ordinary local that owns its own elements.
+    let string[3] copy = NAMES.clone()
     println("copy: {copy[0]}")
 
     foreach(name in NAMES.iter()):

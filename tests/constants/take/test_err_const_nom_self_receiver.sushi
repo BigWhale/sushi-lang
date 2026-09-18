@@ -1,0 +1,16 @@
+# The third spelling of the take: a `nom self` receiver. The method takes the value
+# away, and a constant is unit-level storage with no owner to take it from, so it
+# reads the CE2436 a unit variable reads. CE2400 stays the WRITE rule.
+# EXPECT_ERROR_CODE: CE2436
+
+struct Holder:
+    string tag
+
+extend Holder release(nom self) ~:
+    println(self.tag)
+
+const Holder OUT = Holder("out")
+
+fn main() i32:
+    OUT.release()
+    return Result.Ok(0)

@@ -1,12 +1,15 @@
 """THE gate: what may a borrow of this name do? (#685, #713)
 
 A `const` is READ-ONLY storage. It is one object in `.rodata`, so a pointer into it
-exists and a `peek` reads through it; a `poke` writes, and a write there is undefined
-behaviour and not a diagnostic, while a `nom` takes and a constant has no owner to take
-it from. A unit `var` is storage in the data segment and takes every mode, which is the
-line `docs/design/unit-storage.md` draws. A name that reaches storage of NO kind -- a
-top-level function, a registry stdlib constant, an FFI namespace -- refuses every mode.
-CE2400 is the one answer for all of them.
+exists and a `peek` reads through it, while a `poke` writes and a write there is
+undefined behaviour and not a diagnostic. A unit `var` is storage in the data segment
+and takes both modes, which is the line `docs/design/unit-storage.md` draws. A name that
+reaches storage of NO kind -- a top-level function, a registry stdlib constant, an FFI
+namespace -- refuses both. CE2400 is the one answer for all of them.
+
+A TAKE is not this gate's question. `nom` consumes, so it is the borrow pass's rule and
+it answers CE2436 for a constant and a unit variable alike (#726). This module held a
+`nom` arm that nothing ever reached, because a consuming use never asks here.
 
 The DECLARATION decides, never the position. Until #713 a `peek` was refused in a `let`
 binding and in an argument and allowed in a match arm, while a bare pattern binding --
@@ -37,16 +40,12 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.error_reporter import PassErrorReporter
     from sushi_lang.semantics.passes.collect import ConstSig
 
-# The mode that only READS through the pointer. Every other mode reaches the value:
-# `poke` writes it and `nom` takes it away.
+# The mode that only READS through the pointer. The other one writes through it.
 READ_ONLY_MODE = "peek"
 
 _READ_ONLY_HELP = (
     "a constant is read-only storage: `peek` reads it, and `poke` writes it; "
     "declare a `var` for storage that you can write")
-_NO_OWNER_HELP = (
-    "a constant has no owner, so nothing can take it away; copy it with a `let`, "
-    "or declare a `var`")
 _NO_STORAGE_HELP = (
     "only storage can be borrowed, and this name has none; read the value, or copy "
     "it into a local first")
@@ -72,17 +71,17 @@ def reject_borrow_of_constant(err: 'PassErrorReporter', name: str,
     """Report CE2400 when a `mode` borrow of `name` is refused. True when it was.
 
     `sig` is what the SCOPED constant lookup answered for `name`. `mode` is the word the
-    position writes -- `peek`, `poke` or `nom` -- because the record permits a read and
-    refuses a write. `no_frame_slot` is for a caller that has already read the name
-    ladder and knows the name reaches something with no storage even though no constant
-    record holds it -- a top-level function, a registry stdlib constant, an FFI
+    position writes -- `peek` or `poke` -- because the record permits a read and refuses
+    a write. `no_frame_slot` is for a caller that has already read the name ladder and
+    knows the name reaches something with no storage even though no constant record
+    holds it -- a top-level function, a registry stdlib constant, an FFI
     namespace. Only the scope pass can tell those apart, so only the scope pass passes
     it.
     """
     if has_an_address(sig):
         if mode == READ_ONLY_MODE or may_be_written(sig):
             return False
-        help_line = _NO_OWNER_HELP if mode == "nom" else _READ_ONLY_HELP
+        help_line = _READ_ONLY_HELP
     elif no_frame_slot:
         help_line = _NO_STORAGE_HELP
     else:

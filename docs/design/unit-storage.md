@@ -19,7 +19,7 @@ shape -- a marker, a type, a name, an initializer -- and a different kind:
 | address | none: a read copies the value out | yes: a rebind, a `poke`, a field write and a mutating method reach it |
 | initializer | a constant expression | a constant expression, plus an EMPTY container |
 | lifetime | none | initialized before `main`, never destroyed at exit |
-| moved out of | never (a copy has nothing to move) | never (CE2436); a plain value copies out |
+| moved out of | never (CE2436); a plain value copies out | the same |
 | visibility | `public` explicit, private by default | the same |
 
 ## What it is for
@@ -74,7 +74,9 @@ already exist apply to it with one addition:
 - **Never moved out of** (CE2436). `f(nom v)`, `let T x = v`, `return v` and a `nom self`
   method such as `close()` would hand storage nothing re-initializes to a callee or a
   binding that frees it. The rule is CE2410's, the one that fences `main`'s argv view,
-  and it applies to an OWNING type only: a plain `var i32` copies out freely.
+  and it applies to an OWNING type only: a plain `var i32` copies out freely. It reads
+  the same for a `const`, which has no owner either (#726): a take of a `const string`
+  is CE2436 and `.clone()` is the escape, while a `const i32` copies out.
 - **A rebind is the one way to change what it holds.** `stdout := f` consumes `f`, drops
   the old value the way a local's rebind does, and stores the new one. A `let`-borrow out
   of a `var` (`let string first = names[0]`) freezes it exactly as it freezes a local:

@@ -243,12 +243,13 @@ names the method. One code covers every consuming receiver: `close()` releases a
 descriptor and hands nothing on, while `into_inner()` hands the value onward, and the
 method name is what tells a reader which happened.
 
-A `const` receiver is refused for both marked kinds, for one reason: read-only storage
-cannot take the `poke` write and has no owner to hand a `nom` away from. That is CE2400,
-and `stdout.close()` is the case it catches. A `peek self` receiver only reads, so it is
-legal on a constant (#713). The two differ on a TEMPORARY: a
-`poke self` needs an address the caller keeps, so a call result is CE2404, while a
-`nom self` takes ownership and a temporary is owned by construction.
+A `const` receiver is refused for both marked kinds, and each reads its own code. The
+`poke` write lands in read-only storage: that is CE2400. The `nom` take has no owner to
+take from, and unit-level storage is never moved out of whichever keyword declares it:
+that is CE2436, and `stdout.close()` is the case it catches (#726). A `peek self`
+receiver only reads, so it is legal on a constant (#713). The two marked kinds differ on
+a TEMPORARY: a `poke self` needs an address the caller keeps, so a call result is CE2404,
+while a `nom self` takes ownership and a temporary is owned by construction.
 
 Re-aimed:
 

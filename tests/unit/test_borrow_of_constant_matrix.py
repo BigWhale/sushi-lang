@@ -211,6 +211,9 @@ fn counts(nom i32 n) ~:
     println("{n}")
     return Result.Ok(~)
 
+extend string release(nom self) ~:
+    println(self)
+
 fn main() i32:
 '''
 
@@ -220,6 +223,7 @@ _TAKES = {
     "match_binding": ("    match TONE:\n"
                       "        Shade.Dim(nom d) -> println(d)\n"
                       "        Shade.Bright(_) -> println(\"bright\")\n", "CE2432"),
+    "nom_self":      ("    NAME.release()\n", "CE2436"),
     "plain_value":   ("    counts(nom LIMIT)\n", None),
 }
 

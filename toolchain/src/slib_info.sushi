@@ -22,8 +22,8 @@ const string ESC_ITALIC = "\x1b[3m"
 const string ESC_BLUE = "\x1b[34m"
 const string ESC_CYAN = "\x1b[36m"
 
-# Opts: what one run was asked for -- the doc blocks, and whether to paint. A struct of
-# plain fields, so it copies freely and every printer takes it by borrow.
+# Opts: what one run was asked for -- the doc blocks, and whether to paint. Every
+# printer takes it by borrow, and it owns its six style strings.
 #
 # The styles are STRINGS and never a branch at the call site, so a painted line and a
 # plain one are written once. That is also what makes R43's constraint hold by
@@ -40,8 +40,11 @@ struct Opts:
 # make_opts: the palette, or six empty strings.
 fn make_opts(bool docs, bool colour) Opts:
     if (colour):
-        return Result.Ok(Opts(docs, ESC_BOLD, ESC_DIM, ESC_ITALIC, ESC_BLUE, ESC_CYAN,
-                              ESC_RESET))
+        # A constant is unit-level storage and is never moved out of (CE2436), so the
+        # struct takes a value of its own.
+        return Result.Ok(Opts(docs, ESC_BOLD.clone(), ESC_DIM.clone(),
+                              ESC_ITALIC.clone(), ESC_BLUE.clone(), ESC_CYAN.clone(),
+                              ESC_RESET.clone()))
     return Result.Ok(Opts(docs, "", "", "", "", "", ""))
 
 # ml_str: the payload of a Str value, empty for any other kind.
