@@ -193,14 +193,19 @@ def _reject_use_below_declaration(reporter: Reporter, unit: Unit,
                 .note("this declaration comes first", first).emit()
 
 
-def _names_declared_by(program: Program) -> Dict[str, Span]:
+def _names_declared_by(program: Program) -> Dict[str, Optional[Span]]:
     """The names this unit declares itself, each with the span that declares it.
 
     The walk is `ast_walk.declarations`, the one home for "what does this unit
     declare". A second list here read the concrete groups alone and lost every generic
     one the collect pass had re-filed (#631).
+
+    The span is OPTIONAL: a declaration the source did not write has none to give. No
+    source reaches that today, because this pass runs before `instantiate` and a
+    library-injected declaration keeps its own span, but the type says what the map
+    holds and the caller answers for it (#714).
     """
-    names: Dict[str, Span] = {}
+    names: Dict[str, Optional[Span]] = {}
     for kind, node in declarations(program):
         if kind in _INNER_KINDS:
             continue
@@ -213,9 +218,14 @@ def _names_declared_by(program: Program) -> Dict[str, Span]:
 
 
 def _reject_alias_collision(reporter: Reporter, table: NamespaceTable,
-                            declared: Dict[str, Span], use_stmt: UseStatement,
-                            alias: str) -> bool:
-    """CE3013: one name holds one namespace. True when the alias was refused."""
+                            declared: Dict[str, Optional[Span]],
+                            use_stmt: UseStatement, alias: str) -> bool:
+    """CE3013: one name holds one namespace. True when the alias was refused.
+
+    Each arm that names a second location points at it or says it in prose. A `note`
+    with no span renders as a relational diagnostic with one location, which the
+    diagnostic ladder refuses (#714).
+    """
     span = use_stmt.alias_span or use_stmt.loc
     if alias == "_":
         er.emit_with(reporter, er.ERR.CE3013, span, alias=alias) \
@@ -233,9 +243,14 @@ def _reject_alias_collision(reporter: Reporter, table: NamespaceTable,
         diagnostic.emit()
         return True
     if alias in declared:
-        er.emit_with(reporter, er.ERR.CE3013, span, alias=alias) \
-            .note("this unit declares the name here", declared[alias]) \
-            .emit()
+        diagnostic = er.emit_with(reporter, er.ERR.CE3013, span, alias=alias)
+        declared_at = declared[alias]
+        if declared_at is not None:
+            diagnostic = diagnostic.note(
+                "this unit declares the name here", declared_at)
+        else:
+            diagnostic = diagnostic.help("this unit already declares the name")
+        diagnostic.emit()
         return True
     return False
 
