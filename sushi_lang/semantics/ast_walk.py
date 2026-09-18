@@ -177,6 +177,10 @@ class ConstraintSite:
 
     Not a `TypeSite`: a constraint names a PERK, and a perk is not a type. `decl` is the
     declaration whose visibility decides whether the constraint leaks (CE3010).
+
+    `span` marks the perk NAME, and the qualifier with it where the constraint carries
+    one. A constraint rule finds fault with the perk, never with the type parameter --
+    which is the one name in `@(T: Hidden)` the user cannot change (#706).
     """
 
     kind: str
@@ -195,6 +199,10 @@ def signature_constraints(program: 'Program') -> Iterator[ConstraintSite]:
     A separate walk from `signature_types` for one reason: a constraint carries a name and
     not a type, so a rule over it reads a different field. Both walks cover the same
     declarations.
+
+    The span is the constraint's own, and the type parameter is only the fallback: a
+    declaration the source did not write -- a library template rebuilt from a manifest --
+    carries the names and no span for them.
     """
     # Named, so that the four kinds stay one union. Left inline, the pairs read as
     # their common base class and every field below goes unchecked again.
@@ -214,7 +222,7 @@ def signature_constraints(program: 'Program') -> Iterator[ConstraintSite]:
                 if isinstance(constraint, str):
                     yield ConstraintSite(
                         kind, decl, constraint,
-                        param.loc or fallback,
+                        param.constraint_span(index) or param.loc or fallback,
                         namespaces[index] if index < len(namespaces) else None)
 
 
