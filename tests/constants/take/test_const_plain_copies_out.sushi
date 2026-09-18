@@ -1,0 +1,21 @@
+# A PLAIN constant copies out freely: a `nom` argument, a `let` and a return all take
+# a copy. Only a type that owns a resource is fenced (CE2436).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "10\n10 11\n"
+# EXPECT_NO_LEAKS
+
+const i32 LIMIT = 10
+
+fn eats(nom i32 n) ~:
+    println("{n}")
+    return Result.Ok(~)
+
+fn plus_one(i32 n) i32:
+    return Result.Ok(n + 1)
+
+fn main() i32:
+    eats(nom LIMIT)
+    let i32 mine = LIMIT
+    let i32 more = plus_one(LIMIT).realise(0)
+    println("{mine} {more}")
+    return Result.Ok(0)

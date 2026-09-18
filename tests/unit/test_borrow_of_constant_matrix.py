@@ -191,3 +191,57 @@ def test_every_caller_names_the_mode():
                 and node.name == "reject_borrow_of_constant")
     assert [arg.arg for arg in gate.args.kwonlyargs][:1] == ["mode"], ast.dump(gate.args)
     assert gate.args.kw_defaults[0] is None, "the mode has a default, so a caller can skip it"
+
+
+# --- The take is NOT this gate's: a `nom` is a consuming use (#726).
+
+_TAKE = '''enum Shade:
+    Dim(string)
+    Bright(string)
+
+const string NAME = "Mostly Harmless"
+const Shade TONE = Shade.Dim("grey")
+const i32 LIMIT = 10
+
+fn eats(nom string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn counts(nom i32 n) ~:
+    println("{n}")
+    return Result.Ok(~)
+
+fn main() i32:
+'''
+
+_TAKES = {
+    "nom_argument":  ("    eats(nom NAME)\n", "CE2436"),
+    "let_binding":   ("    let string mine = NAME\n    println(mine)\n", "CE2436"),
+    "match_binding": ("    match TONE:\n"
+                      "        Shade.Dim(nom d) -> println(d)\n"
+                      "        Shade.Bright(_) -> println(\"bright\")\n", "CE2432"),
+    "plain_value":   ("    counts(nom LIMIT)\n", None),
+}
+
+
+@pytest.mark.parametrize("take", sorted(_TAKES))
+def test_a_take_of_a_constant_is_the_borrow_pass_rule(analyze, take):
+    """Unit-level storage is never moved out of, whichever keyword declares it (#726).
+
+    A `const` and a `var` are each one object the program keeps for its whole run, and
+    neither has an owner that can hand it away. The refusal is the borrow pass's,
+    because every other consuming-use rule is -- CE2405, CE2410, CE2411, CE2401 -- and
+    a plain value still copies out.
+    """
+    body, expected = _TAKES[take]
+    codes = _codes(analyze(_TAKE + body + "    return Result.Ok(0)\n", name="m"))
+    assert "CE2400" not in codes, (
+        f"the {take} take read the BORROW gate; a take is a consuming use and its "
+        f"home is the borrow pass (#726). Got {codes}")
+    if expected is None:
+        assert not [code for code in codes if code.startswith("CE")], (
+            f"a plain constant copies out, so the {take} take is legal; got {codes}")
+    else:
+        assert expected in codes, (
+            f"the {take} take of an owning constant was not refused with {expected}; "
+            f"got {codes}")

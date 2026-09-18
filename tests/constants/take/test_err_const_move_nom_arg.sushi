@@ -1,0 +1,14 @@
+# A constant is unit-level storage, the same as a `var`: one object the program keeps
+# for its whole run, with no owner that can hand it away. A `nom` argument is refused
+# with CE2436, and only an owning type is fenced.
+# EXPECT_ERROR_CODE: CE2436
+
+const string NAME = "Mostly Harmless"
+
+fn eat(nom string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn main() i32:
+    eat(nom NAME)
+    return Result.Ok(0)
