@@ -7,7 +7,7 @@ from sushi_lang.semantics.typesys import Type, UnknownType
 from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_name, first_tree, is_type_node, name_tokens)
-from sushi_lang.internals.report import span_of
+from sushi_lang.internals.report import Span, span_of
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -84,7 +84,8 @@ def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List
                 continue
 
             perk_constraints_node = first_tree(child.children, "perk_constraints")
-            constraints, namespaces = _parse_perk_constraints(perk_constraints_node)
+            constraints, namespaces, spans = _parse_perk_constraints(
+                perk_constraints_node)
 
             bounded_params.append(BoundedTypeParam(
                 name=str(param_name),
@@ -92,6 +93,7 @@ def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List
                 loc=span_of(child),
                 is_pack=is_pack,
                 constraint_namespaces=namespaces,
+                constraint_spans=spans,
             ))
 
     return bounded_params if bounded_params else None
@@ -99,22 +101,25 @@ def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List
 
 def _parse_perk_constraints(
     perk_constraints_node: Optional[Tree],
-) -> tuple[List[str], List[Optional[str]]]:
-    """The perk names one type parameter is constrained by, and their qualifiers.
+) -> tuple[List[str], List[Optional[str]], List[Optional[Span]]]:
+    """The perk names one type parameter is constrained by, their qualifiers and spans.
 
-    Two index-aligned lists rather than one list of pairs: `constraints` is the table
-    key every existing reader wants, and only the rule that checks a qualifier reaches
-    for the second (`docs/design/unit-namespaces.md` section 5).
+    Index-aligned lists rather than one list of triples: `constraints` is the table key
+    every existing reader wants, only the rule that checks a qualifier reaches for the
+    second (`docs/design/unit-namespaces.md` section 5), and only a diagnostic reaches
+    for the third. A span covers the `perk_constraint` node whole, so a qualified name
+    is marked with its qualifier (#706).
     """
     constraints: List[str] = []
     namespaces: List[Optional[str]] = []
+    spans: List[Optional[Span]] = []
     if perk_constraints_node is None:
-        return constraints, namespaces
+        return constraints, namespaces, spans
 
     constraint_list_node = first_tree(perk_constraints_node.children,
                                       "perk_constraint_list")
     if constraint_list_node is None:
-        return constraints, namespaces
+        return constraints, namespaces, spans
 
     for constraint_child in constraint_list_node.children:
         if not isinstance(constraint_child, Tree) or constraint_child.data != "perk_constraint":
@@ -124,5 +129,6 @@ def _parse_perk_constraints(
             continue
         constraints.append(str(names[-1]))
         namespaces.append(str(names[0]) if len(names) > 1 else None)
+        spans.append(span_of(constraint_child))
 
-    return constraints, namespaces
+    return constraints, namespaces, spans
