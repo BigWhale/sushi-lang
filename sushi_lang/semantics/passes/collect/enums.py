@@ -26,7 +26,8 @@ from sushi_lang.semantics.visibility import (
     reject_library_clash,
 )
 
-from .utils import extract_type_param_names, note_first_declaration, reject_reference_in
+from .utils import (
+    TakenName, extract_type_param_names, reject_duplicate_type_name, reject_reference_in)
 
 
 @dataclass
@@ -129,43 +130,14 @@ class EnumCollector:
         type_params_raw = enum.type_params
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
-        if (name in self.enums.by_name or name in self.structs.by_name
-                or name in self.generic_structs.by_name
-                or name in self.generic_enums.by_name):
-            if self._reject_library_clash(name, name_span):
-                return
-
-        if name in self.enums.by_name:
-            note_first_declaration(
-                er.emit_with(self.r, ERR.CE2046, name_span, name=name),
-                self.enums.spans, name, files=self.enums.files,
-            ).emit()
-            return
-
-        if name in self.structs.by_name:
-            note_first_declaration(
-                er.emit_with(self.r, ERR.CE0006, name_span, name=name),
-                self.structs.spans, name,
-                what="already defined as a struct here", files=self.structs.files,
-            ).emit()
-            return
-
-        if name in self.generic_structs.by_name:
-            note_first_declaration(
-                er.emit_with(self.r, ERR.CE0006, name_span, name=name),
-                self.generic_structs.spans, name,
-                what="already defined as a generic struct here",
-                files=self.generic_structs.files,
-            ).emit()
-            return
-
-        if name in self.generic_enums.by_name:
-            note_first_declaration(
-                er.emit_with(self.r, ERR.CE2046, name_span, name=name),
-                self.generic_enums.spans, name,
-                what="first defined here, as a generic enum",
-                files=self.generic_enums.files,
-            ).emit()
+        if reject_duplicate_type_name(self.r, name, name_span, (
+            TakenName(self.enums, ERR.CE2046),
+            TakenName(self.structs, ERR.CE0006, "already defined as a struct here"),
+            TakenName(self.generic_structs, ERR.CE0006,
+                      "already defined as a generic struct here"),
+            TakenName(self.generic_enums, ERR.CE2046,
+                      "first defined here, as a generic enum"),
+        ), library_clash=self._reject_library_clash):
             return
 
         variants_list: List[EnumVariantInfo] = []

@@ -18,7 +18,9 @@ from sushi_lang.semantics.visibility import (
     reject_library_clash,
 )
 
-from .utils import extract_type_param_names, note_first_declaration, reject_reference_in
+from .utils import (
+    TakenName, extract_type_param_names, note_first_declaration, reject_duplicate_type_name,
+    reject_reference_in)
 
 
 @dataclass
@@ -136,24 +138,11 @@ class StructCollector:
         type_params_raw = struct.type_params
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
-        if name in self.structs.by_name or name in self.generic_structs.by_name:
-            if self._reject_library_clash(name, name_span):
-                return
-
-        if name in self.structs.by_name:
-            note_first_declaration(
-                er.emit_with(self.r, ERR.CE0004, name_span, name=name),
-                self.structs.spans, name, files=self.structs.files,
-            ).emit()
-            return
-
-        if name in self.generic_structs.by_name:
-            note_first_declaration(
-                er.emit_with(self.r, ERR.CE0004, name_span, name=name),
-                self.generic_structs.spans, name,
-                what="first defined here, as a generic struct",
-                files=self.generic_structs.files,
-            ).emit()
+        if reject_duplicate_type_name(self.r, name, name_span, (
+            TakenName(self.structs, ERR.CE0004),
+            TakenName(self.generic_structs, ERR.CE0004,
+                      "first defined here, as a generic struct"),
+        ), library_clash=self._reject_library_clash):
             return
 
         fields_list: List[Tuple[str, Type]] = []
