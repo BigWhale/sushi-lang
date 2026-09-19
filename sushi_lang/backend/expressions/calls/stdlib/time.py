@@ -103,4 +103,6 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
 
         return codegen.utils.as_i1(ok_result) if to_i1 else ok_result
     else:
-        raise_internal_error("CE0091", type="Result<i64>" if is_i64 else "Result<i32>")
+        raise_internal_error("CE0091",
+                             type="Result@(i64, StdError)" if is_i64
+                             else "Result@(i32, StdError)")

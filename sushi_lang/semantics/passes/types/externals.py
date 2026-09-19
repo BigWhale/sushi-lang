@@ -176,7 +176,7 @@ def _signature_notes(decl: 'ExternalDecl') -> List[str]:
         )
     elif isinstance(ret, BuiltinType) and ret != BuiltinType.BLANK:
         notes.append(
-            f"'{decl.name}' returns raw `{ret}`, not `Result<{ret}>` - "
+            f"'{decl.name}' returns raw `{ret}`, not `Result@({ret}, StdError)` - "
             f"check the C error convention by hand"
         )
 

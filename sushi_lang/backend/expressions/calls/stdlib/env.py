@@ -97,7 +97,7 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
 
             return codegen.utils.as_i1(ok_result) if to_i1 else ok_result
         else:
-            raise_internal_error("CE0091", type="Result<i32>")
+            raise_internal_error("CE0091", type="Result@(i32, EnvError)")
 
     else:
         raise_internal_error("CE0024", type="sys/env", method=func_name)

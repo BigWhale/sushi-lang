@@ -3,6 +3,11 @@
 Source syntax is `@(...)`. The angle-bracket form is the INTERNAL identity name and a
 table key, and `display_type()` is the one renderer that turns it back. One renderer
 answers for many emit sites, so the gate is what asks the emit sites.
+
+`test_diagnostics_use_display_type.py` reads the SOURCE for the same rule. It reads a
+keyword value that is an f-string or a `str(...)` call, so a bare `struct_type.name`
+went past it, and a note built in a pass is not a keyword value at all. This gate reads
+the RENDERED text instead, which is the one thing every emit site has in common.
 """
 from __future__ import annotations
 
