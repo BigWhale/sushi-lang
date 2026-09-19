@@ -199,8 +199,12 @@ class SemanticAnalyzer:
                                         self.library_linker, self.library_registry)
         # BEFORE the consumer's units: perk-impl collection validates each impl against
         # the visible perk definitions (CE4003), so the contract must already be here.
+        # A library's generic TYPES are seeded for the same reason one kind on: a
+        # consumer's `extend Crate@(T)` names one in its TARGET, and the collect pass
+        # reads that name while it collects the unit (#728).
         if self.library_linker is not None:
             libraries.seed_perks(global_tables.perks)
+            libraries.seed_generic_types()
 
         for unit in compilation_order:
             if unit.ast is None:
