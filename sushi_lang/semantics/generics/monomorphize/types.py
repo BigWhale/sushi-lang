@@ -278,6 +278,15 @@ class TypeMonomorphizer:
         that is not true (#721). The emitter is lazy, so the shell published above is
         all this needs; `Own`, `List` and `HashMap` keep their own method paths and the
         struct registration excludes them.
+
+        The HASH deliberately does NOT move with it, and an instance that ends the
+        analysis with neither is correct and not a gap (ruled on #730). The gate reads
+        the type: `can_enum_be_hashed` walks the variants, and what is published here is
+        an EMPTY SHELL -- the tie-the-knot step fills the variants afterwards -- so a
+        registration made at this point would answer on no variants at all. A second
+        visit after that step buys an ordering dependency in the monomorphizer to close
+        a bucket with no symptom: 312 types of 1,915 programs end with neither, and
+        every one of those programs compiles, links and runs.
         """
         from sushi_lang.semantics.generics.cloning import (
             register_enum_clone_method, register_struct_clone_method)

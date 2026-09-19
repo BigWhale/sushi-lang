@@ -129,7 +129,17 @@ class LambdaLifter:
         return index
 
     def _synthesize_env_struct(self, env_name: str, lam: Lambda) -> StructType:
-        """The closure's own storage: one field per capture, in capture order."""
+        """The closure's own storage: one field per capture, in capture order.
+
+        This mint takes NO derived pair, and the absence is deliberate at both ends --
+        the shape `List`, `Own` and `HashMap` already carry in `generics/cloning.py`
+        (#730). The environment is a heap box with its own duplicator and destructor
+        (`backend/runtime/closures.py`), reached through the closure fat pointer's
+        `clone_ptr` and `drop_ptr` slots and never through the derived table. Its name
+        is unwritable, so no receiver can reach an entry either. A census of the derived
+        table reads an environment struct as empty BY DESIGN and not as a registration
+        that went missing.
+        """
         env_struct = StructType(
             name=env_name,
             fields=tuple((c.name, c.ty) for c in (lam.captures or [])))

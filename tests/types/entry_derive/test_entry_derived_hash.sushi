@@ -1,0 +1,28 @@
+# An `Entry@(K, V)` is an ordinary struct, so the compiler derives its hash like any
+# other. The struct is interned by `.entries()`, which runs after the derive pass, and
+# only that mint time kept the pair away: the call read CE2008, a refusal that is not
+# true of a struct (#730). Equal entries hash equal, because the derived hash reads the
+# fields.
+# EXPECT_STDOUT_EXACT: "true\n"
+
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, string) left = HashMap.new()
+    left.insert(7, "seven")
+    let HashMap@(i32, string) right = HashMap.new()
+    right.insert(7, "seven")
+
+    let u64 a = 0 as u64
+    foreach(e in left.entries()):
+        a := e.hash()
+
+    let u64 b = 1 as u64
+    foreach(e in right.entries()):
+        b := e.hash()
+
+    println("{a == b}")
+
+    left.free()
+    right.free()
+    return Result.Ok(0)

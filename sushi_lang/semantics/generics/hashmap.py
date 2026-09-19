@@ -10,6 +10,7 @@ from sushi_lang.semantics.generics.type_strings import (
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.derived_methods import DerivedMethodTable
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.generics.types import GenericStructType
@@ -455,8 +456,16 @@ def get_entry_type_name(key_type: Type, value_type: Type) -> str:
     return f"Entry<{key_str}, {val_str}>"
 
 
-def ensure_entry_type_in_struct_table(struct_table: Any, key_type: Type, value_type: Type) -> StructType:
-    """Ensure that a user-facing Entry<K, V> struct exists in the struct table."""
+def ensure_entry_type_in_struct_table(struct_table: Any, derived: DerivedMethodTable,
+                                      key_type: Type, value_type: Type) -> StructType:
+    """Ensure that a user-facing Entry<K, V> struct exists in the struct table.
+
+    `derived` is the compilation's auto-derived pair, and it is required: `.entries()`
+    is typed after the derive pass walked the table, so this mint is the one supplier
+    of the pair for an `Entry`. Without it the struct is the only one in the program
+    with no derived hash and no derived clone, and `e.hash()` reads a CE2008 that is
+    not true of a struct (#730).
+    """
     entry_name = get_entry_type_name(key_type, value_type)
 
     if entry_name in struct_table.by_name:
@@ -472,5 +481,8 @@ def ensure_entry_type_in_struct_table(struct_table: Any, key_type: Type, value_t
     struct_table.by_name[entry_name] = entry_struct
     if hasattr(struct_table, 'order'):
         struct_table.order.append(entry_name)
+
+    from sushi_lang.semantics.passes.derive import derive_for_struct
+    derive_for_struct(entry_struct, derived)
 
     return entry_struct
