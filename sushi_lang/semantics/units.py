@@ -34,7 +34,10 @@ class Unit:
     file_path: Path                 # Absolute path to the .sushi file
     ast: Optional[Program]          # Parsed AST (None until loaded)
     dependencies: List[str]         # Other unit names this depends on (from use statements)
-    public_symbols: Dict[str, Symbol]  # Symbols exported by this unit
+    # Symbols exported by this unit. ONE reader: `compiler/fingerprint.py`, which
+    # folds them into the cache digest. It is not a visibility rule -- every
+    # question of who may name what is `semantics/visibility.py`'s.
+    public_symbols: Dict[str, Symbol]
     # Set on every unit whose code the CONSUMER did not write -- a source library's
     # unit, and a bundled Sushi-source stdlib module. Every diagnostic raised against
     # the unit carries it as a note, so a consumer is never shown a bare error about

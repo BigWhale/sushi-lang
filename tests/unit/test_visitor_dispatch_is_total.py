@@ -107,7 +107,7 @@ def _every_expression() -> dict[str, object]:
         "TryExpr": a.TryExpr(None, a.Name(None, "r")),
         "RangeExpr": a.RangeExpr(None, a.IntLit(None, 0), a.IntLit(None, 9), False),
         "Spread": a.Spread(None, a.Name(None, "args")),
-        "Lambda": a.Lambda(None, [a.Param("p", None)], _block(), is_block_body=True),
+        "Lambda": a.Lambda(None, [a.Param("p", None)], _block()),
     }
 
 

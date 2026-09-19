@@ -22,7 +22,6 @@ def _typed_lambda():
         loc=None,
         params=[Param(name="x", ty=BuiltinType.I32)],
         body=Name(loc=None, id="x"),
-        is_block_body=False,
     )
 
 

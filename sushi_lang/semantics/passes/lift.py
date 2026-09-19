@@ -174,7 +174,7 @@ class LambdaLifter:
 
 def _normalized_body(lam: Lambda) -> Block:
     """A lambda's body as a Block. An expression body returns `Result.Ok` of itself."""
-    if lam.is_block_body:
+    if isinstance(lam.body, Block):
         return lam.body
     ok = DotCall(receiver=Name(id="Result", loc=lam.loc), method="Ok",
                  args=[lam.body], loc=lam.loc)

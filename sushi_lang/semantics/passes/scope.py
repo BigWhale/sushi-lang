@@ -329,7 +329,7 @@ class ScopeAnalyzer:
         self._push_scope()
         for p in lam.params:
             self._declare_variable(p.name, p.name_span)
-        if lam.is_block_body:
+        if isinstance(lam.body, Block):
             self._check_block(lam.body)
         else:
             self._check_expression(lam.body)

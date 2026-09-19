@@ -22,7 +22,7 @@ def _lambda_in_main(body_line: str) -> Lambda:
 
 def test_expr_body_typed_param() -> None:
     lam = _lambda_in_main("let f = |i32 x| x + 1")
-    assert lam.is_block_body is False
+    assert not isinstance(lam.body, Block)
     assert len(lam.params) == 1
     p = lam.params[0]
     assert isinstance(p, Param)
@@ -34,7 +34,7 @@ def test_expr_body_typed_param() -> None:
 
 def test_expr_body_bare_param_untyped() -> None:
     lam = _lambda_in_main("let g = |x| x * 2")
-    assert lam.is_block_body is False
+    assert not isinstance(lam.body, Block)
     assert len(lam.params) == 1
     assert lam.params[0].name == "x"
     # Bare param: type is inferred later, so it is None at parse time.
@@ -43,7 +43,7 @@ def test_expr_body_bare_param_untyped() -> None:
 
 def test_zero_param_tilde() -> None:
     lam = _lambda_in_main("let lazy = |~| compute()")
-    assert lam.is_block_body is False
+    assert not isinstance(lam.body, Block)
     assert lam.params == []
 
 
@@ -72,7 +72,7 @@ def test_block_body() -> None:
     main = next(f for f in program.functions if f.name == "main")
     lam = main.body.statements[0].value
     assert isinstance(lam, Lambda)
-    assert lam.is_block_body is True
+    assert isinstance(lam.body, Block)
     assert isinstance(lam.body, Block)
     assert len(lam.body.statements) == 2
 
@@ -88,5 +88,5 @@ def test_block_body_with_return_annotation() -> None:
     main = next(f for f in program.functions if f.name == "main")
     lam = main.body.statements[0].value
     assert isinstance(lam, Lambda)
-    assert lam.is_block_body is True
+    assert isinstance(lam.body, Block)
     assert str(lam.ret) == "i32"

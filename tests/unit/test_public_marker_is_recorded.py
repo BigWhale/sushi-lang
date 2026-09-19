@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from sushi_lang.internals.parser import parse_to_ast
-from sushi_lang.semantics.visibility import UNMARKED_IS_PUBLIC, declared_public
+from sushi_lang.semantics.visibility import declared_public
 
 
 SOURCES = {
@@ -48,8 +48,11 @@ def test_an_unmarked_declaration_carries_no_span(kind):
 
 
 def test_every_marked_kind_is_private_when_unmarked():
-    """Phase 2 emptied the set: private is the default for all five kinds."""
-    assert not UNMARKED_IS_PUBLIC
+    """Private is the default for every kind that carries a marker.
+
+    The predicate answers the marker and nothing else. A kind that answered public
+    without the word would fail here, which is what keeps Ruling 1 whole.
+    """
     for kind in SOURCES:
         assert declared_public(kind, False) is False, kind
         assert declared_public(kind, True) is True, kind

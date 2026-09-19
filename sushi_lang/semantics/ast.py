@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Union, Literal, TYPE_CHECKING
 from sushi_lang.internals.report import Origin, Span
-from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.typesys import FunctionType, Type
 
 from lark import Token
 
@@ -650,8 +650,9 @@ class Spread(Node):
 class Lambda(Node):
     """A lambda literal (closure)."""
     params: List[Param]
+    # A BLOCK body (`|x|:` and its statements) or a bare expression (`|x| x + 1`). The
+    # shape is the predicate: a reader asks `isinstance(body, Block)`.
     body: Union["Expr", "Block"]
-    is_block_body: bool = False
     ret: Optional[Type] = None
     err_type: Optional[Type] = None
     captures: Optional[List["Param"]] = None
@@ -659,7 +660,7 @@ class Lambda(Node):
     # Filled by the type pass: the lambda's resolved FunctionType (params + captures
     # typed, ok/err resolved). `expected_type` is a FunctionType propagated from the
     # binding/argument context, used to infer bare-param types (`|x|`).
-    resolved_type: Optional[Type] = None
+    resolved_type: Optional[FunctionType] = None
     expected_type: Optional[Type] = None
     env_struct: Optional[Type] = None
 
