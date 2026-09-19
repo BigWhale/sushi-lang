@@ -237,7 +237,7 @@ def collect_and_validate_patterns(
         variant = scrutinee_type.get_variant(pattern.variant_name)
         if variant is None:
             er.emit(validator.reporter, er.ERR.CE2045, pattern.variant_name_span or pattern.loc,
-                   variant=pattern.variant_name, enum=scrutinee_type.name)
+                   variant=pattern.variant_name, enum=display_type(scrutinee_type))
             continue
 
         pattern_signature = get_pattern_signature(pattern)
@@ -315,7 +315,7 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
             nested_variant = resolved_type.get_variant(binding.variant_name)
             if nested_variant is None:
                 er.emit(validator.reporter, er.ERR.CE2045, binding.variant_name_span or binding.loc,
-                       variant=binding.variant_name, enum=resolved_type.name)
+                       variant=binding.variant_name, enum=display_type(resolved_type))
                 return False
 
             if not validate_pattern_bindings(validator, binding, nested_variant, resolved_type):
@@ -351,7 +351,8 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                 if inner_variant is None:
                     er.emit(validator.reporter, er.ERR.CE2045,
                            binding.inner_pattern.variant_name_span or binding.inner_pattern.loc,
-                           variant=binding.inner_pattern.variant_name, enum=element_type.name)
+                           variant=binding.inner_pattern.variant_name,
+                           enum=display_type(element_type))
                     return False
 
                 if not validate_pattern_bindings(validator, binding.inner_pattern, inner_variant, element_type):
