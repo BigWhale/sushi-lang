@@ -1,0 +1,11 @@
+# The same hole with an ENUM behind the alias (#733).
+# EXPECT_ERROR_CODE: CE4003
+# EXPECT_STDERR_CONTAINS: unknown perk: k.Sign
+use "helpers/kinds" as k
+
+fn use_it@(T: k.Sign)(T x) i32:
+    return Result.Ok(x.volume())
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

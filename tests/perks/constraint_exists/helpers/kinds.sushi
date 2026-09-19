@@ -1,0 +1,20 @@
+# One unit with a public declaration of each kind a qualified constraint can name.
+# The perk is the only one of them that a `@(T: P)` constraint may write.
+public struct Vec:
+    i32 x
+
+public enum Sign:
+    Plus
+    Minus
+
+public const i32 SIZE = 4
+
+public fn twice(i32 n) i32:
+    return Result.Ok(n * 2)
+
+public perk Loud:
+    fn volume() i32
+
+extend i32 with Loud:
+    fn volume() i32:
+        return self * 10
