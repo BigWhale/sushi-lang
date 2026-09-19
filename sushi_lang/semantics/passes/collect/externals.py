@@ -33,7 +33,6 @@ class ExternalSig:
 class ExternalTable:
     """Namespace-keyed table of foreign function signatures."""
     by_namespace: Dict[str, Dict[str, ExternalSig]] = field(default_factory=dict)
-    by_link_name: Dict[str, ExternalSig] = field(default_factory=dict)
 
     def is_namespace(self, ns: str) -> bool:
         """True if `ns` is a registered external namespace."""
@@ -45,7 +44,6 @@ class ExternalTable:
 
     def add(self, sig: ExternalSig) -> None:
         self.by_namespace.setdefault(sig.namespace, {})[sig.name] = sig
-        self.by_link_name[sig.link_name] = sig
 
 
 class ExternalCollector:

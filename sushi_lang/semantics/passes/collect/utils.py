@@ -1,7 +1,9 @@
 """Shared utilities for collection passes."""
 
 from __future__ import annotations
-from typing import Any, Iterable, List, Optional, TYPE_CHECKING
+from dataclasses import dataclass
+from typing import (
+    Any, Callable, Dict, Iterable, List, Optional, Protocol, Sequence, TYPE_CHECKING)
 
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import BoundedTypeParam, Param
@@ -9,6 +11,21 @@ from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import Param as CollectedParam
+
+
+class TypeNameTable(Protocol):
+    """What every type table answers: who holds a name, where, and in which unit."""
+    by_name: Dict[str, Any]
+    spans: Dict[str, Optional[Span]]
+    files: Dict[str, Optional[str]]
+
+
+@dataclass(frozen=True)
+class TakenName:
+    """One table a name may already be taken in, and the diagnostic that says so."""
+    table: 'TypeNameTable'
+    code: Any
+    what: str = "first defined here"
 
 
 def extract_type_param_names(type_params_raw: Optional[List]) -> Optional[List[str]]:
@@ -70,13 +87,35 @@ def note_first_declaration(builder: Any, spans: dict, name: str,
     return builder.note("defined by the compiler")
 
 
-def get_span(node: Any, *attrs: str) -> Optional[Span]:
-    """Get first non-None span from node attributes."""
-    for attr in attrs:
-        span = getattr(node, attr, None)
-        if span is not None:
-            return span
-    return None
+def reject_duplicate_type_name(
+    reporter, name: str, name_span: Optional[Span],
+    rules: Sequence[TakenName],
+    library_clash: Optional[Callable[[str, Optional[Span]], bool]] = None,
+) -> bool:
+    """A TYPE name is one per program: refuse the second declaration of it.
+
+    One rule for an enum and for a struct alike. The tables are asked in the order the
+    caller lists them, and the first that holds the name answers with its own code and
+    its own note. `library_clash` is the CE3011 arm: a source library's PRIVATE type
+    took the name, which is a different fault from the plain duplicate, and it is asked
+    once, before the arms, exactly when some table holds the name.
+    """
+    from sushi_lang.internals import errors as er
+
+    if not any(name in rule.table.by_name for rule in rules):
+        return False
+
+    if library_clash is not None and library_clash(name, name_span):
+        return True
+
+    for rule in rules:
+        if name in rule.table.by_name:
+            note_first_declaration(
+                er.emit_with(reporter, rule.code, name_span, name=name),
+                rule.table.spans, name, what=rule.what, files=rule.table.files,
+            ).emit()
+            return True
+    return False
 
 
 def reject_reference_in(reporter, ty: Optional[Type], span: Optional[Span],

@@ -75,10 +75,23 @@ exclude = [
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["F", "E", "W", "B"]
+select = ["F", "E", "W", "B", "C901"]
 # E501: no formatter is in use (black was dropped unadopted); a line-length gate
 # without a formatter is hand-wrapping busywork with no bug-finding value.
 ignore = ["E501"]
+
+[tool.ruff.lint.mccabe]
+# A RATCHET, set at the worst function in the lint scope and not at a target.
+# `validate_method_call` (`semantics/passes/types/calls/methods.py`) is that function
+# at 60. The gate therefore permits everything that stands today and refuses anything
+# WORSE, which is the one promise a threshold can keep with no exception list: there
+# are no per-file ignores here, and a new one is not the way to pass this rule.
+#
+# Lower the number when a section's batch splits its own worst function. Wave C took
+# `_check_multi_file` from 38 to 5 and `scope._check_expression` from 44 to 2; the
+# next steps down are 41 (`emit_array_method`), 39 (`validate_builtin_array_method`)
+# and 37 (`print_library_info` and two in `tests/`).
+max-complexity = 60
 
 [tool.mypy]
 # Tier 5.2 ratchet. The CLEAN packages (internals, compiler, packager, sushi_stdlib)

@@ -373,6 +373,12 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Tooling
+- **Cyclomatic complexity is gated, as a ratchet.** Ruff selected `F`, `E`, `W` and `B`, so
+  no complexity rule ran and the worst functions in the tree were invisible to CI. `C901`
+  is on with the threshold at the worst function in the lint scope,
+  `validate_method_call` at 60. The gate permits what stands today and refuses anything
+  worse, and it carries NO per-file ignores, because an exception list makes a threshold a
+  suggestion. The number comes down when a section's batch splits its own worst function.
 - **`--lib-info` lists a library's perks.** The report named a public perk and nothing
   under it, printed an implementation's methods as bare names, and printed a generic-target
   implementation (`extend Box@(T) with Show`) nowhere -- so since the io contracts became
@@ -386,6 +392,15 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A qualified perk constraint carets the name the user wrote** (#729). `@(T: nope.Loud)`
+  put the CE2001 caret on `T`, the one name in that constraint the user cannot change. #706
+  moved CE4011, CE3010, CE4003 and CE2001 onto the constraint's own span, but this reader
+  was not on that seam: it walked the declarations itself and re-implemented the zip over
+  the names and the qualifiers, which made it a FOURTH reader of a fact that has one walk.
+  It reads `signature_constraints()` now, so it moved with the rest. One diagnostic goes
+  with the move: `perk Quiet@(T: nope.Loud):` answered CE4010 and CE2001 together, and
+  answers CE4010 alone now -- the same as the bare `perk Quiet@(T: Nope):` always did,
+  because CE4010 refuses the declaration whole.
 - **A generic called with the calling unit's own private type compiles** (#725). `use
   "gen"` and then `first_of(Point(1), Point(2))` on a plain `struct Point` answered CE3005
   twice, with the caret on the TEMPLATE in the other unit, and exit 2 -- and private is the
@@ -865,6 +880,33 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **The whole-program analyzer is one method per named pass.** `_check_multi_file` was 424
+  lines at cyclomatic complexity 38: the collect loop, the shadowed-implementation pruning,
+  docs, externs, the library calls, namespaces, ffi-clash, entrypoint, instantiate, six
+  stages of monomorphize, resolve, finite-types, derive, shadowing, effects, the per-unit
+  loop and the array fixpoint, in one body. It is 49 lines now -- the guards, one call per
+  stage, and the two stops -- with 21 stage methods under it and none above complexity 7.
+  No pass moved and no diagnostic changed. `SemanticAnalyzer.check()`'s docstring stays the
+  authority on the ORDER and now names the method per stage, and the split showed a gap in
+  it: `_register_monomorphized_extensions` sits between `derive` and `shadowing`, is NOT a
+  pass, and had no row. It has one now, with a note that both ends of its placement are
+  load-bearing.
+- **The scope pass dispatches its expressions from a table.** `_check_expression` was 148
+  lines at cyclomatic complexity 44, the worst in the semantic layer. It is a class-keyed
+  table now, the shape #686 gave the STATEMENT half of the same file, with the same located
+  CE0130 backstop and a totality gate that reads the table against the `Expr` union. The
+  three gates that read the `match` through `ast.parse` are replaced by gates that read the
+  table: the rule they held is stronger, because agreement is now checked on class objects,
+  so an arm naming a renamed class can no longer read as covered.
+- **The predefined types are data, in one module.** 221 lines of the collect pass built the
+  nine predefined enums and the built-in generics inline -- and four of the five generics
+  were built by hand while `HashMap` came from a factory, an intended factoring applied to
+  one of five. `semantics/predefined_types.py` holds the nine as records and all five
+  generics come from one place. `collect/enums.py` goes 393 to 195. Every `home_module`
+  stamp is unchanged, and `PREDEFINED_ENUM_HOMES` is derived from the one table instead of
+  written beside it. Six dead declarations, three forwarding wrappers and six copies of the
+  duplicate-type-name rule went with it; the rule is one function now, and its diagnostics
+  are byte-identical.
 - **One seam supplies a derived clone** (#720). An instance interned during the `typecheck`
   pass got a derived hash and no derived clone, because the `derive` pass runs before
   `typecheck` and the interning seams derived a hash alone. The missing clone was then
