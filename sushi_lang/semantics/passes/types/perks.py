@@ -8,15 +8,17 @@ from sushi_lang.internals import errors as er
 
 
 def check_constraint_perks(validator, program) -> None:
-    """Every bare `@(T: P)` this unit writes names a perk that exists and is reachable.
+    """Every `@(T: P)` this unit writes names a perk that exists and is reachable.
 
     Reads `signature_constraints()`, the one walk over a unit's constraint names. The
     name was recorded by the collect pass and measured against nothing, so a constraint
     naming no perk at all compiled clean (#505).
 
-    A QUALIFIED constraint is skipped: `check_qualified_constraints` has already asked
-    whether the namespace holds the name, and a name behind an alias never enters the
-    flat scope that the rule below measures against.
+    A QUALIFIED constraint reads the same rule one alias out (#733), and it asks the
+    namespace seam because a name behind an alias never enters the flat scope the bare
+    arm measures against. `check_qualified_constraints` has run already and owns the
+    two refusals above this one -- an alias that is bound to nothing, and an alias that
+    does not hold the name -- so a site it refused is silent here.
     """
     from sushi_lang.semantics.ast_walk import signature_constraints
     from .visibility import reject_out_of_scope_type
@@ -28,6 +30,7 @@ def check_constraint_perks(validator, program) -> None:
 
     for site in signature_constraints(program):
         if site.namespace is not None:
+            _reject_qualified_non_perk(validator, site)
             continue
         # A perk some unit declares and this one did not import is out of scope, not
         # missing, and CE2001 is the code that says so -- `_TYPE_KINDS` already reads
@@ -36,6 +39,25 @@ def check_constraint_perks(validator, program) -> None:
             continue
         if validator.perk_table.get(site.perk_name) is None:
             er.emit(validator.reporter, er.ERR.CE4003, site.span, perk=site.perk_name)
+
+
+def _reject_qualified_non_perk(validator, site) -> None:
+    """CE4003 for `@(T: h.Vec)`: the alias holds the name, and it is not a perk (#733).
+
+    The qualified path asked only whether the namespace holds a MEMBER of that name, so
+    a struct, an enum, a constant or a function there was accepted and the constraint
+    did nothing. The binding carries its KIND, which is the one fact the bare arm reads
+    out of the perk table, so the answer is the same code with the WRITTEN name in it.
+
+    A binding of None is the qualifier's own miss and is already reported.
+    """
+    from .qualified import written_name
+
+    binding = validator.namespaces.lookup(site.namespace, site.perk_name)
+    if binding is None or binding.kind == "perk":
+        return
+    er.emit(validator.reporter, er.ERR.CE4003, site.span,
+            perk=written_name(site.namespace, site.perk_name))
 
 
 def validate_perk_implementation(
