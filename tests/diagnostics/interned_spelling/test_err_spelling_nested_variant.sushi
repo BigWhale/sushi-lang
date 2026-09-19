@@ -1,0 +1,13 @@
+# A NESTED pattern reads the same rule: the enum it names is spelled the way the
+# source spells it.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2045
+# EXPECT_STDERR_CONTAINS: "not found in enum 'Maybe@(i32)'"
+enum Outer:
+    Wrap(Maybe@(i32))
+
+fn main() i32:
+    let Outer o = Outer.Wrap(Maybe.Some(1))
+    match o:
+        Outer.Wrap(Maybe.Nope(v)) -> println("{v}")
+    return Result.Ok(0)

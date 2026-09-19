@@ -1,0 +1,12 @@
+# A named argument that names no field reports the struct with the SOURCE spelling.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2080
+# EXPECT_STDERR_CONTAINS: "unknown field 'nope' for struct 'Pair@(i32, string)'"
+struct Pair@(T, U):
+    T first
+    U second
+
+fn main() i32:
+    let Pair@(i32, string) p = Pair(nope: 1, second: "answer")
+    println("{p.first}")
+    return Result.Ok(0)

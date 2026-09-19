@@ -1,0 +1,12 @@
+# The `Own(...)` arm of the pattern walk reads the same rule as the other two.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2045
+# EXPECT_STDERR_CONTAINS: "not found in enum 'Maybe@(i32)'"
+enum Box:
+    Held(Own@(Maybe@(i32)))
+
+fn main() i32:
+    let Box b = Box.Held(Own.alloc(Maybe.Some(1)))
+    match b:
+        Box.Held(Own(Maybe.Nope(v))) -> println("{v}")
+    return Result.Ok(0)

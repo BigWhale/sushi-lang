@@ -1,0 +1,13 @@
+# A named construction that leaves a field out reports the struct with the SOURCE
+# spelling.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2082
+# EXPECT_STDERR_CONTAINS: "missing required field(s) 'second' for struct 'Pair@(i32, string)'"
+struct Pair@(T, U):
+    T first
+    U second
+
+fn main() i32:
+    let Pair@(i32, string) p = Pair(first: 1)
+    println("{p.first}")
+    return Result.Ok(0)

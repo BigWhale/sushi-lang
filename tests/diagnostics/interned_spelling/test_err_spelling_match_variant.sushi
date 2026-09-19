@@ -1,0 +1,11 @@
+# The enum a match arm missed is named with the SOURCE spelling, not with the
+# internal `Maybe<i32>` identity name.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2045
+# EXPECT_STDERR_CONTAINS: "not found in enum 'Maybe@(i32)'"
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(1)
+    match m:
+        Maybe.Nope(v) -> println("{v}")
+        _ -> println("Mostly Harmless")
+    return Result.Ok(0)
