@@ -21,6 +21,7 @@ from sushi_lang.semantics.library_registry import LibraryRegistry
 from sushi_lang.semantics.library_templates import (
     apply_template_bindings, deserialize_perk_impl)
 from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
+from sushi_lang.semantics.generics.type_display import display_type_name
 from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
 from sushi_lang.semantics.visibility import DeclOrigin
@@ -435,7 +436,8 @@ class LibraryRegistration:
                 # The snippet failed to re-parse; skip rather than crash the consumer
                 # build (it can supply its own impl) -- but say so, or the user later
                 # gets "no such method" on a perk the library implements.
-                er.emit(self.reporter, er.ERR.CW3506, None, type=type_name)
+                er.emit(self.reporter, er.ERR.CW3506, None,
+                        type=display_type_name(type_name))
                 continue
 
             if perk_impls.register(impl, type_name):

@@ -23,7 +23,8 @@ from test_metadata import (parse_test_metadata, get_test_category, should_run_ru
                           TestMetadata, collect_fixtures, fixture_binary_name)
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
-                       DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs)
+                       DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
+                       arm_spelling_gate, spelling_gate_tripped)
 
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
@@ -504,6 +505,10 @@ class TestRunner:
             )
 
             success = result.returncode == expected_exit_code
+            if success and spelling_gate_tripped(result.stderr):
+                # #734: the gate refused a diagnostic. The exit code matching the
+                # fixture's expectation is a coincidence, not a pass.
+                return False, f"\u2717 Compilation: spelling gate\nSTDERR: {result.stderr.strip()}"
             if success:
                 message = f"✓ Compilation: Expected exit code {expected_exit_code}"
             else:
@@ -893,6 +898,8 @@ class TestRunner:
 
 def main():
     """Main entry point for the enhanced test runner."""
+    arm_spelling_gate()
+
     # allow_abbrev=False for the same reason as in run_tests.py: --leaks is gone and
     # must not resolve as a prefix of --leaks-only.
     parser = argparse.ArgumentParser(description="Enhanced Sushi language test runner",

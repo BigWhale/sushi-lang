@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import List, Optional, Set, TYPE_CHECKING
 from sushi_lang.semantics.ast import Expr
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import StructType
 from sushi_lang.internals import errors as er
 
@@ -28,7 +29,7 @@ def validate_and_reorder_named_args(
     for field_name in field_names:
         if field_name not in expected_field_names:
             er.emit(reporter, er.ERR.CE2080, loc,
-                   field=field_name, struct=struct_type.name)
+                   field=field_name, struct=display_type(struct_type))
             return None
 
     seen_fields: Set[str] = set()
@@ -44,7 +45,7 @@ def validate_and_reorder_named_args(
     if missing_fields:
         missing_list = ", ".join(sorted(missing_fields))
         er.emit(reporter, er.ERR.CE2082, loc,
-               fields=missing_list, struct=struct_type.name)
+               fields=missing_list, struct=display_type(struct_type))
         return None
 
     name_to_expr = {name: expr for name, expr in zip(field_names, arg_exprs, strict=False)}

@@ -45,7 +45,7 @@ _add(ErrorMessage("CE4007", Severity.ERROR,
 
 _add(ErrorMessage("CE4010", Severity.ERROR,
     "perk {name} cannot have type parameters",
-    Category.PERK, "Perks cannot be generic. Remove the <...> type parameter list; constrain generic functions with '<T: {name}>' instead."))
+    Category.PERK, "Perks cannot be generic. Remove the @(...) type parameter list; constrain generic functions with '@(T: {name})' instead."))
 
 _add(ErrorMessage("CE4011", Severity.ERROR,
     "cannot {action} private perk '{name}' from unit '{current_unit}' (perk is defined in '{owner}')",
