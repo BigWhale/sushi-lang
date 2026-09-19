@@ -16,7 +16,7 @@ extend Result@(T, E) spelled() string:
 
 fn main() i32:
     let Result@(i32, StdError) ok = Result.Ok(3)
-    let Result@(i32, StdError) err = Result.Err(StdError.Failed)
+    let Result@(i32, StdError) err = Result.Err(StdError.Error)
     println("{ok.fine()} {ok.bad()}")
     println("{err.fine()} {err.bad()}")
     println("{ok.fine_ch().realise(false)}")

@@ -88,8 +88,8 @@ def emit_list_method(
     else:
         raise_internal_error("CE0083", method=method)
 
-    if to_i1 and method == "is_empty":
-        result = codegen.utils.as_i1(result)
+    if method == "is_empty":
+        result = codegen.utils.bool_answer(result, to_i1)
 
     return result
 

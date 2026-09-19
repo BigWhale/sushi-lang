@@ -18,9 +18,11 @@ def emit_builtin_result_method(
     from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check, emit_enum_realise
 
     if call.method == "is_ok":
-        return emit_enum_tag_check(codegen, result_value, 0, "is_ok")
+        return codegen.utils.bool_answer(
+            emit_enum_tag_check(codegen, result_value, 0, "is_ok"), to_i1)
     elif call.method == "is_err":
-        return emit_enum_tag_check(codegen, result_value, 1, "is_err")
+        return codegen.utils.bool_answer(
+            emit_enum_tag_check(codegen, result_value, 1, "is_err"), to_i1)
     elif call.method == "realise":
         return emit_enum_realise(codegen, call, result_value, result_type, "Ok", "Result")
     elif call.method == "expect":

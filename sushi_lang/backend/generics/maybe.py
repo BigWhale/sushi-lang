@@ -22,9 +22,11 @@ def emit_builtin_maybe_method(
     from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check, emit_enum_realise
 
     if call.method == "is_some":
-        return emit_enum_tag_check(codegen, maybe_value, 0, "is_some")
+        return codegen.utils.bool_answer(
+            emit_enum_tag_check(codegen, maybe_value, 0, "is_some"), to_i1)
     elif call.method == "is_none":
-        return emit_enum_tag_check(codegen, maybe_value, 1, "is_none")
+        return codegen.utils.bool_answer(
+            emit_enum_tag_check(codegen, maybe_value, 1, "is_none"), to_i1)
     elif call.method == "realise":
         return emit_enum_realise(codegen, call, maybe_value, maybe_type, "Some", "Maybe")
     elif call.method == "expect":

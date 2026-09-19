@@ -1,6 +1,6 @@
 # The HashMap half. `is_empty` and `contains_key` read the same rule, and the
 # conversion their dispatcher carried only ever went the other way (#737).
-# EXPECT_STDOUT_EXACT: "true false\nfalse true\ntrue\n"
+# EXPECT_STDOUT_EXACT: "true false\nfalse true\nfalse\n"
 use <collections/hashmap>
 
 extend HashMap@(K, V) empty_now() bool:
