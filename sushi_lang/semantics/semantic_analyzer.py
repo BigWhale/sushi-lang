@@ -66,7 +66,6 @@ class SemanticAnalyzer:
         self.tables: SymbolTables = SymbolTables()
         self.monomorphized_extensions: list['ExtendDef'] = []  # Concrete ExtendDef nodes for codegen
         self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
-        self.libraries: Optional[LibraryRegistration] = None  # The `libraries` step, for its two later readers
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
 
     def check(self) -> None:
@@ -148,7 +147,7 @@ class SemanticAnalyzer:
         self._check_docs(compilation_order)
         self._check_externs(compilation_order)
         self._register_libraries(compilation_order, libraries)
-        self._build_namespaces(compilation_order)
+        self._build_namespaces(compilation_order, self.unit_manager.units)
         self._check_ffi_clash(compilation_order)
         self._check_entrypoint(compilation_order)
 
@@ -198,7 +197,6 @@ class SemanticAnalyzer:
 
         libraries = LibraryRegistration(self.reporter, global_tables,
                                         self.library_linker, self.library_registry)
-        self.libraries = libraries
         # BEFORE the consumer's units: perk-impl collection validates each impl against
         # the visible perk definitions (CE4003), so the contract must already be here.
         if self.library_linker is not None:
@@ -268,13 +266,12 @@ class SemanticAnalyzer:
         self.library_registry = libraries.registry
         self.library_perk_impls = libraries.shipped_perk_impls
 
-    def _build_namespaces(self, compilation_order: list[Unit]) -> None:
+    def _build_namespaces(self, compilation_order: list[Unit], all_units: dict) -> None:
         """namespaces: what each unit may write behind a dot."""
         # After `libraries`, because a BINARY library's declarations exist only once that
         # step has read the manifest, and before `ffi-clash`, which is the first step that
         # asks whether a name is already taken (`unit-namespaces.md` section 3.2).
         from sushi_lang.semantics.passes.namespaces import build_namespaces
-        all_units = self.unit_manager.units if self.unit_manager is not None else {}
         for unit in compilation_order:
             if unit.ast is None:
                 continue
@@ -642,8 +639,14 @@ class SemanticAnalyzer:
             self._check_monomorphized_extensions(destroy_effects, enum_names,
                                                  lift_target, only=batch)
 
-    # Rounds the call-site-driven fixpoint may take before it drops the rest. The
-    # same shape and reasoning as InstantiationCollector.MAX_EXPANSION_ROUNDS.
+    # Rounds an expansion fixpoint may take before it drops the rest. The same shape
+    # and reasoning as InstantiationCollector.MAX_EXPANSION_ROUNDS. TWO readers, and
+    # they are one rule: `_check_array_extensions` drives the call-site-driven array
+    # extensions, and `_cut_templates_for_late_instantiations` drives the late
+    # instantiations (#555). Each round of either can name a new instantiation, so the
+    # bound answers the same question -- how deep a chain the compiler follows before
+    # it stops. Reaching it drops an instantiation, which surfaces as the ordinary
+    # CE2008 and never as a hang.
     MAX_ARRAY_EXPANSION_ROUNDS = 8
 
     def _drain_pending_array_extensions(self, monomorphizer, compilation_order) -> None:
