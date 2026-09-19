@@ -650,8 +650,9 @@ class Spread(Node):
 class Lambda(Node):
     """A lambda literal (closure)."""
     params: List[Param]
+    # A BLOCK body (`|x|:` and its statements) or a bare expression (`|x| x + 1`). The
+    # shape is the predicate: a reader asks `isinstance(body, Block)`.
     body: Union["Expr", "Block"]
-    is_block_body: bool = False
     ret: Optional[Type] = None
     err_type: Optional[Type] = None
     captures: Optional[List["Param"]] = None

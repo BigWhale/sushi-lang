@@ -37,7 +37,6 @@ def parse_lambda(t: Tree, ast_builder: "ASTBuilder") -> Lambda:
     return Lambda(
         params=params,
         body=body,
-        is_block_body=is_block,
         ret=ret,
         err_type=err_type,
         loc=span_of(t),

@@ -61,7 +61,7 @@ def let_annotations(block) -> Iterator[Type]:
         if isinstance(stmt, Let):
             if stmt.ty is not None:
                 yield stmt.ty
-            if isinstance(stmt.value, Lambda) and stmt.value.is_block_body:
+            if isinstance(stmt.value, Lambda) and isinstance(stmt.value.body, Block):
                 yield from let_annotations(stmt.value.body)
         elif isinstance(stmt, If):
             for _cond, arm in stmt.arms:
@@ -441,7 +441,7 @@ class FunctionMonomorphizer:
         for stmt in body.statements:
             if isinstance(stmt, Let) and stmt.value:
                 self._collect_from_expr(stmt.value, substitution, var_types)
-                if isinstance(stmt.value, Lambda) and stmt.value.is_block_body:
+                if isinstance(stmt.value, Lambda) and isinstance(stmt.value.body, Block):
                     self._collect_block_instantiations(stmt.value.body, substitution, var_types)
                 # A local is in scope for the calls after it, and a generic called with
                 # one needs its type as a parameter's is needed (#555). Only the
@@ -482,7 +482,7 @@ class FunctionMonomorphizer:
             IndexAccess, ArrayLiteral, EnumConstructor, CastExpr,
             InterpolatedString, Borrow, RangeExpr, Spread, MemberAccess,
             MethodCall, DynamicArrayFrom, DynamicArrayNew, BlankLit, Lambda,
-            IntLit, FloatLit, StringLit, BoolLit,
+            IntLit, FloatLit, StringLit, BoolLit, Block,
         )
 
         if isinstance(expr, Call):
@@ -554,7 +554,7 @@ class FunctionMonomorphizer:
             # An expression-body lambda scans directly. A block-body lambda (a `let` RHS) is
             # walked in _collect_nested_instantiations, which has the generic_func needed to
             # rebuild its var-type scope.
-            if not expr.is_block_body:
+            if not isinstance(expr.body, Block):
                 self._collect_from_expr(expr.body, substitution, var_types)
         elif isinstance(expr, (IntLit, FloatLit, StringLit, BoolLit, Name,
                                BlankLit, DynamicArrayNew)):

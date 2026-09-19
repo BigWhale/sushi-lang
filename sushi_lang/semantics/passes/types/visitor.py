@@ -20,7 +20,7 @@ from sushi_lang.semantics.ast import (
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow, Spread, Lambda,
-    BlankLit, MemberAccess
+    BlankLit, MemberAccess, Block
 )
 
 
@@ -125,7 +125,7 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
         # cannot: a built-in static and a generic variant read their type from the
         # position and infer nothing of their own (#625). A block body has no expression
         # to ask at all.
-        ok_type = (None if lam.is_block_body
+        ok_type = (None if isinstance(lam.body, Block)
                    else type_validator.infer_expression_type(lam.body))
         if ok_type is None and isinstance(expected, FunctionType):
             ok_type = expected.ok_type
