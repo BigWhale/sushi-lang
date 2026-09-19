@@ -116,7 +116,8 @@ def emit_hashmap_entries(
 
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
-    entry_struct_type = ensure_entry_type_in_struct_table(codegen.struct_table, key_type, value_type)
+    entry_struct_type = ensure_entry_type_in_struct_table(
+        codegen.struct_table, codegen.derived_methods, key_type, value_type)
 
     buckets_ptr = gep_utils.gep_struct_field(codegen, hashmap_value, 0, "buckets_ptr")
     capacity_ptr = gep_utils.gep_struct_field(codegen, hashmap_value, 2, "capacity_ptr")
