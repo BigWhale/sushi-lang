@@ -1,0 +1,25 @@
+# A consumer's TEMPLATE extension on a binary library's generic type, on the plain
+# extension path and on the perk implementation path. The library's generic types
+# reach the tables before the first unit is collected, so the target's base is
+# readable where it is written (#728).
+# EXPECT_STDOUT_EXACT: "5 6 7\n"
+use <lib/generic_ext_bin_lib>
+
+perk Named:
+    fn named() i32
+
+extend Crate@(T) tag() i32:
+    return 5
+
+extend Crate@(T) with Named:
+    fn named() i32:
+        return 6
+
+extend Slot@(T) mark() i32:
+    return 7
+
+fn main() i32:
+    let Crate@(i32) c = Crate(1)
+    let Slot@(i32) s = Slot.Full(2)
+    println("{c.tag()} {c.named()} {s.mark()}")
+    return Result.Ok(0)

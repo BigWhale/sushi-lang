@@ -1,0 +1,12 @@
+# The positive half of the same rule: a real perk behind the alias still compiles
+# and still runs (#733).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n30\n"
+use "helpers/kinds" as k
+
+fn use_it@(T: k.Loud)(T x) i32:
+    return Result.Ok(x.volume())
+
+fn main() i32:
+    println("Mostly Harmless")
+    println("{use_it(3).realise(0)}")
+    return Result.Ok(0)

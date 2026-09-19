@@ -39,6 +39,17 @@ class LLVMUtils:
         # answers.
         raise_internal_error("CE0017", src=str(ty), dst="i1")
 
+    def bool_answer(self, v: ir.Value, to_i1: bool) -> ir.Value:
+        """A built-in method's `bool`, in the shape its caller asked for (#737).
+
+        A `bool` is an `i8` everywhere in the language, and a CONDITION is an `i1`.
+        Every built-in bool method builds its answer out of a comparison, so one of
+        the two conversions always applies and the caller's `to_i1` says which. Four
+        dispatchers answered this by hand, and two of them handed back the comparison
+        in both positions -- an `i1` in a `bool` return, which fails the verifier.
+        """
+        return self.as_i1(v) if to_i1 else self.as_i8(v)
+
     def as_i8(self, v: ir.Value) -> ir.Value:
         """Convert integer value to i8 with appropriate width conversion."""
         if self.codegen.builder is None:

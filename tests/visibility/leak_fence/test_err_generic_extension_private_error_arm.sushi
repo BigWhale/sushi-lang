@@ -1,0 +1,17 @@
+# The ERROR ARM of the same fence, on a generic extension target. The `| E` channel
+# hands the enum out exactly as a return type does (#656).
+# EXPECT_ERROR_CODE: CE3009
+
+enum Fault:
+    Bad
+
+public struct Box@(T):
+    T held
+
+extend Box@(T) checked() i32 | Fault:
+    return Result.Err(Fault.Bad)
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println("{b.checked().realise(0)}")
+    return Result.Ok(0)

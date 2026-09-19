@@ -132,6 +132,24 @@ class LibraryRegistration:
             perk_table.by_name[perk_name] = perk_def
             perk_table.order.append(perk_name)
 
+    def seed_generic_types(self) -> None:
+        """Seed the generic struct and enum TEMPLATES the libraries ship (#728).
+
+        Called BEFORE the collect loop, for `seed_perks`' reason one kind further on. A
+        consumer writes `extend Crate@(T)` and `extend Crate@(i32)`, and the collect
+        pass reads that base while it collects the unit, so the library's generic has
+        to be in the tables by then. Registered after the loop it was not, and the
+        target was refused with a CE2001 for a type the program does have -- the
+        concrete spelling since #698, the template spelling since the base check was
+        added to it.
+
+        The library's own re-parsed templates read the same tables
+        (`_register_generic_perk_impls`), so one seam answers both readers and the
+        registration runs once.
+        """
+        self._register_generic_types("generic_structs")
+        self._register_generic_types("generic_enums")
+
     def register(self, compilation_order: list['Unit']) -> None:
         """Register everything but the perk definitions, in the order the tables need.
 
@@ -141,8 +159,10 @@ class LibraryRegistration:
         monomorphized bodies call), and then the names the library keeps, which are
         names and not callables (#469). Perk IMPLEMENTATIONS after the consumer's own,
         so local wins, and before `instantiate`, so the constraint validator sees them.
-        Generic structs before generic enums, and both before `instantiate`, so the
-        consumer's instantiations monomorphize locally.
+
+        The generic TYPE templates are NOT here: `seed_generic_types` files them before
+        the collect loop, because an extension target names one and the collect pass
+        reads that name (#728). They are in the tables by the time anything below asks.
         """
         if self.linker is not None and self.registry is None:
             self._build_registry()
@@ -159,8 +179,6 @@ class LibraryRegistration:
         self._register_perk_impls()
         self._register_generic_perk_impls()
         self._register_generic_functions(build_units)
-        self._register_generic_types("generic_structs")
-        self._register_generic_types("generic_enums")
 
     def signatures(self) -> Iterator['FuncSig']:
         """Every signature a loaded library's manifest declares: the public API, and

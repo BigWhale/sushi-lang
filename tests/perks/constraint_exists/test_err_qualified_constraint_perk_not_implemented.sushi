@@ -1,0 +1,16 @@
+# The honest row: the alias names a real PERK, so the constraint stays a constraint.
+# A type that does not implement it is CE4006, which is what tells a non-perk row
+# above from a perk row (#733).
+# EXPECT_ERROR_CODE: CE4006
+use "helpers/kinds" as k
+
+struct Mute:
+    i32 n
+
+fn use_it@(T: k.Loud)(T x) i32:
+    return Result.Ok(x.volume())
+
+fn main() i32:
+    let Mute m = Mute(1)
+    println("{use_it(m).realise(0)}")
+    return Result.Ok(0)
