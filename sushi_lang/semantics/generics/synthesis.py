@@ -88,6 +88,11 @@ def register_synthesized_function(
             target = next((u for u in units if getattr(u, "is_entry", False) and u.ast),
                           None)
         if target is None and units[0].ast:
+            # NOT the analyzer's `_entry_unit` rule, which scans on for the first unit
+            # that has an AST (#736). An instance has a home unit and reaches this line
+            # only when that home is gone, so the FIRST unit is the last guess and no
+            # further one is made: the body is dropped rather than parked on a unit that
+            # never asked for it.
             target = units[0]
         if target is not None and target.ast:
             target.ast.functions.append(funcdef)
