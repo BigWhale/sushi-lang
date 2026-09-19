@@ -2,9 +2,9 @@
 
 The instantiate pass collects what annotations and calls SPELL. `monomorphize_struct`
 then substitutes `B := string` into a `Box@(B)` field and builds `Box<string>`, which
-nothing spelled -- so it lived in the substitutor's cache and in no table, and the
-derive pass reported the leftover as CE0128, CE2052 or a backend KeyError depending on
-the shape (#577). Every substituted instance is published to its table at creation;
+nothing spelled -- so it lived in the substitutor's cache and in no table, and every
+pass after it had no declaration to read (#577). Every substituted instance is
+published to its table at creation;
 these pin the tables, one face each.
 """
 from __future__ import annotations

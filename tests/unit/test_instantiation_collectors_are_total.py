@@ -28,13 +28,22 @@ def _expr_union_members() -> set[str]:
 
 
 def _dispatched_names(method) -> set[str]:
-    """Every class name a collector method tests with isinstance(), read from its source."""
+    """Every class name a collector method DISPATCHES on, read from its source.
+
+    A dispatch asks what the collector was HANDED: `isinstance(expr, Call)`, on a bare
+    name. An `isinstance` on a field of that node -- `isinstance(expr.callee, Name)`, or
+    `isinstance(expr.body, Block)` for a lambda's two body shapes -- decides what to do
+    inside an arm that is already chosen, so it names no arm of its own and it is not
+    read here.
+    """
     src = inspect.getsource(method)
     tree = ast.parse(textwrap.dedent(src))
 
     names: set[str] = set()
     for node in ast.walk(tree):
         if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "isinstance"):
+            continue
+        if not isinstance(node.args[0], ast.Name):
             continue
         target = node.args[1]
         if isinstance(target, ast.Name):

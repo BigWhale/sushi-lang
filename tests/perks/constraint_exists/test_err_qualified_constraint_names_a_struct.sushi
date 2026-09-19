@@ -1,0 +1,13 @@
+# A constraint behind an alias that names a STRUCT. The bare spelling is CE4003 and
+# the qualified one was accepted, and did nothing (#733). The caret is on the whole
+# written name, qualifier included.
+# EXPECT_ERROR_CODE: CE4003
+# EXPECT_STDERR_CONTAINS: unknown perk: k.Vec
+use "helpers/kinds" as k
+
+fn use_it@(T: k.Vec)(T x) i32:
+    return Result.Ok(x.volume())
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

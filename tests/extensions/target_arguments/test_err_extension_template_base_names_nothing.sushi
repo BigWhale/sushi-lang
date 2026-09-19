@@ -1,0 +1,14 @@
+# A TEMPLATE target reads its base the same way a concrete one does. The base was
+# read only on the concrete arm, so `extend NoSuchBase@(T) g()` was accepted and the
+# extension was dead: nothing can name the target (#728).
+# EXPECT_ERROR_CODE: CE2001
+
+struct Box@(T):
+    T v
+
+extend NoSuchBase@(T) g() i32:
+    return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

@@ -566,8 +566,9 @@ class PerkCollector:
             owner = self.perk_impls.owner(type_name, perk_name)
             if not taken_by_a_library(owner, current_unit=self.current_unit_name,
                                       library_units=self.library_units):
+                from sushi_lang.semantics.generics.type_display import display_type
                 er.emit(self.r, ERR.CE4002, impl.loc,
-                        type=type_name, perk=perk_name)
+                        type=display_type(target_type), perk=perk_name)
                 return False
             previous = self.perk_impls.replace(impl, type_name,
                                                unit_name=self.current_unit_name)

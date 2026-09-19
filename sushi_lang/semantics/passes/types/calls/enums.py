@@ -68,10 +68,10 @@ def validate_variant_exists(
             # been either member, so the help names both.
             er.emit_with(validator.reporter, er.ERR.CE2045,
                          constructor.variant_name_span or constructor.loc,
-                         variant=variant_name, enum=enum_type.name) \
+                         variant=variant_name, enum=display_type(enum_type)) \
                 .help("a name behind an enum's dot is a variant or a static method: "
-                      f"add the variant, or declare 'extend {enum_type.name} static "
-                      f"{variant_name}(...)'").emit()
+                      f"add the variant, or declare 'extend {display_type(enum_type)} "
+                      f"static {variant_name}(...)'").emit()
         return None
 
     return variant

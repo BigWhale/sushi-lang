@@ -1,0 +1,17 @@
+# The CONCRETE spelling of the same target. It has answered a false CE2001 since
+# #698, for the same reason the template spelling did: the base was read before the
+# library's generic types were in the tables (#728).
+# EXPECT_STDOUT_EXACT: "8 9\n"
+use <lib/generic_ext_bin_lib>
+
+extend Crate@(i32) weight() i32:
+    return 8
+
+extend Slot@(i32) depth() i32:
+    return 9
+
+fn main() i32:
+    let Crate@(i32) c = Crate(1)
+    let Slot@(i32) s = Slot.Full(2)
+    println("{c.weight()} {s.depth()}")
+    return Result.Ok(0)

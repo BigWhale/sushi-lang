@@ -1,0 +1,13 @@
+# A struct constructor with the wrong number of arguments names the struct with the
+# SOURCE spelling.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2027
+# EXPECT_STDERR_CONTAINS: "struct 'Pair@(i32, string)' expects 2 field(s), got 1"
+struct Pair@(T, U):
+    T first
+    U second
+
+fn main() i32:
+    let Pair@(i32, string) p = Pair(1)
+    println("{p.first}")
+    return Result.Ok(0)

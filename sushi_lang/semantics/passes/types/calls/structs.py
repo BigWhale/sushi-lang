@@ -134,7 +134,8 @@ def _validate_positional_struct_constructor(
     if (len(actual_args) != len(expected_fields)
             and not name_is_contested(validator, "struct", struct_type.name)):
         er.emit(validator.reporter, er.ERR.CE2027, call.callee.loc,
-               name=struct_type.name, expected=len(expected_fields), got=len(actual_args))
+               name=display_type(struct_type), expected=len(expected_fields),
+               got=len(actual_args))
 
     for _i, (arg, (field_name, field_type)) in enumerate(zip(actual_args, expected_fields, strict=False)):
         from sushi_lang.semantics.generics.types import GenericTypeRef

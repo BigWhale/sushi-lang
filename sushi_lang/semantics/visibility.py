@@ -55,15 +55,16 @@ FOLLOWS_TARGET_TYPE = frozenset({"extension", "perk implementation"})
 NO_VISIBILITY = frozenset({"external block", "external declaration"})
 
 
-# Every kind that carries a marker is now private by default, which is Ruling 1 and
-# Ruling 3 in full. The set stays because it is the one place that says so, and because
-# `declared_public` is what every builder asks -- a kind added later starts here.
-UNMARKED_IS_PUBLIC: frozenset[str] = frozenset()
-
-
 def declared_public(kind: str, marked: bool) -> bool:
-    """Is a declaration of this kind public, given whether it carries the marker?"""
-    return marked or kind in UNMARKED_IS_PUBLIC
+    """Is a declaration of this kind public, given whether it carries the marker?
+
+    The marker alone answers, for every kind in `CARRIES_MARKER`. That is Ruling 1 and
+    Ruling 3 in full: private is the default, and no kind is public without the word.
+    A `frozenset` of kinds that are public when unmarked stood here and was empty, so
+    the answer was already the marker. The gate is
+    `tests/unit/test_public_marker_is_recorded.py`.
+    """
+    return marked
 
 
 # The verb a diagnostic uses for each kind. Derived rather than passed, so a kind cannot

@@ -11,8 +11,11 @@ so both halves answer the same question the same way.
 """
 from __future__ import annotations
 
+import gc
 import inspect
+import sys
 import typing
+from dataclasses import dataclass
 
 import pytest
 
@@ -25,8 +28,22 @@ from sushi_lang.semantics.passes.scope import (
 
 
 def _stmt_subclasses() -> set[type]:
-    """Every statement node type: the direct subclasses of `Stmt` (semantics/ast.py)."""
-    return set(sushi_ast.Stmt.__subclasses__())
+    """Every statement node type: the DECLARED subclasses of `Stmt` (semantics/ast.py).
+
+    `Stmt.__subclasses__()` answers more than that (#735). Each node is declared with
+    `@dataclass(slots=True)`, and that decorator cannot add `__slots__` to a class that
+    is already built: it builds a SECOND class and drops the first. The dropped class is
+    already registered as a subclass, and it is reachable only through a reference cycle,
+    so only the cyclic collector can free it. With `gc.disable()` all thirteen statement
+    kinds are in the list twice. With the collector on, whether one is still there when
+    this file runs depends on how much the process has allocated, which is why these
+    gates failed on a run of this file alone and passed in the full suite.
+
+    A declared class is the attribute that its own module holds under its name. A
+    dropped class never is, because the decorator gave the module the replacement.
+    """
+    return {cls for cls in sushi_ast.Stmt.__subclasses__()
+            if getattr(sys.modules.get(cls.__module__), cls.__name__, None) is cls}
 
 
 def _expr_union_types() -> set[type]:
@@ -105,6 +122,43 @@ def _analyzer() -> ScopeAnalyzer:
 
 # --- The table, in both directions.
 
+def test_the_statement_set_holds_only_the_declared_classes():
+    """`Stmt.__subclasses__()` is not the declared set (#735).
+
+    `semantics/ast.py` declares every node with `@dataclass(slots=True)`. That decorator
+    cannot add `__slots__` to a class that is already built, so it builds a SECOND class
+    and drops the first. The dropped class is already registered as a subclass of `Stmt`,
+    and it is reachable only through a reference cycle, so it stays in the subclass list
+    until the cyclic collector frees it.
+
+    The stand-in below has that same shape: a class that carries the name of a declared
+    statement, on an object that is not the declaration. `_stmt_subclasses()` must not
+    answer it. If it does, the gates below compare the table against a name that is
+    already in it, and they report a fault that does not exist.
+    """
+    before = set(sushi_ast.Stmt.__subclasses__())
+
+    @dataclass(slots=True)
+    class Continue(sushi_ast.Stmt):
+        pass
+
+    try:
+        added = set(sushi_ast.Stmt.__subclasses__()) - before
+        assert added, (
+            "the stand-in did not register as a subclass of `Stmt`; the shape this gate "
+            "guards has changed, so read the test before you change the code."
+        )
+        leaked = sorted(cls.__name__ for cls in added & _stmt_subclasses())
+        assert not leaked, (
+            f"_stmt_subclasses() answers a class that no module holds under its own "
+            f"name: {leaked}.\n"
+            "Read the DECLARED classes, not `Stmt.__subclasses__()`."
+        )
+    finally:
+        del Continue
+        gc.collect()
+
+
 def test_every_statement_node_has_a_row():
     missing = sorted(cls.__name__ for cls in _stmt_subclasses()
                      if cls not in _STATEMENT_HANDLERS)
@@ -152,7 +206,15 @@ def test_every_statement_kind_has_a_fixture():
     """The behaviour tests below prove nothing unless every kind is exercised."""
     uncovered = sorted(cls.__name__ for cls in _stmt_subclasses()
                        if cls not in _every_statement())
-    assert not uncovered, f"statement kinds with no fixture: {uncovered}"
+    assert not uncovered, (
+        f"`_every_statement()` has no value for statement kind(s): {uncovered}.\n"
+        "A kind with no value is walked by none of the behaviour tests below, so "
+        "nothing here says its arm runs. Add the kind, with its real children filled "
+        "in.\n"
+        "A name that `_every_statement()` clearly holds means that two different "
+        "classes carry it. Read `_stmt_subclasses()` first: the set is keyed on the "
+        "class OBJECT, not on the name."
+    )
 
 
 @pytest.mark.parametrize("kind", sorted(_every_statement(), key=lambda c: c.__name__))

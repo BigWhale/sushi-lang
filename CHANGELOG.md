@@ -392,6 +392,57 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A built-in bool method answers the language's bool** (#737). `extend Maybe@(i32)
+  is_here() bool: return self.is_some()` crashed the compiler with an LLVM parse error --
+  `ret i1` against a function typed `i8`. A `bool` is an `i8` everywhere in Sushi, and the
+  built-in emitters for `Maybe`, `Result` and `HashMap` handed back the comparison's raw
+  `i1`. `List.is_empty()` was the control that said which side was wrong: its emitter already
+  extended, so the same extension on a list was clean. The rule now has one home, and the
+  four dispatchers that each wrote a version of it call it -- an `i1` for a condition, an
+  `i8` for a value. `HashMap` was broken the same way and no report named it; it is fixed
+  too, because leaving it would leave the crash reachable by one more spelling. **This was
+  the third internal compiler error a user could reach.**
+- **A qualified perk constraint is measured against its binding** (#733). `fn use_it@(T:
+  h.Vec)` -- a STRUCT behind an alias, written where a perk belongs -- compiled, linked, ran
+  and printed its answer, and the constraint was inert. The bare spelling `@(T: Vec)` has
+  always been CE4003, and the qualified path already enforced a REAL perk, so the hole was
+  exactly the non-perk one alias out. The constraint checker no longer skips a qualified
+  site; it reads the binding's kind, and CE4003 names what the user wrote (`h.Vec`). An
+  unbound alias still reads CE2001 first, because the qualifier's own rule runs before this
+  one.
+- **A binary library's generic types are seeded before the collect pass** (#728). A consumer
+  could not extend a generic type that a BINARY `.slib` exports: the collect pass classifies
+  an extension target before the library pass had filed those types, so the base name looked
+  like nothing. The concrete spelling `extend Crate@(i32) weight()` had been refused with
+  CE2001 since #698 and nobody noticed; the template spelling `extend Crate@(T) tag()`
+  survived only because the base was never checked. Both work now: a library's generic types
+  are seeded beside its perks, before the collect loop, which is where the same problem was
+  already solved for a perk contract. A HYBRID `.slib` was measured and behaves like the
+  binary one. With the seed in place the template arm takes the base check its concrete twin
+  has had since #698, so a target whose base names nothing is one CE2001 at the declaration
+  in both spellings. A consumer that declares a generic type name a binary library also
+  exports now reads CE0004, the documented one-type-per-program rule, in place of silently
+  winning.
+- **A diagnostic spells a generic type the way the source does** (#734). `extend List@(i32)
+  with Show:` twice in one file answered "type `List<i32>` already implements perk Show",
+  with the source line printed directly underneath it. Angle brackets are the compiler's
+  INTERNAL identity spelling and a user can neither write them nor read them back, so a
+  diagnostic that prints one contradicts the line it points at. Eleven emit sites render
+  through `display_type()` now, over six codes and three unrelated families -- CE4002 for a
+  duplicate perk implementation, CE2045 for an unknown variant, CE2027, CE2080 and CE2082 for
+  a struct's fields, CW5001 for an FFI return, and CE0091 for two stdlib call sites that also
+  named the wrong type. The table KEY is untouched: it stays the internal name, because
+  `--lib-info` splits it on `"<"` and rendering it would key an array target on the wrong
+  name (#393). A new gate refuses the internal spelling in a rendered message, a note and a
+  help alike; it is armed by `SUSHI_SPELLING_GATE` and the test runners arm it, because a
+  cosmetic fault is never worth a user-facing crash. Measured over 1007 error fixtures and
+  2048 diagnostic lines: zero trips.
+- **A lambda's body shape is read from the body** (#711). `Lambda` carried both a
+  `Union[Expr, Block]` body and an `is_block_body` flag that described it, so the two could
+  disagree and nothing said they could not. The flag is retired: a block body is a `Block`,
+  which is the same question, and the lifter narrows on it. `Lambda.resolved_type` is typed
+  as the function type every reader already assumed, which took the lifting pass from 27 type
+  errors to one.
 - **A qualified perk constraint carets the name the user wrote** (#729). `@(T: nope.Loud)`
   put the CE2001 caret on `T`, the one name in that constraint the user cannot change. #706
   moved CE4011, CE3010, CE4003 and CE2001 onto the constraint's own span, but this reader
@@ -880,6 +931,28 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One rule names the entry unit** (#736). "The first unit with an AST that says
+  `is_entry`, else the first unit with an AST" was written twice in the analyzer, once
+  answering the unit and once answering its AST. It is `_entry_unit()` now, and the two
+  callers read what each needs off it. A third reader in `generics/synthesis.py` deliberately
+  stops where this one scans on, so it keeps its own rule and a comment that says why.
+- **One home for the derived pair at a late intern** (#730). A type interned AFTER the derive
+  pass needs its hash and its clone supplied at the intern, and the `Result` seam and the
+  `Maybe` seam each held their own copy of that. Both call one supplier now. The `HashMap`
+  `Entry` struct joins them, which is what makes `e.hash()` and `e.clone()` work on an entry
+  at all -- both answered "undefined function" before, in every position. A closure's
+  environment struct stays outside, with the reason written beside it: it carries its own
+  clone and drop through the closure fat pointer, and its name cannot be spelled, so no
+  reader of the derived table can reach one.
+- **One home for the numeric type sets in the constant evaluator.** The evaluator held its
+  own integer and float tuples and three private predicates beside
+  `semantics/type_predicates.py`. It reads the shared ones now; the members were measured
+  equal first, and one of the three predicates turned out to have no caller at all.
+- **The empty "public when unmarked" set is retired.** `UNMARKED_IS_PUBLIC` was an empty
+  frozenset, so the predicate that read it has answered its `marked` argument alone since the
+  set was emptied, and an entry in it would contradict the private-by-default rule. The rule
+  now stands in the predicate's own docstring, and the gate that holds it in both directions
+  is unchanged.
 - **The whole-program analyzer is one method per named pass.** `_check_multi_file` was 424
   lines at cyclomatic complexity 38: the collect loop, the shadowed-implementation pruning,
   docs, externs, the library calls, namespaces, ffi-clash, entrypoint, instantiate, six
@@ -1053,6 +1126,20 @@ All notable changes to Sushi Lang will be documented in this file.
   `<random>` keep their own shape and are the follow-up.
 
 ### Testing
+- **The leak fence on a generic extension is pinned** (#656). A generic EXTENSION that hands
+  out a private type was refused only by a predicate shared with the perk-implementation
+  path, and nothing held it there. Three fixtures now cover the return type, a parameter and
+  the error arm.
+- **The statement totality gate reads the declared classes** (#735). Two of its own tests
+  failed when the file ran on its own and passed in the full suite, and the message accused a
+  missing fixture for `continue`, which was never the fault. `@dataclass(slots=True)` cannot
+  add slots in place, so it builds a second class and drops the first -- and the dropped one
+  is already in `__subclasses__()`, reachable only through its own `__mro__` cycle. All
+  thirteen statement kinds are such phantoms at birth; whether one survives to the gate
+  depends on how much the process has allocated, which is why the file alone failed. The gate
+  keeps only a class its own module holds under its name, so it no longer depends on the
+  collector at all. Measured with the collector disabled, where all thirteen phantoms are
+  present: the gate passes.
 - **The docs sweep compiles the FILES too, and there are 109 of them.** A third
   collector, `--only files`: nothing compiled a `.sushi` file under `docs/` before it,
   because one collector reads fences out of Markdown and the other compiles fences OUT OF

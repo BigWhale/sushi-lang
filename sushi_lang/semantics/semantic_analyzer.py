@@ -199,8 +199,12 @@ class SemanticAnalyzer:
                                         self.library_linker, self.library_registry)
         # BEFORE the consumer's units: perk-impl collection validates each impl against
         # the visible perk definitions (CE4003), so the contract must already be here.
+        # A library's generic TYPES are seeded for the same reason one kind on: a
+        # consumer's `extend Crate@(T)` names one in its TARGET, and the collect pass
+        # reads that name while it collects the unit (#728).
         if self.library_linker is not None:
             libraries.seed_perks(global_tables.perks)
+            libraries.seed_generic_types()
 
         for unit in compilation_order:
             if unit.ast is None:
@@ -606,19 +610,22 @@ class SemanticAnalyzer:
             self._merge_unit(unit_reporter)
 
     @staticmethod
-    def _lift_target(compilation_order: list[Unit]):
-        """The AST a monomorphized extension's lifted lambdas belong to."""
-        # The ENTRY unit, for the same reason `generics/synthesis.py` names it: a lifted
-        # body belongs to the unit the compiler was pointed at, not to whichever unit the
-        # compilation order happens to put first.
-        lift_target = next(
-            (u.ast for u in compilation_order
-             if u.ast is not None and getattr(u, "is_entry", False)),
-            None)
-        if lift_target is None:
-            lift_target = next(
-                (u.ast for u in compilation_order if u.ast is not None), None)
-        return lift_target
+    def _entry_unit(compilation_order: list[Unit]) -> Optional[Unit]:
+        """The unit the compiler was pointed at, and the home of every body it makes.
+
+        A monomorphized extension's lifted lambdas go into its AST, and a generic-target
+        perk implementation whose template names no unit goes to the unit itself. Both
+        read this for the same reason `generics/synthesis.py` names the entry unit: a
+        body the compiler makes belongs to the unit the compiler was pointed at, and not
+        to whichever unit the compilation order happens to put first (#736).
+
+        A unit with no AST is never the answer, because every caller reads `.ast` off it.
+        """
+        entry = next((u for u in compilation_order
+                      if u.ast is not None and getattr(u, "is_entry", False)), None)
+        if entry is not None:
+            return entry
+        return next((u for u in compilation_order if u.ast is not None), None)
 
     def _check_array_extensions(self, compilation_order: list[Unit], monomorphizer,
                                 destroy_effects, enum_names: set[str]) -> None:
@@ -628,7 +635,8 @@ class SemanticAnalyzer:
         # another. The bound mirrors MAX_EXPANSION_ROUNDS in the instantiate pass:
         # reaching it drops an instantiation, which surfaces as the ordinary CE2008,
         # never as a hang.
-        lift_target = self._lift_target(compilation_order)
+        entry = self._entry_unit(compilation_order)
+        lift_target = entry.ast if entry is not None else None
         checked = 0
         for _round in range(self.MAX_ARRAY_EXPANSION_ROUNDS):
             self._drain_pending_array_extensions(monomorphizer, compilation_order)
@@ -730,10 +738,7 @@ class SemanticAnalyzer:
             return
 
         units_by_name = {u.name: u for u in compilation_order if u.ast is not None}
-        entry = next((u for u in compilation_order
-                      if u.ast is not None and getattr(u, "is_entry", False)), None)
-        if entry is None:
-            entry = next((u for u in compilation_order if u.ast is not None), None)
+        entry = self._entry_unit(compilation_order)
 
         for (type_name, _perk_name), (template, impl) in copies.items():
             if not self.tables.perk_impls.register(impl, type_name,

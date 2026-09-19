@@ -65,7 +65,7 @@ class ExpressionScanner:
             EnumConstructor, CastExpr, InterpolatedString, DotCall, TryExpr,
             IntLit, FloatLit, StringLit, BoolLit, Name, Borrow,
             RangeExpr, Spread, MemberAccess, MethodCall, DynamicArrayFrom,
-            DynamicArrayNew, BlankLit, Lambda,
+            DynamicArrayNew, BlankLit, Lambda, Block,
         )
 
         if isinstance(expr, Call):
@@ -144,7 +144,7 @@ class ExpressionScanner:
             # block body (only valid as a `let` RHS) is walked through the injected block
             # scanner. Types depending on the lambda's own (possibly bare) params can't be
             # inferred here -- that is the pre-existing bare-param limitation, not a new gap.
-            if expr.is_block_body:
+            if isinstance(expr.body, Block):
                 if self.scan_block is not None:
                     self.scan_block(expr.body)
             else:

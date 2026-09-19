@@ -1,0 +1,22 @@
+# The positive half: a template on a base that DOES name a generic still compiles
+# and still runs, on the extension path and on the perk path alike (#728).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n7 7\n"
+
+perk Named:
+    fn named() i32
+
+struct Box@(T):
+    T v
+
+extend Box@(T) g() i32:
+    return 7
+
+extend Box@(T) with Named:
+    fn named() i32:
+        return 7
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println("Mostly Harmless")
+    println("{b.g()} {b.named()}")
+    return Result.Ok(0)

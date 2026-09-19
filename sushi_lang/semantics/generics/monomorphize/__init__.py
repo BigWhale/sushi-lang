@@ -148,7 +148,9 @@ class Monomorphizer:
         self._monomorphize_depth += 1
         try:
             if self._monomorphize_depth > self.MONOMORPHIZE_MAX_DEPTH:
-                er.emit(self.reporter, er.ERR.CE0122, None, name=type_name)
+                from sushi_lang.semantics.generics.type_display import display_type_name
+                er.emit(self.reporter, er.ERR.CE0122, None,
+                        name=display_type_name(type_name))
                 raise MonomorphizationDepthExceeded(type_name)
             yield
         finally:

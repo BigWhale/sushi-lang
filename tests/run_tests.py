@@ -15,8 +15,10 @@ import time
 from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from test_metadata import (parse_test_metadata, collect_fixtures,  # noqa: E402
                           fixture_binary_name)
+from sushi_lang.internals.report import SPELLING_GATE_ENV  # noqa: E402
 
 
 DEFAULT_JOBS = 4
@@ -106,9 +108,14 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
 # parameter pack. A source library reaches none of that code (#675).
 # private_generic_type_lib backs test_lib_binary_private_generic_type: a private generic
 # struct the closure ships under two manifest arms, which only the binary path reads.
+# generic_ext_bin_lib backs tests/libs/binary_generic_extension, which pins a CONSUMER's
+# own extension on a library's generic type. A source library's units are collected
+# beside the consumer's, so the base is in the tables either way and the seed under test
+# is never read (#728).
 BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib", "const_lib", "var_bin_lib",
                        "mangle_closure_lib", "twolib_bin", "channel_bin_lib",
-                       "generic_perk_bin_lib", "binary_api_lib", "private_generic_type_lib"}
+                       "generic_perk_bin_lib", "binary_api_lib", "private_generic_type_lib",
+                       "generic_ext_bin_lib"}
 
 
 def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
@@ -267,6 +274,26 @@ def get_expected_exit_code(test_file: Path) -> int:
         # Non-test file, shouldn't happen but default to 0
         return 0
 
+def arm_spelling_gate() -> None:
+    """Turn the diagnostic spelling gate on for every compiler the run spawns (#734).
+
+    The gate refuses an interned type name (`List<i32>`) in a diagnostic, where the
+    source spelling is `List@(i32)`. It is off in the compiler by default, because a
+    cosmetic fault must never become a user-facing crash. A test run is exactly the
+    place that wants it loud.
+
+    Both runners call this, and both also read the compiler's stderr for the gate's
+    own name: the gate raises, the process dies with a traceback, and an exit code
+    that happens to match the fixture's expectation must not read as a pass.
+    """
+    os.environ[SPELLING_GATE_ENV] = "1"
+
+
+def spelling_gate_tripped(stderr: str) -> bool:
+    """Did the spelling gate refuse a diagnostic this compiler printed?"""
+    return f"{SPELLING_GATE_ENV}:" in (stderr or "")
+
+
 def run_single_test(test_file: Path, bin_dir: Path, tests_dir: Path,
                     verbose: bool = False) -> tuple[str, bool, int, int, str]:
     """Run a single test file and return results."""
@@ -296,6 +323,10 @@ def run_single_test(test_file: Path, bin_dir: Path, tests_dir: Path,
 
         actual_exit_code = result.returncode
         passed = actual_exit_code == expected_exit_code
+
+        # A tripped spelling gate is a failure whatever the exit code says (#734).
+        if spelling_gate_tripped(result.stderr):
+            passed = False
 
         # Capture output for verbose mode
         output = ""
@@ -343,6 +374,8 @@ def main():
     # only one that executes binaries at all.
     if args.leaks_only:
         args.enhanced = True
+
+    arm_spelling_gate()
 
     # Before either runner: a warm cache can outlive a codegen change (see purge_unit_caches).
     purge_unit_caches(Path(__file__).parent.parent, verbose=args.verbose)

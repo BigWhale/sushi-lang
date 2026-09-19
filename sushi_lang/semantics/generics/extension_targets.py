@@ -148,9 +148,11 @@ def reject_unwritable_target(
     neither -- a generic without its arguments, a perk -- binds no parameter either, so
     it constrains an instantiation that can never exist.
 
-    A TEMPLATE is not asked at all: a bare undeclared argument there IS the parameter it
-    binds, which is the whole of #393, and the base of one is read while the tables are
-    still filling -- a library's own template is collected before the library's types.
+    The BASE is asked of every target, template and concrete alike (#728): a template
+    on a base that names no generic is as dead as a concrete one, because nothing can
+    write the target either way. The ARGUMENTS are asked of a concrete target only,
+    because a bare undeclared argument in a template IS the parameter it binds, which
+    is the whole of #393.
 
     What this does NOT ask is whether the instantiation the target names was ever
     written. A target is a CONSTRAINT and not a use: an implementation nothing reaches
@@ -158,12 +160,12 @@ def reject_unwritable_target(
     """
     from sushi_lang.internals import errors as er
 
-    if not shape.is_concrete:
-        return False
-
     if not namer.names_a_generic(shape.base_name):
         er.emit(reporter, er.ERR.CE2001, span, name=shape.base_name)
         return True
+
+    if not shape.is_concrete:
+        return False
 
     refused = False
     for arg in shape.args:

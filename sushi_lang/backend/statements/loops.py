@@ -275,7 +275,8 @@ def _emit_hashmap_foreach(
 
     is_entries = (method == "entries")
     if is_entries:
-        element_type = ensure_entry_type_in_struct_table(codegen.struct_table, key_type, value_type)
+        element_type = ensure_entry_type_in_struct_table(
+            codegen.struct_table, codegen.derived_methods, key_type, value_type)
     else:
         element_type = key_type if method == "keys" else value_type
     entry_field_index = 0 if method == "keys" else 1  # 0=key, 1=value in Entry<K,V>

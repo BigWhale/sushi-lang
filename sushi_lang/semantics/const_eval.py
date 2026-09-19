@@ -26,6 +26,7 @@ from sushi_lang.semantics.ast import (
 from sushi_lang.semantics.integer_width import (
     fits_integer_type, integer_bit_width, wrap_to_integer_type)
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
+from sushi_lang.semantics.type_predicates import is_float_type, is_integer_type
 from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.namespaces import NamespaceRef, NamespaceTable, UnitScope
 from sushi_lang.semantics.passes.collect import ConstantTable
@@ -62,10 +63,6 @@ _COMPARISON: Mapping[str, Callable[[object, object], bool]] = {
     "<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge,
 }
 _ORDERINGS = ("<", "<=", ">", ">=")
-
-_INTEGER_TYPES = (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-                  BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64)
-_FLOAT_TYPES = (BuiltinType.F32, BuiltinType.F64)
 
 # The expression kinds that are never a constant. Each answers CE0108 through the one
 # backstop in `evaluate`; naming them here is what lets the gate tell a decision from a
@@ -137,13 +134,13 @@ ConstantValue = Union[ScalarConstant, AggregateConstant]
 
 def is_integer_constant(value: ConstantValue) -> TypeGuard[ScalarConstant]:
     """A scalar of an integer type."""
-    return isinstance(value, ScalarConstant) and value.semantic_type in _INTEGER_TYPES
+    return isinstance(value, ScalarConstant) and is_integer_type(value.semantic_type)
 
 
 def is_numeric_constant(value: ConstantValue) -> TypeGuard[ScalarConstant]:
     """A scalar of an integer or a float type."""
     return isinstance(value, ScalarConstant) and (
-        value.semantic_type in _INTEGER_TYPES or value.semantic_type in _FLOAT_TYPES)
+        is_integer_type(value.semantic_type) or is_float_type(value.semantic_type))
 
 
 def is_bool_constant(value: ConstantValue) -> TypeGuard[ScalarConstant]:
@@ -461,14 +458,14 @@ class ConstantEvaluator:
     def _evaluate_int_lit(self, expr: IntLit, expected_type: Type,
                           span: Optional[Span]) -> ScalarConstant:
         """Evaluate integer literal with type inference."""
-        if expected_type in _INTEGER_TYPES:
+        if is_integer_type(expected_type):
             return ScalarConstant(expr.value, expected_type)
         return ScalarConstant(expr.value, BuiltinType.I32)
 
     def _evaluate_float_lit(self, expr: FloatLit, expected_type: Type,
                             span: Optional[Span]) -> ScalarConstant:
         """Evaluate float literal with type inference."""
-        if expected_type in _FLOAT_TYPES:
+        if is_float_type(expected_type):
             return ScalarConstant(expr.value, expected_type)
         return ScalarConstant(expr.value, BuiltinType.F64)
 
@@ -502,7 +499,7 @@ class ConstantEvaluator:
                 return "%g" % struct.unpack("f", struct.pack("f", value.value))[0]
             if t == BuiltinType.F64:
                 return "%g" % value.value
-            if t in _INTEGER_TYPES:
+            if is_integer_type(t):
                 return str(value.value)
         er.emit(self.reporter, er.ERR.CE0108, span,
                 expr_type=f"interpolation of {display_type(value.semantic_type)}")
@@ -739,24 +736,24 @@ class ConstantEvaluator:
 
         # A cast asks for the bit pattern, so it truncates and never reports: it is the
         # escape from the overflow rule and cannot be subject to it.
-        if is_integer_constant(value) and self._is_integer_type(to_type):
+        if is_integer_constant(value) and is_integer_type(to_type):
             return ScalarConstant(wrap_to_integer_type(value.value, to_type), to_type)
 
-        elif is_integer_constant(value) and self._is_float_type(to_type):
+        elif is_integer_constant(value) and is_float_type(to_type):
             return ScalarConstant(float(value.value), to_type)
 
-        elif isinstance(value, ScalarConstant) and self._is_float_type(from_type) \
-                and self._is_integer_type(to_type):
+        elif isinstance(value, ScalarConstant) and is_float_type(from_type) \
+                and is_integer_type(to_type):
             return ScalarConstant(wrap_to_integer_type(int(value.value), to_type), to_type)
 
         elif is_integer_constant(value) and to_type == BuiltinType.BOOL:
             return ScalarConstant(value.value != 0, BuiltinType.BOOL)
 
-        elif is_bool_constant(value) and self._is_integer_type(to_type):
+        elif is_bool_constant(value) and is_integer_type(to_type):
             return ScalarConstant(1 if value.value else 0, to_type)
 
-        elif isinstance(value, ScalarConstant) and self._is_float_type(from_type) \
-                and self._is_float_type(to_type):
+        elif isinstance(value, ScalarConstant) and is_float_type(from_type) \
+                and is_float_type(to_type):
             return ScalarConstant(value.value, to_type)
 
         else:
@@ -805,7 +802,7 @@ class ConstantEvaluator:
         A float has no width to leave, and a value the operands already made a lie --
         a mixed pair, which CE2510 owns -- is not this diagnostic's to report.
         """
-        if (self._is_integer_type(semantic_type)
+        if (is_integer_type(semantic_type)
                 and isinstance(value, int) and not isinstance(value, bool)
                 and not fits_integer_type(value, semantic_type)):
             record = ConstOverflow(node=node, op=op, value=value,
@@ -966,18 +963,6 @@ class ConstantEvaluator:
         return (isinstance(left, ScalarConstant) and isinstance(right, ScalarConstant)
                 and left.semantic_type == right.semantic_type
                 and left.semantic_type in (BuiltinType.BOOL, BuiltinType.STRING))
-
-    def _is_integer_type(self, ty: Type) -> bool:
-        """Check if type is an integer type."""
-        return ty in _INTEGER_TYPES
-
-    def _is_float_type(self, ty: Type) -> bool:
-        """Check if type is a float type."""
-        return ty in _FLOAT_TYPES
-
-    def _is_numeric_type(self, ty: Type) -> bool:
-        """Check if type is numeric (integer or float)."""
-        return self._is_integer_type(ty) or self._is_float_type(ty)
 
     # The one dispatch. A kind absent here is CE0108 in `evaluate`; `NOT_CONSTANT` names
     # which kinds that is meant for, and the totality gate holds the two sets against the

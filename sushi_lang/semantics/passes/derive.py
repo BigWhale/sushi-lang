@@ -10,7 +10,33 @@ from sushi_lang.semantics.generics.hashing import can_array_be_hashed, register_
 from sushi_lang.semantics.generics.cloning import (
     register_struct_clone_method, register_enum_clone_method)
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
-from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type
+from sushi_lang.semantics.typesys import (
+    ArrayType, DynamicArrayType, EnumType, StructType, Type)
+
+
+def derive_for_struct(struct_type: StructType, derived: DerivedMethodTable) -> None:
+    """The derived pair for ONE struct, for a seam that interns after this pass ran.
+
+    The pass walks both tables once, before typecheck. A producer that mints a type
+    behind it calls this, so the pair arrives with the type and not from a later
+    whole-table walk that a program may never drive (#720, #730).
+    """
+    can_hash, _ = can_struct_be_hashed(struct_type)
+    if can_hash:
+        register_struct_hash_method(struct_type, derived)
+    register_struct_clone_method(struct_type, derived)
+
+
+def derive_for_enum(enum_type: EnumType, derived: DerivedMethodTable) -> None:
+    """The derived pair for ONE enum, for a seam that interns after this pass ran.
+
+    The `Result` and `Maybe` intern seams are the callers. A type with no variants YET
+    stays outside: the gate below reads the variants, and an empty shell has none (#730).
+    """
+    can_hash, _ = can_enum_be_hashed(enum_type)
+    if can_hash:
+        register_enum_hash_method(enum_type, derived)
+    register_enum_clone_method(enum_type, derived)
 
 
 def register_all_struct_hashes(struct_table: StructTable,

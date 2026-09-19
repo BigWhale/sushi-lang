@@ -1,4 +1,6 @@
 from __future__ import annotations
+import os
+import re
 import textwrap
 from dataclasses import dataclass, field
 from typing import List, Optional, Any
@@ -8,6 +10,51 @@ from lark import Token
 # The palette and the colour ladder live in `styling`, which the version banner reads
 # too. `C` is re-exported because this module's renderers are its oldest caller.
 from sushi_lang.internals.styling import C, should_colour  # noqa: F401
+
+# The spelling gate (#734). Source syntax is `@(...)`; `<...>` is the INTERNAL identity
+# name and a table key, and it must not reach a user. One renderer, `display_type()`,
+# answers for many emit sites, and nothing asked the emit sites until this gate.
+SPELLING_GATE_ENV = "SUSHI_SPELLING_GATE"
+
+# Every legitimate `<` in a diagnostic follows a quote, a space or a line start: the
+# operators `'<'` and `'<<'`, the placeholders `<value>` and `<expression>`, the import
+# path `<collections/strings>`. An identifier character in front of one is an interned
+# name. Measured over the fixture corpus: 4 hits in 1338 diagnostic lines, all four real.
+_INTERNED_SPELLING = re.compile(r"[A-Za-z0-9_]<")
+
+
+class DiagnosticSpellingError(BaseException):
+    """A diagnostic carries an interned type name where the source spelling belongs.
+
+    It derives from `BaseException` on purpose. The compiler catches `Exception` at two
+    levels and renders a CE0000 from it, which would hide the emit site behind a generic
+    crash and let a fixture that asserts the exit code alone report a pass. This one has
+    to reach the developer with the traceback that names the line, because the line is
+    the whole answer.
+    """
+
+    def __init__(self, code: str, text: str) -> None:
+        super().__init__(
+            f"{SPELLING_GATE_ENV}: diagnostic {code} names a type with the internal "
+            f"spelling. Render it with display_type(). Message: {text!r}")
+        self.code = code
+        self.text = text
+
+
+def spelling_gate_is_on() -> bool:
+    """Is the gate armed? OFF unless the environment says otherwise.
+
+    A cosmetic fault is never worth a user-facing crash, so the default stays off and
+    the test runner arms it.
+    """
+    return os.environ.get(SPELLING_GATE_ENV, "").lower() not in ("", "0", "off")
+
+
+def check_spelling(code: str, text: str) -> None:
+    """Refuse an interned type name in one piece of diagnostic text."""
+    if text and spelling_gate_is_on() and _INTERNED_SPELLING.search(text):
+        raise DiagnosticSpellingError(code, text)
+
 
 @dataclass
 class Span:
@@ -125,10 +172,12 @@ class DiagnosticBuilder:
         self._diagnostic = diagnostic
 
     def note(self, message: str, span: Optional[Span] = None, filename: Optional[str] = None) -> DiagnosticBuilder:
+        check_spelling(self._diagnostic.code, message)
         self._diagnostic.sub.append(SubDiagnostic("note", message, span, filename))
         return self
 
     def help(self, message: str) -> DiagnosticBuilder:
+        check_spelling(self._diagnostic.code, message)
         self._diagnostic.sub.append(SubDiagnostic("help", message))
         return self
 
@@ -185,6 +234,12 @@ class Reporter:
         self.collapse_repeats = False
 
     def _record(self, d: Diagnostic) -> Diagnostic:
+        # The one funnel every diagnostic passes: `error`, `warn` and the two builder
+        # openers all arrive here, so the gate sits here and asks once (#734). A note or
+        # a help added later is asked by the builder, because it arrives after this.
+        check_spelling(d.code, d.message)
+        for sub in d.sub:
+            check_spelling(d.code, sub.message)
         if self.origin is not None:
             # An emit site that named a file of its own keeps it; `error()` fills the
             # reporter's own name in otherwise, and that is the one to replace.

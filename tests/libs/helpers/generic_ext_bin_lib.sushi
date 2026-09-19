@@ -1,0 +1,12 @@
+# A BINARY library shipping a public generic struct and an enum, so a CONSUMER can
+# write its own extension on them. The consumer's target is read while its unit is
+# collected, which is before the manifest is registered (#728).
+public struct Crate@(T):
+    T held
+
+public enum Slot@(T):
+    Full(T)
+    Empty
+
+public fn make_crate(i32 v) Crate@(i32):
+    return Result.Ok(Crate(v))
