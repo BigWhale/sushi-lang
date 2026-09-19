@@ -142,6 +142,12 @@ class LibraryRegistration:
         so local wins, and before `instantiate`, so the constraint validator sees them.
         Generic structs before generic enums, and both before `instantiate`, so the
         consumer's instantiations monomorphize locally.
+
+        Both generic TYPE tables are filled before the generic perk implementations,
+        because a shipped `extend Box@(T) with Show` is re-parsed and collected here
+        and its target's base is read against those tables (#728). Filling them after
+        made a library's own valid template unreadable to every rule that asks what
+        the base names.
         """
         if self.linker is not None and self.registry is None:
             self._build_registry()
@@ -155,11 +161,11 @@ class LibraryRegistration:
         self._register_not_exported()
         self._register_constants(compilation_order)
         self._register_private_types()
+        self._register_generic_types("generic_structs")
+        self._register_generic_types("generic_enums")
         self._register_perk_impls()
         self._register_generic_perk_impls()
         self._register_generic_functions(build_units)
-        self._register_generic_types("generic_structs")
-        self._register_generic_types("generic_enums")
 
     def signatures(self) -> Iterator['FuncSig']:
         """Every signature a loaded library's manifest declares: the public API, and
