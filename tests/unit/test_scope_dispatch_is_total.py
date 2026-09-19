@@ -11,8 +11,10 @@ so both halves answer the same question the same way.
 """
 from __future__ import annotations
 
+import gc
 import inspect
 import typing
+from dataclasses import dataclass
 
 import pytest
 
@@ -104,6 +106,43 @@ def _analyzer() -> ScopeAnalyzer:
 
 
 # --- The table, in both directions.
+
+def test_the_statement_set_holds_only_the_declared_classes():
+    """`Stmt.__subclasses__()` is not the declared set (#735).
+
+    `semantics/ast.py` declares every node with `@dataclass(slots=True)`. That decorator
+    cannot add `__slots__` to a class that is already built, so it builds a SECOND class
+    and drops the first. The dropped class is already registered as a subclass of `Stmt`,
+    and it is reachable only through a reference cycle, so it stays in the subclass list
+    until the cyclic collector frees it.
+
+    The stand-in below has that same shape: a class that carries the name of a declared
+    statement, on an object that is not the declaration. `_stmt_subclasses()` must not
+    answer it. If it does, the gates below compare the table against a name that is
+    already in it, and they report a fault that does not exist.
+    """
+    before = set(sushi_ast.Stmt.__subclasses__())
+
+    @dataclass(slots=True)
+    class Continue(sushi_ast.Stmt):
+        pass
+
+    try:
+        added = set(sushi_ast.Stmt.__subclasses__()) - before
+        assert added, (
+            "the stand-in did not register as a subclass of `Stmt`; the shape this gate "
+            "guards has changed, so read the test before you change the code."
+        )
+        leaked = sorted(cls.__name__ for cls in added & _stmt_subclasses())
+        assert not leaked, (
+            f"_stmt_subclasses() answers a class that no module holds under its own "
+            f"name: {leaked}.\n"
+            "Read the DECLARED classes, not `Stmt.__subclasses__()`."
+        )
+    finally:
+        del Continue
+        gc.collect()
+
 
 def test_every_statement_node_has_a_row():
     missing = sorted(cls.__name__ for cls in _stmt_subclasses()
