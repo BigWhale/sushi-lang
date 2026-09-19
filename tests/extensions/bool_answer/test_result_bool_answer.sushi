@@ -1,0 +1,24 @@
+# The Result half of the same rule: `is_ok` and `is_err` answer a `bool` and not the
+# comparison's i1 (#737).
+# EXPECT_STDOUT_EXACT: "true false\nfalse true\ntrue\ntrue\n"
+
+extend Result@(T, E) fine() bool:
+    return self.is_ok()
+
+extend Result@(T, E) bad() bool:
+    return self.is_err()
+
+extend Result@(T, E) fine_ch() bool | StdError:
+    return self.is_ok()
+
+extend Result@(T, E) spelled() string:
+    return "{self.is_ok()}"
+
+fn main() i32:
+    let Result@(i32, StdError) ok = Result.Ok(3)
+    let Result@(i32, StdError) err = Result.Err(StdError.Failed)
+    println("{ok.fine()} {ok.bad()}")
+    println("{err.fine()} {err.bad()}")
+    println("{ok.fine_ch().realise(false)}")
+    println("{ok.spelled()}")
+    return Result.Ok(0)

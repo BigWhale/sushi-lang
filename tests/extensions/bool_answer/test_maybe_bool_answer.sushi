@@ -1,0 +1,35 @@
+# A built-in bool method answers the language's `bool`, which is an i8. An extension
+# that declares `bool` and bare-returns one could not be emitted: the answer was the
+# comparison's i1 and the module failed to parse (#737).
+# EXPECT_STDOUT_EXACT: "true false\nfalse true\ntrue\ntrue\ntrue\nhere\n"
+
+extend Maybe@(T) here() bool:
+    return self.is_some()
+
+extend Maybe@(T) gone() bool:
+    return self.is_none()
+
+extend Maybe@(i32) here_here() bool:
+    return self.is_some()
+
+extend Maybe@(T) here_ch() bool | StdError:
+    return self.is_some()
+
+extend Maybe@(T) spelled() string:
+    return "{self.is_some()}"
+
+extend Maybe@(T) branched() string:
+    if (self.is_some()):
+        return "here"
+    return "gone"
+
+fn main() i32:
+    let Maybe@(i32) some = Maybe.Some(3)
+    let Maybe@(i32) none = Maybe.None()
+    println("{some.here()} {some.gone()}")
+    println("{none.here()} {none.gone()}")
+    println("{some.here_here()}")
+    println("{some.here_ch().realise(false)}")
+    println("{some.spelled()}")
+    println("{some.branched()}")
+    return Result.Ok(0)

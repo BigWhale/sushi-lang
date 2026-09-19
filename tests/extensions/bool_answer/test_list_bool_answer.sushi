@@ -1,0 +1,18 @@
+# The control that says which side of the fault is wrong: `List.is_empty()` already
+# answers an i8, so it worked in every position while the others crashed (#737).
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\n"
+
+extend List@(T) empty_now() bool:
+    return self.is_empty()
+
+extend List@(T) empty_ch() bool | StdError:
+    return self.is_empty()
+
+fn main() i32:
+    let List@(i32) l = List.new()
+    println("{l.empty_now()}")
+    l.push(1)
+    println("{l.empty_now()}")
+    let List@(i32) e = List.new()
+    println("{e.empty_ch().realise(false)}")
+    return Result.Ok(0)
