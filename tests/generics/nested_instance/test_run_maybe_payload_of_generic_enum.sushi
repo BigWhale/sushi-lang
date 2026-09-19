@@ -1,5 +1,5 @@
-# A `Maybe@(B)` payload of a generic enum: the nested instance is interned, so the enum
-# topological sort finishes and there is no false CE2052 (#577, face c).
+# A `Maybe@(B)` payload of a generic enum: the nested instance is published to the enum
+# table, so the `finite-types` walk and the derive pass both find it (#577, face c).
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

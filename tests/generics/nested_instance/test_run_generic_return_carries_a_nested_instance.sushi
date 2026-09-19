@@ -1,6 +1,6 @@
 # A generic FUNCTION's substituted return type names `Pair<i32, string>`, whose field
 # names `Box<string>`: two levels of nesting, both reached only through substitution
-# (#577, face d). CE0128 before.
+# (#577, face d). Neither was in a table before.
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

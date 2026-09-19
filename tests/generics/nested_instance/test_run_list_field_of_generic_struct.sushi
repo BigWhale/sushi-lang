@@ -1,5 +1,6 @@
-# A `List@(B)` field of a generic struct: the nested instance is interned before the
-# derive pass, so the struct topological sort finishes (#577, face b). CE0128 before.
+# A `List@(B)` field of a generic struct: the nested instance is published to the
+# struct table before the `finite-types` walk and the derive pass read it (#577,
+# face b).
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
