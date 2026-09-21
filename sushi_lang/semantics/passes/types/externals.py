@@ -8,8 +8,11 @@ from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
 from sushi_lang.semantics.externs_manifest import GENERATED_INLINE_SYMBOLS
 from sushi_lang.semantics.generics.type_display import display_type
 
+from .compatibility import types_compatible
+
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
+    from . import TypeValidator
 
 
 _C_ABI_BUILTINS = {
@@ -135,6 +138,43 @@ def validate_ptr_unit_gate(reporter: Reporter, program: 'Program') -> None:
     for ty, span in sites:
         if ty is not None and contains_foreign_ptr(ty):
             er.emit(reporter, er.ERR.CE5009, span)
+
+
+def validate_external_call_args(validator: 'TypeValidator', node) -> None:
+    """Validate argument count and types for a resolved foreign call."""
+    sig = validator.external_table.lookup(node.external_ref[0], node.external_ref[1])
+    if sig is None:
+        return
+    expected = sig.param_types
+    is_variadic = getattr(sig, "is_variadic", False)
+    fq_name = f"{node.external_ref[0]}.{node.external_ref[1]}"
+    if is_variadic:
+        if len(node.args) < len(expected):
+            er.emit(validator.reporter, er.ERR.CE2009, node.loc,
+                    name=fq_name, expected=len(expected), got=len(node.args))
+            return
+    elif len(node.args) != len(expected):
+        er.emit(validator.reporter, er.ERR.CE2009, node.loc,
+                name=fq_name, expected=len(expected), got=len(node.args))
+        return
+    for index, (arg, exp_ty) in enumerate(zip(node.args, expected, strict=False)):
+        got_ty = validator.infer_expression_type(arg)
+        if got_ty is None or exp_ty is None:
+            continue
+        if not types_compatible(validator, got_ty, exp_ty):
+            er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
+                    index=index + 1, expected=display_type(exp_ty), got=display_type(got_ty))
+    # Trailing variadic args: each must be C-ABI representable (CE5005).
+    # Record the inferred types so the backend can apply C promotion.
+    if is_variadic:
+        variadic_types = []
+        for arg in node.args[len(expected):]:
+            got_ty = validator.infer_expression_type(arg)
+            variadic_types.append(got_ty)
+            if got_ty is not None and not _is_c_abi_type(got_ty):
+                er.emit(validator.reporter, er.ERR.CE5005, arg.loc,
+                        type=display_type(got_ty), name=fq_name)
+        node.variadic_arg_types = variadic_types
 
 
 def _validate_block_abi(reporter: Reporter, block: 'ExternalBlock') -> None:
