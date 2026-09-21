@@ -1,0 +1,14 @@
+# A nested pattern needs an enum to destructure. The payload here is an i32.
+# EXPECT_ERROR_CODE: CE2108
+
+enum Box:
+    Held(i32)
+
+enum Other:
+    Alpha
+
+fn main() i32:
+    let Box b = Box.Held(3)
+    match b:
+        Box.Held(Other.Alpha) -> println("a")
+    return Result.Ok(0)

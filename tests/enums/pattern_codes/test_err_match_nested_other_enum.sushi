@@ -1,0 +1,18 @@
+# A NESTED pattern that names a different enum than the payload it reads. The same
+# rule as an outer arm, so it reads the same code.
+# EXPECT_ERROR_CODE: CE2107
+
+enum Inner:
+    One
+
+enum Other:
+    Alpha
+
+enum Outer:
+    Wrap(Inner)
+
+fn main() i32:
+    let Outer o = Outer.Wrap(Inner.One)
+    match o:
+        Outer.Wrap(Other.Alpha) -> println("a")
+    return Result.Ok(0)

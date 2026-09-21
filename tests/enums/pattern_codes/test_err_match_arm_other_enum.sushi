@@ -1,0 +1,17 @@
+# An arm that names a different enum than the scrutinee. 'Other' IS an enum, so the
+# refusal names both enums and points at the scrutinee in a note.
+# EXPECT_ERROR_CODE: CE2107
+
+enum Shape:
+    Circle(i32)
+    Square(i32)
+
+enum Other:
+    Alpha
+
+fn main() i32:
+    let Shape s = Shape.Circle(2)
+    match s:
+        Other.Alpha -> println("a")
+        _ -> println("b")
+    return Result.Ok(0)
