@@ -1,0 +1,13 @@
+# The enum half of the same rule: a BINARY library's public enum holds its name,
+# and the consumer's declaration of it is refused at the declaration.
+# EXPECT_ERROR_CODE: CE3011
+use <lib/binary_api_lib>
+
+enum Mood:
+    Sleepy
+
+fn main() i32:
+    let Mood m = Mood.Sleepy
+    match m:
+        Mood.Sleepy -> println("sleepy")
+    return Result.Ok(0)

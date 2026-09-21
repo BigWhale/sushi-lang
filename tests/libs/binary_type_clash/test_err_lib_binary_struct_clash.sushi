@@ -1,0 +1,13 @@
+# A TYPE is one name for the whole program, and a BINARY library's public struct
+# holds the name as firmly as a source library's. The consumer's own declaration
+# is refused where it stands, and the library that holds the name is named.
+# EXPECT_ERROR_CODE: CE3011
+use <lib/binary_api_lib>
+
+struct Crate:
+    i32 mine
+
+fn main() i32:
+    let Crate c = Crate(1)
+    println("{c.mine}")
+    return Result.Ok(0)

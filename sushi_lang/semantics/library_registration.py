@@ -24,7 +24,7 @@ from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
 from sushi_lang.semantics.generics.type_display import display_type_name
 from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
-from sushi_lang.semantics.visibility import DeclOrigin
+from sushi_lang.semantics.visibility import DeclOrigin, reject_library_clash
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import ExtendWithDef, Program
@@ -169,8 +169,10 @@ class LibraryRegistration:
         if self.registry is None and self.linker is None:
             return
         build_units = {u.name for u in compilation_order}
-        self._register_types("structs", LibraryRegistry.get_all_structs)
-        self._register_types("enums", LibraryRegistry.get_all_enums)
+        self._register_types("structs", "struct", LibraryRegistry.get_all_structs,
+                             build_units)
+        self._register_types("enums", "enum", LibraryRegistry.get_all_enums,
+                             build_units)
         self._register_functions()
         self._register_private_functions(build_units)
         self._register_not_exported()
@@ -215,8 +217,16 @@ class LibraryRegistration:
                 yield lib_name, manifest, record
 
     def _type_tables(self) -> tuple[dict, dict]:
-        """The struct and enum tables a manifest type string is parsed against."""
-        return self.tables.structs.by_name, self.tables.enums.by_name
+        """A COPY of the struct and enum tables a manifest type string is parsed against.
+
+        A copy, because the registry UPDATES the dict it is handed with every type it
+        parses. Handed the live tables, a library's `Crate` overwrote the consumer's
+        declaration of that name in place: the consumer lost its own type with no word
+        said, and then heard CE2027 about a field count it never spelled (#739). ONE
+        pair for the whole build, so a second library still parses against the first
+        library's types, which is what the sharing was for.
+        """
+        return dict(self.tables.structs.by_name), dict(self.tables.enums.by_name)
 
     def _build_registry(self) -> None:
         """Build the `LibraryRegistry` from the loaded manifests."""
@@ -253,18 +263,65 @@ class LibraryRegistration:
 
     # -- the registry arms ---------------------------------------------------------
 
-    def _register_types(self, key: str, exported: Callable[[LibraryRegistry], dict]) -> None:
+    def _register_types(self, key: str, kind: str,
+                        exported: Callable[[LibraryRegistry], dict],
+                        build_units: set[str]) -> None:
         """Register the concrete structs or enums the libraries export.
 
         The registry is the one reader of a manifest type record, and there is always
         one: `register()` builds it whenever a library is loaded. A second arm here
         parsed the same records a second way and no build could reach it (#707).
+
+        A name one of THIS build's units already declared is refused here and not
+        registered: a type is one name for the whole program.
         """
         table = getattr(self.tables, key)
         for name, ty in exported(self.registry).items():
+            if self._reject_type_clash(kind, name, build_units):
+                continue
             if name not in table.by_name:
                 table.by_name[name] = ty
                 table.order.append(name)
+
+    def _reject_type_clash(self, kind: str, name: str,
+                           build_units: set[str]) -> bool:
+        """CE3011 when a unit of this build declares a name a library exports (#739).
+
+        Known Limitation 13: a TYPE is one name for the whole program, and identity is
+        nominal, so one name is one shape. A SOURCE library's units are ordinary
+        compilation units and the collect pass answers this for them, at the
+        declaration. A binary library arrives as a manifest that no pass walks, so the
+        refusal stands here, where the two declarations first meet.
+
+        CE3011 and not the plain duplicate: the consumer cannot SEE a binary library's
+        declaration, so a note has nowhere to point and the head line has to say which
+        library holds the name. The visibility table is what tells the two apart -- the
+        consumer's own declaration carries one of this build's units, a library's
+        private type carries the library.
+        """
+        origin = self.tables.visibility.origin(kind, name)
+        if origin is None or origin.unit_name not in build_units:
+            return False
+        reject_library_clash(
+            self.reporter,
+            DeclOrigin(kind=kind, name=name, unit_name=self._owning_library(kind, name)),
+            origin.name_span, kind=kind, name=name, filename=origin.filename)
+        return True
+
+    def _owning_library(self, kind: str, name: str) -> Optional[str]:
+        """Which loaded library exports this type, by the name the manifest carries.
+
+        The LAST one, as `get_all_structs` merges them: two libraries exporting one
+        name leave the later type in the registry's answer.
+        """
+        if self.registry is None:
+            return None
+        exported = "structs" if kind == "struct" else "enums"
+        owner = None
+        for lib in self.registry.get_all_libraries().values():
+            if name in getattr(lib, exported):
+                owner = lib.name
+        return owner
 
     def _register_functions(self) -> None:
         """Register the libraries' public functions into the function table.
