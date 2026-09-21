@@ -196,7 +196,7 @@ _add(ErrorMessage("CE2047", Severity.ERROR,
 
 _add(ErrorMessage("CE2048", Severity.ERROR,
     "match scrutinee must be an enum or integer type, got '{got}'",
-    Category.TYPE, "A match dispatches on an enum's variants, or (since #415) on an integer's value with literal arms. Other types have no match semantics."))
+    Category.TYPE, "A match dispatches on an enum's variants, or (since #415) on an integer's value with literal arms. Other types have no match semantics. This is the SCRUTINEE's rule and nothing else. It answered four faults over seven emit sites until #741: an arm or a nested pattern that names another enum (CE2107), a nested pattern over a payload that is not an enum (CE2108), and the three `Own(...)` pattern refusals (CE2109). Three of those sites filled the quoted type slot with a whole sentence, so a user read 'got 'Own(...) pattern requires Own@(T) type, got i32''. The slot takes a type and only a type."))
 
 _add(ErrorMessage("CE2049", Severity.ERROR,
     "enum constructor argument type mismatch for variant '{variant}': expected '{expected}', got '{got}'",
@@ -408,3 +408,17 @@ _add(ErrorMessage("CE2105", Severity.ERROR,
 _add(ErrorMessage("CE2106", Severity.ERROR,
     "'{type}' has no field '{field}'",
     Category.TYPE, "A name behind a VALUE's dot is a field of that value's type, and this type declares no such field -- CE2102 is the same rule one position over, behind a TYPE's dot. The typecheck pass used to let an unknown field through untouched: the read reached codegen, and the backend was the first thing to notice, answering CE0029 with the note that says the fault is a bug in the compiler -- tier 1, no file, no line, no caret, and the blame on the wrong person for what is a typo (#630). The four backend CE0029 sites stay as the internal backstop they read as. A METHOD is not a field: `v.name` with no parentheses reads a field, and a bound-method value is deferred to Tier 2, so write the call. #630 answered only a STRUCT receiver. A receiver that carries NO field -- an array, a primitive, a string, a closure, a `ptr` -- still reached the backend, where the SHAPE of the read picked the internal code: CE0031 off a name or an assignment target, CE0044 through a field, CE0043 through an array element (#661). One rule answers them all, and `builtin_method_exists` is what tells a compiler-defined method from a typo, so `s.len` reads the same note a struct's method read does. An ENUM receiver reads it too (#666). #661 left that one alone, and it was worse than an internal error: a `Maybe@(T)` is an ordinary interned enum, so the backend unwrapped the receiver to its payload struct and read field 0, which is the TAG -- `pts.get(0).x` compiled clean and printed 0 where the element held 11, and a test fixture had frozen the wrong number. An enum carries variants, and a variant is reached by a pattern and not by a dot, so the help says to take the value first: `??`, `.realise(default)` or `match` for a wrapper, `match` for a user enum. A `Maybe@(T)` gets no implicit unwrap, for the reason a condition is a bool and nothing else (#522/#532), and because the `None` arm has no answer."))
+
+# The three match-pattern refusals CE2048 used to answer (#741). CE2048 stays the
+# SCRUTINEE's rule, and these three are the PATTERN's.
+_add(ErrorMessage("CE2107", Severity.ERROR,
+    "pattern matches enum '{got}', but the value has type '{expected}'",
+    Category.TYPE, "A pattern names the enum it destructures, and the value it reads is of another type. This is the outer arm's rule and the nested pattern's rule alike: `Other.Alpha ->` against a `Shape` scrutinee, and `Outer.Wrap(Other.Alpha)` against a payload the variant declares as `Inner`. It is relational, so the note points at the value -- the scrutinee for an outer arm, the variant that declares the payload for a nested one. Both sites answered CE2048 until #741, which reads 'match scrutinee must be an enum or integer type, got 'Other''. That sentence was false twice over: 'Other' IS an enum, and the enum the slot named was the PATTERN's and not the scrutinee's."))
+
+_add(ErrorMessage("CE2108", Severity.ERROR,
+    "nested pattern needs an enum value, got '{got}'",
+    Category.TYPE, "A nested pattern destructures a variant's payload, so the payload must be an enum. `Box.Held(Other.Alpha)` over a `Held(i32)` reads this, and so does the same shape one level down inside an `Own(...)` pattern -- one rule, two positions. Both answered CE2048 until #741, where the Own position put a whole sentence in the quoted type slot: 'got 'Nested pattern inside Own(...) requires enum type, got i32''."))
+
+_add(ErrorMessage("CE2109", Severity.ERROR,
+    "Own(...) pattern needs an Own@(T) value, got '{got}'",
+    Category.TYPE, "An `Own(...)` pattern reads through an owning pointer, so the value it reads must be an `Own@(T)`. A plain payload is not one, and neither is a malformed `Own@(i32, i32)`, whose payload cannot be read -- that one arrives behind a CE2001 for the type itself. It answered CE2048 until #741, which put the whole explanation inside the quoted type slot: 'got 'Own(...) pattern requires Own@(T) type, got i32''."))

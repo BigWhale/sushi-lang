@@ -1,0 +1,15 @@
+# A nested pattern INSIDE an Own(...) pattern reads the same rule: the payload it
+# destructures must be an enum, and this one is an i32.
+# EXPECT_ERROR_CODE: CE2108
+
+enum Node:
+    Leaf(Own@(i32))
+
+enum Other:
+    Alpha
+
+fn main() i32:
+    let Node n = Node.Leaf(Own.alloc(3))
+    match n:
+        Node.Leaf(Own(Other.Alpha)) -> println("a")
+    return Result.Ok(0)

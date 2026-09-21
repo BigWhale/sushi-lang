@@ -23,6 +23,7 @@ _INTEGER_SCRUTINEES = {
 
 if TYPE_CHECKING:
     from . import TypeValidator
+    from sushi_lang.internals.report import Span
     from sushi_lang.semantics.ast import EnumVariant
 
 
@@ -178,6 +179,23 @@ def validate_integer_match(validator: 'TypeValidator', stmt: Match,
         er.emit(validator.reporter, er.ERR.CE2074, stmt.loc)
 
 
+def reject_other_enum(validator: 'TypeValidator', written: str,
+                      span: Optional['Span'], subject: EnumType,
+                      subject_label: str, subject_span: Optional['Span']) -> None:
+    """A pattern names one enum, and the value it reads is another one (CE2107).
+
+    Relational, because the pattern alone cannot say which enum the position holds.
+    The note carries the value: the scrutinee for an outer arm, and the variant that
+    declares the payload for a nested pattern.
+    """
+    spelling = display_type(subject)
+    diagnostic = er.emit_with(validator.reporter, er.ERR.CE2107, span,
+                              got=written, expected=spelling)
+    if subject_span is not None:
+        diagnostic.note(f"{subject_label} '{spelling}'", subject_span)
+    diagnostic.emit()
+
+
 def collect_and_validate_patterns(
     validator: 'TypeValidator', stmt: Match, scrutinee_type: EnumType
 ) -> Tuple[Set[str], bool]:
@@ -230,8 +248,9 @@ def collect_and_validate_patterns(
                 enum_names_match = True
 
         if not enum_names_match:
-            er.emit(validator.reporter, er.ERR.CE2048, pattern.enum_name_span or pattern.loc,
-                   got=pattern.enum_name)
+            reject_other_enum(validator, pattern.enum_name,
+                              pattern.enum_name_span or pattern.loc, scrutinee_type,
+                              "the value matched here is", stmt.scrutinee.loc)
             continue
 
         variant = scrutinee_type.get_variant(pattern.variant_name)
@@ -302,14 +321,19 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                 resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
 
             if not isinstance(resolved_type, EnumType):
-                er.emit(validator.reporter, er.ERR.CE2048, binding.loc, got=display_type(resolved_type))
+                er.emit(validator.reporter, er.ERR.CE2108, binding.loc,
+                        got=display_type(resolved_type))
                 return False
 
             if binding.enum_name != resolved_type.name:
                 if not (binding.enum_name in validator.generic_enum_table.by_name and
                         resolved_type.name.startswith(f"{binding.enum_name}<")):
-                    er.emit(validator.reporter, er.ERR.CE2048, binding.enum_name_span or binding.loc,
-                           got=binding.enum_name)
+                    reject_other_enum(
+                        validator, binding.enum_name,
+                        binding.enum_name_span or binding.loc, resolved_type,
+                        f"variant '{pattern.variant_name}' of "
+                        f"'{display_type(parent_enum_type)}' carries",
+                        pattern.variant_name_span or pattern.loc)
                     return False
 
             nested_variant = resolved_type.get_variant(binding.variant_name)
@@ -327,24 +351,23 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                 resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
 
             if not is_own_type(resolved_type):
-                er.emit(validator.reporter, er.ERR.CE2048, binding.loc,
-                       got=f"Own(...) pattern requires Own@(T) type, got {display_type(resolved_type)}")
+                er.emit(validator.reporter, er.ERR.CE2109, binding.loc,
+                        got=display_type(resolved_type))
                 return False
 
             if isinstance(binding.inner_pattern, Pattern):
                 element_type = own_payload_type(resolved_type)
                 if element_type is None:
-                    er.emit(validator.reporter, er.ERR.CE2048, binding.loc,
-                           got=f"Own@(T) with no readable payload type: "
-                               f"{display_type(resolved_type)}")
+                    er.emit(validator.reporter, er.ERR.CE2109, binding.loc,
+                            got=display_type(resolved_type))
                     return False
 
                 if isinstance(element_type, UnknownType):
                     element_type = resolve_unknown_type(element_type, validator.struct_table.by_name, validator.enum_table.by_name)
 
                 if not isinstance(element_type, EnumType):
-                    er.emit(validator.reporter, er.ERR.CE2048, binding.inner_pattern.loc,
-                           got=f"Nested pattern inside Own(...) requires enum type, got {display_type(element_type)}")
+                    er.emit(validator.reporter, er.ERR.CE2108, binding.inner_pattern.loc,
+                            got=display_type(element_type))
                     return False
 
                 inner_variant = element_type.get_variant(binding.inner_pattern.variant_name)
