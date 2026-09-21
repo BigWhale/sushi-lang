@@ -101,3 +101,43 @@ fn main() i32:
     return Result.Ok(0)
 """)
     assert _count(stderr, "CE2400") == 1, stderr
+
+
+def test_try_in_main_nested_in_a_return_reported_once(tmp_path):
+    """CW2511 had two emit sites, and the second cared the wrong span (#743).
+
+    `return Result.Ok(compute()??)` warned at the `??` AND at the `Result.Ok(`, which
+    holds no `??` at all.
+    """
+    stderr = _compile(tmp_path, """fn compute() i32:
+    return Result.Ok(7)
+
+fn main() i32:
+    return Result.Ok(compute()??)
+""")
+    assert _count(stderr, "CW2511") == 1, stderr
+    assert "5:31" in stderr, stderr
+    assert "5:12" not in stderr, stderr
+
+
+def test_try_in_main_bare_return_reported_once(tmp_path):
+    """The same two sites, both on one span, for a bare `return compute()??` (#743)."""
+    stderr = _compile(tmp_path, """fn compute() i32:
+    return Result.Ok(7)
+
+fn main() i32:
+    return compute()??
+""")
+    assert _count(stderr, "CW2511") == 1, stderr
+
+
+def test_try_in_main_in_a_let_still_reported_once(tmp_path):
+    """Control: the `let` form was never doubled, and must stay at one."""
+    stderr = _compile(tmp_path, """fn compute() i32:
+    return Result.Ok(7)
+
+fn main() i32:
+    let i32 v = compute()??
+    return Result.Ok(v)
+""")
+    assert _count(stderr, "CW2511") == 1, stderr

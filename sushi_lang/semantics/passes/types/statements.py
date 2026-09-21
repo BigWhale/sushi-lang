@@ -278,12 +278,6 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
         if not validate_result_pattern(validator, stmt.value, expected_type):
             er.emit_with(validator.reporter, er.ERR.CE2030, stmt.value.loc) \
                 .help("wrap return value: return Result.Ok(value)").emit()
-
-        # Check for ?? in main() warning (CW2511)
-        if validator.current_function.name == "main":
-            from .expressions import check_propagation_in_expression
-            if check_propagation_in_expression(stmt.value):
-                er.emit(validator.reporter, er.ERR.CW2511, stmt.value.loc)
     else:
         er.emit_with(validator.reporter, er.ERR.CE2030, stmt.loc) \
             .help("wrap return value: return Result.Ok(value)").emit()

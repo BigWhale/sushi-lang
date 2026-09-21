@@ -598,48 +598,6 @@ def validate_boolean_condition(validator: 'TypeValidator', expr: Expr, context: 
     reject_non_bool_condition(validator, expr)
 
 
-def check_propagation_in_expression(expr: Expr) -> bool:
-    """Check if expression contains ?? operator (TryExpr)."""
-    if isinstance(expr, TryExpr):
-        return True
-
-    from sushi_lang.semantics.ast import (
-        BinaryOp, UnaryOp, Call, MethodCall, DotCall, IndexAccess, MemberAccess,
-        ArrayLiteral, EnumConstructor, CastExpr, RangeExpr
-    )
-
-    if isinstance(expr, (BinaryOp, RangeExpr)):
-        return (check_propagation_in_expression(expr.left) or
-                check_propagation_in_expression(expr.right))
-
-    elif isinstance(expr, UnaryOp):
-        return check_propagation_in_expression(expr.expr)
-
-    elif isinstance(expr, (Call, MethodCall, DotCall)):
-        if hasattr(expr, 'args') and expr.args:
-            return any(check_propagation_in_expression(arg) for arg in expr.args)
-
-    elif isinstance(expr, IndexAccess):
-        return (check_propagation_in_expression(expr.array) or
-                check_propagation_in_expression(expr.index))
-
-    elif isinstance(expr, MemberAccess):
-        return check_propagation_in_expression(expr.receiver)
-
-    elif isinstance(expr, ArrayLiteral):
-        if expr.elements:
-            return any(check_propagation_in_expression(elem.value) for elem in expr.elements)
-
-    elif isinstance(expr, EnumConstructor):
-        if expr.args:
-            return any(check_propagation_in_expression(arg) for arg in expr.args)
-
-    elif isinstance(expr, CastExpr):
-        return check_propagation_in_expression(expr.expr)
-
-    return False
-
-
 def _field_names_of(receiver_type: 'Type') -> Optional[list[str]]:
     """The fields a receiver type declares, or None when this position is not ours.
 
