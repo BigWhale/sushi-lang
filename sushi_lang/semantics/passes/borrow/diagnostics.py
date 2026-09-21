@@ -48,7 +48,7 @@ BORROW_KINDS: tuple[BorrowKind, ...] = (
         matches=lambda state: (isinstance(state.var_type, ReferenceType)
                                and state.declared_at_span is not None),
         note_span=lambda state: state.declared_at_span,
-        note="'{name}' is declared here as a `&{mode}` borrow of the caller's value",
+        note="'{name}' is declared here as a `{mode}` borrow of the caller's value",
     ),
     BorrowKind(
         # No span requirement, on purpose: this sentence still says something without a

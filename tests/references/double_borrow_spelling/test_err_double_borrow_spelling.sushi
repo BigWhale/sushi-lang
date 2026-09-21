@@ -1,0 +1,11 @@
+# CE2418 names the two modes it read. The `&` spelling was retired when borrow-by-default
+# landed, so the message may not print one (#759).
+# EXPECT_ERROR_CODE: CE2418
+# EXPECT_STDERR_CONTAINS: a reference to a reference is not supported ('peek poke ...')
+fn odd(peek poke i32 x) ~:
+    println("called")
+    return Result.Ok(~)
+
+fn main() i32:
+    println("built")
+    return Result.Ok(0)

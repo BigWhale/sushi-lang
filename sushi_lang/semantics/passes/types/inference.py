@@ -2,13 +2,11 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
-from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.integer_width import fits_integer_type, integer_bit_width
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, IteratorType
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, DynamicArrayFrom, Expr, RangeExpr
-from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -28,7 +26,7 @@ def infer_array_element_type(validator: 'TypeValidator', element_value: Expr,
 
 
 def infer_array_literal_type(validator: 'TypeValidator', expr: ArrayLiteral) -> Optional[Type]:
-    """Infer type of array literal based on elements (validates all elements match)."""
+    """Infer type of array literal from its elements. Reports nothing."""
     if not expr.elements:
         return None
 
@@ -36,12 +34,10 @@ def infer_array_literal_type(validator: 'TypeValidator', expr: ArrayLiteral) -> 
     if first_element_type is None:
         return None
 
-    # Verify all elements have the same type (CE2013)
+    # Read every element, and judge none: `validate_array_literal` is this literal's one
+    # speaker for CE2013, and inference walks a literal up to three times per position.
     for element in expr.elements[1:]:
-        element_type = infer_array_element_type(validator, element.value)
-        if element_type is not None and element_type != first_element_type:
-            er.emit(validator.reporter, er.ERR.CE2013, element.value.loc,
-                   expected=display_type(first_element_type), got=display_type(element_type))
+        infer_array_element_type(validator, element.value)
 
     # The SIZE is the expanded count, so a run of 144 is 144 slots and not one. Read
     # silently: CE2017 belongs to validate_array_literal, which speaks for this literal.
