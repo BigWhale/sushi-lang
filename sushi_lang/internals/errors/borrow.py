@@ -106,7 +106,7 @@ _add(ErrorMessage("CE2417", Severity.ERROR,
     Category.BORROW, "Returning a `peek` / `poke` lets a function hand out a borrow of its own local, and the caller reads it after the frame is gone -- a dangling read that compiles clean today (issue #314). `typesys.py` states the intended rule, 'borrows are function-scoped (end at function return)', and this is what enforces it. Return an owned value, or `.clone()` what you borrowed. Returning a borrow needs lifetimes to be sound."))
 
 _add(ErrorMessage("CE2418", Severity.ERROR,
-    "a reference to a reference is not supported ('&{outer} &{inner} ...')",
+    "a reference to a reference is not supported ('{outer} {inner} ...')",
     Category.BORROW, "Both grammar rules for a borrow are recursive, so `peek peek i32` parses -- in a type position and in an expression position (issue #317). There is no double borrow in the language: a borrow of a borrow is the same borrow, and the extra level has no meaning at any layer. Write the single borrow."))
 
 _add(ErrorMessage("CE2419", Severity.ERROR,

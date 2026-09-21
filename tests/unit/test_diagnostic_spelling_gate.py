@@ -115,3 +115,61 @@ def test_the_gate_is_not_catchable_as_an_ordinary_error(armed):
         pytest.fail("the spelling gate was swallowed by an `except Exception`")
     except DiagnosticSpellingError:
         pass
+
+
+# --- The retired borrow spelling (#759) ------------------------------------------------
+#
+# `&peek x` / `&poke x` was the borrow spelling before borrow-by-default. The parser
+# refuses it now (`tests/unit/test_borrow_mode_syntax.py` pins that), so a diagnostic
+# that prints one hands the user a repair the compiler then rejects (#744). Three help
+# sites and a registry message carried it; this is what stops a fourth.
+
+RETIRED_BORROW = [
+    "borrow it at the call site: `&peek t`",
+    "the argument is written `&poke n`",
+    "'s' is declared here as a `&peek` borrow of the caller's value",
+    "a reference to a reference is not supported ('&peek &poke ...')",
+    "borrow it as `& poke x`",
+]
+
+# A `&` that is not a borrow spelling. The bitwise operators are the whole population,
+# and each is quoted or stands alone, so the pattern reads only the two mode words.
+ACCEPTED_AMPERSAND = [
+    "operator '&' expects a numeric operand",
+    "the bitwise operators '&', '|' and '^' take one width",
+    "'{ty}' has no '&' with a string operand",
+    "a `peek` borrow of the caller's value",
+    "write `poke self` to make the receiver writable",
+]
+
+
+@pytest.mark.parametrize("text", RETIRED_BORROW)
+def test_the_gate_refuses_a_retired_borrow_spelling(armed, text):
+    with pytest.raises(DiagnosticSpellingError):
+        check_spelling("CE0000", text)
+
+
+@pytest.mark.parametrize("text", ACCEPTED_AMPERSAND)
+def test_the_gate_admits_an_ampersand_that_is_not_a_borrow(armed, text):
+    check_spelling("CE0000", text)
+
+
+def test_a_retired_borrow_spelling_names_its_repair(armed):
+    """One gate, two faults: the message must say which one it caught."""
+    with pytest.raises(DiagnosticSpellingError) as caught:
+        check_spelling("CE2006", "borrow it at the call site: `&peek t`")
+    message = str(caught.value)
+    assert message.startswith(f"{SPELLING_GATE_ENV}:")
+    assert "peek" in message and "poke" in message
+    assert "display_type" not in message
+
+
+def test_a_retired_borrow_spelling_in_a_note_is_asked_too(armed):
+    r = Reporter(source="x", filename="t.sushi")
+    with pytest.raises(DiagnosticSpellingError):
+        r.error_with("CE2411", "fine", Span(1, 1, 1, 2)) \
+            .note("'s' is declared here as a `&peek` borrow")
+
+
+def test_the_retired_borrow_gate_is_off_by_default(disarmed):
+    check_spelling("CE2006", "borrow it at the call site: `&peek t`")

@@ -87,3 +87,15 @@ fn main() i32:
 """)
     assert "declared here as a `peek` borrow of the caller's value" in stderr, stderr
     assert not _RETIRED.search(stderr), stderr
+
+
+def test_double_borrow_message_is_written_without_an_ampersand(tmp_path):
+    """CE2418's registry text held the fourth copy of the retired spelling (#759)."""
+    stderr = _compile(tmp_path, """fn look(peek poke i32 n) i32:
+    return Result.Ok(n)
+
+fn main() i32:
+    return Result.Ok(0)
+""")
+    assert "not supported ('peek poke ...')" in stderr, stderr
+    assert not _RETIRED.search(stderr), stderr
