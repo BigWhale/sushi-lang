@@ -1,14 +1,15 @@
 """Struct constructor validation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from sushi_lang.internals import errors as er
 from ..visibility import name_is_contested
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import StructType, Type
-from sushi_lang.semantics.ast import Call
+from sushi_lang.semantics.ast import Call, Expr
 from ..compatibility import types_compatible
-from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall, reject_spread_args
+from ..utils import (propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall,
+                     reject_spread_args, resolve_declared_type)
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -72,54 +73,8 @@ def _validate_named_struct_constructor(
 
     call.field_names = None
 
-    for _i, (arg, (field_name, field_type)) in enumerate(zip(reordered_args, expected_fields, strict=False)):
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        from sushi_lang.semantics.typesys import StructType as StructTypeClass
-        resolved_field_type = field_type
-        if isinstance(field_type, GenericTypeRef):
-            if field_type.base_name == "Result" and len(field_type.type_args) == 2:
-                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-                from sushi_lang.semantics.type_resolution import resolve_unknown_type
-
-                ok_type = resolve_unknown_type(
-                    field_type.type_args[0],
-                    validator.struct_table.by_name,
-                    validator.enum_table.by_name
-                )
-                err_type = resolve_unknown_type(
-                    field_type.type_args[1],
-                    validator.struct_table.by_name,
-                    validator.enum_table.by_name
-                )
-
-                result_enum = ensure_result_type_in_table(validator.enum_table, ok_type, err_type,
-                                    struct_table=validator.struct_table.by_name)
-                if result_enum is not None:
-                    resolved_field_type = result_enum
-            else:
-                type_args_str = ", ".join(str(arg_type) for arg_type in field_type.type_args)
-                concrete_name = f"{field_type.base_name}<{type_args_str}>"
-
-                if concrete_name in validator.struct_table.by_name:
-                    resolved_field_type = validator.struct_table.by_name[concrete_name]
-                elif concrete_name in validator.enum_table.by_name:
-                    resolved_field_type = validator.enum_table.by_name[concrete_name]
-
-        propagate_enum_type_to_dotcall(validator, arg, resolved_field_type)
-
-        propagate_struct_type_to_dotcall(validator, arg, resolved_field_type)
-
-        if isinstance(arg, Call) and hasattr(arg.callee, 'id') and isinstance(resolved_field_type, StructTypeClass):
-            arg_struct_name = arg.callee.id
-            if arg_struct_name in validator.generic_struct_table.by_name:
-                arg.callee.id = resolved_field_type.name
-
-        validator.validate_expression(arg)
-
-        arg_type = validator.infer_expression_type(arg)
-        if arg_type is not None and not types_compatible(validator, arg_type, resolved_field_type):
-            er.emit(validator.reporter, er.ERR.CE2083, arg.loc,
-                   field=field_name, expected=display_type(resolved_field_type), got=display_type(arg_type))
+    _check_field_arguments(validator, reordered_args, expected_fields,
+                           code=er.ERR.CE2083, field_key="field")
 
 
 def _validate_positional_struct_constructor(
@@ -137,54 +92,84 @@ def _validate_positional_struct_constructor(
                name=display_type(struct_type), expected=len(expected_fields),
                got=len(actual_args))
 
-    for _i, (arg, (field_name, field_type)) in enumerate(zip(actual_args, expected_fields, strict=False)):
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        from sushi_lang.semantics.typesys import StructType as StructTypeClass
-        resolved_field_type = field_type
-        if isinstance(field_type, GenericTypeRef):
-            if field_type.base_name == "Result" and len(field_type.type_args) == 2:
-                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-                from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    _check_field_arguments(validator, actual_args, expected_fields,
+                           code=er.ERR.CE2028, field_key="field_name")
 
-                ok_type = resolve_unknown_type(
-                    field_type.type_args[0],
-                    validator.struct_table.by_name,
-                    validator.enum_table.by_name
-                )
-                err_type = resolve_unknown_type(
-                    field_type.type_args[1],
-                    validator.struct_table.by_name,
-                    validator.enum_table.by_name
-                )
+    for i in range(len(expected_fields), len(actual_args)):
+        validator.validate_expression(actual_args[i])
 
-                result_enum = ensure_result_type_in_table(validator.enum_table, ok_type, err_type,
-                                    struct_table=validator.struct_table.by_name)
-                if result_enum is not None:
-                    resolved_field_type = result_enum
-            else:
-                type_args_str = ", ".join(str(arg_type) for arg_type in field_type.type_args)
-                concrete_name = f"{field_type.base_name}<{type_args_str}>"
 
-                if concrete_name in validator.struct_table.by_name:
-                    resolved_field_type = validator.struct_table.by_name[concrete_name]
-                elif concrete_name in validator.enum_table.by_name:
-                    resolved_field_type = validator.enum_table.by_name[concrete_name]
+def _check_field_arguments(
+    validator: 'TypeValidator',
+    args: List[Expr],
+    expected_fields: List[Tuple[str, Type]],
+    *,
+    code: er.ErrorMessage,
+    field_key: str,
+) -> None:
+    """Check each argument against the field it fills, and stamp it for the backend.
+
+    The one walk both constructors take: a named construction puts its arguments in
+    field order first, and from there the two are the same work. Only the CODE differs
+    -- CE2083 for a named construction, CE2028 for a positional one -- and the two
+    registry texts spell one sentence with two placeholder names, which is why the
+    keyword travels beside the code.
+    """
+    for arg, (field_name, field_type) in zip(args, expected_fields, strict=False):
+        resolved_field_type = _resolve_field_type(validator, field_type)
 
         propagate_enum_type_to_dotcall(validator, arg, resolved_field_type)
 
         propagate_struct_type_to_dotcall(validator, arg, resolved_field_type)
 
-        if isinstance(arg, Call) and hasattr(arg.callee, 'id') and isinstance(resolved_field_type, StructTypeClass):
-            arg_struct_name = arg.callee.id
-            if arg_struct_name in validator.generic_struct_table.by_name:
-                arg.callee.id = resolved_field_type.name
+        if (isinstance(arg, Call) and hasattr(arg.callee, 'id')
+                and isinstance(resolved_field_type, StructType)
+                and arg.callee.id in validator.generic_struct_table.by_name):
+            arg.callee.id = resolved_field_type.name
 
         validator.validate_expression(arg)
 
         arg_type = validator.infer_expression_type(arg)
         if arg_type is not None and not types_compatible(validator, arg_type, resolved_field_type):
-            er.emit(validator.reporter, er.ERR.CE2028, arg.loc,
-                   field_name=field_name, expected=display_type(resolved_field_type), got=display_type(arg_type))
+            er.emit(validator.reporter, code, arg.loc,
+                    expected=display_type(resolved_field_type),
+                    got=display_type(arg_type), **{field_key: field_name})
 
-    for i in range(len(expected_fields), len(actual_args)):
-        validator.validate_expression(actual_args[i])
+
+def _resolve_field_type(validator: 'TypeValidator', field_type: Type) -> Type:
+    """The concrete type a field's DECLARED type names.
+
+    `resolve_declared_type` answers for every kind but one. A `Result@(T, E)` field is
+    INTERNED here, through the seam that alone may build one: the enum may not be in
+    the table before a construction names it, and a structural Result poisons it
+    (CE0126).
+    """
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    if (isinstance(field_type, GenericTypeRef) and field_type.base_name == "Result"
+            and len(field_type.type_args) == 2):
+        interned = _intern_result_field(validator, field_type)
+        return interned if interned is not None else field_type
+
+    resolved = resolve_declared_type(validator, field_type)
+    return resolved if resolved is not None else field_type
+
+
+def _intern_result_field(validator: 'TypeValidator', field_type) -> Optional[Type]:
+    """Intern the `Result@(T, E)` a field declares, payloads resolved first."""
+    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+
+    ok_type = resolve_unknown_type(
+        field_type.type_args[0],
+        validator.struct_table.by_name,
+        validator.enum_table.by_name
+    )
+    err_type = resolve_unknown_type(
+        field_type.type_args[1],
+        validator.struct_table.by_name,
+        validator.enum_table.by_name
+    )
+
+    return ensure_result_type_in_table(validator.enum_table, ok_type, err_type,
+                                       struct_table=validator.struct_table.by_name)
