@@ -1,0 +1,11 @@
+# `from_bits` takes one argument, and that argument is at position 1 like every other
+# first argument in the language. The static's own check spelled a literal 0, so it was
+# the last call that numbered an argument from zero.
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: at position 1: expected u64, got i32
+
+fn main() i32:
+    let i32 bits = 1
+    let f64 x = f64.from_bits(bits)
+    println("{x}")
+    return Result.Ok(0)
