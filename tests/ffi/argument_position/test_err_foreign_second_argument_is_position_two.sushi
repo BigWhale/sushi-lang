@@ -1,0 +1,14 @@
+# The second argument of a foreign call is at position 2: the number counts the
+# arguments, it is not a constant. This pins the step of the loop, where the sibling
+# fixture pins where it starts.
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: at position 2: expected string, got i32
+
+unsafe external "C" as libc because "a probe of the argument position number":
+    fn strcmp(string a, string b) i32 = "strcmp"
+
+fn main() i32:
+    let i32 n = 7
+    let i32 r = libc.strcmp("x", n)
+    println("{r}")
+    return Result.Ok(0)
