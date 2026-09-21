@@ -4,10 +4,12 @@ from typing import TYPE_CHECKING, Optional, Set, Tuple
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.passes.types.visibility import name_is_contested
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, UnknownType
+from sushi_lang.semantics.typesys import (
+    BorrowMode, BuiltinType, EnumType, ReferenceType, Type, UnknownType,
+)
 from sushi_lang.semantics.ast import (
-    Match, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
-    MemberAccess, Name, RefBinding,
+    Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
+    MemberAccess, Name, NomBinding, RefBinding,
 )
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.ownership import is_own_type
@@ -25,6 +27,37 @@ if TYPE_CHECKING:
     from . import TypeValidator
     from sushi_lang.internals.report import Span
     from sushi_lang.semantics.ast import EnumVariant
+
+
+def _resolve_through_tables(validator: 'TypeValidator', ty: Type) -> Type:
+    """The name a type stands for, looked up in this validator's tables.
+
+    The ONE place that names the struct table and the enum table. `resolve_unknown_type`
+    answers for an `UnknownType` and for a `GenericTypeRef`, and hands every other type
+    back unchanged.
+    """
+    return resolve_unknown_type(ty, validator.struct_table.by_name,
+                                validator.enum_table.by_name)
+
+
+def _resolve(validator: 'TypeValidator', ty: Type) -> Type:
+    """An `UnknownType` resolved against this validator's tables, or `ty` unchanged.
+
+    A variant's associated type can still be a NAME when the pattern rules read it, so
+    every reader of one asks this first. It ran nine times by hand, each copy naming
+    both tables (#742).
+    """
+    if isinstance(ty, UnknownType):
+        return _resolve_through_tables(validator, ty)
+    return ty
+
+
+def _walk_arm_body(validator: 'TypeValidator', arm: MatchArm) -> None:
+    """Validate one arm's body, in either shape a `->` takes."""
+    if isinstance(arm.body, Block):
+        validator._validate_block(arm.body)
+    elif isinstance(arm.body, Expr):
+        validator.validate_expression(arm.body)
 
 
 def validate_match_statement(validator: 'TypeValidator', stmt: Match) -> None:
@@ -115,16 +148,9 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
 
     # An unresolved generic scrutinee (e.g. an indexed element of a Maybe<i32>[]
     # array, or a method returning Maybe<T>) infers to a GenericTypeRef/UnknownType.
-    # Resolve it to its concrete monomorphized enum
-    # so pattern matching sees a real EnumType instead of rejecting it (CE2048).
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-    if isinstance(scrutinee_type, (GenericTypeRef, UnknownType)):
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
-        scrutinee_type = resolve_unknown_type(
-            scrutinee_type,
-            validator.struct_table.by_name,
-            validator.enum_table.by_name
-        )
+    # Resolve it to its concrete monomorphized enum so pattern matching sees a real
+    # EnumType instead of rejecting it (CE2048).
+    scrutinee_type = _resolve_through_tables(validator, scrutinee_type)
 
     if isinstance(scrutinee_type, EnumType) or scrutinee_type in _INTEGER_SCRUTINEES:
         return scrutinee_type
@@ -170,10 +196,7 @@ def validate_integer_match(validator: 'TypeValidator', stmt: Match,
             er.emit(validator.reporter, er.ERR.CE2076, pattern.loc,
                     arm_kind="enum-pattern", scrutinee_type=scrutinee_type.value)
 
-        if isinstance(arm.body, Block):
-            validator._validate_block(arm.body)
-        elif isinstance(arm.body, Expr):
-            validator.validate_expression(arm.body)
+        _walk_arm_body(validator, arm)
 
     if not has_wildcard:
         er.emit(validator.reporter, er.ERR.CE2074, stmt.loc)
@@ -212,10 +235,7 @@ def collect_and_validate_patterns(
                 er.emit(validator.reporter, er.ERR.CE2041, pattern.loc,
                        variant="_")  # Reuse duplicate arm error for now
 
-            if isinstance(arm.body, Block):
-                validator._validate_block(arm.body)
-            elif isinstance(arm.body, Expr):
-                validator.validate_expression(arm.body)
+            _walk_arm_body(validator, arm)
 
             continue
 
@@ -273,10 +293,7 @@ def collect_and_validate_patterns(
         saved_vars = validator.variable_types.copy()
         register_pattern_bindings(validator, pattern, variant)
 
-        if isinstance(arm.body, Block):
-            validator._validate_block(arm.body)
-        elif isinstance(arm.body, Expr):
-            validator.validate_expression(arm.body)
+        _walk_arm_body(validator, arm)
 
         validator.variable_types = saved_vars
 
@@ -315,10 +332,7 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
 
     for _i, (binding, binding_type) in enumerate(zip(pattern.bindings, variant.associated_types, strict=False)):
         if isinstance(binding, Pattern):
-            from sushi_lang.semantics.typesys import UnknownType
-            resolved_type = binding_type
-            if isinstance(binding_type, UnknownType):
-                resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
+            resolved_type = _resolve(validator, binding_type)
 
             if not isinstance(resolved_type, EnumType):
                 er.emit(validator.reporter, er.ERR.CE2108, binding.loc,
@@ -345,10 +359,7 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
             if not validate_pattern_bindings(validator, binding, nested_variant, resolved_type):
                 return False
         elif isinstance(binding, OwnPattern):
-            from sushi_lang.semantics.typesys import UnknownType
-            resolved_type = binding_type
-            if isinstance(binding_type, UnknownType):
-                resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
+            resolved_type = _resolve(validator, binding_type)
 
             if not is_own_type(resolved_type):
                 er.emit(validator.reporter, er.ERR.CE2109, binding.loc,
@@ -362,8 +373,7 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                             got=display_type(resolved_type))
                     return False
 
-                if isinstance(element_type, UnknownType):
-                    element_type = resolve_unknown_type(element_type, validator.struct_table.by_name, validator.enum_table.by_name)
+                element_type = _resolve(validator, element_type)
 
                 if not isinstance(element_type, EnumType):
                     er.emit(validator.reporter, er.ERR.CE2108, binding.inner_pattern.loc,
@@ -387,57 +397,34 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
 def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', variant: 'EnumVariant') -> None:
     """Register pattern bindings in variable_types table (recursive for nested and Own patterns).
     """
-    from sushi_lang.semantics.ast import NomBinding, RefBinding
     for binding, binding_type in zip(pattern.bindings, variant.associated_types, strict=False):
         if isinstance(binding, NomBinding):
             # `Variant(nom x)` (ruling R11): the arm OWNS the payload, so the binding has
             # the payload's own type -- no reference wrapper, and every consumer that
             # asks "may this be given away?" answers yes.
-            from sushi_lang.semantics.typesys import UnknownType
-            resolved_type = binding_type
-            if isinstance(binding_type, UnknownType):
-                resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
-            validator.variable_types[binding.name] = resolved_type
+            validator.variable_types[binding.name] = _resolve(validator, binding_type)
         elif isinstance(binding, str):
             if binding != "_":  # Skip wildcards
-                from sushi_lang.semantics.typesys import UnknownType
-                resolved_type = binding_type
-                if isinstance(binding_type, UnknownType):
-                    resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
-
-                validator.variable_types[binding] = resolved_type
+                validator.variable_types[binding] = _resolve(validator, binding_type)
         elif isinstance(binding, RefBinding):
             # `Variant(poke x)` (#300 phase 3): the binding IS a reference into the
             # scrutinee's payload storage, so register the reference type -- every
             # consumer that asks "is this name a borrow?" answers truthfully, and
             # inference auto-derefs the name.
-            from sushi_lang.semantics.typesys import BorrowMode, ReferenceType, UnknownType
-            resolved_type = binding_type
-            if isinstance(binding_type, UnknownType):
-                resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
+            resolved_type = _resolve(validator, binding_type)
             mode = BorrowMode.POKE if binding.mode == "poke" else BorrowMode.PEEK
             validator.variable_types[binding.name] = ReferenceType(resolved_type, mode)
         elif isinstance(binding, Pattern):
-            from sushi_lang.semantics.typesys import UnknownType
-            resolved_type = binding_type
-            if isinstance(binding_type, UnknownType):
-                resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
-
+            resolved_type = _resolve(validator, binding_type)
             if isinstance(resolved_type, EnumType):
                 nested_variant = resolved_type.get_variant(binding.variant_name)
                 if nested_variant:
                     register_pattern_bindings(validator, binding, nested_variant)
         elif isinstance(binding, OwnPattern):
-            from sushi_lang.semantics.typesys import UnknownType
-            resolved_type = binding_type
-            if isinstance(binding_type, UnknownType):
-                resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
-
-            element_type = own_payload_type(resolved_type)
+            element_type = own_payload_type(_resolve(validator, binding_type))
 
             if element_type is not None:
-                if isinstance(element_type, UnknownType):
-                    element_type = resolve_unknown_type(element_type, validator.struct_table.by_name, validator.enum_table.by_name)
+                element_type = _resolve(validator, element_type)
 
                 inner_pattern = binding.inner_pattern
                 if isinstance(inner_pattern, str):
@@ -447,7 +434,6 @@ def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                             # to the pointee, so register the reference type -- every
                             # consumer that asks "is this name a borrow?" then answers
                             # truthfully, and inference auto-derefs the name.
-                            from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
                             mode = (BorrowMode.POKE if binding.inner_borrow == "poke"
                                     else BorrowMode.PEEK)
                             validator.variable_types[inner_pattern] = ReferenceType(
