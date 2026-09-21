@@ -27,7 +27,7 @@ def emit_argument_mismatch(validator: 'TypeValidator', arg, index: int,
                      got=display_type(actual_ty))
     if isinstance(expected_ty, ReferenceType) and isinstance(arg, (Name, MemberAccess)):
         place = arg.id if isinstance(arg, Name) else f"{arg.receiver}.{arg.member}"
-        b.help(f"borrow it at the call site: `&{expected_ty.mutability} {place}`")
+        b.help(f"borrow it at the call site: `{expected_ty.mutability} {place}`")
     b.emit()
 
 
@@ -109,7 +109,7 @@ def _explain_missing_borrow(diag, arg, arg_ty, param_ty) -> None:
     if not isinstance(param_ty, ReferenceType) or param_ty.referenced_type != arg_ty:
         return
     diag.help(f"a borrow is created where it is USED, so the argument is written "
-              f"`&{param_ty.mutability} {arg.id}`; a reference-typed name mentioned "
+              f"`{param_ty.mutability} {arg.id}`; a reference-typed name mentioned "
               f"bare is its referent")
 
 
