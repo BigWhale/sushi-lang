@@ -11,7 +11,7 @@ from ..visibility import (name_is_contested, out_of_scope_help,
                           reject_private_kept_call)
 from ..arguments import check_arguments
 from ..compatibility import types_compatible
-from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
+from ..propagation import propagate_types_to_value
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -41,8 +41,7 @@ def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
                     er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
                             index=index, expected=display_type(array_ty), got=display_type(arg_type))
         else:
-            propagate_enum_type_to_dotcall(validator, arg, element_ty)
-            propagate_struct_type_to_dotcall(validator, arg, element_ty)
+            propagate_types_to_value(validator, arg, element_ty)
             validator.validate_expression(arg)
             if element_ty is not None:
                 arg_type = validator.infer_expression_type(arg)

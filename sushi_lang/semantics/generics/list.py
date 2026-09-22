@@ -83,14 +83,10 @@ def _validate_list_element_type(
         validator.validate_expression(arg)
         return
 
-    from sushi_lang.semantics.passes.types.utils import (
-        propagate_enum_type_to_dotcall,
-        propagate_struct_type_to_dotcall,
-    )
+    from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
     from sushi_lang.semantics.passes.types.compatibility import types_compatible
 
-    propagate_enum_type_to_dotcall(validator, arg, element_type)
-    propagate_struct_type_to_dotcall(validator, arg, element_type)
+    propagate_types_to_value(validator, arg, element_type)
     validator.validate_expression(arg)
 
     arg_type = validator.infer_expression_type(arg)

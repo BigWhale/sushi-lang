@@ -74,4 +74,4 @@ def test_the_field_argument_loop_is_written_once():
     source = Path(structs_module.__file__).read_text(encoding="utf-8")
     assert source.count("types_compatible(") == 1, "the compatibility test is written twice"
     assert source.count("ensure_result_type_in_table(") == 1, "the interning is written twice"
-    assert source.count("propagate_struct_type_to_dotcall(validator") == 1
+    assert source.count("propagate_types_to_value(validator") == 1

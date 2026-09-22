@@ -79,8 +79,8 @@ def _validate_maybe_realise(
 
     default_arg = call.args[0]
 
-    from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall
-    propagate_enum_type_to_dotcall(validator, default_arg, t_type)
+    from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
+    propagate_types_to_value(validator, default_arg, t_type)
 
     validator.validate_expression(default_arg)
 

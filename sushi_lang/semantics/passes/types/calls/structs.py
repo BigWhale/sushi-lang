@@ -8,8 +8,8 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import StructType, Type
 from sushi_lang.semantics.ast import Call, Expr
 from ..compatibility import types_compatible
-from ..utils import (propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall,
-                     reject_spread_args, resolve_declared_type)
+from ..propagation import propagate_types_to_value
+from ..utils import reject_spread_args, resolve_declared_type
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -118,9 +118,7 @@ def _check_field_arguments(
     for arg, (field_name, field_type) in zip(args, expected_fields, strict=False):
         resolved_field_type = _resolve_field_type(validator, field_type)
 
-        propagate_enum_type_to_dotcall(validator, arg, resolved_field_type)
-
-        propagate_struct_type_to_dotcall(validator, arg, resolved_field_type)
+        propagate_types_to_value(validator, arg, resolved_field_type)
 
         if (isinstance(arg, Call) and hasattr(arg.callee, 'id')
                 and isinstance(resolved_field_type, StructType)
