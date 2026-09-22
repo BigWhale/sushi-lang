@@ -200,7 +200,7 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
     # Normalize the enclosing function's return type to the interned Result<T, E> enum, whichever
     # way it was spelled: an implicit `fn foo() T` / `fn foo() T | E`, an explicit
     # `fn foo() Result<T, E>` (still a GenericTypeRef), or a signature already resolved in place.
-    from sushi_lang.semantics.type_resolution import TypeResolver, resolve_unknown_type
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
     from sushi_lang.semantics.generics.results import (
         ensure_result_type_in_table, is_result_enum, result_ok_err,
     )
@@ -211,6 +211,9 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
     def intern(ok: 'Type', err: 'Type'):
         return ensure_result_type_in_table(validator.enum_table, ok, err, struct_table=structs)
 
+    # Result ALONE, where `utils.intern_declared_wrapper` also answers for a written
+    # `Maybe@(T)`: a Maybe return type belongs in the wrap below, as the OK payload of the
+    # enclosing Result, and interning it here would make `??` read it as the channel.
     if isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result":
         if len(func_return_type.type_args) != 2:
             er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
@@ -219,8 +222,8 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
     elif not is_result_enum(func_return_type):
         if (validator.current_function is not None
                 and validator.current_function.err_type is not None):
-            resolver = TypeResolver(structs, enums)
-            err_type_resolved = resolver.resolve(validator.current_function.err_type)
+            err_type_resolved = resolve_unknown_type(
+                validator.current_function.err_type, structs, enums)
         else:
             err_type_resolved = enums.get("StdError")
         if err_type_resolved is None:

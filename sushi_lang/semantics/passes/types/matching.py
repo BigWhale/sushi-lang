@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional, Set, Tuple
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.passes.types.visibility import name_is_contested
 from sushi_lang.semantics.typesys import (
-    BorrowMode, BuiltinType, EnumType, ReferenceType, Type, UnknownType,
+    BorrowMode, BuiltinType, EnumType, ReferenceType, Type,
 )
 from sushi_lang.semantics.ast import (
     Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
@@ -14,8 +14,8 @@ from sushi_lang.semantics.ast import (
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.generics.own import own_payload_type
-from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.generics.type_display import display_type
+from .utils import resolve_declared_type
 
 # The scrutinee types an integer literal match accepts (#415).
 _INTEGER_SCRUTINEES = {
@@ -29,27 +29,16 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.ast import EnumVariant
 
 
-def _resolve_through_tables(validator: 'TypeValidator', ty: Type) -> Type:
-    """The name a type stands for, looked up in this validator's tables.
-
-    The ONE place that names the struct table and the enum table. `resolve_unknown_type`
-    answers for an `UnknownType` and for a `GenericTypeRef`, and hands every other type
-    back unchanged.
-    """
-    return resolve_unknown_type(ty, validator.struct_table.by_name,
-                                validator.enum_table.by_name)
-
-
 def _resolve(validator: 'TypeValidator', ty: Type) -> Type:
-    """An `UnknownType` resolved against this validator's tables, or `ty` unchanged.
+    """The type a scrutinee or a pattern binding stands for.
 
     A variant's associated type can still be a NAME when the pattern rules read it, so
-    every reader of one asks this first. It ran nine times by hand, each copy naming
-    both tables (#742).
+    every reader of one asks this first. It ran nine times by hand, each copy naming both
+    tables (#742), and then it answered the pass's own question with a body of its own
+    (#755): `resolve_declared_type` is that answer.
     """
-    if isinstance(ty, UnknownType):
-        return _resolve_through_tables(validator, ty)
-    return ty
+    resolved = resolve_declared_type(validator, ty)
+    return resolved if resolved is not None else ty
 
 
 def _walk_arm_body(validator: 'TypeValidator', arm: MatchArm) -> None:
@@ -150,7 +139,7 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
     # array, or a method returning Maybe<T>) infers to a GenericTypeRef/UnknownType.
     # Resolve it to its concrete monomorphized enum so pattern matching sees a real
     # EnumType instead of rejecting it (CE2048).
-    scrutinee_type = _resolve_through_tables(validator, scrutinee_type)
+    scrutinee_type = _resolve(validator, scrutinee_type)
 
     if isinstance(scrutinee_type, EnumType) or scrutinee_type in _INTEGER_SCRUTINEES:
         return scrutinee_type

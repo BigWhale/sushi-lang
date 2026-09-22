@@ -304,7 +304,7 @@ def _stdlib_return_type(validator: 'TypeValidator', node: 'DotCall',
 
 def _materialize(validator: 'TypeValidator', declared) -> Optional[Type]:
     """Resolve a registry module's declared return type against the program's tables."""
-    return validator.type_inference_visitor._materialize_stdlib_return_type(declared)
+    return validator.type_inference_visitor._materialize_wrapper(declared)
 
 
 def _infer_generic_call(validator: 'TypeValidator',

@@ -74,19 +74,17 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         """Initialize with reference to the main type validator."""
         self.type_validator = type_validator
 
-    def _resolve_generic_to_semantic_type(self, generic_type: 'Type') -> 'Type':
-        """Resolve a GenericTypeRef to its concrete semantic type where applicable."""
-        from sushi_lang.semantics.generics.types import GenericTypeRef
+    def _materialize_wrapper(self, ty: Optional[Type]) -> Optional[Type]:
+        """The interned wrapper a WRITTEN type names, or `ty` unchanged (#755).
 
-        if not isinstance(generic_type, GenericTypeRef):
-            return generic_type
+        A field's declared type, a registry-declared stdlib return type and a substituted
+        signature all reach this with the same spelling and want the same answer, so they
+        read `utils.intern_declared_wrapper` and not three bodies of their own.
+        """
+        from ..utils import intern_declared_wrapper
 
-        if generic_type.base_name == "Result" and len(generic_type.type_args) == 2:
-            interned = self._intern_result(generic_type.type_args[0], generic_type.type_args[1])
-            if interned is not None:
-                return interned
-
-        return generic_type
+        interned = intern_declared_wrapper(self.type_validator, ty)
+        return interned if interned is not None else ty
 
     def visit_intlit(self, node: IntLit) -> Optional[Type]:
         """Infer integer literal type (context-typed if stamped, else default i32)."""
@@ -162,7 +160,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                     # Resolve generic types to semantic types where applicable
                     # E.g., GenericTypeRef("Result", [T, E]) → EnumType("Result<T, E>")
                     # This ensures pattern matching and other operations work correctly
-                    resolved_type = self._resolve_generic_to_semantic_type(field_type)
+                    resolved_type = self._materialize_wrapper(field_type)
                     return resolved_type
 
         return None
@@ -221,7 +219,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             stdlib_const = lookup_stdlib_constant(node.id, tv.scope)
             if stdlib_const is None:
                 return None
-            return self._materialize_stdlib_return_type(stdlib_const.get_return_type())
+            return self._materialize_wrapper(stdlib_const.get_return_type())
 
         if rung is BareName.FUNCTION:
             fn_value_type = function_value_type_of(tv, node.id)
@@ -299,32 +297,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             struct_table=self.type_validator.struct_table.by_name,
         )
 
-    def _materialize_stdlib_return_type(self, ret_type: Optional[Type]) -> Optional[Type]:
-        """Resolve a registry-declared stdlib return type into a concrete type."""
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
-        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
-
-        structs = self.type_validator.struct_table.by_name
-        enums = self.type_validator.enum_table.by_name
-
-        if (isinstance(ret_type, GenericTypeRef) and ret_type.base_name == "Result"
-                and len(ret_type.type_args) == 2):
-            return ensure_result_type_in_table(
-                self.type_validator.enum_table,
-                ret_type.type_args[0],
-                ret_type.type_args[1],
-                struct_table=structs,
-            ) or ret_type
-
-        if (isinstance(ret_type, GenericTypeRef) and ret_type.base_name == "Maybe"
-                and len(ret_type.type_args) == 1):
-            value_type = resolve_unknown_type(ret_type.type_args[0], structs, enums)
-            return ensure_maybe_type_in_table(
-                self.type_validator.enum_table, value_type, struct_table=structs) or ret_type
-
-        return ret_type
 
     def visit_call(self, node: Call) -> Optional[Type]:
         """Infer a function call's type and stamp the node with it.
@@ -377,7 +349,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 generic_call_result_type)
             substituted = generic_call_result_type(self.type_validator, node, generic_func)
             if substituted is not None:
-                return self._resolve_generic_to_semantic_type(substituted)
+                return self._materialize_wrapper(substituted)
 
         # The registry is the single source of truth the backend reads too, so reading it
         # here keeps the two from drifting. The hardcoded copies this replaced had gone
@@ -391,7 +363,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 module_path, function_name
             )
             if stdlib_func is not None and not stdlib_func.is_constant:
-                return self._materialize_stdlib_return_type(stdlib_func.get_return_type())
+                return self._materialize_wrapper(stdlib_func.get_return_type())
 
         if function_name in {'abs', 'min', 'max', 'sqrt', 'pow', 'floor', 'ceil', 'round', 'trunc'}:
             from sushi_lang.sushi_stdlib.src import math as math_module

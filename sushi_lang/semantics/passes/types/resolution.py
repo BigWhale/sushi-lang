@@ -4,8 +4,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import (
-    BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType,
-    UnknownType
+    DynamicArrayType
 )
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
@@ -65,56 +64,36 @@ def resolve_return_type_to_result(validator: 'TypeValidator',
 def resolve_variable_type(validator: 'TypeValidator',
                           declared_type: 'Type',
                           type_span: 'Span') -> 'Type':
-    """Resolve variable type from declaration."""
-    if isinstance(declared_type, (BuiltinType, StructType, EnumType)):
-        return declared_type
+    """The concrete type a variable's ANNOTATION names, its wrapper interned.
 
-    from sushi_lang.semantics.typesys import FunctionType
+    `resolve_declared_type` answers what the spelling names and `intern_declared_wrapper`
+    builds the one kind a lookup cannot find -- `let Result@(T, E) r = mk()` compared
+    unequal against the call it takes until the annotation interned too (#184).
 
-    # Types that CONTAIN another type: resolve the MEMBERS, not the wrapper. `let P[] arr`
-    # parses as DynamicArrayType(UnknownType("P")), and leaving that put an UnknownType in
-    # the variable table -- every later compare failed, and since both spell themselves "P"
-    # the message read `expected P, got P` (#284). Delegated to `resolve_declared_type`, the
-    # ONE answer to what a declared spelling names.
-    if isinstance(declared_type, (ArrayType, DynamicArrayType, FunctionType)):
-        from .utils import resolve_declared_type
-        return resolve_declared_type(validator, declared_type)
-
-    if isinstance(declared_type, UnknownType):
-        resolved = resolve_unknown_type(
-            declared_type,
-            validator.struct_table.by_name,
-            validator.enum_table.by_name
-        )
-        return resolved
+    What is left is this position's OWN question: a `let` is where a HashMap key type is
+    written, so CE2058 is read here and nowhere under it.
+    """
+    from .utils import intern_declared_wrapper, resolve_declared_type
 
     if isinstance(declared_type, GenericTypeRef):
-        # Result<T, E> interns to an EnumType, exactly like Maybe<T>. It used to resolve to a
-        # ResultType here, which is not an EnumType -- so `let Result<T, E> r = mk()` compared
-        # the annotation against the call's type and found them unequal (#184).
-        if declared_type.base_name == "Result" and len(declared_type.type_args) == 2:
-            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-            interned = ensure_result_type_in_table(
-                validator.enum_table,
-                declared_type.type_args[0],
-                declared_type.type_args[1],
-                struct_table=validator.struct_table.by_name,
-            )
-            if interned is not None:
-                return interned
+        _reject_array_hashmap_key(validator, declared_type, type_span)
 
-        if declared_type.base_name == "HashMap" and len(declared_type.type_args) >= 1:
-            key_type = declared_type.type_args[0]
-            if isinstance(key_type, DynamicArrayType):
-                er.emit(validator.reporter, er.ERR.CE2058, type_span, key_type=display_type(key_type))
+    interned = intern_declared_wrapper(validator, declared_type)
+    if interned is not None:
+        return interned
 
-        type_args_str = ", ".join(str(arg) for arg in declared_type.type_args)
-        concrete_name = f"{declared_type.base_name}<{type_args_str}>"
+    resolved = resolve_declared_type(validator, declared_type)
+    return resolved if resolved is not None else declared_type
 
-        if concrete_name in validator.enum_table.by_name:
-            return validator.enum_table.by_name[concrete_name]
 
-        if concrete_name in validator.struct_table.by_name:
-            return validator.struct_table.by_name[concrete_name]
+def _reject_array_hashmap_key(validator: 'TypeValidator',
+                              declared_type: GenericTypeRef,
+                              type_span: 'Span') -> None:
+    """A dynamic array cannot be a HashMap key: it has no equality (CE2058)."""
+    if declared_type.base_name != "HashMap" or not declared_type.type_args:
+        return
 
-    return declared_type
+    key_type = declared_type.type_args[0]
+    if isinstance(key_type, DynamicArrayType):
+        er.emit(validator.reporter, er.ERR.CE2058, type_span,
+                key_type=display_type(key_type))

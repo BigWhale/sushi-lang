@@ -1,6 +1,6 @@
 """Struct constructor validation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 
 from sushi_lang.internals import errors as er
 from ..visibility import name_is_contested
@@ -9,7 +9,8 @@ from sushi_lang.semantics.typesys import StructType, Type
 from sushi_lang.semantics.ast import Call, Expr
 from ..compatibility import types_compatible
 from ..propagation import propagate_types_to_value
-from ..utils import reject_spread_args, resolve_declared_type
+from ..utils import (
+    intern_declared_wrapper, reject_spread_args, resolve_declared_type)
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -137,37 +138,13 @@ def _check_field_arguments(
 def _resolve_field_type(validator: 'TypeValidator', field_type: Type) -> Type:
     """The concrete type a field's DECLARED type names.
 
-    `resolve_declared_type` answers for every kind but one. A `Result@(T, E)` field is
-    INTERNED here, through the seam that alone may build one: the enum may not be in
-    the table before a construction names it, and a structural Result poisons it
-    (CE0126).
+    `resolve_declared_type` answers for every kind but one: a written wrapper may name an
+    enum no declaration has built yet, so it is INTERNED. The `resolve` pass resolves
+    every field before this reads one, so the intern is a guard and not a hot path.
     """
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    if (isinstance(field_type, GenericTypeRef) and field_type.base_name == "Result"
-            and len(field_type.type_args) == 2):
-        interned = _intern_result_field(validator, field_type)
-        return interned if interned is not None else field_type
+    interned = intern_declared_wrapper(validator, field_type)
+    if interned is not None:
+        return interned
 
     resolved = resolve_declared_type(validator, field_type)
     return resolved if resolved is not None else field_type
-
-
-def _intern_result_field(validator: 'TypeValidator', field_type) -> Optional[Type]:
-    """Intern the `Result@(T, E)` a field declares, payloads resolved first."""
-    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-    from sushi_lang.semantics.type_resolution import resolve_unknown_type
-
-    ok_type = resolve_unknown_type(
-        field_type.type_args[0],
-        validator.struct_table.by_name,
-        validator.enum_table.by_name
-    )
-    err_type = resolve_unknown_type(
-        field_type.type_args[1],
-        validator.struct_table.by_name,
-        validator.enum_table.by_name
-    )
-
-    return ensure_result_type_in_table(validator.enum_table, ok_type, err_type,
-                                       struct_table=validator.struct_table.by_name)

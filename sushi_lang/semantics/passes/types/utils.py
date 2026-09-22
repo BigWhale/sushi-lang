@@ -173,23 +173,58 @@ def validate_constant_array_index(expr: 'Expr', array_size: int, reporter) -> No
 
 
 def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Optional[Type]:
-    """The concrete type that a DECLARED type names."""
+    """The concrete type that a DECLARED type names -- the pass's ONE answer (#755).
+
+    A LOOKUP, and the table is its authority: nothing is built here, so a spelling that
+    names no entry comes back as it was written.
+
+    Two depths under it, and the split is deliberate. A NAME stops at name level, because
+    a named type's identity IS its spelling: walking what it holds cannot change the
+    answer, but it can cycle (#240). A type that CONTAINS others is walked, or the name
+    inside `P[]` comes back unresolved and the message reads `expected P, got P` (#284).
+    """
     from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.type_resolution import resolve_type_recursively
     from sushi_lang.semantics.typesys import FunctionType
 
-    if isinstance(ty, UnknownType):
-        return resolve_unknown_type(ty, validator.struct_table.by_name,
-                                    validator.enum_table.by_name)
-    if isinstance(ty, GenericTypeRef):
-        interned = str(ty)
-        return (validator.enum_table.by_name.get(interned)
-                or validator.struct_table.by_name.get(interned)
-                or ty)
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
+
+    if isinstance(ty, (UnknownType, GenericTypeRef)):
+        return resolve_unknown_type(ty, structs, enums)
     if isinstance(ty, (FunctionType, ArrayType, DynamicArrayType)):
-        from sushi_lang.semantics.type_resolution import resolve_type_recursively
-        return resolve_type_recursively(ty, validator.struct_table.by_name,
-                                        validator.enum_table.by_name)
+        return resolve_type_recursively(ty, structs, enums)
     return ty
+
+
+def intern_declared_wrapper(validator: 'TypeValidator',
+                            ty: Optional[Type]) -> Optional[Type]:
+    """The interned `Result@(T, E)` or `Maybe@(T)` a WRITTEN type names, else None (#755).
+
+    `resolve_declared_type` reads the table. A written wrapper is the one spelling that
+    may name an entry nobody has built yet, because nothing instantiates a `Result@(T, E)`
+    until a declaration asks for it, so it goes through the seam that alone may build one
+    -- a structural build poisons the table (CE0126). Both seams resolve their own
+    payloads recursively, so nothing is resolved before the call.
+
+    None means "not a written wrapper". That is what lets a caller fall through to the
+    lookup instead of reading the answer to tell a miss from a hit.
+    """
+    from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
+    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    if not isinstance(ty, GenericTypeRef):
+        return None
+
+    structs = validator.struct_table.by_name
+    if ty.base_name == "Result" and len(ty.type_args) == 2:
+        return ensure_result_type_in_table(validator.enum_table, ty.type_args[0],
+                                           ty.type_args[1], struct_table=structs)
+    if ty.base_name == "Maybe" and len(ty.type_args) == 1:
+        return ensure_maybe_type_in_table(validator.enum_table, ty.type_args[0],
+                                          struct_table=structs)
+    return None
 
 
 def validate_and_register_parameters(validator: 'TypeValidator', params: List['Param']) -> None:
