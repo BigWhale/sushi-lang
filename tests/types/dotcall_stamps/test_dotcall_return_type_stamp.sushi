@@ -1,0 +1,28 @@
+# The `inferred_return_type` stamp on an `X.Y(args)` node. A `match` over a call reads the
+# enum the call yields off the call node, so the ladder has to carry the declared return
+# type back from the node it resolved the callee on.
+# EXPECT_STDOUT_EXACT: "minus plus\n"
+
+enum Sign:
+    Plus
+    Minus
+
+struct Dial:
+    i32 n
+
+extend Dial read() Sign:
+    if (self.n < 0):
+        return Sign.Minus
+    return Sign.Plus
+
+fn main() i32:
+    let Dial low = Dial(-3)
+    let Dial high = Dial(3)
+    match low.read():
+        Sign.Plus -> print("plus")
+        Sign.Minus -> print("minus")
+    print(" ")
+    match high.read():
+        Sign.Plus -> println("plus")
+        Sign.Minus -> println("minus")
+    return Result.Ok(0)

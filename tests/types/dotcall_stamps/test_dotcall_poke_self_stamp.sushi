@@ -1,0 +1,18 @@
+# The `callee_self_mode` stamp on an `X.Y(args)` node. A `poke self` receiver is passed by
+# POINTER, so the write the method makes is visible to the caller. Losing the stamp passes
+# the receiver by value and the write goes to a copy (#326, #327).
+# EXPECT_STDOUT_EXACT: "3\n"
+
+struct Counter:
+    i32 n
+
+extend Counter bump(poke self) ~:
+    self.n := self.n + 1
+
+fn main() i32:
+    let Counter c = Counter(0)
+    c.bump()
+    c.bump()
+    c.bump()
+    println("{c.n}")
+    return Result.Ok(0)
