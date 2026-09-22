@@ -7,11 +7,20 @@ differently -- but the two files stated the invariant in opposite order, and a
 type that ever satisfies two families would diverge silently. The canonical
 order below is arbitrary where the kinds are disjoint; what matters is that
 both layers state the SAME one (docs/design/method-resolution.md).
+
+Since #751 the typecheck pass states its half in ONE place: the family table in
+`semantics/passes/types/method_registry.py`, which the inference half and the
+validation half both read. So the validation order below is the table's, and the two
+rungs that are the LADDER's and not a family's -- the perk implementation and the
+extension -- are read from `calls/methods.py`, where `beats_perk` puts the perk rung
+between the two halves of the table.
 """
 from __future__ import annotations
 
 import re
 from pathlib import Path
+
+from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
 VALIDATION = SOURCE_ROOT / "semantics" / "passes" / "types" / "calls" / "methods.py"
@@ -27,14 +36,21 @@ CANONICAL_ORDER = [
     "EXTENSION",
 ]
 
-# How each family's dispatch step is recognised in each file. The marker is the
-# step itself (the probe call / the arm's condition), never a comment.
-VALIDATION_MARKERS = {
-    "PERK": r"perk_impl_table\.get_method",
-    "DERIVED_HASH": r'call\.method == "hash"',
-    "DERIVED_CLONE": r'call\.method == "clone"',
-    "FUNCTION_CLONE": r"is_builtin_function_method",
-    "PRIMITIVE": r"validate_primitive_method",
+# The family table's row name for each step it carries. The rungs that are not a
+# family -- the perk implementation and the extension -- are the ladder's, and the
+# markers below find them in the dispatcher's own body.
+TABLE_ROWS = {
+    "derived_hash": "DERIVED_HASH",
+    "derived_clone": "DERIVED_CLONE",
+    "function": "FUNCTION_CLONE",
+    "primitive": "PRIMITIVE",
+}
+
+# How each ladder rung is recognised. The marker is the step itself (the probe call),
+# never a comment.
+LADDER_MARKERS = {
+    "PERK": r"_validate_perk_method\(validator",
+    "FAMILIES_AFTER_PERK": r"beats_perk=False",
     "EXTENSION": r"resolve_extension_method\(validator",
 }
 
@@ -67,8 +83,18 @@ def _family_order(path: Path, markers: dict[str, str], scope: str | None = None)
 
 
 def test_validation_resolves_families_in_the_canonical_order():
-    assert _family_order(VALIDATION, VALIDATION_MARKERS,
-                         scope=VALIDATION_SCOPE) == CANONICAL_ORDER
+    """The perk rung, then the table's rows that yield to it, then the extension rung."""
+    order = ["PERK"]
+    order += [TABLE_ROWS[family.name] for family in METHOD_TYPE_REGISTRY.families
+              if not family.beats_perk]
+    order.append("EXTENSION")
+    assert order == CANONICAL_ORDER
+
+
+def test_the_dispatcher_asks_the_rungs_in_that_order():
+    """And the dispatcher reads them so: perk, the table's second half, extension."""
+    assert _family_order(VALIDATION, LADDER_MARKERS, scope=VALIDATION_SCOPE) == [
+        "PERK", "FAMILIES_AFTER_PERK", "EXTENSION"]
 
 
 def test_codegen_resolves_families_in_the_canonical_order():

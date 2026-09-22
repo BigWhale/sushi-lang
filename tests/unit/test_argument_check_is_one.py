@@ -23,14 +23,14 @@ SEAM = TYPES_PASS / "arguments.py"
 _ARGUMENT_CODES = ("CE2006", "CE2009")
 
 #: What each module that still holds a copy may emit, at MOST. A row may only go DOWN:
-#: `arrays.py` (the built-in array arity checks) and `calls/methods.py` (the perk arm and
-#: the extension arm) convert under their own tickets, and `calls/user_defined.py` keeps
-#: the two checks that are not a parameter list at all -- the variadic TAIL, measured
-#: against an element type, and the polymorphic math family, measured against a SET of
-#: types. A module absent from this table may emit neither code.
+#: `arrays.py` (the built-in array arity checks) converts under its own ticket, and
+#: `calls/user_defined.py` keeps the two checks that are not a parameter list at all --
+#: the variadic TAIL, measured against an element type, and the polymorphic math family,
+#: measured against a SET of types. `calls/methods.py` held the perk arm and the
+#: extension arm; both read the seam since #752, so it carries no row. A module absent
+#: from this table may emit neither code.
 _CEILING = {
     "arrays.py": {"CE2006": 2},
-    "calls/methods.py": {"CE2006": 2, "CE2009": 2},
     "calls/user_defined.py": {"CE2006": 6, "CE2009": 2},
 }
 
@@ -47,6 +47,7 @@ _INDIRECT_CEILING = {
 
 #: The modules that must reach the seam, one per converted copy.
 _CALLERS = (
+    "calls/methods.py",
     "calls/user_defined.py",
     "calls/statics.py",
     "calls/enums.py",

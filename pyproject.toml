@@ -82,16 +82,18 @@ ignore = ["E501"]
 
 [tool.ruff.lint.mccabe]
 # A RATCHET, set at the worst function in the lint scope and not at a target.
-# `validate_method_call` (`semantics/passes/types/calls/methods.py`) is that function
-# at 60. The gate therefore permits everything that stands today and refuses anything
-# WORSE, which is the one promise a threshold can keep with no exception list: there
-# are no per-file ignores here, and a new one is not the way to pass this rule.
+# `emit_array_method` (`backend/types/arrays/dispatcher.py`) is that function at 41.
+# The gate therefore permits everything that stands today and refuses anything WORSE,
+# which is the one promise a threshold can keep with no exception list: there are no
+# per-file ignores here, and a new one is not the way to pass this rule.
 #
 # Lower the number when a section's batch splits its own worst function. Wave C took
-# `_check_multi_file` from 38 to 5 and `scope._check_expression` from 44 to 2, and S3
-# Wave 2 took `validate_builtin_array_method` from 39 to 5; the next steps down are
-# 41 (`emit_array_method`) and 37 (`print_library_info` and two in `tests/`).
-max-complexity = 60
+# `_check_multi_file` from 38 to 5 and `scope._check_expression` from 44 to 2, S3 Wave 2
+# took `validate_builtin_array_method` from 39 to 5, and S3 Wave 3 took
+# `validate_method_call` from 60 to 11; the next steps down are 37 (`print_library_info`
+# and `parse_test_metadata`), 35 (`_compute_export_closure`) and 32 (`report.format` and
+# `_collect_from_expr`).
+max-complexity = 41
 
 [tool.mypy]
 # Tier 5.2 ratchet. The CLEAN packages (internals, compiler, packager, sushi_stdlib)
