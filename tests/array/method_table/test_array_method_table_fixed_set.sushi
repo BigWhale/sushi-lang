@@ -1,0 +1,33 @@
+# EXPECT_STDOUT_EXACT: "len=4\nget=4\nfirst=3\nlast=1\ncontains=true\nindex_of=2\niter=9\nclone=4\nhash=true\ns=2\nss=2\nreverse=1\nfill=7\n"
+#
+# Every method the table marks as taking any receiver, on ONE fixed array. The backend
+# keeps a separate arm per name for a fixed receiver, so this reads end to end the same
+# set the totality gate reads out of the two sides.
+fn main() i32:
+    let i32[4] a = [3, 1, 4, 1]
+    println("len={a.len()}")
+    println("get={a.get(2).realise(0)}")
+    println("first={a.first().realise(0)}")
+    println("last={a.last().realise(0)}")
+    println("contains={a.contains(4)}")
+    println("index_of={a.index_of(4).realise(0)}")
+
+    let i32 total = 0
+    foreach(n in a.iter()):
+        total := total + n
+    println("iter={total}")
+
+    let i32[4] copy = a.clone()
+    println("clone={copy.len()}")
+    println("hash={a.hash() != 0}")
+
+    let i32[] window = a.s(1, 3)
+    println("s={window.len()}")
+    let i32[] pair = a.ss(0, 2)
+    println("ss={pair.len()}")
+
+    a.reverse()
+    println("reverse={a.get(0).realise(0)}")
+    a.fill(7)
+    println("fill={a.get(3).realise(0)}")
+    return Result.Ok(0)

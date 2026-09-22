@@ -84,13 +84,8 @@ class ArrayMethodInferrer:
                 return ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32,
                                                   struct_table=self.validator.struct_table.by_name)
 
-            if self.method_name == "to_string_checked":
-                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-                std_error = self.validator.enum_table.by_name.get("StdError")
-                return ensure_result_type_in_table(self.validator.enum_table, BuiltinType.STRING, std_error,
-                                       struct_table=self.validator.struct_table.by_name)
-
-            return get_builtin_array_method_return_type(self.method_name, actual_type)
+            return get_builtin_array_method_return_type(self.method_name, actual_type,
+                                                        self.validator)
         return None
 
 
