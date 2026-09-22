@@ -1,11 +1,11 @@
 """One propagation call per position, and the guard that survives it.
 
 `utils.py` carried two shims over `propagation.propagate_types_to_value` that differed in
-one word of their docstrings, and six positions called BOTH of them, back to back, on one
+one word of their docstrings, and nine positions called BOTH of them, back to back, on one
 argument. The propagation therefore ran twice at each of them, and the idempotency guard
 in `_stamp_numeric_literal` absorbed the second run.
 
-Every position calls the seam itself now. The guard stays, because it also answers a
+Both shims are gone, and every position calls the seam itself. The guard stays, because it also answers a
 GENUINE re-entry: a value is reached by more than one propagation in its own right, and
 stamping a literal twice would report its range fault twice. That is measured, not
 argued -- the guard still fires over the fixture corpus with every duplicate call gone.
@@ -18,17 +18,11 @@ from pathlib import Path
 SUSHI_LANG = Path(__file__).resolve().parents[2] / "sushi_lang"
 PROPAGATION = SUSHI_LANG / "semantics" / "passes" / "types" / "propagation.py"
 
-#: The struct shim is gone outright: nothing may name it again.
-_RETIRED_SHIM = "propagate_struct_type_to_dotcall"
-
-#: The enum shim has ONE caller left, `passes/types/arrays.py`, plus its own definition.
-#: That file belongs to the array-arity ticket of the same wave, so its two lines are
-#: handed back rather than edited here. The ceiling may only go DOWN.
-_LAST_SHIM = "propagate_enum_type_to_dotcall"
-_LAST_SHIM_MODULES = {
-    "semantics/passes/types/utils.py": 1,     # the definition
-    "semantics/passes/types/arrays.py": 2,    # the import and the call
-}
+#: Both shims are gone outright: nothing may name either again.
+_RETIRED_SHIMS = (
+    "propagate_struct_type_to_dotcall",
+    "propagate_enum_type_to_dotcall",
+)
 
 
 def _sources():
@@ -36,10 +30,12 @@ def _sources():
         yield path.relative_to(SUSHI_LANG).as_posix(), path.read_text(encoding="utf-8")
 
 
-def test_the_struct_propagation_shim_is_gone():
-    offenders = [module for module, source in _sources() if _RETIRED_SHIM in source]
+def test_the_propagation_shims_are_gone():
+    offenders = [f"{module}: {shim}"
+                 for module, source in _sources()
+                 for shim in _RETIRED_SHIMS if shim in source]
     assert not offenders, (
-        "a retired propagation shim is named again: " + ", ".join(offenders)
+        "a retired propagation shim is named again:\n  " + "\n  ".join(offenders)
         + "\nCall propagation.propagate_types_to_value once instead."
     )
 
@@ -48,18 +44,6 @@ def test_the_detector_sees_a_name():
     """The always-fires control: a sweep that answers zero must be a sweep that works."""
     modules = [module for module, source in _sources() if "propagate_types_to_value" in source]
     assert len(modules) > 3, modules
-
-
-def test_the_enum_propagation_shim_has_one_caller_left():
-    found = {module: source.count(_LAST_SHIM)
-             for module, source in _sources() if _LAST_SHIM in source}
-    offenders = [f"{module}: {count}, ceiling {_LAST_SHIM_MODULES.get(module, 0)}"
-                 for module, count in sorted(found.items())
-                 if count > _LAST_SHIM_MODULES.get(module, 0)]
-    assert not offenders, (
-        "the last propagation shim grew a caller:\n  " + "\n  ".join(offenders)
-        + "\nCall propagation.propagate_types_to_value instead."
-    )
 
 
 def test_the_idempotency_guard_is_still_there():

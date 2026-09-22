@@ -302,20 +302,3 @@ def pop_destroyed_scope(validator: 'TypeValidator') -> None:
     """Pop the current scope for tracking destroyed arrays."""
     if validator.destroyed_arrays:
         validator.destroyed_arrays.pop()
-
-
-def propagate_enum_type_to_dotcall(
-    validator: 'TypeValidator',
-    arg: 'Expr',
-    expected_type: Optional[Type]
-) -> None:
-    """The LAST caller's shim over `propagate_types_to_value`, and nothing more.
-
-    There were two of these, byte-identical apart from one word of a docstring, and six
-    positions called BOTH of them on one argument. Every one of those positions calls the
-    seam itself now. The array PUSH check is the one caller left (#749 is finished when
-    `arrays.py` calls the seam too); `tests/unit/test_propagation_is_reached_once.py`
-    holds the count at one so a second caller cannot appear.
-    """
-    from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
-    propagate_types_to_value(validator, arg, expected_type)

@@ -131,8 +131,8 @@ def _an_element_to_store(call: MethodCall, array_type: ArrayReceiver, reporter: 
     """`push(v)`: the element, with the stamp a bare enum variant needs before it is read."""
     if validator is None:
         return
-    from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall
-    propagate_enum_type_to_dotcall(validator, call.args[0], array_type.base_type)
+    from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
+    propagate_types_to_value(validator, call.args[0], array_type.base_type)
     _validate_element_argument(call, array_type.base_type, reporter, validator)
 
 
