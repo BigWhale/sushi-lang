@@ -8,7 +8,7 @@ from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
 from sushi_lang.semantics.externs_manifest import GENERATED_INLINE_SYMBOLS
 from sushi_lang.semantics.generics.type_display import display_type
 
-from .compatibility import types_compatible
+from .arguments import check_arguments
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
@@ -148,22 +148,13 @@ def validate_external_call_args(validator: 'TypeValidator', node) -> None:
     expected = sig.param_types
     is_variadic = getattr(sig, "is_variadic", False)
     fq_name = f"{node.external_ref[0]}.{node.external_ref[1]}"
-    if is_variadic:
-        if len(node.args) < len(expected):
-            er.emit(validator.reporter, er.ERR.CE2009, node.loc,
-                    name=fq_name, expected=len(expected), got=len(node.args))
-            return
-    elif len(node.args) != len(expected):
-        er.emit(validator.reporter, er.ERR.CE2009, node.loc,
-                name=fq_name, expected=len(expected), got=len(node.args))
+    # The arguments are walked by the caller before this runs (`namespaced.py`), so the
+    # check measures them and does not walk them a second time.
+    if not check_arguments(validator, fq_name, expected, node.args, node.loc,
+                           mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
+                           minimum_arity=is_variadic, stop_on_arity=True,
+                           walk_arguments=False):
         return
-    for index, (arg, exp_ty) in enumerate(zip(node.args, expected, strict=False)):
-        got_ty = validator.infer_expression_type(arg)
-        if got_ty is None or exp_ty is None:
-            continue
-        if not types_compatible(validator, got_ty, exp_ty):
-            er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                    index=index + 1, expected=display_type(exp_ty), got=display_type(got_ty))
     # Trailing variadic args: each must be C-ABI representable (CE5005).
     # Record the inferred types so the backend can apply C promotion.
     if is_variadic:

@@ -13,8 +13,7 @@ from sushi_lang.semantics.generics.explicit_type_args import (
     check_explicit_type_arg_arity,
 )
 from ..visibility import name_is_contested, reject_private_call
-from ..compatibility import types_compatible
-from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
+from .user_defined import validate_call_arguments
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -105,7 +104,8 @@ def validate_generic_function_call(
 
     func_sig = validator.func_table.lookup(mangled_name, home_unit)
 
-    validate_call_arguments(validator, call, func_sig)
+    validate_call_arguments(validator, func_sig.name, func_sig,
+                            call.args, call.callee.loc)
 
 
 def call_type_args(validator: 'TypeValidator', call: Call, generic_func) -> Optional[tuple]:
@@ -300,38 +300,3 @@ def _unify_types_for_inference(
     """Unify parameter type with argument type for type inference (the typecheck pass)."""
     from sushi_lang.semantics.generics.unify import unify_types
     return unify_types(param_type, arg_type, type_param_map)
-
-
-def validate_call_arguments(
-    validator: 'TypeValidator',
-    call: Call,
-    func_sig
-) -> None:
-    """Validate call arguments against function signature."""
-    expected_params = func_sig.params
-    actual_args = call.args
-
-    if len(actual_args) != len(expected_params):
-        er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
-               name=func_sig.name, expected=len(expected_params), got=len(actual_args))
-
-    for i, (arg, param) in enumerate(zip(actual_args, expected_params, strict=False)):
-        propagate_enum_type_to_dotcall(validator, arg, param.ty)
-
-        propagate_struct_type_to_dotcall(validator, arg, param.ty)
-
-        if isinstance(arg, Call) and hasattr(arg.callee, 'id') and isinstance(param.ty, StructType):
-            struct_name = arg.callee.id
-            if struct_name in validator.generic_struct_table.by_name:
-                arg.callee.id = param.ty.name
-
-        validator.validate_expression(arg)
-
-        if param.ty is not None:  # Skip if parameter has unknown type
-            arg_type = validator.infer_expression_type(arg)
-            if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
-                er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=display_type(param.ty), got=display_type(arg_type))
-
-    for i in range(len(expected_params), len(actual_args)):
-        validator.validate_expression(actual_args[i])

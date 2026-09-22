@@ -4,45 +4,17 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.typesys import BuiltinType, StructType
+from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.ast import Call, Name, Spread
 from ..visibility import (name_is_contested, out_of_scope_help,
                           reject_ambiguous_name, reject_private_call,
                           reject_private_kept_call)
+from ..arguments import check_arguments
 from ..compatibility import types_compatible
-from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
+from ..propagation import propagate_types_to_value
 
 if TYPE_CHECKING:
     from .. import TypeValidator
-
-
-def emit_argument_mismatch(validator: 'TypeValidator', arg, index: int,
-                           expected_ty, actual_ty) -> None:
-    """Report CE2006, and say how to borrow when the parameter wants a borrow."""
-    from sushi_lang.semantics.ast import MemberAccess
-    from sushi_lang.semantics.typesys import ReferenceType
-
-    b = er.emit_with(validator.reporter, er.ERR.CE2006, arg.loc,
-                     index=index, expected=display_type(expected_ty),
-                     got=display_type(actual_ty))
-    if isinstance(expected_ty, ReferenceType) and isinstance(arg, (Name, MemberAccess)):
-        place = arg.id if isinstance(arg, Name) else f"{arg.receiver}.{arg.member}"
-        b.help(f"borrow it at the call site: `{expected_ty.mutability} {place}`")
-    b.emit()
-
-
-def _reject_misplaced_spread(validator: 'TypeValidator', arg) -> bool:
-    """Emit CE0120 if `arg` is a bloom spread `arr...` in a position where one is not allowed (a
-    non-variadic call, or a fixed/non-last argument). Still validates the inner expression so
-    downstream inference does not crash. Returns True if rejected.
-    """
-    if isinstance(arg, Spread):
-        er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
-                message="bloom argument 'arr...' is only allowed as the last argument "
-                        "of a call to a variadic '...T' function")
-        validator.validate_expression(arg)
-        return True
-    return False
 
 
 def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
@@ -69,8 +41,7 @@ def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
                     er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
                             index=index, expected=display_type(array_ty), got=display_type(arg_type))
         else:
-            propagate_enum_type_to_dotcall(validator, arg, element_ty)
-            propagate_struct_type_to_dotcall(validator, arg, element_ty)
+            propagate_types_to_value(validator, arg, element_ty)
             validator.validate_expression(arg)
             if element_ty is not None:
                 arg_type = validator.infer_expression_type(arg)
@@ -251,20 +222,11 @@ def validate_call_arguments(validator: 'TypeValidator', function_name: str, func
         from sushi_lang.semantics.typesys import DynamicArrayType
         fixed_count = len(expected_params) - 1
 
-        if len(actual_args) < fixed_count:
-            er.emit(validator.reporter, er.ERR.CE2009, loc,
-                   name=function_name, expected=fixed_count, got=len(actual_args))
-
-        for i, (arg, param) in enumerate(zip(actual_args[:fixed_count], expected_params[:fixed_count], strict=False)):
-            if _reject_misplaced_spread(validator, arg):
-                continue
-            propagate_enum_type_to_dotcall(validator, arg, param.ty)
-            propagate_struct_type_to_dotcall(validator, arg, param.ty)
-            validator.validate_expression(arg)
-            if param.ty is not None:
-                arg_type = validator.infer_expression_type(arg)
-                if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
-                    emit_argument_mismatch(validator, arg, i + 1, param.ty, arg_type)
+        check_arguments(validator, function_name,
+                        [p.ty for p in expected_params[:fixed_count]],
+                        actual_args, loc,
+                        mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
+                        minimum_arity=True)
 
         # Validate trailing variadic arguments. Two forms are accepted:
         #   - individual values, each type-checked against element type T;
@@ -279,35 +241,9 @@ def validate_call_arguments(validator: 'TypeValidator', function_name: str, func
             variadic_param.ty, element_ty)
         return
 
-    if len(actual_args) != len(expected_params):
-        er.emit(validator.reporter, er.ERR.CE2009, loc,
-               name=function_name, expected=len(expected_params), got=len(actual_args))
-
-    for i, (arg, param) in enumerate(zip(actual_args, expected_params, strict=False)):
-        if _reject_misplaced_spread(validator, arg):
-            continue
-        propagate_enum_type_to_dotcall(validator, arg, param.ty)
-
-        propagate_struct_type_to_dotcall(validator, arg, param.ty)
-
-        if isinstance(arg, Call) and hasattr(arg.callee, 'id') and isinstance(param.ty, StructType):
-            struct_name = arg.callee.id
-            if struct_name in validator.generic_struct_table.by_name:
-                arg.callee.id = param.ty.name
-
-        # `validate_expression` walks the argument AND returns its type, so asking the
-        # inference a second time here told the user twice about any fault an inference
-        # arm reports -- `poke geo.SIZE` read its CE2400 twice (#685).
-        arg_type = validator.validate_expression(arg)
-
-        if param.ty is not None:  # Skip if parameter has unknown type
-            if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
-                emit_argument_mismatch(validator, arg, i + 1, param.ty, arg_type)
-
-    for i in range(len(expected_params), len(actual_args)):
-        if _reject_misplaced_spread(validator, actual_args[i]):
-            continue
-        validator.validate_expression(actual_args[i])
+    check_arguments(validator, function_name, [p.ty for p in expected_params],
+                    actual_args, loc,
+                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
 
 
 def check_stdlib_function(validator: 'TypeValidator', call: Call) -> Optional[any]:
@@ -350,37 +286,19 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
     # so it must be handled BEFORE any generic per-arg validation.
     if getattr(stdlib_func, "is_variadic", False):
         fixed_count = len(expected_params) - 1
-        if len(args) < fixed_count:
-            er.emit(validator.reporter, er.ERR.CE2009, callee_loc,
-                   name=function_name, expected=fixed_count, got=len(args))
+        if not check_arguments(validator, function_name,
+                               expected_params[:fixed_count], args, callee_loc,
+                               mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
+                               minimum_arity=True, stop_on_arity=True):
             return
-        for i, (arg, expected_type) in enumerate(zip(args[:fixed_count], expected_params[:fixed_count], strict=False)):
-            if _reject_misplaced_spread(validator, arg):
-                continue
-            validator.validate_expression(arg)
-            arg_type = validator.infer_expression_type(arg)
-            if arg_type is not None and not types_compatible(validator, arg_type, expected_type):
-                er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=display_type(expected_type), got=display_type(arg_type))
         array_ty = expected_params[-1]
         element_ty = array_ty.base_type if isinstance(array_ty, DynamicArrayType) else array_ty
         validate_variadic_trailing_args(
             validator, args[fixed_count:], fixed_count, array_ty, element_ty)
         return
 
-    for arg in args:
-        validator.validate_expression(arg)
-
-    if len(args) != len(expected_params):
-        er.emit(validator.reporter, er.ERR.CE2009, callee_loc,
-               name=function_name, expected=len(expected_params), got=len(args))
-        return
-
-    for i, (arg, expected_type) in enumerate(zip(args, expected_params, strict=False)):
-        arg_type = validator.infer_expression_type(arg)
-        if arg_type is not None and not types_compatible(validator, arg_type, expected_type):
-            er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                   index=i+1, expected=display_type(expected_type), got=display_type(arg_type))
+    check_arguments(validator, function_name, expected_params, args, callee_loc,
+                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
 
 
 def _validate_polymorphic_math(validator: 'TypeValidator', call: Call, function_name: str) -> None:
