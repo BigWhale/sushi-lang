@@ -302,29 +302,3 @@ def pop_destroyed_scope(validator: 'TypeValidator') -> None:
     """Pop the current scope for tracking destroyed arrays."""
     if validator.destroyed_arrays:
         validator.destroyed_arrays.pop()
-
-
-def propagate_enum_type_to_dotcall(
-    validator: 'TypeValidator',
-    arg: 'Expr',
-    expected_type: Optional[Type]
-) -> None:
-    """Propagate expected enum type to DotCall nodes for generic enums."""
-    if expected_type is None:
-        return
-
-    from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
-    propagate_types_to_value(validator, arg, expected_type)
-
-
-def propagate_struct_type_to_dotcall(
-    validator: 'TypeValidator',
-    arg: 'Expr',
-    expected_type: Optional[Type]
-) -> None:
-    """Propagate expected struct type to DotCall nodes for generic structs."""
-    if expected_type is None:
-        return
-
-    from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
-    propagate_types_to_value(validator, arg, expected_type)

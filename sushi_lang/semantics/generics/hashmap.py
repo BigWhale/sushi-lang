@@ -198,7 +198,7 @@ def _validate_hashmap_insert(
     validator: Any
 ) -> None:
     """Validate HashMap<K, V>.insert(key, value) method call."""
-    from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
+    from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
     from sushi_lang.semantics.passes.types.compatibility import types_compatible
 
     if len(call.args) != 2:
@@ -213,9 +213,7 @@ def _validate_hashmap_insert(
 
     expected_types = [key_type, value_type]
     for i, (arg, expected_ty) in enumerate(zip(call.args, expected_types, strict=False)):
-        propagate_enum_type_to_dotcall(validator, arg, expected_ty)
-
-        propagate_struct_type_to_dotcall(validator, arg, expected_ty)
+        propagate_types_to_value(validator, arg, expected_ty)
 
         if isinstance(arg, Call) and hasattr(arg.callee, 'id') and isinstance(expected_ty, StructType):
             struct_name = arg.callee.id
@@ -269,7 +267,7 @@ def _validate_hashmap_key_method(
     method_name: str
 ) -> None:
     """Validate HashMap<K, V> methods that take a key argument (get, contains_key, remove)."""
-    from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
+    from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
     from sushi_lang.semantics.passes.types.compatibility import types_compatible
 
     if len(call.args) != 1:
@@ -283,9 +281,7 @@ def _validate_hashmap_key_method(
 
     arg = call.args[0]
 
-    propagate_enum_type_to_dotcall(validator, arg, key_type)
-
-    propagate_struct_type_to_dotcall(validator, arg, key_type)
+    propagate_types_to_value(validator, arg, key_type)
 
     if isinstance(arg, Call) and hasattr(arg.callee, 'id') and isinstance(key_type, StructType):
         struct_name = arg.callee.id

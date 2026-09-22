@@ -88,9 +88,9 @@ ignore = ["E501"]
 # are no per-file ignores here, and a new one is not the way to pass this rule.
 #
 # Lower the number when a section's batch splits its own worst function. Wave C took
-# `_check_multi_file` from 38 to 5 and `scope._check_expression` from 44 to 2; the
-# next steps down are 41 (`emit_array_method`), 39 (`validate_builtin_array_method`)
-# and 37 (`print_library_info` and two in `tests/`).
+# `_check_multi_file` from 38 to 5 and `scope._check_expression` from 44 to 2, and S3
+# Wave 2 took `validate_builtin_array_method` from 39 to 5; the next steps down are
+# 41 (`emit_array_method`) and 37 (`print_library_info` and two in `tests/`).
 max-complexity = 60
 
 [tool.mypy]

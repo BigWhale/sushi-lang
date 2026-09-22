@@ -195,11 +195,9 @@ def validate_static_call(validator: 'TypeValidator', call) -> bool:
     refusal included (CE2102). On an ENUM it steps aside when no static answered: a
     name behind an enum's dot may still be a variant, and that path owns CE2045.
     """
+    from sushi_lang.semantics.passes.types.arguments import check_arguments
     from sushi_lang.semantics.passes.types.calls.methods import (
         RESOLUTION_REPORTED, extension_call_result_type, resolve_method)
-    from sushi_lang.semantics.passes.types.compatibility import types_compatible
-    from sushi_lang.semantics.passes.types.propagation import (
-        propagate_declared_type_to_value)
 
     target = static_target_type(validator, call)
     if target is None:
@@ -223,25 +221,9 @@ def validate_static_call(validator: 'TypeValidator', call) -> bool:
     call.callee_is_static = True
     call.callee_static_target = target
 
-    if len(call.args) != len(params):
-        er.emit(validator.reporter, er.ERR.CE2009, call.loc,
-                name=f"{display_type(target)}.{call.method}",
-                expected=len(params), got=len(call.args))
-
-    for index, (arg, param) in enumerate(zip(call.args, params, strict=False)):
-        # PROPAGATE before validating, exactly as the instance arm does (#387).
-        expected_ty = propagate_declared_type_to_value(validator, arg, param.ty)
-        validator.validate_expression(arg)
-        if expected_ty is None:
-            continue
-        arg_type = validator.infer_expression_type(arg)
-        if arg_type is not None and not types_compatible(validator, arg_type, expected_ty):
-            er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                    index=index + 1, expected=display_type(expected_ty),
-                    got=display_type(arg_type))
-
-    for extra in call.args[len(params):]:
-        validator.validate_expression(extra)
+    check_arguments(validator, f"{display_type(target)}.{call.method}",
+                    [p.ty for p in params], call.args, call.loc,
+                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
 
     call.inferred_return_type = extension_call_result_type(validator, method)
     return True

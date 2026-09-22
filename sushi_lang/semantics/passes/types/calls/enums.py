@@ -6,7 +6,7 @@ from sushi_lang.internals import errors as er
 from ..visibility import name_is_contested
 from sushi_lang.semantics.typesys import BuiltinType, EnumType
 from sushi_lang.semantics.ast import EnumConstructor, DotCall, Name
-from ..compatibility import types_compatible
+from ..arguments import check_arguments
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
@@ -125,23 +125,6 @@ def validate_constructor_arguments(
             er.emit(validator.reporter, er.ERR.CE2036, constructor.loc)
             return
 
-    if len(actual_args) != len(expected_types):
-        er.emit(validator.reporter, er.ERR.CE2050, constructor.loc,
-               variant=variant_name, expected=len(expected_types), got=len(actual_args))
-
-    for _i, (arg, expected_type) in enumerate(zip(actual_args, expected_types, strict=False)):
-        validator.validate_expression(arg)
-
-        from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
-        resolved_type = expected_type
-        if isinstance(expected_type, UnknownType):
-            resolved_type = resolve_unknown_type(expected_type, validator.struct_table.by_name, validator.enum_table.by_name)
-
-        arg_type = validator.infer_expression_type(arg)
-        if arg_type is not None and not types_compatible(validator, arg_type, resolved_type):
-            er.emit(validator.reporter, er.ERR.CE2049, arg.loc,
-                   variant=variant_name, expected=display_type(resolved_type), got=display_type(arg_type))
-
-    for i in range(len(expected_types), len(actual_args)):
-        validator.validate_expression(actual_args[i])
+    check_arguments(validator, variant_name, expected_types, actual_args,
+                    constructor.loc,
+                    mismatch_code=er.ERR.CE2049, arity_code=er.ERR.CE2050)

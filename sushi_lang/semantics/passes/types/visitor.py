@@ -578,17 +578,11 @@ class ExpressionValidator(RecursiveVisitor):
         expected_arg = BuiltinType.U64 if is_f64 else BuiltinType.U32
         node.inferred_return_type = float_ty
 
-        if len(node.args) != 1:
-            er.emit(tv.reporter, er.ERR.CE2009, node.loc,
-                    name=f"{node.receiver.id}.from_bits", expected=1, got=len(node.args))
-            return
-
-        arg = node.args[0]
-        tv.validate_expression(arg)
-        arg_type = tv.infer_expression_type(arg)
-        if arg_type is not None and arg_type != expected_arg:
-            er.emit(tv.reporter, er.ERR.CE2006, getattr(arg, 'loc', node.loc),
-                    index=1, expected=display_type(expected_arg), got=display_type(arg_type))
+        from .arguments import check_arguments
+        check_arguments(tv, f"{node.receiver.id}.from_bits", [expected_arg],
+                        node.args, node.loc,
+                        mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
+                        stop_on_arity=True)
 
     def visit_arrayliteral(self, node: ArrayLiteral) -> None:
         """Validate array literal."""

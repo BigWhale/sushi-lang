@@ -72,9 +72,12 @@ def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
         sign = -1
         lit = lit.expr
 
-    # Idempotent: a literal may be reached by more than one propagation shim
-    # (enum + struct dotcall helpers both delegate here). Stamp once so we neither
-    # emit a duplicate CE2073 nor re-walk.
+    # Idempotent, and it must stay so. The two shims that used to reach this twice for
+    # one argument are gone (#749), and the guard is still live: a value is reached by
+    # more than one propagation in its own right -- an array literal's elements are
+    # walked again for every position that names the element type, a nested constructor's
+    # payload by the outer propagation as well as by the argument check. Stamping once is
+    # what stops a second CE2073 for one literal.
     if isinstance(lit, (IntLit, FloatLit)) and lit.resolved_type is not None:
         return
 

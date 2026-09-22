@@ -1,0 +1,19 @@
+# The borrow help offers the argument back to the user, so it must be text the user could
+# type. A member chain spells its receiver first; the node itself has no source spelling.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: help: borrow it at the call site: `peek b.inner.label`
+struct Inner:
+    string label
+
+struct Box:
+    Inner inner
+
+fn look(peek string s) i32:
+    return Result.Ok(s.len())
+
+fn main() i32:
+    let Box b = Box(Inner("Mostly Harmless"))
+    let i32 c = look(b.inner.label).realise(0)
+    println("{c}")
+    return Result.Ok(0)
