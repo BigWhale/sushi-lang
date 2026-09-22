@@ -1,0 +1,11 @@
+# The `resolved_enum_type` stamp on an `X.Y(args)` node. A built-in wrapper method --
+# `realise` here -- is measured against the interned `Maybe@(T)`, and the back end reads
+# the concrete enum off the call node instead of matching the LLVM type.
+# EXPECT_STDOUT_EXACT: "20 0\n"
+
+fn main() i32:
+    let i32[] arr = from([10, 20, 30])
+    let i32 hit = arr.get(1).realise(0)
+    let i32 miss = arr.get(9).realise(0)
+    println("{hit} {miss}")
+    return Result.Ok(0)

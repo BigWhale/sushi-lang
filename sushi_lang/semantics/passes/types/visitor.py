@@ -471,118 +471,19 @@ class ExpressionValidator(RecursiveVisitor):
 
     def _dispatch_dotcall(self, node: DotCall) -> None:
         """Send `X.Y(args)` to the rules of whatever X.Y turns out to name."""
-        from sushi_lang.semantics.passes.types.calls.namespaced import (
-            fold_namespaced_enum, fold_namespaced_static, validate_namespaced_call)
+        from sushi_lang.semantics.passes.types.calls.dotcall import (
+            DotCallKind, copy_callee_stamps, resolve_dotcall)
 
-        # `geo.Sign.Plus(1)`: the qualifier folds away and what is left is the bare
-        # constructor every rule below already knows (unit-namespaces.md section 5).
-        # `hm.HashMap.new()` folds the same way (#506).
-        fold_namespaced_enum(self.type_validator, node)
-        fold_namespaced_static(self.type_validator, node)
+        target = resolve_dotcall(self.type_validator, node, report=True)
 
-        # A namespace answers first, and it answers for every producer: an FFI block, a
-        # unit behind a `use ... as`, a registry stdlib module. Local-wins is inside
-        # `namespace_of`, so a variable of the same name never reaches here.
-        if self.type_validator.namespace_of(node.receiver) is not None:
-            validate_namespaced_call(self.type_validator, node)
-            return
-
-        # CE6102 reads the RECEIVER, not the parse shape: a type-argument list rides a
-        # direct call to a named free function, and every receiver that reaches this
-        # line is a value. The rule used to live in the AST builder, which cannot know
-        # whether a receiver names a bound alias (section 5.1).
-        if node.type_args:
-            er.emit_with(self.type_validator.reporter, er.ERR.CE6102,
-                         node.type_args_loc or node.loc) \
-                .help("call the generic function directly, e.g. foo@(i32)(x)") \
-                .emit()
-
-        # f64.from_bits(bits) / f32.from_bits(bits): static bit-reinterpret constructor.
-        # The receiver is a primitive float type NAME, not a value, so handle it before
-        # validating the receiver as an expression.
-        if (isinstance(node.receiver, Name) and node.receiver.id in ("f64", "f32")
-                and node.method == "from_bits"):
-            self._validate_from_bits(node)
-            return
-
-        # The receiver is deliberately NOT validated here: every path either has no
-        # receiver (an enum constructor's is a type NAME) or validates it itself. Doing it
-        # here as well walked the receiver twice and reported every diagnostic in it
-        # twice (#201).
-
-        # A name behind a type's dot is a MEMBER of that type (#542, ruling Q1): a
-        # static method, or -- on an enum -- a variant. The static is asked first
-        # because the variant path OWNS the enum's refusal (CE2045), and it steps
-        # aside for a name that is neither.
-        from sushi_lang.semantics.passes.types.calls.statics import validate_static_call
-        if validate_static_call(self.type_validator, node):
-            return
-
-        if (isinstance(node.receiver, Name)
-                and self._validate_variant_spelling(node, node.method, node.args)):
-            return
-
-        # obj.handler(): indirect call through a fn-typed struct field (a same-named
-        # method wins over the field -- see resolve_fn_field_call). The backend reads
-        # node.callee_fn_type to emit the fat-pointer indirect call.
-        fn_field_ty = resolve_fn_field_call(self.type_validator, node)
-        if fn_field_ty is not None:
+        if target.kind is DotCallKind.FN_FIELD:
             self.type_validator.validate_expression(node.receiver)
-            node.callee_fn_type = fn_field_ty
-            validate_fn_field_call_args(self.type_validator, node, fn_field_ty)
+            validate_fn_field_call_args(self.type_validator, node, target.fn_type)
             return
 
-        from sushi_lang.semantics.ast import MethodCall
-        temp_method_call = MethodCall(
-            receiver=node.receiver,
-            method=node.method,
-            args=node.args,
-            loc=node.loc
-        )
-        # The propagation stamp travels with it: the HashMap.new() key gate reads the
-        # concrete HashMap type off the call node (#272). The namespace stamp travels
-        # too: it is what says the receiver arrived QUALIFIED (#506, A-strict).
-        temp_method_call.resolved_struct_type = getattr(node, 'resolved_struct_type', None)
-        temp_method_call.namespace_ref = getattr(node, 'namespace_ref', None)
-        self.type_validator._validate_method_call(temp_method_call)
-
-        if hasattr(temp_method_call, 'inferred_return_type') and temp_method_call.inferred_return_type is not None:
-            node.inferred_return_type = temp_method_call.inferred_return_type
-
-        if hasattr(temp_method_call, 'resolved_enum_type') and temp_method_call.resolved_enum_type is not None:
-            node.resolved_enum_type = temp_method_call.resolved_enum_type
-
-        # CRITICAL: Copy the receiver-mode stamp back (#327) -- the borrow pass and the backend
-        # read it off THIS node, and losing it here would pass a poke-self receiver by
-        # value (the silently lost write of #326).
-        if getattr(temp_method_call, 'callee_self_mode', None) is not None:
-            node.callee_self_mode = temp_method_call.callee_self_mode
-
-        # The parameter-mode stamp travels with it: the borrow pass reads it off THIS node, so
-        # losing it makes every `nom` parameter of a method inert.
-        if getattr(temp_method_call, 'callee_param_modes', None) is not None:
-            node.callee_param_modes = temp_method_call.callee_param_modes
-            node.callee_param_names = temp_method_call.callee_param_names
-            node.callee_param_types = temp_method_call.callee_param_types
-
-        # The solved method-level type arguments are HALF the callee's symbol: losing
-        # them here would call `List__i32_mapv` where `List__i32_mapv__bool` is defined.
-        if getattr(temp_method_call, 'callee_method_type_args', None) is not None:
-            node.callee_method_type_args = temp_method_call.callee_method_type_args
-
-    def _validate_from_bits(self, node: DotCall) -> None:
-        """Validate f64.from_bits(u64) / f32.from_bits(u32) static reinterpret calls."""
-        tv = self.type_validator
-        is_f64 = node.receiver.id == "f64"
-        float_ty = BuiltinType.F64 if is_f64 else BuiltinType.F32
-        expected_arg = BuiltinType.U64 if is_f64 else BuiltinType.U32
-        node.inferred_return_type = float_ty
-
-        from .arguments import check_arguments
-        check_arguments(tv, f"{node.receiver.id}.from_bits", [expected_arg],
-                        node.args, node.loc,
-                        mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-                        stop_on_arity=True)
+        if target.kind is DotCallKind.METHOD:
+            self.type_validator._validate_method_call(target.method_call)
+            copy_callee_stamps(node, target.method_call)
 
     def visit_arrayliteral(self, node: ArrayLiteral) -> None:
         """Validate array literal."""
@@ -620,37 +521,10 @@ class ExpressionValidator(RecursiveVisitor):
         reject_unknown_field(self.type_validator, node)
 
     def _validate_variant_spelling(self, node, variant_name: str, args: list) -> bool:
-        """Validate `Enum.Variant(...)` or the bare `Enum.Variant` as the constructor it is.
-
-        Both parse as an operation on a type NAME -- a call, or a field read -- and both
-        construct the same value, so one path checks them. The bare spelling used to
-        take neither path: an undeclared variant compiled, and a GENERIC enum's variant
-        carried no stamp for the borrow pass and the backend to read (#545).
-
-        Local-wins (#296): a local named after the enum shadows it, so the node is a
-        method call or a field read on the local, never a variant construction.
-        """
-        tv = self.type_validator
-        receiver_name = node.receiver.id
-        if receiver_name in tv.variable_types:
-            return False
-        if (receiver_name not in tv.enum_table.by_name
-                and receiver_name not in tv.generic_enum_table.by_name):
-            return False
-
-        from sushi_lang.semantics.ast import EnumConstructor
-        constructor = EnumConstructor(
-            enum_name=receiver_name,
-            variant_name=variant_name,
-            args=args,
-            enum_name_span=node.receiver.loc,
-            loc=node.loc,
-        )
-        constructor.resolved_enum_type = getattr(node, 'resolved_enum_type', None)
-        tv._validate_enum_constructor(constructor)
-        if constructor.resolved_enum_type is not None:
-            node.resolved_enum_type = constructor.resolved_enum_type
-        return True
+        """`Enum.Variant(...)` and the bare `Enum.Variant` -- the ladder's one home."""
+        from sushi_lang.semantics.passes.types.calls.dotcall import (
+            validate_variant_spelling)
+        return validate_variant_spelling(self.type_validator, node, variant_name, args)
 
     def visit_tryexpr(self, node: TryExpr) -> None:
         """Validate try expression (?? operator)."""
@@ -1174,60 +1048,23 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_dotcall(self, node: DotCall) -> Optional[Type]:
         """Infer dot-call type and annotate node with inferred return type."""
-        from sushi_lang.semantics.passes.types.calls.namespaced import (
-            fold_namespaced_enum, fold_namespaced_static, infer_namespaced_call)
+        from sushi_lang.semantics.passes.types.calls.dotcall import (
+            DotCallKind, copy_callee_stamps, resolve_dotcall)
 
-        fold_namespaced_enum(self.type_validator, node)
-        fold_namespaced_static(self.type_validator, node)
+        target = resolve_dotcall(self.type_validator, node, report=False)
 
-        if self.type_validator.namespace_of(node.receiver) is not None:
-            return infer_namespaced_call(self.type_validator, node)
-
-        if (isinstance(node.receiver, Name) and node.receiver.id in ("f64", "f32")
-                and node.method == "from_bits"):
-            ty = BuiltinType.F64 if node.receiver.id == "f64" else BuiltinType.F32
-            node.inferred_return_type = ty
-            return ty
-
-        # A static answers before the enum-name arm, for the reason the validation
-        # half states: the two share one namespace and the static is the narrower ask.
-        from sushi_lang.semantics.passes.types.calls.statics import infer_static_call
-        static_ty = infer_static_call(self.type_validator, node)
-        if static_ty is not None:
-            return static_ty
-
-        if (isinstance(node.receiver, Name)
-                and node.receiver.id not in self.type_validator.variable_types):
-            receiver_name = node.receiver.id
-            if receiver_name in self.type_validator.enum_table.by_name:
-                inferred_type = self.type_validator.enum_table.by_name[receiver_name]
-                node.inferred_return_type = inferred_type
-                return inferred_type
-            elif receiver_name in self.type_validator.generic_enum_table.by_name:
-                # This is a generic enum constructor (like Result.Ok())
-                # We can't infer the complete type without more context
-                # For now, return None and let the type be inferred from context
-                return None
-
-        fn_field_ty = resolve_fn_field_call(self.type_validator, node)
-        if fn_field_ty is not None:
-            node.callee_fn_type = fn_field_ty
-            node.inferred_return_type = self._intern_result(fn_field_ty.ok_type,
-                                                            fn_field_ty.err_type)
+        if target.kind is DotCallKind.FN_FIELD:
+            node.inferred_return_type = self._intern_result(target.fn_type.ok_type,
+                                                            target.fn_type.err_type)
             return node.inferred_return_type
 
-        from sushi_lang.semantics.ast import MethodCall
-        temp_method_call = MethodCall(
-            receiver=node.receiver,
-            method=node.method,
-            args=node.args,
-            loc=node.loc
-        )
-        inferred_type = self.visit_methodcall(temp_method_call)
+        if target.kind is not DotCallKind.METHOD:
+            return target.type
+
+        inferred_type = self.visit_methodcall(target.method_call)
         if inferred_type is not None:
             node.inferred_return_type = inferred_type
-        if getattr(temp_method_call, 'callee_method_type_args', None) is not None:
-            node.callee_method_type_args = temp_method_call.callee_method_type_args
+        copy_callee_stamps(node, target.method_call)
         return inferred_type
 
     def visit_dynamicarraynew(self, node: DynamicArrayNew) -> Optional[Type]:

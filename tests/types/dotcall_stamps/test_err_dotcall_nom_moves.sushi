@@ -1,0 +1,20 @@
+# The `callee_param_modes` stamp on an `X.Y(args)` node. The borrow pass reads the declared
+# modes off the call node, so a `nom` parameter of a METHOD spends its argument exactly as a
+# free function's does. Without the stamp every `nom` parameter of a method is inert.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2405
+
+struct Sink:
+    i32 n
+
+extend Sink swallow(nom List@(i32) xs) i32:
+    return xs.len()
+
+fn main() i32:
+    let Sink sink = Sink(0)
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    let i32 a = sink.swallow(nom xs)
+    let i32 b = sink.swallow(nom xs)
+    println("{a} {b}")
+    return Result.Ok(0)

@@ -1,0 +1,20 @@
+# The `callee_param_names` stamp on an `X.Y(args)` node. CE2427 names the parameter the
+# marker belongs to, and the name comes off the call node. Without it the diagnostic can
+# only count the position.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2427
+# EXPECT_STDERR_CONTAINS: 'swallowed'
+
+struct Sink:
+    i32 n
+
+extend Sink swallow(nom List@(i32) swallowed) i32:
+    return swallowed.len()
+
+fn main() i32:
+    let Sink sink = Sink(0)
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    let i32 a = sink.swallow(xs)
+    println("{a}")
+    return Result.Ok(0)
