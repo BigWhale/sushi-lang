@@ -1,0 +1,14 @@
+# A foreign call numbers its arguments the way every other call does: the first
+# argument is at position 1. The FFI argument loop reported its 0-based counter, so a
+# foreign call was the one call in the language that numbered its first argument zero.
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: at position 1: expected i32, got string
+
+unsafe external "C" as libc because "a probe of the argument position number":
+    fn abs(i32 v) i32 = "abs"
+
+fn main() i32:
+    let string s = "x"
+    let i32 r = libc.abs(s)
+    println("{r}")
+    return Result.Ok(0)

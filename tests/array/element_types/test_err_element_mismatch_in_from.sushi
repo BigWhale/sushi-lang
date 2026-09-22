@@ -1,0 +1,6 @@
+# CE2013: a dynamic-array literal inside `from(...)` refuses a mixed element type.
+# EXPECT_ERROR_CODE: CE2013
+# EXPECT_STDERR_CONTAINS: expected i32, got string
+fn main() i32:
+    let i32[] a = from([1, "two"])
+    return Result.Ok(0)

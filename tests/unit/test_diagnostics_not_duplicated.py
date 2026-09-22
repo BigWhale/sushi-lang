@@ -101,3 +101,86 @@ fn main() i32:
     return Result.Ok(0)
 """)
     assert _count(stderr, "CE2400") == 1, stderr
+
+
+def test_try_in_main_nested_in_a_return_reported_once(tmp_path):
+    """CW2511 had two emit sites, and the second cared the wrong span (#743).
+
+    `return Result.Ok(compute()??)` warned at the `??` AND at the `Result.Ok(`, which
+    holds no `??` at all.
+    """
+    stderr = _compile(tmp_path, """fn compute() i32:
+    return Result.Ok(7)
+
+fn main() i32:
+    return Result.Ok(compute()??)
+""")
+    assert _count(stderr, "CW2511") == 1, stderr
+    assert "5:31" in stderr, stderr
+    assert "5:12" not in stderr, stderr
+
+
+def test_try_in_main_bare_return_reported_once(tmp_path):
+    """The same two sites, both on one span, for a bare `return compute()??` (#743)."""
+    stderr = _compile(tmp_path, """fn compute() i32:
+    return Result.Ok(7)
+
+fn main() i32:
+    return compute()??
+""")
+    assert _count(stderr, "CW2511") == 1, stderr
+
+
+def test_try_in_main_in_a_let_still_reported_once(tmp_path):
+    """Control: the `let` form was never doubled, and must stay at one."""
+    stderr = _compile(tmp_path, """fn compute() i32:
+    return Result.Ok(7)
+
+fn main() i32:
+    let i32 v = compute()??
+    return Result.Ok(v)
+""")
+    assert _count(stderr, "CW2511") == 1, stderr
+
+
+def test_array_element_mismatch_in_a_fixed_let_reported_once(tmp_path):
+    """CE2013 had two emit sites and the literal is walked by both, more than once.
+
+    Measured four identical diagnostics for one bad element on `main` (#757).
+    """
+    stderr = _compile(tmp_path, """fn main() i32:
+    let i32[3] a = [1, "two", 3]
+    return Result.Ok(0)
+""")
+    assert _count(stderr, "CE2013") == 1, stderr
+
+
+def test_array_element_mismatch_in_a_dynamic_let_reported_once(tmp_path):
+    """The same literal against a dynamic declared type (#757)."""
+    stderr = _compile(tmp_path, """fn main() i32:
+    let i32[] a = from([1, "two"])
+    return Result.Ok(0)
+""")
+    assert _count(stderr, "CE2013") == 1, stderr
+
+
+def test_array_element_mismatch_in_an_argument_reported_once(tmp_path):
+    """A literal inside a `from(...)` in an argument position (#757)."""
+    stderr = _compile(tmp_path, """fn take(i32[] v) i32:
+    return Result.Ok(v.len())
+
+fn main() i32:
+    let i32 n = take(from([1, "two"]))??
+    return Result.Ok(n)
+""")
+    assert _count(stderr, "CE2013") == 1, stderr
+
+
+def test_array_element_mismatch_in_a_foreach_iterable_reported_once(tmp_path):
+    """A literal inside the iterable of a `foreach` (#757)."""
+    stderr = _compile(tmp_path, """fn main() i32:
+    foreach(x in from([1, "two"]).iter()):
+        println("{x}")
+    return Result.Ok(0)
+""")
+    assert _count(stderr, "CE2013") == 1, stderr

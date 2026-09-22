@@ -588,7 +588,7 @@ class ExpressionValidator(RecursiveVisitor):
         arg_type = tv.infer_expression_type(arg)
         if arg_type is not None and arg_type != expected_arg:
             er.emit(tv.reporter, er.ERR.CE2006, getattr(arg, 'loc', node.loc),
-                    index=0, expected=display_type(expected_arg), got=display_type(arg_type))
+                    index=1, expected=display_type(expected_arg), got=display_type(arg_type))
 
     def visit_arrayliteral(self, node: ArrayLiteral) -> None:
         """Validate array literal."""

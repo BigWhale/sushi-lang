@@ -11,20 +11,36 @@ from lark import Token
 # too. `C` is re-exported because this module's renderers are its oldest caller.
 from sushi_lang.internals.styling import C, should_colour  # noqa: F401
 
-# The spelling gate (#734). Source syntax is `@(...)`; `<...>` is the INTERNAL identity
-# name and a table key, and it must not reach a user. One renderer, `display_type()`,
-# answers for many emit sites, and nothing asked the emit sites until this gate.
+# The spelling gate (#734, widened by #759). A diagnostic renders for a USER, so it may
+# carry only spellings the user can write. Two are refused. One renderer, `display_type()`,
+# answers the first for many emit sites, and nothing asked the emit sites until this gate.
 SPELLING_GATE_ENV = "SUSHI_SPELLING_GATE"
 
+# Source syntax is `@(...)`; `<...>` is the INTERNAL identity name and a table key.
 # Every legitimate `<` in a diagnostic follows a quote, a space or a line start: the
 # operators `'<'` and `'<<'`, the placeholders `<value>` and `<expression>`, the import
 # path `<collections/strings>`. An identifier character in front of one is an interned
 # name. Measured over the fixture corpus: 4 hits in 1338 diagnostic lines, all four real.
 _INTERNED_SPELLING = re.compile(r"[A-Za-z0-9_]<")
 
+# A borrow is written `peek x` / `poke x`. The `&` form was retired when borrow-by-default
+# landed, and the parser refuses it, so a diagnostic that prints one hands the user a
+# repair the compiler then rejects (#744). Only the two mode words are read, so a bitwise
+# `&` is untouched. Measured over the fixture corpus: 0 hits in 2020 diagnostic lines, and
+# one spelling put back answers 2 -- a zero here is a measured zero, not a dead pattern.
+_RETIRED_BORROW = re.compile(r"&\s*(?:peek|poke)\b")
+
+# Each row is a pattern and the repair its message names.
+_REFUSED_SPELLINGS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (_INTERNED_SPELLING,
+     "names a type with the internal spelling. Render it with display_type()"),
+    (_RETIRED_BORROW,
+     "spells a borrow with the retired `&`. Write the bare `peek` / `poke`"),
+)
+
 
 class DiagnosticSpellingError(BaseException):
-    """A diagnostic carries an interned type name where the source spelling belongs.
+    """A diagnostic carries a spelling the user cannot write.
 
     It derives from `BaseException` on purpose. The compiler catches `Exception` at two
     levels and renders a CE0000 from it, which would hide the emit site behind a generic
@@ -33,12 +49,12 @@ class DiagnosticSpellingError(BaseException):
     the whole answer.
     """
 
-    def __init__(self, code: str, text: str) -> None:
+    def __init__(self, code: str, text: str, repair: str) -> None:
         super().__init__(
-            f"{SPELLING_GATE_ENV}: diagnostic {code} names a type with the internal "
-            f"spelling. Render it with display_type(). Message: {text!r}")
+            f"{SPELLING_GATE_ENV}: diagnostic {code} {repair}. Message: {text!r}")
         self.code = code
         self.text = text
+        self.repair = repair
 
 
 def spelling_gate_is_on() -> bool:
@@ -51,9 +67,12 @@ def spelling_gate_is_on() -> bool:
 
 
 def check_spelling(code: str, text: str) -> None:
-    """Refuse an interned type name in one piece of diagnostic text."""
-    if text and spelling_gate_is_on() and _INTERNED_SPELLING.search(text):
-        raise DiagnosticSpellingError(code, text)
+    """Refuse a spelling the user cannot write, in one piece of diagnostic text."""
+    if not text or not spelling_gate_is_on():
+        return
+    for pattern, repair in _REFUSED_SPELLINGS:
+        if pattern.search(text):
+            raise DiagnosticSpellingError(code, text, repair)
 
 
 @dataclass
