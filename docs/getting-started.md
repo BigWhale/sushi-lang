@@ -326,11 +326,11 @@ Second division failed (as expected)
 Sushi includes a comprehensive test suite. Try running it:
 
 ```bash
-# Run all tests (compilation only)
+# Run all tests
 uv run python tests/run_tests.py
 
-# Run with runtime validation
-uv run python tests/run_tests.py --enhanced
+# Run only the fixtures that never execute a binary (quicker, and asserts them in full)
+uv run python tests/run_tests.py --compile-only
 
 # Run specific tests
 uv run python tests/run_tests.py --filter hashmap

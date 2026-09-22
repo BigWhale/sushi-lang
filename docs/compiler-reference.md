@@ -743,16 +743,19 @@ Occurs when system runs out of memory during dynamic allocation.
 ### Test Runner
 
 ```bash
-# Run all tests (compilation only)
+# Run all tests: every fixture, every directive
 python tests/run_tests.py
 
-# Run with runtime validation
-python tests/run_tests.py --enhanced
+# Run only the fixtures that never execute a binary (a fast gate on the diagnostics)
+python tests/run_tests.py --compile-only
 
-# Filter tests by pattern
+# Filter tests by the path under tests/
 python tests/run_tests.py --filter hashmap
 python tests/run_tests.py --filter test_result
 ```
+
+Each flag SELECTS; none of them makes the checking weaker. A run that selects no fixture
+fails, because a run that covered nothing must not report a pass.
 
 ### Test Types
 

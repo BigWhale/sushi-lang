@@ -4,20 +4,14 @@
 import argparse
 import subprocess
 import sys
-import json
 import os
 import shutil
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
-from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from test_metadata import (parse_test_metadata, collect_fixtures,  # noqa: E402
-                          fixture_binary_name)
 from sushi_lang.internals.report import SPELLING_GATE_ENV  # noqa: E402
 
 
@@ -260,19 +254,6 @@ def build_leakcheck(project_root: Path, verbose: bool = False) -> bool:
 COMPILATION_QUARANTINE: set[str] = set()
 
 
-def get_expected_exit_code(test_file: Path) -> int:
-    """Determine expected exit code based on filename convention."""
-    test_name = test_file.name
-
-    if test_name.startswith("test_warn_"):
-        return 1
-    elif test_name.startswith("test_err_"):
-        return 2
-    elif test_name.startswith("test_"):
-        return 0
-    else:
-        # Non-test file, shouldn't happen but default to 0
-        return 0
 
 def arm_spelling_gate() -> None:
     """Turn the diagnostic spelling gate on for every compiler the run spawns (#734).
@@ -294,58 +275,24 @@ def spelling_gate_tripped(stderr: str) -> bool:
     return f"{SPELLING_GATE_ENV}:" in (stderr or "")
 
 
-def run_single_test(test_file: Path, bin_dir: Path, tests_dir: Path,
-                    verbose: bool = False) -> tuple[str, bool, int, int, str]:
-    """Run a single test file and return results."""
-    test_name = test_file.name
-    expected_exit_code = get_expected_exit_code(test_file)
-
-    # Skip tests that expose known compiler ICEs: they cannot satisfy the
-    # expected exit code until the underlying bug is fixed.
-    if test_name in COMPILATION_QUARANTINE:
-        return test_name, True, expected_exit_code, expected_exit_code, "[QUARANTINED - known compiler ICE]"
-
-    try:
-        # The output binary, named from the fixture's PATH. The stem alone was not
-        # unique, and the run is parallel: two fixtures of one stem raced for one
-        # output file (#604).
-        output_path = bin_dir / fixture_binary_name(test_file, tests_dir)
-
-        # Run the compiler on the test file with unique output, plus whatever the
-        # fixture's COMPILER_FLAGS directive asks for.
-        result = subprocess.run(
-            ["./sushic", str(test_file), "-o", str(output_path),
-             *parse_test_metadata(test_file).compiler_flags],
-            capture_output=True,
-            text=True,
-            timeout=30  # 30 second timeout per test
-        )
-
-        actual_exit_code = result.returncode
-        passed = actual_exit_code == expected_exit_code
-
-        # A tripped spelling gate is a failure whatever the exit code says (#734).
-        if spelling_gate_tripped(result.stderr):
-            passed = False
-
-        # Capture output for verbose mode
-        output = ""
-        if result.stdout:
-            output += f"STDOUT:\n{result.stdout}\n"
-        if result.stderr:
-            output += f"STDERR:\n{result.stderr}\n"
-
-        return test_name, passed, expected_exit_code, actual_exit_code, output
-
-    except subprocess.TimeoutExpired:
-        return test_name, False, expected_exit_code, -1, "TEST TIMEOUT"
-    except Exception as e:
-        return test_name, False, expected_exit_code, -1, f"TEST ERROR: {e}"
 
 def main():
+    """The front end: build what a run needs, then hand it to the ONE runner.
+
+    `run_tests.py` used to carry a second runner of its own that compiled every fixture
+    and checked the compiler's exit status alone -- it read no `EXPECT_*` directive, so a
+    `test_err_` fixture passed it whatever diagnostic the compiler printed (#760). It was
+    not the compile HALF of the suite; it was the whole suite with the assertions turned
+    off, and it bought no speed for them: over `tests/diagnostics/`, where almost nothing
+    runs a binary, it measured 6.95s against the enhanced runner's 6.85s.
+
+    What remains here is what both halves always shared -- the stdlib and helper builds,
+    the leak interposer, the cache purge and the spelling gate -- plus the argument
+    parsing. `enhanced_test_runner` runs the tests.
+    """
     # allow_abbrev=False: with --leaks deleted, argparse would otherwise accept it as a
-    # unique prefix of --leaks-only and silently narrow a full run to the 96-test leak
-    # subset. A removed flag has to fail, not quietly mean something else.
+    # unique prefix of --leaks-only and silently narrow a full run to the leak subset.
+    # A removed flag has to fail, not quietly mean something else.
     parser = argparse.ArgumentParser(description="Run Sushi language compiler tests",
                                      allow_abbrev=False)
     parser.add_argument("-v", "--verbose", action="store_true",
@@ -354,185 +301,51 @@ def main():
                        help=f"Number of parallel test jobs (default: {DEFAULT_JOBS}, "
                             f"or ${JOBS_ENV_VAR})")
     parser.add_argument("--filter", type=str,
-                       help="Only run tests matching this pattern")
+                       help="Only run tests whose path under tests/ contains this string")
     parser.add_argument("--enhanced", action="store_true",
-                       help="Use enhanced test runner with runtime testing support")
+                       help="Accepted and does nothing: every run is the enhanced run. "
+                            "Kept so the CI lines and a typed habit keep working")
     parser.add_argument("--json", action="store_true",
                        help="Output results in JSON format")
     parser.add_argument("--skip-build", action="store_true",
                        help="Skip building stdlib and test helpers")
     parser.add_argument("--leaks-only", action="store_true",
-                       help="Run only the tests declaring EXPECT_NO_LEAKS (implies --enhanced)")
+                       help="Run only the tests declaring EXPECT_NO_LEAKS (a selector; "
+                            "the assertion is enforced by every run)")
     parser.add_argument("--allow-leak-skips", action="store_true",
                        help="Report a pass even though leak assertions were not "
-                            "evaluated (enhanced runner only)")
+                            "evaluated. Only for a platform that cannot check at all")
+    parser.add_argument("--compile-only", action="store_true",
+                       help="Run only the fixtures that never execute a binary (every "
+                            "test_err_ and most test_warn_). A selector, not a weaker "
+                            "check: what it selects is asserted in full")
 
     args = parser.parse_args()
 
-    # --enhanced enforces EXPECT_NO_LEAKS; --leaks-only just narrows the selection to
-    # the annotated subset. The leak gate lives in the enhanced runner, which is the
-    # only one that executes binaries at all.
-    if args.leaks_only:
-        args.enhanced = True
-
     arm_spelling_gate()
 
-    # Before either runner: a warm cache can outlive a codegen change (see purge_unit_caches).
+    # A warm cache can outlive a codegen change (see purge_unit_caches).
     purge_unit_caches(Path(__file__).parent.parent, verbose=args.verbose)
 
-    # Delegate to enhanced runner if requested
-    if args.enhanced:
-        if not args.json:
-            print("Delegating to enhanced test runner...")
-        try:
-            import enhanced_test_runner
-            sys.argv = [sys.argv[0]]  # Reset argv for enhanced runner
-            if args.verbose:
-                sys.argv.append("--verbose")
-            if args.filter:
-                sys.argv.extend(["--filter", args.filter])
-            sys.argv.extend(["--jobs", str(args.jobs)])
-            if args.json:
-                sys.argv.append("--json")
-            if args.skip_build:
-                sys.argv.append("--skip-build")
-            if args.leaks_only:
-                sys.argv.append("--leaks-only")
-            if args.allow_leak_skips:
-                sys.argv.append("--allow-leak-skips")
-            return enhanced_test_runner.main()
-        except ImportError:
-            if not args.json:
-                print("Error: Enhanced test runner not available. Falling back to basic runner.")
-        except Exception as e:
-            if not args.json:
-                print(f"Error running enhanced test runner: {e}")
-                print("Falling back to basic runner.")
-
-    # Find the project root and tests directory
-    project_root = Path(__file__).parent.parent
-    tests_dir = project_root / "tests"
-    bin_dir = tests_dir / "bin"
-
-    # Create bin directory if it doesn't exist
-    bin_dir.mkdir(exist_ok=True)
-
-    # Change to project root for running sushic
-    os.chdir(project_root)
-
-    # Build stdlib and test helpers unless skipped
-    if not args.skip_build:
-        if not args.json:
-            print("Building stdlib and test helpers...")
-        if not build_stdlib(project_root, args.verbose):
-            if not args.json:
-                print("Failed to build stdlib, aborting tests")
-            return 1
-        if not build_test_helpers(project_root, args.verbose):
-            if not args.json:
-                print("Failed to build test helpers, aborting tests")
-            return 1
-
-    # Set SUSHI_LIB_PATH for library tests
-    libs_bin_dir = tests_dir / "libs" / "bin"
-    os.environ["SUSHI_LIB_PATH"] = str(libs_bin_dir)
-
-    # Find all test files in tests directory recursively, excluding helper/build directories
-    test_files = collect_fixtures(tests_dir)
-
+    import enhanced_test_runner
+    sys.argv = [sys.argv[0]]
+    if args.verbose:
+        sys.argv.append("--verbose")
     if args.filter:
-        # Filter by relative path (supports directory filters like "stdlib" or filename patterns)
-        test_files = [f for f in test_files if args.filter in str(f.relative_to(tests_dir))]
-
-    if not test_files:
-        if not args.json:
-            print("No test files found!")
-        return 1
-
-    # All test files that match test_*.sushi pattern are automatically supported
-
-    if not args.json:
-        print(f"Running {len(test_files)} tests with {args.jobs} parallel jobs...")
-        print("Note: This is the basic test runner (compilation only). Use --enhanced for runtime testing.")
-        print()
-
-    start_time = time.time()
-
-    # Run tests in parallel with progress bar
-    results = []
-    show_progress = not args.json and not args.verbose
-    with ThreadPoolExecutor(max_workers=args.jobs) as executor:
-        futures = {executor.submit(run_single_test, f, bin_dir, tests_dir, args.verbose): f
-                   for f in test_files}
-        if show_progress:
-            pbar = tqdm(total=len(test_files), desc="Running tests", unit="test",
-                       bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
-        for future in as_completed(futures):
-            results.append(future.result())
-            if show_progress:
-                pbar.update(1)
-        if show_progress:
-            pbar.close()
-
-    end_time = time.time()
-
-    # Analyze results
-    passed_tests = []
-    failed_tests = []
-
-    for test_name, passed, expected, actual, output in results:
-        if passed:
-            passed_tests.append(test_name)
-            if args.verbose and not args.json:
-                print(f"✓ {test_name} (expected: {expected}, actual: {actual})")
-        else:
-            failed_tests.append((test_name, expected, actual, output))
-            if not args.json:
-                print(f"✗ {test_name} (expected: {expected}, actual: {actual})")
-                if args.verbose and output:
-                    print(f"  Output: {output}")
-
-    # Output in JSON format if requested
+        sys.argv.extend(["--filter", args.filter])
+    sys.argv.extend(["--jobs", str(args.jobs)])
     if args.json:
-        json_output = {
-            "total_tests": len(results),
-            "compilation_tests": len(results),  # Basic runner only does compilation
-            "runtime_tests": 0,  # Basic runner doesn't run runtime tests
-            "passed": len(passed_tests),
-            "failed": len(failed_tests),
-            "duration_seconds": round(end_time - start_time, 2),
-            "failed_tests": [
-                {
-                    "name": test_name,
-                    "expected_exit_code": expected,
-                    "actual_exit_code": actual
-                }
-                for test_name, expected, actual, output in failed_tests
-            ]
-        }
-        print(json.dumps(json_output, indent=2))
-        return 1 if failed_tests else 0
+        sys.argv.append("--json")
+    if args.skip_build:
+        sys.argv.append("--skip-build")
+    if args.leaks_only:
+        sys.argv.append("--leaks-only")
+    if args.allow_leak_skips:
+        sys.argv.append("--allow-leak-skips")
+    if args.compile_only:
+        sys.argv.append("--compile-only")
+    return enhanced_test_runner.main()
 
-    # Summary
-    print()
-    print(f"Test Results ({end_time - start_time:.2f}s):")
-    print(f"  Passed: {len(passed_tests)}")
-    print(f"  Failed: {len(failed_tests)}")
-    print(f"  Total:  {len(results)}")
-
-    if failed_tests:
-        print()
-        print("Failed tests:")
-        for test_name, expected, actual, _output in failed_tests:
-            print(f"  {test_name}: expected {expected}, got {actual}")
-
-    # Return appropriate exit code
-    if failed_tests:
-        return 1
-    else:
-        print()
-        print("All tests passed! ✓")
-        return 0
 
 if __name__ == "__main__":
     sys.exit(main())
