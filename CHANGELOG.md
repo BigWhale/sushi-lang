@@ -392,6 +392,15 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A generic call reads the same argument check as every other call** (#747).
+  `passes/types/calls/generics.py` held a near-verbatim fork of the canonical
+  `validate_call_arguments`, and the fork had lost two behaviours. A bloom spread in a
+  position that is never variadic got no diagnostic from that path, where a plain call
+  answers **CE0120**. A parameter-mode mismatch emitted a bare CE2006, where a plain call
+  adds the help that names the fix, ``borrow it at the call site: `peek x` ``. The fork is
+  gone and the generic path calls the one check, so both behaviours reach a generic call.
+  This is the drift the duplicate register warns about: one rule, two homes, and the copy
+  already behind.
 - **Each match-pattern fault has its own code** (#741). CE2048 answered FOUR faults over
   seven emit sites, and three of them filled its quoted type slot with a whole sentence, so
   a user read `got 'Own(...) pattern requires Own@(T) type, got i32'`. Two of the four
@@ -973,6 +982,48 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One argument check for every call shape** (#748). The shape "check the arity, then walk
+  the pairs, propagate, validate, infer, compare and emit" was written THIRTEEN times under
+  the typecheck pass: 19 CE2006 emit sites and 34 CE2009 emit sites over seven modules, for
+  two rules. What legitimately differs between them is a four-tuple -- the callee's display
+  name, the parameter list, the arity code and the mismatch code -- and everything else was
+  accidental. The accident had already cost behaviour twice (#747 and #746). One seam,
+  `passes/types/arguments.py:check_arguments`, now serves the canonical loop, the two
+  variadic prefixes, the stdlib plain path, the generic call, a static call, an enum
+  constructor's tail loop, the FFI extern check and `f64.from_bits`; 12 CE2006 and 25 CE2009
+  sites remain outside it, over three modules, and CE2049/CE2050 have none. A ratchet gate
+  holds the count, and refuses an emit that hides its code behind a value where the count
+  cannot read it. **The unification converged five behaviours, all widenings**: the bloom
+  spread refusal now reaches a generic call, a static call, an enum constructor, a stdlib
+  call and `from_bits`; the CE2006 borrow help reaches every converted path, where it was on
+  exactly one of the 19 sites; every path resolves the declared type before it compares; the
+  stdlib plain path no longer stops at a wrong count, so it may now also report a type
+  mismatch for the arguments that line up; and three paths that asked the inference a second
+  time read the validation's own answer instead.
+- **One table for the built-in array methods** (#750). `passes/types/arrays.py` spelled the
+  method set three times -- a literal set of 24 names, an 18-arm `elif` chain of 143 lines,
+  and a 15-arm return-type chain -- and validated it with twelve near-identical functions,
+  ten of which were the same five lines with a different name string. `to_string_checked`
+  was in two of the three lists and absent from the third, which was patched by a special
+  case in `method_registry.py`. One `_ARRAY_METHODS` table now carries the arity, the
+  receiver kind, the argument rule, the return rule and the constant-receiver gate per row;
+  the two chains are one lookup, the twelve validators are nine argument rules, and the
+  special case is gone. 21 of the section's 34 CE2009 sites were in this file and one
+  remains. `validate_builtin_array_method` drops from a McCabe complexity of 39 to 5, the
+  module from 528 lines to 456, and its 40 `Any` annotations to none. A totality gate holds
+  every row to a return type and pins the table against the BACKEND's array dispatcher, so
+  a name added on one side and forgotten on the other fails a test instead of dying as a
+  `NotImplementedError` at code generation. No behaviour change, proved over 2304 cases --
+  24 methods by 8 receiver kinds by 12 argument shapes -- whose diagnostics are identical
+  before and after.
+- **The propagation seam is reached once per position** (#749). `passes/types/utils.py`
+  carried two wrappers over `propagate_types_to_value` that were byte-identical apart from
+  one word of a docstring, and NINE positions called both of them, back to back, on one
+  argument -- 20 calls in all, four of the paired positions outside the typecheck pass
+  entirely. The propagation therefore ran twice at each of them. Both wrappers are gone and
+  every position calls the seam itself. The idempotency guard stays and is now documented as
+  live rather than left over: measured over 2931 fixtures, it fired 9372 times before and
+  7565 times after, so 7565 of those firings answer a genuine re-entry and not the duplicate.
 - **A pattern's type name resolves through one seam** (#742). `passes/types/matching.py`
   resolved an `UnknownType` by hand ten times, naming the struct and the enum table at every
   one of them, behind seven local imports of a name the module header already held. One
