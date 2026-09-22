@@ -14,6 +14,7 @@ in the changelog: it bought no speed and gave up the assertions.
 from __future__ import annotations
 
 import ast
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -62,6 +63,15 @@ def test_an_empty_selection_fails_the_same_way_behind_every_flag():
     assert done.returncode != 0, (
         "a leak assertion needs a run, so these two select nothing; the run reported "
         "success:\n" + done.stdout[-2000:])
+
+
+def test_an_empty_selection_is_still_a_json_report():
+    """A consumer reads the report, not the exit code, so the refusal must BE a report."""
+    done = _run("--json", "--filter", "zzz_no_such_area")
+    assert done.returncode != 0, done.stdout[-2000:]
+    report = json.loads(done.stdout)
+    assert report["selected_nothing"] is True, report
+    assert report["passed"] == 0 and report["total_tests"] == 0, report
 
 
 def test_a_real_selection_still_passes():

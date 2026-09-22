@@ -378,8 +378,23 @@ class TestRunner:
 
         if not test_files:
             self.selected_nothing = True
-            if not self.json_output:
-                print(f"No fixture matched this selection: {self._describe_selection(filter_pattern)}.")
+            selection = self._describe_selection(filter_pattern)
+            if self.json_output:
+                # A consumer of the JSON reads a report, not an exit code, so the empty
+                # selection has to BE a report. Printing nothing would make a consumer
+                # crash on an empty file where it should read a clear failure.
+                print(json.dumps({
+                    "total_tests": 0, "compilation_tests": 0, "runtime_tests": 0,
+                    "passed": 0, "failed": 0, "duration_seconds": 0.0,
+                    "failed_tests": [],
+                    "leak_checks_run": 0, "leak_checks_skipped": 0,
+                    "leak_checks_skipped_detail": [],
+                    "leak_skips_allowed": self.allow_leak_skips,
+                    "selected_nothing": True,
+                    "selection": selection,
+                }, indent=2))
+            else:
+                print(f"No fixture matched this selection: {selection}.")
                 print("A run that covered nothing is a failure, not a pass.")
             return {}
 
