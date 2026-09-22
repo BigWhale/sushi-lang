@@ -30,9 +30,15 @@ a bug of the class #239 collected:
 
 | layer | file | what it decides |
 |---|---|---|
-| **validation** | `semantics/passes/types/calls/methods.py:validate_method_call` | which family checks arity and argument types |
-| **inference** | `semantics/passes/types/method_registry.py` | what the call expression's type is |
+| **validation** | `semantics/passes/types/method_registry.py` (the family's `validate` hook) | which family checks arity and argument types |
+| **inference** | `semantics/passes/types/method_registry.py` (the family's `infer` hook) | what the call expression's type is |
 | **codegen** | `backend/expressions/calls/dispatcher.py:emit_method_call` | which body actually runs |
+
+Validation and inference are ONE table since #751. Each family row carries both hooks, and
+`calls/methods.py:validate_method_call` asks the table instead of holding an arm chain of its
+own -- it had twelve arms, in a different order from the registry's ten checkers, and nothing
+but a comment held the two in step. Codegen is still its own dispatcher, so two layers must
+agree where three did.
 
 Inference is the layer that goes wrong quietly. `validate_assignment_compatibility` opens with
 `if value_type is None: return`, so a family that fails to infer does not report anything --
@@ -61,7 +67,7 @@ Two rules follow, and both are load-bearing:
 ## The built-in families
 
 `builtin_method_exists(receiver_type, method_name)` in
-`semantics/generics/builtin_methods.py` is the single seam. It mirrors `validate_method_call`'s
+`semantics/generics/builtin_methods.py` is the single seam. It mirrors the family TABLE's
 receiver dispatch, family for family:
 
 - **arrays** (fixed and dynamic) -- `len`, `get`, `push`, `pop`, `iter`, `clone`, `hash`, ...
@@ -72,8 +78,9 @@ receiver dispatch, family for family:
 - **the compiler-derived pair** -- `hash()` and `clone()`, auto-derived in the derive pass for every
   struct and enum
 
-`tests/unit/test_builtin_method_seam.py` pins that list against `validate_method_call`'s in
-both directions. Two places answering one question drift; that is the #248 lesson (*if the
+`tests/unit/test_builtin_method_seam.py` pins that list against the family table's in both
+directions. It used to read `validate_method_call`; once the arms became table rows, a gate
+left pointing there would have compared one family against ten and passed vacuously. Two places answering one question drift; that is the #248 lesson (*if the
 same question is asked in six places, the fix is a seam, not a fallback*).
 
 ## The family order
@@ -88,6 +95,13 @@ arbitrary. What matters is that validation and codegen state the SAME one: the t
 used to state it oppositely, and a type that ever satisfied two families would have
 dispatched differently per layer with no diagnostic (#273).
 `tests/unit/test_method_resolution_family_order.py` pins the order in both files.
+
+**#751 measured the disjointness rather than asserting it.** At most ONE family claims any
+(receiver kind, method name), over a space proved to reach every family
+(`tests/unit/test_method_family_dispatch_is_one.py`). So the order cannot decide an answer,
+which is why the two orders never diverged in practice. The one thing the order still
+decides is where the PERK rung sits: the ladder asks the perk implementation between the two
+halves of the table, and each row's `beats_perk` says which side it is on.
 
 ## Why extensions lose
 

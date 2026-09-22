@@ -1,0 +1,21 @@
+# The `callee_param_types` stamp on an `X.Y(args)` node. The back end settles each argument
+# against the type its parameter declares, so the list a `nom` parameter takes has exactly
+# one owner and is freed exactly once.
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_NO_LEAKS
+
+struct Sink:
+    i32 n
+
+extend Sink swallow(nom List@(i32) xs) i32:
+    return xs.len()
+
+fn main() i32:
+    let Sink sink = Sink(0)
+    let List@(i32) xs = List.new()
+    xs.push(10)
+    xs.push(20)
+    xs.push(30)
+    let i32 n = sink.swallow(nom xs)
+    println("{n}")
+    return Result.Ok(0)

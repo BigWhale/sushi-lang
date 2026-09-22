@@ -982,6 +982,49 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **A method family is decided in one table, not in two dispatchers** (#751). One closed set
+  had two dispatchers that had to agree by hand: INFERENCE went through
+  `method_registry.py`'s ten registered checkers, VALIDATION through a twelve-arm `if/elif`
+  chain in `calls/methods.py`. Nothing held them in step but comments, and the comments said
+  what the drift would cost -- a perk implementation that wins at validation and at code
+  generation but not at inference types the call as the built-in's return while the backend
+  calls the perk, which is a MISCOMPILE. `MethodTypeRegistry` carries a `validate` hook per
+  family now; both halves read the one table and the twelve arms are gone. The measurement
+  that allowed the full merge rather than a gate: all twelve arms are pure dispatch, the
+  arity work the ticket warned about living inside the family validators instead. A second
+  measurement is the stronger result -- **the families claim PAIRWISE DISJOINTLY**, so at
+  most one answers any (receiver kind, method name) and the dispatch ORDER cannot decide an
+  answer. That is why the two orders never diverged, and a gate now holds it over a space
+  proved to reach every family.
+- **`validate_method_call` is 52 lines at complexity 11** (#752), from **266 lines at
+  complexity 60**. It held four jobs: the family dispatcher, a per-family arity checker, a
+  perk arm that was the same twenty lines as the extension arm, and the extension-resolution
+  ladder. The perk arm and the extension arm read one checker now, and the two argument loops
+  read the `check_arguments` seam #748 built. **The C901 gate falls from 60 to 41**: this
+  function WAS the threshold, and the repository worst is now `emit_array_method` at 41.
+  One measured behaviour change, kept deliberately: the CE2006 borrow help now reaches a
+  METHOD argument, so `k.take(v)` against a `peek string` parameter says
+  ``help: borrow it at the call site: `peek v` ``. It was absent there, which is exactly the
+  #747 argument for the seam -- a behaviour the compiler had on one path and had lost on
+  another.
+- **A dot-call is answered by one ladder with one stamp set** (#753). "What does `X.Y(args)`
+  name?" was answered twice in `visitor.py`, and the two halves copied back a different
+  number of stamps: the validating half seven attributes in five blocks, the inferring half
+  two. Three of the five carry a comment recording a past miscompile -- a lost `poke self`
+  receiver (#326, #327), a `nom` parameter made inert, a call to the wrong monomorphized
+  symbol. One `resolve_dotcall` in the new `calls/dotcall.py` answers a tagged union and both
+  halves read it; `_dispatch_dotcall` goes from 100 lines to 15 and the inference half from
+  57 to 20. **The ticket's premise was wrong in one respect and the measurement says so**:
+  the two halves walked the same rung ORDER, not different ones. What differed was the arm
+  bodies, a validation-only CE6102 gate, and the stamps. Seven fixtures pin the stamps, and
+  five of the seven are proved to REDDEN when their copy is broken.
+- **The three typecheck visitors have a module each** (#754). `visitor.py` was 1304 lines
+  holding `StatementValidator`, `ExpressionValidator` and `TypeInferenceVisitor`; the two
+  dot-call ladders were the reason the three sat together and the reason they should not. It
+  is `visit/statements.py`, `visit/expressions.py`, `visit/inference.py` and
+  `visit/helpers.py` now, with the shared ladder in `calls/dotcall.py`. `visitor.py` stays as
+  a 24-line facade, because it has SEVEN outside readers and not the one the ticket claimed;
+  every existing import line is unchanged.
 - **One argument check for every call shape** (#748). The shape "check the arity, then walk
   the pairs, propagate, validate, infer, compare and emit" was written THIRTEEN times under
   the typecheck pass: 19 CE2006 emit sites and 34 CE2009 emit sites over seven modules, for

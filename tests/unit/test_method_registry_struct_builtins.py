@@ -4,10 +4,24 @@ from __future__ import annotations
 import pytest
 
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
-from sushi_lang.semantics.passes.types.method_registry import (
-    check_struct_enum_builtin_methods,
-)
+from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, StructType
+
+#: The derived family's two rows in the one family table (#751).
+_DERIVED = ("derived_hash", "derived_clone")
+
+
+def check_struct_enum_builtin_methods(receiver_type, method_name, validator):
+    """The derived struct/enum family's claim, asked through the one table (#751).
+
+    The claim used to be a checker function of its own. It is a row of
+    `METHOD_TYPE_REGISTRY` now, which the validation half reads too; every case below
+    asks the same question of the same predicate.
+    """
+    family = METHOD_TYPE_REGISTRY.claim(receiver_type, method_name, validator)
+    if family is None or family.name not in _DERIVED:
+        return None
+    return family.infer(receiver_type, method_name, validator)
 
 
 STRUCT_SRC = """

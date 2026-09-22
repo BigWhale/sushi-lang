@@ -1,0 +1,15 @@
+# The `callee_method_type_args` stamp on an `X.Y(args)` node. The solved method-level type
+# arguments are half the callee's symbol: two instantiations of one method-generic differ
+# only by them, so losing them calls the copy cut for the other type.
+# EXPECT_STDOUT_EXACT: "7 2.5\n"
+
+struct Box:
+    i32 n
+
+extend Box echo@(U)(U v) U:
+    return v
+
+fn main() i32:
+    let Box b = Box(0)
+    println("{b.echo(7)} {b.echo(2.5)}")
+    return Result.Ok(0)

@@ -1,7 +1,36 @@
-"""Method type inference registry for built-in types."""
+"""The one table that says which built-in method family a call belongs to.
+
+A method call is answered by a built-in family (an array method, a `Result` method, a
+derived `clone`), by a perk implementation, or by an extension method. The families were
+dispatched TWICE: the typecheck pass INFERRED through a registry of checkers and
+VALIDATED through an `if/elif` chain of twelve arms in a different order, and nothing
+held the two in step but two comments. The failure mode is a miscompile -- the pass types
+the call as the built-in's return while the backend calls the perk implementation that
+answers it (#751).
+
+There is one table now. A `MethodFamily` carries the CLAIM -- which receiver and which
+name it answers -- and both halves: the inferrer the typecheck pass reads, and the
+validator it runs. `claim()` is the one decision; `infer_method_type()` and
+`validate_method()` are two hooks on it. The gate is
+`tests/unit/test_method_family_dispatch_is_one.py`, which holds the table TOTAL (no
+family with one half) and its claims DISJOINT.
+
+Disjoint is what makes the order safe: exactly one family answers any (receiver kind,
+method name), so the order below decides nothing. It is written in the order the
+validation half reads, because `docs/design/method-resolution.md` and the codegen
+dispatcher state that one.
+
+`beats_perk` is the one thing the order does decide. The ladder asks the perk
+implementation BETWEEN the two halves of this table, so a family says which side it is
+on. A family that yields to a perk asks the perk table in its own claim -- the primitive
+and the two derived families do -- and a family that beats one has nothing to ask.
+"""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional, Protocol, Callable
+from typing import TYPE_CHECKING, Callable, Optional, Protocol
 from dataclasses import dataclass
+
+from sushi_lang.semantics.typesys import (
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, FunctionType, StructType)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
@@ -17,41 +46,85 @@ class MethodTypeInferrer(Protocol):
         ...
 
 
-TypeChecker = Callable[['Type', str, 'TypeValidator'], Optional[MethodTypeInferrer]]
+#: Does this family answer this receiver and this method name?
+ClaimHook = Callable[['Type', str, 'TypeValidator'], bool]
+#: The inferrer the typecheck pass reads for a claimed call.
+InferHook = Callable[['Type', str, 'TypeValidator'], MethodTypeInferrer]
+#: The check the typecheck pass runs for a claimed call.
+ValidateHook = Callable[['TypeValidator', 'MethodCall', 'Type'], None]
+
+
+@dataclass
+class MethodFamily:
+    """One built-in method family: who it answers for, and what each half does."""
+    name: str
+    beats_perk: bool
+    claims: ClaimHook
+    infer: Optional[InferHook] = None
+    validate: Optional[ValidateHook] = None
 
 
 class MethodTypeRegistry:
-    """Registry for method type inference handlers."""
+    """The built-in method families, and the one claim both halves of the pass read."""
 
     def __init__(self):
-        self._checkers: list[TypeChecker] = []
+        self._families: list[MethodFamily] = []
+        self._by_name: dict[str, MethodFamily] = {}
 
-    def register_checker(self, checker: TypeChecker) -> TypeChecker:
-        """Register a type checker function."""
-        self._checkers.append(checker)
-        return checker
+    @property
+    def families(self) -> tuple[MethodFamily, ...]:
+        """The table, in dispatch order."""
+        return tuple(self._families)
 
-    def infer_method_type(
-        self,
-        receiver_type: 'Type',
-        method_name: str,
-        validator: 'TypeValidator'
-    ) -> Optional['Type']:
-        """Infer the return type of a method call."""
-        for checker in self._checkers:
-            inferrer = checker(receiver_type, method_name, validator)
-            if inferrer is not None:
-                return inferrer.infer_return_type()
+    def register(self, family: MethodFamily) -> MethodFamily:
+        """Add a family. Its name is the handle the validation half attaches to."""
+        if family.name in self._by_name:
+            raise ValueError(f"method family {family.name!r} is registered twice")
+        self._families.append(family)
+        self._by_name[family.name] = family
+        return family
 
+    def validator(self, name: str) -> Callable[[ValidateHook], ValidateHook]:
+        """Attach the validation hook of a family the table already carries."""
+        def attach(hook: ValidateHook) -> ValidateHook:
+            family = self._by_name.get(name)
+            if family is None:
+                raise ValueError(f"no method family named {name!r}")
+            family.validate = hook
+            return hook
+        return attach
+
+    def claim(self, receiver_type: 'Type', method_name: str,
+              validator: 'TypeValidator') -> Optional[MethodFamily]:
+        """The family that answers this call, or None when the ladder gets it."""
+        for family in self._families:
+            if family.claims(receiver_type, method_name, validator):
+                return family
         return None
+
+    def infer_method_type(self, receiver_type: 'Type', method_name: str,
+                          validator: 'TypeValidator') -> Optional['Type']:
+        """Infer the return type of a method call."""
+        family = self.claim(receiver_type, method_name, validator)
+        if family is None or family.infer is None:
+            return None
+        return family.infer(receiver_type, method_name, validator).infer_return_type()
+
+    def validate_method(self, validator: 'TypeValidator', call: 'MethodCall',
+                        receiver_type: 'Type', *, beats_perk: bool) -> bool:
+        """Run the claiming family's check, and answer whether one ran.
+
+        `beats_perk` picks the half of the table the caller is asking for: the families
+        that answer before a perk implementation does, or the ones that answer after it.
+        """
+        family = self.claim(receiver_type, call.method, validator)
+        if family is None or family.beats_perk != beats_perk or family.validate is None:
+            return False
+        family.validate(validator, call, receiver_type)
+        return True
 
 
 METHOD_TYPE_REGISTRY = MethodTypeRegistry()
-
-
-# Built-in type inference handlers. Belong in their respective type modules eventually.
-
-from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType  # noqa: E402
 
 
 @dataclass
@@ -317,111 +390,146 @@ class FunctionMethodInferrer:
         return function_method_return_type(self.method_name, self.receiver_type)
 
 
-@METHOD_TYPE_REGISTRY.register_checker
-def check_array_methods(receiver_type, method_name, validator):
-    from sushi_lang.semantics.typesys import deref_type
-    actual_type = deref_type(receiver_type)
-    if isinstance(actual_type, (ArrayType, DynamicArrayType)):
-        return ArrayMethodInferrer(receiver_type, method_name, validator)
-    return None
+# The family table. Written in the order the VALIDATION half reads: the families that
+# answer before a perk implementation, then the ones that answer after it. The claims are
+# disjoint, so the order changes no answer; stating ONE order in both layers is the point
+# (#273), and `tests/unit/test_method_resolution_family_order.py` pins it against the
+# codegen dispatcher.
+#
+# A claim reads the receiver type as the caller hands it in. Both callers deref a borrow
+# before they ask -- the inference half in `visitor.py:visit_methodcall`, the validation
+# half because `infer_expression_type` of a receiver never answered a `ReferenceType` in
+# a sweep of 984 fixtures over the five areas that bind one -- so no claim derefs.
 
 
-@METHOD_TYPE_REGISTRY.register_checker
-def check_string_methods(receiver_type, method_name, validator):
-    # Claim only the NAMES this family handles. `infer_method_type` is first-match-wins,
-    # so a claim whose inferrer returns None ends the chain instead of falling through --
-    # which is how `string.hash()` stayed un-inferred (#239).
+def _named(receiver_type: 'Type', kind: type, prefix: str) -> bool:
+    """A receiver of this kind whose interned name starts with this generic base."""
+    return isinstance(receiver_type, kind) and receiver_type.name.startswith(prefix)
+
+
+def _has_perk_override(receiver_type: 'Type', method_name: str,
+                       validator: 'TypeValidator') -> bool:
+    """Whether a perk implementation answers this call instead.
+
+    A perk implementation is the sanctioned override and wins at validation and at
+    codegen, so a family that the ladder asks AFTER the perk has to decline here or the
+    two halves disagree about which method the call names.
+    """
+    return validator.perk_impl_table.get_method(receiver_type, method_name) is not None
+
+
+def _claims_array(receiver_type, method_name, validator):
+    from sushi_lang.semantics.passes.types.arrays import is_builtin_array_method
+    return (isinstance(receiver_type, (ArrayType, DynamicArrayType))
+            and is_builtin_array_method(method_name))
+
+
+def _claims_string(receiver_type, method_name, validator):
     from sushi_lang.sushi_stdlib.src.collections.strings import is_builtin_string_method
-    if receiver_type == BuiltinType.STRING and is_builtin_string_method(method_name):
-        return StringMethodInferrer(method_name, validator)
-    return None
+    return receiver_type == BuiltinType.STRING and is_builtin_string_method(method_name)
 
 
-@METHOD_TYPE_REGISTRY.register_checker
-def check_primitive_methods(receiver_type, method_name, validator):
-    # Every primitive INCLUDING string. Claim only a (receiver, method) pair the
-    # semantics table carries, so unrelated names reach the extension lookup.
-    from sushi_lang.semantics.generics.primitives import has_primitive_method
-    if not has_primitive_method(receiver_type, method_name):
-        return None
-    # A perk impl wins at validation and at codegen, so inference must let it win too, or
-    # the typecheck pass types the call as the built-in's return while the backend calls the perk.
-    if validator.perk_impl_table.get_method(receiver_type, method_name) is not None:
-        return None
-    return PrimitiveMethodInferrer(receiver_type, method_name, validator)
+def _claims_result(receiver_type, method_name, validator):
+    from sushi_lang.semantics.generics.results import is_builtin_result_method
+    return (_named(receiver_type, EnumType, "Result<")
+            and is_builtin_result_method(method_name))
 
 
-# Registration ORDER is load-bearing. BEFORE the container checkers, because
-# check_result_methods claims ANY name on a `Result<` receiver and would make this
-# unreachable for the auto-derived clone. And it must claim only a genuinely registered
-# (type, name), so it never swallows `List<i32>.get`.
-@METHOD_TYPE_REGISTRY.register_checker
-def check_struct_enum_builtin_methods(receiver_type, method_name, validator):
-    """Claim the auto-derived struct/enum builtins (hash, clone) -- and nothing else."""
-    if not isinstance(receiver_type, (StructType, EnumType)):
-        return None
+def _claims_maybe(receiver_type, method_name, validator):
+    from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method
+    return (_named(receiver_type, EnumType, "Maybe<")
+            and is_builtin_maybe_method(method_name))
 
-    # Own/List/HashMap keep their own method paths -- except `hash`, which is a genuinely
-    # derived method for a container now (#628). The derived table below is the right
-    # answer for all three: `List@(T)` and `Own@(T)` carry a hash of what they hold, and
-    # a `HashMap@(K, V)` carries no entry at all. Declining it here left the container
-    # method inferrers to answer None, and a call with NO inferred type is not compared
-    # against its declared one -- `let i32 h = l.hash()` was accepted in silence.
+
+def _claims_own(receiver_type, method_name, validator):
+    from sushi_lang.semantics.generics.own import is_builtin_own_method
+    return (_named(receiver_type, StructType, "Own<")
+            and is_builtin_own_method(method_name))
+
+
+def _claims_hashmap(receiver_type, method_name, validator):
+    from sushi_lang.semantics.generics.hashmap import is_builtin_hashmap_method
+    return (_named(receiver_type, StructType, "HashMap<")
+            and is_builtin_hashmap_method(method_name))
+
+
+def _claims_list(receiver_type, method_name, validator):
+    from sushi_lang.semantics.generics.list import is_builtin_list_method
+    return (_named(receiver_type, StructType, "List<")
+            and is_builtin_list_method(method_name))
+
+
+def _claims_derived_hash(receiver_type, method_name, validator):
+    # A container hashes what it HOLDS, so `List@(T).hash()` is a derived method and not
+    # the container family's (#628). Declining it here left the container inferrer to
+    # answer None, and a call with NO inferred type is not compared against its declared
+    # one -- `let i32 h = l.hash()` was accepted in silence.
+    return (isinstance(receiver_type, (StructType, EnumType))
+            and method_name == "hash"
+            and not _has_perk_override(receiver_type, method_name, validator)
+            and validator.derived_methods.get_method(receiver_type, "hash") is not None)
+
+
+def _claims_derived_clone(receiver_type, method_name, validator):
+    # `Own`, `List` and `HashMap` keep their own clone, and the derive pass registers
+    # none for them (`generics/cloning.py`), so the prefix test states what the table
+    # already holds.
     from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
-    if method_name != "hash" and receiver_type.name.startswith(CONTAINER_PREFIXES):
-        return None
-
-    if validator.perk_impl_table.get_method(receiver_type, method_name) is not None:
-        return None
-
-    if validator.derived_methods.get_method(receiver_type, method_name) is None:
-        return None
-
-    return StructEnumBuiltinInferrer(receiver_type, method_name, validator)
+    return (isinstance(receiver_type, (StructType, EnumType))
+            and method_name == "clone"
+            and not receiver_type.name.startswith(CONTAINER_PREFIXES)
+            and not _has_perk_override(receiver_type, method_name, validator)
+            and validator.derived_methods.get_method(receiver_type, "clone") is not None)
 
 
-@METHOD_TYPE_REGISTRY.register_checker
-def check_result_methods(receiver_type, method_name, validator):
-    if isinstance(receiver_type, EnumType) and receiver_type.name.startswith("Result<"):
-        return ResultMethodInferrer(receiver_type, method_name, validator)
-    return None
-
-
-@METHOD_TYPE_REGISTRY.register_checker
-def check_maybe_methods(receiver_type, method_name, validator):
-    if isinstance(receiver_type, EnumType) and receiver_type.name.startswith("Maybe<"):
-        return MaybeMethodInferrer(receiver_type, method_name, validator)
-    return None
-
-
-@METHOD_TYPE_REGISTRY.register_checker
-def check_hashmap_methods(receiver_type, method_name, validator):
-    if isinstance(receiver_type, StructType) and receiver_type.name.startswith("HashMap<"):
-        return HashMapMethodInferrer(receiver_type, method_name, validator)
-    return None
-
-
-@METHOD_TYPE_REGISTRY.register_checker
-def check_list_methods(receiver_type, method_name, validator):
-    if isinstance(receiver_type, StructType) and receiver_type.name.startswith("List<"):
-        return ListMethodInferrer(receiver_type, method_name, validator)
-    return None
-
-
-@METHOD_TYPE_REGISTRY.register_checker
-def check_own_methods(receiver_type, method_name, validator):
-    if isinstance(receiver_type, StructType) and receiver_type.name.startswith("Own<"):
-        return OwnMethodInferrer(receiver_type, method_name, validator)
-    return None
-
-
-@METHOD_TYPE_REGISTRY.register_checker
-def check_function_methods(receiver_type, method_name, validator):
-    # Claim only the names this family handles: infer_method_type is first-match-wins, so a
-    # claim whose inferrer then answers None ends the chain instead of falling through (the
-    # #239 shape, recorded on check_string_methods above).
+def _claims_function(receiver_type, method_name, validator):
+    # No perk question: a function type is not an extension target
+    # (`generics/extension_targets.py:CONCRETE_EXTENSION_TARGETS`), so no perk
+    # implementation can name one.
     from sushi_lang.semantics.generics.closures import is_builtin_function_method
-    from sushi_lang.semantics.typesys import FunctionType
-    if isinstance(receiver_type, FunctionType) and is_builtin_function_method(method_name):
-        return FunctionMethodInferrer(receiver_type, method_name, validator)
-    return None
+    return (isinstance(receiver_type, FunctionType)
+            and is_builtin_function_method(method_name))
+
+
+def _claims_primitive(receiver_type, method_name, validator):
+    # Every primitive INCLUDING string. `has_primitive_method` answers for the (receiver,
+    # name) pair and not for the name alone: `to_bits` exists on f32 and f64 and nowhere
+    # else, so `i32.to_bits()` falls through to a clean unknown-method error.
+    from sushi_lang.semantics.generics.primitives import has_primitive_method
+    return (has_primitive_method(receiver_type, method_name)
+            and not _has_perk_override(receiver_type, method_name, validator))
+
+
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="array", beats_perk=True, claims=_claims_array,
+    infer=lambda rt, name, v: ArrayMethodInferrer(rt, name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="string", beats_perk=True, claims=_claims_string,
+    infer=lambda rt, name, v: StringMethodInferrer(name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="result", beats_perk=True, claims=_claims_result,
+    infer=lambda rt, name, v: ResultMethodInferrer(rt, name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="maybe", beats_perk=True, claims=_claims_maybe,
+    infer=lambda rt, name, v: MaybeMethodInferrer(rt, name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="own", beats_perk=True, claims=_claims_own,
+    infer=lambda rt, name, v: OwnMethodInferrer(rt, name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="hashmap", beats_perk=True, claims=_claims_hashmap,
+    infer=lambda rt, name, v: HashMapMethodInferrer(rt, name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="list", beats_perk=True, claims=_claims_list,
+    infer=lambda rt, name, v: ListMethodInferrer(rt, name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="derived_hash", beats_perk=False, claims=_claims_derived_hash,
+    infer=lambda rt, name, v: StructEnumBuiltinInferrer(rt, name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="derived_clone", beats_perk=False, claims=_claims_derived_clone,
+    infer=lambda rt, name, v: StructEnumBuiltinInferrer(rt, name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="function", beats_perk=False, claims=_claims_function,
+    infer=lambda rt, name, v: FunctionMethodInferrer(rt, name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="primitive", beats_perk=False, claims=_claims_primitive,
+    infer=lambda rt, name, v: PrimitiveMethodInferrer(rt, name, v)))
