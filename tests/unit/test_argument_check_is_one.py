@@ -29,9 +29,20 @@ _ARGUMENT_CODES = ("CE2006", "CE2009")
 #: against an element type, and the polymorphic math family, measured against a SET of
 #: types. A module absent from this table may emit neither code.
 _CEILING = {
-    "arrays.py": {"CE2006": 4, "CE2009": 21},
+    "arrays.py": {"CE2006": 2},
     "calls/methods.py": {"CE2006": 2, "CE2009": 2},
     "calls/user_defined.py": {"CE2006": 6, "CE2009": 2},
+}
+
+#: The reader above sees a code SPELLED at the emit. A module that carries the code in a
+#: table row and emits `er.emit(reporter, row.code, ...)` is invisible to it, so a copy of
+#: the loop could hide behind one indirection. These are the four positions that legitimately
+#: do it -- the seam, whose codes travel IN, and the two tables that hold a code per row --
+#: and the count is pinned so a fifth cannot appear unseen. A row may only go DOWN.
+_INDIRECT_CEILING = {
+    "arguments.py": 2,
+    "arrays.py": 1,
+    "calls/structs.py": 1,
 }
 
 #: The modules that must reach the seam, one per converted copy.
@@ -94,6 +105,45 @@ def test_the_seam_emits_neither_code_by_name():
     """The codes travel IN, so the seam never spells one: it serves CE2049/CE2050 too."""
     sites = _emit_sites()
     assert "arguments.py" not in sites, sites.get("arguments.py")
+
+
+def _indirect_emit_sites() -> dict[str, int]:
+    """Every emit under the pass whose code is a value, not a spelled `er.ERR.CExxxx`."""
+    found: dict[str, int] = {}
+    for path in sorted(TYPES_PASS.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not node.args:
+                continue
+            func = node.func
+            if not (isinstance(func, ast.Attribute) and func.attr in ("emit", "emit_with")):
+                continue
+            spelled = any(isinstance(arg, ast.Attribute)
+                          and isinstance(arg.value, ast.Attribute)
+                          and arg.value.attr == "ERR"
+                          for arg in node.args[:2])
+            if not spelled:
+                module = path.relative_to(TYPES_PASS).as_posix()
+                found[module] = found.get(module, 0) + 1
+    return found
+
+
+def test_no_emit_hides_its_code_behind_a_value():
+    sites = _indirect_emit_sites()
+    offenders = [f"{module}: {count}, ceiling {_INDIRECT_CEILING.get(module, 0)}"
+                 for module, count in sorted(sites.items())
+                 if count > _INDIRECT_CEILING.get(module, 0)]
+    assert not offenders, (
+        "an emit names its code through a value, where the ceiling above cannot read it:"
+        "\n  " + "\n  ".join(offenders)
+        + "\nSpell the code at the emit, or route the position through "
+          "passes/types/arguments.py:check_arguments."
+    )
+
+
+def test_the_indirect_detector_sees_a_site():
+    """The always-fires control for the reader above."""
+    assert _indirect_emit_sites(), "the indirect reader found nothing at all"
 
 
 def test_no_copy_of_the_argument_loop_grows():
