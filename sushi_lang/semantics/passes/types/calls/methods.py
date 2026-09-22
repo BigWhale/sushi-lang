@@ -9,6 +9,7 @@ from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayTyp
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from ..compatibility import types_compatible
+from ..method_registry import METHOD_TYPE_REGISTRY
 from ..propagation import propagate_declared_type_to_value
 from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args,\
     resolve_declared_type
@@ -320,6 +321,8 @@ def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
     receiver's, not the seam's.
     """
     from sushi_lang.semantics.typesys import holds_declared_resource
+    if call.method != "clone":
+        return False
     drops = validator.drop_type_names
     if not drops:
         return False
@@ -475,14 +478,14 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             if reject_out_of_scope_type(validator, type_name, call.receiver.loc):
                 return
         if type_name == "List" and call.method in ("new", "with_capacity"):
-            from sushi_lang.semantics.generics.list import is_builtin_list_method
-            if is_builtin_list_method(call.method):
-                expected_args = {"new": 0, "with_capacity": 1}
-                expected = expected_args.get(call.method, 0)
-                got = len(call.args)
-                if got != expected:
-                    er.emit(validator.reporter, er.ERR.CE2053, call.loc,
-                            method=call.method, expected=expected, got=got)
+            # A STATIC on the type name, not a receiver family: `List.new()` has no
+            # receiver to claim. Both names are built-in list methods by construction,
+            # which is what the arm's own test above already says.
+            expected = {"new": 0, "with_capacity": 1}[call.method]
+            got = len(call.args)
+            if got != expected:
+                er.emit(validator.reporter, er.ERR.CE2053, call.loc,
+                        method=call.method, expected=expected, got=got)
             return
         elif type_name == "HashMap" and call.method == "new":
             # The receiver is a type NAME, so the concrete HashMap type comes from the
@@ -510,149 +513,19 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     if not isinstance(receiver_type, (BuiltinType, ArrayType, DynamicArrayType, EnumType, FunctionType, StructType)) and not is_generic_struct:
         return
 
-    if isinstance(receiver_type, (ArrayType, DynamicArrayType)):
-        from sushi_lang.semantics.passes.types.arrays import is_builtin_array_method, validate_builtin_array_method
-        if is_builtin_array_method(call.method):
-            validate_builtin_array_method(call, receiver_type, validator.reporter, validator)
-
-            if (call.method == "destroy" and
-                isinstance(receiver_type, DynamicArrayType) and
-                isinstance(call.receiver, Name)):
-                mark_array_destroyed(validator, call.receiver.id)
-            return
-
-    if receiver_type == BuiltinType.STRING:
-        from sushi_lang.sushi_stdlib.src.collections.strings import is_builtin_string_method, validate_builtin_string_method_with_validator
-        if is_builtin_string_method(call.method):
-            validate_builtin_string_method_with_validator(call, receiver_type, validator.reporter, validator)
-            return
-
-    if isinstance(receiver_type, EnumType) and receiver_type.name.startswith("Result<"):
-        from sushi_lang.semantics.generics.results import is_builtin_result_method, validate_result_method_with_validator
-        if is_builtin_result_method(call.method):
-            validate_result_method_with_validator(call, receiver_type, validator.reporter, validator)
-            return
-
-    if isinstance(receiver_type, EnumType) and receiver_type.name.startswith("Maybe<"):
-        from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method, validate_maybe_method_with_validator
-        if is_builtin_maybe_method(call.method):
-            validate_maybe_method_with_validator(call, receiver_type, validator.reporter, validator)
-            return
-
-    if isinstance(receiver_type, StructType) and receiver_type.name.startswith("Own<"):
-        from sushi_lang.semantics.generics.own import is_builtin_own_method, validate_own_method_with_validator
-        if is_builtin_own_method(call.method):
-            validate_own_method_with_validator(call, receiver_type, validator.reporter, validator)
-            return
-
-    if isinstance(receiver_type, StructType) and receiver_type.name.startswith("HashMap<"):
-        from sushi_lang.semantics.generics.hashmap import is_builtin_hashmap_method, validate_hashmap_method_with_validator
-        if is_builtin_hashmap_method(call.method):
-            validate_hashmap_method_with_validator(call, receiver_type, validator.reporter, validator)
-            return
-
-    if isinstance(receiver_type, StructType) and receiver_type.name.startswith("List<"):
-        from sushi_lang.semantics.generics.list import is_builtin_list_method, validate_list_method_with_validator
-        if is_builtin_list_method(call.method):
-            validate_list_method_with_validator(call, receiver_type, validator.reporter, validator)
-            return
-
-    perk_method = validator.perk_impl_table.get_method(receiver_type, call.method)
-    if perk_method is not None:
-        # Found a perk method - validate it
-        # A `poke self` / `peek self` perk method (#327): stamp the mode for the borrow pass
-        # and the backend, and reject a receiver with no address for the poke form --
-        # the same rule as the extension arm below.
-        perk_self_mode = getattr(perk_method, "self_mode", None)
-        if perk_self_mode is not None:
-            call.callee_self_mode = perk_self_mode
-            mode = receiver_mode(perk_self_mode)
-            if mode is not ParamMode.PEEK:
-                _reject_unreachable_receiver(validator, call, mode)
-
-        _stamp_param_modes(call, perk_method)
-
-        # Arity and argument type read the SAME codes as the extension arm below: a perk
-        # method and an extension method are one rule -- a user-written method on a type --
-        # so one rule gets one code. CE0023 is in the INTERNAL family and documented as a
-        # codegen check, and CE2023 says "dynamic array method" about whatever it is
-        # handed; both were wrong here, and neither was visible until io/contracts made
-        # `write(string)` a perk method.
-        expected = len(perk_method.params)
-        got = len(call.args)
-        if got != expected:
-            er.emit(validator.reporter, er.ERR.CE2009, call.loc,
-                   name=f"{display_type(receiver_type)}.{call.method}", expected=expected, got=got)
-            return
-
-        for _i, (arg, param) in enumerate(zip(call.args, perk_method.params, strict=False)):
-            # PROPAGATE before validating -- see the extension arm below (#387).
-            expected_ty = propagate_declared_type_to_value(validator, arg, param.ty)
-
-            validator.validate_expression(arg)
-            arg_type = validator.infer_expression_type(arg)
-            if arg_type is not None and expected_ty is not None:
-                if not types_compatible(validator, arg_type, expected_ty):
-                    er.emit(validator.reporter, er.ERR.CE2006, arg.loc if hasattr(arg, 'loc') else call.loc,
-                           index=_i + 1, expected=display_type(expected_ty), got=display_type(arg_type))
-
-        if perk_method.ret is not None:
-            call.inferred_return_type = extension_call_result_type(validator, perk_method)
+    if METHOD_TYPE_REGISTRY.validate_method(validator, call, receiver_type,
+                                            beats_perk=True):
         return
 
-    # The family order from here on matches the codegen dispatcher exactly --
-    # derived hash, derived clone, function clone, primitive, extension. The receiver
-    # kinds are disjoint, so the order is arbitrary; stating ONE order in both layers
-    # is the point (#273), and tests/unit/test_method_resolution_family_order.py pins it.
-    if isinstance(receiver_type, StructType) and call.method == "hash":
-        struct_hash_method = validator.derived_methods.get_method(receiver_type, "hash")
-        if struct_hash_method is not None:
-            struct_hash_method.semantic_validator(call, receiver_type, validator.reporter)
-            return
-
-    if isinstance(receiver_type, EnumType) and call.method == "hash":
-        enum_hash_method = validator.derived_methods.get_method(receiver_type, "hash")
-        if enum_hash_method is not None:
-            enum_hash_method.semantic_validator(call, receiver_type, validator.reporter)
-            return
-
-    if call.method == "clone" and _reject_clone_of_resource(validator, call, receiver_type):
+    if _validate_perk_method(validator, call, receiver_type):
         return
 
-    # Check for auto-derived struct/enum clone (#134) - AFTER perks. Own/List/HashMap
-    # named structs keep their own method paths and are not registered here.
-    if isinstance(receiver_type, (StructType, EnumType)) and call.method == "clone":
-        clone_method = validator.derived_methods.get_method(receiver_type, "clone")
-        if clone_method is not None:
-            clone_method.semantic_validator(call, receiver_type, validator.reporter)
-            return
+    if _reject_clone_of_resource(validator, call, receiver_type):
+        return
 
-    # Check for built-in methods on a function value (clone). A closure read out of a
-    # struct field or a container is a borrow, so consuming it is CE2411 and `.clone()` is
-    # the escape the diagnostic names -- it has to resolve here, or dispatch falls through
-    # to the extension path and mangles the type name into a symbol nobody defines.
-    if isinstance(receiver_type, FunctionType):
-        from sushi_lang.semantics.generics.closures import (
-            is_builtin_function_method, validate_function_method_with_validator,
-        )
-        if is_builtin_function_method(call.method):
-            validate_function_method_with_validator(
-                call, receiver_type, validator.reporter, validator)
-            return
-
-    if isinstance(receiver_type, BuiltinType) and receiver_type in [
-        BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-        BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-        BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING
-    ]:
-        from sushi_lang.semantics.generics.primitives import has_primitive_method, validate_primitive_method
-        # A method name may be a builtin primitive method in general (to_str/hash/to_bits)
-        # but only exist on some types (e.g. to_bits only on f32/f64). Ask about THIS
-        # receiver; otherwise fall through so a call like i32.to_bits() gets a clean
-        # unknown-method error.
-        if has_primitive_method(receiver_type, call.method):
-            validate_primitive_method(call, receiver_type, validator.reporter)
-            return
+    if METHOD_TYPE_REGISTRY.validate_method(validator, call, receiver_type,
+                                            beats_perk=False):
+        return
 
     # A generic-target extension is resolved through the monomorphized copy that the monomorphize pass put in
     # the extension table under the concrete receiver type. There used to be a second lookup
@@ -705,6 +578,167 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
 
     for i in range(len(expected_params), len(actual_args)):
         validator.validate_expression(actual_args[i])
+
+
+def _validate_perk_method(validator: 'TypeValidator', call: MethodCall,
+                          receiver_type) -> bool:
+    """A perk implementation answered the call. Answers whether one did.
+
+    A perk implementation is the sanctioned override
+    (`docs/design/method-resolution.md`), so the ladder asks it between the two halves
+    of the family table: after the families a built-in wins outright, before the ones
+    that decline to it.
+    """
+    perk_method = validator.perk_impl_table.get_method(receiver_type, call.method)
+    if perk_method is None:
+        return False
+
+    # A `poke self` / `peek self` perk method (#327): stamp the mode for the borrow pass
+    # and the backend, and reject a receiver with no address for the poke form --
+    # the same rule as the extension arm.
+    perk_self_mode = getattr(perk_method, "self_mode", None)
+    if perk_self_mode is not None:
+        call.callee_self_mode = perk_self_mode
+        mode = receiver_mode(perk_self_mode)
+        if mode is not ParamMode.PEEK:
+            _reject_unreachable_receiver(validator, call, mode)
+
+    _stamp_param_modes(call, perk_method)
+
+    # Arity and argument type read the SAME codes as the extension arm: a perk method and
+    # an extension method are one rule -- a user-written method on a type -- so one rule
+    # gets one code. CE0023 is in the INTERNAL family and documented as a codegen check,
+    # and CE2023 says "dynamic array method" about whatever it is handed; both were wrong
+    # here, and neither was visible until io/contracts made `write(string)` a perk method.
+    expected = len(perk_method.params)
+    got = len(call.args)
+    if got != expected:
+        er.emit(validator.reporter, er.ERR.CE2009, call.loc,
+                name=f"{display_type(receiver_type)}.{call.method}",
+                expected=expected, got=got)
+        return True
+
+    for _i, (arg, param) in enumerate(zip(call.args, perk_method.params, strict=False)):
+        # PROPAGATE before validating -- see the extension arm (#387).
+        expected_ty = propagate_declared_type_to_value(validator, arg, param.ty)
+
+        validator.validate_expression(arg)
+        arg_type = validator.infer_expression_type(arg)
+        if arg_type is not None and expected_ty is not None:
+            if not types_compatible(validator, arg_type, expected_ty):
+                er.emit(validator.reporter, er.ERR.CE2006,
+                        arg.loc if hasattr(arg, 'loc') else call.loc,
+                        index=_i + 1, expected=display_type(expected_ty),
+                        got=display_type(arg_type))
+
+    if perk_method.ret is not None:
+        call.inferred_return_type = extension_call_result_type(validator, perk_method)
+    return True
+
+
+# The validation half of each built-in family, in the table's order. The claim is the
+# registry's and is written once; what stands here is the CHECK that follows it.
+
+
+@METHOD_TYPE_REGISTRY.validator("array")
+def _validate_array_family(validator: 'TypeValidator', call: MethodCall,
+                           receiver_type) -> None:
+    from sushi_lang.semantics.passes.types.arrays import validate_builtin_array_method
+    validate_builtin_array_method(call, receiver_type, validator.reporter, validator)
+    if (call.method == "destroy"
+            and isinstance(receiver_type, DynamicArrayType)
+            and isinstance(call.receiver, Name)):
+        mark_array_destroyed(validator, call.receiver.id)
+
+
+@METHOD_TYPE_REGISTRY.validator("string")
+def _validate_string_family(validator: 'TypeValidator', call: MethodCall,
+                            receiver_type) -> None:
+    from sushi_lang.sushi_stdlib.src.collections.strings import (
+        validate_builtin_string_method_with_validator)
+    validate_builtin_string_method_with_validator(
+        call, receiver_type, validator.reporter, validator)
+
+
+@METHOD_TYPE_REGISTRY.validator("result")
+def _validate_result_family(validator: 'TypeValidator', call: MethodCall,
+                            receiver_type) -> None:
+    from sushi_lang.semantics.generics.results import validate_result_method_with_validator
+    validate_result_method_with_validator(
+        call, receiver_type, validator.reporter, validator)
+
+
+@METHOD_TYPE_REGISTRY.validator("maybe")
+def _validate_maybe_family(validator: 'TypeValidator', call: MethodCall,
+                           receiver_type) -> None:
+    from sushi_lang.semantics.generics.maybe import validate_maybe_method_with_validator
+    validate_maybe_method_with_validator(
+        call, receiver_type, validator.reporter, validator)
+
+
+@METHOD_TYPE_REGISTRY.validator("own")
+def _validate_own_family(validator: 'TypeValidator', call: MethodCall,
+                         receiver_type) -> None:
+    from sushi_lang.semantics.generics.own import validate_own_method_with_validator
+    validate_own_method_with_validator(call, receiver_type, validator.reporter, validator)
+
+
+@METHOD_TYPE_REGISTRY.validator("hashmap")
+def _validate_hashmap_family(validator: 'TypeValidator', call: MethodCall,
+                             receiver_type) -> None:
+    from sushi_lang.semantics.generics.hashmap import validate_hashmap_method_with_validator
+    validate_hashmap_method_with_validator(
+        call, receiver_type, validator.reporter, validator)
+
+
+@METHOD_TYPE_REGISTRY.validator("list")
+def _validate_list_family(validator: 'TypeValidator', call: MethodCall,
+                          receiver_type) -> None:
+    from sushi_lang.semantics.generics.list import validate_list_method_with_validator
+    validate_list_method_with_validator(call, receiver_type, validator.reporter, validator)
+
+
+@METHOD_TYPE_REGISTRY.validator("derived_hash")
+def _validate_derived_hash(validator: 'TypeValidator', call: MethodCall,
+                           receiver_type) -> None:
+    _run_derived_validator(validator, call, receiver_type, "hash")
+
+
+@METHOD_TYPE_REGISTRY.validator("derived_clone")
+def _validate_derived_clone(validator: 'TypeValidator', call: MethodCall,
+                            receiver_type) -> None:
+    _run_derived_validator(validator, call, receiver_type, "clone")
+
+
+def _run_derived_validator(validator: 'TypeValidator', call: MethodCall,
+                           receiver_type, method_name: str) -> None:
+    """The check the `derive` pass wrote beside the method it derived.
+
+    The family claimed the call, so the table holds the entry; the lookup here reads it
+    back rather than carrying it through the claim.
+    """
+    derived = validator.derived_methods.get_method(receiver_type, method_name)
+    derived.semantic_validator(call, receiver_type, validator.reporter)
+
+
+@METHOD_TYPE_REGISTRY.validator("function")
+def _validate_function_family(validator: 'TypeValidator', call: MethodCall,
+                              receiver_type) -> None:
+    # A closure read out of a struct field or a container is a borrow, so consuming it is
+    # CE2411 and `.clone()` is the escape the diagnostic names -- it has to resolve here,
+    # or dispatch falls through to the extension path and mangles the type name into a
+    # symbol nobody defines.
+    from sushi_lang.semantics.generics.closures import (
+        validate_function_method_with_validator)
+    validate_function_method_with_validator(
+        call, receiver_type, validator.reporter, validator)
+
+
+@METHOD_TYPE_REGISTRY.validator("primitive")
+def _validate_primitive_family(validator: 'TypeValidator', call: MethodCall,
+                               receiver_type) -> None:
+    from sushi_lang.semantics.generics.primitives import validate_primitive_method
+    validate_primitive_method(call, receiver_type, validator.reporter)
 
 
 def _stamp_param_modes(call, method) -> None:

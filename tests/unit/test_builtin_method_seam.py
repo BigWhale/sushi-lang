@@ -1,4 +1,9 @@
-"""The built-in-method seam and the typecheck pass validation must recognise the same families."""
+"""The built-in-method seam and the typecheck pass must recognise the same families.
+
+The pass states its families in ONE place since #751: the family table in
+`semantics/passes/types/method_registry.py`, which the inference half and the
+validation half both read. That table is what this file measures the seam against.
+"""
 from __future__ import annotations
 
 import re
@@ -19,14 +24,14 @@ from sushi_lang.semantics.typesys import (
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
 SEAM = SOURCE_ROOT / "semantics" / "generics" / "builtin_methods.py"
-VALIDATION = SOURCE_ROOT / "semantics" / "passes" / "types" / "calls" / "methods.py"
+FAMILY_TABLE = SOURCE_ROOT / "semantics" / "passes" / "types" / "method_registry.py"
 
 # How a built-in family is recognised in either file.
 FAMILY_PREDICATE = re.compile(
     r"\b(is_builtin_\w+_method|has_primitive_method|derived_methods)\b"
 )
 
-# Families validate_method_call consults that the seam deliberately does not.
+# Families the family table consults that the seam deliberately does not.
 #
 # Perk implementations are the sanctioned override -- they win at all three layers on
 # purpose, and CE2097's help text points users at them. Treating a perk method as a
@@ -40,10 +45,10 @@ def _families(path: Path) -> set[str]:
 
 
 def test_seam_covers_every_family_validation_dispatches_on():
-    """A family validation knows about but the seam does not means silent shadowing."""
-    missing = sorted(_families(VALIDATION) - _families(SEAM) - SEAM_EXEMPT)
+    """A family the pass knows about but the seam does not means silent shadowing."""
+    missing = sorted(_families(FAMILY_TABLE) - _families(SEAM) - SEAM_EXEMPT)
     assert not missing, (
-        f"validate_method_call recognises these built-in families but the seam does not: "
+        f"the family table recognises these built-in families but the seam does not: "
         f"{missing}. An extension method with one of those names would be compiled and "
         f"then never called -- add it to builtin_method_exists."
     )
@@ -51,9 +56,9 @@ def test_seam_covers_every_family_validation_dispatches_on():
 
 def test_seam_claims_no_family_validation_does_not_have():
     """The converse: a seam-only family would reject an extension that in fact works."""
-    extra = sorted(_families(SEAM) - _families(VALIDATION))
+    extra = sorted(_families(SEAM) - _families(FAMILY_TABLE))
     assert not extra, (
-        f"the seam recognises these built-in families but validate_method_call does not: "
+        f"the seam recognises these built-in families but the family table does not: "
         f"{extra}. CE2097 would reject an extension method that would have dispatched fine."
     )
 
@@ -61,7 +66,7 @@ def test_seam_claims_no_family_validation_does_not_have():
 def test_the_gate_can_actually_see_families():
     """Guard against both sides silently reading as empty (a typo'd path, a renamed file)."""
     assert len(_families(SEAM)) >= 8
-    assert len(_families(VALIDATION)) >= 8
+    assert len(_families(FAMILY_TABLE)) >= 8
 
 
 # Behaviour, per family
