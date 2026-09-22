@@ -392,6 +392,48 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **Each match-pattern fault has its own code** (#741). CE2048 answered FOUR faults over
+  seven emit sites, and three of them filled its quoted type slot with a whole sentence, so
+  a user read `got 'Own(...) pattern requires Own@(T) type, got i32'`. Two of the four
+  printed a statement that was false: an arm naming `Other.Alpha` against a `Shape`
+  scrutinee read `match scrutinee must be an enum or integer type, got 'Other'`, and `Other`
+  is an enum. CE2048 now carries the SCRUTINEE's rule alone. **CE2107** is an arm or a
+  nested pattern that names an enum the value is not, relational, with the scrutinee's type
+  in a note; **CE2108** is a nested pattern over a payload that is not an enum; **CE2109**
+  is an `Own(...)` pattern over a value that is not an `Own@(T)`. Every slot takes a type
+  and only a type.
+- **A consumer's type name against a binary library's export is refused, once** (#739). A
+  consumer declaring `struct Crate` beside a binary `.slib`'s public `Crate` lost its own
+  declaration in silence and then heard CE2027 about a field count it never wrote, plus
+  CE2106 about a field it had written correctly. The cause was upstream of the diagnostic:
+  the library registry was handed the LIVE struct and enum tables so it could parse manifest
+  type strings, and its `update()` overwrote the consumer's type in place -- one call before
+  the "a local declaration wins" guard could see the name. It parses against one shared copy
+  per build now, and the clash reads a single **CE3011**, at the declaration. No cascade
+  follows, because the consumer keeps its own type. The enum twin went from three
+  diagnostics to one. A SOURCE `.slib` was measured and is unchanged: CE0004 for a public
+  type, CE3011 for a private one.
+- **One `??` in `main` warns once** (#743). CW2511 had two emit sites for one rule, and the
+  second was at the wrong span: `return Result.Ok(compute()??)` pointed one warning at the
+  `??` and the other at the whole `Result.Ok(...)`, which carries no `??` at all. The
+  statement-walk copy is gone, and `check_propagation_in_expression` with it.
+- **One bad array element is refused once** (#757). CE2013 was printed FOUR times for one
+  mismatched element of a fixed-array `let`, and twice in a `from(...)` argument and in a
+  `foreach` iterable. The inference side reads the element types and judges none now; the
+  validating side is the one speaker, the way the inference side already handled the runs.
+  Four positions the report never named -- a `const`, a struct argument, a `return` and a
+  `var` initializer -- were printing three or four and answer once as well.
+- **The borrow help spells a borrow the way the parser reads it** (#744, #759). Four
+  diagnostics told the user to write `&peek x`, and `&peek x` is CE6001 `unexpected token
+  '&'`: the `&` was retired when borrow-by-default landed. The CE2006 call-site help, the
+  CE2092 function-value help, the CE2411 declared-borrow note and CE2418's own registry text
+  all print the bare `peek` / `poke` now. `SUSHI_SPELLING_GATE` holds it: the gate refuses a
+  retired borrow spelling in a head, a note and a help alike, beside the interned-name
+  pattern it already carried.
+- **No argument in the language is numbered from zero** (#746, #758). A foreign call
+  reported `argument type mismatch at position 0` where every other call counted from one,
+  and `f64.from_bits` did the same. `_validate_external_call_args` also moved out of the
+  facade into `externals.py`, where the rest of the FFI signature rules live.
 - **A built-in bool method answers the language's bool** (#737). `extend Maybe@(i32)
   is_here() bool: return self.is_some()` crashed the compiler with an LLVM parse error --
   `ret i1` against a function typed `i8`. A `bool` is an `i8` everywhere in Sushi, and the
@@ -931,6 +973,16 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **A pattern's type name resolves through one seam** (#742). `passes/types/matching.py`
+  resolved an `UnknownType` by hand ten times, naming the struct and the enum table at every
+  one of them, behind seven local imports of a name the module header already held. One
+  `_resolve`, one `_resolve_through_tables` that names the two tables once, and one
+  `_walk_arm_body` for the three copies of the arm-body walk. No behaviour change.
+- **A struct construction's field arguments are checked in one place** (#745). The named and
+  the positional constructor held a 48-line copy of one check, differing only in the error
+  code (CE2083 against CE2028) and one keyword. One `_check_field_arguments` takes both as
+  parameters, and the field type resolves through `utils.resolve_declared_type` instead of a
+  third and fourth inline copy. Both codes keep their own text and their own fixtures.
 - **One rule names the entry unit** (#736). "The first unit with an AST that says
   `is_entry`, else the first unit with an AST" was written twice in the analyzer, once
   answering the unit and once answering its AST. It is `_entry_unit()` now, and the two
