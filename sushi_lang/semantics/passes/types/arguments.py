@@ -130,6 +130,21 @@ def _callee_key(code: er.ErrorMessage, callee_name: str) -> Dict[str, str]:
     return {}
 
 
+def _spell_place(arg: Expr) -> Optional[str]:
+    """The source spelling of a PLACE the user can borrow, or None when there is none.
+
+    The help offers the argument back to the user, so it must be text the user could type.
+    A name spells itself and a member chain spells its receiver first; anything else --
+    a call, an index, a literal -- has no spelling here and is offered no help.
+    """
+    if isinstance(arg, Name):
+        return arg.id
+    if isinstance(arg, MemberAccess):
+        receiver = _spell_place(arg.receiver)
+        return None if receiver is None else f"{receiver}.{arg.member}"
+    return None
+
+
 def _emit_mismatch(validator: 'TypeValidator', code: er.ErrorMessage, callee_name: str,
                    arg: Expr, index: int, expected_ty: Type, actual_ty: Type) -> None:
     """Report the mismatch, and say how to borrow when the parameter wants a borrow."""
@@ -137,8 +152,8 @@ def _emit_mismatch(validator: 'TypeValidator', code: er.ErrorMessage, callee_nam
                         index=index, expected=display_type(expected_ty),
                         got=display_type(actual_ty),
                         **_callee_key(code, callee_name))
-    if isinstance(expected_ty, ReferenceType) and isinstance(arg, (Name, MemberAccess)):
-        place = arg.id if isinstance(arg, Name) else f"{arg.receiver}.{arg.member}"
+    place = _spell_place(arg) if isinstance(expected_ty, ReferenceType) else None
+    if place is not None:
         diag.help(f"borrow it at the call site: `{expected_ty.mutability} {place}`")
     diag.emit()
 

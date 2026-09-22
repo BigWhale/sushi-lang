@@ -996,7 +996,8 @@ All notable changes to Sushi Lang will be documented in this file.
   cannot read it. **The unification converged five behaviours, all widenings**: the bloom
   spread refusal now reaches a generic call, a static call, an enum constructor, a stdlib
   call and `from_bits`; the CE2006 borrow help reaches every converted path, where it was on
-  exactly one of the 19 sites; every path resolves the declared type before it compares; the
+  exactly one of the 19 sites, and it now names a MEMBER CHAIN as well as a bare name
+  (`peek b.inner.label`), where a member argument got no help at all; every path resolves the declared type before it compares; the
   stdlib plain path no longer stops at a wrong count, so it may now also report a type
   mismatch for the arguments that line up; and three paths that asked the inference a second
   time read the validation's own answer instead.
