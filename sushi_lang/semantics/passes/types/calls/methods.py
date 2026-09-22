@@ -5,14 +5,20 @@ from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, FunctionType, StructType, ForeignPtrType
+from sushi_lang.semantics.typesys import (
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
+    StructType)
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
-from ..compatibility import types_compatible
+from ..arguments import check_arguments
 from ..method_registry import METHOD_TYPE_REGISTRY
-from ..propagation import propagate_declared_type_to_value
 from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args,\
     resolve_declared_type
+
+# A receiver that can answer a method at all. `Own@(T)`, `List@(T)` and `HashMap@(K, V)`
+# are named StructTypes, so the tuple covers them with every other struct.
+RECEIVERS_WITH_METHODS = (BuiltinType, ArrayType, DynamicArrayType, EnumType,
+                          FunctionType, StructType)
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -443,20 +449,21 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
 
 
 def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
-    """Validate method call - receiver type, method existence, argument types."""
+    """The method-call ladder: a built-in family, a perk implementation, an extension.
+
+    Each rung is a named step that answers whether it took the call. The order is
+    `docs/design/method-resolution.md`'s and the codegen dispatcher's alike, and the
+    families are one table both halves of the pass read (`method_registry.py`, #751).
+    """
     # A bloom spread `arr...` is never valid in a method call (methods cannot be
     # variadic, CE0115). Reject early so it never reaches the backend (CE0120).
     if reject_spread_args(validator, call.args):
         return
 
-    # Check for use-after-destroy (CE2024)
-    if isinstance(call.receiver, Name):
-        if is_array_destroyed(validator, call.receiver.id):
-            er.emit(validator.reporter, er.ERR.CE2024, call.receiver.loc, name=call.receiver.id)
-            return
+    if _reject_destroyed_receiver(validator, call):
+        return
 
     validator.validate_expression(call.receiver)
-
     receiver_type = validator.infer_expression_type(call.receiver)
 
     # CE5011: a foreign ptr is an opaque handle - no methods (no hash, no
@@ -465,52 +472,17 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         er.emit(validator.reporter, er.ERR.CE5011, call.loc, method=call.method)
         return
 
-    if receiver_type is None and isinstance(call.receiver, Name):
-        type_name = call.receiver.id
-        # A static on a GATED generic obeys the scope like the type does: behind
-        # an aliased import the bare name is refused, and the qualified form is
-        # what folds to this shape (#506, decision A-strict).
-        from sushi_lang.semantics.namespaces import GATED_GENERIC_NAMES
-        if (type_name in GATED_GENERIC_NAMES
-                and getattr(call, "namespace_ref", None) is None):
-            from sushi_lang.semantics.passes.types.visibility import (
-                reject_out_of_scope_type)
-            if reject_out_of_scope_type(validator, type_name, call.receiver.loc):
-                return
-        if type_name == "List" and call.method in ("new", "with_capacity"):
-            # A STATIC on the type name, not a receiver family: `List.new()` has no
-            # receiver to claim. Both names are built-in list methods by construction,
-            # which is what the arm's own test above already says.
-            expected = {"new": 0, "with_capacity": 1}[call.method]
-            got = len(call.args)
-            if got != expected:
-                er.emit(validator.reporter, er.ERR.CE2053, call.loc,
-                        method=call.method, expected=expected, got=got)
-            return
-        elif type_name == "HashMap" and call.method == "new":
-            # The receiver is a type NAME, so the concrete HashMap type comes from the
-            # propagation stamp -- reading it is what makes the key gate reachable (#272).
-            from sushi_lang.semantics.generics.hashmap import validate_hashmap_method_with_validator
-            hashmap_type = getattr(call, 'resolved_struct_type', None)
-            if isinstance(hashmap_type, StructType) and hashmap_type.name.startswith("HashMap<"):
-                validate_hashmap_method_with_validator(call, hashmap_type, validator.reporter, validator)
-            elif len(call.args) != 0:
-                er.emit(validator.reporter, er.ERR.CE2016, call.loc,
-                        method=call.method, expected=0, got=len(call.args))
-            return
-
     if receiver_type is None:
+        # A receiver that named no value may still name a TYPE: `List.new()` and
+        # `HashMap.new()` are statics, and a static has no receiver to dispatch on.
+        if isinstance(call.receiver, Name):
+            _validate_type_name_call(validator, call, call.receiver.id)
         return
-
-    is_generic_struct = (isinstance(receiver_type, StructType) and
-                         (receiver_type.name.startswith("Own<") or
-                          receiver_type.name.startswith("HashMap<") or
-                          receiver_type.name.startswith("List<")))
 
     # StructType for perk and auto-derived methods; FunctionType because a function value
     # carries clone(). Without the latter a method call on a fn value was never validated
     # AT ALL, and reached codegen to die mangling `fn(i32) - i32_clone`.
-    if not isinstance(receiver_type, (BuiltinType, ArrayType, DynamicArrayType, EnumType, FunctionType, StructType)) and not is_generic_struct:
+    if not isinstance(receiver_type, RECEIVERS_WITH_METHODS):
         return
 
     if METHOD_TYPE_REGISTRY.validate_method(validator, call, receiver_type,
@@ -527,57 +499,57 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
                                             beats_perk=False):
         return
 
-    # A generic-target extension is resolved through the monomorphized copy that the monomorphize pass put in
-    # the extension table under the concrete receiver type. There used to be a second lookup
-    # here, by base name -- it repeated the lookup above verbatim, so it could only ever find
-    # None again, and under #393 asking by base name is the wrong question anyway: a concrete
-    # target answers its own instantiation and no other.
-    method = resolve_extension_method(validator, receiver_type, call.method, call=call)
-    if method is RESOLUTION_REPORTED:
-        return
+    _validate_extension_call(validator, call, receiver_type)
 
-    if method is None:
-        if _reject_unhandled_channel_chain(validator, call, receiver_type):
+
+def _reject_destroyed_receiver(validator: 'TypeValidator', call: MethodCall) -> bool:
+    """CE2024: the array this name held was destroyed, so it answers no method."""
+    if not isinstance(call.receiver, Name):
+        return False
+    if not is_array_destroyed(validator, call.receiver.id):
+        return False
+    er.emit(validator.reporter, er.ERR.CE2024, call.receiver.loc, name=call.receiver.id)
+    return True
+
+
+def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
+                             type_name: str) -> None:
+    """A call written on a built-in generic's NAME: `List.new()`, `HashMap.new()`.
+
+    There is no receiver here, so no family claims it and the arity is measured against
+    the static's own table. Every other static goes through `passes/types/calls/statics.py`;
+    these two keep their narrow emitters because a container static has no `ExtendDef`
+    to converge onto (`docs/design/method-resolution.md`).
+    """
+    # A static on a GATED generic obeys the scope like the type does: behind
+    # an aliased import the bare name is refused, and the qualified form is
+    # what folds to this shape (#506, decision A-strict).
+    from sushi_lang.semantics.namespaces import GATED_GENERIC_NAMES
+    if (type_name in GATED_GENERIC_NAMES
+            and getattr(call, "namespace_ref", None) is None):
+        from sushi_lang.semantics.passes.types.visibility import reject_out_of_scope_type
+        if reject_out_of_scope_type(validator, type_name, call.receiver.loc):
             return
-        er.emit(validator.reporter, er.ERR.CE2008, call.loc, name=f"{display_type(receiver_type)}.{call.method}")
+
+    if type_name == "List" and call.method in ("new", "with_capacity"):
+        expected = {"new": 0, "with_capacity": 1}[call.method]
+        if len(call.args) != expected:
+            er.emit(validator.reporter, er.ERR.CE2053, call.loc,
+                    method=call.method, expected=expected, got=len(call.args))
         return
 
-    # A `poke self` / `peek self` method (#327) receives its receiver's ADDRESS. Stamp
-    # the mode on the call node -- the borrow pass treats a poke-self call as a WRITE to the
-    # receiver root (the CE2408/CE2412 gates), and the backend passes a pointer instead
-    # of a value. Both read the stamp instead of re-resolving the method.
-    self_mode = getattr(method, "self_mode", None)
-    if self_mode is not None:
-        call.callee_self_mode = self_mode
-        mode = receiver_mode(self_mode)
-        if mode is not ParamMode.PEEK:
-            _reject_unreachable_receiver(validator, call, mode)
-
-    _stamp_param_modes(call, method)
-
-    expected_params = method.params
-    actual_args = call.args
-
-    if len(actual_args) != len(expected_params):
-        er.emit(validator.reporter, er.ERR.CE2009, call.loc,
-               name=f"{display_type(receiver_type)}.{call.method}", expected=len(expected_params), got=len(actual_args))
-
-    for i, (arg, param) in enumerate(zip(actual_args, expected_params, strict=False)):
-        # PROPAGATE before validating, as a plain function's call site does: a generic enum
-        # or struct constructor handed to a method parameter is unstamped otherwise, and
-        # reached the backend as a CE0113 (#387, the argument half).
-        expected_ty = propagate_declared_type_to_value(validator, arg, param.ty)
-
-        validator.validate_expression(arg)
-
-        if expected_ty is not None:  # Skip if parameter has unknown type
-            arg_type = validator.infer_expression_type(arg)
-            if arg_type is not None and not types_compatible(validator, arg_type, expected_ty):
-                er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=display_type(expected_ty), got=display_type(arg_type))
-
-    for i in range(len(expected_params), len(actual_args)):
-        validator.validate_expression(actual_args[i])
+    if type_name == "HashMap" and call.method == "new":
+        # The receiver is a type NAME, so the concrete HashMap type comes from the
+        # propagation stamp -- reading it is what makes the key gate reachable (#272).
+        from sushi_lang.semantics.generics.hashmap import (
+            validate_hashmap_method_with_validator)
+        hashmap_type = getattr(call, 'resolved_struct_type', None)
+        if isinstance(hashmap_type, StructType) and hashmap_type.name.startswith("HashMap<"):
+            validate_hashmap_method_with_validator(
+                call, hashmap_type, validator.reporter, validator)
+        elif call.args:
+            er.emit(validator.reporter, er.ERR.CE2016, call.loc,
+                    method=call.method, expected=0, got=len(call.args))
 
 
 def _validate_perk_method(validator: 'TypeValidator', call: MethodCall,
@@ -588,52 +560,87 @@ def _validate_perk_method(validator: 'TypeValidator', call: MethodCall,
     (`docs/design/method-resolution.md`), so the ladder asks it between the two halves
     of the family table: after the families a built-in wins outright, before the ones
     that decline to it.
+
+    It takes the SAME check as an extension method, and the same two codes with it: a
+    perk method and an extension method are one rule -- a user-written method on a type
+    -- so one rule gets one checker. CE0023 is in the INTERNAL family and documented as
+    a codegen check, and CE2023 says "dynamic array method" about whatever it is handed;
+    both were wrong here, and neither was visible until io/contracts made `write(string)`
+    a perk method.
     """
     perk_method = validator.perk_impl_table.get_method(receiver_type, call.method)
     if perk_method is None:
         return False
 
-    # A `poke self` / `peek self` perk method (#327): stamp the mode for the borrow pass
-    # and the backend, and reject a receiver with no address for the poke form --
-    # the same rule as the extension arm.
-    perk_self_mode = getattr(perk_method, "self_mode", None)
-    if perk_self_mode is not None:
-        call.callee_self_mode = perk_self_mode
-        mode = receiver_mode(perk_self_mode)
-        if mode is not ParamMode.PEEK:
-            _reject_unreachable_receiver(validator, call, mode)
-
-    _stamp_param_modes(call, perk_method)
-
-    # Arity and argument type read the SAME codes as the extension arm: a perk method and
-    # an extension method are one rule -- a user-written method on a type -- so one rule
-    # gets one code. CE0023 is in the INTERNAL family and documented as a codegen check,
-    # and CE2023 says "dynamic array method" about whatever it is handed; both were wrong
-    # here, and neither was visible until io/contracts made `write(string)` a perk method.
-    expected = len(perk_method.params)
-    got = len(call.args)
-    if got != expected:
-        er.emit(validator.reporter, er.ERR.CE2009, call.loc,
-                name=f"{display_type(receiver_type)}.{call.method}",
-                expected=expected, got=got)
+    if not _check_user_method(validator, call, receiver_type, perk_method,
+                              stop_on_arity=True):
         return True
-
-    for _i, (arg, param) in enumerate(zip(call.args, perk_method.params, strict=False)):
-        # PROPAGATE before validating -- see the extension arm (#387).
-        expected_ty = propagate_declared_type_to_value(validator, arg, param.ty)
-
-        validator.validate_expression(arg)
-        arg_type = validator.infer_expression_type(arg)
-        if arg_type is not None and expected_ty is not None:
-            if not types_compatible(validator, arg_type, expected_ty):
-                er.emit(validator.reporter, er.ERR.CE2006,
-                        arg.loc if hasattr(arg, 'loc') else call.loc,
-                        index=_i + 1, expected=display_type(expected_ty),
-                        got=display_type(arg_type))
 
     if perk_method.ret is not None:
         call.inferred_return_type = extension_call_result_type(validator, perk_method)
     return True
+
+
+def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
+                             receiver_type) -> None:
+    """The last rung: a user-written extension method, or the unknown-method refusal.
+
+    A generic-target extension is resolved through the monomorphized copy the
+    monomorphize pass put in the extension table under the concrete receiver type. There
+    used to be a second lookup here, by base name -- it repeated the first verbatim, so
+    it could only ever find None again, and under #393 asking by base name is the wrong
+    question anyway: a concrete target answers its own instantiation and no other.
+    """
+    method = resolve_extension_method(validator, receiver_type, call.method, call=call)
+    if method is RESOLUTION_REPORTED:
+        return
+
+    if method is None:
+        if _reject_unhandled_channel_chain(validator, call, receiver_type):
+            return
+        er.emit(validator.reporter, er.ERR.CE2008, call.loc,
+                name=f"{display_type(receiver_type)}.{call.method}")
+        return
+
+    _check_user_method(validator, call, receiver_type, method, stop_on_arity=False)
+
+
+def _check_user_method(validator: 'TypeValidator', call: MethodCall, receiver_type,
+                       method, *, stop_on_arity: bool) -> bool:
+    """The check a USER-written method takes, perk implementation or extension alike.
+
+    Stamp what the borrow pass and the backend read off the call -- the receiver's mode
+    and the declared parameter modes -- then measure the arguments through the one
+    argument check (`passes/types/arguments.py`). Answers whether the COUNT fit.
+
+    `stop_on_arity` is the one thing the two rungs do not share: a perk call reports a
+    wrong count and says no more, an extension call reads the remaining arguments as a
+    plain function call does.
+    """
+    _check_receiver_mode(validator, call, method)
+    _stamp_param_modes(call, method)
+    return check_arguments(
+        validator, f"{display_type(receiver_type)}.{call.method}",
+        [p.ty for p in method.params], call.args, call.loc,
+        mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
+        stop_on_arity=stop_on_arity)
+
+
+def _check_receiver_mode(validator: 'TypeValidator', call: MethodCall, method) -> None:
+    """A `poke self` / `peek self` method (#327) receives its receiver's ADDRESS.
+
+    Stamp the mode on the call node -- the borrow pass treats a poke-self call as a
+    WRITE to the receiver root (the CE2408/CE2412 gates), and the backend passes a
+    pointer instead of a value. Both read the stamp instead of re-resolving the method.
+    A poke receiver must also name storage the call can reach; a peek one only reads.
+    """
+    self_mode = getattr(method, "self_mode", None)
+    if self_mode is None:
+        return
+    call.callee_self_mode = self_mode
+    mode = receiver_mode(self_mode)
+    if mode is not ParamMode.PEEK:
+        _reject_unreachable_receiver(validator, call, mode)
 
 
 # The validation half of each built-in family, in the table's order. The claim is the

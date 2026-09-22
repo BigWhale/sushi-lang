@@ -1,0 +1,17 @@
+# An extension method's arguments are measured by the one argument check, so CE2006 on a
+# parameter that wants a borrow names the repair the user types, exactly as it does on a
+# static call and on a plain call.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: help: borrow it at the call site: `peek t`
+struct Tag:
+    i32 n
+
+extend Tag rename(peek string s) i32:
+    return self.n + s.len()
+
+fn main() i32:
+    let Tag g = Tag(1)
+    let string t = "hi"
+    println("{g.rename(t)}")
+    return Result.Ok(0)
