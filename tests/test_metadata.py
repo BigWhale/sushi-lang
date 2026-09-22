@@ -328,6 +328,41 @@ def collect_fixtures(tests_dir: Path) -> List[Path]:
     )
 
 
+def select_fixtures(tests_dir: Path, *, filter_pattern: Optional[str] = None,
+                    leaks_only: bool = False,
+                    compile_only: bool = False) -> List[Path]:
+    """The fixtures THIS run covers: `collect_fixtures`, narrowed by each flag.
+
+    ONE selector. `collect_fixtures` answers what the corpus holds; this answers what a
+    run was asked for, and every flag narrows the same list here rather than filtering a
+    copy of its own somewhere in a runner.
+
+    The flags compose, and a combination may legitimately select nothing -- a leak
+    assertion needs a run, so `--leaks-only --compile-only` is empty. An empty selection
+    is not this function's to refuse: it returns the empty list and the RUNNER fails the
+    run, because a run that covered nothing must not report a pass (#765).
+    """
+    tests_dir = Path(tests_dir)
+    selected = collect_fixtures(tests_dir)
+
+    if filter_pattern:
+        selected = [f for f in selected
+                    if filter_pattern in str(f.relative_to(tests_dir))]
+
+    if leaks_only:
+        selected = [f for f in selected if parse_test_metadata(f).expect_no_leaks]
+
+    # `--compile-only` is a SELECTOR over the rule that already decides whether a binary
+    # runs, never a second rule and never a weaker check: what it selects is asserted in
+    # full. The retired basic runner was the other shape -- the whole corpus with the
+    # directives switched off -- and it bought no speed for it (#760).
+    if compile_only:
+        selected = [f for f in selected
+                    if not should_run_runtime_test(f, parse_test_metadata(f))]
+
+    return selected
+
+
 def fixture_id(test_file: Path, tests_dir: Path) -> str:
     """A fixture's identity: its path under `tests/`, without the suffix.
 

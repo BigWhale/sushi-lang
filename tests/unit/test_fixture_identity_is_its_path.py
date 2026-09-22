@@ -9,6 +9,13 @@ Two rules keep that shut. The binary name carries the fixture's DIRECTORY, so a
 collision is impossible whatever the corpus holds; and no two fixtures share a file
 name, so every by-name key the harness still uses -- the results map, the quarantine
 sets, the printed report -- names exactly one test.
+
+There is ONE runner now. The weaker second one that `run_tests.py` carried is retired
+(#760), and the test that reproduced this collision against it went with it; the
+reproduction against the surviving runner is stronger anyway, because it RUNS both
+binaries and asserts each prints its own source's word. `run_tests.py` is still checked
+below, because it is still the front end and must still not name a binary or glob a
+corpus of its own.
 """
 from __future__ import annotations
 
@@ -136,20 +143,6 @@ def test_two_fixtures_of_one_stem_do_not_share_a_binary(tmp_path):
     assert printed == {"alpha\n", "beta\n"}, (
         f"the binaries do not print what their own sources print: {printed}")
 
-
-def test_the_compile_only_runner_keeps_them_apart(tmp_path):
-    """`run_tests.py` names its output the same way, into a directory it reuses."""
-    left, right = _twin_fixtures(tmp_path)
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-
-    for source in (left, right):
-        _name, passed, expected, actual, output = run_tests.run_single_test(
-            source, bin_dir, TESTS_DIR)
-        assert passed, f"expected exit {expected}, got {actual}\n{output}"
-
-    produced = sorted(p.name for p in bin_dir.iterdir())
-    assert len(produced) == 2, f"the two fixtures compiled to one binary: {produced}"
 
 
 @pytest.mark.parametrize("module", [enhanced_test_runner, run_tests])

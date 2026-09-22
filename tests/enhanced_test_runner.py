@@ -20,7 +20,8 @@ import os
 from tqdm import tqdm
 
 from test_metadata import (parse_test_metadata, get_test_category, should_run_runtime_test,
-                          TestMetadata, collect_fixtures, fixture_binary_name)
+                          TestMetadata, fixture_binary_name,
+                          select_fixtures)
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
@@ -303,7 +304,8 @@ class TestRunner:
 
     def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False,
                  parallel_jobs: Optional[int] = None, json_output: bool = False,
-                 leaks_only: bool = False, allow_leak_skips: bool = False):
+                 leaks_only: bool = False, allow_leak_skips: bool = False,
+                 compile_only: bool = False):
         """Initialize the test runner."""
         self.tests_dir = tests_dir
         self.mode = mode
@@ -312,6 +314,11 @@ class TestRunner:
         self.json_output = json_output
         self.leaks_only = leaks_only
         self.allow_leak_skips = allow_leak_skips
+        self.compile_only = compile_only
+        # A run that selected no fixture is a FAILURE, not a pass (#765). An empty
+        # result dict reads as "nothing failed" to any caller that counts failures,
+        # which is how a chunk that ran nothing reported exit 0 for as long as it did.
+        self.selected_nothing = False
         # Every leak assertion that produced a verdict, and every one that could not
         # (as (test name, reason)). Both are lists because they are appended from the
         # worker threads, and list.append is atomic. "Passed" is not evidence a check
@@ -347,22 +354,33 @@ class TestRunner:
             return []
         return sorted(self.leaks_skipped)
 
-    def run_all_tests(self, filter_pattern: str = None) -> Dict[str, TestResult]:
-        """Run all tests in the test directory."""
-        test_files = collect_fixtures(self.tests_dir)
-
-        # Filter by relative path if pattern provided
+    def _describe_selection(self, filter_pattern: Optional[str]) -> str:
+        """The flags that narrowed this run, for the message an empty one prints."""
+        parts = []
         if filter_pattern:
-            test_files = [f for f in test_files if filter_pattern in str(f.relative_to(self.tests_dir))]
-
-        # --leaks-only: run just the tests carrying a leak assertion, so CI can gate on
-        # them without paying for the whole suite a second time.
+            parts.append(f"--filter {filter_pattern!r}")
         if self.leaks_only:
-            test_files = [f for f in test_files if parse_test_metadata(f).expect_no_leaks]
+            parts.append("--leaks-only")
+        if self.compile_only:
+            parts.append("--compile-only")
+        return ", ".join(parts) if parts else "the whole corpus"
+
+    def run_all_tests(self, filter_pattern: str = None) -> Dict[str, TestResult]:
+        """Run every fixture this run selected.
+
+        `select_fixtures` is the one selector: `--filter`, `--leaks-only` and
+        `--compile-only` all narrow the same list there, so a flag cannot select a
+        corpus a gate has never seen.
+        """
+        test_files = select_fixtures(self.tests_dir, filter_pattern=filter_pattern,
+                                     leaks_only=self.leaks_only,
+                                     compile_only=self.compile_only)
 
         if not test_files:
+            self.selected_nothing = True
             if not self.json_output:
-                print("No test files found!")
+                print(f"No fixture matched this selection: {self._describe_selection(filter_pattern)}.")
+                print("A run that covered nothing is a failure, not a pass.")
             return {}
 
         if not self.json_output:
@@ -959,6 +977,14 @@ def main():
              "platform that cannot check at all; a skip is otherwise a failure"
     )
 
+    parser.add_argument(
+        "--compile-only",
+        action="store_true",
+        help="Run only the fixtures that never execute a binary (every test_err_ and "
+             "most test_warn_). A SELECTOR, not a weaker check: what it selects is "
+             "asserted in full"
+    )
+
     args = parser.parse_args()
 
     tests_dir = Path(__file__).parent
@@ -996,12 +1022,17 @@ def main():
     os.environ["SUSHI_LIB_PATH"] = str(libs_bin_dir)
 
     with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json,
-                    args.leaks_only, args.allow_leak_skips) as runner:
+                    args.leaks_only, args.allow_leak_skips, args.compile_only) as runner:
         results = runner.run_all_tests(filter_pattern=args.filter)
 
-    # Exit with appropriate code. A leak assertion that was not evaluated counts here:
-    # a run that asserts nothing must not report a pass (#605).
+    # Exit with appropriate code. Two things besides a failed test count here, and both
+    # say the same thing: a run that asserted nothing must not report a pass. A leak
+    # assertion that was not evaluated is one (#605); a selection that matched no fixture
+    # at all is the other (#765), and an empty result dict would otherwise read as
+    # "nothing failed".
     failed_count = sum(1 for r in results.values() if not r.total_success)
+    if runner.selected_nothing:
+        return 1
     return 0 if failed_count == 0 and not runner.unexcused_leak_skips() else 1
 
 

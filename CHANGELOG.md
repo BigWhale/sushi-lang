@@ -1230,6 +1230,37 @@ All notable changes to Sushi Lang will be documented in this file.
   `<random>` keep their own shape and are the follow-up.
 
 ### Testing
+- **One test runner, and every flag selects** (#760, #765). `tests/run_tests.py` carried a
+  second runner beside `enhanced_test_runner.py` that compiled every fixture and checked the
+  compiler's EXIT STATUS alone. It read no `EXPECT_*` directive -- a `test_err_` fixture
+  passed it whatever diagnostic the compiler printed, so five fixtures whose expected codes
+  were ALL absent once reported five of five passed. It was documented as "compilation
+  only", which reads as "it will not run the binary"; but an error CODE is a compile-time
+  fact, and the runner already had the stderr carrying it.
+  The measurement retired it rather than the wording: over `tests/diagnostics/`, where 4 of
+  45 fixtures run a binary, the weaker runner took 6.95s against the enhanced runner's
+  6.85s. It was not the compile HALF of the suite, it was the whole suite with the
+  assertions turned off, and it bought no speed for them. `run_tests.py` is now the front
+  end alone -- the stdlib, helper and interposer builds, the cache purge, the spelling gate
+  and the argument parsing -- and every run is the full run. `--enhanced` is accepted and
+  does nothing, so the CI lines and a typed habit keep working.
+- **`--compile-only` selects the fixtures that never execute a binary** (#760). 1033 of the
+  2847, every `test_err_` and most `test_warn_`, asserted IN FULL: it is a selector like
+  `--leaks-only`, never a weaker check. ~150s against the whole suite's ~380s, and it is the
+  gate that matches a change to a diagnostic. The rule is `should_run_runtime_test`, which
+  the runner already used to decide whether to run a binary -- the split existed, it simply
+  could not be asked for.
+- **A run that selects no fixture fails** (#765). The enhanced runner answered an empty
+  result dict, which `main` counted for failures and read as "nothing failed", so
+  `--enhanced --filter <typo>` printed `No test files found!` and exited **0** -- while the
+  same empty selection exited 1 without `--enhanced`. A chunk that ran nothing was
+  indistinguishable from a chunk that passed, in the mode CI and the wave protocol trust,
+  and the flags compose so an empty selection has more than one way to happen. It exits 1
+  now in every spelling, and says which selection was empty. Same rule as #605's skipped
+  leak assertion: a run that asserted nothing is not a pass.
+- **`select_fixtures` is the one selector** (`tests/test_metadata.py`, beside
+  `collect_fixtures`). `--filter`, `--leaks-only` and `--compile-only` narrow one list in
+  one place, so a flag cannot select a corpus the gates have never seen.
 - **The leak fence on a generic extension is pinned** (#656). A generic EXTENSION that hands
   out a private type was refused only by a predicate shared with the perk-implementation
   path, and nothing held it there. Three fixtures now cover the return type, a parameter and
