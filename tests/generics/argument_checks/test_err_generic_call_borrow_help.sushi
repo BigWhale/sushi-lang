@@ -1,0 +1,15 @@
+# CE2006 on a parameter that wants a borrow names the repair the user types. The
+# generic argument check must carry the same help line as the plain one.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: help: borrow it at the call site: `peek t`
+fn look@(T)(peek string s, T x) i32:
+    println("{x}")
+    return Result.Ok(s.len())
+
+fn main() i32:
+    let string t = "hi"
+    let i32 n = 1
+    let i32 r = look(t, n).realise(0)
+    println("{r}")
+    return Result.Ok(0)
