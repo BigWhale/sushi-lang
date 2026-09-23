@@ -982,6 +982,43 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One answer to what a WRITTEN type names** (#755). The question had seven homes in the
+  typecheck pass, all ending at `semantics/type_resolution.py` by different routes. Two
+  were closed by #745 in Wave 1; of the five left, four now call
+  `utils.resolve_declared_type` and the fifth states in one line why its question is
+  different (`compatibility.resolve_generic_type_ref` stays narrower because
+  `compare_resolved_types` reads two `UnknownType`s by NAME and resolves a one-sided one
+  itself). A new `utils.intern_declared_wrapper` collapsed FOUR hand-written copies of the
+  "which interned `Result@(T, E)` or `Maybe@(T)` does this spelling name" arm, and
+  `TypeResolver` is named nowhere in the pass. `resolve_variable_type` drops from 56 lines
+  to 23; `_resolve_generic_to_semantic_type` is deleted; `_materialize_stdlib_return_type`
+  goes from 26 lines to 11.
+  **A depth change was measured and REFUSED.** Replacing `resolve_declared_type`'s body
+  with a plain `resolve_type_recursively` answered differently **2051 times in 119,872**:
+  the deep walk replaces a `GenericTypeRef`'s type ARGUMENTS with their interned entries, so
+  the two are not equal even when they spell the same. The function keeps two depths on
+  purpose -- name-level for a name (#240's RecursionError), a walk for a container (#284) --
+  and the docstring now says why. That is the #716/#717/#718 trap, and it was live here.
+  Every move that WAS taken was measured first: eight candidates, each instrumented against
+  its exact replacement over the whole 2856-fixture suite, every one agreeing 100% with a
+  counter proved to fire.
+- **The typecheck pass drops its dead code and its small duplicates** (#756). Five dead
+  sites: `validate_if_statement` and `validate_while_statement` (the visitors re-implement
+  them inline), `detect_mixed_args` (no caller in the repository), `ListMethodInferrer`'s
+  unreachable arity block with its own table -- a third CE2053 emitter -- an `else: pass`,
+  and an `isinstance` arm followed by the same `return False`. Nine local numeric-type set
+  literals read `type_predicates.BUILTIN_*` instead, and `arrays.py` stops redefining
+  `is_integer_type` privately. `check_stdlib_function`'s `-> Optional[any]` named the
+  BUILTIN `any` FUNCTION, evaluating to `<built-in function any> | None`; it answers
+  `Optional[Tuple[str, Any]]`. `visit_print` and `visit_println` were byte-identical, and
+  `visit_unaryop` had four branches returning three answers. `validate_try_expression` was
+  133 lines at complexity 22 and is a 22-line orchestrator over five named helpers.
+  `__init__.py`'s forwarding block loses 21 of its 28 pure forwarders -- the callers name
+  the module function -- and the three that stay each say why in one line: an outside
+  caller holds only the validator. The pass goes from 9909 lines to 9750, `__init__.py`
+  from 376 to 250.
+  **No step needed a new fixture**, which is what the ticket asked be proved: a step that
+  needs one is a step that was not dead.
 - **A method family is decided in one table, not in two dispatchers** (#751). One closed set
   had two dispatchers that had to agree by hand: INFERENCE went through
   `method_registry.py`'s ten registered checkers, VALIDATION through a twelve-arm `if/elif`
