@@ -13,6 +13,7 @@ from sushi_lang.semantics.generics.explicit_type_args import (
     check_explicit_type_arg_arity,
 )
 from ..visibility import name_is_contested, reject_private_call
+from ..arguments import check_arguments
 from .user_defined import validate_call_arguments
 
 if TYPE_CHECKING:
@@ -24,13 +25,16 @@ def validate_generic_function_call(
     call: Call,
     function_name: str,
     generic_func=None,
+    written_name: str | None = None,
 ) -> None:
     """Validate generic function call and rewrite to use mangled name.
 
     A qualified call (`geo.twin(...)`) resolved its declaration through the alias's
     provider already and hands it in; a bare call resolves through the unit ladder
-    here (#495).
+    here (#495). `written_name` is the callee as the user wrote it (`geo.twin`), for
+    every diagnostic to quote; `function_name` is the declaration's own name.
     """
+    written = written_name or function_name
 
     if generic_func is None:
         generic_func = validator.generic_sig(function_name)
@@ -52,20 +56,25 @@ def validate_generic_function_call(
                 validator.reporter,
                 er.ERR.CE2062,
                 call.type_args_loc or call.callee.loc,
-                name=function_name,
+                name=written,
                 expected=expected,
                 got=len(explicit),
             )
             return
 
+    contested = name_is_contested(validator, "function", function_name)
+    if not explicit and not contested and _reject_argument_count(
+            validator, call, generic_func, written):
+        return
+
     type_args = _named_or_inferred_type_args(validator, call, generic_func)
     if type_args is None:
-        if not name_is_contested(validator, "function", function_name):
+        if not contested:
             er.emit(
                 validator.reporter,
                 er.ERR.CE2060,
                 call.callee.loc,
-                name=function_name,
+                name=written,
                 reason="could not infer type arguments from call site"
             )
         return
@@ -95,7 +104,7 @@ def validate_generic_function_call(
             validator.reporter,
             er.ERR.CE2061,
             call.callee.loc,
-            name=function_name,
+            name=written,
             mangled=mangled_name,
             type_args=", ".join(display_type(t) for t in type_args)
         )
@@ -104,8 +113,25 @@ def validate_generic_function_call(
     call.callee.id = mangled_name
 
     # The WRITTEN name, not the instance's symbol: the user never wrote `pair__i32` (#766).
-    validate_call_arguments(validator, function_name, func_sig,
+    validate_call_arguments(validator, written, func_sig,
                             call.args, call.callee.loc)
+
+
+def _reject_argument_count(validator: 'TypeValidator', call: Call, generic_func,
+                           written: str) -> bool:
+    """CE2009 for a wrong argument count, asked BEFORE inference (#790).
+
+    A miscount cannot be solved, and CE2060 then spoke about inference where the user
+    miscounted. The count is the template's: its fixed parameters, and at least that
+    many when a pack parameter takes the rest. The types are not compared here; that is
+    the instance's check, once the count fits.
+    """
+    fixed = [p for p in generic_func.params if not getattr(p, "is_pack", False)]
+    has_pack = len(fixed) != len(generic_func.params)
+    return not check_arguments(
+        validator, written, [None] * len(fixed), call.args, call.callee.loc,
+        mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
+        minimum_arity=has_pack, stop_on_arity=True)
 
 
 def call_type_args(validator: 'TypeValidator', call: Call, generic_func) -> Optional[tuple]:

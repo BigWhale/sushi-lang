@@ -1,0 +1,11 @@
+# A wrong argument count on an inferred generic call is a wrong count, not a failed
+# inference: CE2009 names the function and both counts, as it does with `pair@(i32)`.
+# EXPECT_ERROR_CODE: CE2009
+# EXPECT_STDERR_CONTAINS: 'pair' expects 2, got 3
+fn pair@(T)(T a, T b) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 n = pair(1, 2, 3).realise(0)
+    println("{n}")
+    return Result.Ok(0)
