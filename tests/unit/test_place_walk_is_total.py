@@ -24,11 +24,7 @@ _STEP_FIELDS = {"receiver", "array"}
 
 # A root walk this gate may not remove, with the reason. The list may only shrink: an
 # entry that is no longer found fails the gate too, so it cannot outlive its walk.
-_KNOWN_WALKS = {
-    # The CE2006 help spells a member chain back to the user. The file belongs to another
-    # batch of work this wave; it is `borrow/calls.py:_place_of`'s twin.
-    ("sushi_lang/semantics/passes/types/arguments.py", "_spell_place"),
-}
+_KNOWN_WALKS: set[tuple[str, str]] = set()
 
 # A recursion through `.receiver` / `.array` that answers another question than the root:
 # it visits every node, so it recurses through a receiver like through any other child.
