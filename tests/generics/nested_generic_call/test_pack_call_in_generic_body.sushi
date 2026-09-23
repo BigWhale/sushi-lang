@@ -1,0 +1,16 @@
+# A variadic generic call inside a generic body is solved and instantiated,
+# like the same call in a plain function.
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn count@(...Ts)(...Ts xs) i32:
+    return Result.Ok(3)
+
+fn outer@(T)(T x) i32:
+    let i32 n = count(x, x, 1)??
+    return Result.Ok(n)
+
+fn main() i32:
+    let i32 r = outer(5).realise(0)
+    println(r)
+    return Result.Ok(0)

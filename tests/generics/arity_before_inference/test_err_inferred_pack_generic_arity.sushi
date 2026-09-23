@@ -1,0 +1,11 @@
+# A variadic generic takes at least its fixed parameters; too few is CE2009, as it is
+# for a variadic plain function.
+# EXPECT_ERROR_CODE: CE2009
+# EXPECT_STDERR_CONTAINS: 'lead' expects 2, got 1
+fn lead@(H, ...Ts)(H a, H b, ...Ts rest) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 n = lead(1).realise(0)
+    println("{n}")
+    return Result.Ok(0)

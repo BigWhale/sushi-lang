@@ -1,0 +1,20 @@
+# The control: the same variadic call and lambda call in a plain function.
+# EXPECT_STDOUT_EXACT: "3 5\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn count@(...Ts)(...Ts xs) i32:
+    return Result.Ok(3)
+
+fn apply@(U)(fn(U) -> U f, U v) U:
+    let U r = f(v)??
+    return Result.Ok(r)
+
+fn outer(i32 x) i32:
+    let i32 n = count(x, x, 1)??
+    let i32 r = apply(|i32 y| y, x)??
+    println("{n} {r}")
+    return Result.Ok(0)
+
+fn main() i32:
+    outer(5).realise(0)
+    return Result.Ok(0)
