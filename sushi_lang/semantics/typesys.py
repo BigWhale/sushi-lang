@@ -1,6 +1,6 @@
 from __future__ import annotations
 from enum import Enum
-from typing import AbstractSet, Optional, Mapping, Union
+from typing import AbstractSet, Callable, Optional, Mapping, Union
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
@@ -221,8 +221,22 @@ class FunctionType:
                 self.modes == other.modes)
 
 
+def _container_names() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The container base names, and the prefixes of their interned names."""
+    from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
+    return tuple(p[:-1] for p in CONTAINER_PREFIXES), CONTAINER_PREFIXES
+
+
+# Where each predicate stops. A pointer, an iterator, a fn value and a template hold what
+# they name somewhere else, so neither predicate enters them. `owns_resource` also stops
+# at a borrow, because a borrow names storage that another value owns.
+_HOLDS_STOPS = frozenset({"PointerType", "IteratorType", "FunctionType", "TypePack",
+                          "GenericStructType", "GenericEnumType"})
+_OWNS_STOPS = _HOLDS_STOPS | {"ReferenceType"}
+
+
 def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
-                  _visited: Optional[set] = None, resolve=None) -> bool:
+                  resolve: Optional[Callable[["Type"], Optional["Type"]]] = None) -> bool:
     """True if a value of this type owns something RAII must release and a sink must transfer.
 
     Two ways to own. Most types own HEAP, and the answer is structural: a `string`, a
@@ -235,66 +249,35 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
     default: a caller that forgets it would answer False for every handle in the
     program, and a false answer here is a leaked descriptor with no diagnostic
     (ruling R2a).
+
+    One question per type over `type_walk.walk_named_types`. A fixed array owns no buffer
+    of its own, but its elements can own heap (#185). A container's fields are raw
+    pointers, so its NAME answers (#162, #181, #183).
     """
-    if t is None:
+    from sushi_lang.semantics.type_walk import walk_named_types
+    bases, prefixes = _container_names()
+
+    def owns_here(ty: "Type") -> bool:
+        if isinstance(ty, BuiltinType):
+            return ty == BuiltinType.STRING
+        if isinstance(ty, DynamicArrayType):
+            return True
+        if isinstance(ty, FunctionType):
+            return ty.captures != ()
+        if isinstance(ty, GenericTypeRef):
+            return ty.base_name in bases
+        if isinstance(ty, (StructType, EnumType)):
+            return ty.name in drops or (
+                isinstance(ty, StructType) and ty.name.startswith(prefixes))
         return False
-    if resolve is not None and isinstance(t, (UnknownType, GenericTypeRef)):
-        t = resolve(t) or t
 
-    if isinstance(t, ForeignPtrType):
-        return False  # an opaque unmanaged foreign handle; RAII never frees it
-    if isinstance(t, ReferenceType):
-        return False  # a borrow names storage someone else owns
-    if isinstance(t, FunctionType):
-        # Tri-state, and the distinction is load-bearing -- see the docstring.
-        return t.captures != ()
-    if isinstance(t, BuiltinType):
-        # A string owns its buffer when the runtime `owned` bit is set; the free is guarded
-        # on that bit, so a literal/borrow frees to a no-op. Every other builtin (numerics,
-        # bool, I/O handles) is unmanaged.
-        return t == BuiltinType.STRING
-    if isinstance(t, DynamicArrayType):
-        return True
-    if isinstance(t, GenericTypeRef) and t.base_name in ('Own', 'List', 'HashMap'):
-        return True
-
-    if isinstance(t, UnknownType):
-        return False  # unresolved and no resolver given; treat as owning nothing
-
-    if _visited is None:
-        _visited = set()
-
-    if isinstance(t, StructType):
-        # A DECLARED resource, before any field walk: the whole point of `Drop` is that
-        # the fields do not say so.
-        if t.name in drops:
-            return True
-        # Own<T> / List<T> / HashMap<K, V> always own a heap allocation, but their only
-        # fields are raw pointers or a placeholder, so the field scan below answers False and
-        # every recursion gate would skip them. That mismatch was #162 / #181 / #183.
-        if t.name.startswith(('Own<', 'List<', 'HashMap<')):
-            return True
-        if t.name in _visited:
-            return False
-        _visited.add(t.name)
-        return any(owns_resource(ft, drops, _visited, resolve) for _, ft in t.fields)
-    if isinstance(t, EnumType):
-        if t.name in drops:
-            return True
-        if t.name in _visited:
-            return False
-        _visited.add(t.name)
-        return any(owns_resource(at, drops, _visited, resolve)
-                   for variant in t.variants for at in variant.associated_types)
-    if isinstance(t, ArrayType):
-        # A fixed array `T[N]` owns no buffer of its own -- its storage is inline -- but its
-        # ELEMENTS can own heap (#185).
-        return owns_resource(t.base_type, drops, _visited, resolve)
-    return False
+    return any(owns_here(ty) for ty in walk_named_types(
+        t, stop=lambda ty: type(ty).__name__ in _OWNS_STOPS, resolve=resolve))
 
 
 def holds_declared_resource(t: Optional["Type"], drops: AbstractSet[str],
-                            _visited: Optional[set] = None, resolve=None) -> bool:
+                            resolve: Optional[Callable[["Type"], Optional["Type"]]] = None,
+                            ) -> bool:
     """Does this type declare a resource, or hold one anywhere inside it?
 
     NARROWER than `owns_resource`, and the difference is the whole point: a `string`
@@ -307,44 +290,12 @@ def holds_declared_resource(t: Optional["Type"], drops: AbstractSet[str],
     close that the copy verb hides. `.share()` is the operation that means a second
     owner, and it says so in its name.
     """
-    if t is None:
-        return False
-    if resolve is not None and isinstance(t, (UnknownType, GenericTypeRef)):
-        t = resolve(t) or t
-
-    if isinstance(t, ReferenceType):
-        return holds_declared_resource(t.referenced_type, drops, _visited, resolve)
-    if isinstance(t, (DynamicArrayType, ArrayType)):
-        return holds_declared_resource(t.base_type, drops, _visited, resolve)
-    if isinstance(t, GenericTypeRef):
-        return any(holds_declared_resource(a, drops, _visited, resolve)
-                   for a in (t.type_args or ()))
-
-    if _visited is None:
-        _visited = set()
-
-    if isinstance(t, StructType):
-        if t.name in drops:
-            return True
-        if t.name in _visited:
-            return False
-        _visited.add(t.name)
-        # A container's element type rides in `generic_args`; its FIELDS are raw pointers
-        # and a placeholder, so the field walk alone cannot see a `List@(Handle)`.
-        if any(holds_declared_resource(a, drops, _visited, resolve)
-               for a in (t.generic_args or ())):
-            return True
-        return any(holds_declared_resource(ft, drops, _visited, resolve)
-                   for _, ft in t.fields)
-    if isinstance(t, EnumType):
-        if t.name in drops:
-            return True
-        if t.name in _visited:
-            return False
-        _visited.add(t.name)
-        return any(holds_declared_resource(at, drops, _visited, resolve)
-                   for variant in t.variants for at in variant.associated_types)
-    return False
+    from sushi_lang.semantics.type_walk import walk_named_types
+    return any(
+        isinstance(ty, (StructType, EnumType)) and ty.name in drops
+        for ty in walk_named_types(
+            t, stop=lambda ty: type(ty).__name__ in _HOLDS_STOPS, resolve=resolve,
+            struct_type_args=True))
 
 
 @dataclass(frozen=True)
@@ -440,11 +391,3 @@ def type_from_rule_name(name: str) -> Optional[Type]:
     """Map grammar rule name (e.g., 'int_t') to internal Type, or None if unknown."""
     return NODE_TO_TYPE.get(name)
 
-def type_string_from_rule_name(name: str) -> str:
-    """Human-readable type name for diagnostics. Returns enum .value for known types, otherwise a
-    reasonable fallback (strip trailing '_t' if present).
-    """
-    t = NODE_TO_TYPE.get(name)
-    if t is not None:
-        return t.value
-    return name[:-2] if name.endswith("_t") else name

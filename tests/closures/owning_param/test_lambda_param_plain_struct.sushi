@@ -1,0 +1,12 @@
+# The control: a lambda parameter of a plain struct owns nothing and compiles.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7\n"
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let fn(Point) -> i32 f = |Point p| p.x + p.y
+    println("{f(Point(3, 4)).realise(0)}")
+    return Result.Ok(0)
