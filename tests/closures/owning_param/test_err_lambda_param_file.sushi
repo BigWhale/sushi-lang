@@ -1,0 +1,8 @@
+# A lambda parameter of type File owns a descriptor (the Drop perk). The indirect-call
+# path has no deep copy yet, so the parameter is refused (CE2094).
+# EXPECT_ERROR_CODE: CE2094
+use <io/fs>
+
+fn main() i32:
+    let fn(File) -> i32 f = |File h| 1
+    return Result.Ok(0)
