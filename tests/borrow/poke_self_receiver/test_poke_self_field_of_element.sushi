@@ -1,0 +1,19 @@
+# A `poke self` call on a FIELD of an array element writes that field in place (#776).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 7\n"
+# EXPECT_NO_LEAKS
+struct Counter:
+    i32 n
+
+struct Outer:
+    Counter inner
+    i32 k
+
+extend Counter bump(poke self) ~:
+    self.n := self.n + 1
+
+fn main() i32:
+    let Outer[] xs = from([Outer(Counter(1), 7)])
+    xs[0].inner.bump()
+    println("{xs[0].inner.n} {xs[0].k}")
+    return Result.Ok(0)

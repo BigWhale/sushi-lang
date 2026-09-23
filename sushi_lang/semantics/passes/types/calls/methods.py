@@ -427,12 +427,12 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
     code. A temporary is owned by construction, so it is legal there -- the same rule
     ruling R11 states for a match scrutinee.
     """
-    from sushi_lang.semantics.ast import DotCall, MemberAccess
+    from sushi_lang.semantics.ast import DotCall, IndexAccess, MemberAccess
     from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 
     root = call.receiver
-    while isinstance(root, (MethodCall, DotCall, MemberAccess)):
-        root = root.receiver
+    while isinstance(root, (MethodCall, DotCall, MemberAccess, IndexAccess)):
+        root = root.array if isinstance(root, IndexAccess) else root.receiver
     if not isinstance(root, Name):
         if mode.by_pointer:
             er.emit(validator.reporter, er.ERR.CE2404, call.receiver.loc,
