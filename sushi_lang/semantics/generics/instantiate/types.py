@@ -6,7 +6,16 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
 
 from sushi_lang.semantics.typesys import BuiltinType
-from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
+from sushi_lang.semantics.ast import BoolLit, DotCall, FloatLit, IntLit, Name, StringLit
+from sushi_lang.semantics.generics.types import GenericTypeRef
+
+
+_LITERAL_TYPES: dict[type, "Type"] = {
+    StringLit: BuiltinType.STRING,
+    IntLit: BuiltinType.I32,
+    FloatLit: BuiltinType.F64,
+    BoolLit: BuiltinType.BOOL,
+}
 
 
 class TypeInferrer:
@@ -22,38 +31,14 @@ class TypeInferrer:
 
     def infer_simple_receiver_type(self, receiver) -> "Type | None":
         """Simple type inference for method call receivers."""
-        from sushi_lang.semantics.ast import Name, StringLit, IntLit, FloatLit, BoolLit, DotCall
-
-        if isinstance(receiver, StringLit):
-            return self._infer_stringlit_type(receiver)
-        elif isinstance(receiver, IntLit):
-            return self._infer_intlit_type(receiver)
-        elif isinstance(receiver, FloatLit):
-            return self._infer_floatlit_type(receiver)
-        elif isinstance(receiver, BoolLit):
-            return self._infer_boollit_type(receiver)
-        elif isinstance(receiver, DotCall):
+        literal_type = _LITERAL_TYPES.get(type(receiver))
+        if literal_type is not None:
+            return literal_type
+        if isinstance(receiver, DotCall):
             return self._infer_dotcall_type(receiver)
-        elif isinstance(receiver, Name):
+        if isinstance(receiver, Name):
             return self._infer_name_type(receiver)
-        else:
-            return None
-
-    def _infer_stringlit_type(self, expr) -> "Type":
-        """Infer type for string literal."""
-        return BuiltinType.STRING
-
-    def _infer_intlit_type(self, expr) -> "Type":
-        """Infer type for integer literal (for future int extension methods)."""
-        return BuiltinType.I32
-
-    def _infer_floatlit_type(self, expr) -> "Type":
-        """Infer type for float literal (for future float extension methods)."""
-        return BuiltinType.F64
-
-    def _infer_boollit_type(self, expr) -> "Type":
-        """Infer type for bool literal (for future bool extension methods)."""
-        return BuiltinType.BOOL
+        return None
 
     def _infer_dotcall_type(self, expr) -> "Type | None":
         """Infer type for chained method call expressions."""
@@ -107,26 +92,3 @@ class TypeInferrer:
         """Unify parameter type with argument type (the instantiate pass)."""
         from sushi_lang.semantics.generics.unify import unify_types
         return unify_types(param_type, arg_type, type_param_map)
-
-    def substitute_type_simple(self, ty: "Type", type_params: tuple, type_args: tuple) -> "Type":
-        """Simple type substitution for instantiation detection."""
-        from sushi_lang.semantics.typesys import UnknownType
-
-        substitution = {}
-        for param, arg in zip(type_params, type_args, strict=False):
-            param_name = param.name if hasattr(param, 'name') else str(param)
-            substitution[param_name] = arg
-
-        if isinstance(ty, TypeParameter):
-            param_name = ty.name
-            if param_name in substitution:
-                return substitution[param_name]
-            return ty
-
-        if isinstance(ty, UnknownType):
-            type_name = str(ty)
-            if type_name in substitution:
-                return substitution[type_name]
-            return ty
-
-        return ty

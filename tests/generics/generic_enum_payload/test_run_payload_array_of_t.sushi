@@ -1,0 +1,21 @@
+# The same rule for a `T[]` payload: the element type parameter is substituted too, so
+# `size@(i32)` is collected (#801).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3\n"
+
+enum Wrap@(T):
+    Many(T[])
+    Zero
+
+fn size@(U)(U[] a) i32:
+    return Result.Ok(a.len())
+
+fn main() i32:
+    let i32[] xs = from([4, 5, 6])
+    let Wrap@(i32) w = Wrap.Many(xs)
+    match w:
+        Wrap.Many(a) -> println(size(a).realise(0))
+        Wrap.Zero -> println(0)
+    return Result.Ok(0)

@@ -1,0 +1,23 @@
+# A generic-enum payload that NESTS the type parameter, `List@(T)`, is substituted in full
+# when a match binds it. A shallow substitution left `List@(T)`, so `count@(i32)` was never
+# collected and the call answered CE2061 (#801).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1\n"
+
+enum Wrap@(T):
+    Many(List@(T))
+    Zero
+
+fn count@(U)(List@(U) l) i32:
+    return Result.Ok(l.len())
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    let Wrap@(i32) w = Wrap.Many(xs)
+    match w:
+        Wrap.Many(l) -> println(count(l).realise(0))
+        Wrap.Zero -> println(0)
+    return Result.Ok(0)

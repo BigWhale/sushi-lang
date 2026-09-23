@@ -6,7 +6,9 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
     from sushi_lang.semantics.generics.instantiate.expressions import ExpressionScanner
 
-from sushi_lang.semantics.generics.types import GenericTypeRef
+from sushi_lang.semantics.generics.types import (
+    GenericTypeRef, substitute_type_params, type_param_substitution,
+)
 from sushi_lang.semantics.generics.instantiate.type_collection import (
     collect_type_instantiations,
 )
@@ -73,12 +75,7 @@ class FunctionCollector:
         inferred = None
         validator = getattr(self.expression_scanner, "type_validator", None)
         if validator is not None:
-            try:
-                inferred = validator.infer_expression_type(scrutinee)
-            except Exception:
-                # This pass reports nothing: a scrutinee it cannot type simply collects
-                # no binding, and the typecheck pass raises the real diagnostic afterwards.
-                inferred = None
+            inferred = validator.infer_expression_type(scrutinee)
         if inferred is None:
             # A GENERIC call has no monomorphized copy yet, so the validator cannot type
             # it. The scanner has the type arguments and answers from the substituted
@@ -110,13 +107,13 @@ class FunctionCollector:
             template = tables.get(scrutinee_type.base_name)
             if template is None:
                 return ()
-            inferrer = self.expression_scanner.type_inferrer
+            substitution = type_param_substitution(template, scrutinee_type.type_args)
+            if substitution is None:
+                return ()
             for variant in template.variants:
                 if variant.name == variant_name:
                     return tuple(
-                        inferrer.substitute_type_simple(
-                            payload, template.type_params, scrutinee_type.type_args
-                        )
+                        substitute_type_params(payload, substitution)
                         for payload in (variant.associated_types or ())
                     )
             return ()

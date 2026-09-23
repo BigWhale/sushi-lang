@@ -1,0 +1,20 @@
+# The same rule for a `Maybe@(T)` payload (#801).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "42\n"
+
+enum Wrap@(T):
+    One(Maybe@(T))
+    Zero
+
+fn first@(U)(Maybe@(U) m, U fallback) U:
+    return Result.Ok(m.realise(fallback))
+
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(42)
+    let Wrap@(i32) w = Wrap.One(m)
+    match w:
+        Wrap.One(v) -> println(first(v, 0).realise(-1))
+        Wrap.Zero -> println(0)
+    return Result.Ok(0)
