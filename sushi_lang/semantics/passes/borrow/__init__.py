@@ -19,7 +19,8 @@ from .reads import unit_variables
 from .state import BorrowState
 from .statements import check_block
 from .types import TypeQueries
-from .writes import MUTATING_METHODS, READONLY_RECEIVERS
+from .methods import MUTATING_METHODS
+from .writes import READONLY_RECEIVERS
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.tables import SymbolTables

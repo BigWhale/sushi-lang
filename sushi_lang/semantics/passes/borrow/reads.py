@@ -124,11 +124,9 @@ def is_bare_enum_constant(checker: 'BorrowChecker', expr: Optional[Expr]) -> boo
         return False  # a local shadows the enum name
     # A GENERIC enum's bare variant carries the interned instance as a stamp: the
     # receiver is written `Maybe` and the table holds `Maybe<string>` (#545).
-    enum_type = getattr(expr, "resolved_enum_type", None)
+    enum_type = expr.resolved_enum_type
     if enum_type is None:
-        tables = checker.tables
-        enums = getattr(tables, "enums", None) if tables is not None else None
-        enum_type = getattr(enums, "by_name", {}).get(expr.receiver.id) if enums else None
+        enum_type = checker.tables.enums.by_name.get(expr.receiver.id)
     get_variant = getattr(enum_type, "get_variant", None)
     return get_variant is not None and get_variant(expr.member) is not None
 
@@ -171,11 +169,7 @@ def constant_sig(checker: 'BorrowChecker', name: str):
     over the whole program and is first-wins, so it answers with another unit's
     declaration of the same name (#685, `docs/design/unit-namespaces.md` section 9).
     """
-    tables = getattr(checker, "tables", None)
-    constants = getattr(tables, "constants", None) if tables is not None else None
-    if constants is None:
-        return None
-    return constants.lookup(name, checker.unit_name, checker.scope)
+    return checker.tables.constants.lookup(name, checker.unit_name, checker.scope)
 
 
 def constant_type(checker: 'BorrowChecker', name: str) -> Optional[Type]:
@@ -196,11 +190,10 @@ def unit_variables(checker: 'BorrowChecker'):
     entry (`is_unit_var`) rather than at a `let`: borrowable, freezable by a `let`-borrow
     out of it, and never moved out of (docs/design/unit-storage.md).
     """
-    tables = getattr(checker, "tables", None)
-    constants = getattr(tables, "constants", None) if tables is not None else None
-    if constants is None:
-        return []
-    visible = {**constants.by_name, **constants.by_unit.get(checker.unit_name, {})}
+    constants = checker.tables.constants
+    own = (constants.by_unit.get(checker.unit_name, {})
+           if checker.unit_name is not None else {})
+    visible = {**constants.by_name, **own}
     return [(name, sig) for name, sig in visible.items() if sig.is_var]
 
 

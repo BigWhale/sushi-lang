@@ -1,0 +1,10 @@
+# `extend_range` is the second bulk write, and it follows the rule `extend` does (#785).
+# EXPECT_ERROR_CODE: CE2412
+
+fn main() i32:
+    let string[] a = from(["x", "y"])
+    let string[] b = from(["z"])
+    let string first = a[0]
+    a.extend_range(b, 0, 1)
+    println(first)
+    return Result.Ok(0)

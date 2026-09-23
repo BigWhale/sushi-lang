@@ -848,6 +848,10 @@ class RangeExpr(Node):
     inclusive: bool         # True for ..=, False for ..
 
 Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda]
+# The three call shapes; each carries the whole set of callee stamps.
+CallLike = Union[Call, MethodCall, DotCall]
+# The two call shapes with a receiver and a method name.
+MethodLike = Union[MethodCall, DotCall]
 
 def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
     """Accepts either a Token (from the parser) or a str (already a lexeme). Returns one of:

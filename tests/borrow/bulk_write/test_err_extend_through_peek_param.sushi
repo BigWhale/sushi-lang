@@ -1,0 +1,16 @@
+# A bulk write through a `peek` parameter writes the caller's array through a read-only
+# borrow. `r.push(...)` here is CE2408, and `extend` / `extend_range` are the same write.
+# EXPECT_ERROR_CODE: CE2408
+
+fn touch(peek i32[] r) ~:
+    let i32[] b = from([1])
+    r.extend(b)
+    r.extend_range(b, 0, 1)
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32[] a = from([0])
+    match touch(peek a):
+        Result.Ok(_) -> println(a.len())
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

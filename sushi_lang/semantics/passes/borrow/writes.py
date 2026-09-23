@@ -7,25 +7,17 @@ from typing import Callable, Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr
+from sushi_lang.semantics.ast import Expr, MethodLike
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.typesys import ReferenceType
 
 from .diagnostics import escape_help
+from .methods import effect_of
 from .reads import chain_call_boundary, root_owner
 from .state import BorrowState
 
 if TYPE_CHECKING:
     from . import BorrowChecker
-
-
-# Methods that change or release what a container holds, so each is CE2412 for a live
-# `let`-borrow out of the receiver. ONE set: a name missing from a copy would be a silent
-# dangling borrow, not a wrong diagnostic.
-MUTATING_METHODS = frozenset({
-    "push", "pop", "insert", "remove", "clear", "truncate", "reserve", "shrink_to_fit",
-    "rehash", "destroy", "free", "fill", "reverse",
-})
 
 
 @dataclass(frozen=True)
@@ -128,15 +120,14 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
 )
 
 
-def maybe_reject_mutation(checker: 'BorrowChecker', expr: Expr) -> None:
+def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike) -> None:
     """Reject `c.push(x)` while a `let`-borrow binding reads out of `c` (#242)."""
     # A call to a `poke self` method (#327) IS a write to the receiver root --
     # the typecheck pass stamps the resolution on the node, so this pass never re-resolves.
-    is_poke_self_call = (receiver_mode(getattr(expr, "callee_self_mode", None))
-                         is ParamMode.POKE)
-    if getattr(expr, "method", None) not in MUTATING_METHODS and not is_poke_self_call:
+    is_poke_self_call = receiver_mode(expr.callee_self_mode) is ParamMode.POKE
+    if not effect_of(expr.method).mutates and not is_poke_self_call:
         return
-    receiver = getattr(expr, "receiver", None)
+    receiver = expr.receiver
     root = root_owner(receiver)
     what = f"call `.{expr.method}()`"
     if reject_readonly_write(checker, root, expr.loc, what, receiver=receiver):
