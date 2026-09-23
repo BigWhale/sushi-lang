@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODE: CE2062
+# EXPECT_STDERR_CONTAINS: generic 'Pair' expects 2 type argument(s), got 1
+# Too few type arguments is the same fault as too many.
+struct Pair@(T, U):
+    T a
+    U b
+
+fn main() i32:
+    let Pair@(i32) p = Pair(1, 2)
+    println(p.a)
+    return Result.Ok(0)

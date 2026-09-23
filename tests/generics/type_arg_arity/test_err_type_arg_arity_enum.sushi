@@ -1,0 +1,13 @@
+# EXPECT_ERROR_CODE: CE2062
+# EXPECT_STDERR_CONTAINS: generic 'Opt' expects 1 type argument(s), got 2
+# A generic enum written with too many type arguments.
+enum Opt@(T):
+    Some(T)
+    Nothing
+
+fn main() i32:
+    let Opt@(i32, i32) o = Opt.Nothing
+    match o:
+        Opt.Some(_) -> println("some")
+        Opt.Nothing -> println("nothing")
+    return Result.Ok(0)

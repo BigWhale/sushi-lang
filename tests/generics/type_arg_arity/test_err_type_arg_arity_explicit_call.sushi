@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2062
+# EXPECT_STDERR_CONTAINS: expects 1 type argument(s), got 2
+# The control: an explicit call-site list reads the same code.
+fn id@(T)(T x) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    println(id@(i32, i32)(1).realise(0))
+    return Result.Ok(0)

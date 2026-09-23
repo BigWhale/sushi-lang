@@ -1,0 +1,7 @@
+# EXPECT_ERROR_CODE: CE2062
+# EXPECT_STDERR_CONTAINS: generic 'List' expects 1 type argument(s), got 2
+# A built-in generic takes the same rule as a declared one.
+fn main() i32:
+    let List@(i32, i32) xs = List.new()
+    println(xs.len())
+    return Result.Ok(0)
