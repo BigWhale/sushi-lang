@@ -279,8 +279,6 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
                             if sig_param.name == param.name:
                                 sig_param.ty = resolved_type
                                 break
-                else:
-                    pass
 
 
 def reject_spread_args(validator: 'TypeValidator', args: List) -> bool:

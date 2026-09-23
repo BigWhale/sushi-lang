@@ -14,7 +14,7 @@ def block_always_returns(self, block: Block) -> bool:
 
 def statement_always_returns(self, stmt: Stmt) -> bool:
     """Check if a statement always returns on all code paths."""
-    from sushi_lang.semantics.ast import Break, Continue, ExprStmt, Let, Rebind, Print, PrintLn, Foreach, While
+    from sushi_lang.semantics.ast import Foreach, While
 
     if isinstance(stmt, Return):
         return True
@@ -35,7 +35,6 @@ def statement_always_returns(self, stmt: Stmt) -> bool:
     if isinstance(stmt, (While, Foreach)):
         return False
 
-    if isinstance(stmt, (Let, Rebind, ExprStmt, Print, PrintLn, Break, Continue)):
-        return False
-
+    # Everything else -- a let, a rebind, an expression statement, a print, a break, a
+    # continue -- does not return either, so the answer is the same.
     return False

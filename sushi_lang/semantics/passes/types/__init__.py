@@ -12,8 +12,8 @@ if TYPE_CHECKING:
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.ast import (
-    Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, Return, While, Foreach, Match,
-    If, Expr
+    Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, Return, Foreach, Match,
+    Expr
 )
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.types.visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
@@ -27,13 +27,11 @@ from .signatures import (
     validate_extension_method,
     validate_perk_implementation_method,
 )
-from .control_flow import block_always_returns, statement_always_returns
+from .control_flow import block_always_returns
 from .statements import (
     validate_let_statement,
     validate_return_statement,
     validate_rebind_statement,
-    validate_if_statement,
-    validate_while_statement,
     validate_foreach_statement
 )
 from .matching import validate_match_statement
@@ -47,7 +45,6 @@ from .expressions import (
 )
 from .calls import (
     validate_function_call,
-    validate_struct_constructor,
     validate_enum_constructor,
     validate_method_call
 )
@@ -275,10 +272,6 @@ class TypeValidator:
         """Delegate to control_flow module."""
         return block_always_returns(self, block)
 
-    def _statement_always_returns(self, stmt: Stmt) -> bool:
-        """Delegate to control_flow module."""
-        return statement_always_returns(self, stmt)
-
     def _validate_block(self, block: Block) -> None:
         """Validate statements in a block."""
         for stmt in block.statements:
@@ -299,14 +292,6 @@ class TypeValidator:
     def _validate_rebind_statement(self, stmt) -> None:
         """Delegate to statements module."""
         validate_rebind_statement(self, stmt)
-
-    def _validate_if_statement(self, stmt: If) -> None:
-        """Delegate to statements module."""
-        validate_if_statement(self, stmt)
-
-    def _validate_while_statement(self, stmt: While) -> None:
-        """Delegate to statements module."""
-        validate_while_statement(self, stmt)
 
     def _validate_foreach_statement(self, stmt: Foreach) -> None:
         """Delegate to statements module."""
@@ -343,10 +328,6 @@ class TypeValidator:
     def _validate_function_call(self, call) -> None:
         """Delegate to calls module."""
         validate_function_call(self, call)
-
-    def _validate_struct_constructor(self, call) -> None:
-        """Delegate to calls module."""
-        validate_struct_constructor(self, call)
 
     def _validate_enum_constructor(self, constructor) -> None:
         """Delegate to calls module."""
