@@ -253,7 +253,7 @@ Each gate turns the next occurrence of its bug class into a red test:
 |---|---|
 | `test_borrow_dispatch_is_total.py` | an arm for every `Expr` node (CE0125) |
 | `test_scope_dispatch_is_total.py` | the same for the scope pass (CE0130) |
-| `test_peek_write_gate_is_total.py` | every member of `_MUTATING_METHODS` |
+| `test_peek_write_gate_is_total.py` | every method `borrow/methods.py:METHOD_EFFECTS` marks as mutating |
 | `test_readonly_receiver_matrix.py` | every kind x shape cell of §5, the shape-keyed sixth kind included, and the rebind position per kind |
 | `test_borrow_flag_lifecycle.py` | every `BorrowState` flag x flow event |
 | `test_ownership_table.py` | the 3x2 table, reference rows included |
