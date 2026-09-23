@@ -117,10 +117,7 @@ def drops_of(codegen: 'LLVMCodegen') -> frozenset:
     set rather than reaching for a registry, so a caller that cannot supply it does not
     compile -- and every backend caller already holds `codegen`.
     """
-    table = getattr(codegen, "perk_impl_table", None)
-    if table is None:
-        return frozenset()
-    return frozenset(table.by_perk.get("Drop", ()))
+    return frozenset(codegen.perk_impl_table.by_perk.get("Drop", ()))
 
 
 def resolver_for(codegen: 'LLVMCodegen'):

@@ -1,7 +1,7 @@
 """The type algebra the borrow checker needs, answered from the collect pass's tables alone."""
 
 from __future__ import annotations
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from types import SimpleNamespace
 
 from sushi_lang.semantics.generics.types import GenericTypeRef
@@ -19,6 +19,9 @@ from sushi_lang.semantics.typesys import (
 )
 
 from .state import BorrowState
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.tables import SymbolTables
 
 
 def _split_type_args(args: str) -> list[str]:
@@ -42,7 +45,7 @@ def _split_type_args(args: str) -> list[str]:
 class TypeQueries:
     """Resolves and classifies types for the checker. Reads `tables`, nothing else."""
 
-    def __init__(self, tables=None) -> None:
+    def __init__(self, tables: SymbolTables) -> None:
         """Hold the collect pass's tables -- the sole authority for a named type's contents."""
         self.tables = tables
 
@@ -56,12 +59,12 @@ class TypeQueries:
         while the backend, which resolves it, classifies it MOVE. That disagreement is
         a use after move with no diagnostic in front of it.
         """
-        if self.tables is None or not isinstance(ty, (UnknownType, GenericTypeRef)):
+        if not isinstance(ty, (UnknownType, GenericTypeRef)):
             return ty
-        structs = getattr(getattr(self.tables, "structs", None), "by_name", None) or {}
-        enums = getattr(getattr(self.tables, "enums", None), "by_name", None) or {}
         name = ty.name if isinstance(ty, UnknownType) else str(ty)
-        return structs.get(name) or enums.get(name) or ty
+        return (self.tables.structs.by_name.get(name)
+                or self.tables.enums.by_name.get(name)
+                or ty)
 
     def variant_payload_types(self, enum_type: Optional[Type],
                              variant_name: str) -> tuple:
@@ -139,10 +142,7 @@ class TypeQueries:
         reaching for a registry, and the tables this object already holds are where the
         answer lives.
         """
-        impls = getattr(self.tables, "perk_impls", None)
-        if impls is None:
-            return frozenset()
-        return frozenset(impls.by_perk.get("Drop", ()))
+        return frozenset(self.tables.perk_impls.by_perk.get("Drop", ()))
 
     def type_class(self, ty: Optional[Type]) -> TypeClass:
         """Classify a type as PLAIN or MOVE, resolving named types first."""

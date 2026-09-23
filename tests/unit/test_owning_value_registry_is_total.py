@@ -20,6 +20,7 @@ import pytest
 from llvmlite import ir
 
 from sushi_lang.backend.codegen_llvm import LLVMCodegen
+from sushi_lang.semantics.passes.collect import PerkImplementationTable
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, FunctionType, StructType, UnknownType,
 )
@@ -30,7 +31,7 @@ def codegen():
     """A codegen positioned inside a function, so locals can be created."""
     from sushi_lang.backend.memory.dynamic_arrays import DynamicArrayManager
 
-    cg = LLVMCodegen()
+    cg = LLVMCodegen(perk_impl_table=PerkImplementationTable())
     fn = ir.Function(cg.module, ir.FunctionType(ir.VoidType(), []), name="_registry_probe")
     block = fn.append_basic_block("entry")
     cg.builder = ir.IRBuilder(block)

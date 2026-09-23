@@ -17,6 +17,7 @@ from __future__ import annotations
 import pytest
 
 from sushi_lang.backend.codegen_llvm import LLVMCodegen
+from sushi_lang.semantics.passes.collect import PerkImplementationTable
 from sushi_lang.backend.destructors import needs_cleanup
 from sushi_lang.semantics.ownership import TypeClass, type_class_of
 from sushi_lang.semantics.typesys import (
@@ -45,7 +46,7 @@ DROPS = frozenset({"Handle"})
 
 def _codegen() -> LLVMCodegen:
     """A codegen whose tables know these types and which of them implement `Drop`."""
-    codegen = LLVMCodegen("predicate_agreement")
+    codegen = LLVMCodegen("predicate_agreement", perk_impl_table=PerkImplementationTable())
     for ty in (HANDLE, WRAPPER, PLAIN, OWNING):
         codegen.struct_table.by_name[ty.name] = ty
     codegen.enum_table.by_name[HOLDER.name] = HOLDER

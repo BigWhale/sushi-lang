@@ -362,7 +362,10 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
             raise StdlibBuildError("CE0007", detail=str(e)) from e
 
         from sushi_lang.backend.codegen_llvm import LLVMCodegen
-        temp_cg = LLVMCodegen()
+        from sushi_lang.semantics.passes.collect import PerkImplementationTable
+        # This codegen resolves stdlib paths and emits nothing, so no drops question
+        # reaches its empty perk table.
+        temp_cg = LLVMCodegen(perk_impl_table=PerkImplementationTable())
         try:
             for unit_path in stdlib_units:
                 temp_cg.stdlib._resolve_stdlib_unit(unit_path)

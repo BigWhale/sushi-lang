@@ -435,8 +435,7 @@ def emit_declared_drop(codegen: LLVMCodegen, value_ptr: ir.Value,
     and every ordinary call site.
     """
     name = getattr(value_type, "name", None)
-    impls = getattr(codegen, "perk_impl_table", None)
-    if name is None or impls is None or not impls.implements(name, "Drop"):
+    if name is None or not codegen.perk_impl_table.implements(name, "Drop"):
         return
 
     from sushi_lang.semantics.generics.name_mangling import extension_symbol
