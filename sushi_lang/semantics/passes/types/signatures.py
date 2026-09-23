@@ -13,6 +13,7 @@ from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS)
 
+from .control_flow import block_always_returns
 from .utils import validate_type_name, validate_and_register_parameters
 from .perks import validate_perk_implementation, check_no_conflicts_with_regular_methods
 from sushi_lang.semantics.generics.type_display import display_type
@@ -135,7 +136,7 @@ def validate_function(self, func: FuncDef) -> None:
     self._validate_block(func.body)
 
     if func.ret != BuiltinType.BLANK:
-        if not self._block_always_returns(func.body):
+        if not block_always_returns(self, func.body):
             self.err.emit(er.ERR.CE0107, func.name_span, name=func.name)
 
     self.current_function = None
@@ -228,7 +229,7 @@ def _validate_method_body(self, target_type, method) -> None:
 
     self._validate_block(method.body)
 
-    if method.ret != BuiltinType.BLANK and not self._block_always_returns(method.body):
+    if method.ret != BuiltinType.BLANK and not block_always_returns(self, method.body):
         self.err.emit(er.ERR.CE0107, method.name_span, name=method.name)
 
     self.in_extension_context = False

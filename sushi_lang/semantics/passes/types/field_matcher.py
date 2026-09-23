@@ -55,14 +55,3 @@ def validate_and_reorder_named_args(
         reordered_args.append(name_to_expr[field_name])
 
     return reordered_args
-
-
-def detect_mixed_args(field_names: Optional[List[str]], args: List[Expr]) -> bool:
-    """Detect if arguments mix positional and named styles."""
-    if field_names is None:
-        return False
-
-    # If field_names exists, all should be named
-    # Mixing is only possible if field_names length != args length
-    # But AST builder should ensure this never happens
-    return len(field_names) != len(args)

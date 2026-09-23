@@ -15,6 +15,7 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import Type
+from ..externals import validate_external_call_args
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import DotCall, MemberAccess
@@ -37,7 +38,7 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
         validator._resolve_external_call(node)
         for arg in node.args:
             validator.validate_expression(arg)
-        validator._validate_external_call_args(node)
+        validate_external_call_args(validator, node)
         return
 
     if binding.kind == "struct":
@@ -304,7 +305,7 @@ def _stdlib_return_type(validator: 'TypeValidator', node: 'DotCall',
 
 def _materialize(validator: 'TypeValidator', declared) -> Optional[Type]:
     """Resolve a registry module's declared return type against the program's tables."""
-    return validator.type_inference_visitor._materialize_stdlib_return_type(declared)
+    return validator.type_inference_visitor._materialize_wrapper(declared)
 
 
 def _infer_generic_call(validator: 'TypeValidator',

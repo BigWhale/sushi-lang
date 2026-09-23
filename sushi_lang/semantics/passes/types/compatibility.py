@@ -6,9 +6,10 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics import array_runs
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, ReferenceType, BorrowMode
+from sushi_lang.semantics.typesys import Type, UnknownType, ArrayType, DynamicArrayType, ReferenceType, BorrowMode
 from sushi_lang.semantics.ast import Expr, ArrayLiteral, DynamicArrayNew, DynamicArrayFrom
-from sushi_lang.semantics.type_resolution import resolve_unknown_type, TypeResolver
+from sushi_lang.semantics.type_resolution import resolve_unknown_type
+from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from .inference import infer_dynamic_array_from_type
 
 if TYPE_CHECKING:
@@ -115,9 +116,20 @@ def validate_return_compatibility(validator: 'TypeValidator', expected_type: Typ
 
 
 def resolve_generic_type_ref(validator: 'TypeValidator', ty: Type) -> Type:
-    """Resolve GenericTypeRef to monomorphized EnumType or StructType."""
-    resolver = TypeResolver(validator.struct_table.by_name, validator.enum_table.by_name)
-    return resolver.resolve_generic_type_ref(ty)
+    """The instance a WRITTEN generic names, and nothing else touched.
+
+    Narrower than `resolve_declared_type` on purpose: `compare_resolved_types` reads two
+    `UnknownType`s by NAME and resolves a one-sided one itself, so resolving a name here
+    would answer that question a second time and from one side only.
+    """
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    from .utils import resolve_declared_type
+
+    if not isinstance(ty, GenericTypeRef):
+        return ty
+    resolved = resolve_declared_type(validator, ty)
+    return resolved if resolved is not None else ty
 
 
 def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
@@ -209,13 +221,8 @@ def is_valid_cast(source_type: Type, target_type: Type) -> bool:
 
     # Only allow casts between numeric types for now
     # Casts are explicit only: there is no implicit numeric conversion
-    numeric_types = {
-        BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-        BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-        BuiltinType.F32, BuiltinType.F64
-    }
-
-    if source_type in numeric_types and target_type in numeric_types:
+    if (source_type in BUILTIN_NUMERIC_TYPES
+            and target_type in BUILTIN_NUMERIC_TYPES):
         return True
 
     return False

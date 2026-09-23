@@ -70,8 +70,15 @@ def test_an_argument_past_the_last_field_is_still_validated(analyze):
 
 
 def test_the_field_argument_loop_is_written_once():
-    """The gate: one loop, one resolution, one interning site, whatever the code is."""
+    """The gate: one loop, one resolution, one interning site, whatever the code is.
+
+    The interning MOVED in #755: a written wrapper is interned through
+    `utils.intern_declared_wrapper` for every position that writes one, so this file
+    names the seam once and the `ensure_*` call not at all. The row is unchanged --
+    one interning site -- and the spelling it counts follows the site.
+    """
     source = Path(structs_module.__file__).read_text(encoding="utf-8")
     assert source.count("types_compatible(") == 1, "the compatibility test is written twice"
-    assert source.count("ensure_result_type_in_table(") == 1, "the interning is written twice"
+    assert source.count("intern_declared_wrapper(validator") == 1, "the interning is written twice"
+    assert source.count("ensure_result_type_in_table(") == 0, "the intern seam is bypassed"
     assert source.count("propagate_types_to_value(validator") == 1

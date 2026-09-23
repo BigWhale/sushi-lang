@@ -6,14 +6,13 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
-from sushi_lang.semantics.ast import Let, Return, Rebind, If, While, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess
+from sushi_lang.semantics.ast import Let, Return, Rebind, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
 from .compatibility import (validate_assignment_compatibility,
                             reject_incompatible_assignment, types_compatible)
-from .expressions import validate_boolean_condition
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
@@ -372,25 +371,6 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
     if not types_compatible(validator, expr_type, actual_type):
         er.emit(validator.reporter, er.ERR.CE2002, stmt.loc,
                expected=display_type(actual_type), got=display_type(expr_type))
-
-
-def validate_if_statement(validator: 'TypeValidator', stmt: If) -> None:
-    """Validate if statement conditions and branches."""
-    for cond, block in stmt.arms:
-        # Validate condition is boolean (CE2005)
-        validate_boolean_condition(validator, cond, "if")
-        validator._validate_block(block)
-
-    if stmt.else_block:
-        validator._validate_block(stmt.else_block)
-
-
-def validate_while_statement(validator: 'TypeValidator', stmt: While) -> None:
-    """Validate while statement condition and body."""
-    # Validate condition is boolean (CE2005)
-    validate_boolean_condition(validator, stmt.cond, "while")
-
-    validator._validate_block(stmt.body)
 
 
 def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> None:

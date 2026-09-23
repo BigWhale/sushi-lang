@@ -305,28 +305,12 @@ class ListMethodInferrer:
     receiver_type: StructType
     method_name: str
     validator: 'TypeValidator'
-    call: Optional['MethodCall'] = None
 
     def infer_return_type(self) -> Optional['Type']:
         from sushi_lang.semantics.generics.list import is_builtin_list_method
         from sushi_lang.semantics.generics.list import parse_list_types
-        import sushi_lang.internals.errors as er
 
         if is_builtin_list_method(self.method_name):
-            if self.call is not None:
-                expected_args = {
-                    "new": 0, "len": 0, "capacity": 0, "is_empty": 0,
-                    "pop": 0, "clear": 0, "shrink_to_fit": 0, "destroy": 0, "free": 0, "debug": 0, "iter": 0,
-                    "clone": 0,
-                    "with_capacity": 1, "push": 1, "get": 1, "reserve": 1, "remove": 1,
-                    "insert": 2,
-                }
-                expected = expected_args.get(self.method_name, 0)
-                got = len(self.call.args)
-                if got != expected:
-                    er.emit(self.validator.reporter, er.ERR.CE2053, self.call.loc,
-                            method=self.method_name, expected=expected, got=got)
-
             element_type = parse_list_types(self.receiver_type, self.validator)
             if element_type is not None:
                 if self.method_name in ("get", "pop", "remove"):

@@ -7,6 +7,11 @@ from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
+from sushi_lang.semantics.passes.types.calls import (
+    validate_enum_constructor, validate_function_call, validate_method_call)
+from sushi_lang.semantics.passes.types.expressions import (
+    validate_array_literal, validate_bitwise_operation, validate_cast_expression,
+    validate_index_access, validate_try_expression)
 from sushi_lang.semantics.visitors import RecursiveVisitor
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, ForeignPtrType
 from sushi_lang.semantics.passes.types.visibility import (
@@ -116,7 +121,7 @@ class ExpressionValidator(RecursiveVisitor):
             reject_uncomparable_operands(self.type_validator, node, left_type, right_type)
 
         if node.op in ["&", "|", "^", "<<", ">>"]:
-            self.type_validator._validate_bitwise_operation(node)
+            validate_bitwise_operation(self.type_validator, node)
 
         # Both operands of a logical operator are conditions (#532).
         if node.op in ["and", "or", "xor"]:
@@ -194,12 +199,12 @@ class ExpressionValidator(RecursiveVisitor):
 
     def visit_call(self, node: Call) -> None:
         """Validate function call."""
-        self.type_validator._validate_function_call(node)
+        validate_function_call(self.type_validator, node)
         reject_named_args(self.type_validator, node)
 
     def visit_methodcall(self, node: MethodCall) -> None:
         """Validate method call."""
-        self.type_validator._validate_method_call(node)
+        validate_method_call(self.type_validator, node)
         reject_named_args(self.type_validator, node)
 
     def visit_dotcall(self, node: DotCall) -> None:
@@ -220,16 +225,16 @@ class ExpressionValidator(RecursiveVisitor):
             return
 
         if target.kind is DotCallKind.METHOD:
-            self.type_validator._validate_method_call(target.method_call)
+            validate_method_call(self.type_validator, target.method_call)
             copy_callee_stamps(node, target.method_call)
 
     def visit_arrayliteral(self, node: ArrayLiteral) -> None:
         """Validate array literal."""
-        self.type_validator._validate_array_literal(node)
+        validate_array_literal(self.type_validator, node)
 
     def visit_indexaccess(self, node: IndexAccess) -> None:
         """Validate index access."""
-        self.type_validator._validate_index_access(node)
+        validate_index_access(self.type_validator, node)
 
     def visit_dynamicarraynew(self, node: DynamicArrayNew) -> None:
         """new() constructor - no subexpressions to validate."""
@@ -241,11 +246,11 @@ class ExpressionValidator(RecursiveVisitor):
 
     def visit_castexpr(self, node: CastExpr) -> None:
         """Cast expression - validate the source expression and check cast validity."""
-        self.type_validator._validate_cast_expression(node)
+        validate_cast_expression(self.type_validator, node)
 
     def visit_enumconstructor(self, node: EnumConstructor) -> None:
         """Validate enum constructor call (including Result.Ok() and Result.Err())."""
-        self.type_validator._validate_enum_constructor(node)
+        validate_enum_constructor(self.type_validator, node)
 
     def visit_memberaccess(self, node: MemberAccess) -> None:
         """A field read -- or the bare spelling of a payload-free variant (#545)."""
@@ -266,7 +271,7 @@ class ExpressionValidator(RecursiveVisitor):
 
     def visit_tryexpr(self, node: TryExpr) -> None:
         """Validate try expression (?? operator)."""
-        self.type_validator._validate_try_expression(node)
+        validate_try_expression(self.type_validator, node)
 
     def visit_rangeexpr(self, node: RangeExpr) -> None:
         """Validate range expression."""

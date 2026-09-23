@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.typesys import BuiltinType, Type
+from .enums import validate_enum_constructor
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import DotCall
@@ -164,7 +165,7 @@ def validate_variant_spelling(validator: 'TypeValidator', node, variant_name: st
         loc=node.loc,
     )
     constructor.resolved_enum_type = getattr(node, 'resolved_enum_type', None)
-    validator._validate_enum_constructor(constructor)
+    validate_enum_constructor(validator, constructor)
     if constructor.resolved_enum_type is not None:
         node.resolved_enum_type = constructor.resolved_enum_type
     return True
