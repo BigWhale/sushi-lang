@@ -1,6 +1,6 @@
 """Expression validation for type validation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, NamedTuple, Optional, Tuple
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics import array_runs
@@ -9,6 +9,7 @@ from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, RangeExpr, MemberAccess
 from sushi_lang.semantics.type_predicates import (
     BUILTIN_INTEGER_TYPES, is_integer_type, is_numeric_type)
+from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .compatibility import is_valid_cast
 from .utils import validate_constant_array_index
 from sushi_lang.semantics.generics.type_display import display_type
@@ -123,116 +124,174 @@ def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> 
     # checking happens during cast emission.
 
 
+class _Arms(NamedTuple):
+    """What a `??` reads off the wrapper it is applied to."""
+    value_type: Optional['Type']       # the payload the success arm carries
+    success_tag: Optional[int]         # that arm's variant index
+    error_type: Optional['Type']       # the failure arm's payload, if it has one
+    error_tag: Optional[int]           # that arm's variant index
+
+
+_NO_ARMS = _Arms(None, None, None, None)
+
+
 def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None:
-    """Validate ?? operator usage and annotate AST with inferred types."""
+    """Validate ?? operator usage and annotate AST with inferred types.
+
+    Four questions, in this order, and each one reports its own fault: what the wrapper
+    under the `??` carries (CE2507), what channel encloses it (CE2508), whether the two
+    failure arms name one type (CE2511), and what the back end reads off the node.
+    """
     validator.validate_expression(expr.expr)
 
     inner_type = validator.infer_expression_type(expr.expr)
+    arms = _unwrapped_arms(validator, expr, inner_type)
+    if arms is None:
+        return
 
-    unwrapped_type = None
-    success_tag = None
-    error_type = None
-    error_tag = None
+    channel = _enclosing_channel(validator, expr)
+    if channel is None:
+        return
 
-    if inner_type is not None:
-        if isinstance(inner_type, EnumType):
-            ok_variant = inner_type.get_variant("Ok")
-            err_variant = inner_type.get_variant("Err")
-            is_result_like = (ok_variant and err_variant and
-                             len(ok_variant.associated_types) == 1)
+    if not _error_arms_agree(validator, expr, inner_type, channel):
+        return
 
-            some_variant = inner_type.get_variant("Some")
-            none_variant = inner_type.get_variant("None")
-            is_maybe_like = (some_variant and none_variant and
-                            len(some_variant.associated_types) == 1 and
-                            len(none_variant.associated_types) == 0)
+    _annotate_try_expr(expr, inner_type, arms, channel)
 
-            if not is_result_like and not is_maybe_like:
-                er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=display_type(inner_type))
-                return
 
-            if is_result_like:
-                unwrapped_type = ok_variant.associated_types[0]
-                success_tag = inner_type.get_variant_index("Ok")
-                if err_variant.associated_types:
-                    error_type = err_variant.associated_types[0]
-                error_tag = inner_type.get_variant_index("Err")
-            else:  # is_maybe_like
-                unwrapped_type = some_variant.associated_types[0]
-                success_tag = inner_type.get_variant_index("Some")
-                # Maybe-like has no error variant with data
-                error_type = None
-                error_tag = None
-        else:
-            er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=display_type(inner_type))
-            return
+def _unwrapped_arms(validator: 'TypeValidator', expr: 'TryExpr',
+                    inner_type: Optional['Type']) -> Optional[_Arms]:
+    """What the wrapper under a `??` carries, or None once CE2507 is reported.
 
+    An uninferrable operand carries nothing and reports nothing: the fault that made it
+    uninferrable has a diagnostic of its own already.
+    """
+    if inner_type is None:
+        return _NO_ARMS
+
+    if not isinstance(inner_type, EnumType):
+        er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=display_type(inner_type))
+        return None
+
+    ok_variant = inner_type.get_variant("Ok")
+    err_variant = inner_type.get_variant("Err")
+    if ok_variant and err_variant and len(ok_variant.associated_types) == 1:
+        return _Arms(
+            value_type=ok_variant.associated_types[0],
+            success_tag=inner_type.get_variant_index("Ok"),
+            error_type=(err_variant.associated_types[0]
+                        if err_variant.associated_types else None),
+            error_tag=inner_type.get_variant_index("Err"),
+        )
+
+    # A Maybe-like wrapper has no failure payload: `??` still propagates, as an Err.
+    some_variant = inner_type.get_variant("Some")
+    none_variant = inner_type.get_variant("None")
+    if (some_variant and none_variant and len(some_variant.associated_types) == 1
+            and len(none_variant.associated_types) == 0):
+        return _Arms(
+            value_type=some_variant.associated_types[0],
+            success_tag=inner_type.get_variant_index("Some"),
+            error_type=None,
+            error_tag=None,
+        )
+
+    er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=display_type(inner_type))
+    return None
+
+
+def _enclosing_channel(validator: 'TypeValidator', expr: 'TryExpr') -> Optional['Type']:
+    """The interned `Result@(T, E)` a `??` propagates into, or None once it is reported.
+
+    Every way of having no channel reads CE2508, and there is one silent way out: a BARE
+    extension body has no channel and the collect pass already rejected every `??` in it
+    with CE0131 (#398), so a second diagnostic here would only mislead.
+    """
+    declared = _declared_channel(validator, expr)
+    if declared is None:
+        return None
+
+    return _intern_channel(validator, expr, declared)
+
+
+def _declared_channel(validator: 'TypeValidator', expr: 'TryExpr') -> Optional['Type']:
+    """The return type the enclosing body declares, before it is interned."""
     if validator.current_function is None:
         # A CHANNEL extension body (`| E`, ruling 1) propagates into its own interned
-        # Result -- validated below exactly as a function's. A BARE extension body has
-        # no channel; the collect pass already rejected every `??` in it with CE0131
-        # (#398), so emitting the accidental CE2508 here would only duplicate and
-        # mislead. Any other None context keeps the CE2508 backstop.
+        # Result. A BARE one is the silent case above; any other None context keeps the
+        # CE2508 backstop.
         channel = getattr(validator, "extension_channel_result", None)
         if channel is None:
             if not getattr(validator, "in_extension_context", False):
                 er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-            return
-        func_return_type = channel
-    else:
-        # CW2511: Warn about ?? operator in main function
-        # While it works, explicit error handling is clearer at the program entry point
-        if validator.current_function.name == "main":
-            er.emit(validator.reporter, er.ERR.CW2511, expr.loc)
-            # Continue validation - this is just a warning
+            return None
+        return channel
 
-        func_return_type = validator.current_function.ret
+    # CW2511: `??` works in main, but explicit handling is clearer at the entry point.
+    if validator.current_function.name == "main":
+        er.emit(validator.reporter, er.ERR.CW2511, expr.loc)
 
-        if func_return_type is None:
-            # Function has no return type
-            er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-            return
+    if validator.current_function.ret is None:
+        er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
+        return None
+    return validator.current_function.ret
 
-    # Normalize the enclosing function's return type to the interned Result<T, E> enum, whichever
-    # way it was spelled: an implicit `fn foo() T` / `fn foo() T | E`, an explicit
-    # `fn foo() Result<T, E>` (still a GenericTypeRef), or a signature already resolved in place.
-    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+
+def _intern_channel(validator: 'TypeValidator', expr: 'TryExpr',
+                    declared: 'Type') -> Optional['Type']:
+    """The declared channel as its interned Result, whichever way it was spelled.
+
+    An implicit `fn foo() T` / `fn foo() T | E`, an explicit `fn foo() Result@(T, E)`
+    still spelled as a `GenericTypeRef`, or a signature already resolved in place.
+    """
     from sushi_lang.semantics.generics.results import (
-        ensure_result_type_in_table, is_result_enum, result_ok_err,
+        ensure_result_type_in_table, is_result_enum,
     )
 
     structs = validator.struct_table.by_name
     enums = validator.enum_table.by_name
 
     def intern(ok: 'Type', err: 'Type'):
-        return ensure_result_type_in_table(validator.enum_table, ok, err, struct_table=structs)
+        return ensure_result_type_in_table(validator.enum_table, ok, err,
+                                           struct_table=structs)
 
     # Result ALONE, where `utils.intern_declared_wrapper` also answers for a written
-    # `Maybe@(T)`: a Maybe return type belongs in the wrap below, as the OK payload of the
-    # enclosing Result, and interning it here would make `??` read it as the channel.
-    if isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result":
-        if len(func_return_type.type_args) != 2:
+    # `Maybe@(T)`: a Maybe return type belongs in the wrap below, as the OK payload of
+    # the enclosing Result, and interning it here would make `??` read it as the channel.
+    if isinstance(declared, GenericTypeRef) and declared.base_name == "Result":
+        if len(declared.type_args) != 2:
             er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-            return
-        func_return_type = intern(func_return_type.type_args[0], func_return_type.type_args[1])
-    elif not is_result_enum(func_return_type):
+            return None
+        declared = intern(declared.type_args[0], declared.type_args[1])
+    elif not is_result_enum(declared):
         if (validator.current_function is not None
                 and validator.current_function.err_type is not None):
-            err_type_resolved = resolve_unknown_type(
+            err_type = resolve_unknown_type(
                 validator.current_function.err_type, structs, enums)
         else:
-            err_type_resolved = enums.get("StdError")
-        if err_type_resolved is None:
+            err_type = enums.get("StdError")
+        if err_type is None:
             er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-            return
-        func_return_type = intern(func_return_type, err_type_resolved)
+            return None
+        declared = intern(declared, err_type)
 
-    if not is_result_enum(func_return_type):
+    if not is_result_enum(declared):
         er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-        return
+        return None
+    return declared
 
-    # Note: when ?? is used with Maybe<T>, it still propagates as Result.Err()
-    outer_ok_type, outer_err_type = result_ok_err(func_return_type)
+
+def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr',
+                      inner_type: Optional['Type'], channel: 'Type') -> bool:
+    """Whether the wrapper's failure arm names the channel's, or CE2511.
+
+    Strict matching with no conversion. The two sides used to be compared as STRINGS,
+    because one Result had many instances; both are interned now, so they compare as
+    types.
+    """
+    from sushi_lang.semantics.generics.results import result_ok_err
+
+    outer_ok_type, outer_err_type = result_ok_err(channel)
 
     inner_err_type = None
     if isinstance(inner_type, EnumType):
@@ -240,40 +299,31 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
         if err_variant and err_variant.associated_types:
             inner_err_type = err_variant.associated_types[0]
 
-    # Strict error-type matching, no conversions. This used to compare str(inner) != str(outer)
-    # because the two sides could be different instances of the same type -- the workaround that
-    # only existed because Result had no single representation. Both sides now resolve to the
-    # interned type, so they are compared as types.
-    if inner_err_type is not None and outer_err_type is not None:
-        inner_resolved = resolve_unknown_type(inner_err_type, structs, enums)
-        outer_resolved = resolve_unknown_type(outer_err_type, structs, enums)
-        if inner_resolved != outer_resolved:
-            er.emit(validator.reporter, er.ERR.CE2511, expr.loc,
-                    ok_type=display_type(outer_ok_type),
-                    inner_err=display_type(inner_err_type),
-                    outer_err=display_type(outer_err_type))
-            return
+    if inner_err_type is None or outer_err_type is None:
+        return True
 
-    _annotate_try_expr(expr, inner_type, unwrapped_type, success_tag,
-                      error_type, error_tag, func_return_type)
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
+    if (resolve_unknown_type(inner_err_type, structs, enums)
+            == resolve_unknown_type(outer_err_type, structs, enums)):
+        return True
+
+    er.emit(validator.reporter, er.ERR.CE2511, expr.loc,
+            ok_type=display_type(outer_ok_type),
+            inner_err=display_type(inner_err_type),
+            outer_err=display_type(outer_err_type))
+    return False
 
 
-def _annotate_try_expr(
-    expr: 'TryExpr',
-    inner_type: 'EnumType',
-    unwrapped_type: 'Type',
-    success_tag: int,
-    error_type: 'Optional[Type]',
-    error_tag: 'Optional[int]',
-    func_return_type: 'Type'
-) -> None:
+def _annotate_try_expr(expr: 'TryExpr', inner_type: Optional['Type'],
+                       arms: _Arms, channel: 'Type') -> None:
     """Annotate TryExpr AST node with inferred type information."""
     expr.inferred_inner_type = inner_type
-    expr.inferred_unwrapped_type = unwrapped_type
-    expr.inferred_success_tag = success_tag
-    expr.inferred_error_type = error_type
-    expr.inferred_error_tag = error_tag
-    expr.inferred_func_return_type = func_return_type
+    expr.inferred_unwrapped_type = arms.value_type
+    expr.inferred_success_tag = arms.success_tag
+    expr.inferred_error_type = arms.error_type
+    expr.inferred_error_tag = arms.error_tag
+    expr.inferred_func_return_type = channel
 
 
 def reject_mixed_numeric_operands(validator: 'TypeValidator', expr: BinaryOp,
