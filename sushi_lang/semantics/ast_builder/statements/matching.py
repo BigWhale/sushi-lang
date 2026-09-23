@@ -257,17 +257,38 @@ def parse_own_pattern(t: Tree, ast_builder: 'ASTBuilder') -> 'OwnPattern':
         if nom_name_tok is None:
             ice(t, "malformed nom_binding inside Own pattern")
         return ast_builder.recover(
-            SyntaxDiagnostic("CE2434", span=span_of(nom_tree))
-            .help("bind the pointee by value, or `Own(poke x)` to write through it; to "
-                  "take the value out, move the whole `Own@(T)` with a `nom` binding on "
-                  "the payload that holds it"),
+            _take_from_own(span_of(nom_tree)),
             OwnPattern(inner_pattern=str(nom_name_tok.value), loc=span_of(t)))
 
     pattern_item_tree = first_tree(t.children, "pattern_item")
     if pattern_item_tree is None:
         ice(t, "own_pattern must contain a pattern_item")
 
-    return OwnPattern(
-        inner_pattern=_read_pattern_item(pattern_item_tree, ast_builder),
-        loc=span_of(t)
-    )
+    inner = _read_pattern_item(pattern_item_tree, ast_builder)
+    if isinstance(inner, Pattern):
+        _refuse_takes_inside_own(inner, ast_builder)
+    return OwnPattern(inner_pattern=inner, loc=span_of(t))
+
+
+def _take_from_own(span) -> SyntaxDiagnostic:
+    """CE2434: a `nom` binding anywhere inside an `Own(...)` pattern (ruling R11)."""
+    return (SyntaxDiagnostic("CE2434", span=span)
+            .help("bind the pointee by value, or `Own(poke x)` to write through it; to "
+                  "take the value out, move the whole `Own@(T)` with a `nom` binding on "
+                  "the payload that holds it"))
+
+
+def _refuse_takes_inside_own(pattern: 'Pattern', ast_builder: 'ASTBuilder') -> None:
+    """Refuse each `nom` binding nested in an `Own(...)` pattern, and bind it by value.
+
+    A nested `Own(...)` refused its own inner pattern when it was built, so the walk
+    stops there.
+    """
+    from sushi_lang.semantics.ast import NomBinding
+
+    for index, binding in enumerate(pattern.bindings):
+        if isinstance(binding, NomBinding):
+            pattern.bindings[index] = ast_builder.recover(
+                _take_from_own(binding.loc), binding.name)
+        elif isinstance(binding, Pattern):
+            _refuse_takes_inside_own(binding, ast_builder)

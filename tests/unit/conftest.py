@@ -53,9 +53,13 @@ def _analyze_source(tmp_path, src: str, name: str,
     file_path = tmp_path / f"{name}.sushi"
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(text, encoding="utf-8")
-    program, _tree = parse_to_ast(text)
-
     reporter = Reporter(source=text, filename=name)
+
+    # The parse STAGE reports into the same Reporter and stops before the next one, as
+    # the command line does: a recovered rule leaves a substitute node in the tree.
+    program, _tree = parse_to_ast(text, reporter=reporter)
+    if reporter.has_errors:
+        return Analysis(reporter=reporter, program=program, analyzer=None)
 
     # Match compile_multi_file's pre-analysis setup.
     get_stdlib_registry()
