@@ -10,7 +10,7 @@ from sushi_lang.semantics.ast import (
 )
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter, TypePack
 from sushi_lang.semantics.typesys import (
-    Type, EnumType, EnumVariantInfo, StructType, UnknownType,
+    Type, EnumType, StructType, UnknownType,
     PointerType, ArrayType, DynamicArrayType, ReferenceType
 )
 
@@ -85,25 +85,10 @@ class TypeSubstitutor:
                 base_type=self.substitute_type(ty.base_type, substitution)
             )
 
-        if isinstance(ty, StructType):
-            new_fields = []
-            for field_name, field_type in ty.fields:
-                new_field_type = self.substitute_type(field_type, substitution)
-                new_fields.append((field_name, new_field_type))
-            return StructType(name=ty.name, fields=tuple(new_fields))
-
-        if isinstance(ty, EnumType):
-            new_variants = []
-            for variant in ty.variants:
-                new_assoc_types = []
-                for assoc_type in variant.associated_types:
-                    new_assoc_type = self.substitute_type(assoc_type, substitution)
-                    new_assoc_types.append(new_assoc_type)
-                new_variants.append(EnumVariantInfo(
-                    name=variant.name,
-                    associated_types=tuple(new_assoc_types)
-                ))
-            return EnumType(name=ty.name, variants=tuple(new_variants))
+        # A NAMED type is terminal: its interned name already IS (declaration, type
+        # arguments). It is looked up, never rebuilt (docs/design/type-identity.md, #802).
+        if isinstance(ty, (StructType, EnumType)):
+            return ty
 
         if isinstance(ty, GenericTypeRef):
             new_type_args = []
