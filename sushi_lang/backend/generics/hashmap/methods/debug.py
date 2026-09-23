@@ -4,7 +4,7 @@ from typing import Any
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 from ..types import get_hashmap_field_ptrs, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
-from sushi_lang.semantics.generics.hashmap import extract_key_value_types
+from sushi_lang.semantics.generics.hashmap import parse_hashmap_types
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i8_const
 from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_VALUE_INDICES, ENTRY_STATE_INDICES
@@ -22,7 +22,7 @@ def emit_hashmap_debug(
     """Emit HashMap<K, V>.debug() -> ~"""
     builder = codegen.builder
 
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     fields = get_hashmap_field_ptrs(codegen, hashmap_value)
     size_ptr, capacity_ptr = fields.size, fields.capacity

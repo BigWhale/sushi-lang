@@ -420,130 +420,43 @@ class ExpressionScanner:
 
     def _infer_arg_type(self, arg_expr):
         """Infer a generic call argument's type through the typecheck pass's real inferrer."""
-        from sushi_lang.semantics.ast import Lambda
-        if self.type_validator is None:
-            return None
-        if isinstance(arg_expr, Lambda):
-            from sushi_lang.semantics.passes.types.visitor import infer_lambda_type
-            return infer_lambda_type(self.type_validator, arg_expr, stamp=False)
-        arg_type = self.type_validator.infer_expression_type(arg_expr)
-        if arg_type is None and getattr(arg_expr, "method", None) == "clone":
-            # `.clone()` returns its receiver's type BY DEFINITION (it is total over
-            # types), but at the instantiate pass the receiver's type is still a GenericTypeRef --
-            # the interned instance does not exist until the monomorphize pass -- so the typecheck pass's clone
-            # inference (keyed on StructType/EnumType) declines it and `f(p.clone())`
-            # was never collected (F8; the pin was CE2061). Fall back to the receiver.
-            receiver = getattr(arg_expr, "receiver", None)
-            if receiver is not None:
-                arg_type = self.type_validator.infer_expression_type(receiver)
-        return arg_type
+        from sushi_lang.semantics.generics.pack_inference import infer_call_arg_type
+        return infer_call_arg_type(self.type_validator, arg_expr)
 
     def _infer_type_args_from_call(self, call, generic_func) -> tuple["Type", ...] | None:
         """Infer type arguments for generic function call."""
         from sushi_lang.semantics.generics.pack_inference import infer_flat_type_args
 
-        call_args = getattr(call, "args", []) or []
         arg_types: list["Type"] = []
-        for arg_expr in call_args:
+        for arg_expr in getattr(call, "args", []) or []:
             arg_type = self._infer_arg_type(arg_expr)
             if arg_type is None:
                 return None
             arg_types.append(arg_type)
 
         return infer_flat_type_args(
-            generic_func,
-            arg_types,
-            infer_leading=self._infer_leading_type_args,
-        )
-
-    def _infer_leading_type_args(
-        self, generic_func, leading_arg_types
-    ) -> tuple["Type", ...] | None:
-        """Infer the leading (non-pack) type-args from already-inferred arg types."""
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
-
-        type_param_map: dict[str, "Type"] = {}
-
-        func_params = [
-            p for p in generic_func.params if not getattr(p, "is_pack", False)
-        ]
-
-        if len(leading_arg_types) != len(func_params):
-            return None
-
-        for arg_type, param in zip(leading_arg_types, func_params, strict=False):
-            if param.ty is None:
-                # Parameter has no type annotation - shouldn't happen
-                return None
-
-            success = self.type_inferrer.unify_types(param.ty, arg_type, type_param_map)
-            if not success:
-                return None
-
-        leading_type_params = [
-            tp for tp in generic_func.type_params
-            if not getattr(tp, "is_pack", False)
-        ]
-
-        for tp in leading_type_params:
-            tp_name = tp.name if hasattr(tp, 'name') else str(tp)
-            if tp_name not in type_param_map:
-                return None
-
-        type_args = []
-        for tp in leading_type_params:
-            tp_name = tp.name if hasattr(tp, 'name') else str(tp)
-            inferred_type = type_param_map[tp_name]
-            resolved_type = resolve_unknown_type(
-                inferred_type,
-                self.type_inferrer.struct_table or {},
-                self.type_inferrer.enum_table or {}
-            )
-            type_args.append(resolved_type)
-
-        return tuple(type_args)
+            generic_func, arg_types,
+            self.type_inferrer.struct_table or {}, self.type_inferrer.enum_table or {})
 
     def scan_generic_fn_reference(self, name: str, expected_ty) -> None:
         """Record an instantiation for a bare generic-fn reference (T2.3)."""
         from sushi_lang.semantics.typesys import FunctionType
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
         if not isinstance(expected_ty, FunctionType):
             return
         if not self.generic_funcs or name not in self.generic_funcs:
             return
         generic_func = self.generic_funcs[name]
-        func_params = [p for p in generic_func.params if not getattr(p, "is_pack", False)]
-        if len(func_params) != len(expected_ty.param_types):
+        type_args = solve_leading_type_args(
+            generic_func, list(expected_ty.param_types),
+            self.type_inferrer.struct_table or {}, self.type_inferrer.enum_table or {},
+            ret_type=expected_ty.ok_type)
+        if type_args is None:
             return
 
-        type_param_map: dict[str, "Type"] = {}
-        for param, exp_param_ty in zip(func_params, expected_ty.param_types, strict=False):
-            if param.ty is None:
-                return
-            if not self.type_inferrer.unify_types(param.ty, exp_param_ty, type_param_map):
-                return
-        if generic_func.ret is not None:
-            if not self.type_inferrer.unify_types(generic_func.ret, expected_ty.ok_type, type_param_map):
-                return
-
-        leading_type_params = [
-            tp for tp in generic_func.type_params if not getattr(tp, "is_pack", False)
-        ]
-        type_args = []
-        for tp in leading_type_params:
-            tp_name = tp.name if hasattr(tp, 'name') else str(tp)
-            if tp_name not in type_param_map:
-                return  # a type param not solvable from the expected type
-            resolved = resolve_unknown_type(
-                type_param_map[tp_name],
-                self.type_inferrer.struct_table or {},
-                self.type_inferrer.enum_table or {},
-            )
-            type_args.append(resolved)
-
         self.function_instantiations.add(
-            (getattr(generic_func, "unit_name", None), name, tuple(type_args)))
-        self._collect_substituted_signature(generic_func, tuple(type_args))
+            (getattr(generic_func, "unit_name", None), name, type_args))
+        self._collect_substituted_signature(generic_func, type_args)
 
     def _collect_from_type(self, ty: "Type") -> None:
         """Collect generic instantiations from a type annotation."""

@@ -392,6 +392,32 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A `Maybe` whose payload nests a user type is interned like a `Result`** (#793). `let
+  Maybe@(Point[]) m = l.get(0)` stopped with the internal CE0126: the Maybe seam resolved
+  its payload one level deep and had no guard. One seam, `intern_wrapper_enum`, now interns
+  both wrappers; the payload is resolved recursively, and an abstract `Maybe@(T)` is no
+  longer stored in the enum table.
+- **A function type in a `List@` or `HashMap@` type argument is read correctly** (#794).
+  `List@(fn(i32) -> i32)` stopped with CE0022 and a HashMap with CE0050, because the element
+  types were cut out of the interned name and the `->` arrow broke the cut. The readers now
+  read `generic_args` and resolve each argument recursively; one splitter remains.
+- **A function-typed HashMap key is refused** (#789) with CE2054: a function value has no
+  hash and no equality. A `Maybe@(i32[])` key stays legal, because the key equality compares
+  the array element by element.
+- **A variadic or lambda call inside a generic body compiles** (#795). Five copies of
+  leading type-argument inference disagreed, and the monomorphize walk read the template
+  body, where `T` is not bound. One solver, `solve_leading_type_args`, serves all five
+  positions, and the walk reads the substituted copy.
+- **A wrong argument count on a generic call is CE2009 before inference** (#790), not
+  CE2060; a call behind an alias quotes the name as written (`ap.pair`); and the Result
+  texts spell `Result@(T, E)`.
+- **A wrong type-argument count is CE2062 at every position** (#796): a `let`, a parameter,
+  a return, a field, a payload, a nested argument, an extension target and a perk
+  implementation target, with a note at the declaration. It was an unlocated CE2001 plus a
+  CE2008 cascade, the internal CE0096, or silence on an extension target.
+- **A match payload of a generic enum that nests `T` is substituted in full** (#801). A
+  payload of `List@(T)`, `T[]` or `Maybe@(T)` was substituted one level deep, and the call
+  in the arm answered a false CE2061.
 - **The HashMap key rules are read at the written type, once** (#773). `let
   HashMap@(i32[], string) m = HashMap.new()` printed CE2058 twice, at the annotation and at
   the construction, while a struct field, a parameter, a perk contract or a nested
@@ -1029,6 +1055,10 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **A named type is terminal in type substitution** (#802). `TypeSubstitutor` rebuilt a
+  struct or an enum it met and lost `generic_base`, `generic_args` and `home_module`; it now
+  returns the table's type, as `substitute_type_params` does. Measured over 1,407 fixtures:
+  no exit code and no diagnostic changed.
 - **One walk finds the root of a place** (#784). `semantics/places.py:walk_place` is a
   `match` over the closed step set with a backstop, and the ten hand-written root walks in
   the borrow pass, the typecheck pass and the scope pass read it; an alias, a namespace and

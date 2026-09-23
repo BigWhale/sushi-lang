@@ -1,0 +1,15 @@
+# A unit variable of type `Maybe@(Point[])`, the cache shape (#793).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "empty\n"
+
+struct Point:
+    i32 x
+
+var Maybe@(Point[]) cache = Maybe.None
+
+fn main() i32:
+    if (cache.is_none()):
+        println("empty")
+    return Result.Ok(0)

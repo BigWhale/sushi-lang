@@ -220,7 +220,7 @@ def test_the_own_code_quotes_a_type_and_nothing_else(analyze):
 
 
 def test_an_own_type_with_no_readable_payload_reads_the_own_code(analyze):
-    """`Own@(i32, i32)` is not an `Own@(T)`. It reaches here behind a CE2001 cascade."""
+    """`Own@(i32, i32)` is not an `Own@(T)`: the wrong count is the one fault, CE2062 (#796)."""
     source = (
         "enum Node:\n"
         "    Leaf(Own@(i32, i32))\n"
@@ -235,7 +235,8 @@ def test_an_own_type_with_no_readable_payload_reads_the_own_code(analyze):
         "    return Result.Ok(0)\n"
     )
     codes = _codes(analyze(source, name="m"))
-    assert "CE2109" in codes, codes
+    assert codes.count("CE2062") == 1, codes
+    assert "CE2109" not in codes, codes
     assert "CE2048" not in codes, codes
 
 

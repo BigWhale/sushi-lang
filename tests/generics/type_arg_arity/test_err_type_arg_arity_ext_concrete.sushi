@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODE: CE2062
+# EXPECT_STDERR_CONTAINS: generic 'Box' expects 1 type argument(s), got 2
+# A concrete extension target with too many type arguments constrains nothing that can exist.
+struct Box@(T):
+    T v
+
+extend Box@(i32, i32) twice() i32:
+    return 2
+
+fn main() i32:
+    return Result.Ok(0)

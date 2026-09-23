@@ -1,6 +1,6 @@
 """Generic function call validation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional, Dict
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
@@ -13,6 +13,7 @@ from sushi_lang.semantics.generics.explicit_type_args import (
     check_explicit_type_arg_arity,
 )
 from ..visibility import name_is_contested, reject_private_call
+from ..arguments import check_arguments
 from .user_defined import validate_call_arguments
 
 if TYPE_CHECKING:
@@ -24,13 +25,16 @@ def validate_generic_function_call(
     call: Call,
     function_name: str,
     generic_func=None,
+    written_name: str | None = None,
 ) -> None:
     """Validate generic function call and rewrite to use mangled name.
 
     A qualified call (`geo.twin(...)`) resolved its declaration through the alias's
     provider already and hands it in; a bare call resolves through the unit ladder
-    here (#495).
+    here (#495). `written_name` is the callee as the user wrote it (`geo.twin`), for
+    every diagnostic to quote; `function_name` is the declaration's own name.
     """
+    written = written_name or function_name
 
     if generic_func is None:
         generic_func = validator.generic_sig(function_name)
@@ -52,20 +56,25 @@ def validate_generic_function_call(
                 validator.reporter,
                 er.ERR.CE2062,
                 call.type_args_loc or call.callee.loc,
-                name=function_name,
+                name=written,
                 expected=expected,
                 got=len(explicit),
             )
             return
 
-    type_args = call_type_args(validator, call, generic_func)
+    contested = name_is_contested(validator, "function", function_name)
+    if not explicit and not contested and _reject_argument_count(
+            validator, call, generic_func, written):
+        return
+
+    type_args = _named_or_inferred_type_args(validator, call, generic_func)
     if type_args is None:
-        if not name_is_contested(validator, "function", function_name):
+        if not contested:
             er.emit(
                 validator.reporter,
                 er.ERR.CE2060,
                 call.callee.loc,
-                name=function_name,
+                name=written,
                 reason="could not infer type arguments from call site"
             )
         return
@@ -89,12 +98,13 @@ def validate_generic_function_call(
     # The instance is parked in the DECLARING unit (D3), which an aliased import
     # keeps out of the caller's flat scope -- so the lookup asks that unit directly.
     home_unit = getattr(generic_func, "unit_name", None)
-    if validator.func_table.lookup(mangled_name, home_unit) is None:
+    func_sig = validator.func_table.lookup(mangled_name, home_unit)
+    if func_sig is None:
         er.emit(
             validator.reporter,
             er.ERR.CE2061,
             call.callee.loc,
-            name=function_name,
+            name=written,
             mangled=mangled_name,
             type_args=", ".join(display_type(t) for t in type_args)
         )
@@ -102,11 +112,26 @@ def validate_generic_function_call(
 
     call.callee.id = mangled_name
 
-    func_sig = validator.func_table.lookup(mangled_name, home_unit)
-
     # The WRITTEN name, not the instance's symbol: the user never wrote `pair__i32` (#766).
-    validate_call_arguments(validator, function_name, func_sig,
+    validate_call_arguments(validator, written, func_sig,
                             call.args, call.callee.loc)
+
+
+def _reject_argument_count(validator: 'TypeValidator', call: Call, generic_func,
+                           written: str) -> bool:
+    """CE2009 for a wrong argument count, asked BEFORE inference (#790).
+
+    A miscount cannot be solved, and CE2060 then spoke about inference where the user
+    miscounted. The count is the template's: its fixed parameters, and at least that
+    many when a pack parameter takes the rest. The types are not compared here; that is
+    the instance's check, once the count fits.
+    """
+    fixed = [p for p in generic_func.params if not getattr(p, "is_pack", False)]
+    has_pack = len(fixed) != len(generic_func.params)
+    return not check_arguments(
+        validator, written, [None] * len(fixed), call.args, call.callee.loc,
+        mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
+        minimum_arity=has_pack, stop_on_arity=True)
 
 
 def call_type_args(validator: 'TypeValidator', call: Call, generic_func) -> Optional[tuple]:
@@ -116,13 +141,18 @@ def call_type_args(validator: 'TypeValidator', call: Call, generic_func) -> Opti
     the call is rewritten to and the type its result is stamped with are both read off
     these arguments. A wrong explicit arity answers None here and CE2062 there.
     """
-    explicit = call.type_args
-    if explicit:
-        if check_explicit_type_arg_arity(generic_func, len(explicit)) is not None:
-            return None
+    if call.type_args and check_explicit_type_arg_arity(
+            generic_func, len(call.type_args)) is not None:
+        return None
+    return _named_or_inferred_type_args(validator, call, generic_func)
+
+
+def _named_or_inferred_type_args(validator: 'TypeValidator', call: Call,
+                                 generic_func) -> Optional[tuple]:
+    """The explicit type arguments resolved, or the inferred ones. The arity is checked."""
+    if call.type_args:
         return resolve_explicit_type_args(
-            explicit, validator.struct_table, validator.enum_table
-        )
+            call.type_args, validator.struct_table, validator.enum_table)
     return _infer_type_args_from_call_site(validator, call, generic_func)
 
 
@@ -148,7 +178,7 @@ def generic_call_result_type(validator: 'TypeValidator', call: Call, generic_fun
 def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected_ty):
     """Resolve a bare generic-fn reference against an expected FunctionType (T2.3)."""
     from sushi_lang.semantics.typesys import FunctionType, UnknownType
-    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
     if not isinstance(expected_ty, FunctionType):
         return None
     generic_func = validator.generic_sig(name)
@@ -157,28 +187,11 @@ def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected
     type_params = generic_func.type_params or []
     if type_params and getattr(type_params[-1], "is_pack", False):
         return None
-    func_params = [p for p in generic_func.params if not getattr(p, "is_pack", False)]
-    if len(func_params) != len(expected_ty.param_types):
+    type_args = solve_leading_type_args(
+        generic_func, list(expected_ty.param_types),
+        validator.struct_table, validator.enum_table, ret_type=expected_ty.ok_type)
+    if type_args is None:
         return None
-
-    type_param_map: Dict[str, Type] = {}
-    for param, exp_pty in zip(func_params, expected_ty.param_types, strict=False):
-        if param.ty is None:
-            return None
-        if not _unify_types_for_inference(param.ty, exp_pty, type_param_map):
-            return None
-    if generic_func.ret is not None:
-        if not _unify_types_for_inference(generic_func.ret, expected_ty.ok_type, type_param_map):
-            return None
-
-    type_args = []
-    for tp in type_params:
-        tp_name = tp.name if hasattr(tp, "name") else str(tp)
-        if tp_name not in type_param_map:
-            return None
-        type_args.append(resolve_unknown_type(
-            type_param_map[tp_name], validator.struct_table, validator.enum_table))
-    type_args = tuple(type_args)
 
     mangled_name = mangle_function_name(name, type_args)
     func_sig = validator.func_table.lookup(
@@ -215,39 +228,8 @@ def _infer_type_args_from_call_site(
         )
         arg_types.append(resolved)
 
-    def _infer_leading(gfunc, leading_arg_types):
-        """Existing Pass-2 leading unification, restricted to the fixed prefix."""
-        type_param_map: Dict[str, Type] = {}
-
-        leading_params = [
-            p for p in gfunc.params if not getattr(p, "is_pack", False)
-        ]
-        if len(leading_arg_types) != len(leading_params):
-            return None
-
-        for arg_type, param in zip(leading_arg_types, leading_params, strict=False):
-            if param.ty is None:
-                return None
-            if not _unify_types_for_inference(param.ty, arg_type, type_param_map):
-                return None
-
-        leading_tps = [
-            tp for tp in gfunc.type_params if not getattr(tp, "is_pack", False)
-        ]
-        leading_args = []
-        for tp in leading_tps:
-            tp_name = tp.name if hasattr(tp, "name") else str(tp)
-            if tp_name not in type_param_map:
-                return None
-            resolved = resolve_unknown_type(
-                type_param_map[tp_name], validator.struct_table, validator.enum_table
-            )
-            leading_args.append(resolved)
-        return tuple(leading_args)
-
     return infer_flat_type_args(
-        generic_func, arg_types, infer_leading=_infer_leading
-    )
+        generic_func, arg_types, validator.struct_table, validator.enum_table)
 
 
 def _validate_pack_element_constraints(
@@ -291,13 +273,3 @@ def _type_name_for_constraint(ty: Type) -> str:
     if isinstance(ty, (StructType, EnumType)):
         return ty.name
     return str(ty)
-
-
-def _unify_types_for_inference(
-    param_type: Type,
-    arg_type: Type,
-    type_param_map: Dict[str, Type]
-) -> bool:
-    """Unify parameter type with argument type for type inference (the typecheck pass)."""
-    from sushi_lang.semantics.generics.unify import unify_types
-    return unify_types(param_type, arg_type, type_param_map)

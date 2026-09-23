@@ -1,0 +1,17 @@
+# The same shape with an enum element: `Maybe@(Color[])` (#793).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\n"
+
+enum Color:
+    Red
+    Green
+
+fn main() i32:
+    let Color[] cs = from([Color.Red, Color.Green])
+    let Maybe@(Color[]) m = Maybe.Some(cs)
+    match m:
+        Maybe.Some(v) -> println("{v.len()}")
+        Maybe.None -> println("none")
+    return Result.Ok(0)

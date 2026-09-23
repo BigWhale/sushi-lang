@@ -1,0 +1,20 @@
+# A List of a function type whose own parameter is a function type (#794).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1\n14\n"
+
+fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn apply(fn(i32) -> i32 f, i32 x) i32:
+    return Result.Ok(f(x).realise(0))
+
+fn main() i32:
+    let List@(fn(fn(i32) -> i32, i32) -> i32) l = List.new()
+    l.push(apply)
+    println("{l.len()}")
+    match l.get(0):
+        Maybe.Some(g) -> println("{g(twice, 7).realise(0)}")
+        Maybe.None -> println("none")
+    return Result.Ok(0)

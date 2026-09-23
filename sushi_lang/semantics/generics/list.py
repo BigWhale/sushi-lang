@@ -95,10 +95,28 @@ def _validate_list_element_type(
                 index=arg_index + 1, expected=display_type(element_type), got=display_type(arg_type))
 
 
+def instance_type_arguments(instance: Any, base: str, tables: Any) -> Optional[tuple[Type, ...]]:
+    """The type arguments of a `base<...>` instance, each resolved RECURSIVELY, or None.
+
+    An instance carries its arguments in `generic_args`; its interned NAME is a spelling
+    and not a thing to parse (#794). The monomorphize pass can leave a nested reference
+    unresolved there (`List<List<i32>>` holds a `GenericTypeRef`), so each argument is
+    resolved against the tables at read time.
+    """
+    from sushi_lang.semantics.type_resolution import resolve_type_recursively
+
+    if not isinstance(instance, StructType) or instance.generic_base != base:
+        return None
+    if instance.generic_args is None:
+        return None
+    structs = tables.struct_table.by_name
+    enums = tables.enum_table.by_name
+    return tuple(resolve_type_recursively(arg, structs, enums) for arg in instance.generic_args)
+
+
 def parse_list_types(list_type: StructType, validator: Any) -> Optional[Type]:
     """Resolve the element type T from a List<T> struct type, or None."""
-    from sushi_lang.semantics.generics.type_strings import resolve_type_argument
-    if not list_type.name.startswith("List<"):
+    args = instance_type_arguments(list_type, "List", validator)
+    if args is None or len(args) != 1:
         return None
-
-    return resolve_type_argument(list_type.name[5:-1], validator)  # strip "List<" and ">"
+    return args[0]

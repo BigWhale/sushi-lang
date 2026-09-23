@@ -1,5 +1,5 @@
 """Validation and table-building for the built-in Result<T, E> methods."""
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type
@@ -164,14 +164,6 @@ def result_ok_err(result_enum: EnumType) -> tuple[Type, Type]:
     return ok_variant.associated_types[0], err_variant.associated_types[0]
 
 
-def _result_type_to_str(t: Type) -> str:
-    """Format a type for Result<T, E> naming (builtins lowercased)."""
-    from sushi_lang.semantics.typesys import BuiltinType
-    if isinstance(t, BuiltinType):
-        return str(t).lower()
-    return str(t)
-
-
 def _differs_only_in_nested_resolution(stored, rebuilt, structs, enums) -> bool:
     """True when two variant tuples are one type seen at two resolution DEPTHS.
 
@@ -255,67 +247,71 @@ def ensure_result_type_in_table(
     struct_table: Optional[dict] = None,
 ) -> Optional[EnumType]:
     """Ensure ``Result<ok_type, err_type>`` exists in ``enum_table``, creating it if needed."""
-    from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
+    from sushi_lang.semantics.typesys import EnumVariantInfo
+
+    return intern_wrapper_enum(
+        enum_table, "Result", (ok_type, err_type),
+        lambda ok, err: (EnumVariantInfo(name="Ok", associated_types=(ok,)),
+                         EnumVariantInfo(name="Err", associated_types=(err,))),
+        struct_table,
+    )
+
+
+def intern_wrapper_enum(
+    enum_table: Any,
+    base: str,
+    payloads: tuple[Type, ...],
+    make_variants: Callable[..., tuple],
+    struct_table: Optional[dict] = None,
+) -> EnumType:
+    """Intern ``base<payloads...>``, the one seam under the Result and the Maybe intern.
+
+    Each payload is resolved RECURSIVELY, not one level. A payload that IS a name resolved
+    before; a payload that CONTAINS one -- `IpAddr[]`, whose element is the name -- did not,
+    and it interned with the element unresolved. The interned NAME is identical either way,
+    so the next intern rebuilt different variants and the guard fired CE0126 with two
+    spellings that read the same. A named type is terminal in this walk, so the table stays
+    the sole authority for its contents (docs/design/type-identity.md).
+
+    An abstract instance, whose payloads still name an enclosing template's type params, is
+    not a real type: it is handed back but kept OUT of the table, or every later walk of the
+    tables reads a type that was never built. A PROVISIONAL one is the same answer for the
+    same reason (#556): the walk leaves a `GenericTypeRef` exactly when the instance it
+    names has not been built yet, so storing over one parks an unresolved payload under a
+    name whose resolved form arrives later.
+    """
     from sushi_lang.semantics.type_resolution import resolve_type_recursively
     from sushi_lang.semantics.type_predicates import is_abstract_type
 
     enums = enum_table.by_name
     structs = struct_table if struct_table is not None else {}
-    # RECURSIVELY, not one level. A payload that IS a name resolved before; a payload that
-    # CONTAINS one -- `IpAddr[]`, whose element is the name -- did not, and it interned with
-    # the element unresolved. The interned NAME is identical either way, so the next intern
-    # of the same Result rebuilt different variants and the guard below fired CE0126 with
-    # two spellings that read the same. A named type is terminal in this walk, so the table
-    # stays the sole authority for its contents (docs/design/type-identity.md).
-    ok_type = resolve_type_recursively(ok_type, structs, enums)
-    err_type = resolve_type_recursively(err_type, structs, enums)
+    resolved = tuple(resolve_type_recursively(t, structs, enums) for t in payloads)
 
-    result_enum_name = f"Result<{_result_type_to_str(ok_type)}, {_result_type_to_str(err_type)}>"
+    name = f"{base}<{', '.join(str(t) for t in resolved)}>"
+    variants = make_variants(*resolved)
 
-    ok_variant = EnumVariantInfo(name="Ok", associated_types=(ok_type,))
-    err_variant = EnumVariantInfo(name="Err", associated_types=(err_type,))
-    variants = (ok_variant, err_variant)
+    def build() -> EnumType:
+        return EnumType(name=name, variants=variants, generic_base=base,
+                        generic_args=resolved)
 
-    # An abstract Result, whose payloads still name an enclosing template's type params, is
-    # not a real type: hand it back but keep it OUT of the table, or every later walk of
-    # the tables reads a type that was never built. A PROVISIONAL one
-    # is the same answer for the same reason (#556): the walk above leaves a
-    # `GenericTypeRef` exactly when the instance it names has not been built yet, so
-    # storing the Result over one parks an unresolved payload under a name whose resolved
-    # form arrives later -- the two-depths collision this seam exists to prevent.
-    if (is_abstract_type(ok_type, structs, enums)
-            or is_abstract_type(err_type, structs, enums)
-            or _names_an_unbuilt_instance(ok_type, structs, enums)
-            or _names_an_unbuilt_instance(err_type, structs, enums)):
-        return EnumType(
-            name=result_enum_name,
-            variants=variants,
-            generic_base="Result",
-            generic_args=(ok_type, err_type),
-        )
+    if any(is_abstract_type(t, structs, enums) or _names_an_unbuilt_instance(t, structs, enums)
+           for t in resolved):
+        return build()
 
-    existing = enums.get(result_enum_name)
+    existing = enums.get(name)
     if existing is not None:
         if existing.variants and existing.variants != variants:
             if not _differs_only_in_nested_resolution(existing.variants, variants, structs, enums):
                 raise_internal_error(
                     "CE0126",
-                    name=result_enum_name,
+                    name=name,
                     existing=str([str(t) for v in existing.variants for t in v.associated_types]),
                     rebuilt=str([str(t) for v in variants for t in v.associated_types]),
                 )
         return existing
 
-    result_enum = EnumType(
-        name=result_enum_name,
-        variants=variants,
-        generic_base="Result",
-        generic_args=(ok_type, err_type),
-    )
-
-    enums[result_enum_name] = result_enum
-    enum_table.order.append(result_enum_name)
-
-    derive_for_enum(result_enum, enum_table.derived)
-
-    return result_enum
+    interned = build()
+    enums[name] = interned
+    enum_table.order.append(name)
+    derive_for_enum(interned, enum_table.derived)
+    return interned

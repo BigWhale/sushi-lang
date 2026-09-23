@@ -1,0 +1,26 @@
+# A variadic call and a lambda call inside a generic EXTENSION body.
+# EXPECT_STDOUT_EXACT: "3 9\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn count@(...Ts)(...Ts xs) i32:
+    return Result.Ok(3)
+
+fn apply@(U)(fn(U) -> U f, U v) U:
+    let U r = f(v)??
+    return Result.Ok(r)
+
+struct Box@(T):
+    T v
+
+extend Box@(T) counted() i32:
+    return count(self.v, self.v, 1).realise(0)
+
+extend Box@(T) applied() T:
+    return apply(|T y| y, self.v).realise(self.v)
+
+fn main() i32:
+    let Box@(i32) b = Box(9)
+    let i32 c = b.counted()
+    let i32 a = b.applied()
+    println("{c} {a}")
+    return Result.Ok(0)

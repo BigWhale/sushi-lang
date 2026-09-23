@@ -4,8 +4,7 @@ from typing import Dict, Tuple, Set, TYPE_CHECKING
 
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
 from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo, StructType
-from sushi_lang.internals import errors as er
-from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.generics.explicit_type_args import reject_type_arg_arity
 from sushi_lang.semantics.type_predicates import is_abstract_type
 from sushi_lang.semantics.type_resolution import TypeResolver
 
@@ -68,16 +67,9 @@ class TypeMonomorphizer:
         if cache_key in self.monomorphizer.cache:
             return self.monomorphizer.cache[cache_key]
 
-        if len(type_args) != len(generic.type_params):
-            er.emit(
-                self.monomorphizer.reporter,
-                er.ERR.CE2001,  # Use generic type error for now
-                None,
-                name=f"{generic.name}@({', '.join(display_type(t) for t in type_args)})"
-            )
-            return EnumType(name=f"{generic.name}<error>", variants=())
-
         concrete_name = self._generate_concrete_name(generic.name, type_args)
+        if self._refuse_arity("enum", generic, type_args, concrete_name):
+            return EnumType(name=f"{generic.name}<error>", variants=())
 
         # A refused instantiation is built nowhere (#579, Ruling 4): not cached, not
         # published, so no template copy is ever cut for it. The shell keeps the caller
@@ -165,16 +157,9 @@ class TypeMonomorphizer:
         if cache_key in self.monomorphizer.struct_cache:
             return self.monomorphizer.struct_cache[cache_key]
 
-        if len(type_args) != len(generic.type_params):
-            er.emit(
-                self.monomorphizer.reporter,
-                er.ERR.CE2001,  # Use generic type error for now
-                None,
-                name=f"{generic.name}@({', '.join(display_type(t) for t in type_args)})"
-            )
-            return StructType(name=f"{generic.name}<error>", fields=())
-
         concrete_name = self._generate_concrete_name(generic.name, type_args)
+        if self._refuse_arity("struct", generic, type_args, concrete_name):
+            return StructType(name=f"{generic.name}<error>", fields=())
 
         # A refused instantiation is built nowhere (#579, Ruling 4): not cached, not
         # published, so no template copy is ever cut for it. The shell keeps the caller
@@ -222,6 +207,30 @@ class TypeMonomorphizer:
         structs = self.monomorphizer.struct_table.by_name if self.monomorphizer.struct_table else {}
         enums = self.monomorphizer.enum_table.by_name if self.monomorphizer.enum_table else {}
         return structs, enums
+
+    def _refuse_arity(self, kind: str, generic, type_args: Tuple[Type, ...],
+                      key: str) -> bool:
+        """CE2062 for an instantiation whose type-argument count is not the declared one.
+
+        Every instantiation of a generic type enters here, the ones a written type names
+        and the ones a template's substitution builds, so this is the one position that
+        sees them all (#796). The refusal follows the constraint rule (#579, Ruling 4):
+        reported ONCE, at the first site that named it, never built, and the analyzer
+        stops after this pass, so no later reader repeats it.
+        """
+        mono = self.monomorphizer
+        if len(type_args) == len(generic.type_params):
+            return False
+        if key in mono._refused:
+            return True
+        span, filename = mono.sites.get(key, (None, None))
+        reject_type_arg_arity(
+            mono.reporter, generic.name, generic, len(type_args), span, filename,
+            declared_at=mono.template_span(kind, generic.name),
+            declared_in=mono.template_file(kind, generic.name))
+        mono._refused.add(key)
+        mono.constraint_violations += 1
+        return True
 
     def _is_abstract(self, type_args: Tuple[Type, ...]) -> bool:
         """Whether an argument still names an enclosing template's type parameter."""

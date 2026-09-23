@@ -9,18 +9,18 @@ from sushi_lang.internals.errors.registry import (
 )
 
 
-# Result@(T) method errors (CE25xx)
+# Result@(T, E) method errors (CE25xx)
 _add(ErrorMessage("CE2502", Severity.ERROR,
     "realise() requires exactly 1 argument, got {got}",
-    Category.TYPE, "The realise() method on Result@(T) must be called with exactly one default value argument."))
+    Category.TYPE, "The realise() method on Result@(T, E) must be called with exactly one default value argument."))
 
 _add(ErrorMessage("CE2503", Severity.ERROR,
     "realise() default type mismatch: expected '{expected}', got '{got}'",
-    Category.TYPE, "The default value type passed to realise() must match the T type in Result@(T)."))
+    Category.TYPE, "The default value type passed to realise() must match the T type in Result@(T, E)."))
 
 _add(ErrorMessage("CE2505", Severity.ERROR,
-    "cannot assign Result@(T) to non-Result variable without handling (use .realise() or pattern matching)",
-    Category.TYPE, "Result@(T) values must be explicitly handled before assigning to non-Result variables."))
+    "cannot assign Result@(T, E) to non-Result variable without handling (use .realise() or pattern matching)",
+    Category.TYPE, "Result@(T, E) values must be explicitly handled before assigning to non-Result variables."))
 
 _add(ErrorMessage("CE2506", Severity.ERROR,
     "cannot call .realise() on Result@(~) (blank type has no value to extract)",
@@ -28,12 +28,12 @@ _add(ErrorMessage("CE2506", Severity.ERROR,
 
 # Try operator (??) errors (CE25xx continued)
 _add(ErrorMessage("CE2507", Severity.ERROR,
-    "?? operator requires Result@(T), Maybe@(T), or result-like enum (with Ok/Err or Some/None variants), got '{got}'",
-    Category.TYPE, "The ?? operator requires an enum with Ok/Err variants (e.g., Result@(T)) or Some/None variants (e.g., Maybe@(T))."))
+    "?? operator requires Result@(T, E), Maybe@(T), or result-like enum (with Ok/Err or Some/None variants), got '{got}'",
+    Category.TYPE, "The ?? operator requires an enum with Ok/Err variants (e.g., Result@(T, E)) or Some/None variants (e.g., Maybe@(T))."))
 
 _add(ErrorMessage("CE2508", Severity.ERROR,
     "?? operator can only be used in functions returning a result-like enum (with Ok/Err variants)",
-    Category.TYPE, "The ?? operator propagates errors by early return, so it requires the enclosing function to return a result-like enum (e.g., Result@(T)). Note: Maybe@(T) can be used with ??, but it propagates as Result.Err()."))
+    Category.TYPE, "The ?? operator propagates errors by early return, so it requires the enclosing function to return a result-like enum (e.g., Result@(T, E)). Note: Maybe@(T) can be used with ??, but it propagates as Result.Err()."))
 
 _add(ErrorMessage("CE2509", Severity.ERROR,
     "operator '+' cannot be used with string types (use string interpolation instead: \"text {{variable}}\")",

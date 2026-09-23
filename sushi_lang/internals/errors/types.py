@@ -154,8 +154,8 @@ _add(ErrorMessage("CE2036", Severity.ERROR,
     Category.TYPE, "Empty Ok() is not allowed. Use Ok(value) for regular returns or Ok(~) for blank type returns."))
 
 _add(ErrorMessage("CE2037", Severity.ERROR,
-    "cannot print Result@(T) directly (use .realise() to unwrap first)",
-    Category.TYPE, "Result@(T) must be explicitly handled before printing. Use .realise(default) to extract the value."))
+    "cannot print Result@(T, E) directly (use .realise() to unwrap first)",
+    Category.TYPE, "Result@(T, E) must be explicitly handled before printing. Use .realise(default) to extract the value."))
 
 _add(ErrorMessage("CE2038", Severity.ERROR,
     "empty interpolation in string literal",
@@ -264,9 +264,14 @@ _add(ErrorMessage("CE2061", Severity.ERROR,
     Category.INTERNAL, "Internal compiler error: monomorphized function missing from function table."))
 
 _add(ErrorMessage("CE2062", Severity.ERROR,
-    "generic function '{name}' expects {expected} type argument(s), got {got}",
-    Category.TYPE, "The explicit `@(...)` type-argument list does not match the function's "
-                   "type parameters. Explicit type arguments are all-or-nothing."))
+    "generic '{name}' expects {expected} type argument(s), got {got}",
+    Category.TYPE, "A `@(...)` type-argument list does not give the generic the count it "
+                   "declares. One rule for every position: an explicit call-site list "
+                   "(`id@(i32, i32)(1)`; explicit type arguments are all-or-nothing), a "
+                   "written type (`let Box@(i32, i32) b`, a parameter, a field, a payload), "
+                   "and an extension or perk-implementation target (`extend Box@(T, U)`). "
+                   "Before #796 a written type answered CE2001 'unknown type' and a target "
+                   "reached an internal error or was accepted in silence."))
 
 # Radix literal errors (CE2070-CE2079)
 _add(ErrorMessage("CE2070", Severity.ERROR,

@@ -120,7 +120,8 @@ def _validate_generic_call(validator: 'TypeValidator', node: 'DotCall',
                     type_args=node.type_args, type_args_loc=node.type_args_loc,
                     loc=node.loc)
     validate_generic_function_call(validator, stand_in, name,
-                                   generic_func=binding.record)
+                                   generic_func=binding.record,
+                                   written_name=_written(node.receiver, node.method))
     if stand_in.callee.id != name:
         _stamp(node, binding, name=stand_in.callee.id)
 

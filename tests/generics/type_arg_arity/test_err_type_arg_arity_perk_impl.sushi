@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODE: CE2062
+# EXPECT_STDERR_CONTAINS: generic 'Box' expects 1 type argument(s), got 2
+# A perk implementation on a target with too many type parameters.
+perk Named:
+    fn name() string
+
+struct Box@(T):
+    T v
+
+extend Box@(T, U) with Named:
+    fn name() string:
+        return "box"
+
+fn main() i32:
+    return Result.Ok(0)

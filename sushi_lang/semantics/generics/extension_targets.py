@@ -152,7 +152,7 @@ def reject_unwritable_target(
     on a base that names no generic is as dead as a concrete one, because nothing can
     write the target either way. The ARGUMENTS are asked of a concrete target only,
     because a bare undeclared argument in a template IS the parameter it binds, which
-    is the whole of #393.
+    is the whole of #393. The COUNT is asked of every target too (CE2062, #796).
 
     What this does NOT ask is whether the instantiation the target names was ever
     written. A target is a CONSTRAINT and not a use: an implementation nothing reaches
@@ -162,6 +162,9 @@ def reject_unwritable_target(
 
     if not namer.names_a_generic(shape.base_name):
         er.emit(reporter, er.ERR.CE2001, span, name=shape.base_name)
+        return True
+
+    if _reject_target_arity(reporter, shape, namer, span):
         return True
 
     if not shape.is_concrete:
@@ -178,6 +181,27 @@ def reject_unwritable_target(
             .help(help_line).emit()
         refused = True
     return refused
+
+
+def _reject_target_arity(reporter, shape: ExtensionTarget, namer: DeclaredTypeNamer,
+                         span) -> bool:
+    """CE2062 for a target whose `@(...)` list is not the count its base declares (#796).
+
+    A template and a concrete target alike: `extend Box@(T, U)` binds a parameter the
+    type does not have, and `extend Box@(i32, i32)` constrains an instantiation that
+    cannot exist.
+    """
+    from sushi_lang.semantics.generics.explicit_type_args import reject_type_arg_arity
+
+    for table in (namer.generic_structs, namer.generic_enums):
+        generic = table.by_name.get(shape.base_name)
+        if generic is None:
+            continue
+        return reject_type_arg_arity(
+            reporter, shape.base_name, generic, len(shape.args), span,
+            declared_at=getattr(table, "spans", {}).get(shape.base_name),
+            declared_in=getattr(table, "files", {}).get(shape.base_name))
+    return False
 
 
 # The synthetic base name under which array-target templates live in the

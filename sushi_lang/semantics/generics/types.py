@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo, StructType
+    from sushi_lang.semantics.typesys import Type, EnumVariantInfo
     from sushi_lang.semantics.ast import BoundedTypeParam
 
 TypeParam = Union['TypeParameter', 'BoundedTypeParam']
@@ -56,48 +56,6 @@ class GenericEnumType:
                 self.type_params == other.type_params and
                 self.variants == other.variants)
 
-    def instantiate(self, type_args: tuple[Type, ...]) -> EnumType:
-        """Create a concrete EnumType by substituting type parameters."""
-        from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
-
-        if len(type_args) != len(self.type_params):
-            raise ValueError(
-                f"Type argument count mismatch: expected {len(self.type_params)}, "
-                f"got {len(type_args)}"
-            )
-
-        substitution = {}
-        for param, arg in zip(self.type_params, type_args, strict=False):
-            substitution[param.name] = arg
-
-        concrete_variants = []
-        for variant in self.variants:
-            concrete_associated_types = []
-            for assoc_type in variant.associated_types:
-                if isinstance(assoc_type, TypeParameter):
-                    if assoc_type.name in substitution:
-                        concrete_associated_types.append(substitution[assoc_type.name])
-                    else:
-                        raise ValueError(f"Unknown type parameter: {assoc_type.name}")
-                else:
-                    # Not a type parameter (could be concrete type or nested generic).
-                    # Nested generics are handled by Monomorphizer._substitute_type()
-                    # during the monomorphize pass, so we just pass this through unchanged.
-                    concrete_associated_types.append(assoc_type)
-
-            concrete_variants.append(EnumVariantInfo(
-                name=variant.name,
-                associated_types=tuple(concrete_associated_types)
-            ))
-
-        type_arg_strs = ", ".join(str(t) for t in type_args)
-        concrete_name = f"{self.name}<{type_arg_strs}>"
-
-        return EnumType(
-            name=concrete_name,
-            variants=tuple(concrete_variants)
-        )
-
 
 @dataclass(frozen=True)
 class GenericStructType:
@@ -118,33 +76,6 @@ class GenericStructType:
                 self.name == other.name and
                 self.type_params == other.type_params and
                 self.fields == other.fields)
-
-    def instantiate(self, type_args: tuple[Type, ...]) -> StructType:
-        """Create a concrete StructType by substituting type parameters."""
-        from sushi_lang.semantics.typesys import StructType
-
-        if len(type_args) != len(self.type_params):
-            raise ValueError(
-                f"Type argument count mismatch: expected {len(self.type_params)}, "
-                f"got {len(type_args)}"
-            )
-
-        substitution = {}
-        for param, arg in zip(self.type_params, type_args, strict=False):
-            substitution[param.name] = arg
-
-        concrete_fields = []
-        for field_name, field_type in self.fields:
-            concrete_type = substitute_type_params(field_type, substitution)
-            concrete_fields.append((field_name, concrete_type))
-
-        type_arg_strs = ", ".join(str(t) for t in type_args)
-        concrete_name = f"{self.name}<{type_arg_strs}>"
-
-        return StructType(
-            name=concrete_name,
-            fields=tuple(concrete_fields)
-        )
 
 
 @dataclass(frozen=True)

@@ -117,46 +117,12 @@ def ensure_maybe_type_in_table(
     struct_table: Optional[dict] = None,
 ) -> Optional[EnumType]:
     """Ensure ``Maybe<value_type>`` exists in ``enum_table``, creating it if needed."""
-    from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
-    from sushi_lang.semantics.passes.derive import derive_for_enum
-    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    from sushi_lang.semantics.typesys import EnumVariantInfo
+    from sushi_lang.semantics.generics.results import intern_wrapper_enum
 
-    enums = enum_table.by_name
-    structs = struct_table if struct_table is not None else {}
-    value_type = resolve_unknown_type(value_type, structs, enums)
-
-    if isinstance(value_type, BuiltinType):
-        type_str = str(value_type).lower()
-    else:
-        type_str = str(value_type)
-
-    maybe_enum_name = f"Maybe<{type_str}>"
-
-    some_variant = EnumVariantInfo(name="Some", associated_types=(value_type,))
-    none_variant = EnumVariantInfo(name="None", associated_types=())
-    variants = (some_variant, none_variant)
-
-    existing = enums.get(maybe_enum_name)
-    if existing is not None:
-        if existing.variants and existing.variants != variants:
-            raise_internal_error(
-                "CE0126",
-                name=maybe_enum_name,
-                existing=str([str(t) for v in existing.variants for t in v.associated_types]),
-                rebuilt=str([str(t) for v in variants for t in v.associated_types]),
-            )
-        return existing
-
-    maybe_enum = EnumType(
-        name=maybe_enum_name,
-        variants=variants,
-        generic_base="Maybe",
-        generic_args=(value_type,),
+    return intern_wrapper_enum(
+        enum_table, "Maybe", (value_type,),
+        lambda value: (EnumVariantInfo(name="Some", associated_types=(value,)),
+                       EnumVariantInfo(name="None", associated_types=())),
+        struct_table,
     )
-
-    enums[maybe_enum_name] = maybe_enum
-    enum_table.order.append(maybe_enum_name)
-
-    derive_for_enum(maybe_enum, enum_table.derived)
-
-    return maybe_enum

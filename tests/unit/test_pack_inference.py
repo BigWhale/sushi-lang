@@ -1,9 +1,9 @@
-"""Pack-aware type-argument inference (the instantiate pass's shared helper)."""
+"""Pack-aware type-argument inference: the one solver every pass calls (#795)."""
 
 from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.generics.pack_inference import (
     infer_flat_type_args,
-    has_pack_value_param,
+    solve_leading_type_args,
 )
 from sushi_lang.semantics.typesys import BuiltinType, UnknownType
 
@@ -37,31 +37,11 @@ def _generic(type_params, params):
 
 
 def _leading(generic_func, leading_arg_types):
-    """Minimal leading inference: unify non-pack params (UnknownType refs) 1:1."""
-    non_pack_params = [p for p in generic_func.params if not p.is_pack]
-    if len(leading_arg_types) != len(non_pack_params):
-        return None
-    bindings = {}
-    for arg_ty, param in zip(leading_arg_types, non_pack_params, strict=True):
-        if isinstance(param.ty, UnknownType):
-            name = str(param.ty)
-            if name in bindings and bindings[name] != arg_ty:
-                return None
-            bindings[name] = arg_ty
-        elif param.ty != arg_ty:
-            return None
-    out = []
-    for tp in generic_func.type_params:
-        if getattr(tp, "is_pack", False):
-            continue
-        if tp.name not in bindings:
-            return None
-        out.append(bindings[tp.name])
-    return tuple(out)
+    return solve_leading_type_args(generic_func, leading_arg_types, {}, {})
 
 
 def _infer(generic_func, arg_types):
-    return infer_flat_type_args(generic_func, arg_types, infer_leading=_leading)
+    return infer_flat_type_args(generic_func, arg_types, {}, {})
 
 
 # pack-only generic: fn f@(...Ts)(...Ts args)
@@ -86,10 +66,6 @@ def test_pack_arity1():
 def test_pack_arity0_allowed():
     g = _pack_only()
     assert _infer(g, []) == ()
-
-
-def test_has_pack_value_param():
-    assert has_pack_value_param(_pack_only()) is True
 
 
 # leading param + pack: fn f@(T, ...Ts)(T head, ...Ts rest)
@@ -138,10 +114,6 @@ def test_non_pack_delegates():
     g = _non_pack()
     # Identical to calling _leading directly with all args -> legacy result.
     assert _infer(g, [I32, STR]) == _leading(g, [I32, STR]) == (I32, STR)
-
-
-def test_non_pack_no_value_param_flag():
-    assert has_pack_value_param(_non_pack()) is False
 
 
 def test_non_pack_arg_count_mismatch():
