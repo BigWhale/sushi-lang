@@ -1,0 +1,10 @@
+# A perk contract with an array key is refused at the contract (#773)
+# EXPECT_ERROR_CODE: CE2058
+# EXPECT_STDERR_CONTAINS: 7:13: error [CE2058]
+use <collections/hashmap>
+
+perk Keeps:
+    fn keep(HashMap@(i32[], string) m) i32
+
+fn main() i32:
+    return Result.Ok(0)

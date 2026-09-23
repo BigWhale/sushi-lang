@@ -14,6 +14,7 @@ from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, Enum
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.name_ladder import BareName, classify
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
+from sushi_lang.semantics.places import Step, walk_place
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import NamespaceTable
@@ -495,11 +496,8 @@ class ScopeAnalyzer:
         # walk above already read the iterable and said CE2105 about it, and one fault
         # gets one diagnostic.
         if receiver_mode(stmt.item_borrow) is ParamMode.POKE:
-            root = stmt.iterable
-            from sushi_lang.semantics.ast import DotCall as _DotCall, MethodCall as _MethodCall
-            while isinstance(root, (_DotCall, _MethodCall)):
-                root = root.receiver
-            if (isinstance(root, Name)
+            root = walk_place(stmt.iterable, Step.CALL).name
+            if (root is not None
                     and self._rung_of(root.id) in _NOT_A_POKE_CONTAINER):
                 reject_borrow_of_constant(
                     self.err, root.id, self._const_sig(root.id),
@@ -730,11 +728,9 @@ class ScopeAnalyzer:
         `peek cfg.port` borrows out of `cfg`, so the whole chain resolves through this
         one arm. That is what gives `peek nope.x` a single diagnostic instead of two.
         """
-        base = expr.expr
-        while isinstance(base, MemberAccess):
-            base = base.receiver
-        if (isinstance(base, Name)
-                and not (base is not expr.expr and self._is_namespace(base.id))):
+        walked = walk_place(expr.expr, Step.MEMBER)
+        base = walked.name
+        if base is not None and not (walked.path and self._is_namespace(base.id)):
             self._borrow_variable(base.id, expr.mutability, base.loc)
         else:
             # `poke geo.count` reads a namespace: the MemberAccess arm resolves

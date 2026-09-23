@@ -1,0 +1,11 @@
+# A generic struct instantiated at an array key is refused where the instance is written (#773)
+# EXPECT_ERROR_CODE: CE2058
+# EXPECT_STDERR_CONTAINS: 10:9: error [CE2058]
+use <collections/hashmap>
+
+struct Box@(T):
+    HashMap@(T, string) m
+
+fn main() i32:
+    let Box@(i32[]) b = Box(HashMap.new())
+    return Result.Ok(0)

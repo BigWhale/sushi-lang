@@ -1,0 +1,8 @@
+# An array key nested in a Maybe is refused at the written type (#773)
+# EXPECT_ERROR_CODE: CE2058
+# EXPECT_STDERR_CONTAINS: 7:9: error [CE2058]
+use <collections/hashmap>
+
+fn main() i32:
+    let Maybe@(HashMap@(i32[], string)) m = Maybe.None
+    return Result.Ok(0)

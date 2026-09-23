@@ -392,6 +392,23 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **The HashMap key rules are read at the written type, once** (#773). `let
+  HashMap@(i32[], string) m = HashMap.new()` printed CE2058 twice, at the annotation and at
+  the construction, while a struct field, a parameter, a perk contract or a nested
+  `Maybe@(HashMap@(i32[], ...))` with an array key compiled clean when no construction
+  reached it. CE2058, CE2054 and CE2055 are now judged once at every WRITTEN
+  `HashMap@(K, V)`, through `validate_type_name` and one walk over the type, and
+  `HashMap.new()` checks only its arity. A field's or a parameter's refusal now points at
+  the field or the parameter, not at the construction or the argument.
+- **A generic call's arity error names the function the user wrote** (#766), `pair`, not
+  the instance symbol `pair__i32`.
+- **Every built-in array method miscount is CE2009** (#764). `extend`, `extend_range`, `s`
+  and `ss` answered the internal CE0023. CE2009's text is now `wrong number of arguments:
+  '<name>' expects N, got M`: it never calls a method a function, and it reads correctly
+  for a count of one.
+- **A constant-rooted `match` is one fault** (#784). `match TONES[0]:` with a `poke`
+  binding answered CE2404 where `match TONE:` answered CE2400, and `match BOX.s:` printed
+  both. Each is CE2400 alone now.
 - **A bulk write is a write** (#785). `extend` and `extend_range` sat in no mutating set, so
   `r.extend(b)` through a `peek` parameter changed the caller's array with no diagnostic,
   and a bulk write did not freeze a live `let`-borrow. They are CE2408 and CE2412 now, like
@@ -1012,6 +1029,12 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One walk finds the root of a place** (#784). `semantics/places.py:walk_place` is a
+  `match` over the closed step set with a backstop, and the ten hand-written root walks in
+  the borrow pass, the typecheck pass and the scope pass read it; an alias, a namespace and
+  a call boundary are parameters of the walk, not second walks. A totality gate and a
+  ratchet refuse a new hand-rolled walk. Proved over every error and warning fixture: one
+  output changed, the constant-element `match` above.
 - **The borrow marker is read in one place** (#779). `semantics/param_modes.py` holds a
   strict `borrow_mode()` and a `ParamMode.borrow_mode` property; eighteen hand-written
   `== "poke"` / `== "peek"` reads across both passes, the scope pass and the backend are

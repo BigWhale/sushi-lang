@@ -9,11 +9,12 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.semantics.ast import (
     Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
-    MemberAccess, Name, NomBinding, RefBinding,
+    NomBinding, RefBinding,
 )
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.param_modes import ParamMode, borrow_mode, receiver_mode
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.generics.own import own_payload_type
 from sushi_lang.semantics.generics.type_display import display_type
 from .utils import resolve_declared_type
@@ -88,10 +89,8 @@ def reject_poke_binding_into_a_constant(validator: 'TypeValidator',
     the one position that never asked it. A `peek` and a bare binding READ the payload,
     and reading a constant is legal.
     """
-    root = stmt.scrutinee
-    while isinstance(root, MemberAccess):
-        root = root.receiver
-    if not isinstance(root, Name) or root.id in validator.variable_types:
+    root = walk_place(stmt.scrutinee, Step.MEMBER | Step.INDEX).name
+    if root is None or root.id in validator.variable_types:
         return
     binding = _first_poke_binding(stmt)
     if binding is None:

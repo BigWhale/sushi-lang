@@ -1,0 +1,7 @@
+# A let that writes an array key and constructs the map is refused once, at the annotation (#773)
+# EXPECT_ERROR_CODE: CE2058
+# EXPECT_STDERR_CONTAINS: 6:9: error [CE2058]
+use <collections/hashmap>
+fn main() i32:
+    let HashMap@(i32[], string) m = HashMap.new()
+    return Result.Ok(0)

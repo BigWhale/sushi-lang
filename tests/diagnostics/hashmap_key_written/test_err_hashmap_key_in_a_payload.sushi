@@ -1,0 +1,11 @@
+# An enum payload with an array key is refused at the variant (#773)
+# EXPECT_ERROR_CODE: CE2058
+# EXPECT_STDERR_CONTAINS: 7:5: error [CE2058]
+use <collections/hashmap>
+
+enum Slot:
+    Full(HashMap@(i32[], string))
+    Empty
+
+fn main() i32:
+    return Result.Ok(0)

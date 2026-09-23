@@ -2,13 +2,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
-from sushi_lang.internals import errors as er
-from sushi_lang.semantics.typesys import (
-    DynamicArrayType
-)
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
-from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -69,14 +64,8 @@ def resolve_variable_type(validator: 'TypeValidator',
     `resolve_declared_type` answers what the spelling names and `intern_declared_wrapper`
     builds the one kind a lookup cannot find -- `let Result@(T, E) r = mk()` compared
     unequal against the call it takes until the annotation interned too (#184).
-
-    What is left is this position's OWN question: a `let` is where a HashMap key type is
-    written, so CE2058 is read here and nowhere under it.
     """
     from .utils import intern_declared_wrapper, resolve_declared_type
-
-    if isinstance(declared_type, GenericTypeRef):
-        _reject_array_hashmap_key(validator, declared_type, type_span)
 
     interned = intern_declared_wrapper(validator, declared_type)
     if interned is not None:
@@ -84,16 +73,3 @@ def resolve_variable_type(validator: 'TypeValidator',
 
     resolved = resolve_declared_type(validator, declared_type)
     return resolved if resolved is not None else declared_type
-
-
-def _reject_array_hashmap_key(validator: 'TypeValidator',
-                              declared_type: GenericTypeRef,
-                              type_span: 'Span') -> None:
-    """A dynamic array cannot be a HashMap key: it has no equality (CE2058)."""
-    if declared_type.base_name != "HashMap" or not declared_type.type_args:
-        return
-
-    key_type = declared_type.type_args[0]
-    if isinstance(key_type, DynamicArrayType):
-        er.emit(validator.reporter, er.ERR.CE2058, type_span,
-                key_type=display_type(key_type))

@@ -20,7 +20,54 @@ _KEPT_TYPE_KINDS = frozenset({"struct", "enum"})
 
 
 def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], span: Optional[Span]) -> None:
-    """Validate that a type name is known/valid."""
+    """Validate a WRITTEN type: every name in it, then every HashMap key it holds.
+
+    The key rules are asked once per written type, over the whole of it, so a
+    `HashMap@(K, V)` nested in a `Maybe@(...)` is read exactly once (#773).
+    """
+    _check_type_names(validator, type_obj, span)
+    reject_unusable_hashmap_keys(validator, type_obj, span)
+
+
+def reject_unusable_hashmap_keys(validator: 'TypeValidator', type_obj: Optional[Type],
+                                 span: Optional[Span]) -> None:
+    """CE2054 / CE2055 / CE2058 for every HashMap a written type holds (#773).
+
+    A key type is written in a type, so the rules are read where the type is written and
+    not at `HashMap.new()`. The walk enters a generic INSTANCE, whose fields exist only
+    with this position's type arguments, and stops at a written declaration: that
+    declaration's own fields are read where they are written.
+    """
+    if type_obj is None:
+        return
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.generics.hashmap import reject_unusable_key
+    from sushi_lang.semantics.type_walk import walk_named_types
+
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
+
+    def instance(ty: Type) -> Optional[Type]:
+        if not isinstance(ty, GenericTypeRef):
+            return None
+        name = f"{ty.base_name}<{', '.join(str(arg) for arg in ty.type_args)}>"
+        return structs.get(name) or enums.get(name)
+
+    def is_hashmap(ty: Type) -> bool:
+        return isinstance(ty, StructType) and ty.name.startswith("HashMap<")
+
+    def stop(ty: Type) -> bool:
+        return is_hashmap(ty) or (isinstance(ty, (StructType, EnumType))
+                                  and not getattr(ty, "generic_args", None))
+
+    for reached in walk_named_types(type_obj, structs, enums, stop=stop,
+                                    resolve=instance, struct_type_args=True):
+        if is_hashmap(reached):
+            reject_unusable_key(reached, validator, span)
+
+
+def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span: Optional[Span]) -> None:
+    """Validate that every type name in a written type is known and may be named here."""
     if type_obj is None:
         return
 
@@ -54,7 +101,7 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
 
         if type_obj.base_name == "Result" and len(type_obj.type_args) == 2:
             for type_arg in type_obj.type_args:
-                validate_type_name(validator, type_arg, span)
+                _check_type_names(validator, type_arg, span)
             return
 
         # CE5012: foreign `ptr` as a generic type argument is only supported by
@@ -76,7 +123,7 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
             return
 
         for type_arg in type_obj.type_args:
-            validate_type_name(validator, type_arg, span)
+            _check_type_names(validator, type_arg, span)
 
         type_args_str = ", ".join(str(arg) for arg in type_obj.type_args)
         concrete_name = f"{type_obj.base_name}<{type_args_str}>"
@@ -108,7 +155,7 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
         if type_obj.base_type == BuiltinType.BLANK:
             er.emit(validator.reporter, er.ERR.CE2032, span)
             return
-        validate_type_name(validator, type_obj.base_type, span)
+        _check_type_names(validator, type_obj.base_type, span)
         # Validate array size (CE2010: Array size must be positive integer literal)
         if type_obj.size <= 0:
             er.emit(validator.reporter, er.ERR.CE2010, span, size=type_obj.size)
@@ -117,12 +164,12 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
         if type_obj.base_type == BuiltinType.BLANK:
             er.emit(validator.reporter, er.ERR.CE2032, span)
             return
-        validate_type_name(validator, type_obj.base_type, span)
+        _check_type_names(validator, type_obj.base_type, span)
     elif isinstance(type_obj, ReferenceType):
         # A borrow of a type is not a different type (#305), so the REFERENT is checked the
         # same way. Without this arm a `peek Nope` fell through and reached the backend as
         # CE0020, telling the user their program was a compiler bug.
-        validate_type_name(validator, type_obj.referenced_type, span)
+        _check_type_names(validator, type_obj.referenced_type, span)
     elif isinstance(type_obj, (StructType, EnumType)):
         # A named type that the resolve pass already interned. It exists by construction,
         # so the only question left is whether this unit may name it.
@@ -131,13 +178,13 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
         from sushi_lang.semantics.typesys import FunctionType, IteratorType, PointerType
         if isinstance(type_obj, FunctionType):
             for param_type in type_obj.param_types or ():
-                validate_type_name(validator, param_type, span)
-            validate_type_name(validator, type_obj.ok_type, span)
-            validate_type_name(validator, type_obj.err_type, span)
+                _check_type_names(validator, param_type, span)
+            _check_type_names(validator, type_obj.ok_type, span)
+            _check_type_names(validator, type_obj.err_type, span)
         elif isinstance(type_obj, PointerType):
-            validate_type_name(validator, type_obj.pointee_type, span)
+            _check_type_names(validator, type_obj.pointee_type, span)
         elif isinstance(type_obj, IteratorType):
-            validate_type_name(validator, type_obj.element_type, span)
+            _check_type_names(validator, type_obj.element_type, span)
 
 
 def read_constant_index(expr: 'Expr') -> Optional[int]:

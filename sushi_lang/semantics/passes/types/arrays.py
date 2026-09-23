@@ -9,10 +9,9 @@ the three, and its answer was patched in at `method_registry.py`.
 `tests/unit/test_array_method_table_is_total.py` is the gate, and it reads the BACKEND
 dispatcher too, because its emitters are the fourth list of the same names.
 
-Two spellings are kept as they stood, because #750 promised no change of behaviour: the
-bulk-copy family reports an arity fault with the internal CE0023 where every other row
-reports CE2009, and `extend`/`extend_range` answer a type for a fixed receiver although the
-validator refuses one there.
+One spelling is kept as it stood, because #750 promised no change of behaviour:
+`extend`/`extend_range` answer a type for a fixed receiver although the validator refuses
+one there.
 """
 from __future__ import annotations
 
@@ -23,8 +22,9 @@ from typing import TYPE_CHECKING, Callable, Optional, Sequence, Union
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ErrorMessage, Span
 from sushi_lang.internals.report import Reporter
-from sushi_lang.semantics.ast import Expr, MethodCall, Name
+from sushi_lang.semantics.ast import Expr, MethodCall
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import (ArrayType, BuiltinType, DynamicArrayType,
                                           IteratorType, Type, deref_type)
 from .utils import validate_constant_array_index
@@ -277,8 +277,8 @@ class ArraySpec:
     # An in-place write. A constant is emitted as a read-only global, so a constant
     # receiver is refused before anything else is asked (CE2096).
     mutates: bool = False
-    # The bulk-copy family reads the INTERNAL CE0023 for an arity fault where every other
-    # row reads CE2009. Preserved, not corrected: #750 promised no change of behaviour.
+    # Every row reads CE2009 (#764). A field, not a spelled code: `test_argument_check_is_one`
+    # pins this indirect emit until the array arity check reads `check_arguments`.
     arity_code: ErrorMessage = er.ERR.CE2009
 
 
@@ -318,15 +318,11 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
     # The destination must be able to grow, so a fixed array is not a receiver here. It is
     # a legal SOURCE, and `.s()`/`.ss()` read either kind.
     "extend": ArraySpec(1, Receiver.DYNAMIC, _answers(BuiltinType.BLANK),
-                        arguments=_a_source, mutates=True,
-                        arity_code=er.ERR.CE0023),
+                        arguments=_a_source, mutates=True),
     "extend_range": ArraySpec(3, Receiver.DYNAMIC, _answers(BuiltinType.BLANK),
-                              arguments=_a_source_and_a_range, mutates=True,
-                              arity_code=er.ERR.CE0023),
-    "s": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range,
-                   arity_code=er.ERR.CE0023),
-    "ss": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range,
-                    arity_code=er.ERR.CE0023),
+                              arguments=_a_source_and_a_range, mutates=True),
+    "s": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
+    "ss": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
 }
 
 
@@ -341,21 +337,19 @@ def _names_an_unshadowed_constant(expr: Optional[Expr],
     into a constant, and `SEG.start.x := v` does so two levels down. Walking here is
     what keeps one seam answering for every writer.
     """
-    from sushi_lang.semantics.ast import IndexAccess, MemberAccess
-
     if validator is None:
         return None
-    while isinstance(expr, (MemberAccess, IndexAccess)):
-        ref = expr.namespace_ref if isinstance(expr, MemberAccess) else None
-        if ref is not None:
-            # `geo.SIZE`: the alias fold keeps the record's kind, so the answer is the
-            # record's and not the alias name's.
-            sig = validator.const_table.lookup(ref.name, ref.origin)
-            return None if sig is None or sig.is_var else str(ref.name)
-        expr = expr.receiver if isinstance(expr, MemberAccess) else expr.array
-    if not isinstance(expr, Name):
+    walked = walk_place(expr, Step.MEMBER | Step.INDEX,
+                        stop=lambda member: member.namespace_ref)
+    ref = walked.stop
+    if ref is not None:
+        # `geo.SIZE`: the alias fold keeps the record's kind, so the answer is the
+        # record's and not the alias name's.
+        sig = validator.const_table.lookup(ref.name, ref.origin)
+        return None if sig is None or sig.is_var else str(ref.name)
+    if walked.name is None:
         return None
-    name = expr.id
+    name = walked.name.id
     if name in getattr(validator, 'variable_types', {}):
         return None
     # SCOPED, never the flat view: `by_name` holds one record per name over the whole
@@ -425,10 +419,8 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayReceiver,
         return
 
     if len(call.args) != spec.arity:
-        # CE2009 names the method `name` and CE0023 names it `method`; `format_map` drops
-        # whichever key the code's own text does not read.
-        named = f"{display_type(array_type)}.{call.method}"
-        er.emit(reporter, spec.arity_code, call.loc, name=named, method=named,
+        er.emit(reporter, spec.arity_code, call.loc,
+                name=f"{display_type(array_type)}.{call.method}",
                 expected=spec.arity, got=len(call.args))
         return
 
