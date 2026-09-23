@@ -39,9 +39,10 @@ fn main() i32:
     return Result.Ok(0)
 """
 
-# A copy is a new instance: its types, its body and whether it is still generic differ.
+# A copy is a new instance: its types, its body, whether it is still generic and the
+# instance mark (#800) differ.
 _SUBSTITUTED = {"target_type", "params", "ret", "err_type", "body", "type_params",
-                "method_type_args", "ownership_provenance"}
+                "method_type_args", "ownership_provenance", "instance_of"}
 
 
 def _copies(analyze_program):

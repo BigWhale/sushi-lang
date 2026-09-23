@@ -199,7 +199,9 @@ def _validate_method_body(self, target_type, method) -> None:
     self.in_extension_context = True  # Dedicated flag: this body returns a bare value.
     self.in_library_body = self.in_library_unit
     self.in_synthesized_body = False
-    self.reporter.leave_body()
+    # Whether this body is one of many copies of one source: a perk-implementation
+    # method cut per instantiation is (#800); an extension method never is.
+    self.reporter.enter_body(method)
     self.extension_method_name = method.name
     self.extension_return_type = method.ret  # Checked in validate_return_statement.
     self.variable_types = {}

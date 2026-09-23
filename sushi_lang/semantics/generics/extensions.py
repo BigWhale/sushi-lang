@@ -153,11 +153,16 @@ def monomorphize_perk_impl(
     person wrote (#657).
     """
     substitution = _type_substitution(template.type_params, type_args)
+    methods = [substitute_signature(method, substitution, substitutor)
+               for method in template.impl.methods]
+    # Each copy carries the template's spans, so a diagnostic in its body is told once
+    # for all the instances, the rule of a generic function's instance (#648, #800).
+    for method in methods:
+        method.instance_of = method.name
     return replace(
         template.impl,
         target_type=concrete_target_type,
-        methods=[substitute_signature(method, substitution, substitutor)
-                 for method in template.impl.methods],
+        methods=methods,
         is_synthesized=True,
     )
 

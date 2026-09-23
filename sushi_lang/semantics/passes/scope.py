@@ -93,6 +93,7 @@ class ScopeAnalyzer:
 
         for perk_impl in program.perk_impls:
             self._check_perk_implementation(perk_impl)
+        self.reporter.leave_body()
 
     def _push_scope(self) -> None:
         """Enter a new scope."""
@@ -389,6 +390,8 @@ class ScopeAnalyzer:
     def _check_perk_implementation(self, perk_impl: ExtendWithDef) -> None:
         """Check all methods in a perk implementation."""
         for method in perk_impl.methods:
+            # Whether this body is one of many copies of one source (#800).
+            self.reporter.enter_body(method)
             self._push_scope()
 
             # Add implicit 'self' parameter - represents the target type instance.
