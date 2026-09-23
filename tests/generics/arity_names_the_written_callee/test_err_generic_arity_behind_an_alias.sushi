@@ -1,0 +1,8 @@
+# A generic behind an alias keeps its written name in the arity error (#766).
+# EXPECT_ERROR_CODE: CE2009
+# EXPECT_STDERR_CONTAINS: pair'
+use "helpers/arity_pair" as ap
+
+fn main() i32:
+    let i32 n = ap.pair@(i32)(1, 2, 3).realise(0)
+    return Result.Ok(n)

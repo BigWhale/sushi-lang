@@ -1,0 +1,10 @@
+# A generic call with a wrong argument count names the function the user wrote, not the
+# symbol of its instance (#766).
+# EXPECT_ERROR_CODE: CE2009
+# EXPECT_STDERR_CONTAINS: 'pair'
+fn pair@(T)(T a, T b) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 n = pair@(i32)(1, 2, 3).realise(0)
+    return Result.Ok(n)

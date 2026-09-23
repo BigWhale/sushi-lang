@@ -104,7 +104,8 @@ def validate_generic_function_call(
 
     func_sig = validator.func_table.lookup(mangled_name, home_unit)
 
-    validate_call_arguments(validator, func_sig.name, func_sig,
+    # The WRITTEN name, not the instance's symbol: the user never wrote `pair__i32` (#766).
+    validate_call_arguments(validator, function_name, func_sig,
                             call.args, call.callee.loc)
 
 

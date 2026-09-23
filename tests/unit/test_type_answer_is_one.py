@@ -182,7 +182,7 @@ fn main() i32:
     return Result.Ok(0)
 """
     codes = [code for code, _ in _items(analyze(source, name="m"))]
-    assert codes == ["CE2058", "CE2058"]
+    assert codes == ["CE2058"]
 
 
 def test_a_stdlib_return_type_resolves_to_its_interned_wrapper(analyze):

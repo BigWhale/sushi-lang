@@ -1,0 +1,2 @@
+public fn pair@(T)(T a, T b) i32:
+    return Result.Ok(0)
