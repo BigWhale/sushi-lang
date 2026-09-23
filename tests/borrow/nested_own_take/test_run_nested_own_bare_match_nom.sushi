@@ -1,0 +1,21 @@
+# A bare binding nested inside an `Own(...)` pattern reads through the heap cell, under
+# `match nom r:` as under a plain match, and frees everything once.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+enum Inner:
+    Word(string)
+    Nil
+
+enum Outer:
+    Full(Own@(Inner))
+    Empty
+
+fn main() i32:
+    let Outer r = Outer.Full(Own.alloc(Inner.Word("Mostly Harmless".clone())))
+    match nom r:
+        Outer.Full(Own(Inner.Word(s))) -> println(s)
+        Outer.Full(Own(Inner.Nil)) -> println("nil")
+        Outer.Empty -> println("empty")
+    return Result.Ok(0)
