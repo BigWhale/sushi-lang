@@ -16,6 +16,7 @@ import pytest
 from llvmlite import ir
 
 from sushi_lang.backend.codegen_llvm import LLVMCodegen
+from sushi_lang.semantics.passes.collect import PerkImplementationTable
 from sushi_lang.backend.expressions.memory import (
     calculate_llvm_type_size,
     get_element_size_constant,
@@ -43,7 +44,7 @@ PRIMITIVE_SIZES = {
 @pytest.fixture
 def codegen():
     """A codegen with a builder, which the struct arm needs for its GEP."""
-    cg = LLVMCodegen()
+    cg = LLVMCodegen(perk_impl_table=PerkImplementationTable())
     fn = ir.Function(cg.module, ir.FunctionType(ir.VoidType(), []), name="_size_probe")
     cg.builder = ir.IRBuilder(fn.append_basic_block("entry"))
     return cg

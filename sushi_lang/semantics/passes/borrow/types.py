@@ -1,11 +1,10 @@
 """The type algebra the borrow checker needs, answered from the collect pass's tables alone."""
 
 from __future__ import annotations
-from typing import Optional
-from types import SimpleNamespace
+from typing import TYPE_CHECKING, Optional
 
+from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
 from sushi_lang.semantics.generics.types import GenericTypeRef
-from sushi_lang.semantics.generics.type_strings import resolve_type_from_string
 from sushi_lang.semantics.ownership import TypeClass, type_class_of
 from sushi_lang.semantics.typesys import (
     ArrayType,
@@ -20,29 +19,28 @@ from sushi_lang.semantics.typesys import (
 
 from .state import BorrowState
 
+if TYPE_CHECKING:
+    from sushi_lang.semantics.tables import SymbolTables
 
-def _split_type_args(args: str) -> list[str]:
-    """Split an interned type-argument list on its TOP-LEVEL commas."""
-    parts, depth, current = [], 0, ""
-    for ch in args:
-        if ch == "<":
-            depth += 1
-        elif ch == ">":
-            depth -= 1
-        if ch == "," and depth == 0:
-            parts.append(current.strip())
-            current = ""
-        else:
-            current += ch
-    if current.strip():
-        parts.append(current.strip())
-    return parts
+
+# The containers a `push` / `insert` fills and a `.get()` reads an element out of.
+# An `Own@(T)` holds one value and is not one of them.
+_ELEMENT_CONTAINERS = frozenset(prefix[:-1] for prefix in CONTAINER_PREFIXES) - {"Own"}
+
+
+def _generic_parts(ty: Optional[Type]) -> tuple[Optional[str], tuple]:
+    """The base name and the type arguments of a generic instance, written or interned."""
+    if isinstance(ty, GenericTypeRef):
+        return ty.base_name, ty.type_args
+    if isinstance(ty, StructType):
+        return ty.generic_base, ty.generic_args or ()
+    return None, ()
 
 
 class TypeQueries:
     """Resolves and classifies types for the checker. Reads `tables`, nothing else."""
 
-    def __init__(self, tables=None) -> None:
+    def __init__(self, tables: SymbolTables) -> None:
         """Hold the collect pass's tables -- the sole authority for a named type's contents."""
         self.tables = tables
 
@@ -56,12 +54,12 @@ class TypeQueries:
         while the backend, which resolves it, classifies it MOVE. That disagreement is
         a use after move with no diagnostic in front of it.
         """
-        if self.tables is None or not isinstance(ty, (UnknownType, GenericTypeRef)):
+        if not isinstance(ty, (UnknownType, GenericTypeRef)):
             return ty
-        structs = getattr(getattr(self.tables, "structs", None), "by_name", None) or {}
-        enums = getattr(getattr(self.tables, "enums", None), "by_name", None) or {}
         name = ty.name if isinstance(ty, UnknownType) else str(ty)
-        return structs.get(name) or enums.get(name) or ty
+        return (self.tables.structs.by_name.get(name)
+                or self.tables.enums.by_name.get(name)
+                or ty)
 
     def variant_payload_types(self, enum_type: Optional[Type],
                              variant_name: str) -> tuple:
@@ -90,10 +88,7 @@ class TypeQueries:
             ty = ty.referenced_type
         if isinstance(ty, DynamicArrayType):
             return True
-        if isinstance(ty, GenericTypeRef):
-            return ty.base_name in ("List", "HashMap")
-        name = getattr(ty, "name", None)
-        return isinstance(name, str) and (name.startswith("List<") or name.startswith("HashMap<"))
+        return _generic_parts(ty)[0] in _ELEMENT_CONTAINERS
 
     def element_type(self, ty: Optional[Type]) -> Optional[Type]:
         """What a `.get()` on a receiver of type `ty` reads out."""
@@ -102,34 +97,12 @@ class TypeQueries:
             ty = self.resolve_named(ty.referenced_type)
         if isinstance(ty, (DynamicArrayType, ArrayType)):
             return ty.base_type
-        if isinstance(ty, GenericTypeRef):
-            if ty.base_name in ("List", "Own") and ty.type_args:
-                return ty.type_args[0]
-            if ty.base_name == "HashMap" and len(ty.type_args) == 2:
-                return ty.type_args[1]
-        # An interned StructType's NAME carries its type arguments and IS its identity
-        # (#240), so reading them back out of it is the supported route. The angle
-        # brackets are the internal spelling on purpose.
-        if isinstance(ty, StructType):
-            if ty.name.startswith("List<"):
-                return self.type_from_name(ty.name[len("List<"):-1])
-            if ty.name.startswith("HashMap<"):
-                args = _split_type_args(ty.name[len("HashMap<"):-1])
-                return self.type_from_name(args[1]) if len(args) == 2 else None
+        base, args = _generic_parts(ty)
+        if base == "List" and args:
+            return args[0]
+        if base == "HashMap" and len(args) == 2:
+            return args[1]
         return self.own_payload(ty)
-
-    def type_from_name(self, type_str: str) -> Optional[Type]:
-        """Resolve one interned type-argument spelling back to a `Type`."""
-        if self.tables is None:
-            return None
-        adapter = SimpleNamespace(
-            struct_table=getattr(self.tables, "structs", SimpleNamespace(by_name={})),
-            enum_table=getattr(self.tables, "enums", SimpleNamespace(by_name={})),
-        )
-        try:
-            return resolve_type_from_string(type_str, adapter)
-        except Exception:
-            return None
 
     @property
     def drops(self) -> frozenset:
@@ -139,10 +112,7 @@ class TypeQueries:
         reaching for a registry, and the tables this object already holds are where the
         answer lives.
         """
-        impls = getattr(self.tables, "perk_impls", None)
-        if impls is None:
-            return frozenset()
-        return frozenset(impls.by_perk.get("Drop", ()))
+        return frozenset(self.tables.perk_impls.by_perk.get("Drop", ()))
 
     def type_class(self, ty: Optional[Type]) -> TypeClass:
         """Classify a type as PLAIN or MOVE, resolving named types first."""

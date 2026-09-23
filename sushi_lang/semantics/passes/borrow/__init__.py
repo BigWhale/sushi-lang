@@ -1,7 +1,7 @@
 """The borrow pass. The pass object holds the state; siblings hold the rules."""
 
 from __future__ import annotations
-from typing import Dict, FrozenSet, List, Optional, Set
+from typing import TYPE_CHECKING, Dict, FrozenSet, List, Optional, Set
 
 from sushi_lang.semantics.ast import Block, ExtendDef, FuncDef, Param, Program
 from sushi_lang.semantics.typesys import (
@@ -20,6 +20,9 @@ from .state import BorrowState, borrow_mode
 from .statements import check_block
 from .types import TypeQueries
 from .writes import MUTATING_METHODS, READONLY_RECEIVERS
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.tables import SymbolTables
 
 
 def _build_callee_modes(tables, unit_name: Optional[str] = None,
@@ -56,10 +59,10 @@ def _build_callee_modes(tables, unit_name: Optional[str] = None,
 class BorrowChecker:
     """Analyzes borrowing safety for a program."""
 
-    def __init__(self, reporter: Reporter,
+    def __init__(self, reporter: Reporter, *,
+                 tables: SymbolTables,
                  destroy_effects: Optional[Dict[str, FrozenSet[int]]] = None,
                  enum_names: Optional[Set[str]] = None,
-                 tables=None,
                  unit_name: Optional[str] = None,
                  scope: object = None):
         self.reporter = reporter

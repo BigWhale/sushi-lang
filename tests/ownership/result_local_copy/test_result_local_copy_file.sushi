@@ -1,0 +1,32 @@
+# The declared-resource twin of the string case: a Result@(File, IoError) local copied
+# into a second local MOVES, so its descriptor is closed once (#775). The helper closes
+# the first descriptor, opens a second one on the free number and hands it back; a stale
+# second close of the first handle at the helper's exit would close the returned one,
+# and the write through it would fail.
+# EXPECT_STDOUT_EXACT: "opened\nwritten\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+
+use <io/fs>
+
+fn reopen() File | IoError:
+    let Result@(File, IoError) r = open("/tmp/sushi_result_local_copy_a.txt", FileMode.Write())
+    let Result@(File, IoError) r2 = r
+    match nom r2:
+        Result.Ok(nom f) ->
+            match f.write("first\n"):
+                Result.Ok(_) -> println("opened")
+                Result.Err(_) -> println("first write failed")
+        Result.Err(_) -> println("failed")
+    let File g = open("/tmp/sushi_result_local_copy_b.txt", FileMode.Write())??
+    return Result.Ok(g)
+
+fn main() i32:
+    match reopen():
+        Result.Ok(nom g) ->
+            match g.write("Mostly Harmless\n"):
+                Result.Ok(_) -> println("written")
+                Result.Err(_) -> println("write failed")
+        Result.Err(_) -> println("reopen failed")
+    return Result.Ok(0)

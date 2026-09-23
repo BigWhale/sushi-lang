@@ -86,7 +86,7 @@ def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
 class LLVMCodegen:
     """Main LLVM backend orchestrator for the Sushi language compiler."""
 
-    def __init__(self, module_name: str = "lang_module", struct_table: Optional[StructTable] = None, enum_table: Optional[EnumTable] = None, func_table: Optional['FunctionTable'] = None, perk_impl_table: Optional['PerkImplementationTable'] = None, const_table: Optional['ConstantTable'] = None) -> None:
+    def __init__(self, module_name: str = "lang_module", *, perk_impl_table: 'PerkImplementationTable', struct_table: Optional[StructTable] = None, enum_table: Optional[EnumTable] = None, func_table: Optional['FunctionTable'] = None, const_table: Optional['ConstantTable'] = None) -> None:
         """Initialize the LLVM code generator with all specialized subsystems."""
         # Our OWN context, not llvmlite's process-wide global_context: identified types
         # (#257) register per Context, so on the global one a second `struct Tree` would
@@ -100,7 +100,7 @@ class LLVMCodegen:
         # process-wide primitive built-ins behind them (#601). It travels on the enum
         # table, so the analyser's tables carry it here with no wiring of their own.
         self.derived_methods = self.enum_table.derived
-        from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
+        from sushi_lang.semantics.passes.collect import FunctionTable, ConstantTable
         self.func_table = func_table or FunctionTable()
         # The unit whose bodies are being emitted, or None outside a multi-unit walk.
         # A named callee is resolved through it, so a library's own body reads the
@@ -116,7 +116,9 @@ class LLVMCodegen:
         # whichever the flat view happened to hold (`unit-namespaces.md` section 6); and
         # a constant's initializer is folded as the unit that wrote it reads (#561).
         self.unit_namespaces: Dict[str, Any] = {}
-        self.perk_impl_table = perk_impl_table or PerkImplementationTable()
+        # REQUIRED (#780): an empty default answers "nothing implements Drop", and
+        # every handle is then copied and closed twice.
+        self.perk_impl_table = perk_impl_table
         self.const_table = const_table or ConstantTable()
         from sushi_lang.semantics.passes.collect import ExternalTable
         self.external_table = ExternalTable()

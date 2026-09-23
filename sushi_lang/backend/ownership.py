@@ -11,6 +11,7 @@ from llvmlite import ir
 
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.ast import MemberAccess, Name
+from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ownership import (
     ConsumingUse,
     Ownership,
@@ -116,16 +117,16 @@ def drops_of(codegen: 'LLVMCodegen') -> frozenset:
     set rather than reaching for a registry, so a caller that cannot supply it does not
     compile -- and every backend caller already holds `codegen`.
     """
-    table = getattr(codegen, "perk_impl_table", None)
-    if table is None:
-        return frozenset()
-    return frozenset(table.by_perk.get("Drop", ()))
+    return frozenset(codegen.perk_impl_table.by_perk.get("Drop", ()))
 
 
 def resolver_for(codegen: 'LLVMCodegen'):
-    """A `Type -> Type` resolver over the backend's struct and enum tables."""
+    """A `Type -> Type` resolver over the backend's struct and enum tables.
+
+    A `GenericTypeRef` is found by its interned name (#775).
+    """
     def resolve(ty):
-        name = getattr(ty, "name", None)
+        name = str(ty) if isinstance(ty, GenericTypeRef) else getattr(ty, "name", None)
         return (codegen.struct_table.by_name.get(name)
                 or codegen.enum_table.by_name.get(name)
                 or ty)

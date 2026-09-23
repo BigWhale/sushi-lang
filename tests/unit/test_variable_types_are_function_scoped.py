@@ -4,6 +4,7 @@ from __future__ import annotations
 from llvmlite import ir
 
 from sushi_lang.backend.codegen_llvm import LLVMCodegen
+from sushi_lang.semantics.passes.collect import PerkImplementationTable
 from sushi_lang.semantics.typesys import BuiltinType, ReferenceType
 
 
@@ -13,7 +14,7 @@ def _probe(cg: LLVMCodegen, name: str) -> ir.Function:
 
 def test_a_function_starts_with_no_inherited_names():
     """An earlier function's names are not visible while a later one is emitted."""
-    cg = LLVMCodegen()
+    cg = LLVMCodegen(perk_impl_table=PerkImplementationTable())
     cg.variable_types["v"] = ReferenceType(BuiltinType.I32, "peek")
 
     cg.functions.helpers.begin_function(_probe(cg, "later"))
@@ -25,7 +26,7 @@ def test_a_function_starts_with_no_inherited_names():
 
 
 def test_names_registered_by_a_function_do_not_outlive_it():
-    cg = LLVMCodegen()
+    cg = LLVMCodegen(perk_impl_table=PerkImplementationTable())
     cg.functions.helpers.begin_function(_probe(cg, "first"))
     cg.variable_types["v"] = ReferenceType(BuiltinType.I32, "peek")
     cg.functions.helpers.end_function()
@@ -37,7 +38,7 @@ def test_the_surrounding_map_is_restored_not_discarded():
     """Restore, not clear: nested emission (a lazily emitted out-of-line destructor body) must
     leave the enclosing function's names intact.
     """
-    cg = LLVMCodegen()
+    cg = LLVMCodegen(perk_impl_table=PerkImplementationTable())
     cg.variable_types["module_level"] = BuiltinType.I32
 
     cg.functions.helpers.begin_function(_probe(cg, "inner"))
