@@ -6,12 +6,12 @@ from typing import Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Borrow, Expr, MemberAccess, Name
+from sushi_lang.semantics.ast import Borrow, Expr, Name
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.param_modes import borrow_mode
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode
 from .diagnostics import emit_use_after_move, expr_to_string
-from .reads import member_access_base
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
@@ -22,12 +22,10 @@ if TYPE_CHECKING:
 def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
     """Check a borrow expression: `peek x`, `poke x`, `peek x.field`, `poke x.field`."""
     is_poke = borrow_mode(borrow.mutability) is BorrowMode.POKE
-    target = borrow.expr
-    if isinstance(target, MemberAccess):
-        # A field borrow is tracked against the BASE variable: this pass tracks whole
-        # variables, not sub-places, so the two spellings differ in exactly one thing --
-        # where the name comes from.
-        target = member_access_base(target)
+    # A field borrow is tracked against the BASE variable: this pass tracks whole
+    # variables, not sub-places, so the two spellings differ in exactly one thing --
+    # where the name comes from.
+    target = walk_place(borrow.expr, Step.MEMBER).node
 
     if not isinstance(target, Name):
         # A call result, a literal, a member chain off one -- nothing with an address.

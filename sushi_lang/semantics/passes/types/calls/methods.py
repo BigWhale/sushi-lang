@@ -10,6 +10,7 @@ from sushi_lang.semantics.typesys import (
     StructType)
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
+from sushi_lang.semantics.places import Step, walk_place
 from ..arguments import check_arguments
 from ..method_registry import METHOD_TYPE_REGISTRY
 from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args,\
@@ -431,8 +432,8 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
                                  mode) -> None:
     """A MARKED receiver must name storage the call can reach (#327, ruling R25).
 
-    A `poke self` writes the receiver, so read-only storage cannot take it and a
-    TEMPORARY has no address the caller keeps (CE2404). A `peek self` receiver only
+    A `poke self` writes the receiver, so read-only storage cannot take it (CE2400); a
+    temporary receiver is the borrow pass's rule (CE2429). A `peek self` receiver only
     reads, so it never arrives here.
 
     A `nom self` TAKES the receiver, and that is the borrow pass's rule for storage of
@@ -440,13 +441,10 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
     code. A temporary is owned by construction, so it is legal there -- the same rule
     ruling R11 states for a match scrutinee.
     """
-    from sushi_lang.semantics.ast import DotCall, IndexAccess, MemberAccess
     from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 
-    root = call.receiver
-    while isinstance(root, (MethodCall, DotCall, MemberAccess, IndexAccess)):
-        root = root.array if isinstance(root, IndexAccess) else root.receiver
-    if not isinstance(root, Name):
+    root = walk_place(call.receiver, Step.MEMBER | Step.INDEX | Step.CALL).name
+    if root is None:
         return
     if root.id in validator.variable_types or mode.consumes:
         return

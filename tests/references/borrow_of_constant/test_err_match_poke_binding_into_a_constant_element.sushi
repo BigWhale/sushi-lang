@@ -1,0 +1,17 @@
+# A `poke` pattern binding points into the scrutinee's payload storage. An element of a
+# constant array lives in read-only memory like the constant itself, so the binding is
+# refused with CE2400, the code a bare constant scrutinee and a field of one both read.
+# EXPECT_ERROR_CODE: CE2400
+# EXPECT_STDERR_CONTAINS: cannot borrow 'TONES' with `poke`
+
+enum Shade:
+    Dim(i32)
+    Bright(i32)
+
+const Shade[2] TONES = [Shade.Dim(2), Shade.Bright(3)]
+
+fn main() i32:
+    match TONES[0]:
+        Shade.Dim(poke r) -> r := r + 1
+        Shade.Bright(_) -> println("bright")
+    return Result.Ok(0)

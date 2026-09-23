@@ -7,6 +7,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
     Borrow, Call, CallLike, DotCall, Expr, MemberAccess, MethodLike, Name, Spread,
 )
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import FunctionType
 from sushi_lang.semantics.param_modes import (
     CalleeKind, ParamMode, effective_modes, receiver_mode,
@@ -61,12 +62,12 @@ def _place_of(expr: Expr) -> Optional[str]:
 
     A call result, a literal or an index names no storage a second expression can share.
     """
-    if isinstance(expr, Name):
-        return expr.id
-    if isinstance(expr, MemberAccess):
-        base = _place_of(expr.receiver)
-        return None if base is None else f"{base}.{expr.member}"
-    return None
+    walked = walk_place(expr, Step.MEMBER)
+    if walked.name is None:
+        return None
+    members = [step.member for step in reversed(walked.path)
+               if isinstance(step, MemberAccess)]
+    return ".".join([walked.name.id, *members])
 
 
 def maybe_mark_own_alloc_move(checker: 'BorrowChecker', expr: MethodLike) -> None:
