@@ -392,6 +392,31 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A copy of an explicit `Result@(T, E)` local freed its payload twice** (#775).
+  `let Result@(string, StdError) r2 = r` compiled clean and aborted at exit. The declared
+  type reached the backend as a `GenericTypeRef`, the backend resolver looked it up by a
+  name it does not have, and the value was classed PLAIN, so `r` was never marked moved.
+  The resolver finds it by its interned name now, and #781 makes the ownership predicate
+  answer the same cell correctly on its own.
+- **A `poke self` call reaches an array element** (#776). `xs[0].bump()` was a false CE2404,
+  while `let poke Counter c = xs[0]; c.bump()` compiled. Opening the gate alone would have
+  been a silent wrong value: the backend spilled the element to a copy and the method
+  wrote the copy. The receiver now takes the element's bounds-checked address. The same
+  arm corrects `ls[0].push(5)` on a container element, which wrote a copy and leaked.
+- **One temporary receiver, one diagnostic** (#777). `make()??.bump()`,
+  `Counter(3).bump()` and `mko()??.inner.bump()` printed CE2404 and CE2429 for one fault.
+  CE2429 speaks alone, and its note now points at the boundary: a chained call spanned the
+  whole chain, so the note of `c.clone().bump()` sat on the primary span. CE2404's text no
+  longer names the retired `&`.
+- **A lambda parameter of a named owning type is CE2094** (#778). `|File h| 1` and a
+  struct that holds a string compiled, while `|i32[] b|` was refused: the check did not
+  resolve the parameter type.
+- **CE2431 reaches a container** (#770). `List@(File).clone()` compiled and two lists
+  closed one descriptor. The refusal is asked before a container claims `clone`, for
+  `List`, `HashMap`, `Own`, `T[]` and `T[N]`; a perk implementation still answers the call.
+- **A `nom` binding nested in `Own(...)` is CE2434** (#783). It was a false CE2432 whose
+  help asked for the `match nom` already written. The take cannot be made legal -- the cell
+  would have nothing to free it -- so it reads the code the direct `Own(nom x)` form reads.
 - **A generic call reads the same argument check as every other call** (#747).
   `passes/types/calls/generics.py` held a near-verbatim fork of the canonical
   `validate_call_arguments`, and the fork had lost two behaviours. A bloom spread in a
@@ -982,6 +1007,19 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **A missing perk table stops at construction** (#780). `LLVMCodegen`, `BorrowChecker` and
+  `TypeQueries` require the table. Three providers answered an empty `Drop` set when it was
+  missing -- the one answer the "no default" rule of `owns_resource` exists to prevent.
+- **One ownership walk** (#781, #724). `walk_named_types` takes a `stop`, a `resolve` and a
+  `struct_type_args` hook, and `owns_resource`, `holds_declared_resource` and
+  `contains_unresolvable_unknown_type` are one `any()` each over it. Measured at the seam
+  entry over the corpus: 43 of 12,192 ownership cells moved, every one an unresolved
+  `Result<...>` that now owns what it holds; 0 of 8,512 unresolvable-name cells moved.
+  `resolve_type_args` was measured and kept.
+- **The borrow pass reads a container's element type from the instance** (#782). Its own
+  bracket parser, the table adapter and a bare `except` are gone.
+- **A payload binding reads one `ScrutineeKind`** (#783), not two booleans with an
+  impossible fourth combination.
 - **One answer to what a WRITTEN type names** (#755). The question had seven homes in the
   typecheck pass, all ending at `semantics/type_resolution.py` by different routes. Two
   were closed by #745 in Wave 1; of the five left, four now call
