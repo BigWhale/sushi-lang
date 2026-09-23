@@ -213,7 +213,8 @@ def register_pattern_bindings(checker: 'BorrowChecker', scope: BindingScope,
                               pattern: Pattern,
                               scrutinee_type: Optional[Type] = None,
                               scrutinee: Optional[Expr] = None,
-                              owns_scrutinee: bool = False) -> None:
+                              owns_scrutinee: bool = False,
+                              inside_own: bool = False) -> None:
     """Register a match arm's payload bindings, WITH their types."""
     variant_types = checker.types.variant_payload_types(
         scrutinee_type, pattern.variant_name)
@@ -228,8 +229,11 @@ def register_pattern_bindings(checker: 'BorrowChecker', scope: BindingScope,
                 scope.bind_value(binding, payload_type, span)
             case NomBinding():
                 # `Variant(nom x)` (ruling R11): the arm TAKES the payload, which it may
-                # only do out of a scrutinee the match owns.
-                if not owns_scrutinee:
+                # only do out of a scrutinee the match owns, and never out of an
+                # `Own(...)` cell, which would be left with nothing to free it.
+                if inside_own:
+                    _reject_take_from_own(checker, binding)
+                elif not owns_scrutinee:
                     _reject_take_from_a_borrow(checker, binding, scrutinee)
                 scope.bind_owned(binding.name, payload_type, binding.loc or span)
             case RefBinding():
@@ -242,7 +246,8 @@ def register_pattern_bindings(checker: 'BorrowChecker', scope: BindingScope,
             case Pattern():
                 register_pattern_bindings(checker, scope, binding, payload_type,
                                           scrutinee=scrutinee,
-                                          owns_scrutinee=owns_scrutinee)
+                                          owns_scrutinee=owns_scrutinee,
+                                          inside_own=inside_own)
             case _:
                 _register_own_pattern(checker, scope, binding, payload_type, span,
                                       scrutinee)
@@ -261,6 +266,14 @@ def _reject_take_from_a_borrow(checker: 'BorrowChecker', binding: NomBinding,
     diag.help(f"hand the value to the match -- `match nom {text}:` -- and it may be "
               f"taken here; drop the marker to read through the borrow instead")
     diag.emit()
+
+
+def _reject_take_from_own(checker: 'BorrowChecker', binding: NomBinding) -> None:
+    """Report CE2434 for a `nom` binding nested inside an `Own(...)` pattern."""
+    checker.err.emit_with(er.ERR.CE2434, binding.loc) \
+        .help("drop the marker to read the value through the cell, or take the whole "
+              "`Own@(T)` with a `nom` binding on the payload that holds it") \
+        .emit()
 
 
 def reject_partial_take(checker: 'BorrowChecker', pattern: Pattern,
@@ -319,7 +332,8 @@ def _register_own_pattern(checker: 'BorrowChecker', scope: BindingScope, binding
     pointee = checker.types.own_payload(payload_type)
 
     if isinstance(inner, Pattern):
-        register_pattern_bindings(checker, scope, inner, pointee, scrutinee=scrutinee)
+        register_pattern_bindings(checker, scope, inner, pointee, scrutinee=scrutinee,
+                                  inside_own=True)
     elif isinstance(inner, str) and inner != "_":
         if inner_borrow is None:
             scope.bind_value(inner, pointee, span)
