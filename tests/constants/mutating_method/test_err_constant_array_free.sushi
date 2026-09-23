@@ -1,0 +1,10 @@
+# A constant is a read-only global, so a method that changes its receiver is refused
+# on it (CE2096). `free` answers the same code as `clear`, from the one method-effect
+# table.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2096
+const i32[3] A = [1, 2, 3]
+
+fn main() i32:
+    A.free()
+    return Result.Ok(0)
