@@ -8,6 +8,8 @@ from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import Borrow, Expr, MemberAccess, Name
 from sushi_lang.semantics.ownership import TypeClass
+from sushi_lang.semantics.param_modes import borrow_mode
+from sushi_lang.semantics.typesys import BorrowMode
 from .diagnostics import emit_use_after_move, expr_to_string
 from .reads import member_access_base
 from .state import BorrowState
@@ -19,7 +21,7 @@ if TYPE_CHECKING:
 
 def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
     """Check a borrow expression: `peek x`, `poke x`, `peek x.field`, `poke x.field`."""
-    is_poke = borrow.mutability == "poke"
+    is_poke = borrow_mode(borrow.mutability) is BorrowMode.POKE
     target = borrow.expr
     if isinstance(target, MemberAccess):
         # A field borrow is tracked against the BASE variable: this pass tracks whole

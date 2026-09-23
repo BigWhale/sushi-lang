@@ -25,7 +25,7 @@ from sushi_lang.semantics.ast import (
     Stmt,
     While,
 )
-from sushi_lang.semantics.ownership import ConsumingUse, Provenance
+from sushi_lang.semantics.ownership import Provenance
 from sushi_lang.semantics.typesys import ForeignPtrType, ReferenceType
 
 from .bindings import (
@@ -76,7 +76,7 @@ def check_stmt(checker: 'BorrowChecker', stmt: Stmt) -> None:
             # A return hands the value to the caller. `return Result.Ok(x)` consumes `x`
             # at ENUM_PAYLOAD and the constructor itself is FRESH, so this matters for
             # the shape that is not wrapped: an extension method's bare `return value`.
-            consume(checker, stmt.value, ConsumingUse.RETURN)
+            consume(checker, stmt.value)
             clear_borrows(checker)
         case Print() | PrintLn():
             check_expr(checker, stmt.value)
@@ -175,16 +175,16 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
     check_owner_not_borrowed(checker, owner, stmt.loc, "assign")
 
     if isinstance(target, Name):
-        consume(checker, stmt.value, ConsumingUse.REBIND)
+        consume(checker, stmt.value)
         # A rebind RE-INITIALIZES, so a previous move no longer holds. The value was
         # checked above, so `s := "{s}-x"` still reports the moved `s`.
         target_state = checker.borrow_state.get(target.id)
         if target_state is not None:
             reinitialize(target_state)
     elif isinstance(target, MemberAccess):
-        consume(checker, stmt.value, ConsumingUse.FIELD_ASSIGN)
+        consume(checker, stmt.value)
     elif isinstance(target, IndexAccess):
-        consume(checker, stmt.value, ConsumingUse.ELEMENT_ASSIGN)
+        consume(checker, stmt.value)
     clear_borrows(checker)
 
 
@@ -250,7 +250,7 @@ def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:
     if stmt.consumes_scrutinee:
         # `match nom r:` consumes exactly as `f(nom r)` does: CE2411 when `r` is a
         # borrow, and CE2405 at every later mention of it.
-        consume(checker, stmt.scrutinee, ConsumingUse.MATCH_SCRUTINEE)
+        consume(checker, stmt.scrutinee)
     clear_borrows(checker)
     entry = snapshot_flow(checker)
     paths: list[FlowFacts] = []

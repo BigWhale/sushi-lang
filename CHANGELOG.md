@@ -392,6 +392,11 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A bulk write is a write** (#785). `extend` and `extend_range` sat in no mutating set, so
+  `r.extend(b)` through a `peek` parameter changed the caller's array with no diagnostic,
+  and a bulk write did not freeze a live `let`-borrow. They are CE2408 and CE2412 now, like
+  `push`. The borrow pass holds one `METHOD_EFFECTS` table -- mutates, consumes its
+  arguments, bulk-writes -- in place of three name sets that overlapped.
 - **A copy of an explicit `Result@(T, E)` local freed its payload twice** (#775).
   `let Result@(string, StdError) r2 = r` compiled clean and aborted at exit. The declared
   type reached the backend as a `GenericTypeRef`, the backend resolver looked it up by a
@@ -1007,6 +1012,15 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **The borrow marker is read in one place** (#779). `semantics/param_modes.py` holds a
+  strict `borrow_mode()` and a `ParamMode.borrow_mode` property; eighteen hand-written
+  `== "poke"` / `== "peek"` reads across both passes, the scope pass and the backend are
+  gone, one of them inverted, and a gate refuses a new one. A marker that spells no mode is
+  now an internal error instead of a silent `peek`.
+- **The borrow pass reads its call fields by name** (#785). `CallLike` and `MethodLike` type
+  the helpers, 32 `getattr` reads of declared fields became attribute access, and `mypy`
+  over `passes/borrow/` fell from 251 errors to 148. `consume()` loses a parameter it never
+  read, and three `tables is None` guards dead since #780 are gone.
 - **A missing perk table stops at construction** (#780). `LLVMCodegen`, `BorrowChecker` and
   `TypeQueries` require the table. Three providers answered an empty `Drop` set when it was
   missing -- the one answer the "no default" rule of `owns_resource` exists to prevent.

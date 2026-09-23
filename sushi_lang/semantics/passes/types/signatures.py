@@ -149,11 +149,11 @@ def _self_registration_type(target_type, self_mode):
     somebody else's, so nothing here should make it read as a reference.
     """
     from sushi_lang.semantics.param_modes import receiver_mode
-    if not receiver_mode(self_mode).by_pointer:
+    mode = receiver_mode(self_mode)
+    if not mode.by_pointer:
         return target_type
-    from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
-    mode = BorrowMode.POKE if self_mode == "poke" else BorrowMode.PEEK
-    return ReferenceType(target_type, mode)
+    from sushi_lang.semantics.typesys import ReferenceType
+    return ReferenceType(target_type, mode.borrow_mode)
 
 
 def _validate_target_type(self, target_type, span) -> None:

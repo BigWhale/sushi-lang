@@ -283,7 +283,7 @@ reference parameter is read-only/exclusive per the ordinary borrow rules, so a w
 `peek` one is **CE2408** ("cannot modify through peek reference"). That rule became TOTAL in
 R1: the same three write shapes CE2414 rejects for a binding — a mutating method on or under it,
 a field assignment, and a `poke` borrow of it — are rejected for a `peek` reference, next to
-the rebind that was checked before. One helper, four call sites, keyed on `_MUTATING_METHODS`
+the rebind that was checked before. One helper, four call sites, keyed on the `mutates` column of `borrow/methods.py:METHOD_EFFECTS`
 so the method list is never copied. A *bound* borrow
 (a `let` reading through an owner, §8) gets its own diagnostic instead — **CE2412**, "cannot mutate
 the owner while this binding borrows from it" — because the thing being protected is not the

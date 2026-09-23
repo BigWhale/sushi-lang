@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional, Set, Tuple
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.passes.types.visibility import name_is_contested
 from sushi_lang.semantics.typesys import (
-    BorrowMode, BuiltinType, EnumType, ReferenceType, Type,
+    BuiltinType, EnumType, ReferenceType, Type,
 )
 from sushi_lang.semantics.ast import (
     Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
@@ -13,6 +13,7 @@ from sushi_lang.semantics.ast import (
 )
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.ownership import is_own_type
+from sushi_lang.semantics.param_modes import ParamMode, borrow_mode, receiver_mode
 from sushi_lang.semantics.generics.own import own_payload_type
 from sushi_lang.semantics.generics.type_display import display_type
 from .utils import resolve_declared_type
@@ -104,7 +105,8 @@ def _first_poke_binding(stmt: Match) -> Optional[RefBinding]:
     """The first `poke` binding any arm of this match declares, at any depth."""
     def walk(pattern) -> Optional[RefBinding]:
         for binding in getattr(pattern, "bindings", ()):
-            if isinstance(binding, RefBinding) and binding.mode == "poke":
+            if isinstance(binding, RefBinding) \
+                    and receiver_mode(binding.mode) is ParamMode.POKE:
                 return binding
             if isinstance(binding, Pattern):
                 found = walk(binding)
@@ -399,8 +401,8 @@ def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
             # consumer that asks "is this name a borrow?" answers truthfully, and
             # inference auto-derefs the name.
             resolved_type = _resolve(validator, binding_type)
-            mode = BorrowMode.POKE if binding.mode == "poke" else BorrowMode.PEEK
-            validator.variable_types[binding.name] = ReferenceType(resolved_type, mode)
+            validator.variable_types[binding.name] = ReferenceType(
+                resolved_type, borrow_mode(binding.mode))
         elif isinstance(binding, Pattern):
             resolved_type = _resolve(validator, binding_type)
             if isinstance(resolved_type, EnumType):
@@ -421,10 +423,8 @@ def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                             # to the pointee, so register the reference type -- every
                             # consumer that asks "is this name a borrow?" then answers
                             # truthfully, and inference auto-derefs the name.
-                            mode = (BorrowMode.POKE if binding.inner_borrow == "poke"
-                                    else BorrowMode.PEEK)
                             validator.variable_types[inner_pattern] = ReferenceType(
-                                element_type, mode)
+                                element_type, borrow_mode(binding.inner_borrow))
                         else:
                             validator.variable_types[inner_pattern] = element_type
                 elif isinstance(inner_pattern, Pattern):

@@ -25,7 +25,7 @@ def field_take(checker: 'BorrowChecker', expr: Optional[Expr]
     nothing has nothing to hand over, so the marker is an ordinary copy there.
     """
     expr = unwrap_try(expr)
-    if not isinstance(expr, MemberAccess) or not getattr(expr, "nom_marked", False):
+    if not isinstance(expr, MemberAccess) or not expr.nom_marked:
         return None
     receiver = expr.receiver
     if not isinstance(receiver, Name):

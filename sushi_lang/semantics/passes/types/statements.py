@@ -456,9 +456,10 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
         # The binding's registered type is the REFERENCE, so every consumer that asks
         # "is this name a borrow?" (the borrow pass's rules, backend deref machinery) gets the
         # truthful answer; expression inference auto-derefs a reference-typed name.
-        from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
-        mode = BorrowMode.POKE if stmt.item_borrow == "poke" else BorrowMode.PEEK
-        validator.variable_types[stmt.item_name] = ReferenceType(stmt.item_type, mode)
+        from sushi_lang.semantics.param_modes import borrow_mode
+        from sushi_lang.semantics.typesys import ReferenceType
+        validator.variable_types[stmt.item_name] = ReferenceType(
+            stmt.item_type, borrow_mode(stmt.item_borrow))
     else:
         validator.variable_types[stmt.item_name] = stmt.item_type
 

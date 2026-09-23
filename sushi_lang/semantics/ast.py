@@ -9,6 +9,7 @@ from lark import Token
 if TYPE_CHECKING:
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
     from sushi_lang.semantics.namespaces import NamespaceRef
+    from sushi_lang.semantics.param_modes import ParamMode
 
 
 @dataclass(slots=True)
@@ -689,9 +690,9 @@ class Call(Node):
     callee_unresolved: bool = False
     # What the typecheck pass resolved about the callee's parameters. The borrow pass
     # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
-    callee_param_modes: Optional[List] = None
+    callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
     callee_param_names: Optional[List[str]] = None
-    callee_param_types: Optional[List] = None
+    callee_param_types: Optional[Tuple[Type, ...]] = None
     # An extern variadic call's promoted argument types (CE5005 checks them).
     variadic_arg_types: Optional[List] = None
     # The rest of what the typecheck pass resolves about a call. Every call node
@@ -720,9 +721,9 @@ class MethodCall(Node):
                                             # and the backend (pass a pointer)
     # What the typecheck pass resolved about the callee's parameters. The borrow pass
     # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
-    callee_param_modes: Optional[List] = None
+    callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
     callee_param_names: Optional[List[str]] = None
-    callee_param_types: Optional[List] = None
+    callee_param_types: Optional[Tuple[Type, ...]] = None
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
     callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
@@ -756,9 +757,9 @@ class DotCall(Node):
                                             # `poke self` (#327); see MethodCall
     # What the typecheck pass resolved about the callee's parameters. The borrow pass
     # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
-    callee_param_modes: Optional[List] = None
+    callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
     callee_param_names: Optional[List[str]] = None
-    callee_param_types: Optional[List] = None
+    callee_param_types: Optional[Tuple[Type, ...]] = None
     # An extern variadic call's promoted argument types (CE5005 checks them).
     variadic_arg_types: Optional[List] = None
     field_names: Optional[List[str]] = None  # named construction through a namespace
@@ -847,6 +848,10 @@ class RangeExpr(Node):
     inclusive: bool         # True for ..=, False for ..
 
 Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda]
+# The three call shapes; each carries the whole set of callee stamps.
+CallLike = Union[Call, MethodCall, DotCall]
+# The two call shapes with a receiver and a method name.
+MethodLike = Union[MethodCall, DotCall]
 
 def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
     """Accepts either a Token (from the parser) or a str (already a lexeme). Returns one of:

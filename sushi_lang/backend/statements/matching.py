@@ -588,11 +588,10 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
                 # `Own(poke x)` binds the heap POINTER, not a copy of the pointee, so a
                 # write lands in the allocation the Own owns. The slot mimics a reference
                 # parameter's `T**`, and the `ReferenceType` flips every deref consumer.
-                from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
+                from sushi_lang.semantics.param_modes import borrow_mode
+                from sushi_lang.semantics.typesys import ReferenceType
                 pointee_ptr = codegen.builder.extract_value(own_value, 0, name="own_ptr")
-                mode = (BorrowMode.POKE if own_pattern.inner_borrow == "poke"
-                        else BorrowMode.PEEK)
-                ref_type = ReferenceType(element_type, mode)
+                ref_type = ReferenceType(element_type, borrow_mode(own_pattern.inner_borrow))
                 codegen.memory.create_local(inner_pattern, pointee_ptr.type, pointee_ptr,
                                             ref_type, register_cleanup=False)
                 codegen.variable_types[inner_pattern] = ref_type
