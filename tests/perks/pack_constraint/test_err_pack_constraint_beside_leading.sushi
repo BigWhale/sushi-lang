@@ -1,0 +1,23 @@
+# A refused pack and a refused leading parameter are refused by the one check: each call
+# is reported, the pack with CE2090 and the leading parameter with CE4006.
+# EXPECT_ERROR_CODE: CE4006
+# EXPECT_STDERR_CONTAINS: CE2090
+perk Named:
+    fn name() string
+
+extend i32 with Named:
+    fn name() string:
+        return "i32"
+
+fn many@(...Ts: Named)(...Ts xs) ~:
+    expand(a in xs):
+        println(a.name())
+    return Result.Ok(~)
+
+fn one@(T: Named)(T x) ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    many(5, true)
+    one(true)
+    return Result.Ok(0)
