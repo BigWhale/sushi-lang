@@ -1,0 +1,10 @@
+# An array key nested in a List is refused at the written type (#773)
+# EXPECT_ERROR_CODE: CE2058
+# EXPECT_STDERR_CONTAINS: 6:9: error [CE2058]
+use <collections/hashmap>
+
+fn look(List@(HashMap@(i32[], string)) l) i32:
+    return Result.Ok(l.len())
+
+fn main() i32:
+    return Result.Ok(0)

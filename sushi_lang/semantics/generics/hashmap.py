@@ -113,17 +113,25 @@ def _validate_hashmap_new(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate HashMap<K, V>.new() method call."""
+    """Validate HashMap<K, V>.new(): its arity. The key rules are the written type's."""
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="new", expected=0, got=len(call.args))
 
+
+def reject_unusable_key(hashmap_type: StructType, validator: Any, span: Any) -> None:
+    """CE2058 / CE2054 / CE2055: the key rule a written HashMap type breaks (#773).
+
+    A rule on the KEY TYPE alone, so it is read where a HashMap type is written
+    (`passes/types/utils.py:reject_unusable_hashmap_keys`) and never at `new()`.
+    """
     key_type, _ = parse_hashmap_types(hashmap_type, validator)
     if key_type is None:
         return
 
+    reporter = validator.reporter
     from sushi_lang.semantics.typesys import DynamicArrayType
     if isinstance(key_type, DynamicArrayType):
-        er.emit(reporter, er.ERR.CE2058, call.loc, key_type=display_type(key_type))
+        er.emit(reporter, er.ERR.CE2058, span, key_type=display_type(key_type))
         return
 
     # The seam, not the derived-method table alone: that table holds what the derive pass
@@ -133,11 +141,11 @@ def _validate_hashmap_new(
     has_hash = (builtin_method_exists(key_type, "hash", validator.derived_methods)
                 or validator.perk_impl_table.get_method(key_type, "hash") is not None)
     if not has_hash:
-        er.emit(reporter, er.ERR.CE2054, call.loc, key_type=display_type(key_type))
+        er.emit(reporter, er.ERR.CE2054, span, key_type=display_type(key_type))
         return
 
     if not _key_supports_equality(key_type, validator):
-        er.emit(reporter, er.ERR.CE2055, call.loc, key_type=display_type(key_type))
+        er.emit(reporter, er.ERR.CE2055, span, key_type=display_type(key_type))
 
 
 _EQUALITY_SCALARS = (

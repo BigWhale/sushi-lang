@@ -1,0 +1,10 @@
+# A parameter with an array key is refused at the parameter, with no caller (#773)
+# EXPECT_ERROR_CODE: CE2058
+# EXPECT_STDERR_CONTAINS: 6:9: error [CE2058]
+use <collections/hashmap>
+
+fn look(HashMap@(i32[], string) m) i32:
+    return Result.Ok(m.len())
+
+fn main() i32:
+    return Result.Ok(0)

@@ -1,0 +1,10 @@
+# An extension method parameter with an array key is refused at the parameter (#773)
+# EXPECT_ERROR_CODE: CE2058
+# EXPECT_STDERR_CONTAINS: 6:18: error [CE2058]
+use <collections/hashmap>
+
+extend i32 count(HashMap@(i32[], string) m) i32:
+    return m.len()
+
+fn main() i32:
+    return Result.Ok(0)

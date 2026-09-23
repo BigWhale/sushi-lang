@@ -1,0 +1,10 @@
+# A struct field with an array key is refused at the field, with no construction (#773)
+# EXPECT_ERROR_CODE: CE2058
+# EXPECT_STDERR_CONTAINS: 7:5: error [CE2058]
+use <collections/hashmap>
+
+struct Holder:
+    HashMap@(i32[], string) m
+
+fn main() i32:
+    return Result.Ok(0)
