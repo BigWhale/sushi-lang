@@ -313,6 +313,14 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     return concrete
 
 
+def _perk_answers(validator: 'TypeValidator', call: MethodCall, receiver_type) -> bool:
+    """Does a perk implementation answer this call? Not when a family beats the perk."""
+    family = METHOD_TYPE_REGISTRY.claim(receiver_type, call.method, validator)
+    if family is not None and family.beats_perk:
+        return False
+    return validator.perk_impl_table.get_method(receiver_type, call.method) is not None
+
+
 def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
                               receiver_type) -> bool:
     """CE2431: a resource type has no deep copy (HANDLES.md ruling R3).
@@ -322,9 +330,11 @@ def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
     one -- a struct field, an array element, a container -- because the copy happens one
     level down there just the same.
 
-    Placed before every clone family rather than inside one: `.clone()` is registered on
+    Asked before every clone family rather than inside one: `.clone()` is registered on
     a struct, an enum, an array and a container by different seams, and the rule is the
-    receiver's, not the seam's.
+    receiver's, not the seam's. The container and array families beat a perk, so the
+    refusal comes before them too (#770); only a perk implementation that answers the
+    call is the sanctioned override.
     """
     from sushi_lang.semantics.typesys import holds_declared_resource
     if call.method != "clone":
@@ -341,8 +351,11 @@ def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
     if not holds_declared_resource(receiver_type, drops, resolve=resolve):
         return False
 
-    er.emit(validator.reporter, er.ERR.CE2431, call.loc,
-            type=display_type(receiver_type))
+    er.emit_with(validator.reporter, er.ERR.CE2431, call.loc,
+                 type=display_type(receiver_type)) \
+        .help("a second owner of a handle is '.share()'; for a value that holds "
+              "handles, build a new one from a '.share()' of each handle") \
+        .emit()
     return True
 
 
@@ -485,14 +498,15 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     if not isinstance(receiver_type, RECEIVERS_WITH_METHODS):
         return
 
+    if (not _perk_answers(validator, call, receiver_type)
+            and _reject_clone_of_resource(validator, call, receiver_type)):
+        return
+
     if METHOD_TYPE_REGISTRY.validate_method(validator, call, receiver_type,
                                             beats_perk=True):
         return
 
     if _validate_perk_method(validator, call, receiver_type):
-        return
-
-    if _reject_clone_of_resource(validator, call, receiver_type):
         return
 
     if METHOD_TYPE_REGISTRY.validate_method(validator, call, receiver_type,

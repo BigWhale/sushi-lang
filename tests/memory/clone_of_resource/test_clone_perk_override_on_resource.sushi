@@ -1,0 +1,24 @@
+# A perk implementation is the sanctioned override: a resource type that implements a
+# `clone` through its own perk says what the copy means, so CE2431 does not refuse it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "101\ndrop 101\ndrop 1\n"
+# EXPECT_NO_LEAKS
+perk Dup:
+    fn clone() Handle
+
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+extend Handle with Dup:
+    fn clone() Handle:
+        return Handle(self.id + 100)
+
+fn main() i32:
+    let Handle h = Handle(1)
+    let Handle g = h.clone()
+    println("{g.id}")
+    return Result.Ok(0)

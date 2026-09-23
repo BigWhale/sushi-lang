@@ -1,0 +1,14 @@
+# A struct that holds a List@(File) holds a resource one level further down. CE2431
+# refused it before #770, and it still does.
+# EXPECT_ERROR_CODE: CE2431
+# EXPECT_STDERR_CONTAINS: "cannot clone 'Pool'"
+use <io/fs>
+
+struct Pool:
+    List@(File) handles
+
+fn main() i32:
+    let Pool p = Pool(List.new())
+    let Pool q = p.clone()
+    println("{q.handles.len()}")
+    return Result.Ok(0)

@@ -1,0 +1,13 @@
+# A Own@(File) HOLDS a resource, so a clone of it would copy each descriptor and give it two
+# owners that both close it (#770). CE2431 refuses it as it refuses a clone of a File.
+# EXPECT_ERROR_CODE: CE2431
+# EXPECT_STDERR_CONTAINS: "cannot clone 'Own@(File)'"
+use <io/fs>
+use <collections/hashmap>
+
+fn main() i32:
+    let File f = open("/etc/hosts", FileMode.Read()).realise(stdin)
+    let Own@(File) handles = Own.alloc(nom f)
+    let Own@(File) copy = handles.clone()
+    println("cloned")
+    return Result.Ok(0)
