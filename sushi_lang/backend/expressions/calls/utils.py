@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import Name, Call, Expr, MemberAccess, MethodCall, DotCall
+from sushi_lang.semantics.ast import Name, Call, Expr, MemberAccess, MethodCall, DotCall, IndexAccess
 from sushi_lang.semantics.typesys import EnumType, StructType
 from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.errors import raise_internal_error
@@ -445,6 +445,11 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr,
     if isinstance(receiver, MemberAccess):
         from sushi_lang.backend.expressions.structs import try_get_struct_alloca
         return try_get_struct_alloca(codegen, receiver)
+
+    # An element has storage: a write through `self` must reach it and not a copy (#776).
+    if isinstance(receiver, IndexAccess):
+        from sushi_lang.backend.types.arrays.indexing import emit_element_pointer
+        return emit_element_pointer(codegen, receiver)
 
     return _spill_receiver(codegen, receiver, semantic_type)
 

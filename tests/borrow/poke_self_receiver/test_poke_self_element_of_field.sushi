@@ -1,0 +1,21 @@
+# A `poke self` call on an element of an array FIELD writes that element in place (#776),
+# for a dynamic field and for a fixed one.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 2 5\n"
+# EXPECT_NO_LEAKS
+struct Counter:
+    i32 n
+
+struct Box:
+    Counter[] cs
+    Counter[2] fixed
+
+extend Counter bump(poke self) ~:
+    self.n := self.n + 1
+
+fn main() i32:
+    let Box b = Box(from([Counter(1), Counter(2)]), [Counter(4), Counter(5)])
+    b.cs[0].bump()
+    b.fixed[0].bump()
+    println("{b.cs[0].n} {b.cs[1].n} {b.fixed[0].n}")
+    return Result.Ok(0)

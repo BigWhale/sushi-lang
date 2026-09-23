@@ -1,0 +1,23 @@
+# A mutating List or HashMap method on an array ELEMENT writes the element in place. The
+# receiver path is the one a `poke self` call takes (#776); before the element had an
+# address there, each push went to a copy and the length stayed 0.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 1 1\n"
+# EXPECT_NO_LEAKS
+use <collections/hashmap>
+
+struct Bag:
+    List@(i32) items
+
+fn main() i32:
+    let List@(i32) a = List.new()
+    let List@(i32)[] ls = from([a])
+    ls[0].push(5)
+    ls[0].push(6)
+    let Bag[] bs = from([Bag(List.new())])
+    bs[0].items.push(1)
+    let HashMap@(i32, i32) m = HashMap.new()
+    let HashMap@(i32, i32)[] ms = from([m])
+    ms[0].insert(1, 2)
+    println("{ls[0].len()} {bs[0].items.len()} {ms[0].len()}")
+    return Result.Ok(0)

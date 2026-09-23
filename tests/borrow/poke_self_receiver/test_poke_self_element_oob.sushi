@@ -1,0 +1,17 @@
+# A `poke self` call on an array element is bounds-checked like a read (#776): an index
+# past the end traps RE2020 before the method runs, so nothing prints.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: RE2020
+struct Counter:
+    i32 n
+
+extend Counter bump(poke self) ~:
+    self.n := self.n + 1
+    println("bumped")
+
+fn main() i32:
+    let Counter[] xs = from([Counter(1)])
+    let i32 i = 5
+    xs[i].bump()
+    return Result.Ok(0)
