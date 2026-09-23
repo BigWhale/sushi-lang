@@ -1,6 +1,6 @@
 """User-defined and stdlib function call validation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
@@ -248,7 +248,8 @@ def validate_call_arguments(validator: 'TypeValidator', function_name: str, func
                     mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
 
 
-def check_stdlib_function(validator: 'TypeValidator', call: Call) -> Optional[any]:
+def check_stdlib_function(validator: 'TypeValidator',
+                          call: Call) -> Optional[Tuple[str, Any]]:
     """The registry stdlib function a bare name reaches, with the module that has it."""
     return validator.func_table.lookup_stdlib_by_name(written_callee(call)[0],
                                                       validator.scope)

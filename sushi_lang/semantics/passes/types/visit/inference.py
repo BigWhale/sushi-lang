@@ -247,13 +247,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return infer_lambda_type(self.type_validator, node)
 
     def visit_unaryop(self, node: UnaryOp) -> Optional[Type]:
-        """Infer unary operation type."""
+        """Infer unary operation type.
+
+        `not` answers a bool; every other unary operator answers its operand's own type.
+        """
         if node.op == "not":
             return BuiltinType.BOOL
-        if node.op == "~":
-            return self.type_validator.infer_expression_type(node.expr)
-        if node.op == "neg":
-            return self.type_validator.infer_expression_type(node.expr)
         return self.type_validator.infer_expression_type(node.expr)
 
     def visit_binaryop(self, node: BinaryOp) -> Optional[Type]:

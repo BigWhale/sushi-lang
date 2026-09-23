@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from sushi_lang.internals import errors as er
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.ast import Expr
     from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.visitors import RecursiveVisitor
 from sushi_lang.semantics.ast import (
@@ -79,25 +80,24 @@ class StatementValidator(RecursiveVisitor):
 
     def visit_print(self, node: Print) -> None:
         """Validate print statement."""
-        self.type_validator.validate_expression(node.value)
-
-        # Check if trying to print Result<T> directly (CE2037)
-        expr_type = self.type_validator.infer_expression_type(node.value)
-        if expr_type is not None:
-            from sushi_lang.semantics.typesys import EnumType
-            if isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
-                er.emit(self.type_validator.reporter, er.ERR.CE2037, node.value.loc)
+        self._validate_printed_value(node.value)
 
     def visit_println(self, node: PrintLn) -> None:
         """Validate println statement."""
-        self.type_validator.validate_expression(node.value)
+        self._validate_printed_value(node.value)
 
-        # Check if trying to print Result<T> directly (CE2037)
-        expr_type = self.type_validator.infer_expression_type(node.value)
-        if expr_type is not None:
-            from sushi_lang.semantics.typesys import EnumType
-            if isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
-                er.emit(self.type_validator.reporter, er.ERR.CE2037, node.value.loc)
+    def _validate_printed_value(self, value: 'Expr') -> None:
+        """What `print` and `println` both ask of the value they take.
+
+        An unhandled `Result@(T, E)` has no printable form, so it is CE2037 in either.
+        """
+        from sushi_lang.semantics.typesys import EnumType
+
+        self.type_validator.validate_expression(value)
+
+        expr_type = self.type_validator.infer_expression_type(value)
+        if isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
+            er.emit(self.type_validator.reporter, er.ERR.CE2037, value.loc)
 
     def visit_rebind(self, node: Rebind) -> None:
         """Validate rebind statement."""
