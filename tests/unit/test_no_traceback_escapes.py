@@ -63,7 +63,7 @@ CHANNELS = [
         "    let Result@(i32, StdError) r = Result.Ok(1)\n"
         "    let bool ok = r.is_ok(1)\n"
         "    return Result.Ok(0)\n",
-        "CE2016", True, id="result_method_arity",
+        "CE2009", True, id="result_method_arity",
     ),
     pytest.param(
         "fn main() i32:\n    let i32 x = 0755\n    return Result.Ok(0)\n",

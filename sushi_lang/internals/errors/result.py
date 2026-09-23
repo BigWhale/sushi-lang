@@ -10,9 +10,8 @@ from sushi_lang.internals.errors.registry import (
 
 
 # Result@(T, E) method errors (CE25xx)
-_add(ErrorMessage("CE2502", Severity.ERROR,
-    "realise() requires exactly 1 argument, got {got}",
-    Category.TYPE, "The realise() method on Result@(T, E) must be called with exactly one default value argument."))
+# CE2502 ("realise() requires exactly 1 argument, got {got}") was RETIRED by #799: a
+# miscount on `Result.realise()` is CE2009, as on `Maybe.realise()` and every other callee.
 
 _add(ErrorMessage("CE2503", Severity.ERROR,
     "realise() default type mismatch: expected '{expected}', got '{got}'",

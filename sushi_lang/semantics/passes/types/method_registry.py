@@ -26,8 +26,19 @@ on. A family that yields to a perk asks the perk table in its own claim -- the p
 and the two derived families do -- and a family that beats one has nothing to ask.
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, Callable, Optional, Protocol
-from dataclasses import dataclass
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Callable, Mapping, Optional, Protocol
+from dataclasses import dataclass, field
+
+from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
+from sushi_lang.semantics.generics.cloning import DERIVED_CLONE_ARITY
+from sushi_lang.semantics.generics.hashing import DERIVED_HASH_ARITY
+from sushi_lang.semantics.generics.hashmap import HASHMAP_METHOD_ARITY
+from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY
+from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_ARITY
+from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY
+from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY
+from sushi_lang.semantics.generics.type_display import display_type
 
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, FunctionType, StructType)
@@ -56,12 +67,18 @@ ValidateHook = Callable[['TypeValidator', 'MethodCall', 'Type'], None]
 
 @dataclass
 class MethodFamily:
-    """One built-in method family: who it answers for, and what each half does."""
+    """One built-in method family: who it answers for, and what each half does.
+
+    `arity` is the argument count of each method the family answers. The count is read
+    before `validate` runs, and a miscount is CE2009 like every other callee (#799). A
+    family whose module keeps its own count leaves the table empty.
+    """
     name: str
     beats_perk: bool
     claims: ClaimHook
     infer: Optional[InferHook] = None
     validate: Optional[ValidateHook] = None
+    arity: Mapping[str, int] = field(default_factory=lambda: MappingProxyType({}))
 
 
 class MethodTypeRegistry:
@@ -83,6 +100,10 @@ class MethodTypeRegistry:
         self._families.append(family)
         self._by_name[family.name] = family
         return family
+
+    def family(self, name: str) -> MethodFamily:
+        """The family registered under this name."""
+        return self._by_name[name]
 
     def validator(self, name: str) -> Callable[[ValidateHook], ValidateHook]:
         """Attach the validation hook of a family the table already carries."""
@@ -120,11 +141,20 @@ class MethodTypeRegistry:
         family = self.claim(receiver_type, call.method, validator)
         if family is None or family.beats_perk != beats_perk or family.validate is None:
             return False
+        if reject_builtin_miscount(validator.reporter, call,
+                                   f"{display_type(receiver_type)}.{call.method}",
+                                   family.arity):
+            return True
         family.validate(validator, call, receiver_type)
         return True
 
 
 METHOD_TYPE_REGISTRY = MethodTypeRegistry()
+
+
+def arity_of_family(name: str) -> Mapping[str, int]:
+    """The argument count of each method the named family answers."""
+    return METHOD_TYPE_REGISTRY.family(name).arity
 
 
 @dataclass
@@ -491,25 +521,25 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="string", beats_perk=True, claims=_claims_string,
     infer=lambda rt, name, v: StringMethodInferrer(name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="result", beats_perk=True, claims=_claims_result,
+    name="result", beats_perk=True, claims=_claims_result, arity=RESULT_METHOD_ARITY,
     infer=lambda rt, name, v: ResultMethodInferrer(rt, name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="maybe", beats_perk=True, claims=_claims_maybe,
+    name="maybe", beats_perk=True, claims=_claims_maybe, arity=MAYBE_METHOD_ARITY,
     infer=lambda rt, name, v: MaybeMethodInferrer(rt, name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="own", beats_perk=True, claims=_claims_own,
+    name="own", beats_perk=True, claims=_claims_own, arity=OWN_METHOD_ARITY,
     infer=lambda rt, name, v: OwnMethodInferrer(rt, name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="hashmap", beats_perk=True, claims=_claims_hashmap,
+    name="hashmap", beats_perk=True, claims=_claims_hashmap, arity=HASHMAP_METHOD_ARITY,
     infer=lambda rt, name, v: HashMapMethodInferrer(rt, name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="list", beats_perk=True, claims=_claims_list,
+    name="list", beats_perk=True, claims=_claims_list, arity=LIST_METHOD_ARITY,
     infer=lambda rt, name, v: ListMethodInferrer(rt, name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="derived_hash", beats_perk=False, claims=_claims_derived_hash,
+    name="derived_hash", beats_perk=False, claims=_claims_derived_hash, arity=DERIVED_HASH_ARITY,
     infer=lambda rt, name, v: StructEnumBuiltinInferrer(rt, name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="derived_clone", beats_perk=False, claims=_claims_derived_clone,
+    name="derived_clone", beats_perk=False, claims=_claims_derived_clone, arity=DERIVED_CLONE_ARITY,
     infer=lambda rt, name, v: StructEnumBuiltinInferrer(rt, name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="function", beats_perk=False, claims=_claims_function,

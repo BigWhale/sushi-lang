@@ -1,6 +1,7 @@
 """The ir-free half of HashMap<K, V>: method validation and type-table plumbing."""
 
-from typing import Any, Literal, Optional, TYPE_CHECKING, overload
+from types import MappingProxyType
+from typing import Any, Literal, Mapping, Optional, TYPE_CHECKING, overload
 from sushi_lang.semantics.ast import MethodCall, Call
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
 from sushi_lang.internals import errors as er
@@ -12,13 +13,20 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.generics.types import GenericStructType
 
 
+#: Every built-in `HashMap@(K, V)` method and the number of arguments it takes. The count
+#: is checked in the typecheck pass (CE2009) before the check below runs; `new` is the
+#: static `HashMap.new()`, and the same row answers it.
+HASHMAP_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
+    "new": 0, "insert": 2, "get": 1, "contains_key": 1, "remove": 1,
+    "len": 0, "is_empty": 0, "tombstone_count": 0, "rehash": 0,
+    "free": 0, "destroy": 0, "debug": 0,
+    "keys": 0, "values": 0, "entries": 0, "clone": 0,
+})
+
+
 def is_builtin_hashmap_method(method_name: str) -> bool:
     """Check if a method name is a builtin HashMap<K, V> method."""
-    return method_name in (
-        "new", "insert", "get", "contains_key", "remove",
-        "len", "is_empty", "tombstone_count", "rehash", "free", "destroy", "debug",
-        "keys", "values", "entries", "clone"
-    )
+    return method_name in HASHMAP_METHOD_ARITY
 
 
 def validate_hashmap_method_with_validator(
@@ -27,43 +35,17 @@ def validate_hashmap_method_with_validator(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate HashMap<K, V> method calls."""
-    method = call.method
-
-    if method == "new":
-        _validate_hashmap_new(call, hashmap_type, reporter, validator)
-    elif method == "insert":
+    """Validate a HashMap<K, V> method call whose count is correct: the argument types."""
+    if call.method not in HASHMAP_METHOD_ARITY:
+        raise_internal_error("CE0085", method=call.method)
+    if call.method == "insert":
         _validate_hashmap_insert(call, hashmap_type, reporter, validator)
-    elif method == "get":
-        _validate_hashmap_get(call, hashmap_type, reporter, validator)
-    elif method == "contains_key":
-        _validate_hashmap_contains_key(call, hashmap_type, reporter, validator)
-    elif method == "remove":
-        _validate_hashmap_remove(call, hashmap_type, reporter, validator)
-    elif method == "len":
-        _validate_hashmap_len(call, hashmap_type, reporter)
-    elif method == "is_empty":
-        _validate_hashmap_is_empty(call, hashmap_type, reporter)
-    elif method == "tombstone_count":
-        _validate_hashmap_tombstone_count(call, hashmap_type, reporter)
-    elif method == "rehash":
-        _validate_hashmap_rehash(call, hashmap_type, reporter)
-    elif method == "free":
-        _validate_hashmap_free(call, hashmap_type, reporter)
-    elif method == "destroy":
-        _validate_hashmap_destroy(call, hashmap_type, reporter)
-    elif method == "debug":
-        _validate_hashmap_debug(call, hashmap_type, reporter)
-    elif method == "keys":
-        _validate_hashmap_keys(call, hashmap_type, reporter)
-    elif method == "values":
-        _validate_hashmap_values(call, hashmap_type, reporter)
-    elif method == "entries":
-        _validate_hashmap_entries(call, hashmap_type, reporter)
-    elif method == "clone":
-        _validate_hashmap_clone(call, hashmap_type, reporter)
-    else:
-        raise_internal_error("CE0085", method=method)
+    elif call.method in _KEY_METHODS:
+        _validate_hashmap_key_method(call, hashmap_type, reporter, validator)
+
+
+#: The methods whose one argument is a key.
+_KEY_METHODS = frozenset({"get", "contains_key", "remove"})
 
 
 @overload
@@ -89,17 +71,6 @@ def parse_hashmap_types(hashmap_type: Any, tables: Any,
             raise_internal_error("CE0050", generic="HashMap", expected=2, got=len(args))
         return None, None
     return args[0], args[1]
-
-
-def _validate_hashmap_new(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any,
-    validator: Any
-) -> None:
-    """Validate HashMap<K, V>.new(): its arity. The key rules are the written type's."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="new", expected=0, got=len(call.args))
 
 
 def reject_unusable_key(hashmap_type: StructType, validator: Any, span: Any) -> None:
@@ -193,10 +164,6 @@ def _validate_hashmap_insert(
     from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
     from sushi_lang.semantics.passes.types.compatibility import types_compatible
 
-    if len(call.args) != 2:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="insert", expected=2, got=len(call.args))
-        return
-
     key_type, value_type = parse_hashmap_types(hashmap_type, validator)
     if key_type is None or value_type is None:
         for arg in call.args:
@@ -221,50 +188,15 @@ def _validate_hashmap_insert(
                        index=i+1, expected=display_type(expected_ty), got=display_type(arg_type))
 
 
-def _validate_hashmap_get(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any,
-    validator: Any
-) -> None:
-    """Validate HashMap<K, V>.get(key) method call."""
-    _validate_hashmap_key_method(call, hashmap_type, reporter, validator, method_name="get")
-
-
-def _validate_hashmap_contains_key(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any,
-    validator: Any
-) -> None:
-    """Validate HashMap<K, V>.contains_key(key) method call."""
-    _validate_hashmap_key_method(call, hashmap_type, reporter, validator, method_name="contains_key")
-
-
-def _validate_hashmap_remove(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any,
-    validator: Any
-) -> None:
-    """Validate HashMap<K, V>.remove(key) method call."""
-    _validate_hashmap_key_method(call, hashmap_type, reporter, validator, method_name="remove")
-
-
 def _validate_hashmap_key_method(
     call: MethodCall,
     hashmap_type: StructType,
     reporter: Any,
     validator: Any,
-    method_name: str
 ) -> None:
     """Validate HashMap<K, V> methods that take a key argument (get, contains_key, remove)."""
     from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
     from sushi_lang.semantics.passes.types.compatibility import types_compatible
-
-    if len(call.args) != 1:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method=method_name, expected=1, got=len(call.args))
-        return
 
     key_type, _ = parse_hashmap_types(hashmap_type, validator)
     if key_type is None:
@@ -287,116 +219,6 @@ def _validate_hashmap_key_method(
         if arg_type is not None and not types_compatible(validator, arg_type, key_type):
             er.emit(reporter, er.ERR.CE2006, arg.loc,
                    index=1, expected=display_type(key_type), got=display_type(arg_type))
-
-
-def _validate_hashmap_len(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any
-) -> None:
-    """Validate HashMap<K, V>.len() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="len", expected=0, got=len(call.args))
-
-
-def _validate_hashmap_clone(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any
-) -> None:
-    """Validate HashMap<K, V>.clone() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="clone", expected=0, got=len(call.args))
-
-
-def _validate_hashmap_is_empty(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any
-) -> None:
-    """Validate HashMap<K, V>.is_empty() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="is_empty", expected=0, got=len(call.args))
-
-
-def _validate_hashmap_tombstone_count(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any
-) -> None:
-    """Validate HashMap<K, V>.tombstone_count() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="tombstone_count", expected=0, got=len(call.args))
-
-
-def _validate_hashmap_rehash(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any
-) -> None:
-    """Validate HashMap<K, V>.rehash() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="rehash", expected=0, got=len(call.args))
-
-
-def _validate_hashmap_free(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any
-) -> None:
-    """Validate HashMap<K, V>.free() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="free", expected=0, got=len(call.args))
-
-
-def _validate_hashmap_destroy(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any
-) -> None:
-    """Validate HashMap<K, V>.destroy() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="destroy", expected=0, got=len(call.args))
-
-
-def _validate_hashmap_debug(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any
-) -> None:
-    """Validate HashMap<K, V>.debug() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="debug", expected=0, got=len(call.args))
-
-
-def _validate_hashmap_keys(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any
-) -> None:
-    """Validate HashMap<K, V>.keys() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="keys", expected=0, got=len(call.args))
-
-
-def _validate_hashmap_values(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any
-) -> None:
-    """Validate HashMap<K, V>.values() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="values", expected=0, got=len(call.args))
-
-
-def _validate_hashmap_entries(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any
-) -> None:
-    """Validate HashMap<K, V>.entries() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="entries", expected=0, got=len(call.args))
 
 
 def hashmap_generic_struct() -> 'GenericStructType':

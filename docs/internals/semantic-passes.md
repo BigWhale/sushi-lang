@@ -1151,7 +1151,7 @@ order.
 
 **`typecheck`:**
 - CE2xxx: Type mismatch
-- CE2502: `.realise()` wrong argument count
+- CE2009: wrong argument count, `.realise()` included
 - CE2505: Assigning Result@(T) without handling
 
 **`borrow`:**

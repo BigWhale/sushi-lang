@@ -1,5 +1,5 @@
 # Test error: reserve() with wrong number of arguments (expects 1)
-# EXPECT_ERROR_CODE: CE2053
+# EXPECT_ERROR_CODE: CE2009
 fn main() i32:
     let List@(i32) data = List.new()
     # ERROR: reserve() expects exactly 1 argument (additional capacity)

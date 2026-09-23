@@ -523,9 +523,12 @@ fn main() i32:
 
 **Fix:** Don't use a variable after `.destroy()`, or use `.free()` instead.
 
-#### CE2502: .realise() Wrong Argument Count
+#### CE2009: .realise() Wrong Argument Count
 
-<!-- docs-sweep: error CE2502 -->
+A built-in method takes a fixed number of arguments, and a miscount is CE2009, as on
+every other callee. CE2502, CE2016 and CE2053 are retired.
+
+<!-- docs-sweep: error CE2009 -->
 ```sushi
 fn get_value() i32:
     return Result.Ok(42)
@@ -533,7 +536,7 @@ fn get_value() i32:
 fn main() i32:
     let Result@(i32, StdError) r = get_value()
 
-    # ERROR CE2502: realise() requires exactly 1 argument, got 0
+    # ERROR CE2009: wrong number of arguments: 'Result@(i32, StdError).realise' expects 1, got 0
     let i32 x = r.realise()
 
     return Result.Ok(0)

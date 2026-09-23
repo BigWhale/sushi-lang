@@ -1,5 +1,6 @@
 """Validation and table-building for the built-in Result<T, E> methods."""
-from typing import Any, Callable, Optional
+from types import MappingProxyType
+from typing import Any, Callable, Mapping, Optional
 
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type
@@ -9,9 +10,16 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.derive import derive_for_enum
 
 
+#: Every built-in `Result@(T, E)` method and the number of arguments it takes. The count
+#: is checked in the typecheck pass (CE2009) before the check below runs.
+RESULT_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
+    "is_ok": 0, "is_err": 0, "err": 0, "realise": 1, "expect": 1,
+})
+
+
 def is_builtin_result_method(method_name: str) -> bool:
     """Check if a method name is a builtin Result<T, E> method."""
-    return method_name in ("is_ok", "is_err", "realise", "expect", "err")
+    return method_name in RESULT_METHOD_ARITY
 
 
 def validate_result_method_with_validator(
@@ -26,48 +34,11 @@ def validate_result_method_with_validator(
     # instead of relying on unreliable LLVM type matching
     call.resolved_enum_type = result_type
 
-    if call.method == "is_ok":
-        _validate_result_is_ok(call, result_type, reporter)
-    elif call.method == "is_err":
-        _validate_result_is_err(call, result_type, reporter)
-    elif call.method == "realise":
-        validate_result_realise_method_with_validator(call, result_type, reporter, validator)
-    elif call.method == "expect":
-        _validate_result_expect(call, result_type, reporter, validator)
-    elif call.method == "err":
-        _validate_result_err(call, result_type, reporter)
-    else:
+    if call.method not in RESULT_METHOD_ARITY:
         raise_internal_error("CE0094", method=call.method)
-
-
-def _validate_result_is_ok(
-    call: MethodCall,
-    result_type: EnumType,
-    reporter: Any
-) -> None:
-    """Validate Result<T, E>.is_ok() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="is_ok", expected=0, got=len(call.args))
-
-
-def _validate_result_is_err(
-    call: MethodCall,
-    result_type: EnumType,
-    reporter: Any
-) -> None:
-    """Validate Result<T, E>.is_err() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="is_err", expected=0, got=len(call.args))
-
-
-def _validate_result_err(
-    call: MethodCall,
-    result_type: EnumType,
-    reporter: Any
-) -> None:
-    """Validate Result<T, E>.err() method call."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="err", expected=0, got=len(call.args))
+    check = _CHECKS.get(call.method)
+    if check is not None:
+        check(call, result_type, reporter, validator)
 
 
 def _validate_result_expect(
@@ -76,11 +47,7 @@ def _validate_result_expect(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate Result<T, E>.expect(message) method call."""
-    if len(call.args) != 1:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="expect", expected=1, got=len(call.args))
-        return
-
+    """Validate Result<T, E>.expect(message): the message is a string."""
     message_arg = call.args[0]
 
     validator.validate_expression(message_arg)
@@ -98,11 +65,7 @@ def validate_result_realise_method_with_validator(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate Result<T>.realise(default) method call."""
-    if len(call.args) != 1:
-        er.emit(reporter, er.ERR.CE2502, call.loc, got=len(call.args))
-        return
-
+    """Validate Result<T>.realise(default): the default's type matches T."""
     # Extract T from Result<T> by getting the Ok variant's associated type
     # Result<T> has two variants: Ok(T) and Err()
     # We need to find the Ok variant and extract its associated type
@@ -136,6 +99,11 @@ def validate_result_realise_method_with_validator(
     if arg_type is not None and not validator._types_compatible(arg_type, t_type):
         er.emit(reporter, er.ERR.CE2503, default_arg.loc,
                expected=display_type(t_type), got=display_type(arg_type))
+
+
+#: The methods that check more than their count.
+_CHECKS = {"realise": validate_result_realise_method_with_validator,
+           "expect": _validate_result_expect}
 
 
 def is_result_enum(t: Any) -> bool:
