@@ -126,7 +126,10 @@ class TypeValidator:
             self._validate_extension_method(ext)
 
         for impl in program.perk_impls:
+            # The header is read as written, never as a copy of a body (#800).
+            self.reporter.leave_body()
             validate_perk_implementation_method(self, impl)
+        self.reporter.leave_body()
 
     @property
     def drop_type_names(self) -> frozenset:
