@@ -122,52 +122,27 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
 
 
 def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional[EnumType]:
-    """The Result/Maybe enum a direct stdlib-module call returns, or None."""
-    from sushi_lang.semantics.typesys import BuiltinType
+    """The Result/Maybe enum a direct stdlib-module call returns, or None.
+
+    The row comes from the module's one signature table, and only for a name the
+    emitting unit reaches as a stdlib function (#798): a declaration of the same name
+    answers first, and a module the unit does not import answers nothing.
+    """
     from sushi_lang.backend.generics.result_builder import intern_result
+    from sushi_lang.semantics.stdlib_registry import stdlib_signature
 
-    enums = codegen.enum_table.by_name
-    if func_name == 'getenv':
-        return enums.get('Maybe<string>')
-
-    # `<io/files>` and `<net/socket>` keep their rows in ONE table each, beside their
-    # generators (#550): the Ok payload and the error enum are read, never respelled.
-    from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
-    from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
-
-    row = FILES_SIGNATURES.get(func_name) or SOCKET_SIGNATURES.get(func_name)
-    if row is not None:
-        if row.ok is None:
-            return None  # a bare answer carries no Result
-        err_enum = enums.get(row.error) if row.error else None
-        ok_type = _named_ok(codegen, row.ok)
-        if err_enum is None or ok_type is None:
-            return None
-        return intern_result(codegen, ok_type, err_enum)
-
-    # The modules that have no table yet: time, sys/env, sys/process.
-    result_specs = {
-        'sleep': (BuiltinType.I32, 'StdError'),
-        'msleep': (BuiltinType.I32, 'StdError'),
-        'usleep': (BuiltinType.I32, 'StdError'),
-        'nanosleep': (BuiltinType.I32, 'StdError'),
-        'now': (BuiltinType.I64, 'StdError'),
-        'monotonic_ns': (BuiltinType.I64, 'StdError'),
-        'setenv': (BuiltinType.I32, 'EnvError'),
-        'chdir': (BuiltinType.I32, 'ProcessError'),
-        'getcwd': (BuiltinType.STRING, 'ProcessError'),
-    }
-    spec = result_specs.get(func_name)
-    if spec is None:
-        if func_name == 'run':
-            out_struct = codegen.struct_table.by_name.get('ProcessOutput')
-            err_enum = enums.get('ProcessError')
-            if out_struct is not None and err_enum is not None:
-                return intern_result(codegen, out_struct, err_enum)
+    if codegen.func_table.lookup(func_name, codegen.emitting_unit, codegen.scope) is not None:
         return None
-    ok_type, err_name = spec
-    err_enum = enums.get(err_name)
-    if err_enum is None:
+    found = codegen.func_table.lookup_stdlib_by_name(func_name, codegen.scope)
+    row = stdlib_signature(found[0], func_name) if found is not None else None
+    if row is None:
+        return None
+    if row.ok is None:
+        answer = _named_ok(codegen, row.bare)  # `getenv` answers its Maybe bare
+        return answer if isinstance(answer, EnumType) else None
+    err_enum = codegen.enum_table.by_name.get(row.error) if row.error else None
+    ok_type = _named_ok(codegen, row.ok)
+    if err_enum is None or ok_type is None:
         return None
     return intern_result(codegen, ok_type, err_enum)
 
@@ -182,7 +157,6 @@ def _named_ok(codegen: 'LLVMCodegen', ok):
     is the bypass CE0126 refuses. A payload the tables do not hold yet answers None,
     and the caller then has no Result to report.
     """
-    from sushi_lang.semantics.generics.type_display import display_type
     from sushi_lang.semantics.generics.types import GenericTypeRef
     from sushi_lang.semantics.typesys import UnknownType
 
@@ -190,7 +164,7 @@ def _named_ok(codegen: 'LLVMCodegen', ok):
         return (codegen.struct_table.by_name.get(ok.name)
                 or codegen.enum_table.by_name.get(ok.name))
     if isinstance(ok, GenericTypeRef):
-        interned = f"{ok.base_name}<{', '.join(display_type(a) for a in ok.type_args)}>"
+        interned = str(ok)  # the INTERNED spelling, `Maybe<List<i32>>`
         return (codegen.enum_table.by_name.get(interned)
                 or codegen.struct_table.by_name.get(interned))
     return ok
