@@ -9,15 +9,12 @@ from sushi_lang.backend.constants.llvm_values import LIST_LEN_INDICES, LIST_CAP_
 
 def extract_element_type(list_type: StructType, codegen: Any) -> Type:
     """Extract T from List<T>."""
-    name = list_type.name
+    from sushi_lang.semantics.generics.list import parse_list_types
 
-    if not name.startswith("List<") or not name.endswith(">"):
-        raise_internal_error("CE0049", generic="List", name=name)
-
-    type_str = name[5:-1].strip()  # Remove "List<" and ">"
-
-    from sushi_lang.semantics.generics.type_strings import resolve_type_from_string
-    return resolve_type_from_string(type_str, codegen)
+    element = parse_list_types(list_type, codegen)
+    if element is None:
+        raise_internal_error("CE0049", generic="List", name=list_type.name)
+    return element
 
 
 def get_list_llvm_type(codegen: Any, element_type: Type) -> ir.Type:

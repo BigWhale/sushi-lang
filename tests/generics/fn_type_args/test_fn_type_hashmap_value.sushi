@@ -1,0 +1,19 @@
+# A function type as the VALUE of a HashMap: its parameter list holds a comma (#794).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1\n5\n"
+use <collections/hashmap>
+
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+fn main() i32:
+    let HashMap@(string, fn(i32, i32) -> i32) m = HashMap.new()
+    m.insert("add", add)
+    println("{m.len()}")
+    match m.get("add"):
+        Maybe.Some(f) -> println("{f(2, 3).realise(0)}")
+        Maybe.None -> println("none")
+    m.free()
+    return Result.Ok(0)

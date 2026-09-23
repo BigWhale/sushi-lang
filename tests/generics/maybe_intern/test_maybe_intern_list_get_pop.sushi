@@ -1,0 +1,20 @@
+# `get` and `pop` on a `List@(Point[])` bound to a written `Maybe@(Point[])` (#793).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\n2\n0\n"
+
+struct Point:
+    i32 x
+
+fn main() i32:
+    let List@(Point[]) l = List.new()
+    l.push(from([Point(1), Point(2)]))
+    let Maybe@(Point[]) g = l.get(0)
+    println("{g.is_some()}")
+    let Maybe@(Point[]) p = l.pop()
+    match p:
+        Maybe.Some(v) -> println("{v.len()}")
+        Maybe.None -> println("none")
+    println("{l.len()}")
+    return Result.Ok(0)

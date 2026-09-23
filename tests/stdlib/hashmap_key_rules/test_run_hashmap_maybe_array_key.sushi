@@ -1,0 +1,20 @@
+# A Maybe of a dynamic array is a HashMap key (#789, ruled): the key equality compares
+# the array element by element, so an insert and a lookup find the entry again.
+# EXPECT_STDOUT_EXACT: "7\n9\n2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(Maybe@(i32[]), i32) m = HashMap.new()
+    m.insert(Maybe.Some(from([1, 2])), 7)
+    m.insert(Maybe.None, 9)
+    match m.get(Maybe.Some(from([1, 2]))):
+        Maybe.Some(v) -> println("{v}")
+        Maybe.None -> println("miss")
+    match m.get(Maybe.None):
+        Maybe.Some(v) -> println("{v}")
+        Maybe.None -> println("miss")
+    println("{m.len()}")
+    m.free()
+    return Result.Ok(0)

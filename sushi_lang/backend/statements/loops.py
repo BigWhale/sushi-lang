@@ -268,10 +268,10 @@ def _emit_hashmap_foreach(
         get_entry_type, get_user_entry_type, ENTRY_OCCUPIED,
     )
     from sushi_lang.semantics.generics.hashmap import (
-        extract_key_value_types, ensure_entry_type_in_struct_table,
+        parse_hashmap_types, ensure_entry_type_in_struct_table,
     )
 
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     is_entries = (method == "entries")
     if is_entries:

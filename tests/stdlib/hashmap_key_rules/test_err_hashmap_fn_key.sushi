@@ -1,0 +1,14 @@
+# A function value has no hash and no equality, so it is no HashMap key (#789). The key
+# rule did not see the key before: the reader cut the arguments out of the interned name
+# and the `->` arrow broke the cut, so the rule had no key type to judge.
+# EXPECT_ERROR_CODE: CE2054
+use <collections/hashmap>
+
+fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    let HashMap@(fn(i32) -> i32, i32) m = HashMap.new()
+    m.insert(twice, 7)
+    m.free()
+    return Result.Ok(0)
