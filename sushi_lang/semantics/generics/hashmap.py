@@ -1,12 +1,8 @@
 """The ir-free half of HashMap<K, V>: method validation and type-table plumbing."""
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Literal, Optional, TYPE_CHECKING, overload
 from sushi_lang.semantics.ast import MethodCall, Call
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
-from sushi_lang.semantics.generics.type_strings import (
-    resolve_type_from_string,
-    split_type_arguments,
-)
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.internals.errors import raise_internal_error
@@ -70,41 +66,29 @@ def validate_hashmap_method_with_validator(
         raise_internal_error("CE0085", method=method)
 
 
-def parse_hashmap_types(hashmap_type: StructType, validator: Any) -> tuple[Optional[Type], Optional[Type]]:
-    """Parse K and V types from HashMap<K, V> type name."""
+@overload
+def parse_hashmap_types(hashmap_type: Any, tables: Any,
+                        on_missing: Literal["none"] = "none") -> tuple[Optional[Type], Optional[Type]]: ...
+@overload
+def parse_hashmap_types(hashmap_type: Any, tables: Any,
+                        on_missing: Literal["raise"]) -> tuple[Type, Type]: ...
+def parse_hashmap_types(hashmap_type: Any, tables: Any,
+                        on_missing: str = "none") -> tuple[Optional[Type], Optional[Type]]:
+    """The K and V of a HashMap<K, V> instance, read from its `generic_args`.
 
-    if not hashmap_type.name.startswith("HashMap<"):
+    A type that is not a HashMap instance answers `(None, None)`, or CE0087 when the
+    caller says `on_missing="raise"`: the backend reaches here only with a HashMap.
+    """
+    from sushi_lang.semantics.generics.list import instance_type_arguments
+
+    args = instance_type_arguments(hashmap_type, "HashMap", tables)
+    if args is None or len(args) != 2:
+        if on_missing == "raise":
+            if args is None:
+                raise_internal_error("CE0087", type=str(hashmap_type))
+            raise_internal_error("CE0050", generic="HashMap", expected=2, got=len(args))
         return None, None
-
-    type_params_str = hashmap_type.name[8:-1]  # Remove "HashMap<" and ">"
-
-    bracket_depth = 0
-    comma_pos = -1
-    for i, c in enumerate(type_params_str):
-        if c == '<':
-            bracket_depth += 1
-        elif c == '>':
-            bracket_depth -= 1
-        elif c == ',' and bracket_depth == 0:
-            comma_pos = i
-            break
-
-    if comma_pos == -1:
-        return None, None
-
-    key_type_str = type_params_str[:comma_pos].strip()
-    value_type_str = type_params_str[comma_pos + 1:].strip()
-
-    key_type = _resolve_type_string(key_type_str, validator)
-    value_type = _resolve_type_string(value_type_str, validator)
-
-    return key_type, value_type
-
-
-def _resolve_type_string(type_str: str, validator: Any) -> Optional[Type]:
-    """Resolve one of HashMap<K, V>'s type arguments, through the shared reader."""
-    from sushi_lang.semantics.generics.type_strings import resolve_type_argument
-    return resolve_type_argument(type_str, validator)
+    return args[0], args[1]
 
 
 def _validate_hashmap_new(
@@ -430,27 +414,6 @@ def hashmap_generic_struct() -> 'GenericStructType':
             ("tombstones", BuiltinType.I32),
         ),
     )
-
-
-def extract_key_value_types(hashmap_type: StructType, tables: Any) -> tuple[Type, Type]:
-    """Extract K and V types from HashMap<K, V>."""
-    name = hashmap_type.name
-
-    if not name.startswith("HashMap<") or not name.endswith(">"):
-        raise_internal_error("CE0087", type=name)
-
-    type_args_str = name[len("HashMap<"):-1]
-
-    parts = split_type_arguments(type_args_str)
-    if len(parts) != 2:
-        raise_internal_error("CE0050", generic="HashMap", expected=2, got=len(parts))
-
-    key_type_str, value_type_str = parts[0].strip(), parts[1].strip()
-
-    key_type = resolve_type_from_string(key_type_str, tables)
-    value_type = resolve_type_from_string(value_type_str, tables)
-
-    return (key_type, value_type)
 
 
 def get_entry_type_name(key_type: Type, value_type: Type) -> str:

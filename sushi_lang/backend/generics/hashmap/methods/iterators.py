@@ -6,7 +6,7 @@ from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType
 from sushi_lang.backend import gep_utils
 from ..types import get_user_entry_type
-from sushi_lang.semantics.generics.hashmap import extract_key_value_types, ensure_entry_type_in_struct_table
+from sushi_lang.semantics.generics.hashmap import parse_hashmap_types, ensure_entry_type_in_struct_table
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.allocas import entry_alloca
 
@@ -24,7 +24,7 @@ def emit_hashmap_keys(
     if len(call.args) != 0:
         raise_internal_error("CE0023", method="keys", expected=0, got=len(call.args))
 
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     # `{Entry<K, V>[] buckets, i32 size, i32 capacity, i32 tombstones}`.
 
@@ -72,7 +72,7 @@ def emit_hashmap_values(
     if len(call.args) != 0:
         raise_internal_error("CE0023", method="values", expected=0, got=len(call.args))
 
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     buckets_ptr = gep_utils.gep_struct_field(codegen, hashmap_value, 0, "buckets_ptr")
     capacity_ptr = gep_utils.gep_struct_field(codegen, hashmap_value, 2, "capacity_ptr")
@@ -114,7 +114,7 @@ def emit_hashmap_entries(
     if len(call.args) != 0:
         raise_internal_error("CE0023", method="entries", expected=0, got=len(call.args))
 
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     entry_struct_type = ensure_entry_type_in_struct_table(
         codegen.struct_table, codegen.derived_methods, key_type, value_type)

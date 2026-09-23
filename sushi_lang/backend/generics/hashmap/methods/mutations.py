@@ -11,7 +11,7 @@ from sushi_lang.backend.constants import (
     ENTRY_VALUE_INDICES,
     ENTRY_STATE_INDICES,
 )
-from sushi_lang.semantics.generics.hashmap import extract_key_value_types
+from sushi_lang.semantics.generics.hashmap import parse_hashmap_types
 from ..probe import emit_probe_loop, ProbeSlot
 from ..utils import (
     emit_key_equality_check,
@@ -38,7 +38,7 @@ def emit_hashmap_insert(
 
     builder = codegen.builder
 
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     entry_type = get_entry_type(codegen, key_type, value_type)
     key_llvm = codegen.types.ll_type(key_type)
@@ -208,7 +208,7 @@ def emit_hashmap_remove(
 
     builder = codegen.builder
 
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     value_llvm = codegen.types.ll_type(value_type)
 
@@ -339,7 +339,7 @@ def emit_hashmap_resize_to_capacity(
 
     builder = codegen.builder
 
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     entry_type = get_entry_type(codegen, key_type, value_type)
 
@@ -483,7 +483,7 @@ def emit_hashmap_free(
     """Emit HashMap<K, V>.free() -> ~"""
     builder = codegen.builder
 
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     entry_type = get_entry_type(codegen, key_type, value_type)
 
@@ -529,7 +529,7 @@ def emit_hashmap_destroy(
     """Emit HashMap<K, V>.destroy() -> ~"""
     builder = codegen.builder
 
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     entry_type = get_entry_type(codegen, key_type, value_type)
 

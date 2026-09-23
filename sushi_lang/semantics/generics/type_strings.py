@@ -1,6 +1,6 @@
 """Resolve a `Type` from its string representation."""
 
-from typing import Any, Optional
+from typing import Any
 import re
 
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType
@@ -23,48 +23,29 @@ _BUILTIN_TYPES = {
 }
 
 
-def split_type_arguments(type_args_str: str) -> list[str]:
-    """Split comma-separated type arguments while respecting angle brackets."""
+def split_type_arguments(text: str, sep: str = ",") -> list[str]:
+    """Split `text` on `sep` at the top level, the one splitter for a type string.
+
+    Nesting is `<>`, `()` and `[]`. The `>` of a `->` arrow closes nothing: a function
+    type such as `fn(i32) -> i32` reads as one argument, with its parameter list whole.
+    """
     parts = []
     current: list[str] = []
     depth = 0
-
-    for char in type_args_str:
-        if char == '<':
+    previous = ""
+    for char in text:
+        if char in "<([":
             depth += 1
-            current.append(char)
-        elif char == '>':
-            depth -= 1
-            current.append(char)
-        elif char == ',' and depth == 0:
-            parts.append(''.join(current).strip())
-            current = []
-        else:
-            current.append(char)
-
-    if current:
-        parts.append(''.join(current).strip())
-
-    return parts
-
-
-def _split_top_level(s: str, sep: str) -> list[str]:
-    """Split `s` on `sep`, ignoring separators nested inside <>, (), or []."""
-    parts = []
-    current: list[str] = []
-    depth = 0
-    for char in s:
-        if char in '<([':
-            depth += 1
-        elif char in '>)]':
+        elif char in ")]" or (char == ">" and previous != "-"):
             depth -= 1
         if char == sep and depth == 0:
-            parts.append(''.join(current).strip())
+            parts.append("".join(current).strip())
             current = []
         else:
             current.append(char)
+        previous = char
     if current:
-        parts.append(''.join(current).strip())
+        parts.append("".join(current).strip())
     return parts
 
 
@@ -90,7 +71,7 @@ def _resolve_function_type_from_string(type_str: str, tables: Any) -> Type:
     if rest.startswith("->"):
         rest = rest[2:].strip()
 
-    pipe_parts = _split_top_level(rest, "|")
+    pipe_parts = split_type_arguments(rest, "|")
     ret_str = pipe_parts[0].strip()
     err_str = pipe_parts[1].strip() if len(pipe_parts) > 1 else "StdError"
 
@@ -98,7 +79,7 @@ def _resolve_function_type_from_string(type_str: str, tables: Any) -> Type:
     # `str(FunctionType)` writes it, so reading one back must accept it -- it used to reach
     # the type lookup as the text `nom string` and raise CE0022 (#368). `peek` and `poke`
     # need no case: they ARE part of the type, and the reference branch takes them.
-    param_texts = [p for p in _split_top_level(params_str, ",") if p]
+    param_texts = [p for p in split_type_arguments(params_str) if p]
     nom_flags = [text.startswith("nom ") for text in param_texts]
     param_types = tuple(
         resolve_type_from_string(text[4:] if flag else text, tables)
@@ -152,21 +133,3 @@ def resolve_type_from_string(type_str: str, tables: Any) -> Type:
         return tables.enum_table.by_name[type_str]
 
     raise_internal_error("CE0022", type=type_str)
-
-
-def resolve_type_argument(type_str: str, tables: Any) -> Optional[Type]:
-    """One type argument of an interned generic name, or None if it cannot be resolved.
-
-    THE reader for a `List<...>` / `HashMap<..., ...>` type argument. Each container used to
-    carry its own hand-rolled version -- a builtin dict plus two table lookups -- and every
-    one of them lacked an array case, so `List@(i32[])` and `HashMap@(K, V[])` resolved their
-    element to None and `get(0)??` reached the backend unstamped as CE0124 (#283).
-
-    `resolve_type_from_string` raises for a name it cannot place, which is right for a
-    manifest but not here: a caller asking about a type argument treats None as "unknown".
-    """
-    from sushi_lang.internals.diagnostics import InternalCompilerError
-    try:
-        return resolve_type_from_string(type_str, tables)
-    except InternalCompilerError:
-        return None

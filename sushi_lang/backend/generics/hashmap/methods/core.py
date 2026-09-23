@@ -14,7 +14,7 @@ from sushi_lang.backend.constants import (
     ENTRY_KEY_INDICES,
     ENTRY_VALUE_INDICES,
 )
-from sushi_lang.semantics.generics.hashmap import extract_key_value_types
+from sushi_lang.semantics.generics.hashmap import parse_hashmap_types
 from ..utils import emit_key_equality_check, emit_init_buckets_empty
 from ..probe import emit_probe_loop, ProbeSlot
 from sushi_lang.internals.errors import raise_internal_error
@@ -26,7 +26,7 @@ from sushi_lang.backend.memory.allocas import entry_alloca
 
 def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
     """Emit HashMap<K, V>.new() -> HashMap<K, V>"""
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     entry_type = get_entry_type(codegen, key_type, value_type)
     hashmap_llvm_type = codegen.types.ll_type(hashmap_type)
@@ -92,7 +92,7 @@ def emit_hashmap_get(
 
     builder = codegen.builder
 
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     value_llvm = codegen.types.ll_type(value_type)
 
@@ -208,7 +208,7 @@ def emit_hashmap_contains_key(
 
     builder = codegen.builder
 
-    key_type, value_type = extract_key_value_types(hashmap_type, codegen)
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     true_val = ir.Constant(codegen.types.i32, 1)
     false_val = ir.Constant(codegen.types.i32, 0)

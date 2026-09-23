@@ -211,12 +211,12 @@ class TypeMapper:
     def _create_hashmap_struct_type(self, struct_type: StructType) -> ir.LiteralStructType:
         """Create LLVM struct type for HashMap<K, V>."""
         from sushi_lang.backend.generics.hashmap.types import get_entry_type
-        from sushi_lang.semantics.generics.hashmap import extract_key_value_types
+        from sushi_lang.semantics.generics.hashmap import parse_hashmap_types
 
         from sushi_lang.backend.llvm_types import TypeSystemWrapper
         wrapper = TypeSystemWrapper(self, self.struct_table, self.enum_table)
 
-        key_type, value_type = extract_key_value_types(struct_type, wrapper)
+        key_type, value_type = parse_hashmap_types(struct_type, wrapper, on_missing="raise")
         entry_type = get_entry_type(wrapper, key_type, value_type)
 
         buckets_type = ir.LiteralStructType([

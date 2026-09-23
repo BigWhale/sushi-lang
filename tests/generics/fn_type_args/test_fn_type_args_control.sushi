@@ -1,0 +1,19 @@
+# The control: a HashMap whose value is itself a generic instance (#794).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1\n2\n"
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(string, List@(i32)) m = HashMap.new()
+    let List@(i32) l = List.new()
+    l.push(4)
+    l.push(2)
+    m.insert("a", l)
+    println("{m.len()}")
+    match m.get("a"):
+        Maybe.Some(v) -> println("{v.len()}")
+        Maybe.None -> println("none")
+    m.free()
+    return Result.Ok(0)

@@ -837,7 +837,8 @@ class LibraryManifestGenerator:
                 # design, and its source slice is the TEMPLATE's: shipping it as a
                 # concrete record re-parsed to `Box@(T)` at the consumer (#543). The
                 # template ships instead, and the consumer cuts its own copies.
-                if (type_name.split("<", 1)[0], impl.perk_name) in template_keys:
+                base_name = getattr(impl.target_type, "generic_base", None) or type_name
+                if (base_name, impl.perk_name) in template_keys:
                     continue
                 if any(
                     self._contains_foreign_ptr(m.ret)

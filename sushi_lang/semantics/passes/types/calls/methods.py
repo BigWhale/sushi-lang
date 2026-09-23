@@ -780,10 +780,9 @@ def _method_exists_on(validator: 'TypeValidator', payload, method_name: str) -> 
     if isinstance(payload, DynamicArrayType):
         if validator.generic_extension_table.declarations(ARRAY_BASE_KEY, method_name):
             return True
-    name = getattr(payload, "name", None)
-    if isinstance(name, str) and "<" in name:
-        base_name = name.split("<")[0]
+    base_name = getattr(payload, "generic_base", None)
+    if base_name is not None:
         if validator.generic_extension_table.find_applicable(
-                base_name, method_name, name) is not None:
+                base_name, method_name, payload.name) is not None:
             return True
     return False

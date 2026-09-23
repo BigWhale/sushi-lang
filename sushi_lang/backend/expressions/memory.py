@@ -507,14 +507,14 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
 
 def _clone_hashmap_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
     """Deep-copy a HashMap<K, V>: fresh bucket buffer, deep-cloned owning keys/values."""
-    from sushi_lang.semantics.generics.hashmap import extract_key_value_types
+    from sushi_lang.semantics.generics.hashmap import parse_hashmap_types
     from sushi_lang.backend.generics.hashmap.types import get_entry_type, ENTRY_OCCUPIED
     from sushi_lang.backend.generics.hashmap.utils import emit_entry_state_check
     from sushi_lang.backend.generics.container_walk import emit_container_walk
     from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_VALUE_INDICES
 
     b = codegen.builder
-    key_type, val_type = extract_key_value_types(value_type, codegen)
+    key_type, val_type = parse_hashmap_types(value_type, codegen, on_missing="raise")
     entry_llvm = get_entry_type(codegen, key_type, val_type)
 
     buckets = b.extract_value(value, 0, name="clone_hm_buckets")   # {len, cap, Entry*}

@@ -319,9 +319,9 @@ def _emit_hashmap_value_destructor(
         get_hashmap_field_ptrs, get_entry_type
     )
     from sushi_lang.backend.generics.hashmap.utils import emit_destroy_all_entries
-    from sushi_lang.semantics.generics.hashmap import extract_key_value_types
+    from sushi_lang.semantics.generics.hashmap import parse_hashmap_types
 
-    key_type, value_type_kv = extract_key_value_types(value_type, codegen)
+    key_type, value_type_kv = parse_hashmap_types(value_type, codegen, on_missing="raise")
 
     fields = get_hashmap_field_ptrs(codegen, value_ptr)
     capacity = builder.load(fields.capacity, name="hm_dtor_cap")
