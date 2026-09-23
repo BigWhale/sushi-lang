@@ -17,7 +17,8 @@ from sushi_lang.backend.destructors import needs_cleanup
 def codegen_with_tables():
     """A codegen whose tables hold every named type in the table below."""
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    codegen = LLVMCodegen("owns_resource_verdicts")
+    from sushi_lang.semantics.passes.collect import PerkImplementationTable
+    codegen = LLVMCodegen("owns_resource_verdicts", perk_impl_table=PerkImplementationTable())
     for t, _ in VERDICTS:
         name = getattr(t, "name", None)
         if not isinstance(name, str):

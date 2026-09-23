@@ -1,0 +1,21 @@
+# A `poke self` call on an element of a FIXED array writes the element in place (#776).
+# The element has an address, so the call is legal, and the write must reach the ORIGINAL
+# element and not a copy of it: each element prints its bumped value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n3\n"
+# EXPECT_NO_LEAKS
+struct Counter:
+    i32 n
+
+extend Counter bump(poke self) ~:
+    self.n := self.n + 1
+
+fn main() i32:
+    let Counter[2] xs = [Counter(1), Counter(2)]
+    xs[0].bump()
+    xs[0].bump()
+    let i32 i = 1
+    xs[i].bump()
+    println(xs[0].n)
+    println(xs[1].n)
+    return Result.Ok(0)

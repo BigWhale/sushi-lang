@@ -13,7 +13,7 @@ from sushi_lang.semantics.passes.types.expressions import (
     validate_array_literal, validate_bitwise_operation, validate_cast_expression,
     validate_index_access, validate_try_expression)
 from sushi_lang.semantics.visitors import RecursiveVisitor
-from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, ForeignPtrType
+from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
 from sushi_lang.semantics.passes.types.visibility import (
     reject_ambiguous_name, reject_private_kept, reject_private_name)
 from sushi_lang.semantics.passes.types.utils import reject_named_args
@@ -169,30 +169,23 @@ class ExpressionValidator(RecursiveVisitor):
         tv = self.type_validator
         infer_lambda_type(tv, node)  # fills param + capture types (idempotent)
 
-        # CE2094: capturing a peek/poke borrow is deferred to Tier 2. A captured
-        # name whose enclosing type is a reference is a borrow capture.
-        from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, owns_resource
-        drops = tv.drop_type_names
+        # CE2094: capturing a peek/poke borrow is deferred to Tier 2. An owning capture
+        # is a move into the environment, and the borrow pass checks the outer name.
+        from sushi_lang.semantics.passes.types.utils import resolve_declared_type
+        from sushi_lang.semantics.typesys import ReferenceType, owns_resource
         for cap in (node.captures or []):
             if isinstance(cap.ty, ReferenceType):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"cannot capture '{cap.name}': it is a borrow (peek/poke capture is deferred to Tier 2)")
-            elif isinstance(cap.ty, DynamicArrayType):
-                # Move-capture (T1.5): a dynamic array is moved into the heap environment,
-                # which owns it and frees it in the env destructor. The outer binding is
-                # consumed (borrow-checked use-after-move, CE2405). No diagnostic.
-                pass
-            elif owns_resource(cap.ty, drops):
-                # Move-capture into the env: the env owns and frees it, and the outer
-                # binding is consumed (CE2405).
-                pass
 
         # CE2094: an owning parameter type on a function value has no deep-copy on the
         # indirect-call path yet, so reject it. A `string` is excluded deliberately -- its
         # `owned` bit is cleared at entry, so it frees nothing, and including it would
         # silently make `|string s| ...` illegal.
+        drops = tv.drop_type_names
         for p in node.params:
-            if p.ty != BuiltinType.STRING and owns_resource(p.ty, drops):
+            if p.ty != BuiltinType.STRING and owns_resource(
+                    p.ty, drops, resolve=lambda ty: resolve_declared_type(tv, ty)):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"lambda parameter '{p.name}' has an owning type '{display_type(p.ty)}'; "
                                f"owning function-value parameters are deferred to Tier 2")

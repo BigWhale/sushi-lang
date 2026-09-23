@@ -31,6 +31,7 @@ from llvmlite import binding as llvm
 from llvmlite import ir
 
 from sushi_lang.backend.codegen_llvm import LLVMCodegen
+from sushi_lang.semantics.passes.collect import PerkImplementationTable
 from sushi_lang.backend.expressions import operators
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import BinaryOp, IntLit, UnaryOp
@@ -101,7 +102,7 @@ def _evaluator_says(op: str, ty: BuiltinType, left: int, right: int):
 
 def _machine_says(op: str, ty: BuiltinType, pairs: list[tuple[int, int]]) -> list[int]:
     """One JIT-compiled function per pair, each returning the backend's instruction."""
-    codegen = LLVMCodegen("operator_agreement")
+    codegen = LLVMCodegen("operator_agreement", perk_impl_table=PerkImplementationTable())
     ll_type = codegen.types.ll_type(ty)
     mask = (1 << integer_bit_width(ty)) - 1
 

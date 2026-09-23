@@ -1,6 +1,6 @@
 """Type resolution utilities for UnknownType to StructType/EnumType conversion."""
 from __future__ import annotations
-from typing import Dict, Optional, Set, Tuple, TYPE_CHECKING
+from typing import Dict, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type, StructType, EnumType
@@ -68,11 +68,9 @@ class TypeResolver:
 
         return ty
 
-    def contains_unresolvable(self, ty: 'Type', visited: Optional[Set[str]] = None) -> bool:
+    def contains_unresolvable(self, ty: 'Type') -> bool:
         """Check if a type contains UnknownType that cannot be resolved."""
-        return contains_unresolvable_unknown_type(
-            ty, self.struct_table, self.enum_table, visited
-        )
+        return contains_unresolvable_unknown_type(ty, self.struct_table, self.enum_table)
 
     def contains_unresolvable_in_tuple(self, type_args: Tuple['Type', ...]) -> bool:
         """Check if any type in a tuple contains unresolvable UnknownType."""
@@ -179,69 +177,23 @@ def contains_unresolvable_unknown_type(
     ty: 'Type',
     struct_table: Dict[str, 'StructType'],
     enum_table: Dict[str, 'EnumType'],
-    visited: Optional[Set[str]] = None
 ) -> bool:
-    """Check if a type contains UnknownType that cannot be resolved."""
-    from sushi_lang.semantics.typesys import (
-        UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, FunctionType
+    """Does a name anywhere in the type reach no declaration?
+
+    One question over `type_walk.walk_named_types`: the walk resolves each name it meets
+    and enters the declaration, so a name that it yields and that still resolves to
+    nothing is the unresolvable one (#724).
+    """
+    from sushi_lang.semantics.type_walk import walk_named_types
+    from sushi_lang.semantics.typesys import UnknownType
+
+    def resolve(held: 'Type') -> 'Type':
+        return resolve_unknown_type(held, struct_table, enum_table)
+
+    return any(
+        isinstance(reached, UnknownType) and isinstance(resolve(reached), UnknownType)
+        for reached in walk_named_types(ty, resolve=resolve)
     )
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    if visited is None:
-        visited = set()
-
-    resolved_ty = resolve_unknown_type(ty, struct_table, enum_table)
-
-    if isinstance(resolved_ty, UnknownType):
-        return True
-
-    type_key = None
-    if isinstance(resolved_ty, StructType):
-        type_key = f"struct:{resolved_ty.name}"
-    elif isinstance(resolved_ty, EnumType):
-        type_key = f"enum:{resolved_ty.name}"
-
-    if type_key and type_key in visited:
-        return False
-
-    if type_key:
-        visited = visited | {type_key}
-
-    if isinstance(resolved_ty, (ArrayType, DynamicArrayType)):
-        return contains_unresolvable_unknown_type(
-            resolved_ty.base_type, struct_table, enum_table, visited
-        )
-
-    elif isinstance(resolved_ty, GenericTypeRef):
-        return any(
-            contains_unresolvable_unknown_type(arg, struct_table, enum_table, visited)
-            for arg in resolved_ty.type_args
-        )
-
-    elif isinstance(resolved_ty, StructType):
-        return any(
-            contains_unresolvable_unknown_type(field_type, struct_table, enum_table, visited)
-            for _, field_type in resolved_ty.fields
-        )
-
-    elif isinstance(resolved_ty, EnumType):
-        return any(
-            contains_unresolvable_unknown_type(assoc_type, struct_table, enum_table, visited)
-            for variant in resolved_ty.variants
-            for assoc_type in variant.associated_types
-        )
-
-    elif isinstance(resolved_ty, FunctionType):
-        return (
-            any(
-                contains_unresolvable_unknown_type(p, struct_table, enum_table, visited)
-                for p in resolved_ty.param_types
-            )
-            or contains_unresolvable_unknown_type(resolved_ty.ok_type, struct_table, enum_table, visited)
-            or contains_unresolvable_unknown_type(resolved_ty.err_type, struct_table, enum_table, visited)
-        )
-
-    return False
 
 
 def parse_type_string(

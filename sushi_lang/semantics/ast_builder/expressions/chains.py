@@ -81,7 +81,7 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                         field_names=field_names,
                         type_args=type_args,
                         type_args_loc=type_args_loc,
-                        loc=span_of(t)
+                        loc=_span_through(t, call_node)
                     )
                 else:
                     # Call-through an arbitrary expression that evaluates to a
@@ -110,7 +110,7 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                     method=method,
                     args=args,
                     field_names=field_names,
-                    loc=span_of(t)
+                    loc=_span_through(t, call_node)
                 )
 
             elif call_node.data == "member_access":
@@ -126,3 +126,11 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                 unhandled(call_node)
 
     return result_expr
+
+
+def _span_through(chain: Tree, step: Tree):
+    """The span of a chain from its first atom through `step`, not the whole chain."""
+    whole, last = span_of(chain), span_of(step)
+    if whole is None or last is None:
+        return whole
+    return type(whole)(whole.line, whole.col, last.end_line, last.end_col)

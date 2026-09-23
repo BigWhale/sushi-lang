@@ -1,0 +1,29 @@
+# A `poke self` call on an element of a DYNAMIC array writes the element in place (#776).
+# The element owns a string, so a copy of it would also give the string a second owner.
+# A perk method with a `poke self` receiver takes the same path.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "alpha 3\nbeta 11\n"
+# EXPECT_NO_LEAKS
+perk Stepper:
+    fn step(poke self) ~
+
+struct Tag:
+    string name
+    i32 n
+
+extend Tag bump(poke self) ~:
+    self.n := self.n + 1
+
+extend Tag with Stepper:
+    fn step(poke self) ~:
+        self.n := self.n + 10
+
+fn main() i32:
+    let Tag[] tags = from([Tag("alpha".clone(), 1), Tag("beta".clone(), 0)])
+    tags[0].bump()
+    tags[0].bump()
+    tags[1].step()
+    tags[1].bump()
+    foreach(t in tags.iter()):
+        println("{t.name} {t.n}")
+    return Result.Ok(0)

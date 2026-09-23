@@ -1,0 +1,9 @@
+# A lambda parameter of a struct that holds a string owns heap through its field, so
+# the parameter is refused (CE2094).
+# EXPECT_ERROR_CODE: CE2094
+struct Bag:
+    string s
+
+fn main() i32:
+    let fn(Bag) -> i32 f = |Bag b| 1
+    return Result.Ok(0)

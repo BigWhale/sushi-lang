@@ -1,6 +1,7 @@
 """Registration and lifetime of the bindings a `match` arm or a `foreach` introduces."""
 
 from __future__ import annotations
+from enum import Enum, auto
 from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
@@ -153,7 +154,9 @@ def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
 
     owner_state = checker.borrow_state.get(owner) if owner else None
     if owner_state is None:
-        return  # a constant was refused upstream (CE2400); nothing here to freeze
+        # A constant (a `peek` binds it, #713; a `poke` was CE2400 upstream) or a
+        # temporary (CE2404 upstream): no local owns it, so nothing is frozen.
+        return
 
     if is_poke:
         if _pokes_through_a_peek(state, owner_state):
@@ -209,12 +212,28 @@ def _reject_poke_through_peek(checker: 'BorrowChecker', owner: str,
     diag.emit()
 
 
+class ScrutineeKind(Enum):
+    """What a payload binding reads through, which decides what it may do."""
+
+    BORROWED = auto()       # a match that only borrows its scrutinee
+    OWNED = auto()          # a match that owns it: a temporary, or `match nom r:`
+    OWN_PAYLOAD = auto()    # the heap cell of an `Own(...)` pattern
+
+
 def register_pattern_bindings(checker: 'BorrowChecker', scope: BindingScope,
                               pattern: Pattern,
                               scrutinee_type: Optional[Type] = None,
                               scrutinee: Optional[Expr] = None,
                               owns_scrutinee: bool = False) -> None:
     """Register a match arm's payload bindings, WITH their types."""
+    kind = ScrutineeKind.OWNED if owns_scrutinee else ScrutineeKind.BORROWED
+    _register_bindings(checker, scope, pattern, scrutinee_type, scrutinee, kind)
+
+
+def _register_bindings(checker: 'BorrowChecker', scope: BindingScope, pattern: Pattern,
+                       scrutinee_type: Optional[Type], scrutinee: Optional[Expr],
+                       kind: ScrutineeKind) -> None:
+    """Register one pattern's bindings, read through a scrutinee of `kind`."""
     variant_types = checker.types.variant_payload_types(
         scrutinee_type, pattern.variant_name)
     span = pattern.variant_name_span or pattern.loc
@@ -228,8 +247,11 @@ def register_pattern_bindings(checker: 'BorrowChecker', scope: BindingScope,
                 scope.bind_value(binding, payload_type, span)
             case NomBinding():
                 # `Variant(nom x)` (ruling R11): the arm TAKES the payload, which it may
-                # only do out of a scrutinee the match owns.
-                if not owns_scrutinee:
+                # only do out of a scrutinee the match owns, and never out of an
+                # `Own(...)` cell, which would be left with nothing to free it.
+                if kind is ScrutineeKind.OWN_PAYLOAD:
+                    _reject_take_from_own(checker, binding)
+                elif kind is ScrutineeKind.BORROWED:
                     _reject_take_from_a_borrow(checker, binding, scrutinee)
                 scope.bind_owned(binding.name, payload_type, binding.loc or span)
             case RefBinding():
@@ -237,12 +259,10 @@ def register_pattern_bindings(checker: 'BorrowChecker', scope: BindingScope,
                 # scrutinee is frozen for the arm -- rebinding it would change the
                 # variant tag under the pointer.
                 _bind_payload_ref(checker, scope, binding.name, payload_type,
-                                  binding.mode, binding.loc or span, scrutinee,
-                                  owns_scrutinee=owns_scrutinee)
+                                  binding.mode, binding.loc or span, scrutinee, kind)
             case Pattern():
-                register_pattern_bindings(checker, scope, binding, payload_type,
-                                          scrutinee=scrutinee,
-                                          owns_scrutinee=owns_scrutinee)
+                _register_bindings(checker, scope, binding, payload_type, scrutinee,
+                                   kind)
             case _:
                 _register_own_pattern(checker, scope, binding, payload_type, span,
                                       scrutinee)
@@ -261,6 +281,14 @@ def _reject_take_from_a_borrow(checker: 'BorrowChecker', binding: NomBinding,
     diag.help(f"hand the value to the match -- `match nom {text}:` -- and it may be "
               f"taken here; drop the marker to read through the borrow instead")
     diag.emit()
+
+
+def _reject_take_from_own(checker: 'BorrowChecker', binding: NomBinding) -> None:
+    """Report CE2434 for a `nom` binding nested inside an `Own(...)` pattern."""
+    checker.err.emit_with(er.ERR.CE2434, binding.loc) \
+        .help("drop the marker to read the value through the cell, or take the whole "
+              "`Own@(T)` with a `nom` binding on the payload that holds it") \
+        .emit()
 
 
 def reject_partial_take(checker: 'BorrowChecker', pattern: Pattern,
@@ -319,7 +347,8 @@ def _register_own_pattern(checker: 'BorrowChecker', scope: BindingScope, binding
     pointee = checker.types.own_payload(payload_type)
 
     if isinstance(inner, Pattern):
-        register_pattern_bindings(checker, scope, inner, pointee, scrutinee=scrutinee)
+        _register_bindings(checker, scope, inner, pointee, scrutinee,
+                           ScrutineeKind.OWN_PAYLOAD)
     elif isinstance(inner, str) and inner != "_":
         if inner_borrow is None:
             scope.bind_value(inner, pointee, span)
@@ -328,21 +357,20 @@ def _register_own_pattern(checker: 'BorrowChecker', scope: BindingScope, binding
             # for the arm like a `let`-borrow's (#242).
             borrow_span = getattr(binding, "inner_borrow_span", None) or span
             _bind_payload_ref(checker, scope, inner, pointee, inner_borrow,
-                              borrow_span, scrutinee, require_named_scrutinee=False)
+                              borrow_span, scrutinee, ScrutineeKind.OWN_PAYLOAD)
 
 
 def _bind_payload_ref(checker: 'BorrowChecker', scope: BindingScope, name: str,
                       ty: Optional[Type], marker: str, span: Optional[Span],
-                      scrutinee: Optional[Expr],
-                      require_named_scrutinee: bool = True,
-                      owns_scrutinee: bool = False) -> None:
+                      scrutinee: Optional[Expr], kind: ScrutineeKind) -> None:
     """Bind a reference into a matched payload, rejecting a scrutinee with no storage."""
-    if require_named_scrutinee and scrutinee is not None \
-            and not isinstance(scrutinee, Name) and not owns_scrutinee:
+    if kind is ScrutineeKind.BORROWED and scrutinee is not None \
+            and not isinstance(scrutinee, Name):
         # The pointer aims INTO the scrutinee's storage, so the scrutinee must HAVE
         # storage. A read through an owner has none of its own here, and the write would
         # go nowhere. A TEMPORARY the match owns is different since ruling R11: the match
-        # parks it in a slot for the whole statement, and that slot is the storage.
+        # parks it in a slot for the whole statement, and that slot is the storage. An
+        # `Own(...)` pointee lives in its heap cell, not in the scrutinee.
         scope.bind_ref(name, ty, marker, span, owner=None, declared_at=span)
         checker.err.emit(er.ERR.CE2404, span, expr=expr_to_string(scrutinee))
         return

@@ -296,8 +296,9 @@ def test_reserved_externs_are_declared():
     from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.externs_manifest import RESERVED_EXTERNS
+    from sushi_lang.semantics.passes.collect import PerkImplementationTable
 
-    cg = LLVMCodegen(module_name="reserved_sync")
+    cg = LLVMCodegen(module_name="reserved_sync", perk_impl_table=PerkImplementationTable())
     cg.runtime.declare_externs()
     # malloc/free/realloc/exit are declared lazily; force them so the manifest is
     # checked against the full built-in extern surface.

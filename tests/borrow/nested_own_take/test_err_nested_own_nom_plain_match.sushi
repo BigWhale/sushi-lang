@@ -1,0 +1,23 @@
+# Under a plain `match r:` a `nom` binding nested inside an `Own(...)` pattern reads
+# CE2434, the same code as `Own(nom x)`: the Own position refuses it whatever the
+# scrutinee.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2434
+enum Inner:
+    Word(string)
+    Nil
+
+enum Outer:
+    Full(Own@(Inner))
+    Empty
+
+fn main() i32:
+    let string kept = "none".clone()
+    let Outer r = Outer.Full(Own.alloc(Inner.Word("Mostly Harmless".clone())))
+    match r:
+        Outer.Full(Own(Inner.Word(nom s))) ->
+            kept := s
+        Outer.Full(Own(Inner.Nil)) -> println("nil")
+        Outer.Empty -> println("empty")
+    println(kept)
+    return Result.Ok(0)

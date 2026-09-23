@@ -1,0 +1,13 @@
+# A lambda parameter of a type that implements Drop declares a resource, so the
+# parameter is refused (CE2094).
+# EXPECT_ERROR_CODE: CE2094
+struct Ticket:
+    i32 id
+
+extend Ticket with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+fn main() i32:
+    let fn(Ticket) -> i32 f = |Ticket t| 1
+    return Result.Ok(0)
