@@ -1,0 +1,22 @@
+# Every pack element satisfies the constraint: the call compiles and runs.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "i32\nstring\n"
+perk Named:
+    fn name() string
+
+extend i32 with Named:
+    fn name() string:
+        return "i32"
+
+extend string with Named:
+    fn name() string:
+        return "string"
+
+fn many@(...Ts: Named)(...Ts xs) ~:
+    expand(a in xs):
+        println(a.name())
+    return Result.Ok(~)
+
+fn main() i32:
+    many(5, "five")
+    return Result.Ok(0)

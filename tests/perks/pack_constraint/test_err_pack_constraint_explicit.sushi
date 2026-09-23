@@ -1,0 +1,19 @@
+# An EXPLICIT pack element that fails the pack's perk constraint is ONE diagnostic, CE2090, with
+# the constraint as its note. No copy of the template is made, so its body adds nothing.
+# EXPECT_ERROR_CODE: CE2090
+# EXPECT_STDERR_CONTAINS: the constraint 'Named' is declared here
+perk Named:
+    fn name() string
+
+extend i32 with Named:
+    fn name() string:
+        return "i32"
+
+fn many@(...Ts: Named)(...Ts xs) ~:
+    expand(a in xs):
+        println(a.name())
+    return Result.Ok(~)
+
+fn main() i32:
+    many@(i32, bool)(5, true)
+    return Result.Ok(0)
