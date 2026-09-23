@@ -455,9 +455,7 @@ def extract_key_value_types(hashmap_type: StructType, tables: Any) -> tuple[Type
 
 def get_entry_type_name(key_type: Type, value_type: Type) -> str:
     """Get the name for a user-facing Entry<K, V> struct type."""
-    key_str = str(key_type).lower() if isinstance(key_type, BuiltinType) else str(key_type)
-    val_str = str(value_type).lower() if isinstance(value_type, BuiltinType) else str(value_type)
-    return f"Entry<{key_str}, {val_str}>"
+    return f"Entry<{key_type}, {value_type}>"
 
 
 def ensure_entry_type_in_struct_table(struct_table: Any, derived: DerivedMethodTable,

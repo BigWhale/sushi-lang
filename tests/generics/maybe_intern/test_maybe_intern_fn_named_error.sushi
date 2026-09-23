@@ -1,0 +1,18 @@
+# A `Maybe` of a function type whose error arm is a named enum (#793).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "42\n"
+
+enum Oops:
+    Bad
+
+fn twice(i32 x) i32 | Oops:
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    let Maybe@(fn(i32) -> i32 | Oops) m = Maybe.Some(twice)
+    match m:
+        Maybe.Some(f) -> println("{f(21).realise(0)}")
+        Maybe.None -> println("none")
+    return Result.Ok(0)

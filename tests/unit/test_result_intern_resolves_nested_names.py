@@ -157,3 +157,30 @@ def test_a_real_divergence_still_fires_the_guard():
     )
     with pytest.raises(InternalCompilerError):
         ensure_result_type_in_table(enums, BuiltinType.I32, BuiltinType.I32, structs)
+
+
+def test_the_maybe_intern_resolves_a_nested_name_too():
+    """`Maybe@(IpAddr[])` shares the seam: both spellings, either order, one instance (#793)."""
+    from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
+
+    enums, structs, ip_addr = _tables()
+    first = ensure_maybe_type_in_table(enums, DynamicArrayType(ip_addr), structs)
+    second = ensure_maybe_type_in_table(
+        enums, DynamicArrayType(UnknownType("IpAddr")), structs
+    )
+    assert first is second
+    assert first is not None
+    some_payload = first.variants[0].associated_types[0]
+    assert isinstance(some_payload, DynamicArrayType)
+    assert some_payload.base_type == ip_addr
+
+
+def test_an_abstract_maybe_stays_out_of_the_table():
+    """A `Maybe@(T)` over an enclosing template's parameter is handed back, not stored."""
+    from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
+    from sushi_lang.semantics.generics.types import TypeParameter
+
+    enums, structs, _ = _tables()
+    interned = ensure_maybe_type_in_table(enums, TypeParameter("T"), structs)
+    assert interned is not None
+    assert interned.name not in enums.by_name

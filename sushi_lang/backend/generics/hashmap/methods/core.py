@@ -2,7 +2,7 @@
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
-from sushi_lang.semantics.typesys import StructType, BuiltinType
+from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 from ..types import get_entry_type
 from sushi_lang.backend.constants import (
@@ -159,19 +159,10 @@ def emit_hashmap_get(
     # takes ownership rejects it (CE2411) with `.clone()` as the escape. The deep copy
     # that used to happen here was the compiler inserting one the user did not ask for.
 
-    if isinstance(value_type, BuiltinType):
-        type_str = str(value_type).lower()
-    else:
-        type_str = str(value_type)
-
-    maybe_enum_name = f"Maybe<{type_str}>"
-    maybe_enum_type = codegen.enum_table.by_name.get(maybe_enum_name)
-
+    from sushi_lang.backend.generics.maybe import ensure_maybe_type_exists
+    maybe_enum_type = ensure_maybe_type_exists(codegen, value_type)
     if maybe_enum_type is None:
-        from sushi_lang.backend.generics.maybe import ensure_maybe_type_exists
-        maybe_enum_type = ensure_maybe_type_exists(codegen, value_type)
-        if maybe_enum_type is None:
-            raise_internal_error("CE0047", type=type_str)
+        raise_internal_error("CE0047", type=str(value_type))
 
     maybe_llvm_type = codegen.types.get_enum_type(maybe_enum_type)
 
