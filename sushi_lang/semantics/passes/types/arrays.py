@@ -9,10 +9,9 @@ the three, and its answer was patched in at `method_registry.py`.
 `tests/unit/test_array_method_table_is_total.py` is the gate, and it reads the BACKEND
 dispatcher too, because its emitters are the fourth list of the same names.
 
-Two spellings are kept as they stood, because #750 promised no change of behaviour: the
-bulk-copy family reports an arity fault with the internal CE0023 where every other row
-reports CE2009, and `extend`/`extend_range` answer a type for a fixed receiver although the
-validator refuses one there.
+One spelling is kept as it stood, because #750 promised no change of behaviour:
+`extend`/`extend_range` answer a type for a fixed receiver although the validator refuses
+one there.
 """
 from __future__ import annotations
 
@@ -278,8 +277,8 @@ class ArraySpec:
     # An in-place write. A constant is emitted as a read-only global, so a constant
     # receiver is refused before anything else is asked (CE2096).
     mutates: bool = False
-    # The bulk-copy family reads the INTERNAL CE0023 for an arity fault where every other
-    # row reads CE2009. Preserved, not corrected: #750 promised no change of behaviour.
+    # Every row reads CE2009 (#764). A field, not a spelled code: `test_argument_check_is_one`
+    # pins this indirect emit until the array arity check reads `check_arguments`.
     arity_code: ErrorMessage = er.ERR.CE2009
 
 
@@ -319,15 +318,11 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
     # The destination must be able to grow, so a fixed array is not a receiver here. It is
     # a legal SOURCE, and `.s()`/`.ss()` read either kind.
     "extend": ArraySpec(1, Receiver.DYNAMIC, _answers(BuiltinType.BLANK),
-                        arguments=_a_source, mutates=True,
-                        arity_code=er.ERR.CE0023),
+                        arguments=_a_source, mutates=True),
     "extend_range": ArraySpec(3, Receiver.DYNAMIC, _answers(BuiltinType.BLANK),
-                              arguments=_a_source_and_a_range, mutates=True,
-                              arity_code=er.ERR.CE0023),
-    "s": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range,
-                   arity_code=er.ERR.CE0023),
-    "ss": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range,
-                    arity_code=er.ERR.CE0023),
+                              arguments=_a_source_and_a_range, mutates=True),
+    "s": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
+    "ss": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
 }
 
 
@@ -424,10 +419,8 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayReceiver,
         return
 
     if len(call.args) != spec.arity:
-        # CE2009 names the method `name` and CE0023 names it `method`; `format_map` drops
-        # whichever key the code's own text does not read.
-        named = f"{display_type(array_type)}.{call.method}"
-        er.emit(reporter, spec.arity_code, call.loc, name=named, method=named,
+        er.emit(reporter, spec.arity_code, call.loc,
+                name=f"{display_type(array_type)}.{call.method}",
                 expected=spec.arity, got=len(call.args))
         return
 

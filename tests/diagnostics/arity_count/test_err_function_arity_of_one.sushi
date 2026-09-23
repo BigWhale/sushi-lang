@@ -1,0 +1,11 @@
+# A function that takes one argument, called with none. The text agrees in number.
+# EXPECT_ERROR_CODE: CE2009
+# EXPECT_STDERR_CONTAINS: wrong number of arguments: 'twice' expects 1, got 0
+
+fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    let i32 v = twice().realise(0)
+    println("{v}")
+    return Result.Ok(0)

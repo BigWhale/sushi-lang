@@ -43,8 +43,8 @@ _add(ErrorMessage("CE2008", Severity.ERROR,
     Category.TYPE, "Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is CE3005, on either library kind (#469)."))
 
 _add(ErrorMessage("CE2009", Severity.ERROR,
-    "function '{name}' expects {expected} arguments, got {got}",
-    Category.TYPE, "Function call has wrong number of arguments."))
+    "wrong number of arguments: '{name}' expects {expected}, got {got}",
+    Category.TYPE, "A call has the wrong number of arguments: a function, a method, a static or a built-in. The text names the callee as written and no noun, because one code serves every callee kind, and it states the counts with no noun, so the text agrees in number for a count of one (#764). The four bulk-copy array methods (`extend`, `extend_range`, `s`, `ss`) reported this fault with the internal CE0023 until #764."))
 
 # Array-specific errors
 _add(ErrorMessage("CE2010", Severity.ERROR,
