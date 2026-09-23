@@ -1,37 +1,35 @@
 """Environment variable module for Sushi standard library."""
 from __future__ import annotations
 import typing
+from typing import Dict
+
 from llvmlite import ir
 
-if typing.TYPE_CHECKING:
-    from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.generics.types import GenericTypeRef
+from sushi_lang.semantics.typesys import BuiltinType, Type
+from sushi_lang.sushi_stdlib.src.signatures import Signature, cstr, params_of
+
+
+# The ONE spelling of what each `<sys/env>` function takes and answers (#550, #798).
+# `getenv` answers its Maybe BARE: an absent key is a value, not a failure.
+ENV_SIGNATURES: Dict[str, Signature] = {
+    "getenv": Signature(params_of(cstr()),
+                        bare=GenericTypeRef("Maybe", (BuiltinType.STRING,))),
+    "setenv": Signature(params_of(cstr(), cstr()), ok=BuiltinType.I32, error="EnvError"),
+}
 
 
 def is_builtin_env_function(name: str) -> bool:
     """Check if name is a built-in env module function."""
-    return name in {
-        'getenv',
-        'setenv',
-    }
+    return name in ENV_SIGNATURES
 
 
 def get_builtin_env_function_return_type(name: str) -> Type:
-    """Get the return type for a built-in env function."""
-    from sushi_lang.semantics.typesys import BuiltinType
-
-    if name == 'getenv':
-        # getenv(string key) -> Maybe<string>. Return a type-ref rather than a
-        # concrete enum: get_return_type() has no access to the codegen enum table,
-        # so the consumer (semantic pass / backend) materializes Maybe<string>.
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Maybe", (BuiltinType.STRING,))
-
-    elif name == 'setenv':
-        from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        return GenericTypeRef("Result", (BuiltinType('i32'), UnknownType("EnvError")))
-
-    raise ValueError(f"Unknown env function: {name}")
+    """The declared return type, from the row."""
+    sig = ENV_SIGNATURES.get(name)
+    if sig is None:
+        raise ValueError(f"Unknown env function: {name}")
+    return sig.return_type()
 
 
 def validate_env_function_call(name: str, signature: typing.Any) -> None:

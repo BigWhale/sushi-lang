@@ -627,7 +627,8 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
             library_fingerprints[lib_path] = compute_lib_fingerprint(slib_path)
 
     # Whole-program, so it is computed once and folded into every unit.
-    drop_types = frozenset(cg.perk_impl_table.by_perk.get("Drop", ()))
+    from sushi_lang.backend.ownership import drops_of
+    drop_types = drops_of(cg)
 
     for unit in compilation_order:
         fp = compute_unit_fingerprint(

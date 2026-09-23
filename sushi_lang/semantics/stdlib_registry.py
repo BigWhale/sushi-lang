@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Callable, Optional, Dict, Tuple, List
 import importlib
 
 if TYPE_CHECKING:
-    pass
+    from sushi_lang.sushi_stdlib.src.signatures import Signature
 
 
 # Bundled Sushi-SOURCE stdlib modules: `use <path>` maps to a .sushi file that is
@@ -85,28 +85,10 @@ def _get_param_specs():
     if _param_specs_cache is not None:
         return _param_specs_cache
 
-    from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType
-    I32, I64, U64, F64, STRING = (
-        BuiltinType.I32, BuiltinType.I64, BuiltinType.U64, BuiltinType.F64, BuiltinType.STRING
-    )
-    STRING_ARRAY = DynamicArrayType(BuiltinType.STRING)
+    from sushi_lang.semantics.typesys import BuiltinType
+    I32, U64, F64 = BuiltinType.I32, BuiltinType.U64, BuiltinType.F64
 
     specs = {}
-
-    for fn in ("sleep", "msleep", "usleep"):
-        specs[("time", fn)] = [I64]
-    specs[("time", "nanosleep")] = [I64, I64]
-    specs[("time", "now")] = []
-    specs[("time", "monotonic_ns")] = []
-
-    specs[("env", "getenv")] = [STRING]
-    specs[("env", "setenv")] = [STRING, STRING]
-
-    for fn in ("getcwd", "getpid", "getuid"):
-        specs[("process", fn)] = []
-    specs[("process", "chdir")] = [STRING]
-    specs[("process", "exit")] = [I32]
-    specs[("process", "run")] = [STRING, STRING_ARRAY]
 
     for fn in ("abs", "min", "max"):
         specs[("math", fn)] = None
@@ -122,17 +104,40 @@ def _get_param_specs():
     specs[("random", "rand_range")] = [I32, I32]
     specs[("random", "srand")] = [U64]
 
-    # `<io/files>` and `<net/socket>` keep their parameter types in ONE table each,
-    # beside their generators, and every reader takes its row from there (#550).
-    from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
-    from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
+    # A module with a signature table keeps its parameter types in it, beside its
+    # generators, and every reader takes its row from there (#550).
     from sushi_lang.sushi_stdlib.src.signatures import param_specs
 
-    specs.update(param_specs("files", FILES_SIGNATURES))
-    specs.update(param_specs("socket", SOCKET_SIGNATURES))
+    for module_path, table in signature_tables().items():
+        specs.update(param_specs(module_path.split('/')[-1], table))
 
     _param_specs_cache = specs
     return _param_specs_cache
+
+
+def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
+    """Every registry module's ONE signature table, keyed by its `use` path (#798).
+
+    `<math>` and `<random>` have no table: nothing of theirs answers a Result.
+    """
+    from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
+    from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
+    from sushi_lang.sushi_stdlib.src.sys.env import ENV_SIGNATURES
+    from sushi_lang.sushi_stdlib.src.sys.process import PROCESS_SIGNATURES
+    from sushi_lang.sushi_stdlib.src.time import TIME_SIGNATURES
+
+    return {
+        "time": TIME_SIGNATURES,
+        "sys/env": ENV_SIGNATURES,
+        "sys/process": PROCESS_SIGNATURES,
+        "io/files": FILES_SIGNATURES,
+        "net/socket": SOCKET_SIGNATURES,
+    }
+
+
+def stdlib_signature(module_path: str, name: str) -> Optional["Signature"]:
+    """The row of one registry stdlib function, or None for a module with no table."""
+    return signature_tables().get(module_path, {}).get(name)
 
 
 class StdlibRegistry:
@@ -228,10 +233,11 @@ class StdlibRegistry:
         from sushi_lang.sushi_stdlib.src.io.files_funcs import FILE_UTILITY_FUNCTIONS
         from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_FUNCTIONS
 
+        tables = signature_tables()
         common_names = {
-            "time": ["sleep", "msleep", "usleep", "nanosleep", "now", "monotonic_ns"],
-            "env": ["getenv", "setenv"],
-            "process": ["getcwd", "chdir", "exit", "getpid", "getuid", "run"],
+            "time": list(tables["time"]),
+            "env": list(tables["sys/env"]),
+            "process": list(tables["sys/process"]),
             "math": [
                 "abs", "min", "max", "sqrt", "pow", "floor", "ceil", "round", "trunc",
                 "sin", "cos", "tan",

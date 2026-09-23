@@ -1,0 +1,17 @@
+# A unit's own declaration wins over a name a flat `use` brings in. Here the unit
+# imports `<time>` and declares its own generic `now`, and the call names the generic.
+# An i64 Result also exists in the program, so a wrong stdlib answer would read it.
+# EXPECT_STDOUT_EXACT: 42\n9\n
+use <time>
+
+fn now@(T)(T x) T:
+    return Result.Ok(x)
+
+fn wide() i64:
+    return Result.Ok(9 as i64)
+
+fn main() i32:
+    let i32 r = now(42).realise(0)
+    println(r)
+    println(wide().realise(0 as i64))
+    return Result.Ok(0)

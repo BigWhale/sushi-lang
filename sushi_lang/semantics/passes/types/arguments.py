@@ -28,8 +28,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import Call, Expr, MemberAccess, Name, Spread
+from sushi_lang.semantics.ast import Call, Expr, Spread
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import ReferenceType, StructType, Type
 
 from .compatibility import types_compatible
@@ -137,12 +138,10 @@ def _spell_place(arg: Expr) -> Optional[str]:
     A name spells itself and a member chain spells its receiver first; anything else --
     a call, an index, a literal -- has no spelling here and is offered no help.
     """
-    if isinstance(arg, Name):
-        return arg.id
-    if isinstance(arg, MemberAccess):
-        receiver = _spell_place(arg.receiver)
-        return None if receiver is None else f"{receiver}.{arg.member}"
-    return None
+    walked = walk_place(arg, Step.MEMBER)
+    if walked.name is None:
+        return None
+    return ".".join([walked.name.id, *(step.member for step in reversed(walked.path))])
 
 
 def _emit_mismatch(validator: 'TypeValidator', code: er.ErrorMessage, callee_name: str,
