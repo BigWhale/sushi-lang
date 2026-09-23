@@ -154,8 +154,8 @@ _add(ErrorMessage("CE2036", Severity.ERROR,
     Category.TYPE, "Empty Ok() is not allowed. Use Ok(value) for regular returns or Ok(~) for blank type returns."))
 
 _add(ErrorMessage("CE2037", Severity.ERROR,
-    "cannot print Result@(T) directly (use .realise() to unwrap first)",
-    Category.TYPE, "Result@(T) must be explicitly handled before printing. Use .realise(default) to extract the value."))
+    "cannot print Result@(T, E) directly (use .realise() to unwrap first)",
+    Category.TYPE, "Result@(T, E) must be explicitly handled before printing. Use .realise(default) to extract the value."))
 
 _add(ErrorMessage("CE2038", Severity.ERROR,
     "empty interpolation in string literal",
