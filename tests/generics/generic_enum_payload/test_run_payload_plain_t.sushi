@@ -1,0 +1,19 @@
+# The control: a payload of plain `T` was substituted before #801 too.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7\n"
+
+enum Wrap@(T):
+    One(T)
+    Zero
+
+fn echo@(U)(U v) U:
+    return Result.Ok(v)
+
+fn main() i32:
+    let Wrap@(i32) w = Wrap.One(7)
+    match w:
+        Wrap.One(v) -> println(echo(v).realise(-1))
+        Wrap.Zero -> println(0)
+    return Result.Ok(0)
