@@ -9,15 +9,16 @@ from sushi_lang.semantics.ast import (EnumConstructor, DotCall, Call, Name, IntL
                                       DynamicArrayNew)
 from sushi_lang.internals import errors as er
 from .inference import int_literal_fits, float_literal_fits
+from sushi_lang.semantics.type_predicates import (
+    BUILTIN_FLOAT_TYPES, BUILTIN_INTEGER_TYPES)
 
 if TYPE_CHECKING:
     from . import TypeValidator
     from sushi_lang.semantics.ast import Expr
     from sushi_lang.semantics.typesys import Type
 
-_NUMERIC_INT = {BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-                BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64}
-_NUMERIC_FLOAT = {BuiltinType.F32, BuiltinType.F64}
+_NUMERIC_INT = BUILTIN_INTEGER_TYPES
+_NUMERIC_FLOAT = BUILTIN_FLOAT_TYPES
 
 _ARITH_BITWISE_OPS = {"+", "-", "*", "/", "%", "&", "|", "^"}
 _SHIFT_OPS = {"<<", ">>"}

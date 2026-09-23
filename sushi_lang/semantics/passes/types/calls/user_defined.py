@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.ast import Call, Name, Spread
 from ..visibility import (name_is_contested, out_of_scope_help,
                           reject_ambiguous_name, reject_private_call,
@@ -12,6 +11,9 @@ from ..visibility import (name_is_contested, out_of_scope_help,
 from ..arguments import check_arguments
 from ..compatibility import types_compatible
 from ..propagation import propagate_types_to_value
+from sushi_lang.semantics.type_predicates import (
+    BUILTIN_FLOAT_TYPES, BUILTIN_INTEGER_TYPES, BUILTIN_NUMERIC_TYPES,
+    BUILTIN_UNSIGNED_INTEGER_TYPES)
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -306,10 +308,11 @@ def _validate_polymorphic_math(validator: 'TypeValidator', call: Call, function_
     args = call.args if hasattr(call, 'args') else []
     _name, callee_loc = written_callee(call)
 
-    SIGNED_INTS = {BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64}
-    ALL_INTS = SIGNED_INTS | {BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64}
-    FLOATS = {BuiltinType.F32, BuiltinType.F64}
-    NUMERIC = ALL_INTS | FLOATS
+    # `abs` is the one caller that reads a SIGNED set, and `type_predicates` holds no
+    # such name today, so this one stays local.
+    SIGNED_INTS = BUILTIN_INTEGER_TYPES - BUILTIN_UNSIGNED_INTEGER_TYPES
+    FLOATS = BUILTIN_FLOAT_TYPES
+    NUMERIC = BUILTIN_NUMERIC_TYPES
 
     if function_name == "abs":
         if len(args) != 1:

@@ -48,6 +48,7 @@ from .calls import (
     validate_enum_constructor,
     validate_method_call
 )
+from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from .inference import (
     infer_array_literal_type,
     infer_index_access_type,
@@ -94,12 +95,11 @@ class TypeValidator:
                            else externals_only(self.external_table))
         self.current_unit_name = current_unit_name  # Track which unit is being validated (for visibility checking)
         self.monomorphized_functions = monomorphized_functions or {}
-        self.known_types: Set[BuiltinType] = {
-            BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-            BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-            BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING,
-            BuiltinType.BLANK,
-        }  # Built-in types
+        # Every builtin a program may WRITE: the numeric set, plus the three that are
+        # not numeric.
+        self.known_types: Set[BuiltinType] = BUILTIN_NUMERIC_TYPES | {
+            BuiltinType.BOOL, BuiltinType.STRING, BuiltinType.BLANK,
+        }
         self.current_function: Optional[FuncDef] = None
         # Whose code is being validated. A source library's unit is compiled at the
         # consumer, and its bodies mention whatever the consumer's call substituted into

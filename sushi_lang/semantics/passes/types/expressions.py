@@ -7,7 +7,8 @@ from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, RangeExpr, MemberAccess
-from sushi_lang.semantics.type_predicates import is_integer_type, is_numeric_type
+from sushi_lang.semantics.type_predicates import (
+    BUILTIN_INTEGER_TYPES, is_integer_type, is_numeric_type)
 from .compatibility import is_valid_cast
 from .utils import validate_constant_array_index
 from sushi_lang.semantics.generics.type_display import display_type
@@ -76,12 +77,7 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
     # materializes at the TARGET width, so it is exempt
     # from the bare-literal i32 range check (CE2070). Mark it before recursing.
     from sushi_lang.semantics.ast import IntLit, UnaryOp
-    from sushi_lang.semantics.typesys import BuiltinType
-    integer_targets = (
-        BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-        BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-    )
-    if expr.target_type in integer_targets:
+    if expr.target_type in BUILTIN_INTEGER_TYPES:
         if isinstance(expr.expr, IntLit):
             expr.expr.in_cast_context = True
         elif (isinstance(expr.expr, UnaryOp) and expr.expr.op == "neg"

@@ -9,16 +9,16 @@ from sushi_lang.semantics.externs_manifest import GENERATED_INLINE_SYMBOLS
 from sushi_lang.semantics.generics.type_display import display_type
 
 from .arguments import check_arguments
+from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
     from . import TypeValidator
 
 
-_C_ABI_BUILTINS = {
-    BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-    BuiltinType.F32, BuiltinType.F64,
+# The C ABI's own allowlist. It is not the numeric set plus two: a `~` crosses the
+# boundary as void, and nothing else here is a numeric rule.
+_C_ABI_BUILTINS = BUILTIN_NUMERIC_TYPES | {
     BuiltinType.BOOL, BuiltinType.STRING, BuiltinType.BLANK,
 }
 

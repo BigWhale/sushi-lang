@@ -16,12 +16,10 @@ from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.generics.own import own_payload_type
 from sushi_lang.semantics.generics.type_display import display_type
 from .utils import resolve_declared_type
+from sushi_lang.semantics.type_predicates import BUILTIN_INTEGER_TYPES
 
 # The scrutinee types an integer literal match accepts (#415).
-_INTEGER_SCRUTINEES = {
-    BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-}
+_INTEGER_SCRUTINEES = BUILTIN_INTEGER_TYPES
 
 if TYPE_CHECKING:
     from . import TypeValidator

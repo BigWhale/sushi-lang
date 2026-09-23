@@ -28,6 +28,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import (ArrayType, BuiltinType, DynamicArrayType,
                                           IteratorType, Type, deref_type)
 from .utils import validate_constant_array_index
+from sushi_lang.semantics.type_predicates import is_integer_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -65,14 +66,6 @@ class _InternedByTheCaller:
 INTERNED_BY_THE_CALLER = _InternedByTheCaller()
 
 
-def _is_integer_type(type_: Type) -> bool:
-    """Whether a type is any integer type, signed or unsigned."""
-    return type_ in (
-        BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-        BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64
-    )
-
-
 def _validate_element_argument(call: MethodCall, element_type: Type, reporter: Reporter,
                                validator: Optional['TypeValidator']) -> None:
     """The one check for "is this argument an element of this array?" (CE2006)."""
@@ -106,7 +99,7 @@ def _an_index(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
         return
     validator.validate_expression(call.args[0])
     arg_type = validator.infer_expression_type(call.args[0])
-    if arg_type is not None and not _is_integer_type(arg_type):
+    if arg_type is not None and not is_integer_type(arg_type):
         er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
                 index=1, expected="integer type", got=display_type(arg_type))
 

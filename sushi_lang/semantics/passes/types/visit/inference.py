@@ -12,7 +12,8 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.visitors import NodeVisitor
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType
-from sushi_lang.semantics.type_predicates import is_string_convertible
+from sushi_lang.semantics.type_predicates import (
+    BUILTIN_NUMERIC_TYPES, is_string_convertible)
 from sushi_lang.semantics.ast import (
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow, Spread, Lambda,
@@ -272,9 +273,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
             # The result is the common operand type. Mixed numerics are CE2510 from the
             # ExpressionValidator; None here avoids cascading mismatches.
-            numeric = (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-                       BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-                       BuiltinType.F32, BuiltinType.F64)
+            numeric = BUILTIN_NUMERIC_TYPES
             if left_type == right_type and left_type in numeric:
                 return left_type
             if left_type is None and right_type in numeric:
