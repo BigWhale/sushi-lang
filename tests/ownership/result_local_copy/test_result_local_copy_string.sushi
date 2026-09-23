@@ -1,0 +1,15 @@
+# A copy of a local declared with an explicit Result@(T, E) annotation MOVES when the
+# payload owns heap: the second binding owns the string and the first is spent, so the
+# string is freed once (#775).
+# EXPECT_STDOUT_EXACT: "value 7\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn make(i32 n) string:
+    return Result.Ok("value {n}")
+
+fn main() i32:
+    let Result@(string, StdError) r = make(7)
+    let Result@(string, StdError) r2 = r
+    println(r2.realise("none"))
+    return Result.Ok(0)
