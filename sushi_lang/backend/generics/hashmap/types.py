@@ -102,10 +102,8 @@ def get_key_hash_method(codegen: Any, key_type: Type) -> Optional[Any]:
         return hash_method
 
     if isinstance(key_type, (ArrayType, DynamicArrayType)):
-        from sushi_lang.semantics.generics.hashing import register_array_hash_method, can_array_be_hashed
-        can_hash, reason = can_array_be_hashed(key_type)
-        if can_hash:
-            register_array_hash_method(key_type, codegen.derived_methods)
+        from sushi_lang.semantics.generics.hashing import register_hash_if_hashable
+        if register_hash_if_hashable(key_type, codegen.derived_methods):
             return codegen.derived_methods.get_method(key_type, "hash")
 
     return None

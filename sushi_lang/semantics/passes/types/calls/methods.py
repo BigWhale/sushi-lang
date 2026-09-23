@@ -707,26 +707,13 @@ def _validate_list_family(validator: 'TypeValidator', call: MethodCall,
 
 
 @METHOD_TYPE_REGISTRY.validator("derived_hash")
-def _validate_derived_hash(validator: 'TypeValidator', call: MethodCall,
-                           receiver_type) -> None:
-    _run_derived_validator(validator, call, receiver_type, "hash")
-
-
 @METHOD_TYPE_REGISTRY.validator("derived_clone")
-def _validate_derived_clone(validator: 'TypeValidator', call: MethodCall,
-                            receiver_type) -> None:
-    _run_derived_validator(validator, call, receiver_type, "clone")
+def _validate_derived_method(validator: 'TypeValidator', call: MethodCall,
+                             receiver_type) -> None:
+    """A derived `hash` or `clone` takes no argument, and the count is the whole rule.
 
-
-def _run_derived_validator(validator: 'TypeValidator', call: MethodCall,
-                           receiver_type, method_name: str) -> None:
-    """The check the `derive` pass wrote beside the method it derived.
-
-    The family claimed the call, so the table holds the entry; the lookup here reads it
-    back rather than carrying it through the claim.
+    The registry checked it against the family's row before this hook ran.
     """
-    derived = validator.derived_methods.get_method(receiver_type, method_name)
-    derived.semantic_validator(call, receiver_type, validator.reporter)
 
 
 @METHOD_TYPE_REGISTRY.validator("function")

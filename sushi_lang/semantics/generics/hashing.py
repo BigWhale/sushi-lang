@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
+from types import MappingProxyType
+from typing import Callable, Dict, Iterator, List, Mapping, Optional, Set, Tuple
 
-from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import (
     ArrayType,
     BuiltinType,
@@ -17,14 +17,10 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
-from sushi_lang.internals import errors as er
-from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
-from sushi_lang.sushi_stdlib.src.common import (
-    BuiltinMethod,
-    get_hash_emitter_factory,
-)
-from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.builtin_methods import derived_method
+from sushi_lang.sushi_stdlib.src.common import get_hash_emitter_factory
 
 
 # A kind a derived hash cannot read, and the phrase that says why. Named rather than
@@ -281,97 +277,32 @@ def can_array_be_hashed(array_type: Type,
     return True, "element type is hashable"
 
 
-def _validate_struct_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate hash() method call on struct types."""
-    if call.args:
-        er.emit(reporter, er.ERR.CE2009, call.loc,
-                name=f"{display_type(target_type)}.hash", expected=0, got=len(call.args))
+#: The derived `hash` takes no argument; the typecheck pass reads this row (CE2009).
+DERIVED_HASH_ARITY: Mapping[str, int] = MappingProxyType({"hash": 0})
 
 
-def _validate_enum_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate hash() method call on enum types."""
-    if call.args:
-        er.emit(reporter, er.ERR.CE2009, call.loc,
-                name=f"{display_type(target_type)}.hash", expected=0, got=len(call.args))
+def register_hash_if_hashable(target_type: Type, derived: DerivedMethodTable) -> bool:
+    """Register the derived hash() for a struct, an enum or an array that can have one.
 
-
-def _validate_array_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate hash() method call on array types."""
-    if call.args:
-        er.emit(reporter, er.ERR.CE2009, call.loc,
-                name=f"{display_type(target_type)}.hash", expected=0, got=len(call.args))
-
+    The one "decide, then register" step: the gate for the type's kind decides, and a
+    yes registers through the one derived-method seam. Answers whether the type now has
+    a derived hash. Any other kind answers False and registers nothing.
+    """
     if isinstance(target_type, (ArrayType, DynamicArrayType)):
-        element_type = target_type.base_type
-        if isinstance(element_type, (ArrayType, DynamicArrayType)):
-            er.emit(reporter, er.ERR.CE2051, call.loc,
-                    message="cannot hash array of arrays (nested arrays not supported)")
-
-
-def _lazy_hash_emitter(kind: str, target_type: Type):
-    """Build a hash() emitter that resolves its backend factory on first emission."""
-    def emit(codegen, call, receiver_value, receiver_type, to_i1):
-        factory = get_hash_emitter_factory(kind)
-        if factory is None:
-            raise_internal_error("CE0123", kind=kind)
-        return factory(target_type)(codegen, call, receiver_value, receiver_type, to_i1)
-
-    return emit
-
-
-def _register_hash_method(target_type: Type, derived: DerivedMethodTable, kind: str,
-                          validator, description: str) -> None:
-    """Register the auto-derived hash() method for a type."""
-    if derived.get_method(target_type, "hash") is not None:
-        return  # Already registered
-
-    derived.register_method(
-        target_type,
-        BuiltinMethod(
-            name="hash",
-            parameter_types=[],
-            return_type=BuiltinType.U64,
-            description=description,
-            semantic_validator=validator,
-            llvm_emitter=_lazy_hash_emitter(kind, target_type),
-        )
-    )
-
-
-def register_struct_hash_method(struct_type: StructType,
-                                derived: DerivedMethodTable) -> None:
-    """Register the auto-derived hash() method for a hashable struct type.
-
-    The CALLER decides and this one acts. Every one of the six call sites already asks
-    `can_struct_be_hashed` and registers only on a yes, so re-deciding here was the
-    second of two exponential walks per type (#598).
-    """
-    _register_hash_method(
-        struct_type, derived, container_hash_kind(struct_type) or "struct",
-        _validate_struct_hash,
-        f"Auto-derived hash for struct {struct_type}",
-    )
-
-
-def register_enum_hash_method(enum_type: EnumType,
-                              derived: DerivedMethodTable) -> None:
-    """Register the auto-derived hash() method for a hashable enum type.
-
-    The caller decides; see `register_struct_hash_method`.
-    """
-    _register_hash_method(
-        enum_type, derived, "enum", _validate_enum_hash,
-        f"Auto-derived hash for enum {enum_type}",
-    )
-
-
-def register_array_hash_method(array_type: Type,
-                               derived: DerivedMethodTable) -> None:
-    """Register the auto-derived hash() method for a hashable array type.
-
-    The caller decides; see `register_struct_hash_method`.
-    """
-    _register_hash_method(
-        array_type, derived, "array", _validate_array_hash,
-        f"Auto-derived hash for array {array_type}",
-    )
+        can_hash, _ = can_array_be_hashed(target_type)
+        kind = "array"
+    elif isinstance(target_type, EnumType):
+        can_hash, _ = can_enum_be_hashed(target_type)
+        kind = "enum"
+    elif isinstance(target_type, StructType):
+        can_hash, _ = can_struct_be_hashed(target_type)
+        kind = container_hash_kind(target_type) or "struct"
+    else:
+        return False
+    if not can_hash:
+        return False
+    if derived.get_method(target_type, "hash") is None:
+        derived.register_method(target_type, derived_method(
+            target_type, name="hash", kind=kind, return_type=BuiltinType.U64,
+            factory_getter=get_hash_emitter_factory, ice=er.ERR.CE0123))
+    return True

@@ -208,9 +208,10 @@ _add(ErrorMessage("CE2050", Severity.ERROR,
     "enum variant '{variant}' expects {expected} argument(s), got {got}",
     Category.TYPE, "Enum variant constructor must provide exact number of arguments for associated data."))
 
-_add(ErrorMessage("CE2051", Severity.ERROR,
-    "{message}",
-    Category.TYPE, "Struct hashing limitation or error."))
+# CE2051 ("{message}", a hashing limitation) was RETIRED by #804. Its one emit site refused
+# `.hash()` on an array of arrays, and nothing could reach it: `i32[][]` cannot be written,
+# the hashability gate refuses a nested array before a hash is registered, and the array
+# family answers an array's `.hash()` before the derived method is asked.
 
 # CE2052 ("recursive enum '{name}' requires Own@(T) indirection") was RETIRED by the ruling
 # on #677 (2026-09-14). The derive pass found an enum cycle in its topological sort and said

@@ -31,6 +31,8 @@ from typing import TYPE_CHECKING, Callable, Mapping, Optional, Protocol
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
+from sushi_lang.semantics.generics.cloning import DERIVED_CLONE_ARITY
+from sushi_lang.semantics.generics.hashing import DERIVED_HASH_ARITY
 from sushi_lang.semantics.generics.hashmap import HASHMAP_METHOD_ARITY
 from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY
 from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_ARITY
@@ -534,10 +536,10 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="list", beats_perk=True, claims=_claims_list, arity=LIST_METHOD_ARITY,
     infer=lambda rt, name, v: ListMethodInferrer(rt, name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="derived_hash", beats_perk=False, claims=_claims_derived_hash,
+    name="derived_hash", beats_perk=False, claims=_claims_derived_hash, arity=DERIVED_HASH_ARITY,
     infer=lambda rt, name, v: StructEnumBuiltinInferrer(rt, name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="derived_clone", beats_perk=False, claims=_claims_derived_clone,
+    name="derived_clone", beats_perk=False, claims=_claims_derived_clone, arity=DERIVED_CLONE_ARITY,
     infer=lambda rt, name, v: StructEnumBuiltinInferrer(rt, name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="function", beats_perk=False, claims=_claims_function,

@@ -1,9 +1,10 @@
 """One answer to "does the compiler already define this method on this type?"."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.typesys import (
     ArrayType,
@@ -97,3 +98,29 @@ def reject_builtin_miscount(reporter: Any, call: Any, callee: str,
     er.emit(reporter, er.ERR.CE2009, call.loc,
             name=callee, expected=expected, got=len(call.args))
     return True
+
+
+def derived_method(target_type: Type, *, name: str, kind: str, return_type: Type,
+                   factory_getter: Callable[[str], Any], ice: Any) -> Any:
+    """The auto-derived zero-argument method (`hash`, `clone`) of a type, to register.
+
+    The emitter is LAZY: the backend deposits its factory for `kind` at import time, and
+    semantics may not import the backend, so the factory is found at the first emission.
+    A missing factory is the internal error `ice`. The count is the derived family's row
+    (`MethodFamily.arity`), so the method carries no validator.
+    """
+    def emit(codegen, call, receiver_value, receiver_type, to_i1):
+        factory = factory_getter(kind)
+        if factory is None:
+            raise_internal_error(ice.code, kind=kind)
+        return factory(target_type)(codegen, call, receiver_value, receiver_type, to_i1)
+
+    from sushi_lang.sushi_stdlib.src.common import BuiltinMethod
+    return BuiltinMethod(
+        name=name,
+        parameter_types=[],
+        return_type=return_type,
+        description=f"Auto-derived {name} for {kind} {target_type}",
+        semantic_validator=None,
+        llvm_emitter=emit,
+    )
