@@ -359,6 +359,9 @@ class GenericExtensionMethod:
     # `type_params`, whose CE0096 strict zip stays untouched. Solved at the call site.
     method_type_params: Tuple[str, ...] = ()
     is_static: bool = False          # no receiver, called on the type name (#542)
+    # The declaration as written. A copy is this node with its types substituted, so a
+    # field the record does not spell is not lost (#803).
+    decl: Optional[ExtendDef] = None
 
 
 @dataclass
@@ -1091,6 +1094,7 @@ class FunctionCollector:
             err_span=h.err_span,
             method_type_params=h.method_type_params,
             is_static=h.is_static,
+            decl=h.ext,
         )
 
     def _reject_variant_collision(self, target_type: Optional[Type], name: str,
