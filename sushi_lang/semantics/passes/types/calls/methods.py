@@ -447,9 +447,6 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
     while isinstance(root, (MethodCall, DotCall, MemberAccess, IndexAccess)):
         root = root.array if isinstance(root, IndexAccess) else root.receiver
     if not isinstance(root, Name):
-        if mode.by_pointer:
-            er.emit(validator.reporter, er.ERR.CE2404, call.receiver.loc,
-                    expr=f"<expression>.{call.method}() receiver")
         return
     if root.id in validator.variable_types or mode.consumes:
         return

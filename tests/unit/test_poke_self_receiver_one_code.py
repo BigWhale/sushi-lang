@@ -28,10 +28,14 @@ fn mko() Outer:
 # shape -> the one error code it must print, or None for a legal call.
 _SHAPES = {
     "clone_receiver": ("c.clone().bump()", "CE2429"),
+    "try_receiver": ("make()??.bump()", "CE2429"),
+    "construction_receiver": ("Counter(3).bump()", "CE2429"),
+    "try_then_field_receiver": ("mko()??.inner.bump()", "CE2429"),
     "unhandled_channel_receiver": ("make().bump()", "CE2515"),
     "fixed_element_receiver": ("xs[0].bump()", None),
     "field_of_element_receiver": ("os[0].inner.bump()", None),
 }
+
 
 def _program(line: str) -> str:
     return (_PRELUDE + "fn main() i32:\n"
@@ -53,3 +57,10 @@ def test_a_receiver_shape_prints_one_error_code(analyze, shape):
     codes = [d.code for d in _errors(analyze(_program(line), name="m"))]
     expected = [] if code is None else [code]
     assert codes == expected, f"{line!r}: expected {expected}, got {codes}"
+
+
+def test_the_boundary_note_is_not_the_primary_span(analyze):
+    errors = _errors(analyze(_program("c.clone().bump()"), name="m"))
+    assert [d.code for d in errors] == ["CE2429"]
+    note = next(s for s in errors[0].sub if s.kind == "note")
+    assert note.span != errors[0].span, (note.span, errors[0].span)
