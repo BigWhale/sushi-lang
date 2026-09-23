@@ -1,0 +1,16 @@
+# The same lambda call with explicit type arguments inside a generic body.
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn apply@(U)(fn(U) -> U f, U v) U:
+    let U r = f(v)??
+    return Result.Ok(r)
+
+fn outer@(T)(T x) T:
+    let T r = apply@(T)(|T y| y, x)??
+    return Result.Ok(r)
+
+fn main() i32:
+    let i32 r = outer(7).realise(0)
+    println(r)
+    return Result.Ok(0)

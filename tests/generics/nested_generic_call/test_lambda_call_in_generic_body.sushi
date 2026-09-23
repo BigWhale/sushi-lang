@@ -1,0 +1,17 @@
+# A lambda argument to a generic call inside a generic body is typed with the
+# enclosing type argument, like the same call in a plain function.
+# EXPECT_STDOUT_EXACT: "5\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn apply@(U)(fn(U) -> U f, U v) U:
+    let U r = f(v)??
+    return Result.Ok(r)
+
+fn outer@(T)(T x) T:
+    let T r = apply(|T y| y, x)??
+    return Result.Ok(r)
+
+fn main() i32:
+    let i32 r = outer(5).realise(0)
+    println(r)
+    return Result.Ok(0)

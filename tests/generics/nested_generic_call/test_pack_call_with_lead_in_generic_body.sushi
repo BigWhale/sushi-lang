@@ -1,0 +1,16 @@
+# A variadic generic with a leading type parameter, called inside a generic body.
+# EXPECT_STDOUT_EXACT: "42 2\ns 2\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn lead_and_rest@(H, ...Ts)(H head, ...Ts rest) i32:
+    println("{head} 2")
+    return Result.Ok(2)
+
+fn outer@(T)(T x) i32:
+    let i32 n = lead_and_rest(x, "a", x)??
+    return Result.Ok(n)
+
+fn main() i32:
+    outer(42).realise(0)
+    outer("s").realise(0)
+    return Result.Ok(0)
