@@ -159,6 +159,6 @@ def is_get_out_container(ty: Optional[Type]) -> bool:
     if isinstance(ty, (ArrayType, DynamicArrayType)):
         return True
     if isinstance(ty, GenericTypeRef):
-        return ty.base_name in ("Own", "List", "HashMap")
+        return f"{ty.base_name}<" in _GET_OUT_PREFIXES
     name = getattr(ty, "name", None)
     return isinstance(name, str) and name.startswith(_GET_OUT_PREFIXES)

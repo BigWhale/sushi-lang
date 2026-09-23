@@ -344,3 +344,78 @@ def test_the_resolver_is_one_call_into_the_map():
         assert built not in source, (
             f"the resolver builds a {built[:-1]} itself; the shared map owns that arm"
         )
+
+
+# --- the ownership hooks: stop, resolve, a struct's type arguments (#781) ----------
+
+
+def test_stop_yields_a_type_and_enters_nothing_it_holds():
+    """The prune hook, for every composite and every declaration alike."""
+    for kind, value in _every_composite().items():
+        reached = list(walk_named_types(value, stop=lambda ty, v=value: ty is v))
+        assert reached == [value], (
+            f"stop did not prune {kind}. Reached: {[str(t) for t in reached]}"
+        )
+
+
+def test_resolve_enters_the_declaration_a_spelling_names():
+    """A bare name and a generic reference both reach what they name."""
+    hidden = StructType(name="Hidden", fields=(("f", _marker()),))
+    spellings = {
+        "UnknownType": UnknownType("Hidden"),
+        "GenericTypeRef": GenericTypeRef(base_name="Hidden", type_args=(BuiltinType.I32,)),
+    }
+    for kind, spelling in spellings.items():
+        reached = list(walk_named_types(spelling, resolve=lambda ty: hidden))
+        assert hidden in reached and any(isinstance(t, ForeignPtrType) for t in reached), (
+            f"resolve did not enter the declaration a {kind} names"
+        )
+        if kind == "GenericTypeRef":
+            assert BuiltinType.I32 not in reached, (
+                "a resolved generic reference was entered through its arguments as well"
+            )
+
+
+def test_an_unresolved_generic_reference_is_entered_through_its_arguments():
+    ref = GenericTypeRef(base_name="Nope", type_args=(_marker(),))
+    for resolve in (lambda ty: ty, lambda ty: None):
+        reached = list(walk_named_types(ref, resolve=resolve))
+        assert any(isinstance(t, ForeignPtrType) for t in reached), (
+            "a generic reference that does not resolve must still reach its arguments"
+        )
+
+
+def test_a_structs_type_arguments_are_entered_only_on_request():
+    """A container keeps its element type there; a size rule must not see it (#679)."""
+    box = StructType(name="List<X>", fields=(("data", BuiltinType.I32),),
+                     generic_args=(_marker(),))
+    plain = list(walk_named_types(box))
+    assert not any(isinstance(t, ForeignPtrType) for t in plain)
+    asked = list(walk_named_types(box, struct_type_args=True))
+    assert any(isinstance(t, ForeignPtrType) for t in asked)
+
+
+def test_the_ownership_predicates_read_the_shared_walk():
+    """Two hand-rolled recursions disagreed on a generic reference (#781)."""
+    import inspect
+
+    for predicate in (typesys.owns_resource, typesys.holds_declared_resource):
+        source = inspect.getsource(predicate)
+        body = source.split('"""', 2)[-1]
+        assert "walk_named_types" in body, (
+            f"{predicate.__name__} recurses over a type by hand again"
+        )
+        assert f"{predicate.__name__}(" not in body, (
+            f"{predicate.__name__} calls itself; the shared walk owns the recursion"
+        )
+
+
+def test_the_ownership_predicates_agree_on_an_unresolved_generic_reference():
+    handle = StructType(name="Handle", fields=(("fd", BuiltinType.I32),))
+    ref = GenericTypeRef(base_name="Result", type_args=(handle, BuiltinType.I32))
+    drops = frozenset({"Handle"})
+    assert typesys.holds_declared_resource(ref, drops)
+    assert typesys.owns_resource(ref, drops), (
+        "owns_resource must see the arguments of a reference it cannot resolve, the way "
+        "holds_declared_resource does"
+    )

@@ -64,6 +64,11 @@ DECLARATION_KINDS = frozenset(
 )
 
 
+# A kind that SPELLS a declaration without being one. A `resolve` given to the walk maps
+# these, and only these, to the declaration they name.
+RESOLVABLE_KINDS = frozenset({"UnknownType", "GenericTypeRef"})
+
+
 def _nominal_name(ty: Type) -> Optional[str]:
     """The name a type is identified BY, when it declares one.
 
@@ -109,6 +114,9 @@ def walk_named_types(
     *,
     through_declarations: bool = True,
     inline_only: bool = False,
+    stop: Optional[Callable[[Type], bool]] = None,
+    resolve: Optional[Callable[[Type], Optional[Type]]] = None,
+    struct_type_args: bool = False,
 ) -> Iterator[Type]:
     """Every type reachable from `ty`, `ty` itself first.
 
@@ -124,6 +132,17 @@ def walk_named_types(
     `inline_only=True` enters `INLINE_KINDS` alone, so the walk reaches what the value
     STORES and stops at every indirection. A rule about SIZE wants that: `Node[]` owns a
     heap buffer and holds no `Node` by value, while `Node[2]` holds two.
+
+    `stop` is the prune hook: a type it answers True for is yielded, and nothing it holds
+    is entered. A rule about ownership stops at a borrow, because a borrow names storage
+    that another value owns.
+
+    `resolve` maps a bare `UnknownType` or a `GenericTypeRef` to the declaration it names,
+    and the walk enters that declaration instead. A `GenericTypeRef` that does not resolve
+    is entered through its type arguments.
+
+    `struct_type_args=True` also enters a struct's `generic_args`. A container keeps its
+    element type there, because its fields are raw pointers and a placeholder.
     """
     if ty is None:
         return
@@ -143,17 +162,29 @@ def walk_named_types(
     kind = type(ty).__name__
     if inline_only and kind not in INLINE_KINDS:
         return
+    if stop is not None and stop(ty):
+        return
 
     def below(inner: Optional[Type]) -> Iterator[Type]:
         yield from walk_named_types(inner, structs, enums, _visited,
                                     through_declarations=through_declarations,
-                                    inline_only=inline_only)
+                                    inline_only=inline_only, stop=stop, resolve=resolve,
+                                    struct_type_args=struct_type_args)
+
+    if resolve is not None and kind in RESOLVABLE_KINDS:
+        named = resolve(ty) or ty
+        if named is not ty and named != ty:
+            yield from below(named)
+            return
 
     if kind in COMPOSITE_KINDS:
         for held in _held_types(ty):
             yield from below(held)
     elif kind in DECLARATION_KINDS:
         if through_declarations:
+            if struct_type_args and kind == "StructType":
+                for held in getattr(ty, "generic_args", None) or ():
+                    yield from below(held)
             for held in _declared_types(ty):
                 yield from below(held)
     elif isinstance(ty, UnknownType):
