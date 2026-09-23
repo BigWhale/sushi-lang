@@ -9,6 +9,7 @@ from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
 from sushi_lang.semantics.ast import Let, Return, Rebind, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.ownership import is_own_type
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
 from .compatibility import (validate_assignment_compatibility,
@@ -134,24 +135,18 @@ def place_root(validator: 'TypeValidator', expr) -> Optional[PlaceRoot]:
     one step above the alias: a namespace is storage of no kind, and walking into it
     answered with the alias name itself, which the pass then typed as a variable (#712).
     """
-    while True:
-        if isinstance(expr, Name):
-            return PlaceRoot(expr)
-        if isinstance(expr, MemberAccess):
-            unit = _alias_origin(validator, expr)
-            if unit is not None:
-                return PlaceRoot(Name(id=expr.member, loc=expr.loc), unit)
-            expr = expr.receiver
-            continue
-        if isinstance(expr, IndexAccess):
-            expr = expr.array
-            continue
-        if (isinstance(expr, (MethodCall, DotCall)) and expr.method == "get"
-                and not expr.args
-                and is_own_type(validator.infer_expression_type(expr.receiver))):
-            expr = expr.receiver
-            continue
-        return None
+    def owns_payload(call) -> bool:
+        return (call.method == "get" and not call.args
+                and is_own_type(validator.infer_expression_type(call.receiver)))
+
+    walked = walk_place(expr, Step.MEMBER | Step.INDEX | Step.CALL,
+                        crosses_call=owns_payload,
+                        stop=lambda member: _alias_origin(validator, member))
+    if walked.stop is not None:
+        member = walked.node
+        assert isinstance(member, MemberAccess)
+        return PlaceRoot(Name(id=member.member, loc=member.loc), walked.stop)
+    return PlaceRoot(walked.name) if walked.name is not None else None
 
 
 def _alias_origin(validator: 'TypeValidator', expr: MemberAccess) -> Optional[str]:

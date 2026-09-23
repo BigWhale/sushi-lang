@@ -23,8 +23,9 @@ from typing import TYPE_CHECKING, Callable, Optional, Sequence, Union
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ErrorMessage, Span
 from sushi_lang.internals.report import Reporter
-from sushi_lang.semantics.ast import Expr, MethodCall, Name
+from sushi_lang.semantics.ast import Expr, MethodCall
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import (ArrayType, BuiltinType, DynamicArrayType,
                                           IteratorType, Type, deref_type)
 from .utils import validate_constant_array_index
@@ -341,21 +342,19 @@ def _names_an_unshadowed_constant(expr: Optional[Expr],
     into a constant, and `SEG.start.x := v` does so two levels down. Walking here is
     what keeps one seam answering for every writer.
     """
-    from sushi_lang.semantics.ast import IndexAccess, MemberAccess
-
     if validator is None:
         return None
-    while isinstance(expr, (MemberAccess, IndexAccess)):
-        ref = expr.namespace_ref if isinstance(expr, MemberAccess) else None
-        if ref is not None:
-            # `geo.SIZE`: the alias fold keeps the record's kind, so the answer is the
-            # record's and not the alias name's.
-            sig = validator.const_table.lookup(ref.name, ref.origin)
-            return None if sig is None or sig.is_var else str(ref.name)
-        expr = expr.receiver if isinstance(expr, MemberAccess) else expr.array
-    if not isinstance(expr, Name):
+    walked = walk_place(expr, Step.MEMBER | Step.INDEX,
+                        stop=lambda member: member.namespace_ref)
+    ref = walked.stop
+    if ref is not None:
+        # `geo.SIZE`: the alias fold keeps the record's kind, so the answer is the
+        # record's and not the alias name's.
+        sig = validator.const_table.lookup(ref.name, ref.origin)
+        return None if sig is None or sig.is_var else str(ref.name)
+    if walked.name is None:
         return None
-    name = expr.id
+    name = walked.name.id
     if name in getattr(validator, 'variable_types', {}):
         return None
     # SCOPED, never the flat view: `by_name` holds one record per name over the whole

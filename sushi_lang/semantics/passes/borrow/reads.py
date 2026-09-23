@@ -19,11 +19,15 @@ from sushi_lang.semantics.ast import (
     TryExpr,
 )
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.ownership import is_get_out_container
 from sushi_lang.semantics.typesys import ReferenceType, StructType, Type
 
 if TYPE_CHECKING:
     from . import BorrowChecker
+
+# A read through an owner crosses every step: a field, an element, a call's receiver, a `??`.
+OWNER_STEPS = Step.MEMBER | Step.INDEX | Step.CALL | Step.TRY
 
 
 def unwrap_try(expr: Optional[Expr]) -> Optional[Expr]:
@@ -44,28 +48,10 @@ def called_on(expr: Optional[Expr], *methods: str) -> Optional[Expr]:
     return expr.receiver
 
 
-def member_access_base(expr: MemberAccess) -> Expr:
-    """Get the base variable of a member access chain."""
-    current = expr
-    while isinstance(current, MemberAccess):
-        current = current.receiver
-    return current
-
-
 def root_owner(expr: Optional[Expr]) -> Optional[str]:
     """The named local a read-through-an-owner expression ultimately reads out of."""
-    while True:
-        match expr:
-            case Name():
-                return expr.id
-            case TryExpr():
-                expr = expr.expr
-            case MemberAccess() | MethodCall() | DotCall():
-                expr = expr.receiver
-            case IndexAccess():
-                expr = expr.array
-            case _:
-                return None
+    root = walk_place(expr, OWNER_STEPS).name
+    return root.id if root is not None else None
 
 
 def chain_call_boundary(expr: Optional[Expr]) -> Optional[Span]:
@@ -79,18 +65,10 @@ def chain_call_boundary(expr: Optional[Expr]) -> Optional[Span]:
     is rejected, never silently writable. The boundary's span is the second location
     of the CE2429 diagnostic.
     """
-    if expr is None:
+    end = walk_place(expr, Step.MEMBER | Step.INDEX).node
+    if end is None or isinstance(end, Name):
         return None
-    while True:
-        match expr:
-            case MemberAccess():
-                expr = expr.receiver
-            case IndexAccess():
-                expr = expr.array
-            case Name() | None:
-                return None
-            case _:
-                return expr.loc
+    return end.loc
 
 
 def reads_through_owner(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
