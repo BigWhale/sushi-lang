@@ -27,10 +27,11 @@ def monomorphize_extension_method(
     instantiation, which is the defect (#391): the typecheck pass's stamps and the borrow pass's ownership
     decisions are per instantiation and would land on the same nodes.
     """
+    # The collect pass refuses a target of the wrong count (CE2062, #796).
     if len(type_args) != len(generic_method.type_params):
-        raise_internal_error("CE0096", operation=f"Type argument count mismatch: expected {len(generic_method.type_params)}, "
-            f"got {len(type_args)}"
-        )
+        raise_internal_error("CE0000", detail=(
+            f"type argument count mismatch: expected {len(generic_method.type_params)}, "
+            f"got {len(type_args)}"))
 
     substitution = {}
     for param, arg in zip(generic_method.type_params, type_args, strict=False):
@@ -41,8 +42,8 @@ def monomorphize_extension_method(
     # the receiver substitution in this ONE pass over the original template body.
     method_type_params = getattr(generic_method, "method_type_params", ()) or ()
     if len(method_type_args) != len(method_type_params):
-        raise_internal_error("CE0096", operation=(
-            f"Method type argument count mismatch: expected {len(method_type_params)}, "
+        raise_internal_error("CE0000", detail=(
+            f"method type argument count mismatch: expected {len(method_type_params)}, "
             f"got {len(method_type_args)}"))
     for param_name, arg in zip(method_type_params, method_type_args, strict=True):
         substitution[param_name] = arg
@@ -177,9 +178,10 @@ def monomorphize_perk_impl(
     import copy as _copy
     from sushi_lang.semantics.ast import ExtendWithDef
 
+    # The collect pass refuses a target of the wrong count (CE2062, #796).
     if len(type_args) != len(template.type_params):
-        raise_internal_error("CE0096", operation=(
-            f"Type argument count mismatch: expected {len(template.type_params)}, "
+        raise_internal_error("CE0000", detail=(
+            f"type argument count mismatch: expected {len(template.type_params)}, "
             f"got {len(type_args)}"))
 
     substitution = {name: arg
@@ -253,8 +255,6 @@ def monomorphize_all_perk_impls(
             if concrete_target is None:
                 continue
             for template in templates:
-                if len(template.type_params) != len(type_args):
-                    continue
                 key = (concrete_type_name, template.impl.perk_name)
                 if key in result:
                     continue

@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODE: CE2062
+# EXPECT_STDERR_CONTAINS: generic 'Box' expects 1 type argument(s), got 2
+# A struct field type with too many type arguments.
+struct Box@(T):
+    T v
+
+struct Holder:
+    Box@(i32, i32) b
+
+fn main() i32:
+    return Result.Ok(0)
