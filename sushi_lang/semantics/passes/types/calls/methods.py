@@ -432,8 +432,8 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
                                  mode) -> None:
     """A MARKED receiver must name storage the call can reach (#327, ruling R25).
 
-    A `poke self` writes the receiver, so read-only storage cannot take it and a
-    TEMPORARY has no address the caller keeps (CE2404). A `peek self` receiver only
+    A `poke self` writes the receiver, so read-only storage cannot take it (CE2400); a
+    temporary receiver is the borrow pass's rule (CE2429). A `peek self` receiver only
     reads, so it never arrives here.
 
     A `nom self` TAKES the receiver, and that is the borrow pass's rule for storage of

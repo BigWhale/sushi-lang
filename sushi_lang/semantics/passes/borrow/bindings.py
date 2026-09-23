@@ -7,11 +7,15 @@ from typing import Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import Expr, Name, NomBinding, Pattern, RefBinding
+from sushi_lang.semantics.constant_borrow import (
+    READ_ONLY_MODE, has_an_address, may_be_written,
+)
 from sushi_lang.semantics.ownership import TypeClass
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import ReferenceType, Type
 
 from .diagnostics import expr_to_string
-from .reads import root_owner
+from .reads import constant_sig, root_owner
 from sushi_lang.semantics.param_modes import borrow_mode
 from .state import BorrowState
 
@@ -373,7 +377,20 @@ def _bind_payload_ref(checker: 'BorrowChecker', scope: BindingScope, name: str,
         # parks it in a slot for the whole statement, and that slot is the storage. An
         # `Own(...)` pointee lives in its heap cell, not in the scrutinee.
         scope.bind_ref(name, ty, marker, span, owner=None, declared_at=span)
-        checker.err.emit(er.ERR.CE2404, span, expr=expr_to_string(scrutinee))
+        if not _refused_as_a_constant(checker, scrutinee, marker):
+            checker.err.emit(er.ERR.CE2404, span, expr=expr_to_string(scrutinee))
         return
     owner = scrutinee if isinstance(scrutinee, Name) else None
     scope.bind_ref(name, ty, marker, span, owner=owner, declared_at=span)
+
+
+def _refused_as_a_constant(checker: 'BorrowChecker', scrutinee: Expr, marker: str) -> bool:
+    """Does CE2400 already refuse this binding: a write into a place rooted in a constant?
+
+    The typecheck pass asks the same root the same question, so one fault reads one code.
+    """
+    root = walk_place(scrutinee, Step.MEMBER | Step.INDEX).name
+    if root is None or root.id in checker.borrow_state:
+        return False
+    sig = constant_sig(checker, root.id)
+    return has_an_address(sig) and marker != READ_ONLY_MODE and not may_be_written(sig)
