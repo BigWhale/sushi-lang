@@ -12,7 +12,7 @@ from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
 from ..arguments import check_arguments
-from ..method_registry import METHOD_TYPE_REGISTRY
+from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family
 from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args,\
     resolve_declared_type
 
@@ -525,8 +525,8 @@ def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
                              type_name: str) -> None:
     """A call written on a built-in generic's NAME: `List.new()`, `HashMap.new()`.
 
-    There is no receiver here, so no family claims it and the arity is measured against
-    the static's own table. Every other static goes through `passes/types/calls/statics.py`;
+    There is no receiver here, so no family claims it; the count is still the family's
+    row, and a miscount is CE2009 (#799). Every other static goes through `passes/types/calls/statics.py`;
     these two keep their narrow emitters because a container static has no `ExtendDef`
     to converge onto (`docs/design/method-resolution.md`).
     """
@@ -540,25 +540,17 @@ def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
         if reject_out_of_scope_type(validator, type_name, call.receiver.loc):
             return
 
-    if type_name == "List" and call.method in ("new", "with_capacity"):
-        expected = {"new": 0, "with_capacity": 1}[call.method]
-        if len(call.args) != expected:
-            er.emit(validator.reporter, er.ERR.CE2053, call.loc,
-                    method=call.method, expected=expected, got=len(call.args))
-        return
+    from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
+    family, statics = _CONTAINER_STATICS.get(type_name, ("", ()))
+    if call.method in statics:
+        reject_builtin_miscount(validator.reporter, call, f"{type_name}.{call.method}",
+                                arity_of_family(family))
 
-    if type_name == "HashMap" and call.method == "new":
-        # The receiver is a type NAME, so the concrete HashMap type comes from the
-        # propagation stamp -- reading it is what makes the key gate reachable (#272).
-        from sushi_lang.semantics.generics.hashmap import (
-            validate_hashmap_method_with_validator)
-        hashmap_type = getattr(call, 'resolved_struct_type', None)
-        if isinstance(hashmap_type, StructType) and hashmap_type.name.startswith("HashMap<"):
-            validate_hashmap_method_with_validator(
-                call, hashmap_type, validator.reporter, validator)
-        elif call.args:
-            er.emit(validator.reporter, er.ERR.CE2016, call.loc,
-                    method=call.method, expected=0, got=len(call.args))
+
+#: The statics a built-in container answers on its type NAME, and the family whose count
+#: row each one reads (`MethodFamily.arity`).
+_CONTAINER_STATICS = {"List": ("list", ("new", "with_capacity")),
+                      "HashMap": ("hashmap", ("new",))}
 
 
 def _validate_perk_method(validator: 'TypeValidator', call: MethodCall,

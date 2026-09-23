@@ -1,6 +1,9 @@
 """One answer to "does the compiler already define this method on this type?"."""
 from __future__ import annotations
 
+from typing import Any, Mapping
+
+from sushi_lang.internals import errors as er
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.typesys import (
     ArrayType,
@@ -79,3 +82,18 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str,
         return derived_methods.get_method(receiver_type, method_name) is not None
 
     return False
+
+
+def reject_builtin_miscount(reporter: Any, call: Any, callee: str,
+                            arity: Mapping[str, int]) -> bool:
+    """CE2009: a built-in method or static took the wrong number of arguments.
+
+    `arity` is the family's table (`MethodFamily.arity`); a name it does not hold is
+    measured elsewhere. `callee` is the name the text shows. Answers whether it reported.
+    """
+    expected = arity.get(call.method)
+    if expected is None or len(call.args) == expected:
+        return False
+    er.emit(reporter, er.ERR.CE2009, call.loc,
+            name=callee, expected=expected, got=len(call.args))
+    return True
