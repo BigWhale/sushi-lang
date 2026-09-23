@@ -493,9 +493,9 @@ _MISSING = object()
 def bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,
                             element_type, element_ptr):
     """Bind a foreach item as a REFERENCE to the container's element (#300 phase 1)."""
-    from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
-    mode = BorrowMode.POKE if borrow_mode == "poke" else BorrowMode.PEEK
-    ref_type = ReferenceType(element_type, mode)
+    from sushi_lang.semantics.param_modes import borrow_mode as read_borrow_mode
+    from sushi_lang.semantics.typesys import ReferenceType
+    ref_type = ReferenceType(element_type, read_borrow_mode(borrow_mode))
     codegen.memory.create_local(name, element_ptr.type, element_ptr, ref_type,
                                 register_cleanup=False)
     previous = codegen.variable_types.get(name, _MISSING)

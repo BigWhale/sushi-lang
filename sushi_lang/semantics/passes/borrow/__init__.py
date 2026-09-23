@@ -16,7 +16,7 @@ from .destroy_effects import compute_destroy_effects
 from .expressions import INERT_EXPRS, check_expr
 from .flow import FlowFacts
 from .reads import unit_variables
-from .state import BorrowState, borrow_mode
+from .state import BorrowState
 from .statements import check_block
 from .types import TypeQueries
 from .writes import MUTATING_METHODS, READONLY_RECEIVERS
@@ -165,7 +165,7 @@ class BorrowChecker:
             mode = receiver_mode(self_mode)
             receiver_type = self_type
             if mode.by_pointer:
-                receiver_type = ReferenceType(self_type, borrow_mode(self_mode))
+                receiver_type = ReferenceType(self_type, mode.borrow_mode)
             self._declare(BorrowState(name="self", var_type=receiver_type,
                                       declared_at_span=self_span,
                                       is_method_receiver=not mode.consumes),

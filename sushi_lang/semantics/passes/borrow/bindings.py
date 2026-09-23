@@ -12,7 +12,8 @@ from sushi_lang.semantics.typesys import ReferenceType, Type
 
 from .diagnostics import expr_to_string
 from .reads import root_owner
-from .state import BorrowState, borrow_mode
+from sushi_lang.semantics.param_modes import borrow_mode
+from .state import BorrowState
 
 if TYPE_CHECKING:
     from . import BorrowChecker
@@ -91,7 +92,7 @@ class BindingScope:
         self.register(BorrowState(name=name, var_type=ty, declared_at_span=span,
                                   declared_branch_depth=self.checker.branch_depth + 1))
 
-    def bind_ref(self, name: str, ty: Optional[Type], marker: Optional[str],
+    def bind_ref(self, name: str, ty: Optional[Type], marker: str,
                  span: Optional[Span], owner: Optional[Expr],
                  declared_at: Optional[Span] = None) -> None:
         """Bind BY REFERENCE (#300), and freeze the owner it points into."""
