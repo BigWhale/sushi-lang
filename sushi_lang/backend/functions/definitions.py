@@ -104,10 +104,8 @@ class FunctionDefinitions:
         # that names one, so nothing here reads `self`.
         self_semantic = None if getattr(ext, "is_static", False) else ext.target_type
         if self_semantic is not None and self_receiver_mode.by_pointer:
-            from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
-            self_semantic = ReferenceType(
-                ext.target_type,
-                BorrowMode.POKE if ext.self_mode == "poke" else BorrowMode.PEEK)
+            from sushi_lang.semantics.typesys import ReferenceType
+            self_semantic = ReferenceType(ext.target_type, self_receiver_mode.borrow_mode)
         if self_semantic is not None:
             self.codegen.variable_types["self"] = self_semantic
         for param in ext.params:

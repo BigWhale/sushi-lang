@@ -4,7 +4,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Iterable, Optional, Sequence, Tuple
 
-from sushi_lang.semantics.typesys import ReferenceType, Type
+from sushi_lang.semantics.typesys import BorrowMode, ReferenceType, Type
 
 
 class ParamMode(Enum):
@@ -30,6 +30,13 @@ class ParamMode(Enum):
         """The word written at both ends, or None for the unmarked mode."""
         return None if self is ParamMode.BORROW else self.value
 
+    @property
+    def borrow_mode(self) -> BorrowMode:
+        """The `BorrowMode` of a by-pointer mode. A by-value mode has none."""
+        if not self.by_pointer:
+            raise ValueError(f"the {self.value} mode is not a borrow by pointer")
+        return BorrowMode(self.value)
+
 
 class CalleeKind(Enum):
     """Every kind of thing a call argument can be handed to. A CLOSED set."""
@@ -51,11 +58,6 @@ _ALWAYS_CONSUMES: frozenset[CalleeKind] = frozenset({
     CalleeKind.CONTAINER,
 })
 
-# EMPTY, and that is the whole flip. An unmarked by-value parameter is a BORROW for
-# every kind of callee, so the declared mode is the entire answer and `effective_modes`
-# differs from `declared_modes` only at the two positional sinks above.
-_UNMARKED_STILL_CONSUMES: frozenset[CalleeKind] = frozenset()
-
 
 def mode_of_type(ty: Optional[Type], is_nom: bool = False) -> ParamMode:
     """THE derivation of a declared mode. Nothing else may compute one."""
@@ -64,18 +66,25 @@ def mode_of_type(ty: Optional[Type], is_nom: bool = False) -> ParamMode:
     return ParamMode.NOM if is_nom else ParamMode.BORROW
 
 
-def receiver_mode(self_mode: Optional[str]) -> ParamMode:
-    """THE reading of a declared receiver mode. Nothing else may interpret one.
+def borrow_mode(marker: str) -> BorrowMode:
+    """THE reading of a `peek` / `poke` marker. A bad marker is a ValueError."""
+    return BorrowMode(marker)
+
+
+def receiver_mode(marker: Optional[str]) -> ParamMode:
+    """THE reading of a declared mode marker. Nothing else may interpret one.
 
     An unmarked receiver is a BORROW, exactly as an unmarked parameter is; `peek self`
     and `poke self` arrive by pointer; `nom self` CONSUMES, so the method owns what it
-    was called on and the caller's binding is spent (HANDLES.md ruling R25).
+    was called on and the caller's binding is spent (HANDLES.md ruling R25). A marker
+    that spells no mode is a ValueError, never a silent PEEK.
     """
-    if self_mode is None:
+    if marker is None:
         return ParamMode.BORROW
-    if self_mode == "nom":
-        return ParamMode.NOM
-    return ParamMode.POKE if self_mode == "poke" else ParamMode.PEEK
+    mode = ParamMode(marker)
+    if mode is ParamMode.BORROW:
+        raise ValueError("the unmarked mode has no marker")
+    return mode
 
 
 def param_mode(param) -> ParamMode:
@@ -102,7 +111,7 @@ def normalize_modes(param_types: Sequence[Type],
 
 def effective_modes(modes: Sequence[ParamMode], kind: CalleeKind) -> Tuple[ParamMode, ...]:
     """What the declared modes MEAN at a call to this kind of callee."""
-    if kind in _ALWAYS_CONSUMES or kind in _UNMARKED_STILL_CONSUMES:
+    if kind in _ALWAYS_CONSUMES:
         # Only the UNMARKED mode is reinterpreted. A by-pointer mode is never turned
         # into a consume -- it does not even pass the value -- and an explicit `nom` is
         # already the answer.

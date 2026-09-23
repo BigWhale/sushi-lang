@@ -34,8 +34,11 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
 
     elif isinstance(expr.expr, MemberAccess):
         from sushi_lang.backend.expressions.names import namespaced_storage
-        storage = namespaced_storage(codegen, expr.expr,
-                                     writable=expr.mutability != "peek")
+        from sushi_lang.semantics.param_modes import borrow_mode
+        from sushi_lang.semantics.typesys import BorrowMode
+        storage = namespaced_storage(
+            codegen, expr.expr,
+            writable=borrow_mode(expr.mutability) is BorrowMode.POKE)
         if storage is not None:
             return storage[1]  # `poke geo.count`: the variable's own address
         return emit_member_access_borrow(codegen, expr.expr)

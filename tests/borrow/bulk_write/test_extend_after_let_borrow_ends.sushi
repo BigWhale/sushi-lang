@@ -1,0 +1,12 @@
+# The mirror: a bulk write after the last read of a `let`-borrow is legal (#785).
+# EXPECT_STDOUT_EXACT: "x\n3\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let string[] a = from(["x", "y"])
+    let string[] b = from(["z"])
+    let string first = a[0]
+    println(first)
+    a.extend(b)
+    println(a.len())
+    return Result.Ok(0)

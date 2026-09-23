@@ -13,6 +13,7 @@ from sushi_lang.semantics.ast import (
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.name_ladder import BareName, classify
+from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import NamespaceTable
@@ -375,7 +376,7 @@ class ScopeAnalyzer:
         # Add implicit 'self' parameter first - this is the receiver of the method
         # It should not be declared explicitly by the user. A `poke self` receiver
         # (#327) is rebindable (`self := 0` writes the caller's primitive).
-        self._self_is_poke = getattr(ext, "self_mode", None) == "poke"
+        self._self_is_poke = receiver_mode(ext.self_mode) is ParamMode.POKE
         self._declare_variable("self", None)
 
         for param in ext.params:
@@ -391,7 +392,7 @@ class ScopeAnalyzer:
 
             # Add implicit 'self' parameter - represents the target type instance.
             # `poke self` (#327) makes it rebindable, as in extension methods.
-            self._self_is_poke = getattr(method, "self_mode", None) == "poke"
+            self._self_is_poke = receiver_mode(method.self_mode) is ParamMode.POKE
             self._declare_variable("self", None)
 
             for param in method.params:
@@ -493,7 +494,7 @@ class ScopeAnalyzer:
         # this" (#330), so the rejection is CE2400. A TYPE name is not in the set: the
         # walk above already read the iterable and said CE2105 about it, and one fault
         # gets one diagnostic.
-        if stmt.item_borrow == "poke":
+        if receiver_mode(stmt.item_borrow) is ParamMode.POKE:
             root = stmt.iterable
             from sushi_lang.semantics.ast import DotCall as _DotCall, MethodCall as _MethodCall
             while isinstance(root, (_DotCall, _MethodCall)):

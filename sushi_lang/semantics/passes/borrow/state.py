@@ -26,13 +26,8 @@ from __future__ import annotations
 from typing import Optional
 from dataclasses import dataclass, field
 
-from sushi_lang.semantics.typesys import BorrowMode, Type
+from sushi_lang.semantics.typesys import Type
 from sushi_lang.internals.report import Span
-
-
-def borrow_mode(marker: Optional[str]) -> BorrowMode:
-    """The `BorrowMode` a `peek` / `poke` source marker names."""
-    return BorrowMode.POKE if marker == "poke" else BorrowMode.PEEK
 
 
 @dataclass

@@ -121,7 +121,7 @@ def name_provenance(checker: 'BorrowChecker', name: str) -> Provenance:
     return Provenance.OWNED
 
 
-def consume(checker: 'BorrowChecker', expr: Expr, use) -> None:
+def consume(checker: 'BorrowChecker', expr: Expr) -> None:
     """Classify a consuming use, stamp the decision, and act on it."""
     # A bloom `arr...` MOVES its source into the callee. CE0120 restricts the source
     # to a bare array variable, so unwrapping here makes a use-after-bloom a CE2405
@@ -130,8 +130,8 @@ def consume(checker: 'BorrowChecker', expr: Expr, use) -> None:
         expr = expr.value
 
     provenance = source_provenance(checker, expr)
-    # Only PROVENANCE is stamped. The `use` is the backend's to name: semantics
-    # cannot tell `S(x)` from `f(x)` -- both are a `Call` here.
+    # Only PROVENANCE is stamped. Which consuming use this is, the backend names:
+    # semantics cannot tell `S(x)` from `f(x)` -- both are a `Call` here.
     expr.ownership_provenance = provenance
 
     if isinstance(expr, Name):
@@ -153,10 +153,10 @@ def consume(checker: 'BorrowChecker', expr: Expr, use) -> None:
         emit_consume_of_read(checker, expr)
 
 
-def consume_each(checker: 'BorrowChecker', args, use) -> None:
-    """Consume every argument of an ownership sink at `use`."""
+def consume_each(checker: 'BorrowChecker', args) -> None:
+    """Consume every argument of an ownership sink."""
     for arg in args:
-        consume(checker, arg, use)
+        consume(checker, arg)
 
 
 def reject_move_of_constant(checker: 'BorrowChecker', name: str,

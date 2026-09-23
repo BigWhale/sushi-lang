@@ -4,7 +4,8 @@ from typing import Optional, TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import is_type_node, span_of
-from sushi_lang.semantics.typesys import ReferenceType, BorrowMode, Type
+from sushi_lang.semantics.param_modes import borrow_mode
+from sushi_lang.semantics.typesys import ReferenceType, Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -17,11 +18,7 @@ def parse_reference_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type
 
     for child in node.children:
         if isinstance(child, Token) and child.type == "BORROW_MODE":
-            mode_str = child.value.lower()
-            if mode_str == "peek":
-                mutability = BorrowMode.PEEK
-            elif mode_str == "poke":
-                mutability = BorrowMode.POKE
+            mutability = borrow_mode(child.value)
         elif is_type_node(child):
             referenced_type_node = child
 

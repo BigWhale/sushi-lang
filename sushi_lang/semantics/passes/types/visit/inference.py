@@ -551,7 +551,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_borrow(self, node: Borrow) -> Optional[Type]:
         """Infer type of borrow expression (peek expr or poke expr)."""
-        from sushi_lang.semantics.typesys import ReferenceType, BorrowMode
+        from sushi_lang.semantics.typesys import ReferenceType
 
         inner_type = self.type_validator.infer_expression_type(node.expr)
         if inner_type is None:
@@ -569,8 +569,9 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                                          node.expr.loc, mode=node.mutability):
                 return None
 
-        mutability = BorrowMode.PEEK if node.mutability == "peek" else BorrowMode.POKE
-        return ReferenceType(referenced_type=inner_type, mutability=mutability)
+        from sushi_lang.semantics.param_modes import borrow_mode
+        return ReferenceType(referenced_type=inner_type,
+                             mutability=borrow_mode(node.mutability))
 
     def generic_visit(self, node) -> Optional[Type]:
         """Default behavior for unknown nodes."""

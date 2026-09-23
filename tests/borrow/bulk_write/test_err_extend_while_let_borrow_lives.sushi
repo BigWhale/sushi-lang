@@ -1,0 +1,13 @@
+# A bulk write MUTATES its destination, so it ends a live `let`-borrow out of it (#785).
+#
+# `first` reads out of `a`, and `a.extend(b)` may reallocate the buffer `first` points
+# into. `a.push(...)` in the same place is CE2412, and `extend` follows the same rule.
+# EXPECT_ERROR_CODE: CE2412
+
+fn main() i32:
+    let string[] a = from(["x", "y"])
+    let string[] b = from(["z"])
+    let string first = a[0]
+    a.extend(b)
+    println(first)
+    return Result.Ok(0)

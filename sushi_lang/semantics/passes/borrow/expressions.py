@@ -32,7 +32,6 @@ from sushi_lang.semantics.ast import (
     UnaryOp,
 )
 from sushi_lang.semantics import array_runs
-from sushi_lang.semantics.ownership import ConsumingUse
 
 from .borrows import check_borrow
 from .calls import (
@@ -96,15 +95,13 @@ def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
             # the MOVE happens in `consume_call_args`, which unwraps the Spread.
             check_expr(checker, expr.value)
         case EnumConstructor():
-            _check_sink_elements(checker, expr.args, ConsumingUse.ENUM_PAYLOAD)
+            _check_sink_elements(checker, expr.args)
         case DynamicArrayFrom():
             _check_run_elements(checker, expr.elements.elements)
-            _check_sink_elements(checker, array_runs.values(expr.elements.elements),
-                                 ConsumingUse.ARRAY_ELEMENT)
+            _check_sink_elements(checker, array_runs.values(expr.elements.elements))
         case ArrayLiteral():
             _check_run_elements(checker, expr.elements)
-            _check_sink_elements(checker, array_runs.values(expr.elements),
-                                 ConsumingUse.ARRAY_ELEMENT)
+            _check_sink_elements(checker, array_runs.values(expr.elements))
         case InterpolatedString():
             for part in expr.parts:
                 if not isinstance(part, str):
@@ -171,12 +168,12 @@ def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
     reject_self_aliasing_copy(checker, expr)
     if is_enum_constructor(checker, expr):
         # `Box.Full(a)` arrives here as a DotCall, not an EnumConstructor.
-        consume_each(checker, expr.args, ConsumingUse.ENUM_PAYLOAD)
-    elif getattr(expr, "callee_fn_type", None) is not None:
+        consume_each(checker, expr.args)
+    elif expr.callee_fn_type is not None:
         # Keyed on the typecheck pass's `callee_fn_type` stamp, so an FFI / extension / builtin
         # method keeps the rule above.
         consume_indirect_args(checker, expr)
-    elif getattr(expr, "namespace_ref", None) is not None:
+    elif expr.namespace_ref is not None:
         # `geo.eat(nom s)` is a FUNCTION written behind a dot, not a method: the
         # receiver names a namespace and takes no argument position.
         settle_namespaced_args(checker, expr)
@@ -225,7 +222,7 @@ def _check_run_elements(checker: 'BorrowChecker', elements) -> None:
             check_expr(checker, element.count)
 
 
-def _check_sink_elements(checker: 'BorrowChecker', elements, use) -> None:
+def _check_sink_elements(checker: 'BorrowChecker', elements) -> None:
     """Walk each element of an ownership sink, then consume it (#134).
 
     A bare owning element variable MOVES into the constructed value; a MemberAccess
@@ -233,4 +230,4 @@ def _check_sink_elements(checker: 'BorrowChecker', elements, use) -> None:
     """
     for elem in elements:
         check_expr(checker, elem)
-        consume(checker, elem, use)
+        consume(checker, elem)
