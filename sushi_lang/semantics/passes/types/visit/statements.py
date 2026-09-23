@@ -7,6 +7,11 @@ from sushi_lang.internals import errors as er
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Expr
     from sushi_lang.semantics.passes.types import TypeValidator
+from sushi_lang.semantics.passes.types.expressions import validate_boolean_condition
+from sushi_lang.semantics.passes.types.matching import validate_match_statement
+from sushi_lang.semantics.passes.types.statements import (
+    validate_foreach_statement, validate_let_statement, validate_rebind_statement,
+    validate_return_statement)
 from sushi_lang.semantics.visitors import RecursiveVisitor
 from sushi_lang.semantics.ast import (
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue
@@ -24,7 +29,7 @@ class StatementValidator(RecursiveVisitor):
         """Validate if statement conditions and branches."""
         for cond, block in node.arms:
             # Validate condition is boolean (CE2005)
-            self.type_validator._validate_boolean_condition(cond, "if")
+            validate_boolean_condition(self.type_validator, cond, "if")
             self.type_validator._validate_block(block)
 
         if node.else_block:
@@ -33,12 +38,12 @@ class StatementValidator(RecursiveVisitor):
     def visit_while(self, node: While) -> None:
         """Validate while statement condition and body."""
         # Validate condition is boolean (CE2005)
-        self.type_validator._validate_boolean_condition(node.cond, "while")
+        validate_boolean_condition(self.type_validator, node.cond, "while")
         self.type_validator._validate_block(node.body)
 
     def visit_foreach(self, node: Foreach) -> None:
         """Validate foreach statement iterator type and body."""
-        self.type_validator._validate_foreach_statement(node)
+        validate_foreach_statement(self.type_validator, node)
 
     def visit_expand(self, node) -> None:
         """Reject an Expand that survived to the typecheck pass (CE0119)."""
@@ -47,15 +52,15 @@ class StatementValidator(RecursiveVisitor):
 
     def visit_match(self, node: Match) -> None:
         """Validate match statement with exhaustiveness checking."""
-        self.type_validator._validate_match_statement(node)
+        validate_match_statement(self.type_validator, node)
 
     def visit_let(self, node: Let) -> None:
         """Validate let statement."""
-        self.type_validator._validate_let_statement(node)
+        validate_let_statement(self.type_validator, node)
 
     def visit_return(self, node: Return) -> None:
         """Validate return statement."""
-        self.type_validator._validate_return_statement(node)
+        validate_return_statement(self.type_validator, node)
 
     def visit_exprstmt(self, node: ExprStmt) -> None:
         """Validate expression statement and warn if Result<T> is unused."""
@@ -101,7 +106,7 @@ class StatementValidator(RecursiveVisitor):
 
     def visit_rebind(self, node: Rebind) -> None:
         """Validate rebind statement."""
-        self.type_validator._validate_rebind_statement(node)
+        validate_rebind_statement(self.type_validator, node)
 
     def visit_break(self, node: Break) -> None:
         """Break statements don't need type validation."""

@@ -10,6 +10,8 @@ from sushi_lang.semantics.name_ladder import BareName, classify
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
+from sushi_lang.semantics.passes.types.inference import (
+    infer_array_literal_type, infer_dynamic_array_from_type, infer_index_access_type)
 from sushi_lang.semantics.visitors import NodeVisitor
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType
 from sushi_lang.semantics.type_predicates import (
@@ -127,11 +129,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_arrayliteral(self, node: ArrayLiteral) -> Optional[Type]:
         """Infer array literal type."""
-        return self.type_validator._infer_array_literal_type(node)
+        return infer_array_literal_type(self.type_validator, node)
 
     def visit_indexaccess(self, node: IndexAccess) -> Optional[Type]:
         """Infer index access type."""
-        return self.type_validator._infer_index_access_type(node)
+        return infer_index_access_type(self.type_validator, node)
 
     def visit_memberaccess(self, node: MemberAccess) -> Optional[Type]:
         """Infer member access type (a struct field, or a constant behind an alias)."""
@@ -507,7 +509,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_dynamicarrayfrom(self, node: DynamicArrayFrom) -> Optional[Type]:
         """from(array_literal) can infer type from array literal elements."""
-        return self.type_validator._infer_dynamic_array_from_type(node)
+        return infer_dynamic_array_from_type(self.type_validator, node)
 
     def visit_castexpr(self, node: CastExpr) -> Optional[Type]:
         """Cast expression - return the target type."""

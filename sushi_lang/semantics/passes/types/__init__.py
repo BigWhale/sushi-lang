@@ -12,47 +12,19 @@ if TYPE_CHECKING:
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.ast import (
-    Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, Return, Foreach, Match,
-    Expr
+    Program, FuncDef, ExtendDef, Block, Stmt, Expr
 )
+from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.types.visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
 
 from .compatibility import types_compatible
 from .constants import validate_constant
-from .externals import validate_external_call_args
 from .public_signatures import check_public_signatures
 from .signatures import (
     validate_function,
     validate_extension_method,
     validate_perk_implementation_method,
-)
-from .control_flow import block_always_returns
-from .statements import (
-    validate_let_statement,
-    validate_return_statement,
-    validate_rebind_statement,
-    validate_foreach_statement
-)
-from .matching import validate_match_statement
-from .expressions import (
-    validate_array_literal,
-    validate_index_access,
-    validate_cast_expression,
-    validate_try_expression,
-    validate_bitwise_operation,
-    validate_boolean_condition
-)
-from .calls import (
-    validate_function_call,
-    validate_enum_constructor,
-    validate_method_call
-)
-from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
-from .inference import (
-    infer_array_literal_type,
-    infer_index_access_type,
-    infer_dynamic_array_from_type
 )
 
 
@@ -143,7 +115,7 @@ class TypeValidator:
         check_constraint_perks(self, program)
 
         for const in program.constants:
-            self._validate_constant(const)
+            validate_constant(self, const)
 
         for func in program.functions:
             if hasattr(func, 'type_params') and func.type_params:
@@ -154,7 +126,7 @@ class TypeValidator:
             self._validate_extension_method(ext)
 
         for impl in program.perk_impls:
-            self._validate_perk_implementation(impl)
+            validate_perk_implementation_method(self, impl)
 
     @property
     def drop_type_names(self) -> frozenset:
@@ -237,16 +209,13 @@ class TypeValidator:
         node.external_ref = (binding.provider.origin, node.method)
         return binding.record
 
-    def _validate_external_call_args(self, node) -> None:
-        """Delegate to externals module."""
-        validate_external_call_args(self, node)
-
-    def _validate_constant(self, const: ConstDef) -> None:
-        """Delegate to constants module."""
-        validate_constant(self, const)
-
     def _validate_function(self, func: FuncDef) -> None:
-        """Delegate to signatures module."""
+        """The pass's surface for the `lift` pass (#756).
+
+        The other twenty-one delegates of this shape went: a caller inside the pass
+        names the module function it wants. A caller OUTSIDE the pass holds only the
+        validator, so the three that serve one keep their place here.
+        """
         validate_function(self, func)
 
     def annotate_function(self, func: FuncDef) -> None:
@@ -261,16 +230,8 @@ class TypeValidator:
         self._validate_function(func)
 
     def _validate_extension_method(self, ext: ExtendDef) -> None:
-        """Delegate to signatures module."""
+        """The pass's surface for the analyzer, which drives the per-unit loop."""
         validate_extension_method(self, ext)
-
-    def _validate_perk_implementation(self, impl: ExtendWithDef) -> None:
-        """Delegate to signatures module."""
-        validate_perk_implementation_method(self, impl)
-
-    def _block_always_returns(self, block: Block) -> bool:
-        """Delegate to control_flow module."""
-        return block_always_returns(self, block)
 
     def _validate_block(self, block: Block) -> None:
         """Validate statements in a block."""
@@ -281,76 +242,8 @@ class TypeValidator:
         """Validate a statement using the Visitor Pattern."""
         self.statement_validator.visit(stmt)
 
-    def _validate_let_statement(self, stmt: Let) -> None:
-        """Delegate to statements module."""
-        validate_let_statement(self, stmt)
-
-    def _validate_return_statement(self, stmt: Return) -> None:
-        """Delegate to statements module."""
-        validate_return_statement(self, stmt)
-
-    def _validate_rebind_statement(self, stmt) -> None:
-        """Delegate to statements module."""
-        validate_rebind_statement(self, stmt)
-
-    def _validate_foreach_statement(self, stmt: Foreach) -> None:
-        """Delegate to statements module."""
-        validate_foreach_statement(self, stmt)
-
-    def _validate_match_statement(self, stmt: Match) -> None:
-        """Delegate to matching module."""
-        validate_match_statement(self, stmt)
-
-    def _validate_array_literal(self, expr) -> None:
-        """Delegate to expressions module."""
-        validate_array_literal(self, expr)
-
-    def _validate_index_access(self, expr) -> None:
-        """Delegate to expressions module."""
-        validate_index_access(self, expr)
-
-    def _validate_cast_expression(self, expr) -> None:
-        """Delegate to expressions module."""
-        validate_cast_expression(self, expr)
-
-    def _validate_try_expression(self, expr) -> None:
-        """Delegate to expressions module."""
-        validate_try_expression(self, expr)
-
-    def _validate_bitwise_operation(self, expr) -> None:
-        """Delegate to expressions module."""
-        validate_bitwise_operation(self, expr)
-
-    def _validate_boolean_condition(self, expr, context: str) -> None:
-        """Delegate to expressions module."""
-        validate_boolean_condition(self, expr, context)
-
-    def _validate_function_call(self, call) -> None:
-        """Delegate to calls module."""
-        validate_function_call(self, call)
-
-    def _validate_enum_constructor(self, constructor) -> None:
-        """Delegate to calls module."""
-        validate_enum_constructor(self, constructor)
-
-    def _validate_method_call(self, call) -> None:
-        """Delegate to calls module."""
-        validate_method_call(self, call)
-
-    def _infer_array_literal_type(self, expr) -> Optional[Type]:
-        """Delegate to inference module."""
-        return infer_array_literal_type(self, expr)
-
-    def _infer_index_access_type(self, expr) -> Optional[Type]:
-        """Delegate to inference module."""
-        return infer_index_access_type(self, expr)
-
-    def _infer_dynamic_array_from_type(self, expr, expected_type=None) -> Optional[Type]:
-        """Delegate to inference module."""
-        return infer_dynamic_array_from_type(self, expr, expected_type)
-
     def _types_compatible(self, actual: Type, expected: Type) -> bool:
-        """Delegate to compatibility module."""
+        """The pass's surface for the Maybe and Result intern seams."""
         return types_compatible(self, actual, expected)
 
 
