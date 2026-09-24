@@ -351,6 +351,7 @@ class SemanticAnalyzer:
         func_instantiations = instantiations.function_instantiations
 
         monomorphizer = self._new_monomorphizer(instantiations)
+        monomorphizer.type_monomorphizer.refuse_template_arity(compilation_order)
         enum_instantiations, struct_instantiations = self._resolved_instantiations(
             type_instantiations)
 
