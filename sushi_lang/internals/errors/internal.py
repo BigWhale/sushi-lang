@@ -383,6 +383,18 @@ _add(ErrorMessage("CE0137", Severity.ERROR,
     "with no explanation of what had gone wrong (#687). Same treatment derive.py gives an "
     "unsortable struct cycle with CE0128."))
 
+_add(ErrorMessage("CE0139", Severity.ERROR,
+    "operator '{op}' received integer operands of two widths: {left} and {right}",
+    Category.INTERNAL,
+    "The typecheck pass refuses a mixed width for `== != < <= > >=`, `+ - * / %` and "
+    "`& | ^` (CE2510), and a shift brings its count to the value's width itself. So the "
+    "backend comparison and bitwise emitters always receive two integer operands of one "
+    "width. Reaching this means a mixed pair passed the typecheck pass, which is a gap in "
+    "CE2510 and not a user error. It is fatal ON PURPOSE: the comparison emitter squeezed "
+    "both operands to i32 and compared them signed, so an i64 truncated and an unsigned "
+    "operand took the wrong sign, and the bitwise emitter extended or truncated the right "
+    "operand. Both compiled a wrong value with no diagnostic (#840)."))
+
 _add(ErrorMessage("CE0126", Severity.ERROR,
     "poisoned intern of '{name}': already interned as {existing}, rebuilt as {rebuilt}",
     Category.INTERNAL,
