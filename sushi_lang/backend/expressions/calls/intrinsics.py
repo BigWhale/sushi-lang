@@ -29,7 +29,8 @@ def require_stdlib_unit(codegen: 'LLVMCodegen', module: str, call: str, span) ->
         .help(f"add `use <{module}>` above the first declaration of this unit")
 
 
-def try_emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]) -> Optional[ir.Value]:
+def try_emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                              to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as enum constructor. Returns None if not an enum constructor."""
     from sushi_lang.backend.expressions.calls.utils import get_resolved_type
 
@@ -69,7 +70,8 @@ def try_emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
     return None
 
 
-def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]) -> Optional[ir.Value]:
+def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                                to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as struct constructor (e.g., Own.alloc()). Returns None if not a struct constructor."""
     from sushi_lang.backend.expressions.calls.utils import get_resolved_type
 
@@ -133,7 +135,8 @@ def try_emit_array_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
 
 
 def try_emit_string_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
-                            receiver_value: ir.Value, receiver_type: ir.Type, to_i1: bool) -> Optional[ir.Value]:
+                            receiver_value: ir.Value, receiver_type: ir.Type,
+                            semantic_type, to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as string method. Returns None if not a string method."""
     from sushi_lang.backend.expressions.calls.stdlib import emit_stdlib_string_call
 
@@ -357,14 +360,8 @@ def try_emit_perk_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
         from sushi_lang.backend.expressions.calls.dispatcher import consume_receiver
         receiver_value = consume_receiver(codegen, expr, receiver_value)
 
-    from sushi_lang.backend.expressions.calls.dispatcher import settle_method_call_arguments
+    from sushi_lang.backend.expressions.calls.dispatcher import (
+        emit_checked_call, settle_method_call_arguments)
     arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
     settle_method_call_arguments(codegen, expr, arg_values)
-    emitted_args = [receiver_value, *arg_values]
-
-    params = list(llvm_fn.args)
-    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params, strict=True)]
-
-    result_value = codegen.builder.call(llvm_fn, casted)
-
-    return codegen.utils.as_i1(result_value) if to_i1 else result_value
+    return emit_checked_call(codegen, llvm_fn, [receiver_value, *arg_values], to_i1)
