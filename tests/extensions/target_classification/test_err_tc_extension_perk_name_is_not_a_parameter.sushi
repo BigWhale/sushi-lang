@@ -4,7 +4,8 @@
 # as a fresh parameter, so `g` was on every Box and `Named` was shadowed inside the
 # method's signature (#653).
 # TEST_TYPE: error
-# EXPECT_ERROR_CODE: CE2008
+# The target is refused (CE2001), so the call of `g` adds no CE2008 (#808).
+# EXPECT_ERROR_CODE: CE2001
 perk Named:
     fn name() string
 

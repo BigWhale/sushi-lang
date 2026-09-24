@@ -1,7 +1,8 @@
 # The predefined perk `Drop` is a declared name in every program, so `Box@(Drop)` is a
 # constraint on the extension path and `Box@(i32)` has no `g` (#653).
 # TEST_TYPE: error
-# EXPECT_ERROR_CODE: CE2008
+# The target is refused (CE2001), so the call of `g` adds no CE2008 (#808).
+# EXPECT_ERROR_CODE: CE2001
 struct Box@(T):
     T item
 
