@@ -1,0 +1,11 @@
+# A `~` lambda block body ends with `return Result.Ok(~)`, and the caller hears Ok.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "g\nok\n"
+fn main() i32:
+    let fn() -> ~ g = |~|:
+        println("g")
+        return Result.Ok(~)
+    match g():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("gerr")
+    return Result.Ok(0)

@@ -135,13 +135,10 @@ def validate_function(self, func: FuncDef) -> None:
 
     self._validate_block(func.body)
 
-    # A `~` function returns too (#824): a body that reached its end answered a
-    # Result.Err that no source wrote. A lifted lambda carries no name span, and it
-    # keeps the old rule until it has a ruling of its own.
-    lifted_lambda = func.name_span is None
-    if func.ret != BuiltinType.BLANK or not lifted_lambda:
-        if not block_always_returns(self, func.body):
-            self.err.emit(er.ERR.CE0107, func.name_span, name=func.name)
+    # A `~` function returns too (#824), and so does a lifted lambda (#845): a body
+    # that reached its end answered a Result.Err that no source wrote.
+    if not block_always_returns(self, func.body):
+        self.err.emit(er.ERR.CE0107, func.name_span, name=func.name)
 
     self.current_function = None
 
@@ -235,7 +232,10 @@ def _validate_method_body(self, target_type, method) -> None:
 
     self._validate_block(method.body)
 
-    if method.ret != BuiltinType.BLANK and not block_always_returns(self, method.body):
+    # A method with a `| E` channel answers a Result, as a fn does, so a `~` body that
+    # reaches its end is refused too (#845). A bare `~` method has no Result to answer.
+    answers_result = method.ret != BuiltinType.BLANK or method.err_type is not None
+    if answers_result and not block_always_returns(self, method.body):
         self.err.emit(er.ERR.CE0107, method.name_span, name=method.name)
 
     self.in_extension_context = False

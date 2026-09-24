@@ -1,0 +1,32 @@
+# A `~ | E` extension body ends with `return ~`, and a perk-implementation method with
+# a channel does the same. The caller hears Ok.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "in say 5\nok\nput 3\nok\n"
+enum Why:
+    Bad
+
+extend i32 say() ~ | Why:
+    println("in say {self}")
+    return ~
+
+perk Sink:
+    fn put(i32 v) ~ | Why
+
+struct Printer:
+    i32 id
+
+extend Printer with Sink:
+    fn put(i32 v) ~ | Why:
+        println("put {v}")
+        return ~
+
+fn main() i32:
+    let i32 x = 5
+    match x.say():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    let Printer p = Printer(1)
+    match p.put(3):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)
