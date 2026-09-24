@@ -72,7 +72,7 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
     the position it lands in -- a `let`, a call argument's owner, or the print frame that
     registers the whole value (#521).
     """
-    with codegen.string_temps_own_frame():
+    with codegen.print_frames.own_frame():
         return _emit_interpolated_string(codegen, expr)
 
 
@@ -106,7 +106,7 @@ def _emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) 
                 from sushi_lang.backend.expressions.memory import expression_is_temporary
                 fresh = expression_is_temporary(codegen, part)
                 if fresh:
-                    codegen.register_string_value_temp(expr_value)
+                    codegen.print_frames.register_value(expr_value)
                 fresh_flags.append(fresh)
                 string_values.append(expr_value)
             else:

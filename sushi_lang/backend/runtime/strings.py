@@ -171,7 +171,7 @@ class StringOperations:
         # to free after output (#141). No-op elsewhere. The innermost frame is what
         # answers, and an INTERPOLATION opens one of its own, so a buffer it builds is
         # never an enclosing print's to free (#521).
-        self.codegen.register_string_temp(new_data)
+        self.codegen.print_frames.register_data(new_data)
 
         # Copy first string using llvm.memcpy intrinsic. Use the i64-length form and
         # zero-extend the i32 string size: the fat-pointer size field sits next to the

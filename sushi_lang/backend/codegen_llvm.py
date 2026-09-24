@@ -1,11 +1,8 @@
 """LLVM backend orchestrator for the Sushi language compiler."""
 from __future__ import annotations
-import subprocess
-from pathlib import Path
-from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
-from llvmlite import ir, binding as llvm
+from llvmlite import ir
 
 if TYPE_CHECKING:
     from sushi_lang.backend.library_paths import LibraryResolver
@@ -25,6 +22,7 @@ from sushi_lang.backend.runtime import LLVMRuntime
 from sushi_lang.backend.memory.scopes import ScopeManager
 from sushi_lang.backend.memory.dynamic_arrays import DynamicArrayManager
 from sushi_lang.backend.memory.moves import MoveTracker
+from sushi_lang.backend.memory.print_frames import PrintFrames
 from sushi_lang.backend.expressions import ExpressionEmitter
 from sushi_lang.backend.statements import StatementEmitter
 from sushi_lang.backend.functions import LLVMFunctionManager
@@ -36,27 +34,6 @@ from sushi_lang.backend.stdlib_linker import StdlibLinker
 # resolves when it emits an auto-derived hash(). The derive pass registers the method
 # itself without knowing anything about LLVM.
 import sushi_lang.backend.types  # noqa: F401
-
-
-def _run_linker(cmd: List[str], cc: str) -> None:
-    """Run the link step, and report a failure as a diagnostic rather than a crash.
-
-    Both linking paths come here. `check=True` alone let `CalledProcessError` reach the
-    top-level guard, which renders any uncaught exception as a CE0000 "this is a bug in
-    the Sushi compiler" -- and printed the raw `cc` stderr ahead of it, unfiltered (#251).
-    """
-    from sushi_lang.internals.diagnostics import SushiError
-
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode == 0:
-        return
-
-    error = SushiError("CE3008", cc=cc, status=result.returncode)
-    for stream in (result.stderr, result.stdout):
-        for line in (stream or "").splitlines():
-            if line.strip():
-                error.note(line.rstrip())
-    raise error
 
 
 def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
@@ -168,16 +145,7 @@ class LLVMCodegen:
         self._free_func: Optional[ir.Function] = None
         self._realloc_func: Optional[ir.Function] = None
 
-        # Print-argument string-temp registry (#141): heap data pointers allocated while a
-        # print argument is emitted. The statement pushes a frame, prints, then frees it.
-        # Only real allocations register, so a literal or a plain load registers nothing.
-        self._string_temp_stack: List[List[ir.Value]] = []
-
-        # The same frame for whole string fat VALUES, freed through the string destructor
-        # rather than unconditionally -- so a literal element (owned=0) is a no-op and a
-        # heap one is freed once. A `let` store happens outside any print frame, so its new
-        # owner frees it instead (#145).
-        self._string_value_temp_stack: List[List[ir.Value]] = []
+        self.print_frames = PrintFrames(self)
 
         self.main_expects_args: bool = False
 
@@ -203,6 +171,9 @@ class LLVMCodegen:
         self.function_return_types: UnitKeyedSymbols['Type'] = UnitKeyedSymbols()
 
         self.current_function_ast: Optional['FuncDef'] = None
+        # The names the borrow pass stamped as conditionally moved in the body being
+        # emitted (#414); `begin_function` sets it.
+        self.current_conditional_moves: frozenset[str] = frozenset()
 
         # Recursive-lifecycle state, declared here rather than conjured on at first use:
         # each `_inprogress` is the stack of type keys being inlined, so a re-entry means
@@ -244,36 +215,6 @@ class LLVMCodegen:
         """The scope of the unit being emitted, or an unrestricted one outside a unit."""
         return self.scope_of(self.emitting_unit)
 
-    @property
-    def printf(self) -> ir.Function | None:
-        """Access to printf runtime function."""
-        return self.runtime.libc_stdio.printf
-
-    @property
-    def strcmp(self) -> ir.Function | None:
-        """Access to strcmp runtime function."""
-        return self.runtime.libc_strings.strcmp
-
-    @property
-    def fmt_i32(self) -> ir.GlobalVariable | None:
-        """Access to integer format string."""
-        return self.runtime.formatting.fmt_i32
-
-    @property
-    def fmt_str(self) -> ir.GlobalVariable | None:
-        """Access to string format string."""
-        return self.runtime.formatting.fmt_str
-
-    @property
-    def fmt_f32(self) -> ir.GlobalVariable | None:
-        """Access to f32 format string."""
-        return self.runtime.formatting.fmt_f32
-
-    @property
-    def fmt_f64(self) -> ir.GlobalVariable | None:
-        """Access to f64 format string."""
-        return self.runtime.formatting.fmt_f64
-
     # Centralized memory management function declarations.
     # Private: allocate through backend.memory.heap.emit_malloc, which null-checks
     # and traps RE2021. Emitting a bare malloc call must not recur.
@@ -309,76 +250,6 @@ class LLVMCodegen:
             )
             self._free_func = ir.Function(self.module, free_type, name="free")
         return self._free_func
-
-    def push_string_temp_scope(self) -> None:
-        """Open a print-argument string-temp frame (#141). See `_string_temp_stack`."""
-        self._string_temp_stack.append([])
-        self._string_value_temp_stack.append([])
-
-    @contextmanager
-    def string_temps_own_frame(self):
-        """Give an interpolation its OWN frame, discarded unfreed when it completes.
-
-        An interpolation builds concat and to-string buffers and OWNS them: it frees each
-        intermediate as the next concat copies its bytes, and hands the RESULT to whatever
-        position it lands in. While an enclosing `println(...)` frame was the innermost
-        one, the #141 registry claimed those buffers too -- a second owner for an
-        interpolation that was a nested call's argument, and exit 133 (#521).
-
-        A frame of its own rather than no frame at all, because the registry is also what
-        an EARLY EXIT walks (#295): a `??` that propagates out of a part leaves through
-        `emit_string_temp_frame_cleanup_all`, which frees what the parts had built so far.
-        That path is safe because every part is emitted BEFORE the first concat, so on an
-        early exit no intermediate has been freed yet. On the straight-line path the
-        concat loop has freed them, so the frame is dropped WITHOUT freeing.
-        """
-        self._string_temp_stack.append([])
-        self._string_value_temp_stack.append([])
-        try:
-            yield
-        finally:
-            self._string_temp_stack.pop()
-            self._string_value_temp_stack.pop()
-
-    def register_string_temp(self, data_ptr: ir.Value) -> None:
-        """Register a freshly heap-allocated string buffer if a print-arg frame is open."""
-        if self._string_temp_stack:
-            self._string_temp_stack[-1].append(data_ptr)
-
-    def register_string_value_temp(self, fat_value: ir.Value) -> None:
-        """Register a whole string fat VALUE for an owned-bit-guarded free after output."""
-        if self._string_value_temp_stack:
-            self._string_value_temp_stack[-1].append(fat_value)
-
-    def pop_and_free_string_temp_scope(self) -> None:
-        """Free every buffer registered in the current print-arg frame and pop it."""
-        if not self._string_temp_stack:
-            return
-        temps = self._string_temp_stack.pop()
-        value_temps = self._string_value_temp_stack.pop() if self._string_value_temp_stack else []
-        if self.builder is None or self.builder.block is None or self.builder.block.is_terminated:
-            return
-        from sushi_lang.backend.memory.heap import emit_free
-        for data_ptr in temps:
-            emit_free(self.builder, self, data_ptr)
-        from sushi_lang.backend.destructors import emit_string_destructor_from_value
-        for fat_value in value_temps:
-            emit_string_destructor_from_value(self, fat_value)
-
-    def emit_string_temp_frame_cleanup_all(self) -> None:
-        """Free every open print-arg frame's temporaries on an EARLY-EXIT path (#295)."""
-        if not self._string_temp_stack:
-            return
-        if self.builder is None or self.builder.block is None or self.builder.block.is_terminated:
-            return
-        from sushi_lang.backend.memory.heap import emit_free
-        from sushi_lang.backend.destructors import emit_string_destructor_from_value
-        for frame in self._string_temp_stack:
-            for data_ptr in frame:
-                emit_free(self.builder, self, data_ptr)
-        for frame in self._string_value_temp_stack:
-            for fat_value in frame:
-                emit_string_destructor_from_value(self, fat_value)
 
     def get_realloc_func(self) -> ir.Function:
         """Get or declare realloc function."""
@@ -420,207 +291,6 @@ class LLVMCodegen:
         self._emit_multi_unit_program(units, weak_units=weak_units)
         return self.module
 
-    def compile_multi_unit(
-        self,
-        units: list[Unit],
-        out: Path | None = None,
-        cc: str = "cc",
-        debug: bool = False,
-        opt: str = "mem2reg",
-        verify: bool = True,
-        keep_object: bool = False,
-        main_expects_args: bool = False,
-        monomorphized_extensions: list['ExtendDef'] = None,
-    ) -> Path:
-        """Complete multi-unit compilation pipeline from multiple ASTs to native executable.
-
-        The loaded libraries are read off `self`, where the pipeline's one hand-off put
-        them (#645); taking them as arguments here gave the library build path no way to
-        supply them.
-        """
-        self.main_expects_args = main_expects_args
-
-        self.monomorphized_extensions = monomorphized_extensions or []
-
-        mod_ir: ir.Module = self.build_module_multi_unit(units)
-
-        if debug:
-            print(";; Multi-unit IR (pre-opt)")
-            ir_text = str(mod_ir)
-            for i, line in enumerate(ir_text.splitlines(), 1):
-                print(f"{i:4} {line}")
-
-        llmod = llvm.parse_assembly(str(mod_ir))
-
-        library_paths = set()
-        stdlib_units = set()
-
-        for unit in units:
-            if unit.ast is not None:
-                for use_stmt in unit.ast.uses:
-                    if use_stmt.is_library:
-                        library_paths.add(use_stmt.path)
-                    elif use_stmt.is_stdlib:
-                        stdlib_units.add(use_stmt.path)
-
-        library_linker = self.library_linker
-        if library_linker is not None and library_paths:
-            from sushi_lang.backend.module_linker import TwoPhaseLinker
-
-            target_triple = llmod.triple if hasattr(llmod, 'triple') else ""
-            data_layout = llmod.data_layout if hasattr(llmod, 'data_layout') else ""
-
-            two_phase = TwoPhaseLinker(target_triple, data_layout)
-
-            two_phase.add_main_module(llmod, "main")
-
-            from sushi_lang.backend.library_format import LibraryFormat
-            from sushi_lang.backend.library_errors import LibraryError
-            for lib_path in library_paths:
-                try:
-                    slib_path = library_linker.resolve_library(lib_path)
-                    metadata, bitcode = LibraryFormat.read(slib_path)
-                    library_linker.loaded_libraries[metadata["library_name"]] = metadata
-
-                    lib_mod = llvm.parse_bitcode(bitcode)
-                    two_phase.add_library_module(lib_mod, metadata["library_name"])
-                except LibraryError:
-                    raise
-                except Exception as e:
-                    raise LibraryError("CE3507", lib=lib_path, reason=str(e)) from e
-
-            for stdlib_path in stdlib_units:
-                bc_paths = self.stdlib._resolve_stdlib_unit(stdlib_path)
-                for bc_path in bc_paths:
-                    with open(bc_path, 'rb') as f:
-                        stdlib_mod = llvm.parse_bitcode(f.read())
-                        two_phase.add_stdlib_module(stdlib_mod, stdlib_path)
-
-            llmod = two_phase.link()
-
-        else:
-            self.stdlib.link_stdlib_modules(
-                llmod, [unit.ast for unit in units if unit.ast is not None])
-
-        self.optimizer.ensure_target(llmod)
-
-        if verify:
-            self.optimizer.verify(llmod, "pre-optimization")
-
-        if opt != "none":
-            self.optimizer.optimize(llmod, opt)
-
-        if verify:
-            self.optimizer.verify(llmod, "post-optimization")
-
-        self.module = llvm.parse_assembly(str(llmod))
-
-        out_path = out or Path("a.out")
-        return self._link_executable(llmod, out_path, cc, debug, keep_object=keep_object)
-
-    def compile_to_bitcode(
-        self,
-        units: list[Unit],
-        debug: bool = False,
-        opt: str = "mem2reg",
-        verify: bool = True,
-        monomorphized_extensions: list['ExtendDef'] = None,
-        exported_private_functions: set[str] = frozenset(),
-    ) -> bytes:
-        """Compile units to LLVM bitcode without linking to executable."""
-        self.monomorphized_extensions = monomorphized_extensions or []
-
-        self.is_library_mode = True
-
-        # A bundled stdlib module and an injected source library both arrive as
-        # ordinary units and carry a provenance; neither is this library's to own, and
-        # the consumer holds its own copy of each (#594). `library_manifest.own_units`
-        # is the same question about the same field, asked of the manifest.
-        weak_units = frozenset(u.name for u in units if u.provenance is not None)
-
-        mod_ir: ir.Module = self.build_module_multi_unit(units, weak_units=weak_units)
-
-        # A perk impl may ship through the manifest and be overridden locally. weak_odr,
-        # not linkonce_odr: it must survive optimization while unreferenced in the library,
-        # and it lets the consumer's strong definition win at link time.
-        _set_weak_odr_on_perk_impls(mod_ir, units)
-
-        # An export-closure private function must resolve consumer call sites at link
-        # time, so promote it to external. A same-name consumer definition is CE5007.
-        for name in exported_private_functions:
-            fn = mod_ir.globals.get(name)
-            if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
-                fn.linkage = "external"
-
-        if debug:
-            print(";; Library IR (pre-opt)")
-            ir_text = str(mod_ir)
-            for i, line in enumerate(ir_text.splitlines(), 1):
-                print(f"{i:4} {line}")
-
-        llmod = llvm.parse_assembly(str(mod_ir))
-
-        # The stdlib `.bc` half of the same rule: the consumer links its own copy of
-        # every module it imports, so this one may not be a second strong definition.
-        from sushi_lang.backend.library_linkage import weaken_linked_symbols
-        weaken_linked_symbols(llmod, self.stdlib.link_stdlib_modules(
-            llmod, [unit.ast for unit in units if unit.ast is not None]))
-
-        self.optimizer.ensure_target(llmod)
-
-        if verify:
-            self.optimizer.verify(llmod, "pre-optimization")
-
-        if opt != "none":
-            self.optimizer.optimize(llmod, opt)
-
-        if verify:
-            self.optimizer.verify(llmod, "post-optimization")
-
-        self.module = llvm.parse_assembly(str(llmod))
-
-        return llmod.as_bitcode()
-
-    def _link_executable(
-        self,
-        llmod: llvm.ModuleRef,
-        out: Path,
-        cc: str,
-        debug: bool,
-        tm: Optional[llvm.TargetMachine] = None,
-        keep_object: bool = False,
-    ) -> Path:
-        """Emit object file and link to native executable."""
-        self.optimizer.ensure_llvm()
-
-        if tm is None:
-            tm = self.optimizer.ensure_target(llmod)
-
-        obj_bytes = tm.emit_object(llmod)
-
-        obj_path = out.with_suffix(".o")
-        obj_path.write_bytes(obj_bytes)
-
-        cmd = [cc, str(obj_path)]
-        cmd.extend(["-o", str(out)])
-
-        from sushi_lang.backend.platform_detect import get_current_platform
-        platform = get_current_platform()
-        if platform.is_linux:
-            cmd.append("-lm")
-
-        if debug:
-            cmd.insert(1, "-g")
-        try:
-            _run_linker(cmd, cc)
-        finally:
-            # The object file is an intermediate either way. Leaving it behind on the
-            # failure path was half of #251: a failed compile wrote a stale `.o` next
-            # to the source and said nothing about it.
-            if not keep_object:
-                obj_path.unlink(missing_ok=True)
-        return out
-
     def build_module_single_unit(self, target_unit: Unit, all_units: list[Unit]) -> ir.Module:
         """Generate LLVM IR for a single compilation unit."""
         saved_module = self.module
@@ -644,7 +314,7 @@ class LLVMCodegen:
         self._malloc_func = None
         self._free_func = None
         self._realloc_func = None
-        self._string_temp_stack = []
+        self.print_frames.reset()
         self._dtor_funcs = {}
         self._clone_funcs = {}
         self._dtor_inprogress = []
@@ -668,9 +338,9 @@ class LLVMCodegen:
                 self._emit_global_constant(const, unit.name,
                                            defining=unit.name == target_unit.name)
 
-        # First round: declare function prototypes
-        # For the target unit: declare ALL functions (public + private, they'll get bodies)
-        # For other units: only declare PUBLIC functions (private ones can't be cross-referenced)
+        # The target unit declares ALL its functions, public and private, because this
+        # module holds their bodies; another unit declares only its PUBLIC functions,
+        # because a private one cannot be named from here.
         #
         # THE TARGET UNIT IS DECLARED FIRST. One symbol name holds one declaration in a
         # module, so where a unit shadows a name another unit exports, whichever is
@@ -679,54 +349,9 @@ class LLVMCodegen:
         # to win -- a private one keeps internal linkage, which is what makes the
         # consumer's call bind to its own definition (`visibility.md` decision 10). It
         # used to be decided by the compilation order, which put the consumer first.
-        for unit in sorted(all_units, key=lambda u: u.name != target_unit.name):
-            if unit.ast is None:
-                continue
-            for fn in unit.ast.functions:
-                if hasattr(fn, 'type_params') and fn.type_params:
-                    continue
-                if unit.name != target_unit.name and not fn.is_public:
-                    continue
-                self.functions.emit_func_decl(fn, unit.name)
-
-            for ext in unit.ast.extensions:
-                self.functions.emit_extension_method_decl(ext)
-
-            for perk_impl in unit.ast.perk_impls:
-                for method in perk_impl.methods:
-                    synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
-                    self.functions.emit_extension_method_decl(synthetic_ext)
-
-        for ext in self.monomorphized_extensions:
-            self.functions.emit_extension_method_decl(ext)
-
-        if hasattr(self, 'library_linker') and self.library_linker is not None:
-            self._declare_library_functions()
-            self._declare_library_perk_impl_methods()
-
-        if target_unit.ast is not None:
-            self.emitting_unit = target_unit.name
-            self.emitting_unit_file = str(target_unit.file_path)
-            for fn in target_unit.ast.functions:
-                if hasattr(fn, 'type_params') and fn.type_params:
-                    continue
-                self.functions.emit_func_def(fn, target_unit.name)
-
-            for ext in target_unit.ast.extensions:
-                self.functions.emit_extension_method_def(ext)
-
-            for perk_impl in target_unit.ast.perk_impls:
-                for method in perk_impl.methods:
-                    synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
-                    self.functions.emit_extension_method_def(synthetic_ext)
-            self.emitting_unit = None
-            self.emitting_unit_file = None
-
-        # A monomorphized extension belongs to no unit, so its body is defined
-        # in EVERY unit module. weak_odr lets the linker keep one, like a
-        # perk-impl method; external linkage was a duplicate symbol (#404).
-        for ext in self.monomorphized_extensions:
-            self.functions.emit_extension_method_def(ext).linkage = "weak_odr"
+        self._declare_and_define(
+            sorted(all_units, key=lambda u: u.name != target_unit.name), [target_unit],
+            declares_private=lambda unit: unit.name == target_unit.name)
 
         _set_linkonce_odr_on_inline_runtime(self.module)
 
@@ -738,7 +363,7 @@ class LLVMCodegen:
         self._malloc_func = None
         self._free_func = None
         self._realloc_func = None
-        self._string_temp_stack = []
+        self.print_frames.reset()
         self._dtor_funcs = saved_dtor_funcs
         self._clone_funcs = saved_clone_funcs
         self._dtor_inprogress = saved_dtor_inprogress
@@ -747,81 +372,6 @@ class LLVMCodegen:
         self.runtime = LLVMRuntime(self)
 
         return result_module
-
-    def compile_single_unit_to_object(self, target_unit: Unit, all_units: list[Unit],
-                                      opt: str = "mem2reg", verify: bool = True) -> bytes:
-        """Compile a single unit to an object file (bytes)."""
-        mod_ir = self.build_module_single_unit(target_unit, all_units)
-        llmod = llvm.parse_assembly(str(mod_ir))
-
-        tm = self.optimizer.ensure_target(llmod)
-
-        if verify:
-            self.optimizer.verify(llmod, f"pre-optimization ({target_unit.name})")
-
-        if opt != "none":
-            self.optimizer.optimize(llmod, opt)
-
-        if verify:
-            self.optimizer.verify(llmod, f"post-optimization ({target_unit.name})")
-
-        return tm.emit_object(llmod)
-
-    def compile_stdlib_to_object(self, stdlib_unit: str, opt: str = "mem2reg") -> bytes:
-        """Compile stdlib bitcode files to a single object file."""
-        bc_paths = self.stdlib._resolve_stdlib_unit(stdlib_unit)
-        first = True
-        llmod = None
-        for bc_path in bc_paths:
-            with open(bc_path, 'rb') as f:
-                mod = llvm.parse_bitcode(f.read())
-                if first:
-                    llmod = mod
-                    first = False
-                else:
-                    llmod.link_in(mod)
-
-        if llmod is None:
-            raise RuntimeError(f"No bitcode files found for stdlib unit: {stdlib_unit}")
-
-        tm = self.optimizer.ensure_target(llmod)
-
-        if opt != "none":
-            self.optimizer.optimize(llmod, opt)
-
-        return tm.emit_object(llmod)
-
-    def compile_library_to_object(self, lib_path: str, library_linker,
-                                  opt: str = "mem2reg") -> bytes:
-        """Compile a library .slib to an object file."""
-        from sushi_lang.backend.library_format import LibraryFormat
-
-        slib_path = library_linker.resolve_library(lib_path)
-        _, bitcode = LibraryFormat.read(slib_path)
-        llmod = llvm.parse_bitcode(bitcode)
-
-        tm = self.optimizer.ensure_target(llmod)
-
-        if opt != "none":
-            self.optimizer.optimize(llmod, opt)
-
-        return tm.emit_object(llmod)
-
-    def link_object_files(self, obj_paths: list[Path], out: Path, cc: str = "cc",
-                          debug: bool = False) -> Path:
-        """Link multiple .o files into a native executable."""
-        cmd = [cc] + [str(p) for p in obj_paths]
-        cmd.extend(["-o", str(out)])
-
-        from sushi_lang.backend.platform_detect import get_current_platform
-        platform = get_current_platform()
-        if platform.is_linux:
-            cmd.append("-lm")
-
-        if debug:
-            cmd.insert(1, "-g")
-        _run_linker(cmd, cc)
-        return out
 
     def has_stdlib_unit(self, unit_path: str) -> bool:
         """Check if a stdlib unit has been imported."""
@@ -836,9 +386,7 @@ class LLVMCodegen:
         (`backend/library_linkage.py`). The module is asked what appeared while the
         unit was emitted, so no symbol name is re-derived here.
         """
-        from sushi_lang.backend.library_linkage import (
-            weaken_all, weaken_foreign_globals,
-        )
+        from sushi_lang.backend.library_linkage import weaken_foreign_globals
 
         for unit in units:
             if unit.ast is None:
@@ -850,12 +398,29 @@ class LLVMCodegen:
             if before is not None:
                 weaken_foreign_globals(self.module, before)
 
-        for unit in units:
+        self._declare_and_define(units, units, declares_private=lambda unit: True,
+                                 weak_units=weak_units)
+
+    def _declare_and_define(self, declared: list[Unit], defined: list[Unit], *,
+                            declares_private: Callable[[Unit], bool],
+                            weak_units: frozenset[str] = frozenset()) -> None:
+        """Declare the functions of `declared`, then define the bodies of `defined`.
+
+        ONE walk for both build paths: every function, extension and perk-impl method
+        is declared before any body is emitted, so a body may call a function that a
+        later unit defines. A monomorphized extension belongs to no unit: it is declared
+        and defined in every module, weak_odr, so the linker keeps one, like a perk-impl
+        method; external linkage was a duplicate symbol (#404). A unit named in
+        `weak_units` has each of its bodies weakened (`backend/library_linkage.py`).
+        """
+        from sushi_lang.backend.library_linkage import weaken_all
+
+        for unit in declared:
             if unit.ast is None:
                 continue
-
+            private = declares_private(unit)
             for fn in unit.ast.functions:
-                if hasattr(fn, 'type_params') and fn.type_params:
+                if fn.type_params or not (private or fn.is_public):
                     continue
                 self.functions.emit_func_decl(fn, unit.name)
 
@@ -870,11 +435,11 @@ class LLVMCodegen:
         for ext in self.monomorphized_extensions:
             self.functions.emit_extension_method_decl(ext)
 
-        if hasattr(self, 'library_linker') and self.library_linker is not None:
+        if self.library_linker is not None:
             self._declare_library_functions()
             self._declare_library_perk_impl_methods()
 
-        for unit in units:
+        for unit in defined:
             if unit.ast is None:
                 continue
 
@@ -884,7 +449,7 @@ class LLVMCodegen:
             # declaration round above already put every function in the module.
             emitted = []
             for fn in unit.ast.functions:
-                if hasattr(fn, 'type_params') and fn.type_params:
+                if fn.type_params:
                     continue
                 emitted.append(self.functions.emit_func_def(fn, unit.name))
 
@@ -902,9 +467,6 @@ class LLVMCodegen:
         self.emitting_unit = None
         self.emitting_unit_file = None
 
-        # weak_odr for the same reason as the single-unit path (#404); the
-        # monolithic module defines each body once, so it is inert here, and
-        # one rule for both paths beats two.
         for ext in self.monomorphized_extensions:
             self.functions.emit_extension_method_def(ext).linkage = "weak_odr"
 
@@ -1148,25 +710,6 @@ class LLVMCodegen:
         return const_value_to_llvm(value, self.types)
 
 
-
-
-def _set_weak_odr_on_perk_impls(module: ir.Module, units: list[Unit]) -> None:
-    """Set weak_odr linkage on every perk-impl method in a library module."""
-    from sushi_lang.semantics.library_templates import impl_method_symbol
-    from sushi_lang.semantics.passes.collect.perks import _get_type_name
-
-    for unit in units:
-        if unit.ast is None:
-            continue
-        for perk_impl in unit.ast.perk_impls:
-            type_name = _get_type_name(perk_impl.target_type)
-            if type_name is None:
-                continue
-            for method in perk_impl.methods:
-                symbol = impl_method_symbol(type_name, method.name)
-                fn = module.globals.get(symbol)
-                if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
-                    fn.linkage = "weak_odr"
 
 
 def _set_linkonce_odr_on_inline_runtime(module: ir.Module) -> None:
