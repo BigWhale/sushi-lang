@@ -1,0 +1,19 @@
+# A Maybe read through a struct field keeps the type the field declares (#769).
+# Maybe@(f64) and Maybe@(i64) have one LLVM layout, so a type read off the layout
+# is a guess, and a wrong guess reads the payload bits as the other type.
+# EXPECT_STDOUT_EXACT: "1.5 5000000000\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Real:
+    Maybe@(f64) m
+
+struct Whole:
+    Maybe@(i64) m
+
+fn main() i32:
+    let Real r = Real(Maybe.Some(1.5))
+    let Whole w = Whole(Maybe.Some(5000000000))
+    let f64 a = r.m.realise(0.0)
+    let i64 b = w.m.realise(0)
+    println("{a} {b}")
+    return Result.Ok(0)

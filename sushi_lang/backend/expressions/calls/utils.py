@@ -229,13 +229,19 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
             if stdlib_ret is not None:
                 return stdlib_ret if stdlib_ret.name.startswith(prefix) else None
 
-    for enum_name, enum_type in codegen.enum_table.by_name.items():
-        if isinstance(enum_type, EnumType) and enum_name.startswith(prefix):
-            expected_llvm_type = codegen.types.ll_type(enum_type)
-            if receiver_value.type == expected_llvm_type:
-                return enum_type
+    # Strategy 3: any other receiver -- a field, an element -- by the typecheck pass's
+    # stamp or the field it reads. Authoritative like the others.
+    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+    semantic_type = infer_expr_semantic_type(codegen, receiver)
+    if isinstance(semantic_type, ReferenceType):
+        semantic_type = semantic_type.referenced_type
+    if isinstance(semantic_type, EnumType):
+        return semantic_type if semantic_type.name.startswith(prefix) else None
 
-    return None
+    # No match on the LLVM layout (#769): every instance of one family with the same
+    # payload size has one LLVM type, so a match is a guess, and a wrong guess reads the
+    # payload as the wrong type. A receiver with no known type is a compiler fault.
+    raise_internal_error("CE0019", llvm_type=str(receiver_value.type))
 
 
 def _deref_borrowed_receiver(codegen: 'LLVMCodegen', value: ir.Value, ll_type: ir.Type,

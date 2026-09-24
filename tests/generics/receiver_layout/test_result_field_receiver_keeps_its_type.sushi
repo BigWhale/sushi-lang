@@ -1,0 +1,19 @@
+# A Result read through a struct field keeps the type the field declares (#769).
+# Result@(f64, StdError) and Result@(i64, StdError) have one LLVM layout; the
+# typecheck pass's stamp on the call names the type, and the layout does not.
+# EXPECT_STDOUT_EXACT: "1.5 5000000000\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Real:
+    Result@(f64, StdError) r
+
+struct Whole:
+    Result@(i64, StdError) r
+
+fn main() i32:
+    let Real x = Real(Result.Ok(1.5))
+    let Whole y = Whole(Result.Ok(5000000000))
+    let f64 a = x.r.realise(0.0)
+    let i64 b = y.r.realise(0)
+    println("{a} {b}")
+    return Result.Ok(0)
