@@ -1,0 +1,15 @@
+# A `~ | E` extension returns a Result, as a fn does, so a body that reaches its end
+# is CE0107. It used to answer Result.Err, and no source wrote that Err.
+# EXPECT_ERROR_CODE: CE0107
+enum Why:
+    Bad
+
+extend i32 say() ~ | Why:
+    println("in say {self}")
+
+fn main() i32:
+    let i32 x = 5
+    match x.say():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

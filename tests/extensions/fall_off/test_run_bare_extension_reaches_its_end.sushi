@@ -1,0 +1,23 @@
+# A BARE `~` extension or perk method has no Result to answer, so a body that reaches
+# its end is correct there.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "in say 5\nput 3\n"
+extend i32 say() ~:
+    println("in say {self}")
+
+perk Sink:
+    fn put(i32 v) ~
+
+struct Printer:
+    i32 id
+
+extend Printer with Sink:
+    fn put(i32 v) ~:
+        println("put {v}")
+
+fn main() i32:
+    let i32 x = 5
+    x.say()
+    let Printer p = Printer(1)
+    p.put(3)
+    return Result.Ok(0)

@@ -46,7 +46,7 @@ def emit_return(codegen: 'LLVMCodegen', stmt: 'Return') -> None:
     # consumed BEFORE cleanup, so a MOVE has already flagged the source. Cleaning up first
     # hands the caller a freed buffer (#256).
     from sushi_lang.backend.statements import utils
-    utils.emit_scope_cleanup(codegen, cleanup_type='all')
+    utils.emit_scope_cleanup(codegen)
 
     codegen.builder.ret(value)
 

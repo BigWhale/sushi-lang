@@ -140,7 +140,7 @@ class FunctionDefinitions:
             if channel is not None:
                 from sushi_lang.backend.generics.result_builder import build_err_from_return_type
                 from sushi_lang.backend.statements import utils
-                utils.emit_scope_cleanup(self.codegen, cleanup_type='all')
+                utils.emit_scope_cleanup(self.codegen)
                 self.codegen.builder.ret(
                     build_err_from_return_type(self.codegen, channel, None))
             else:

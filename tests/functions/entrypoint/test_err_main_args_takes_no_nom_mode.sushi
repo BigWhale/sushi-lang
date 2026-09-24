@@ -1,0 +1,6 @@
+# The main parameter takes no mode: `string[] args` or nothing.
+# A `nom` parameter declared that main owns argv, and the program aborted at exit because the runtime frees argv too.
+# EXPECT_ERROR_CODE: CE0138
+fn main(nom string[] args) i32:
+    println("n {args.len()}")
+    return Result.Ok(0)

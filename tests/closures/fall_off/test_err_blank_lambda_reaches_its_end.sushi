@@ -1,0 +1,10 @@
+# A lambda call answers a Result, so a `~` lambda block body that reaches its end is
+# CE0107. It used to answer Result.Err, and no source wrote that Err.
+# EXPECT_ERROR_CODE: CE0107
+fn main() i32:
+    let fn() -> ~ g = |~|:
+        println("g")
+    match g():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("gerr")
+    return Result.Ok(0)

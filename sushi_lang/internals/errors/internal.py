@@ -230,9 +230,9 @@ _add(ErrorMessage("CE0061", Severity.ERROR,
     "block has no 'statements' list",
     Category.INTERNAL, "AST block node missing expected statements field."))
 
-_add(ErrorMessage("CE0062", Severity.ERROR,
-    "invalid cleanup_type: {type}",
-    Category.INTERNAL, "Unknown cleanup type in destructor emission."))
+# CE0062 ("invalid cleanup_type") is retired. `emit_scope_cleanup` took a cleanup kind
+# that every caller gave as 'all', so the guard could not fire; #835 removed the
+# parameter. The number is not reused.
 
 
 # Main Function Validation (CE0064-CE0066)

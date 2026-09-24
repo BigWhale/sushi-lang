@@ -1,41 +1,54 @@
 """Math module for Sushi standard library."""
 from __future__ import annotations
 import typing
+from typing import Dict, Optional, Tuple
+
 from llvmlite import ir
+
+from sushi_lang.semantics.typesys import BuiltinType
+from sushi_lang.sushi_stdlib.src.signatures import Signature, params_of
 
 if typing.TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
 
 
+F64 = BuiltinType.F64
+_UNARY = ('sqrt', 'floor', 'ceil', 'round', 'trunc',
+          'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+          'sinh', 'cosh', 'tanh', 'log', 'log2', 'log10', 'exp', 'exp2')
+_BINARY = ('pow', 'atan2', 'hypot')
+
+# The ONE spelling of what each f64 `<math>` function takes and answers (#827).
+MATH_SIGNATURES: Dict[str, Signature] = {
+    **{name: Signature(params_of(F64), bare=F64) for name in _UNARY},
+    **{name: Signature(params_of(F64, F64), bare=F64) for name in _BINARY},
+}
+
+_SIGNED = (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64)
+_UNSIGNED = (BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64)
+_FLOATS = (BuiltinType.F32, BuiltinType.F64)
+
+# `abs`, `min` and `max` are a FAMILY: one row per argument type, every parameter and
+# the answer of that one type, and the generated function is `sushi_<name>_<type>`.
+MATH_FAMILIES: Dict[str, Tuple[int, Tuple[BuiltinType, ...]]] = {
+    'abs': (1, _SIGNED + _FLOATS),
+    'min': (2, _SIGNED + _UNSIGNED + _FLOATS),
+    'max': (2, _SIGNED + _UNSIGNED + _FLOATS),
+}
+
+
+def family_row(name: str, ty) -> Optional[Signature]:
+    """The row of family `name` at argument type `ty`, or None if the family has none."""
+    family = MATH_FAMILIES.get(name)
+    if family is None or ty not in family[1]:
+        return None
+    arity, _types = family
+    return Signature(params_of(*([ty] * arity)), bare=ty)
+
+
 def is_builtin_math_function(name: str) -> bool:
     """Check if name is a built-in math module function."""
-    return name in {
-        'abs',
-        'min',
-        'max',
-        'sqrt',
-        'pow',
-        'floor',
-        'ceil',
-        'round',
-        'trunc',
-        'sin',
-        'cos',
-        'tan',
-        'asin',
-        'acos',
-        'atan',
-        'atan2',
-        'sinh',
-        'cosh',
-        'tanh',
-        'log',
-        'log2',
-        'log10',
-        'exp',
-        'exp2',
-        'hypot',
-    }
+    return name in MATH_SIGNATURES or name in MATH_FAMILIES
 
 
 def is_builtin_math_constant(name: str) -> bool:
@@ -58,100 +71,40 @@ def get_builtin_math_constant_value(name: str) -> tuple[str, float]:
 
 
 def get_builtin_math_function_return_type(name: str, param_types: list[Type]) -> Type:
-    """Get the return type for a built-in math function."""
-    from sushi_lang.semantics.typesys import BuiltinType
-
-    if name in {'abs', 'min', 'max'}:
+    """The declared return type, from the row (a family answers its argument type)."""
+    if name in MATH_FAMILIES:
         if not param_types:
             raise TypeError(f"{name} requires at least one parameter")
         return param_types[0]
-
-    elif name in {
-        'sqrt', 'pow', 'floor', 'ceil', 'round', 'trunc',
-        'sin', 'cos', 'tan',
-        'asin', 'acos', 'atan', 'atan2',
-        'sinh', 'cosh', 'tanh',
-        'log', 'log2', 'log10',
-        'exp', 'exp2',
-        'hypot',
-    }:
-        return BuiltinType('f64')
-
-    raise ValueError(f"Unknown math function: {name}")
+    sig = MATH_SIGNATURES.get(name)
+    if sig is None:
+        raise ValueError(f"Unknown math function: {name}")
+    return sig.return_type()
 
 
 def validate_math_function_call(name: str, signature: typing.Any) -> None:
-    """Validate a call to a built-in math function."""
-    from sushi_lang.semantics.typesys import BuiltinType
+    """Validate a call to a built-in math function against its row or its family."""
+    params = [param.type for param in signature.params]
+    family = MATH_FAMILIES.get(name)
+    if family is not None:
+        arity, types = family
+        if len(params) != arity:
+            raise TypeError(f"{name} expects {arity} argument(s), got {len(params)}")
+        for param_type in params:
+            if param_type not in types:
+                raise TypeError(f"{name} has no row for {param_type}")
+        if len(set(params)) > 1:
+            raise TypeError(f"{name} expects every parameter to have one type, got {params}")
+        return
 
-    numeric_types = {
-        BuiltinType('i8'), BuiltinType('i16'), BuiltinType('i32'), BuiltinType('i64'),
-        BuiltinType('u8'), BuiltinType('u16'), BuiltinType('u32'), BuiltinType('u64'),
-        BuiltinType('f32'), BuiltinType('f64'),
-    }
-
-    signed_int_types = {
-        BuiltinType('i8'), BuiltinType('i16'), BuiltinType('i32'), BuiltinType('i64'),
-    }
-
-    float_types = {
-        BuiltinType('f32'), BuiltinType('f64'),
-    }
-
-    f64_single_arg_funcs = {
-        'sqrt', 'floor', 'ceil', 'round', 'trunc',
-        'sin', 'cos', 'tan',
-        'asin', 'acos', 'atan',
-        'sinh', 'cosh', 'tanh',
-        'log', 'log2', 'log10',
-        'exp', 'exp2',
-    }
-
-    f64_two_arg_funcs = {'pow', 'atan2', 'hypot'}
-
-    if name == 'abs':
-        if len(signature.params) != 1:
-            raise TypeError(f"abs expects 1 argument, got {len(signature.params)}")
-
-        param_type = signature.params[0].type
-        if param_type not in (signed_int_types | float_types):
-            raise TypeError(f"abs expects signed integer or float type, got {param_type}")
-
-    elif name in {'min', 'max'}:
-        if len(signature.params) != 2:
-            raise TypeError(f"{name} expects 2 arguments, got {len(signature.params)}")
-
-        param1_type = signature.params[0].type
-        param2_type = signature.params[1].type
-
-        if param1_type not in numeric_types:
-            raise TypeError(f"{name} expects numeric type for first parameter, got {param1_type}")
-
-        if param2_type not in numeric_types:
-            raise TypeError(f"{name} expects numeric type for second parameter, got {param2_type}")
-
-        if param1_type != param2_type:
-            raise TypeError(f"{name} expects both parameters to have the same type, got {param1_type} and {param2_type}")
-
-    elif name in f64_single_arg_funcs:
-        if len(signature.params) != 1:
-            raise TypeError(f"{name} expects 1 argument, got {len(signature.params)}")
-
-        param_type = signature.params[0].type
-        if param_type != BuiltinType('f64'):
-            raise TypeError(f"{name} expects f64, got {param_type}")
-
-    elif name in f64_two_arg_funcs:
-        if len(signature.params) != 2:
-            raise TypeError(f"{name} expects 2 arguments, got {len(signature.params)}")
-
-        param1_type = signature.params[0].type
-        param2_type = signature.params[1].type
-
-        if param1_type != BuiltinType('f64'):
-            raise TypeError(f"{name} expects f64 for first argument, got {param1_type}")
-        if param2_type != BuiltinType('f64'):
-            raise TypeError(f"{name} expects f64 for second argument, got {param2_type}")
+    sig = MATH_SIGNATURES.get(name)
+    if sig is None:
+        return
+    if len(params) != sig.arity:
+        raise TypeError(f"{name} expects {sig.arity} argument(s), got {len(params)}")
+    for param_type, param in zip(params, sig.params, strict=True):
+        if param_type != param.ty:
+            raise TypeError(f"{name} expects {param.ty}, got {param_type}")
 
 
 def generate_module_ir() -> ir.Module:

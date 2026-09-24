@@ -70,7 +70,7 @@ def emit_while(codegen: 'LLVMCodegen', node: 'While') -> None:
     codegen.builder.cbranch(cond_val, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory._scope_depth + 1))
+    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory.depth + 1))
     codegen.memory.push_scope()
     _emit_block(codegen, node.body)
     codegen.memory.pop_scope()

@@ -196,14 +196,22 @@ def _build_lifted_function(lam: Lambda, lifted_name: str, env_struct: StructType
         ty=ReferenceType(referenced_type=env_struct, mutability=BorrowMode.POKE),
         loc=lam.loc,
     )
+    # The lambda's own location is the name span: a diagnostic keyed on the name span
+    # of a lifted function carets the lambda, and not nothing (#846).
     return FuncDef(
         name=lifted_name,
         params=[env_param] + list(lam.params),
         ret=ok_type,
         body=body,
         err_type=err_type,
+        name_span=lam.loc,
         loc=lam.loc,
     )
+
+
+def is_lifted_lambda(func: FuncDef) -> bool:
+    """Whether this function is a lambda the pass lifted: its first parameter is the env."""
+    return bool(func.params) and func.params[0].name == ENV_PARAM_NAME
 
 
 def _rewrite_captures(node, cap_names: set) -> None:

@@ -139,7 +139,7 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     codegen.builder.cbranch(has_next, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory._scope_depth + 1))
+    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory.depth + 1))
     codegen.memory.push_scope()
 
     # The payload is read HERE and not in the condition block: on the last iteration the
@@ -209,7 +209,7 @@ def _emit_array_foreach_body(
     codegen.builder.cbranch(has_next, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory._scope_depth + 1))
+    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory.depth + 1))
     codegen.memory.push_scope()
 
     data_ptr_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 2, "data_ptr_ptr")
@@ -321,7 +321,7 @@ def _emit_hashmap_foreach(
     codegen.builder.cbranch(is_occupied, body_bb, increment_bb)
 
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory._scope_depth + 1))
+    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory.depth + 1))
     codegen.memory.push_scope()
 
     # The item binding is a read-only BORROW of the map's entry, exactly as the array path
@@ -461,7 +461,7 @@ def _emit_range_loop_path(
     codegen.builder.cbranch(condition, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((incr_bb, end_bb, codegen.memory._scope_depth + 1))
+    codegen.loop_stack.append((incr_bb, end_bb, codegen.memory.depth + 1))
     codegen.memory.push_scope()
 
     element_ll_type = codegen.types.ll_type(node.item_type)
