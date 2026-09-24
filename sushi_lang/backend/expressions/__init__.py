@@ -1,6 +1,6 @@
 """Expression emission module for the Sushi language compiler."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.ast import Expr
 from sushi_lang.internals.errors import raise_internal_error
@@ -8,6 +8,28 @@ from sushi_lang.internals.errors import raise_internal_error
 if TYPE_CHECKING:
     from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+    from sushi_lang.semantics.ast import MemberAccess
+    from sushi_lang.semantics.typesys import EnumType
+
+
+def bare_variant_enum(codegen: 'LLVMCodegen', expr: 'MemberAccess') -> Optional['EnumType']:
+    """The enum a bare variant `E.V` names, or None if `expr` is not one.
+
+    Local-wins (#296): `Color.v` on a local named Color is a field read. A GENERIC enum's
+    bare variant carries its interned instance as a stamp: the table holds
+    `Maybe<string>`, never `Maybe` (#545).
+    """
+    from sushi_lang.semantics.ast import Name
+    from sushi_lang.semantics.typesys import EnumType
+
+    if not isinstance(expr.receiver, Name):
+        return None
+    receiver_name = expr.receiver.id
+    if codegen.memory.find_semantic_type(receiver_name) is not None:
+        return None
+    enum_type = (getattr(expr, 'resolved_enum_type', None)
+                 or codegen.enum_table.by_name.get(receiver_name))
+    return enum_type if isinstance(enum_type, EnumType) else None
 
 
 class ExpressionEmitter:
@@ -103,20 +125,12 @@ class ExpressionEmitter:
                 return calls.emit_method_call(self.codegen, expr, to_i1, is_dotcall=True)
 
             case MemberAccess():
-                if isinstance(expr.receiver, Name):
-                    receiver_name = expr.receiver.id
-                    # Local-wins (#296): `Color.v` on a local named Color is a field read.
-                    if self.codegen.memory.find_semantic_type(receiver_name) is None:
-                        from sushi_lang.semantics.typesys import EnumType
-                        # A GENERIC enum's bare variant carries its interned instance as
-                        # a stamp: the table holds `Maybe<string>`, never `Maybe` (#545).
-                        enum_type = (getattr(expr, 'resolved_enum_type', None)
-                                     or self.codegen.enum_table.by_name.get(receiver_name))
-                        if isinstance(enum_type, EnumType):
-                            from sushi_lang.backend.expressions import enums
-                            return enums.emit_enum_constructor_from_method_call(
-                                self.codegen, enum_type, expr.member, []
-                            )
+                enum_type = bare_variant_enum(self.codegen, expr)
+                if enum_type is not None:
+                    from sushi_lang.backend.expressions import enums
+                    return enums.emit_enum_constructor_from_method_call(
+                        self.codegen, enum_type, expr.member, []
+                    )
 
                 from sushi_lang.backend.expressions import structs
                 return structs.emit_member_access(self.codegen, expr, to_i1)

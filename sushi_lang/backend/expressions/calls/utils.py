@@ -6,7 +6,6 @@ from llvmlite import ir
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.ast import Name, Call, Expr, MemberAccess, MethodCall, DotCall, IndexAccess
 from sushi_lang.semantics.typesys import EnumType, StructType
-from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -80,7 +79,7 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, base: str)
     # which crashes on a List backing struct.
     if isinstance(receiver, MemberAccess):
         from sushi_lang.backend.expressions.names import namespaced_storage
-        from sushi_lang.backend.expressions.structs import infer_struct_type
+        from sushi_lang.backend.expressions.structs import try_infer_struct_type
         storage = namespaced_storage(codegen, receiver)
         if storage is not None:
             # `geo.items.push(x)`: the alias reaches a unit variable, whose declared
@@ -93,14 +92,9 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, base: str)
                 if field_type.base_name == base and type_name in codegen.struct_table.by_name:
                     return codegen.struct_table.by_name[type_name]
             return None
-        try:
-            parent_struct = infer_struct_type(codegen, receiver.receiver)
-            field_type = parent_struct.get_field_type(receiver.member)
-        except InternalCompilerError:
-            # infer_struct_type raise_internal_error()s when the receiver is not a
-            # struct -- the "not a struct field" case here. A genuine bug (any other
-            # exception) now propagates instead of being read as "no field type".
-            field_type = None
+        parent_struct = try_infer_struct_type(codegen, receiver.receiver)
+        field_type = (None if parent_struct is None
+                      else parent_struct.get_field_type(receiver.member))
         if isinstance(field_type, ReferenceType):
             field_type = field_type.referenced_type
         if isinstance(field_type, StructType) and is_instance_of(field_type, base):
@@ -293,12 +287,14 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
     elif isinstance(receiver, MemberAccess):
         receiver_value = codegen.expressions.emit_expr(receiver)
         receiver_type = codegen.types.infer_llvm_type_from_value(receiver_value)
-        from sushi_lang.backend.expressions.structs import infer_struct_type
-        try:
-            struct_type = infer_struct_type(codegen, receiver.receiver)
-            semantic_type = struct_type.get_field_type(receiver.member)
-        except InternalCompilerError:
-            pass
+        from sushi_lang.backend.expressions import bare_variant_enum
+        from sushi_lang.backend.expressions.structs import try_infer_struct_type
+        # `Sign.Plus.hash()`: a bare variant is a value of its enum, not a field.
+        semantic_type = bare_variant_enum(codegen, receiver)
+        if semantic_type is None:
+            struct_type = try_infer_struct_type(codegen, receiver.receiver)
+            if struct_type is not None:
+                semantic_type = struct_type.get_field_type(receiver.member)
     else:
         receiver_value = codegen.expressions.emit_expr(receiver)
         receiver_type = codegen.types.infer_llvm_type_from_value(receiver_value)
