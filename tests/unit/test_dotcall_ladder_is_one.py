@@ -27,6 +27,11 @@ LADDER = TYPES_PASS / "calls" / "dotcall.py"
 #: namespace stamp says the receiver arrived qualified (#506).
 _CARRIED_IN = ("resolved_struct_type", "namespace_ref")
 
+#: What the DotCall's own visit writes on the DotCall, so a copy back would only write it
+#: again. `visit_dotcall` stamps the inferred type itself; a measurement over the corpus
+#: found no final stamp that the copy changed (#769).
+_WRITTEN_ON_THE_DOTCALL = ("inferred_return_type",)
+
 #: Shared fields the method rung never writes. `callee_fn_type` belongs to the fn-field
 #: rung, which stamps the DotCall itself; the rest are written by the other call shapes
 #: (a plain call, an FFI extern) on their own nodes. A field added to BOTH node kinds and
@@ -68,13 +73,15 @@ def test_the_stamp_set_covers_every_shared_field():
     the base class's and belongs to the DotCall as a VALUE, never to its callee.
     """
     shared = (_field_names(MethodCall) & _field_names(DotCall)) - _field_names(Node)
-    accounted = set(CALLEE_STAMPS) | set(_CARRIED_IN) | set(_NOT_A_METHOD_STAMP)
+    accounted = (set(CALLEE_STAMPS) | set(_CARRIED_IN) | set(_WRITTEN_ON_THE_DOTCALL)
+                 | set(_NOT_A_METHOD_STAMP))
     missing = sorted(shared - accounted)
     assert not missing, (
         "a field the temporary node and the DotCall both carry is in no table: "
         + ", ".join(missing)
         + "\nAdd it to CALLEE_STAMPS in calls/dotcall.py if the resolved callee writes it, "
-          "or to _CARRIED_IN / _NOT_A_METHOD_STAMP here with the reason it is neither."
+          "or to _CARRIED_IN / _WRITTEN_ON_THE_DOTCALL / _NOT_A_METHOD_STAMP here with "
+          "the reason it is neither."
     )
 
 
@@ -85,6 +92,8 @@ def test_the_shared_field_reader_sees_the_stamps():
     assert set(CALLEE_STAMPS) <= shared, (
         "CALLEE_STAMPS names a field one of the two node kinds does not declare: "
         + ", ".join(sorted(set(CALLEE_STAMPS) - shared)))
+    assert not set(CALLEE_STAMPS) & set(_WRITTEN_ON_THE_DOTCALL), (
+        "a stamp the DotCall writes itself is also copied back onto it")
 
 
 def test_the_ladder_has_one_home():
