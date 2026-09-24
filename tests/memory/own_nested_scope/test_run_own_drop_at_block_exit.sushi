@@ -1,0 +1,25 @@
+# An Own@(Res) whose payload implements Drop is dropped when its block ends, before
+# the code after the block runs.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "in inner\ndrop inner\nafter block\nin outer\ndrop outer\n"
+struct Res:
+    string name
+
+extend Res with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn run(bool go) i32:
+    let Own@(Res) o = Own.alloc(Res("outer"))
+    if (go):
+        let Own@(Res) p = Own.alloc(Res("inner"))
+        println("in {p.get().name}")
+    println("after block")
+    println("in {o.get().name}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run(true).realise(1)
+    return Result.Ok(r)

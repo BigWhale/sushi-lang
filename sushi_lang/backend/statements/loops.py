@@ -19,8 +19,7 @@ def emit_break(codegen: 'LLVMCodegen') -> None:
     _, break_bb, scope_boundary = codegen.loop_stack[-1]
     # Free heap-owning locals of the loop's own scopes before abandoning them; the
     # branch terminates this block, so pop_scope would otherwise skip their destructors.
-    from sushi_lang.backend.statements.utils import emit_loop_exit_cleanup
-    emit_loop_exit_cleanup(codegen, scope_boundary)
+    codegen.memory.emit_exit_cleanup(scope_boundary)
     codegen.builder.branch(break_bb)
     codegen.utils.after_terminator_unreachable()
 
@@ -29,8 +28,7 @@ def emit_continue(codegen: 'LLVMCodegen') -> None:
     """Emit continue statement (jump to loop condition)."""
     assert codegen.loop_stack, "checker guarantees inside-loop"
     cont_bb, _, scope_boundary = codegen.loop_stack[-1]
-    from sushi_lang.backend.statements.utils import emit_loop_exit_cleanup
-    emit_loop_exit_cleanup(codegen, scope_boundary)
+    codegen.memory.emit_exit_cleanup(scope_boundary)
     codegen.builder.branch(cont_bb)
     codegen.utils.after_terminator_unreachable()
 

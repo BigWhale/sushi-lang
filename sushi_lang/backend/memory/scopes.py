@@ -1,6 +1,6 @@
 """Variable scope management with O(1) lookup and RAII cleanup."""
 from __future__ import annotations
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Callable, Dict, Iterator, List, Optional, TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.type_predicates import is_instance_of
@@ -88,52 +88,73 @@ class ScopeManager:
             if not entries:
                 del reg[name]
 
-    def _drain_scope_registries(self, current_vars) -> None:
-        """Destroy this scope's owning locals in REVERSE declaration order, then drain.
+    @staticmethod
+    def _stack_entry_at_depth(reg: Dict[str, List], name: str, depth: int):
+        """`name`'s entry registered at `depth` in a stacked cleanup registry, or None."""
+        for entry in reversed(reg.get(name, ())):
+            if entry[0] == depth:
+                return entry
+        return None
 
-        One walk over the scope's names, newest first, rather than one walk per registry:
-        the order a scope destroys in is a property of the SCOPE, and draining registry
-        by registry makes it a property of which registry a type happens to land in.
+    @property
+    def depth(self) -> int:
+        """The depth of the innermost open scope; -1 when no scope is open."""
+        return self._scope_depth
 
-        Reverse declaration order is the RAII rule -- the last binding opened is the
-        first closed, so an owner is still alive while what it borrows from is torn
-        down. It matters for a resource in a way it never did for heap: closing a `File`
-        before the `BufWriter` that flushes into it loses the bytes, while freeing two
-        buffers in either order is unobservable. Before this the scope's names lived in a
-        `set`, so the order was Python's hash order and changed between compilations.
+    def declare_scope_name(self, name: str) -> None:
+        """Record `name` in the innermost scope, in declaration order, if it is new there."""
+        if self._scope_depth >= 0:
+            self._scope_vars[self._scope_depth].setdefault(name)
 
-        If the block already terminated, an early return emitted the frees on that path,
-        so skip emission but still drain the tracking -- emitting would append a stray
-        free after the terminator. Every exit path frees on its own mutually-exclusive
-        block (#59/#60).
-        """
-        block = self.codegen.builder.block if self.codegen.builder is not None else None
-        block_live = block is not None and not block.is_terminated
+    def _block_live(self) -> bool:
+        """Is there an open, unterminated block to emit a destructor into?"""
+        builder = self.codegen.builder
+        return builder is not None and builder.block is not None and not builder.block.is_terminated
+
+    def _exit_actions(self, name: str, depth: int
+                      ) -> Iterator[tuple[ir.AllocaInstr, Callable[[], None]]]:
+        """(slot, emit destructor) for each registry that holds `name` at `depth`."""
+        from sushi_lang.backend.destructors import emit_value_destructor
+        struct = self._stack_entry_at_depth(self._struct_cleanup, name, depth)
+        if struct is not None:
+            _depth, ty, slot = struct
+            yield slot, lambda: emit_value_destructor(self.codegen, slot, ty)
+        closure = self._stack_entry_at_depth(self._closure_cleanup, name, depth)
+        if closure is not None:
+            yield closure[-1], lambda: self._emit_closure_free(closure[-1])
+        string = self._stack_entry_at_depth(self._string_cleanup, name, depth)
+        if string is not None:
+            yield string[-1], lambda: self._emit_string_free(string[-1])
         arrays = getattr(self.codegen, "dynamic_arrays", None)
+        if arrays is not None:
+            yield from arrays.exit_actions(name, depth)
 
-        # A name sits in exactly one of these, but the order is fixed rather than
-        # incidental, so two registries holding one name stay deterministic too.
-        registries = (
-            (self._struct_cleanup,
-             lambda name, entry: arrays.emit_struct_field_cleanup(name, entry[1], entry[2])),
-            (self._closure_cleanup,
-             lambda _name, entry: self._emit_closure_free(entry[-1])),
-            (self._string_cleanup,
-             lambda _name, entry: self._emit_string_free(entry[-1])),
-        )
+    def _emit_scope_exit(self, depth: int) -> None:
+        """Emit the destructors of the scope at `depth`, and drain nothing.
 
-        for var_name in reversed(current_vars):
-            for registry, emit_free in registries:
-                if registry is self._struct_cleanup and arrays is None:
-                    continue
-                entries = registry.get(var_name)
-                if not entries or entries[-1][0] != self._scope_depth:
-                    continue
-                entry = entries[-1]
-                if block_live:
-                    self.codegen.moves.emit_free_unless_moved(
-                        entry[-1], lambda v=var_name, e=entry, f=emit_free: f(v, e))
-                self._stack_pop_at_depth(registry, var_name, self._scope_depth)
+        One walk over the scope's names, NEWEST FIRST, and each name goes to the registry
+        that holds it. The order a scope destroys in is a property of the SCOPE; a walk
+        per registry made it a property of which registry a type happens to land in.
+        Reverse declaration order is the RAII rule: the last binding opened is the first
+        closed, so a `BufWriter` flushes into a `File` that is still open.
+        """
+        for name in reversed(self._scope_vars[depth]):
+            for slot, emit_free in self._exit_actions(name, depth):
+                self.codegen.moves.emit_free_unless_moved(slot, emit_free)
+        self._free_cstr_list(self._cstr_cleanup[depth])
+        self._free_closure_temp_list(self._closure_temp_cleanup[depth])
+
+    def emit_exit_cleanup(self, lowest_depth: int) -> None:
+        """Emit the destructors of every scope from the innermost down to `lowest_depth`.
+
+        The one sweep for the early exits: `lowest_depth` 0 for a `return` or a `??`, the
+        loop's first scope for a `break` or a `continue`. It emits and does not drain:
+        every exit path frees on its own block, and `pop_scope` alone removes the entries.
+        """
+        if not self._block_live():
+            return
+        for depth in range(self._scope_depth, lowest_depth - 1, -1):
+            self._emit_scope_exit(depth)
 
     def push_scope(self) -> None:
         """Push a new lexical scope onto the scope stack."""
@@ -142,46 +163,32 @@ class ScopeManager:
         self._cstr_cleanup.append([])
         self._closure_temp_cleanup.append([])
 
-        if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
-            self.codegen.dynamic_arrays.push_scope()
-
     def pop_scope(self) -> None:
-        """Pop the current lexical scope from the scope stack."""
+        """Destroy the innermost scope's locals on the fall-through path, then drain it.
+
+        If the block already terminated, an early exit emitted the frees on that path, so
+        emit nothing but still drain the tracking (#59/#60).
+        """
         if self._scope_depth < 0:
-            raise IndexError("No scopes to pop")
+            raise_internal_error("CE0016")
 
-        current_vars = self._scope_vars[self._scope_depth]
+        depth = self._scope_depth
+        current_vars = self._scope_vars[depth]
+        if self._block_live():
+            self._emit_scope_exit(depth)
 
-        self._drain_scope_registries(current_vars)
-
+        arrays = getattr(self.codegen, "dynamic_arrays", None)
         for var_name in current_vars:
-            if var_name in self._locals and self._locals[var_name]:
-                if self._locals[var_name][-1][0] == self._scope_depth:
-                    self._locals[var_name].pop()
-                    if not self._locals[var_name]:
-                        del self._locals[var_name]
+            for registry in (self._struct_cleanup, self._closure_cleanup, self._string_cleanup,
+                             self._locals, self._types):
+                self._stack_pop_at_depth(registry, var_name, depth)
+            if arrays is not None:
+                arrays.drain(var_name, depth)
 
-            if var_name in self._types and self._types[var_name]:
-                if self._types[var_name][-1][0] == self._scope_depth:
-                    self._types[var_name].pop()
-                    if not self._types[var_name]:
-                        del self._types[var_name]
-
-        # The ONLY place the per-scope cstr list is removed. An early exit emits its own
-        # frees without popping, so exactly one free runs per runtime path.
-        if self._cstr_cleanup:
-            self._free_cstr_list(self._cstr_cleanup.pop())
-
-        # The only place the per-scope closure-temp list is removed; an early exit emits its
-        # own guarded drop without popping.
-        if self._closure_temp_cleanup:
-            self._free_closure_temp_list(self._closure_temp_cleanup.pop())
-
+        self._cstr_cleanup.pop()
+        self._closure_temp_cleanup.pop()
         self._scope_vars.pop()
         self._scope_depth -= 1
-
-        if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
-            self.codegen.dynamic_arrays.pop_scope()
 
     def register_cstr(self, c_str: 'ir.Value') -> None:
         """Register a marshalled C string (i8*) for freeing at scope exit."""
@@ -199,11 +206,6 @@ class ScopeManager:
         for ptr in ptrs:
             builder.call(free_fn, [ptr])
 
-    def emit_cstr_cleanup_all(self) -> None:
-        """Emit a free for every live C string across all open scopes."""
-        for scope_list in self._cstr_cleanup:
-            self._free_cstr_list(scope_list)
-
     def register_closure_temp(self, fat_value: 'ir.Value') -> None:
         """Register an inline-closure argument temp ({fn,env,drop} value) for scope-exit free."""
         if self._closure_temp_cleanup:
@@ -219,12 +221,6 @@ class ScopeManager:
         from sushi_lang.backend.destructors import emit_function_value_destructor_from_value
         for fat in fat_values:
             emit_function_value_destructor_from_value(self.codegen, fat)
-
-    def emit_closure_temp_cleanup_all(self) -> None:
-        """Emit the guarded env free for every live inline-closure temp across all open scopes.
-        """
-        for scope_list in self._closure_temp_cleanup:
-            self._free_closure_temp_list(scope_list)
 
     def try_find_local_slot(self, name: str) -> Optional[ir.AllocaInstr]:
         """Local variable slot for `name`, or None if it is not a local at all."""
@@ -362,16 +358,6 @@ class ScopeManager:
         from sushi_lang.backend.destructors import emit_string_destructor
         emit_string_destructor(self.codegen, slot)
 
-    def emit_string_cleanup_all(self) -> None:
-        """Emit the guarded free for every live string local across all open scopes."""
-        builder = self.codegen.builder
-        if builder is None or builder.block is None or builder.block.is_terminated:
-            return
-        for _var_name, entries in self._string_cleanup.items():
-            for _depth, slot in entries:
-                self.codegen.moves.emit_free_unless_moved(
-                    slot, lambda s=slot: self._emit_string_free(s))
-
     def is_closure_registered(self, name: str) -> bool:
         """True if `name` is a registered function-value RAII owner in the current scope."""
         return name in self._closure_cleanup
@@ -494,16 +480,4 @@ class ScopeManager:
                             scope_dict[name] = ty
                             break
             result.append(scope_dict)
-        return result
-
-    @property
-    def struct_variables(self) -> List[Dict[str, tuple['StructType', ir.AllocaInstr]]]:
-        """Per-scope-level view of owning-struct locals (name -> (type, slot))."""
-        result: List[Dict[str, tuple['StructType', ir.AllocaInstr]]] = [
-            {} for _ in range(self._scope_depth + 1)
-        ]
-        for name, entries in self._struct_cleanup.items():
-            for depth, struct_type, slot in entries:
-                if 0 <= depth < len(result):
-                    result[depth][name] = (struct_type, slot)
         return result

@@ -1,0 +1,26 @@
+# An Own@(Res) and a Res in one scope are destroyed in reverse declaration order, on
+# the return and at the end of a nested block.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "inner plain-2 own-2\ndrop own-2\ndrop plain-2\nouter plain-1 own-1\ndrop plain-1\ndrop own-1\n"
+struct Res:
+    string name
+
+extend Res with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn run(bool go) i32:
+    let Own@(Res) o = Own.alloc(Res("own-1"))
+    let Res r = Res("plain-1")
+    if (go):
+        let Res s = Res("plain-2")
+        let Own@(Res) p = Own.alloc(Res("own-2"))
+        println("inner {s.name} {p.get().name}")
+    println("outer {r.name} {o.get().name}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 v = run(true).realise(1)
+    return Result.Ok(v)

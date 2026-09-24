@@ -1,0 +1,30 @@
+# A `??` propagation destroys the owning locals in reverse declaration order.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "before\ndrop c\ndrop b-in-list\ndrop a\nfailed\n"
+struct Res:
+    string name
+
+extend Res with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn fail() i32:
+    return Result.Err(StdError.Error)
+
+fn early() i32:
+    let Res a = Res("a")
+    let List@(Res) l = List.new()
+    l.push(Res("b-in-list"))
+    let Res c = Res("c")
+    println("before")
+    let i32 v = fail()??
+    println("after {v} {a.name} {c.name} {l.len()}")
+    return Result.Ok(0)
+
+fn main() i32:
+    match early():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)
