@@ -195,10 +195,8 @@ class MainFunctionWrapper:
         """Create a separate function for the user's main function body."""
         params = params_of_fn(fn)
         ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
-        from sushi_lang.backend.generics.result_builder import intern_result
-        std_error = self.codegen.enum_table.by_name.get("StdError")
-        result_type = intern_result(self.codegen, fn.ret, std_error if std_error else fn.ret)
-        ll_ret = self.codegen.types.ll_type(result_type)
+        from sushi_lang.backend.functions.helpers import declared_result_of
+        ll_ret = self.codegen.types.ll_type(declared_result_of(self.codegen, fn))
 
         fnty = ir.FunctionType(ll_ret, ll_param_tys)
         user_main = ir.Function(self.codegen.module, fnty, name="user_main")
@@ -218,7 +216,7 @@ class MainFunctionWrapper:
         self.codegen.statements.emit_block(fn.body)
 
         if self.codegen.builder.block.terminator is None:
-            emit_default_return_fn(fn.ret)
+            emit_default_return_fn(fn)
 
         end_function_fn()
 

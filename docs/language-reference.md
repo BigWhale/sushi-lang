@@ -358,6 +358,9 @@ fn divide(i32 a, i32 b) i32:  # Actually returns Result@(i32, StdError)
     return Result.Ok(a / b)
 ```
 
+The body must return on every code path, and a `~` function is no exception: it ends with
+`return Result.Ok(~)`. A body that can reach its end is `CE0107`.
+
 ### Parameters
 
 A parameter declares one of four **modes**. The mode says who frees the value, and a marked

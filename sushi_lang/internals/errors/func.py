@@ -40,7 +40,7 @@ _add(ErrorMessage("CE0106", Severity.ERROR,
 
 _add(ErrorMessage("CE0107", Severity.ERROR,
     "function '{name}' must return a value on all code paths",
-    Category.FUNC, "All functions with a return type must have a return statement."))
+    Category.FUNC, "A function body must end in a return on every code path, and a `~` function is no exception: end it with `return Result.Ok(~)`. Until #824 a `~` function was exempt, and a body that reached its end answered a Result.Err that no source wrote. An extension or perk method with a bare return and a lambda body keep their own rules."))
 
 # Constant expression evaluation errors
 _add(ErrorMessage("CE0108", Severity.ERROR,
