@@ -1,0 +1,9 @@
+# A literal that does not fit an i64 operand is out of range for i64, and not an
+# overflow of the i32 default.
+# EXPECT_ERROR_CODE: CE2073
+# EXPECT_STDERR_CONTAINS: "literal 18446744073709551616 out of range for i64"
+fn main() i32:
+    let i64 big = 4294967301
+    if (big == 18446744073709551616):
+        println("never")
+    return Result.Ok(0)

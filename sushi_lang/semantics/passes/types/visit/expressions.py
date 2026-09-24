@@ -1,12 +1,14 @@
 """Expression validation for the typecheck pass."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.ast import Expr
     from sushi_lang.semantics.passes.types import TypeValidator
+    from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.passes.types.calls import (
     validate_enum_constructor, validate_function_call, validate_method_call)
 from sushi_lang.semantics.passes.types.expressions import (
@@ -84,13 +86,16 @@ class ExpressionValidator(RecursiveVisitor):
             reject_non_numeric_arithmetic, reject_overflowing_operation,
             reject_uncomparable_operands, reject_zero_divisor)
 
-        self.type_validator.validate_expression(node.left)
-        self.type_validator.validate_expression(node.right)
-
         # Operand-driven literal typing: when one operand is a bare (unstamped)
         # numeric literal and the other a concrete numeric type, stamp the literal
         # to that type so `a + 1` (a: u8) is u8 + u8, not the mixed u8 + i32 below.
-        self._context_type_operand_from_sibling(node)
+        # BEFORE validation, so the range check reads the sibling's type and not the
+        # i32 default (#826); again after it, for a sibling only validation can type.
+        self._context_type_operand_from_sibling(node, self._infer_leaving_no_trace)
+        self.type_validator.validate_expression(node.left)
+        self.type_validator.validate_expression(node.right)
+        self._context_type_operand_from_sibling(
+            node, self.type_validator.infer_expression_type)
 
         left_type = self.type_validator.infer_expression_type(node.left)
         right_type = self.type_validator.infer_expression_type(node.right)
@@ -133,7 +138,28 @@ class ExpressionValidator(RecursiveVisitor):
         if node.op in ARITHMETIC_OPS:
             reject_overflowing_operation(self.type_validator, node, left_type)
 
-    def _context_type_operand_from_sibling(self, node: BinaryOp) -> None:
+    def _infer_leaving_no_trace(self, expr) -> Optional[Type]:
+        """The type of a value that is not validated yet, with no stamp and no diagnostic.
+
+        Validation reads the stamps inference writes, so every field under the value is
+        put back, as `ReadOnlyInferrer` does for the early passes (#806). A diagnostic
+        goes to a Reporter nobody reads: validation reports it later, for real.
+        """
+        from sushi_lang.internals.report import Reporter
+        from sushi_lang.semantics.passes.types import _field_values_under
+        tv = self.type_validator
+        saved = _field_values_under(expr)
+        reporter, tv.reporter = tv.reporter, Reporter()
+        try:
+            return tv.infer_expression_type(expr)
+        finally:
+            tv.reporter = reporter
+            for owner, values in saved:
+                for name, value in values:
+                    setattr(owner, name, value)
+
+    def _context_type_operand_from_sibling(
+            self, node: BinaryOp, infer: Callable[[Expr], Optional[Type]]) -> None:
         """Stamp a bare numeric-literal operand with its concrete sibling's type.
 
         Bareness is read THROUGH the unary operators that keep their operand's type, so
@@ -149,11 +175,11 @@ class ExpressionValidator(RecursiveVisitor):
         if left_bare == right_bare:
             return
         if left_bare:
-            sibling_type = self.type_validator.infer_expression_type(right)
+            sibling_type = infer(right)
             if isinstance(sibling_type, BuiltinType):
                 propagate_types_to_value(self.type_validator, left, sibling_type)
         else:
-            sibling_type = self.type_validator.infer_expression_type(left)
+            sibling_type = infer(left)
             if isinstance(sibling_type, BuiltinType):
                 propagate_types_to_value(self.type_validator, right, sibling_type)
 
