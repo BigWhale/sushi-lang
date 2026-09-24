@@ -1,6 +1,6 @@
 """Main function wrapper handling for C compatibility."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef
@@ -25,7 +25,7 @@ class MainFunctionWrapper:
         result_enum: ir.Value,
         value_type: ir.Type,
         semantic_type: Ty
-    ) -> Tuple[ir.Value, ir.Value]:
+    ) -> tuple[ir.Value, ir.Value]:
         """Extract the Ok value from a Result<T> enum."""
         is_ok = enum_utils.check_enum_variant(
             self.codegen, result_enum, variant_index=0, signed=True, name="is_ok"
@@ -71,48 +71,51 @@ class MainFunctionWrapper:
             ir.Constant(self.codegen.types.i64, 0),
         ])
 
-    def emit_main_with_args(self, fn: FuncDef, begin_function_fn, end_function_fn, create_user_main_fn) -> ir.Function:
-        """Emit the main function when command line arguments are expected."""
+    def emit_main(self, fn: FuncDef) -> ir.Function:
+        """Emit the C `main` that calls the user's main and returns its exit code."""
         c_main = self.codegen.funcs.get('main')
         if c_main is None:
             raise_internal_error("CE0064")
 
-        user_main = create_user_main_fn(fn)
+        user_main = self.create_user_main_function(fn)
 
-        begin_function_fn(c_main)
+        self.codegen.functions.helpers.begin_function(c_main)
         self._unbuffer_libc_stdio()
 
-        argc = c_main.args[0]  # int argc
-        argv = c_main.args[1]  # char** argv
+        # The entrypoint pass admits `string[] args` or nothing (CE0138), so argv is the
+        # one possible argument.
+        user_main_args: list[ir.Value] = []
+        if self.codegen.main_expects_args:
+            argc, argv = c_main.args[0], c_main.args[1]
+            args_array = self.codegen._generate_argc_argv_conversion(argc, argv)
+            user_main_args.append(self.codegen.builder.load(args_array, name="args_struct"))
 
-        args_array = self.codegen._generate_argc_argv_conversion(argc, argv)
+        self._return_exit_code(fn, user_main, user_main_args)
 
-        # The entrypoint pass admits `string[] args` alone (CE0138), so argv is the one
-        # argument.
-        user_main_args = [self.codegen.builder.load(args_array, name="args_struct")]
+        self.codegen.functions.helpers.end_function()
+        return c_main
 
+    def _return_exit_code(self, fn: FuncDef, user_main: ir.Function,
+                          user_main_args: list[ir.Value]) -> None:
+        """Call the user's main and return its Ok value as an i32, or 1 for an Err."""
         result_struct = self.codegen.builder.call(user_main, user_main_args, name="user_main_result")
 
         value_type = self.codegen.types.ll_type(fn.ret)
-
         is_ok, value = self.extract_value_from_result_enum(result_struct, value_type, fn.ret)
 
-        if value.type != self.codegen.types.i32:
-            if value.type == self.codegen.types.i8:  # i8/u8 -> i32
-                converted_value = self.codegen.builder.zext(value, self.codegen.types.i32, name="i8_to_int")
-            elif value.type == self.codegen.types.i16:  # i16/u16 -> i32
-                converted_value = self.codegen.builder.sext(value, self.codegen.types.i32, name="i16_to_int")
-            elif value.type == self.codegen.types.i64:  # i64/u64 -> i32 (truncate)
-                converted_value = self.codegen.builder.trunc(value, self.codegen.types.i32, name="i64_to_int")
-            else:
-                converted_value = ir.Constant(self.codegen.types.i32, 0)
-        else:
+        i32 = self.codegen.types.i32
+        if value.type == i32:
             converted_value = value
+        elif value.type == self.codegen.types.i8:  # i8/u8 -> i32
+            converted_value = self.codegen.builder.zext(value, i32, name="i8_to_int")
+        elif value.type == self.codegen.types.i16:  # i16/u16 -> i32
+            converted_value = self.codegen.builder.sext(value, i32, name="i16_to_int")
+        elif value.type == self.codegen.types.i64:  # i64/u64 -> i32 (truncate)
+            converted_value = self.codegen.builder.trunc(value, i32, name="i64_to_int")
+        else:
+            converted_value = ir.Constant(i32, 0)
 
-        # Return converted_value if Ok, 1 if Err
-        # In shell conventions: 0 = success, non-zero = error
-        # So Err() should return 1 (generic error), not 0
-        one = ir.Constant(self.codegen.types.i32, 1)
+        one = ir.Constant(i32, 1)
         result = self.codegen.builder.select(is_ok, converted_value, one, name="main_exit_code")
 
         cmd_args_desc = self.codegen.dynamic_arrays._array("cmd_args")
@@ -122,78 +125,19 @@ class MainFunctionWrapper:
 
         self.codegen.builder.ret(result)
 
-        end_function_fn()
-        return c_main
-
-    def emit_main_without_args(self, fn: FuncDef, begin_function_fn, end_function_fn, create_user_main_fn) -> ir.Function:
-        """Emit the main function without command line arguments."""
-        c_main = self.codegen.funcs.get('main')
-        if c_main is None:
-            raise_internal_error("CE0064")
-
-        user_main = create_user_main_fn(fn)
-
-        begin_function_fn(c_main)
-        self._unbuffer_libc_stdio()
-
-        result_struct = self.codegen.builder.call(user_main, [], name="user_main_result")
-
-        value_type = self.codegen.types.ll_type(fn.ret)
-
-        is_ok, value = self.extract_value_from_result_enum(result_struct, value_type, fn.ret)
-
-        if value.type != self.codegen.types.i32:
-            if value.type == self.codegen.types.i8:  # i8/u8 -> i32
-                converted_value = self.codegen.builder.zext(value, self.codegen.types.i32, name="i8_to_int")
-            elif value.type == self.codegen.types.i16:  # i16/u16 -> i32
-                converted_value = self.codegen.builder.sext(value, self.codegen.types.i32, name="i16_to_int")
-            elif value.type == self.codegen.types.i64:  # i64/u64 -> i32 (truncate)
-                converted_value = self.codegen.builder.trunc(value, self.codegen.types.i32, name="i64_to_int")
-            else:
-                converted_value = ir.Constant(self.codegen.types.i32, 0)
-        else:
-            converted_value = value
-
-        # Return converted_value if Ok, 1 if Err
-        # In shell conventions: 0 = success, non-zero = error
-        # So Err() should return 1 (generic error), not 0
-        one = ir.Constant(self.codegen.types.i32, 1)
-        result = self.codegen.builder.select(is_ok, converted_value, one, name="main_exit_code")
-
-        self.codegen.builder.ret(result)
-
-        end_function_fn()
-        return c_main
-
-    def create_user_main_function(self, fn: FuncDef, params_of_fn, begin_function_fn, end_function_fn, emit_default_return_fn) -> ir.Function:
+    def create_user_main_function(self, fn: FuncDef) -> ir.Function:
         """Create a separate function for the user's main function body."""
-        params = params_of_fn(fn)
+        params = self.codegen.functions.helpers.params_of(fn)
         ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
         from sushi_lang.backend.functions.helpers import declared_result_of
         ll_ret = self.codegen.types.ll_type(declared_result_of(self.codegen, fn))
 
         fnty = ir.FunctionType(ll_ret, ll_param_tys)
         user_main = ir.Function(self.codegen.module, fnty, name="user_main")
-        user_main.linkage = 'internal'  # Internal function
+        user_main.linkage = 'internal'
 
         for i, (pname, _) in enumerate(params):
             user_main.args[i].name = pname
 
-        begin_function_fn(user_main, fn)
-
-        self.codegen.current_function_ast = fn
-
-        for param in fn.params:
-            if param.ty is not None:
-                self.codegen.variable_types[param.name] = param.ty
-
-        self.codegen.statements.emit_block(fn.body)
-
-        if self.codegen.builder.block.terminator is None:
-            emit_default_return_fn(fn)
-
-        end_function_fn()
-
-        self.codegen.current_function_ast = None
-
+        self.codegen.functions.definitions.emit_body(user_main, fn)
         return user_main

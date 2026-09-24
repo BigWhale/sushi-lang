@@ -17,39 +17,21 @@ class FunctionDefinitions:
         """Initialize definitions handler with reference to main codegen instance."""
         self.codegen = codegen
 
-    def emit_func_def(
-        self,
-        fn: FuncDef,
-        emit_func_decl_fn,
-        begin_function_fn,
-        end_function_fn,
-        emit_default_return_fn,
-        main_wrapper,
-        unit_name: str | None = None,
-    ) -> ir.Function:
+    def emit_func_def(self, fn: FuncDef, unit_name: str | None = None) -> ir.Function:
         """Define the body of a regular function."""
         if fn.name == 'main' and not getattr(self.codegen, 'is_library_mode', False):
-            if self.codegen.main_expects_args:
-                return main_wrapper.emit_main_with_args(
-                    fn, begin_function_fn, end_function_fn,
-                    lambda f: main_wrapper.create_user_main_function(
-                        f, lambda x: self.codegen.functions.helpers.params_of(x),
-                        begin_function_fn, end_function_fn, emit_default_return_fn
-                    )
-                )
-            else:
-                return main_wrapper.emit_main_without_args(
-                    fn, begin_function_fn, end_function_fn,
-                    lambda f: main_wrapper.create_user_main_function(
-                        f, lambda x: self.codegen.functions.helpers.params_of(x),
-                        begin_function_fn, end_function_fn, emit_default_return_fn
-                    )
-                )
+            return self.codegen.functions.main_wrapper.emit_main(fn)
 
         from sushi_lang.backend.functions.declarations import declaring_unit
         llvm_fn = (self.codegen.funcs.declared(fn.name, declaring_unit(fn, unit_name))
-                   or emit_func_decl_fn(fn, unit_name))
-        begin_function_fn(llvm_fn, fn)
+                   or self.codegen.functions.declarations.emit_func_decl(fn, unit_name))
+        self.emit_body(llvm_fn, fn)
+        return llvm_fn
+
+    def emit_body(self, llvm_fn: ir.Function, fn: FuncDef) -> None:
+        """Emit the body of `fn` into `llvm_fn`."""
+        helpers = self.codegen.functions.helpers
+        helpers.begin_function(llvm_fn, fn)
 
         self.codegen.current_function_ast = fn
 
@@ -60,33 +42,23 @@ class FunctionDefinitions:
         self.codegen.statements.emit_block(fn.body)
 
         if self.codegen.builder.block.terminator is None:
-            emit_default_return_fn(fn)
+            helpers.emit_default_return(fn)
 
-        end_function_fn()
+        helpers.end_function()
 
         self.codegen.current_function_ast = None
 
-        return llvm_fn
-
-    def emit_extension_method_def(
-        self,
-        ext: ExtendDef,
-        get_name_fn,
-        begin_function_fn,
-        end_function_fn,
-        emit_default_return_for_extension_fn
-    ) -> ir.Function:
+    def emit_extension_method_def(self, ext: ExtendDef) -> ir.Function:
         """Define the body of an extension method."""
-        func_name = get_name_fn(ext)
+        helpers = self.codegen.functions.helpers
+        func_name = helpers.get_extension_method_name(ext)
         llvm_fn = self.codegen.funcs.get(func_name)
         if not llvm_fn:
             raise_internal_error("CE0025", name=func_name)
 
-        # An `ExtendDef` is no `FuncDef`, but `begin_function` reads only `.params`, and a
-        # method's parameters obey the same modes as any callable's -- a `nom` one is OWNED
-        # by the body and leaks unless registered. Passing None was the old proxy for "is
-        # this a method body?", which the declared mode now answers (borrow-model.md S1).
-        begin_function_fn(llvm_fn, ext)
+        # A method's parameters obey the same modes as any callable's -- a `nom` one is
+        # OWNED by the body and leaks unless registered (borrow-model.md S1).
+        helpers.begin_function(llvm_fn, ext)
 
         self.codegen.in_extension_method = True
         # A channel body ('| E', ruling 6): every bare success return wraps into Ok at
@@ -144,9 +116,9 @@ class FunctionDefinitions:
                 self.codegen.builder.ret(
                     build_err_from_return_type(self.codegen, channel, None))
             else:
-                emit_default_return_for_extension_fn(ext.ret)
+                helpers.emit_default_return_for_extension(ext.ret)
 
         self.codegen.in_extension_method = False
         self.codegen.current_extension_result = None
-        end_function_fn()
+        helpers.end_function()
         return llvm_fn

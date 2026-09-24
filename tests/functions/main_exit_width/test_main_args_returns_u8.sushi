@@ -1,0 +1,6 @@
+# EXPECT_RUNTIME_EXIT: 201
+# A main that takes the argument vector and returns u8 exits with the value.
+
+fn main(string[] args) u8:
+    let u8 base = 200
+    return Result.Ok(base + (args.len() as u8))

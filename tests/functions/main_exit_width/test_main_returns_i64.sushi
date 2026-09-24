@@ -1,0 +1,6 @@
+# EXPECT_RUNTIME_EXIT: 2
+# A main that returns i64 exits with the low 32 bits of the value.
+# 4294967298 is 2 to the power 32, plus 2.
+
+fn main() i64:
+    return Result.Ok(4294967298)

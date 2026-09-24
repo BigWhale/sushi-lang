@@ -56,7 +56,7 @@ def emit_enum_realise(
     # Extract (is_success, value) from enum using the helper on the function manager
     # This helper handles the complex unpacking of the enum's [N x i8] data field
     # Pass semantic type for accurate size calculation (critical for struct types)
-    is_success, unpacked_value = codegen.functions._extract_value_from_result_enum(
+    is_success, unpacked_value = codegen.functions.extract_value_from_result_enum(
         enum_value, value_llvm_type, t_type
     )
 
@@ -136,7 +136,7 @@ def emit_enum_expect(
     t_type = success_variant.associated_types[0]
     value_llvm_type = codegen.types.ll_type(t_type)
 
-    is_success, unpacked_value = codegen.functions._extract_value_from_result_enum(
+    is_success, unpacked_value = codegen.functions.extract_value_from_result_enum(
         enum_value, value_llvm_type, t_type
     )
 
