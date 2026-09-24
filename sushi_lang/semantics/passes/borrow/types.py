@@ -3,7 +3,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
-from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
+from sushi_lang.semantics.type_predicates import is_instance_of
+from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ownership import TypeClass, type_class_of
 from sushi_lang.semantics.typesys import (
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
 
 # The containers a `push` / `insert` fills and a `.get()` reads an element out of.
 # An `Own@(T)` holds one value and is not one of them.
-_ELEMENT_CONTAINERS = frozenset(prefix[:-1] for prefix in CONTAINER_PREFIXES) - {"Own"}
+_ELEMENT_CONTAINERS = frozenset(CONTAINER_BASES) - {"Own"}
 
 
 def _generic_parts(ty: Optional[Type]) -> tuple[Optional[str], tuple]:
@@ -75,7 +76,7 @@ class TypeQueries:
         ty = self.resolve_named(ty)
         if isinstance(ty, GenericTypeRef) and ty.base_name == "Own" and ty.type_args:
             return ty.type_args[0]
-        if isinstance(ty, StructType) and ty.name.startswith("Own<") and ty.fields:
+        if isinstance(ty, StructType) and is_instance_of(ty, "Own") and ty.fields:
             value_field = ty.fields[0][1]
             if isinstance(value_field, PointerType):
                 return value_field.pointee_type

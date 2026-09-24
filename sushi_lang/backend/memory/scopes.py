@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, TYPE_CHECKING
 
 from llvmlite import ir
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory import allocas
 from sushi_lang.semantics.ownership import is_own_type
@@ -16,13 +17,12 @@ if TYPE_CHECKING:
 # destroys a List through `lists` and an Own through `owned_pointers`, so the general
 # struct registry must leave them alone or each is destroyed twice. A `HashMap` is absent
 # on purpose: it has no registry of its own and IS destroyed through the struct registry.
-_DEDICATED_REGISTRY_PREFIXES = ("List<", "Own<")
+_DEDICATED_REGISTRY_BASES = ("List", "Own")
 
 
 def _has_dedicated_registry(ty: 'Type') -> bool:
     """Does this type already have a scope-exit registry that is not the struct one?"""
-    name = getattr(ty, "name", None)
-    return isinstance(name, str) and name.startswith(_DEDICATED_REGISTRY_PREFIXES)
+    return is_instance_of(ty, *_DEDICATED_REGISTRY_BASES)
 
 
 class ScopeManager:
@@ -298,7 +298,7 @@ class ScopeManager:
             # (`dynamic_arrays.lists`, `.owned_pointers`) that already destroys it at
             # scope exit. Registering one here as well destroys it twice. A `HashMap` has
             # no registry of its own and belongs here, which is why the test is the two
-            # names and not `CONTAINER_PREFIXES`.
+            # names and not `CONTAINER_BASES`.
             if not _has_dedicated_registry(semantic_ty) and needs_cleanup(self.codegen, semantic_ty):
                 self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
         # A fixed array whose ELEMENTS own heap. Its storage is the alloca, so it is no

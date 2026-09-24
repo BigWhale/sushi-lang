@@ -30,6 +30,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Callable, Mapping, Optional, Protocol
 from dataclasses import dataclass, field
 
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
 from sushi_lang.semantics.generics.cloning import DERIVED_CLONE_ARITY
 from sushi_lang.semantics.generics.hashing import DERIVED_HASH_ARITY
@@ -416,9 +417,9 @@ class FunctionMethodInferrer:
 # a sweep of 984 fixtures over the five areas that bind one -- so no claim derefs.
 
 
-def _named(receiver_type: 'Type', kind: type, prefix: str) -> bool:
-    """A receiver of this kind whose interned name starts with this generic base."""
-    return isinstance(receiver_type, kind) and receiver_type.name.startswith(prefix)
+def _named(receiver_type: 'Type', kind: type, base: str) -> bool:
+    """A receiver of this kind that is an instance of this generic base."""
+    return isinstance(receiver_type, kind) and is_instance_of(receiver_type, base)
 
 
 def _has_perk_override(receiver_type: 'Type', method_name: str,
@@ -445,31 +446,31 @@ def _claims_string(receiver_type, method_name, validator):
 
 def _claims_result(receiver_type, method_name, validator):
     from sushi_lang.semantics.generics.results import is_builtin_result_method
-    return (_named(receiver_type, EnumType, "Result<")
+    return (_named(receiver_type, EnumType, "Result")
             and is_builtin_result_method(method_name))
 
 
 def _claims_maybe(receiver_type, method_name, validator):
     from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method
-    return (_named(receiver_type, EnumType, "Maybe<")
+    return (_named(receiver_type, EnumType, "Maybe")
             and is_builtin_maybe_method(method_name))
 
 
 def _claims_own(receiver_type, method_name, validator):
     from sushi_lang.semantics.generics.own import is_builtin_own_method
-    return (_named(receiver_type, StructType, "Own<")
+    return (_named(receiver_type, StructType, "Own")
             and is_builtin_own_method(method_name))
 
 
 def _claims_hashmap(receiver_type, method_name, validator):
     from sushi_lang.semantics.generics.hashmap import is_builtin_hashmap_method
-    return (_named(receiver_type, StructType, "HashMap<")
+    return (_named(receiver_type, StructType, "HashMap")
             and is_builtin_hashmap_method(method_name))
 
 
 def _claims_list(receiver_type, method_name, validator):
     from sushi_lang.semantics.generics.list import is_builtin_list_method
-    return (_named(receiver_type, StructType, "List<")
+    return (_named(receiver_type, StructType, "List")
             and is_builtin_list_method(method_name))
 
 
@@ -486,12 +487,12 @@ def _claims_derived_hash(receiver_type, method_name, validator):
 
 def _claims_derived_clone(receiver_type, method_name, validator):
     # `Own`, `List` and `HashMap` keep their own clone, and the derive pass registers
-    # none for them (`generics/cloning.py`), so the prefix test states what the table
+    # none for them (`generics/cloning.py`), so the base test states what the table
     # already holds.
-    from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
+    from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
     return (isinstance(receiver_type, (StructType, EnumType))
             and method_name == "clone"
-            and not receiver_type.name.startswith(CONTAINER_PREFIXES)
+            and not is_instance_of(receiver_type, *CONTAINER_BASES)
             and not _has_perk_override(receiver_type, method_name, validator)
             and validator.derived_methods.get_method(receiver_type, "clone") is not None)
 

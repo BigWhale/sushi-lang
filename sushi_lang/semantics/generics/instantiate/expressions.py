@@ -414,7 +414,7 @@ class ExpressionScanner:
                     base_name="Result", type_args=(ret, UnknownType("StdError"))))
 
         for param in generic_func.params:
-            if param.ty is not None and not getattr(param, "is_pack", False):
+            if param.ty is not None and not param.is_pack:
                 self.collect_type(substitute_type_params(param.ty, substitution))
 
     def _infer_arg_type(self, arg_expr):

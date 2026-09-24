@@ -1,6 +1,7 @@
 """Type resolution utilities for UnknownType to StructType/EnumType conversion."""
 from __future__ import annotations
 from typing import Dict, Tuple, TYPE_CHECKING
+from sushi_lang.semantics.generics.interned import interned_name
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type, StructType, EnumType
@@ -57,8 +58,7 @@ class TypeResolver:
         from sushi_lang.semantics.generics.types import GenericTypeRef
 
         if isinstance(ty, GenericTypeRef):
-            type_args_str = ", ".join(str(arg) for arg in ty.type_args)
-            concrete_name = f"{ty.base_name}<{type_args_str}>"
+            concrete_name = interned_name(ty.base_name, ty.type_args)
 
             if concrete_name in self.enum_table:
                 return self.enum_table[concrete_name]
@@ -105,11 +105,9 @@ def resolve_unknown_type(
         # `resolve_type_recursively`: a named type's str() is its name, so walking fields
         # cannot change the mangled name but CAN cycle (#240's RecursionError). The sibling
         # mangling sites use a bare str(arg) for the same reason.
-        type_arg_strs = ", ".join(
-            str(_resolve_type_name(arg, struct_table, enum_table))
-            for arg in ty.type_args
-        )
-        concrete_name = f"{ty.base_name}<{type_arg_strs}>"
+        concrete_name = interned_name(
+            ty.base_name,
+            (_resolve_type_name(arg, struct_table, enum_table) for arg in ty.type_args))
 
         if concrete_name in struct_table:
             return struct_table[concrete_name]

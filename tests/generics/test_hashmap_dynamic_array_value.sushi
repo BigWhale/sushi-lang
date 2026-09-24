@@ -3,7 +3,8 @@
 # The same defect as #283, found while fixing it and unfiled: each container carried its own
 # hand-rolled reader for a type argument of its interned name, and none of the three had an
 # array case. So the value type resolved to None, `get(k)??` reached the backend with no
-# stamp, and the report was CE0124. All three read through `resolve_type_argument` now.
+# stamp, and the report was CE0124. All three read the instance's `generic_args` through
+# `instance_type_arguments` now.
 # EXPECT_STDOUT_EXACT: "a=2 b=3\nfirst=1 last=30\n"
 # EXPECT_NO_LEAKS
 use <collections/hashmap>

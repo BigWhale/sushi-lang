@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, TYPE_CHECKING
 
 from llvmlite import ir
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import DynamicArrayType, Type, StructType
 from sushi_lang.backend.constants import INT32_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const
@@ -248,7 +249,7 @@ class DynamicArrayManager:
 
     def is_list_type(self, ty: Type) -> bool:
         """Check if a type is List<T>."""
-        return isinstance(ty, StructType) and ty.name.startswith("List<")
+        return isinstance(ty, StructType) and is_instance_of(ty, "List")
 
     def register_list(self, var_name: str, list_type: StructType, slot: ir.Instruction) -> None:
         """Register a local List<T> variable for automatic RAII cleanup (#61)."""

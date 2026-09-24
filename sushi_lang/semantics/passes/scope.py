@@ -364,7 +364,7 @@ class ScopeAnalyzer:
         for param in func.params:
             # Synthesized pack fan-out params carry user-invisible names, so they are
             # declared with no span and the implicit-variable exemption suppresses CW1001.
-            span = None if getattr(param, 'is_pack', False) else param.name_span
+            span = None if param.is_pack else param.name_span
             self._declare_variable(param.name, span)
 
         self._check_block(func.body)

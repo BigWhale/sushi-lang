@@ -83,7 +83,7 @@ def validate_generic_function_call(
     # symbol carries the pack arity so it matches the monomorphizer's ".pack{N}"
     # name (mirrors monomorphize/functions.py).
     type_params = generic_func.type_params or []
-    has_pack = bool(type_params) and getattr(type_params[-1], "is_pack", False)
+    has_pack = bool(type_params) and type_params[-1].is_pack
     if has_pack:
         pack_arity = len(type_args) - (len(type_params) - 1)
         mangled_name = mangle_function_name(
@@ -123,7 +123,7 @@ def _reject_argument_count(validator: 'TypeValidator', call: Call, generic_func,
     many when a pack parameter takes the rest. The types are not compared here; that is
     the instance's check, once the count fits.
     """
-    fixed = [p for p in generic_func.params if not getattr(p, "is_pack", False)]
+    fixed = [p for p in generic_func.params if not p.is_pack]
     has_pack = len(fixed) != len(generic_func.params)
     return not check_arguments(
         validator, written, [None] * len(fixed), call.args, call.callee.loc,
@@ -182,7 +182,7 @@ def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected
     if generic_func is None:
         return None
     type_params = generic_func.type_params or []
-    if type_params and getattr(type_params[-1], "is_pack", False):
+    if type_params and type_params[-1].is_pack:
         return None
     type_args = solve_leading_type_args(
         generic_func, list(expected_ty.param_types),

@@ -22,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Mapping, Optional, Protocol, Tuple
 
+from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.statics import names_a_type
 from sushi_lang.semantics.typesys import (
     ArrayType,
@@ -114,7 +115,7 @@ class ExtensionTarget:
 
 def instantiation_key(base_name: str, type_args: Tuple[Type, ...]) -> str:
     """The interned name of one instantiation, which is what a concrete target matches."""
-    return f"{base_name}<{', '.join(str(t) for t in type_args)}>"
+    return interned_name(base_name, type_args)
 
 
 def classify_extension_target(

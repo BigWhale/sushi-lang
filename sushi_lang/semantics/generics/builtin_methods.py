@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping
 
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
@@ -51,29 +52,28 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str,
         from sushi_lang.semantics.generics.closures import is_builtin_function_method
         return is_builtin_function_method(method_name)
 
-    # The interned name is the authority for the generic containers -- angle brackets are
-    # the INTERNAL spelling and must not be "fixed" to @( ) here.
+    # The generic base names the family of a built-in container (#805).
     if isinstance(receiver_type, EnumType):
-        if receiver_type.name.startswith("Result<"):
+        if is_instance_of(receiver_type, "Result"):
             from sushi_lang.semantics.generics.results import is_builtin_result_method
             if is_builtin_result_method(method_name):
                 return True
-        elif receiver_type.name.startswith("Maybe<"):
+        elif is_instance_of(receiver_type, "Maybe"):
             from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method
             if is_builtin_maybe_method(method_name):
                 return True
         return derived_methods.get_method(receiver_type, method_name) is not None
 
     if isinstance(receiver_type, StructType):
-        if receiver_type.name.startswith("Own<"):
+        if is_instance_of(receiver_type, "Own"):
             from sushi_lang.semantics.generics.own import is_builtin_own_method
             if is_builtin_own_method(method_name):
                 return True
-        elif receiver_type.name.startswith("HashMap<"):
+        elif is_instance_of(receiver_type, "HashMap"):
             from sushi_lang.semantics.generics.hashmap import is_builtin_hashmap_method
             if is_builtin_hashmap_method(method_name):
                 return True
-        elif receiver_type.name.startswith("List<"):
+        elif is_instance_of(receiver_type, "List"):
             from sushi_lang.semantics.generics.list import is_builtin_list_method
             if is_builtin_list_method(method_name):
                 return True

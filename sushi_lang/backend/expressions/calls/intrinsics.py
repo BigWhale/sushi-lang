@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Union
 
 from llvmlite import ir
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.ast import DotCall, MethodCall, Name
 from sushi_lang.semantics.typesys import EnumType, StructType, BuiltinType
 from sushi_lang.internals.errors import raise_internal_error
@@ -56,10 +57,9 @@ def try_emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
     # This should never be reached if semantic analysis properly sets resolved_enum_type
     if isinstance(receiver, Name) and hasattr(codegen, 'enum_table'):
         base_name = receiver.id
-        prefix = base_name + "<"
 
-        for enum_name in codegen.enum_table.by_name:
-            if enum_name.startswith(prefix):
+        for enum_name, enum_type in codegen.enum_table.by_name.items():
+            if is_instance_of(enum_type, base_name):
                 raise_internal_error("CE0113",
                     message=f"Generic enum constructor {base_name}.{method}() requires "
                             f"type annotation. Found monomorphized instance {enum_name}. "
@@ -85,7 +85,7 @@ def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, 
         from sushi_lang.semantics.generics.own import is_builtin_own_method
         from sushi_lang.backend.generics.own import emit_builtin_own_method
 
-        if isinstance(resolved_type, StructType) and resolved_type.name.startswith("Own<"):
+        if isinstance(resolved_type, StructType) and is_instance_of(resolved_type, "Own"):
             if is_builtin_own_method(method):
                 temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
                 return emit_builtin_own_method(codegen, temp_expr, None, resolved_type)
@@ -121,8 +121,8 @@ def try_emit_array_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
     # descriptor's own shape, so the LLVM type alone cannot tell the two apart. The
     # SEMANTIC type can, and it is already here. Without this the array path claimed
     # `List@(i32).hash()` and then refused its own receiver with CE0042 (#628).
-    from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
-    if isinstance(semantic_type, StructType) and semantic_type.name.startswith(CONTAINER_PREFIXES):
+    from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
+    if isinstance(semantic_type, StructType) and is_instance_of(semantic_type, *CONTAINER_BASES):
         return None
 
     if not is_builtin_array_method(expr.method):
@@ -204,8 +204,8 @@ def _try_emit_auto_derived(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
         return None
 
     if exclude_containers:
-        from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
-        if semantic_type.name.startswith(CONTAINER_PREFIXES):
+        from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
+        if is_instance_of(semantic_type, *CONTAINER_BASES):
             return None
 
     derived = codegen.derived_methods.get_method(semantic_type, method)
