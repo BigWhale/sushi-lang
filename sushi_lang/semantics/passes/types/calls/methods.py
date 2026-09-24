@@ -226,9 +226,9 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     fixpoint round. Returns None (no template), RESOLUTION_REPORTED (CE2063 emitted),
     or the synthetic method.
     """
-    from sushi_lang.semantics.ast import Lambda
+    from sushi_lang.semantics.generics.pack_inference import (
+        infer_call_arg_type, solve_leading_type_args)
     from sushi_lang.semantics.generics.types import substitute_type_params
-    from sushi_lang.semantics.generics.unify import unify_types
     from sushi_lang.semantics.passes.collect.functions import ExtensionMethod, Param
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
@@ -241,21 +241,12 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
         substitute_type_params(p.ty, receiver_subst) if p.ty is not None else None
         for p in template.params]
 
-    type_param_map: dict = {}
-    for expected, arg in zip(expected_params, call.args, strict=False):
-        if expected is None:
-            continue
-        if isinstance(arg, Lambda):
-            from sushi_lang.semantics.passes.types.visitor import infer_lambda_type
-            arg_type = infer_lambda_type(validator, arg, stamp=False)
-        else:
-            arg_type = validator.infer_expression_type(arg)
-        if arg_type is None:
-            continue
-        unify_types(expected, arg_type, type_param_map)
-
     margs_names = list(template.method_type_params)
-    unsolved = [n for n in margs_names if n not in type_param_map]
+    arg_types = [infer_call_arg_type(validator, arg) if expected is not None else None
+                 for arg, expected in zip(call.args, expected_params, strict=False)]
+    type_param_map, unsolved = solve_leading_type_args(
+        template, arg_types, None, None, partial=True,
+        param_types=expected_params, type_param_names=margs_names)
     if unsolved:
         if report:
             names = ", ".join(f"'{n}'" for n in unsolved)

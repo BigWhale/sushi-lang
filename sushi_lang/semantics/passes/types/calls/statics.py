@@ -86,11 +86,12 @@ def _generic_static_target(validator: 'TypeValidator', call, base: str):
 
 def _solve_static(validator: 'TypeValidator', call, template, stamped):
     """Run the shared solver over this call's argument types and its stamp."""
+    from sushi_lang.semantics.generics.pack_inference import infer_call_arg_type
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
     arg_types = []
     for arg in call.args:
-        arg_type = validator.infer_expression_type(arg)
+        arg_type = infer_call_arg_type(validator, arg)
         if arg_type is not None:
             arg_type = resolve_unknown_type(arg_type, validator.struct_table.by_name,
                                             validator.enum_table.by_name)

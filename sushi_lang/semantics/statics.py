@@ -90,15 +90,10 @@ def solve_target_type_args(template, arg_types, stamped_args):
     in declaration order. An argument whose type is not known yet (`None`) solves
     nothing, and a stamp whose arity does not match the template answers nothing.
     """
-    from sushi_lang.semantics.generics.unify import unify_types
-
-    solved: dict = {}
-    for param, arg_type in zip(template.params, arg_types, strict=False):
-        if param.ty is None or arg_type is None:
-            continue
-        unify_types(param.ty, arg_type, solved)
+    from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
 
     names = [p.name if hasattr(p, "name") else str(p) for p in template.type_params]
+    solved, _ = solve_leading_type_args(template, arg_types, None, None, partial=True)
     if stamped_args is not None and len(stamped_args) == len(names):
         for name, stamped in zip(names, stamped_args, strict=True):
             solved.setdefault(name, stamped)
