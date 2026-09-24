@@ -30,9 +30,7 @@ def validate_result_method_with_validator(
     validator: Any
 ) -> None:
     """Validate Result<T, E> method calls."""
-    # CRITICAL: Annotate the MethodCall with the resolved Result<T, E> type
-    # This allows the backend to use the correct type during code generation
-    # instead of relying on unreliable LLVM type matching
+    # The backend reads the receiver's Result type from this stamp.
     call.resolved_enum_type = result_type
 
     if call.method not in RESULT_METHOD_ARITY:

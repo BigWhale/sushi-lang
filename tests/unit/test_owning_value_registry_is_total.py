@@ -46,11 +46,11 @@ def _owning_struct() -> StructType:
 
 
 def _list_type() -> StructType:
-    return StructType(name="List<i32>", fields=())
+    return StructType(name="List<i32>", fields=(), generic_base="List")
 
 
 def _own_type() -> StructType:
-    return StructType(name="Own<i32>", fields=())
+    return StructType(name="Own<i32>", fields=(), generic_base="Own")
 
 
 def _registered_names(codegen: LLVMCodegen) -> set[str]:

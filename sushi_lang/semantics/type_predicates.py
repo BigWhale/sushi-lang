@@ -1,7 +1,7 @@
 """Type checking predicates and type sets for semantic analysis."""
 
 from typing import Optional, Set
-from sushi_lang.semantics.typesys import Type, BuiltinType, EnumType, StructType, UnknownType
+from sushi_lang.semantics.typesys import Type, BuiltinType, EnumType, StructType
 
 
 BUILTIN_INTEGER_TYPES: Set[BuiltinType] = {
@@ -54,17 +54,12 @@ def is_string_convertible(ty: Type) -> bool:
 def generic_base_of(ty: object) -> Optional[str]:
     """The generic a named instance was cut from (`List` for `List<i32>`), else None.
 
-    It reads `generic_base`. Every instance the compiler builds carries it. A name with no
-    `generic_base` -- an `UnknownType` spelling `Own<i32>`, or a type the unit tests build
-    by name alone -- answers from the head of its name, as the retired `startswith("X<")`
-    sites did.
+    It reads `generic_base` and nothing else. Every instance the compiler builds carries
+    it, so a bare name is never read for its family (#805).
     """
-    if isinstance(ty, (StructType, EnumType)) and ty.generic_base is not None:
+    if isinstance(ty, (StructType, EnumType)):
         return ty.generic_base
-    if not isinstance(ty, (StructType, EnumType, UnknownType)):
-        return None
-    head, bracket, _ = ty.name.partition("<")
-    return head if bracket else None
+    return None
 
 
 def is_instance_of(ty: object, *bases: str) -> bool:
