@@ -231,7 +231,7 @@ def test_recursive_type_terminates():
 def test_is_own_type():
     """`Own@(T)` alone, by name. One arm of `is_get_out_container` since #242."""
     assert is_own_type(GenericTypeRef(base_name="Own", type_args=[I32]))
-    assert is_own_type(StructType(name="Own<i32>", fields=()))
+    assert is_own_type(StructType(name="Own<i32>", fields=(), generic_base="Own"))
     assert not is_own_type(GenericTypeRef(base_name="List", type_args=[I32]))
     assert not is_own_type(StructType(name="Owner", fields=()))  # prefix, not the type
     assert not is_own_type(None)
@@ -242,9 +242,9 @@ def test_is_get_out_container():
     for ty in (GenericTypeRef(base_name="Own", type_args=[I32]),
                GenericTypeRef(base_name="List", type_args=[I32]),
                GenericTypeRef(base_name="HashMap", type_args=[STR, I32]),
-               StructType(name="Own<i32>", fields=()),
-               StructType(name="List<i32>", fields=()),
-               StructType(name="HashMap<string, i32>", fields=()),
+               StructType(name="Own<i32>", fields=(), generic_base="Own"),
+               StructType(name="List<i32>", fields=(), generic_base="List"),
+               StructType(name="HashMap<string, i32>", fields=(), generic_base="HashMap"),
                DynamicArrayType(base_type=I32),
                ArrayType(base_type=I32, size=3)):
         assert is_get_out_container(ty), ty

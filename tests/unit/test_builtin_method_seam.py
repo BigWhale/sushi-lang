@@ -72,7 +72,7 @@ def test_the_gate_can_actually_see_families():
 # Behaviour, per family
 
 def _list(elem="i32"):
-    return StructType(name=f"List<{elem}>", fields=())
+    return StructType(name=f"List<{elem}>", fields=(), generic_base="List")
 
 
 # The auto-derived pair is one COMPILATION's (#601); every other family is the
@@ -89,10 +89,10 @@ NOTHING_DERIVED = DerivedMethodTable()
     (BuiltinType.I32, "to_str"),
     (BuiltinType.I32, "hash"),
     (BuiltinType.F64, "to_bits"),
-    (EnumType(name="Result<i32, StdError>", variants=()), "is_ok"),
-    (EnumType(name="Maybe<i32>", variants=()), "is_some"),
-    (StructType(name="Own<i32>", fields=()), "get"),
-    (StructType(name="HashMap<i32, i32>", fields=()), "insert"),
+    (EnumType(name="Result<i32, StdError>", variants=(), generic_base="Result"), "is_ok"),
+    (EnumType(name="Maybe<i32>", variants=(), generic_base="Maybe"), "is_some"),
+    (StructType(name="Own<i32>", fields=(), generic_base="Own"), "get"),
+    (StructType(name="HashMap<i32, i32>", fields=(), generic_base="HashMap"), "insert"),
     (_list(), "push"),
 ])
 def test_recognised(receiver, method):

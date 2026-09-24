@@ -33,20 +33,20 @@ I32, STR = BuiltinType.I32, BuiltinType.STRING
 NO_DROPS: frozenset = frozenset()
 
 
-def struct(name, *fields):
-    return StructType(name=name, fields=tuple(fields))
+def struct(name, *fields, base=None):
+    return StructType(name=name, fields=tuple(fields), generic_base=base)
 
 
 PLAIN = struct("Plain", ("a", I32), ("b", I32))
 STRING_ONLY = struct("Named", ("name", STR), ("id", I32))          # the tier that was deleted
 OWNING = struct("Buffer", ("data", DynamicArrayType(I32)))
 NESTED_OWNING = struct("Outer", ("inner", OWNING), ("tag", STR))
-LIST_FIELD = struct("Bag", ("xs", struct("List<i32>", ("d", DynamicArrayType(I32)))))
-HASHMAP = struct("HashMap<i32, i32>", ("buckets", DynamicArrayType(I32)))
+LIST_FIELD = struct("Bag", ("xs", struct("List<i32>", ("d", DynamicArrayType(I32)), base="List")))
+HASHMAP = struct("HashMap<i32, i32>", ("buckets", DynamicArrayType(I32)), base="HashMap")
 PLAIN_ENUM = EnumType(name="Color", variants=(EnumVariantInfo("Red", ()), EnumVariantInfo("Green", ())))
 OWNING_ENUM = EnumType(name="Msg", variants=(EnumVariantInfo("Text", (STR,)), EnumVariantInfo("Arr", (DynamicArrayType(I32),))))
 STRING_ENUM = EnumType(name="Label", variants=(EnumVariantInfo("Named", (STR,)),))
-RECURSIVE_ENUM = EnumType(name="Tree", variants=(EnumVariantInfo("Leaf", (I32,)), EnumVariantInfo("Node", (struct("Own<Tree>", ("p", I32)),))))
+RECURSIVE_ENUM = EnumType(name="Tree", variants=(EnumVariantInfo("Leaf", (I32,)), EnumVariantInfo("Node", (struct("Own<Tree>", ("p", I32), base="Own"),))))
 
 # (type, owns heap?). The four marked FLIPPED answered False before Phase 9.
 VERDICTS = [

@@ -137,6 +137,8 @@ def test_is_instance_of_reads_the_generic_base():
     assert not is_instance_of(listed, "Own")
     assert generic_base_of(listed) == "List"
 
+    assert generic_base_of(StructType("List<i32>", ())) is None, "a bare name is never read"
+
     plain = StructType("Listing", ())
     assert not is_instance_of(plain, "List")
     assert generic_base_of(plain) is None
