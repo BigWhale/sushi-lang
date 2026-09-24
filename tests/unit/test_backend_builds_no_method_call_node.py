@@ -10,6 +10,7 @@ per container.
 """
 from __future__ import annotations
 
+import ast
 import inspect
 from pathlib import Path
 
@@ -17,14 +18,68 @@ from sushi_lang.backend.expressions.calls import generics
 
 BACKEND = Path(generics.__file__).resolve().parents[2]
 
+# The element-hash sites build a fake node for the derived hash emitter (#855). This list
+# may only get shorter.
+KNOWN_NODE_BUILDERS = {
+    ("generics/hashmap/methods/core.py", "emit_hashmap_get"),
+    ("generics/hashmap/methods/core.py", "emit_hashmap_contains_key"),
+    ("generics/hashmap/methods/mutations.py", "emit_hashmap_insert"),
+    ("generics/hashmap/methods/mutations.py", "emit_hashmap_remove"),
+    ("generics/hashmap/methods/mutations.py", "emit_hashmap_resize_to_capacity"),
+    ("types/arrays/methods/hashing.py", "emit_element_hash"),
+    ("types/enums.py", "_emit_associated_value_hash"),
+    ("types/structs.py", "_emit_field_hash"),
+}
 
-def test_no_backend_module_rebuilds_a_method_call_from_its_node():
-    hits = []
-    for path in sorted(BACKEND.rglob("*.py")):
-        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if "MethodCall(receiver=" in line:
-                hits.append(f"{path.relative_to(BACKEND)}:{lineno}")
-    assert hits == [], hits
+
+def _node_builders(source: str) -> list[str]:
+    """Every function that calls `MethodCall(...)` or `DotCall(...)`, by name."""
+    found: list[str] = []
+
+    def walk(node: ast.AST, owner: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            name = owner
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                name = child.name
+            elif isinstance(child, ast.Call):
+                func = child.func
+                called = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+                if called in ("MethodCall", "DotCall"):
+                    found.append(owner)
+            walk(child, name)
+
+    walk(ast.parse(source), "<module>")
+    return found
+
+
+def _backend_node_builders() -> set[tuple[str, str]]:
+    return {
+        (path.relative_to(BACKEND).as_posix(), owner)
+        for path in sorted(BACKEND.rglob("*.py"))
+        for owner in _node_builders(path.read_text(encoding="utf-8"))
+    }
+
+
+def test_no_backend_module_builds_a_call_node():
+    extra = _backend_node_builders() - KNOWN_NODE_BUILDERS
+    assert not extra, sorted(extra)
+
+
+def test_the_known_node_builders_only_shrink():
+    gone = KNOWN_NODE_BUILDERS - _backend_node_builders()
+    assert not gone, f"delete these rows from KNOWN_NODE_BUILDERS: {sorted(gone)}"
+
+
+def test_the_scan_sees_a_multi_line_build():
+    source = """
+def rebuild(expr):
+    return MethodCall(
+        receiver=expr.receiver, method=expr.method, args=[], loc=expr.loc)
+
+def other(expr):
+    return ast_mod.DotCall(receiver=expr, method="m", args=[], loc=(0, 0))
+"""
+    assert _node_builders(source) == ["rebuild", "other"]
 
 
 def test_no_backend_module_writes_a_stamp_onto_a_call_node():
