@@ -3,10 +3,11 @@ from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING
 from sushi_lang.semantics.type_predicates import is_instance_of
-from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils, gep_utils
 from sushi_lang.backend.utils import require_both_initialized
+from sushi_lang.backend.statements.loops import _emit_block
+from sushi_lang.backend.statements.control_flow import close_merge_block
 
 if TYPE_CHECKING:
     from llvmlite import ir
@@ -29,12 +30,12 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
 
     scrutinee_value = codegen.expressions.emit_expr(stmt.scrutinee)
 
-    # Prefer the typecheck pass's resolved enum type: the backend re-derivation below cannot cover
-    # every scrutinee form, and a miss silently drops the arm's bindings.
+    # The typecheck pass stamps every enum match it accepts, and the stamp is the one
+    # source (#838): a second derivation here could disagree with it.
     from sushi_lang.semantics.typesys import EnumType
-    scrutinee_type = getattr(stmt, 'resolved_scrutinee_type', None)
+    scrutinee_type = stmt.resolved_scrutinee_type
     if not isinstance(scrutinee_type, EnumType):
-        scrutinee_type = _get_scrutinee_type(codegen, stmt.scrutinee)
+        raise_internal_error("CE0121", pattern=_first_arm_pattern(stmt))
 
     # `match nom r:` (ruling R11) hands the local to the match, which then owns it exactly
     # as it owns a temporary. The seam marks `r` moved, so no exit path frees it twice.
@@ -64,14 +65,14 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
 
     _add_switch_cases(codegen, stmt, arm_blocks, switch, scrutinee_type)
 
-    _emit_match_arms(codegen, stmt, arm_blocks, scrutinee_value, scrutinee_type, end_bb,
-                     scrutinee_slot)
+    end_reached = _emit_match_arms(codegen, stmt, arm_blocks, scrutinee_value,
+                                   scrutinee_type, end_bb, scrutinee_slot)
 
     if unreachable_bb is not None:
         codegen.builder.position_at_end(unreachable_bb)
         codegen.builder.unreachable()
 
-    codegen.builder.position_at_end(end_bb)
+    close_merge_block(codegen, end_bb, end_reached)
 
     # Close the synthetic scope owning an unbound scrutinee. Emitted at match.end, this is the
     # fall-through free; the early-exit paths (return / break / ??) already freed it through the
@@ -106,14 +107,14 @@ def _emit_integer_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
             case_value = ir.Constant(scrutinee_value.type, arm.pattern.value)
             switch.add_case(case_value, arm_bb)
 
-    _emit_match_arms(codegen, stmt, arm_blocks, scrutinee_value, None, end_bb,
-                     Scrutinee())
+    end_reached = _emit_match_arms(codegen, stmt, arm_blocks, scrutinee_value, None, end_bb,
+                                   Scrutinee())
 
     if unreachable_bb is not None:
         codegen.builder.position_at_end(unreachable_bb)
         codegen.builder.unreachable()
 
-    codegen.builder.position_at_end(end_bb)
+    close_merge_block(codegen, end_bb, end_reached)
 
 
 # A counter, not a fixed name: two matches in one function would otherwise register the same
@@ -195,91 +196,13 @@ def _own_scrutinee(codegen: 'LLVMCodegen', stmt: 'Match', scrutinee_value: 'ir.V
     return Scrutinee(slot)
 
 
-def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType | None':
-    """Get the EnumType of the scrutinee expression."""
-    from sushi_lang.semantics.ast import Name, DotCall, MethodCall, MemberAccess
-    from sushi_lang.semantics.typesys import EnumType, StructType
-
-    if isinstance(scrutinee, Name):
-        var_type = codegen.memory.find_semantic_type(scrutinee.id)
-
-        if isinstance(var_type, EnumType):
-            return var_type
-
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        if isinstance(var_type, GenericTypeRef):
-            if var_type.base_name == "Result" and len(var_type.type_args) == 2:
-                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-                from sushi_lang.semantics.type_resolution import resolve_unknown_type
-
-                ok_type = resolve_unknown_type(
-                    var_type.type_args[0],
-                    codegen.struct_table.by_name,
-                    codegen.enum_table.by_name
-                )
-                err_type = resolve_unknown_type(
-                    var_type.type_args[1],
-                    codegen.struct_table.by_name,
-                    codegen.enum_table.by_name
-                )
-
-                result_enum = ensure_result_type_in_table(
-                    codegen.enum_table,
-                    ok_type,
-                    err_type, struct_table=codegen.struct_table.by_name)
-                return result_enum
-            else:
-                concrete_name = interned_name(var_type.base_name, var_type.type_args)
-                if concrete_name in codegen.enum_table.by_name:
-                    return codegen.enum_table.by_name[concrete_name]
-
-    if isinstance(scrutinee, MemberAccess):
-        if isinstance(scrutinee.receiver, Name):
-            receiver_type = codegen.memory.find_semantic_type(scrutinee.receiver.id)
-            if isinstance(receiver_type, StructType):
-                for field_name, field_type in receiver_type.fields:
-                    if field_name == scrutinee.member:
-                        from sushi_lang.semantics.generics.types import GenericTypeRef
-                        if isinstance(field_type, GenericTypeRef):
-                            if field_type.base_name == "Result" and len(field_type.type_args) == 2:
-                                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-                                from sushi_lang.semantics.type_resolution import resolve_unknown_type
-
-                                ok_type = resolve_unknown_type(
-                                    field_type.type_args[0],
-                                    codegen.struct_table.by_name,
-                                    codegen.enum_table.by_name
-                                )
-                                err_type = resolve_unknown_type(
-                                    field_type.type_args[1],
-                                    codegen.struct_table.by_name,
-                                    codegen.enum_table.by_name
-                                )
-
-                                result_enum = ensure_result_type_in_table(
-                                    codegen.enum_table,
-                                    ok_type,
-                                    err_type, struct_table=codegen.struct_table.by_name)
-                                return result_enum
-                            else:
-                                concrete_name = interned_name(field_type.base_name, field_type.type_args)
-                                if concrete_name in codegen.enum_table.by_name:
-                                    return codegen.enum_table.by_name[concrete_name]
-                        elif isinstance(field_type, EnumType):
-                            return field_type
-        return None
-
-    # A Call scrutinee needs no branch: the typecheck pass stamps `resolved_scrutinee_type`, which
-    # emit_match reads first. Re-inferring it here swallowed misses and dropped bindings.
-
-    if isinstance(scrutinee, (DotCall, MethodCall)):
-        if hasattr(scrutinee, 'inferred_return_type') and isinstance(scrutinee.inferred_return_type, EnumType):
-            return scrutinee.inferred_return_type
-
-    if hasattr(scrutinee, 'inferred_type') and isinstance(scrutinee.inferred_type, EnumType):
-        return scrutinee.inferred_type
-
-    return None
+def _first_arm_pattern(stmt: 'Match') -> str:
+    """The first arm's pattern as written, for the CE0121 text."""
+    from sushi_lang.semantics.ast import Pattern
+    pattern = stmt.arms[0].pattern if stmt.arms else None
+    if isinstance(pattern, Pattern):
+        return f"{pattern.enum_name}.{pattern.variant_name}"
+    return "_"
 
 
 def _find_wildcard_block(stmt: 'Match', arm_blocks: list['ir.Block']) -> 'ir.Block | None':
@@ -292,7 +215,7 @@ def _find_wildcard_block(stmt: 'Match', arm_blocks: list['ir.Block']) -> 'ir.Blo
     return None
 
 
-def _find_next_arm_with_same_tag(codegen: 'LLVMCodegen', stmt: 'Match', arm_blocks: list['ir.Block'], scrutinee_type: 'EnumType | None', current_arm_index: int) -> 'ir.Block | None':
+def _find_next_arm_with_same_tag(codegen: 'LLVMCodegen', stmt: 'Match', arm_blocks: list['ir.Block'], scrutinee_type: 'EnumType', current_arm_index: int) -> 'ir.Block | None':
     """Find the next arm that has the same outer tag as the current arm."""
     from sushi_lang.semantics.ast import Pattern, WildcardPattern
 
@@ -300,14 +223,7 @@ def _find_next_arm_with_same_tag(codegen: 'LLVMCodegen', stmt: 'Match', arm_bloc
     if not isinstance(current_arm.pattern, Pattern):
         return None
 
-    enum_type = scrutinee_type
-    if enum_type is None and hasattr(codegen, 'enum_table'):
-        enum_type = codegen.enum_table.by_name.get(current_arm.pattern.enum_name)
-
-    if enum_type is None:
-        return None
-
-    current_tag = enum_type.get_variant_index(current_arm.pattern.variant_name)
+    current_tag = scrutinee_type.get_variant_index(current_arm.pattern.variant_name)
     if current_tag is None:
         return None
 
@@ -318,14 +234,9 @@ def _find_next_arm_with_same_tag(codegen: 'LLVMCodegen', stmt: 'Match', arm_bloc
             return arm_blocks[i]
 
         if isinstance(next_arm.pattern, Pattern):
-            next_enum_type = scrutinee_type
-            if next_enum_type is None and hasattr(codegen, 'enum_table'):
-                next_enum_type = codegen.enum_table.by_name.get(next_arm.pattern.enum_name)
-
-            if next_enum_type is not None:
-                next_tag = next_enum_type.get_variant_index(next_arm.pattern.variant_name)
-                if next_tag == current_tag:
-                    return arm_blocks[i]
+            next_tag = scrutinee_type.get_variant_index(next_arm.pattern.variant_name)
+            if next_tag == current_tag:
+                return arm_blocks[i]
 
     return None
 
@@ -339,7 +250,7 @@ def _create_switch_instruction(codegen: 'LLVMCodegen', tag: 'ir.Value', wildcard
         return codegen.builder.switch(tag, wildcard_bb), None
 
 
-def _add_switch_cases(codegen: 'LLVMCodegen', stmt: 'Match', arm_blocks: list['ir.Block'], switch: 'ir.Instruction', scrutinee_type: 'EnumType | None') -> None:
+def _add_switch_cases(codegen: 'LLVMCodegen', stmt: 'Match', arm_blocks: list['ir.Block'], switch: 'ir.Instruction', scrutinee_type: 'EnumType') -> None:
     """Add switch cases for each match arm."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import Pattern, WildcardPattern
@@ -352,16 +263,11 @@ def _add_switch_cases(codegen: 'LLVMCodegen', stmt: 'Match', arm_blocks: list['i
         if not isinstance(arm.pattern, Pattern):
             continue
 
-        enum_type = scrutinee_type
-        if enum_type is None and hasattr(codegen, 'enum_table'):
-            enum_type = codegen.enum_table.by_name.get(arm.pattern.enum_name)
-
-        if enum_type is not None:
-            variant_index = enum_type.get_variant_index(arm.pattern.variant_name)
-            if variant_index is not None and variant_index not in added_tags:
-                tag_value = ir.Constant(codegen.types.i32, variant_index)
-                switch.add_case(tag_value, arm_bb)
-                added_tags.add(variant_index)
+        variant_index = scrutinee_type.get_variant_index(arm.pattern.variant_name)
+        if variant_index is not None and variant_index not in added_tags:
+            tag_value = ir.Constant(codegen.types.i32, variant_index)
+            switch.add_case(tag_value, arm_bb)
+            added_tags.add(variant_index)
 
 
 def _emit_match_arms(
@@ -372,10 +278,11 @@ def _emit_match_arms(
     scrutinee_type: 'EnumType | None',
     end_bb: 'ir.Block',
     scrutinee: Scrutinee,
-) -> None:
-    """Emit all match arms."""
+) -> bool:
+    """Emit all match arms. Answer whether an arm branches to `end_bb`."""
     from sushi_lang.semantics.ast import Pattern, Block
 
+    end_reached = False
     for i, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks, strict=True)):
         codegen.builder.position_at_end(arm_bb)
         codegen.memory.push_scope()
@@ -386,6 +293,8 @@ def _emit_match_arms(
         saved_variable_types = dict(codegen.variable_types)
 
         if isinstance(arm.pattern, Pattern):
+            # Only an enum match has Pattern arms, and emit_match refuses one with no type.
+            assert scrutinee_type is not None
             next_arm_bb = _find_next_arm_with_same_tag(codegen, stmt, arm_blocks, scrutinee_type, i)
 
             # This arm TAKES a payload, so the match must not free the scrutinee on this
@@ -415,9 +324,12 @@ def _emit_match_arms(
 
         if codegen.builder.block.terminator is None:
             codegen.builder.branch(end_bb)
+            end_reached = True
+
+    return end_reached
 
 
-def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scrutinee_value: 'ir.Value', scrutinee_type: 'EnumType | None', next_arm_bb: 'ir.Block | None' = None, scrutinee_expr: 'Expr | None' = None, scrutinee_slot: 'ir.Value | None' = None) -> None:
+def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scrutinee_value: 'ir.Value', scrutinee_type: 'EnumType', next_arm_bb: 'ir.Block | None' = None, scrutinee_expr: 'Expr | None' = None, scrutinee_slot: 'ir.Value | None' = None) -> None:
     """Extract and bind pattern variables from enum data."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import Pattern as PatternNode, OwnPattern
@@ -427,20 +339,7 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
     if not pattern.bindings:
         return
 
-    # The fallback looks up the pattern's BASE enum name, which cannot match a
-    # monomorphized key, so a generic scrutinee needs scrutinee_type. Fail loud if it is
-    # missing while the pattern binds: returning drops the locals and surfaces as CE0055.
-    enum_type = scrutinee_type
-    if enum_type is None and hasattr(codegen, 'enum_table'):
-        enum_type = codegen.enum_table.by_name.get(pattern.enum_name)
-
-    if not enum_type:
-        raise_internal_error(
-            "CE0121",
-            pattern=f"{pattern.enum_name}.{pattern.variant_name}",
-        )
-
-    variant = enum_type.get_variant(pattern.variant_name)
+    variant = scrutinee_type.get_variant(pattern.variant_name)
     if not variant or not variant.associated_types:
         return
 
@@ -600,10 +499,3 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
                                             element_type, register_cleanup=False)
     elif isinstance(inner_pattern, PatternNode):
         _extract_nested_pattern(codegen, inner_pattern, unwrapped_value, element_type, next_arm_bb)
-
-
-def _emit_block(codegen: 'LLVMCodegen', block) -> None:
-    """Helper to emit a block of statements."""
-    from sushi_lang.backend.statements import StatementEmitter
-    emitter = StatementEmitter(codegen)
-    emitter.emit_block(block)

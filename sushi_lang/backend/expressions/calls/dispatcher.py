@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Union
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import Call, MethodCall, DotCall, Name
-from sushi_lang.backend.expressions.calls.stdlib import emit_time_function, emit_math_function, emit_env_function
+from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
 from sushi_lang.backend.expressions.calls import intrinsics, generics
 from sushi_lang.backend.expressions.calls.utils import emit_receiver_value, marshal_cstr
 from sushi_lang.backend.expressions.calls.variadic import build_variadic_array
@@ -92,28 +92,22 @@ def emit_named_call(codegen: 'LLVMCodegen', expr, callee: str, llvm_fn, func_sig
         args = [codegen.expressions.emit_expr(a) for a in expr.args]
         _settle_named_call_arguments(codegen, expr.args, args, func_sig)
 
+    return emit_checked_call(codegen, llvm_fn, args, to_i1)
+
+
+def emit_checked_call(codegen: 'LLVMCodegen', llvm_fn, args: list, to_i1: bool) -> ir.Value:
+    """The ONE tail of a call to a declared callee: the arity guard, the casts, the call.
+
+    `cast_for_param` loads a by-pointer argument for a by-value struct parameter
+    (#124, #131). It fires only on an exact pointer-to-parameter match, so a
+    `peek`/`poke` pointer parameter never triggers it.
+    """
     params = list(llvm_fn.args)
     if len(args) != len(params):
         raise_internal_error("CE0026", expected=len(params), got=len(args))
-
-    # Normalize a by-pointer owning argument against a by-value struct parameter, or
-    # cast_for_param raises CE0017 (#131). Fires only on an exact pointer-to-value-struct
-    # mismatch, so a peek/poke pointer param never triggers it. BaseStructType, because a
-    # user struct's identified type is a SIBLING of LiteralStructType (#257).
-    args = [
-        codegen.builder.load(v, name="arg_by_value")
-        if isinstance(p.type, ir.types.BaseStructType) and v.type == ir.PointerType(p.type)
-        else v
-        for v, p in zip(args, params, strict=True)
-    ]
-
     casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(args, params, strict=True)]
-    result_struct = codegen.builder.call(llvm_fn, casted)
-
-    # Functions now return Result<T> as enum: {i32 tag, [N x i8] data}
-    # Return the full Result<T> struct - downstream code will handle extraction
-    # (e.g., .realise() method, if (result) conditionals, etc.)
-    return codegen.utils.as_i1(result_struct) if to_i1 else result_struct
+    result = codegen.builder.call(llvm_fn, casted)
+    return codegen.utils.as_i1(result) if to_i1 else result
 
 
 def emit_fn_field_call(codegen: 'LLVMCodegen', expr: DotCall, fn_type, to_i1: bool) -> ir.Value:
@@ -231,192 +225,6 @@ def _settle_named_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: 
         modes_for(func_sig.params, CalleeKind.FUNCTION))
 
 
-def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool = False, is_dotcall: bool = False) -> ir.Value:
-    """Emit a method call as a function call with the receiver as first argument (UFCS).
-
-    Every built-in is resolved BEFORE the user-extension fallback, which is why an extension
-    method whose name collides with a built-in can never run -- the typecheck pass rejects one as CE2097
-    rather than letting it be emitted and never called. The same precedence is implemented in
-    validation and inference; see docs/design/method-resolution.md.
-    """
-    # Priority-ordered: each handler returns a value if it matches, or None to continue.
-    # 0. FFI: foreign namespace call (libc.strlen(...)) - resolved by the type
-    #    checker via the external_ref annotation. Direct, raw C call.
-    result = _try_emit_external_call(codegen, expr)
-    if result is not None:
-        return result
-
-    # 0b. A call through a `use ... as` alias. The typecheck pass stamped which
-    #     producer answered and which unit or module it named, so nothing is looked
-    #     up by bare name here (`docs/design/unit-namespaces.md` section 5).
-    result = _try_emit_namespaced_call(codegen, expr, to_i1)
-    if result is not None:
-        return result
-
-    # A USER static (#542), ahead of every receiver-shaped arm. It is stamp-driven, so
-    # it cannot misfire; and it must precede both the enum-constructor arm -- a static
-    # on an enum is no variant -- and `emit_receiver_value`, because a type NAME is not
-    # a value and emitting it is a CE0055.
-    result = _try_emit_static_call(codegen, expr, to_i1)
-    if result is not None:
-        return result
-
-    result = intrinsics.try_emit_enum_constructor(codegen, expr)
-    if result is not None:
-        return result
-
-    result = intrinsics.try_emit_struct_constructor(codegen, expr)
-    if result is not None:
-        return result
-
-    # 5. Result<T, E> and Maybe<T> methods (is_ok, is_some, realise, expect, ...).
-    #    One handler, not two: `realise` and `expect` are in both method sets, and trying the
-    #    families in sequence emitted the receiver once per attempt (#199).
-    result = generics.try_emit_result_or_maybe_method(codegen, expr, to_i1)
-    if result is not None:
-        return result
-
-    result = generics.try_emit_own_method(codegen, expr, to_i1)
-    if result is not None:
-        return result
-
-    result = generics.try_emit_hashmap_method(codegen, expr, to_i1)
-    if result is not None:
-        return result
-
-    result = generics.try_emit_list_method(codegen, expr, to_i1)
-    if result is not None:
-        return result
-
-    result = intrinsics.try_emit_primitive_static(codegen, expr, to_i1)
-    if result is not None:
-        return result
-
-    receiver_value, receiver_type, semantic_type = emit_receiver_value(codegen, expr.receiver)
-
-    result = intrinsics.try_emit_array_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
-    if result is not None:
-        return result
-
-    result = intrinsics.try_emit_string_method(codegen, expr, receiver_value, receiver_type, to_i1)
-    if result is not None:
-        return result
-
-    result = intrinsics.try_emit_perk_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
-    if result is not None:
-        return result
-
-    result = intrinsics.try_emit_struct_hash(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
-    if result is not None:
-        return result
-
-    result = intrinsics.try_emit_enum_hash(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
-    if result is not None:
-        return result
-
-    # 14a. Auto-derived struct clone (#134)
-    result = intrinsics.try_emit_struct_clone(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
-    if result is not None:
-        return result
-
-    # 14b. Auto-derived enum clone (#134)
-    result = intrinsics.try_emit_enum_clone(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
-    if result is not None:
-        return result
-
-    # 14c. Function-value clone -- a closure read out of a field or a container is a
-    # borrow, so `.clone()` is CE2411's escape. Without this arm dispatch reached the
-    # extension fallback, which mangled the type name into `fn(i32) - i32_clone`.
-    result = intrinsics.try_emit_function_clone(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
-    if result is not None:
-        return result
-
-    result = intrinsics.try_emit_primitive_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
-    if result is not None:
-        return result
-
-    # Fallback: user-defined extension methods. The semantic type distinguishes bool
-    # from i8.
-    if semantic_type is not None:
-        from sushi_lang.semantics.typesys import deref_type
-        actual_type = deref_type(semantic_type)
-        lang_type = str(actual_type)
-    else:
-        lang_type = codegen.types.map_llvm_to_language_type(receiver_type)
-
-    from sushi_lang.semantics.generics.name_mangling import extension_symbol
-    func_name = extension_symbol(lang_type, expr.method,
-                                 getattr(expr, "callee_method_type_args", None) or ())
-    llvm_fn = codegen.funcs.get(func_name)
-
-    if llvm_fn is None and func_name in codegen.module.globals:
-        llvm_fn = codegen.module.globals[func_name]
-
-    if llvm_fn is None and lang_type == "string":
-        from sushi_lang.backend.functions import declare_stdlib_function
-        from sushi_lang.sushi_stdlib.src.collections.strings import get_builtin_string_method_return_type
-        from sushi_lang.semantics.typesys import BuiltinType
-
-        ret_sushi_type = get_builtin_string_method_return_type(expr.method, BuiltinType.STRING)
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        if isinstance(ret_sushi_type, GenericTypeRef) and ret_sushi_type.base_name == "Maybe":
-            from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
-            ret_sushi_type = ensure_maybe_type_in_table(
-                codegen.enum_table, ret_sushi_type.type_args[0],
-                struct_table=codegen.struct_table.by_name)
-        if ret_sushi_type is not None:
-            ret_llvm_type = codegen.types.ll_type(ret_sushi_type)
-            llvm_fn = declare_stdlib_function(codegen.module, func_name, ret_llvm_type, [receiver_type])
-
-    if llvm_fn is None:
-        raise KeyError(f"Extension method not found: {func_name}")
-
-    # A `poke self` / `peek self` method (#327) takes its receiver by POINTER, so a
-    # write through `self` reaches the caller's value. The typecheck pass stamped the resolution on
-    # the node; `emit_receiver_as_pointer` returns the receiver's slot address (with the
-    # load-through for a reference-parameter receiver). The typecheck and borrow passes reject the shapes with
-    # no address (a temporary, a constant, a read-only root) before codegen.
-    from sushi_lang.semantics.param_modes import receiver_mode
-    self_mode = receiver_mode(getattr(expr, "callee_self_mode", None))
-    if self_mode.by_pointer:
-        from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
-        receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
-    elif self_mode.consumes:
-        # `nom self` (ruling R25): the receiver crosses by value and the callee becomes
-        # its owner, so the source is relinquished through the ownership seam exactly as
-        # a `nom` argument is. No exit path in the caller frees it afterwards.
-        receiver_value = consume_receiver(codegen, expr, receiver_value)
-
-    emitted_args = [receiver_value]
-    arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
-    # A method's arguments follow the declared modes exactly like a plain call's: a
-    # `nom` one transfers, and every other one stays the caller's -- which is what
-    # registers an unbound owning temporary, so `b.eat(make_list())` is freed once.
-    # That was `_register_inline_closure_temps`, which covered a syntactic `Lambda`
-    # argument only and leaked every other temporary shape.
-    settle_method_call_arguments(codegen, expr, arg_values)
-    emitted_args.extend(arg_values)
-
-    params = list(llvm_fn.args)
-    if len(emitted_args) != len(params):
-        raise_internal_error("CE0026", expected=len(params), got=len(emitted_args))
-
-    # Reconcile a by-pointer receiver against a by-value `self` parameter (#124), or
-    # `cast_for_param` raises CE0017. The receiver only: a peek/poke param has a pointer
-    # param type, so this never misfires. The by-value `self` shallow-copies the caller's
-    # `data*`, and an extension body registers no cleanup, so there is no double free.
-    # BaseStructType, to cover a user struct's identified type as well (#257).
-    if (emitted_args
-            and isinstance(params[0].type, ir.types.BaseStructType)
-            and emitted_args[0].type == ir.PointerType(params[0].type)):
-        emitted_args[0] = codegen.builder.load(emitted_args[0], name="self_by_value")
-
-    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params, strict=True)]
-    result_value = codegen.builder.call(llvm_fn, casted)
-
-    return codegen.utils.as_i1(result_value) if to_i1 else result_value
-
-
 def _try_emit_static_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                           to_i1: bool) -> ir.Value | None:
     """Emit `Type.name(args)` for a user static method (#542).
@@ -446,15 +254,7 @@ def _try_emit_static_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
 
     args = [codegen.expressions.emit_expr(arg) for arg in expr.args]
     settle_method_call_arguments(codegen, expr, args)
-
-    params = list(llvm_fn.args)
-    if len(args) != len(params):
-        raise_internal_error("CE0026", expected=len(params), got=len(args))
-
-    casted = [codegen.utils.cast_for_param(v, p.type)
-              for v, p in zip(args, params, strict=True)]
-    result_value = codegen.builder.call(llvm_fn, casted)
-    return codegen.utils.as_i1(result_value) if to_i1 else result_value
+    return emit_checked_call(codegen, llvm_fn, args, to_i1)
 
 
 def _try_emit_namespaced_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
@@ -495,7 +295,8 @@ def _try_emit_namespaced_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
     return emit_named_call(codegen, expr, name, llvm_fn, func_sig, to_i1)
 
 
-def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]) -> ir.Value | None:
+def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                            to_i1: bool) -> ir.Value | None:
     """Emit a foreign (FFI) function call if `expr` is annotated with external_ref."""
     from sushi_lang.semantics.typesys import BuiltinType
 
@@ -579,6 +380,125 @@ def _promote_variadic_arg(codegen: 'LLVMCodegen', value: ir.Value, sushi_ty) -> 
     return value
 
 
+# The method-resolution order is data: every built-in before the extension fallback
+# (docs/design/method-resolution.md). A handler answers a value, or None to pass.
+PRE_RECEIVER_HANDLERS = (
+    _try_emit_external_call,
+    _try_emit_namespaced_call,
+    # A user static (#542) precedes the enum constructor (a static on an enum is no
+    # variant) and the receiver, because a type NAME is not a value.
+    _try_emit_static_call,
+    intrinsics.try_emit_enum_constructor,
+    intrinsics.try_emit_struct_constructor,
+    # One handler for Result and Maybe: emitting the receiver once per family
+    # attempt was #199.
+    generics.try_emit_result_or_maybe_method,
+    generics.try_emit_own_method,
+    generics.try_emit_hashmap_method,
+    generics.try_emit_list_method,
+    intrinsics.try_emit_primitive_static,
+)
+
+RECEIVER_HANDLERS = (
+    intrinsics.try_emit_array_method,
+    intrinsics.try_emit_string_method,
+    intrinsics.try_emit_perk_method,
+    intrinsics.try_emit_struct_hash,
+    intrinsics.try_emit_enum_hash,
+    intrinsics.try_emit_struct_clone,
+    intrinsics.try_emit_enum_clone,
+    intrinsics.try_emit_function_clone,
+    intrinsics.try_emit_primitive_method,
+)
+
+
+def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool = False, is_dotcall: bool = False) -> ir.Value:
+    """Emit a method call as a function call with the receiver as first argument (UFCS).
+
+    Every built-in is resolved BEFORE the user-extension fallback, which is why an extension
+    method whose name collides with a built-in can never run -- the typecheck pass rejects one as CE2097
+    rather than letting it be emitted and never called. The same precedence is implemented in
+    validation and inference; see docs/design/method-resolution.md.
+    """
+    for pre in PRE_RECEIVER_HANDLERS:
+        if (result := pre(codegen, expr, to_i1)) is not None:
+            return result
+
+    receiver = emit_receiver_value(codegen, expr.receiver)
+    for handler in RECEIVER_HANDLERS:
+        if (result := handler(codegen, expr, *receiver, to_i1)) is not None:
+            return result
+    return _emit_extension_call(codegen, expr, *receiver, to_i1)
+
+
+def _emit_extension_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                         receiver_value: ir.Value, receiver_type: ir.Type,
+                         semantic_type, to_i1: bool) -> ir.Value:
+    """The fallback: a user extension method, called with the receiver first (UFCS)."""
+    # The semantic type distinguishes bool from i8.
+    if semantic_type is not None:
+        from sushi_lang.semantics.typesys import deref_type
+        actual_type = deref_type(semantic_type)
+        lang_type = str(actual_type)
+    else:
+        lang_type = codegen.types.map_llvm_to_language_type(receiver_type)
+
+    from sushi_lang.semantics.generics.name_mangling import extension_symbol
+    func_name = extension_symbol(lang_type, expr.method,
+                                 getattr(expr, "callee_method_type_args", None) or ())
+    llvm_fn = codegen.funcs.get(func_name)
+
+    if llvm_fn is None and func_name in codegen.module.globals:
+        llvm_fn = codegen.module.globals[func_name]
+
+    if llvm_fn is None and lang_type == "string":
+        from sushi_lang.backend.functions import declare_stdlib_function
+        from sushi_lang.sushi_stdlib.src.collections.strings import get_builtin_string_method_return_type
+        from sushi_lang.semantics.typesys import BuiltinType
+
+        ret_sushi_type = get_builtin_string_method_return_type(expr.method, BuiltinType.STRING)
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        if isinstance(ret_sushi_type, GenericTypeRef) and ret_sushi_type.base_name == "Maybe":
+            from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
+            ret_sushi_type = ensure_maybe_type_in_table(
+                codegen.enum_table, ret_sushi_type.type_args[0],
+                struct_table=codegen.struct_table.by_name)
+        if ret_sushi_type is not None:
+            ret_llvm_type = codegen.types.ll_type(ret_sushi_type)
+            llvm_fn = declare_stdlib_function(codegen.module, func_name, ret_llvm_type, [receiver_type])
+
+    if llvm_fn is None:
+        raise KeyError(f"Extension method not found: {func_name}")
+
+    # A `poke self` / `peek self` method (#327) takes its receiver by POINTER, so a
+    # write through `self` reaches the caller's value. The typecheck pass stamped the resolution on
+    # the node; `emit_receiver_as_pointer` returns the receiver's slot address (with the
+    # load-through for a reference-parameter receiver). The typecheck and borrow passes reject the shapes with
+    # no address (a temporary, a constant, a read-only root) before codegen.
+    from sushi_lang.semantics.param_modes import receiver_mode
+    self_mode = receiver_mode(getattr(expr, "callee_self_mode", None))
+    if self_mode.by_pointer:
+        from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
+        receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
+    elif self_mode.consumes:
+        # `nom self` (ruling R25): the receiver crosses by value and the callee becomes
+        # its owner, so the source is relinquished through the ownership seam exactly as
+        # a `nom` argument is. No exit path in the caller frees it afterwards.
+        receiver_value = consume_receiver(codegen, expr, receiver_value)
+
+    emitted_args = [receiver_value]
+    arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    # A method's arguments follow the declared modes exactly like a plain call's: a
+    # `nom` one transfers, and every other one stays the caller's -- which is what
+    # registers an unbound owning temporary, so `b.eat(make_list())` is freed once.
+    # That was `_register_inline_closure_temps`, which covered a syntactic `Lambda`
+    # argument only and leaked every other temporary shape.
+    settle_method_call_arguments(codegen, expr, arg_values)
+    emitted_args.extend(arg_values)
+
+    return emit_checked_call(codegen, llvm_fn, emitted_args, to_i1)
+
+
 def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -> tuple | None:
     """The registry stdlib function a bare name reaches, from the one reader."""
     return codegen.func_table.lookup_stdlib_by_name(function_name, codegen.scope)
@@ -587,25 +507,8 @@ def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -
 def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str,
                           module_and_func: tuple, to_i1: bool) -> ir.Value:
     """Emit code for a stdlib function call."""
-    module_path, stdlib_func = module_and_func
-
-    if module_path == "time":
-        return emit_time_function(codegen, expr, function_name, to_i1)
-    elif module_path == "sys/env":
-        return emit_env_function(codegen, expr, function_name, to_i1)
-    elif module_path == "sys/process":
-        from sushi_lang.backend.expressions.calls.stdlib import emit_process_function
-        return emit_process_function(codegen, expr, function_name, to_i1)
-    elif module_path == "math":
-        return emit_math_function(codegen, expr, function_name, to_i1)
-    elif module_path == "random":
-        from sushi_lang.backend.expressions.calls.stdlib import emit_random_function
-        return emit_random_function(codegen, expr, function_name, to_i1)
-    elif module_path == "io/files":
-        from sushi_lang.backend.expressions.calls.stdlib import emit_files_function
-        return emit_files_function(codegen, expr, function_name, to_i1)
-    elif module_path == "net/socket":
-        from sushi_lang.backend.expressions.calls.stdlib import emit_net_function
-        return emit_net_function(codegen, expr, function_name, to_i1)
-    else:
+    module_path, _ = module_and_func
+    emit = STDLIB_EMITTERS.get(module_path)
+    if emit is None:
         raise_internal_error("CE0055", name=f"{module_path}/{function_name}")
+    return emit(codegen, expr, function_name, to_i1)

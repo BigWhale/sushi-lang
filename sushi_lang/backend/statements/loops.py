@@ -1,6 +1,7 @@
 """Loop statement emission for the Sushi language compiler."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Callable, Iterator
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_both_initialized
@@ -31,6 +32,44 @@ def emit_continue(codegen: 'LLVMCodegen') -> None:
     codegen.memory.emit_exit_cleanup(scope_boundary)
     codegen.builder.branch(cont_bb)
     codegen.utils.after_terminator_unreachable()
+
+
+class LoopFrame:
+    """The loop body's exit actions, run on every exit path before the frame closes."""
+
+    def __init__(self) -> None:
+        """Start with no exit action."""
+        self._on_exit: list[Callable[[], None]] = []
+
+    def on_exit(self, action: Callable[[], None]) -> None:
+        """Run `action` when the body ends, also when its emission raises."""
+        self._on_exit.append(action)
+
+    def _run_exit_actions(self) -> None:
+        for action in self._on_exit:
+            action()
+
+
+@contextmanager
+def loop_frame(codegen: 'LLVMCodegen', continue_bb: 'ir.Block', break_bb: 'ir.Block',
+               back_edge: 'ir.Block') -> Iterator[LoopFrame]:
+    """Open the frame of one loop body at the current block, and close it on exit.
+
+    The loop-stack entry is the contract with `emit_break` and `emit_continue`: an early
+    exit cleans up only the scopes above the recorded depth. On exit the body scope and
+    the entry are popped, and the back edge is added when the block has no terminator.
+    """
+    codegen.loop_stack.append((continue_bb, break_bb, codegen.memory.depth + 1))
+    codegen.memory.push_scope()
+    frame = LoopFrame()
+    try:
+        yield frame
+    finally:
+        frame._run_exit_actions()
+    codegen.memory.pop_scope()
+    codegen.loop_stack.pop()
+    if codegen.builder.block.terminator is None:
+        codegen.builder.branch(back_edge)
 
 
 def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
@@ -139,9 +178,17 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     codegen.builder.cbranch(has_next, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory.depth + 1))
-    codegen.memory.push_scope()
+    with loop_frame(codegen, continue_bb=cond_bb, break_bb=end_bb, back_edge=cond_bb):
+        _bind_protocol_item(codegen, node, answer)
+        _emit_block(codegen, node.body)
 
+    codegen.builder.position_at_end(end_bb)
+    codegen.memory.pop_scope()
+    codegen.variable_types.pop(iter_name, None)
+
+
+def _bind_protocol_item(codegen: 'LLVMCodegen', node: 'Foreach', answer: 'ir.Value') -> None:
+    """Bind the item of a protocol `foreach` to the payload of the `Maybe` that `next()` answered."""
     # The payload is read HERE and not in the condition block: on the last iteration the
     # answer is a None, whose payload bytes are zeroed and mean nothing.
     item_ll_type = codegen.types.ll_type(node.item_type)
@@ -158,18 +205,6 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
         register_cleanup=False)
     if node.item_type is not None:
         codegen.memory.register_owning_value(node.item_name, node.item_type, item_slot)
-
-    _emit_block(codegen, node.body)
-
-    codegen.memory.pop_scope()
-    codegen.loop_stack.pop()
-
-    if codegen.builder.block.terminator is None:
-        codegen.builder.branch(cond_bb)
-
-    codegen.builder.position_at_end(end_bb)
-    codegen.memory.pop_scope()
-    codegen.variable_types.pop(iter_name, None)
 
 
 def _emit_array_foreach(codegen: 'LLVMCodegen', node: 'Foreach', iterator_slot: 'ir.Value', zero: 'ir.Constant') -> None:
@@ -209,45 +244,32 @@ def _emit_array_foreach_body(
     codegen.builder.cbranch(has_next, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory.depth + 1))
-    codegen.memory.push_scope()
+    with loop_frame(codegen, continue_bb=cond_bb, break_bb=end_bb, back_edge=cond_bb) as frame:
+        data_ptr_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 2, "data_ptr_ptr")
+        data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    data_ptr_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 2, "data_ptr_ptr")
-    data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
+        element_ptr = codegen.builder.gep(data_ptr, [current_index], name="element_ptr")
 
-    element_ptr = codegen.builder.gep(data_ptr, [current_index], name="element_ptr")
-
-    previous_entry = _MISSING
-    if node.item_borrow is not None:
-        # Reference binding (#300): store the element POINTER, not a copy, so the slot has
-        # a `peek`/`poke` parameter's shape. The `ReferenceType` flips every consumer at
-        # once -- `is_reference_parameter` keys on nothing else.
-        previous_entry = bind_element_reference(codegen, node.item_name, node.item_borrow,
-                                                 node.item_type, element_ptr)
-    else:
-        element_value = codegen.builder.load(element_ptr, name=node.item_name)
-
-        # A foreach item is a read-only BORROW: the loaded value aliases the array's buffer,
-        # which the array destructor frees. So `register_cleanup=False`, or an owning element
-        # is freed by both the item and the container (#139, #147).
-        element_ll_type = codegen.types.ll_type(node.item_type)
-        codegen.memory.create_local(node.item_name, element_ll_type, element_value, node.item_type,
-                                    register_cleanup=False)
-
-    incremented_index = codegen.builder.add(current_index, ir.Constant(codegen.types.i32, 1), name="next_index")
-    codegen.builder.store(incremented_index, index_ptr)
-
-    try:
-        _emit_block(codegen, node.body)
-    finally:
         if node.item_borrow is not None:
-            unbind_element_reference(codegen, node.item_name, previous_entry)
+            # Reference binding (#300): store the element POINTER, not a copy, so the slot
+            # has a `peek`/`poke` parameter's shape. The `ReferenceType` flips every
+            # consumer at once -- `is_reference_parameter` keys on nothing else.
+            _bind_reference_until_exit(codegen, frame, node.item_name, node.item_borrow,
+                                       node.item_type, element_ptr)
+        else:
+            element_value = codegen.builder.load(element_ptr, name=node.item_name)
 
-    codegen.memory.pop_scope()
-    codegen.loop_stack.pop()
+            # A foreach item is a read-only BORROW: the loaded value aliases the array's
+            # buffer, which the array destructor frees. So `register_cleanup=False`, or an
+            # owning element is freed by both the item and the container (#139, #147).
+            element_ll_type = codegen.types.ll_type(node.item_type)
+            codegen.memory.create_local(node.item_name, element_ll_type, element_value,
+                                        node.item_type, register_cleanup=False)
 
-    if codegen.builder.block.terminator is None:
-        codegen.builder.branch(cond_bb)
+        incremented_index = codegen.builder.add(current_index, ir.Constant(codegen.types.i32, 1), name="next_index")
+        codegen.builder.store(incremented_index, index_ptr)
+
+        _emit_block(codegen, node.body)
 
     codegen.builder.position_at_end(end_bb)
 
@@ -321,58 +343,48 @@ def _emit_hashmap_foreach(
     codegen.builder.cbranch(is_occupied, body_bb, increment_bb)
 
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory.depth + 1))
-    codegen.memory.push_scope()
+    with loop_frame(codegen, continue_bb=cond_bb, break_bb=end_bb,
+                    back_edge=increment_bb) as frame:
+        # The item binding is a read-only BORROW of the map's entry, exactly as the array
+        # path is: the shallow-loaded key/value aliases the buffers the map's own
+        # destructor frees, so `register_cleanup=False` below keeps the map the sole
+        # owner. Registering the binding as a second owner double-freed every owning
+        # key/value type.
+        if is_entries:
+            user_entry_llvm = get_user_entry_type(codegen, key_type, value_type)
 
-    # The item binding is a read-only BORROW of the map's entry, exactly as the array path
-    # at _emit_array_foreach is: the shallow-loaded key/value aliases the buffers the map's
-    # own destructor frees, so `register_cleanup=False` below keeps the map the sole owner.
-    # Registering the binding as a second owner double-freed every owning key/value type.
-    if is_entries:
-        user_entry_llvm = get_user_entry_type(codegen, key_type, value_type)
+            key_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, 0, "entry_key_ptr")
+            key_val = codegen.builder.load(key_ptr, name="entry_key")
 
-        key_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, 0, "entry_key_ptr")
-        key_val = codegen.builder.load(key_ptr, name="entry_key")
+            value_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, 1, "entry_value_ptr")
+            value_val = codegen.builder.load(value_ptr, name="entry_value")
 
-        value_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, 1, "entry_value_ptr")
-        value_val = codegen.builder.load(value_ptr, name="entry_value")
+            entry_val = ir.Constant(user_entry_llvm, ir.Undefined)
+            entry_val = codegen.builder.insert_value(entry_val, key_val, 0, name="entry_with_key")
+            entry_val = codegen.builder.insert_value(entry_val, value_val, 1, name="entry_with_value")
 
-        entry_val = ir.Constant(user_entry_llvm, ir.Undefined)
-        entry_val = codegen.builder.insert_value(entry_val, key_val, 0, name="entry_with_key")
-        entry_val = codegen.builder.insert_value(entry_val, value_val, 1, name="entry_with_value")
-
-        element_ll_type = user_entry_llvm
-        codegen.memory.create_local(node.item_name, element_ll_type, entry_val, element_type,
-                                    register_cleanup=False)
-        codegen.variable_types[node.item_name] = element_type
-    else:
-        element_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, entry_field_index, "element_ptr")
-
-        if node.item_borrow is not None:
-            # Reference binding (#300 phase 1): the entries buffer is heap storage, so
-            # the GEP'd key/value pointer is bindable exactly like an array element's.
-            # (`.entries()` bindings have NO address -- the user Entry is insert_value'd
-            # above -- and the typecheck pass rejects the marker there with CE2423.)
-            previous_entry = bind_element_reference(codegen, node.item_name, node.item_borrow,
-                                                     element_type, element_ptr)
-        else:
-            element_value = codegen.builder.load(element_ptr, name=node.item_name)
-
-            element_ll_type = codegen.types.ll_type(element_type)
-            codegen.memory.create_local(node.item_name, element_ll_type, element_value, element_type,
+            codegen.memory.create_local(node.item_name, user_entry_llvm, entry_val, element_type,
                                         register_cleanup=False)
+            codegen.variable_types[node.item_name] = element_type
+        else:
+            element_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, entry_field_index, "element_ptr")
 
-    try:
+            if node.item_borrow is not None:
+                # Reference binding (#300 phase 1): the entries buffer is heap storage, so
+                # the GEP'd key/value pointer is bindable exactly like an array element's.
+                # (`.entries()` bindings have NO address -- the user Entry is
+                # insert_value'd above -- and the typecheck pass rejects the marker there
+                # with CE2423.)
+                _bind_reference_until_exit(codegen, frame, node.item_name, node.item_borrow,
+                                           element_type, element_ptr)
+            else:
+                element_value = codegen.builder.load(element_ptr, name=node.item_name)
+
+                element_ll_type = codegen.types.ll_type(element_type)
+                codegen.memory.create_local(node.item_name, element_ll_type, element_value,
+                                            element_type, register_cleanup=False)
+
         _emit_block(codegen, node.body)
-    finally:
-        if node.item_borrow is not None:
-            unbind_element_reference(codegen, node.item_name, previous_entry)
-
-    codegen.memory.pop_scope()
-    codegen.loop_stack.pop()
-
-    if codegen.builder.block.terminator is None:
-        codegen.builder.branch(increment_bb)
 
     codegen.builder.position_at_end(increment_bb)
     incremented_index = codegen.builder.add(current_index, ir.Constant(codegen.types.i32, 1), name="next_index")
@@ -461,20 +473,11 @@ def _emit_range_loop_path(
     codegen.builder.cbranch(condition, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((incr_bb, end_bb, codegen.memory.depth + 1))
-    codegen.memory.push_scope()
-
-    element_ll_type = codegen.types.ll_type(node.item_type)
-    counter_value = codegen.builder.load(counter_slot, name=node.item_name)
-    codegen.memory.create_local(node.item_name, element_ll_type, counter_value, node.item_type)
-
-    _emit_block(codegen, node.body)
-
-    codegen.memory.pop_scope()
-    codegen.loop_stack.pop()
-
-    if codegen.builder.block.terminator is None:
-        codegen.builder.branch(incr_bb)
+    with loop_frame(codegen, continue_bb=incr_bb, break_bb=end_bb, back_edge=incr_bb):
+        element_ll_type = codegen.types.ll_type(node.item_type)
+        counter_value = codegen.builder.load(counter_slot, name=node.item_name)
+        codegen.memory.create_local(node.item_name, element_ll_type, counter_value, node.item_type)
+        _emit_block(codegen, node.body)
 
     codegen.builder.position_at_end(incr_bb)
     current_val = codegen.builder.load(counter_slot, name="current_val")
@@ -502,6 +505,13 @@ def bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,
     return previous
 
 
+def _bind_reference_until_exit(codegen: 'LLVMCodegen', frame: LoopFrame, name: str,
+                               borrow_mode: str, element_type, element_ptr) -> None:
+    """Bind a foreach item as a reference, and end the binding when the loop body ends."""
+    previous = bind_element_reference(codegen, name, borrow_mode, element_type, element_ptr)
+    frame.on_exit(lambda: unbind_element_reference(codegen, name, previous))
+
+
 def unbind_element_reference(codegen: 'LLVMCodegen', name: str, previous) -> None:
     """End a reference binding's `variable_types` entry at loop exit (#300)."""
     if previous is _MISSING:
@@ -511,7 +521,7 @@ def unbind_element_reference(codegen: 'LLVMCodegen', name: str, previous) -> Non
 
 
 def _emit_block(codegen: 'LLVMCodegen', block) -> None:
-    """Helper to emit a block of statements."""
+    """Emit a block of statements. The one copy the statement emitters share."""
     from sushi_lang.backend.statements import StatementEmitter
     emitter = StatementEmitter(codegen)
     emitter.emit_block(block)

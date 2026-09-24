@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import MethodCall
+from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type, deref_type
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -95,7 +95,7 @@ def _index_arg(codegen: 'LLVMCodegen', arg) -> ir.Value:
 
 def emit_array_method(
     codegen: 'LLVMCodegen',
-    expr: MethodCall,
+    expr: MethodCall | DotCall,
     receiver_value: ir.Value,
     receiver_type: ir.Type,
     semantic_type: 'Type',

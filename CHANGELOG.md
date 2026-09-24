@@ -1139,6 +1139,26 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **No dead merge block, and no fake default return** (#849). An `if` or `match` whose every
+  arm returns no longer leaves a merge block that nothing reaches. Such a block used to be
+  closed with a declared-type `Result.Err` that no source line produced; now there is no
+  block, and `emit_default_return` is an internal error that no program reaches (0 calls
+  over the corpus, 1025 before). A statement after an all-returning `match` was emitted
+  into that dead block; it is not emitted now (#854 asks for a diagnostic).
+- **`match` reads the scrutinee type from its stamp alone** (#838). The fallback that
+  derived it from the expression and three lookups by base enum name had no hit; a missing
+  stamp is the internal CE0121.
+- **One loop frame** (#839). The five loop emitters share `loop_frame`, which pushes and pops
+  the loop entry and the scope and runs the exit actions; one `_emit_block` is left
+  (gate `tests/unit/test_loop_frame_is_one.py`).
+- **The method-call dispatch is two handler tables** (#830), and the four call tails share
+  `emit_checked_call`, so a perk method call has the CE0026 arity guard too.
+- **One container-method emitter, and no rebuilt `MethodCall`** (#831). The HashMap and
+  List paths are one body; the nine throwaway `MethodCall` copies of an incoming call are
+  gone, and an AST gate refuses a call node built in the backend (eight element-hash sites
+  are a shrink-only list, #855).
+- **One stdlib emitter table** (#829). `STDLIB_EMITTERS` names the emitter per module path,
+  and a gate holds it equal to the registry.
 - **The stdlib emitters read signature rows** (#827). `<time>`, `<sys/env>`, `<random>`,
   `<math>` and `<sys/process>` call `emit_registry_call` over their rows; `exit` and `run`
   are the two named special cases. `abs`/`min`/`max` read a family row per argument type,
