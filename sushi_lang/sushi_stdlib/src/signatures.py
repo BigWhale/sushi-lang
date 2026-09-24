@@ -37,18 +37,30 @@ def cstr() -> Param:
 
 
 @dataclass(frozen=True)
+class BareOk:
+    """The generated function answers the Ok payload BARE; the call site builds the Result.
+
+    `failure` names the error variant a NEGATIVE value stands for. None means the call
+    cannot fail, and the call site always answers `Result.Ok`.
+    """
+    failure: Optional[str] = None
+
+
+@dataclass(frozen=True)
 class Signature:
     """One function's row: what it takes, what it answers, and in which channel.
 
     `ok` is the payload of the `Result` the function answers, and `error` names the
     enum in the other arm. A function that answers its value BARE -- `fd_isatty`, which
     cannot fail in a way a caller can act on -- sets `ok` to None and puts the type in
-    `bare` instead.
+    `bare` instead. `bare_ok` is set when the Sushi type is a Result but the generated
+    function answers only the Ok payload (`<time>`, `setenv`).
     """
     params: Tuple[Param, ...] = ()
     ok: Optional[SushiType] = None
     error: Optional[str] = None
     bare: Optional[SushiType] = None
+    bare_ok: Optional[BareOk] = None
 
     @property
     def arity(self) -> int:

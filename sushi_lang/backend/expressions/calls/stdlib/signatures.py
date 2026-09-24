@@ -26,10 +26,17 @@ if TYPE_CHECKING:
 # A `bool` crosses as i8, not i1: that is the ABI the generators emit, and the caller
 # narrows with `as_i1` where a condition needs one.
 _SCALARS = {
+    BuiltinType.I8: lambda: ir.IntType(8),
+    BuiltinType.I16: lambda: ir.IntType(16),
     BuiltinType.I32: lambda: ir.IntType(32),
     BuiltinType.I64: lambda: ir.IntType(64),
-    BuiltinType.BOOL: lambda: ir.IntType(8),
     BuiltinType.U8: lambda: ir.IntType(8),
+    BuiltinType.U16: lambda: ir.IntType(16),
+    BuiltinType.U32: lambda: ir.IntType(32),
+    BuiltinType.U64: lambda: ir.IntType(64),
+    BuiltinType.F32: lambda: ir.FloatType(),
+    BuiltinType.F64: lambda: ir.DoubleType(),
+    BuiltinType.BOOL: lambda: ir.IntType(8),
 }
 
 
@@ -73,13 +80,18 @@ def llvm_ok_type(ty) -> Optional[ir.Type]:
 
 
 def llvm_return_type(sig: Signature) -> ir.Type:
-    """The LLVM return type of a row: a Result struct, or the bare value."""
+    """The LLVM return type of a row: a Result struct, or the bare value.
+
+    A `bare_ok` row answers its Ok payload bare, and the call site builds the Result.
+    """
     from sushi_lang.sushi_stdlib.src.type_definitions import (
         get_result_type, get_unit_enum_type,
     )
 
-    if sig.ok is None:
-        bare = llvm_value_type(sig.bare)
+    if sig.ok is None and sig.bare == BuiltinType.BLANK:
+        return ir.VoidType()
+    if sig.ok is None or sig.bare_ok is not None:
+        bare = llvm_value_type(sig.ok if sig.bare_ok is not None else sig.bare)
         if bare is None:
             raise_internal_error("CE0024", type="stdlib signature", method=str(sig.bare))
         return bare
@@ -89,6 +101,14 @@ def llvm_return_type(sig: Signature) -> ir.Type:
     # Every registry error enum is a UNIT enum, so the Err arm's size is the same for
     # all of them and the payload word count comes out of the Ok type alone.
     return get_result_type(ok, get_unit_enum_type())
+
+
+def llvm_function_type(sig: Signature) -> ir.FunctionType:
+    """The LLVM type of the generated function a row describes."""
+    params = [llvm_param_type(param) for param in sig.params]
+    if any(param is None for param in params):
+        raise_internal_error("CE0024", type="stdlib signature", method=str(sig.params))
+    return ir.FunctionType(llvm_return_type(sig), params)
 
 
 def emit_registry_call(codegen: 'LLVMCodegen', expr, func_name: str, symbol: str,
@@ -117,11 +137,29 @@ def emit_registry_call(codegen: 'LLVMCodegen', expr, func_name: str, symbol: str
         else:
             args.append(_by_value(codegen, param, emit_borrowed_arg(codegen, written)))
 
-    params = [llvm_param_type(param) for param in sig.params]
+    function_type = llvm_function_type(sig)
     stdlib_func = declare_stdlib_function(codegen.module, symbol,
-                                          llvm_return_type(sig), params)
+                                          function_type.return_type, list(function_type.args))
+    if isinstance(function_type.return_type, ir.VoidType):
+        codegen.builder.call(stdlib_func, args)
+        return ir.Constant(ir.IntType(32), ir.Undefined)
     result = codegen.builder.call(stdlib_func, args, name=f"{func_name}_result")
+    if sig.bare_ok is not None:
+        result = _result_from_bare_ok(codegen, sig, result)
     return codegen.utils.as_i1(result) if to_i1 else result
+
+
+def _result_from_bare_ok(codegen: 'LLVMCodegen', sig: Signature, value: ir.Value) -> ir.Value:
+    """The Result a `bare_ok` row answers, built from the bare value (`status_result.py`)."""
+    from sushi_lang.backend.expressions.calls.stdlib.status_result import (
+        ok_result, status_result,
+    )
+
+    if sig.bare_ok is None or sig.ok is None or sig.error is None:
+        raise_internal_error("CE0024", type="stdlib signature", method=str(sig))
+    if sig.bare_ok.failure is None:
+        return ok_result(codegen, value, sig.ok, sig.error)
+    return status_result(codegen, value, sig.ok, sig.error, sig.bare_ok.failure)
 
 
 def _by_value(codegen: 'LLVMCodegen', param: Param, value: ir.Value) -> ir.Value:

@@ -7,15 +7,17 @@ from llvmlite import ir
 
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.typesys import BuiltinType, Type
-from sushi_lang.sushi_stdlib.src.signatures import Signature, cstr, params_of
+from sushi_lang.sushi_stdlib.src.signatures import BareOk, Signature, cstr, params_of
 
 
 # The ONE spelling of what each `<sys/env>` function takes and answers (#550, #798).
-# `getenv` answers its Maybe BARE: an absent key is a value, not a failure.
+# `getenv` answers its Maybe BARE: an absent key is a value, not a failure. `setenv`'s
+# generated function answers a bare status, and a negative one is EnvError.InvalidValue.
 ENV_SIGNATURES: Dict[str, Signature] = {
     "getenv": Signature(params_of(cstr()),
                         bare=GenericTypeRef("Maybe", (BuiltinType.STRING,))),
-    "setenv": Signature(params_of(cstr(), cstr()), ok=BuiltinType.I32, error="EnvError"),
+    "setenv": Signature(params_of(cstr(), cstr()), ok=BuiltinType.I32, error="EnvError",
+                        bare_ok=BareOk(failure="InvalidValue")),
 }
 
 
