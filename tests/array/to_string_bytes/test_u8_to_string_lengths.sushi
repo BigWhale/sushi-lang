@@ -1,0 +1,23 @@
+# EXPECT_STDOUT_EXACT: "empty: [] 0\none: [A] 1\nmany: 1000 BBB BBB\nmixed: [Mostly Harmless] 15\n"
+# EXPECT_NO_LEAKS: true
+# u8[].to_string() copies every byte and adds no byte of its own, for 0, 1 and 1000 bytes.
+
+use <collections/strings>
+
+fn main() i32:
+    let u8[] none = new()
+    let string e = none.to_string()
+    println("empty: [{e}] {e.len()}")
+
+    let u8[] one = from([65])
+    let string a = one.to_string()
+    println("one: [{a}] {a.len()}")
+
+    let u8[] many = from([66; 1000])
+    let string b = many.to_string()
+    println("many: {b.len()} {b.s(0, 3)} {b.s(997, 1000)}")
+
+    let u8[] words = from([77, 111, 115, 116, 108, 121, 32, 72, 97, 114, 109, 108, 101, 115, 115])
+    let string m = words.to_string()
+    println("mixed: [{m}] {m.len()}")
+    return Result.Ok(0)

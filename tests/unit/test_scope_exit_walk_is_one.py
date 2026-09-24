@@ -23,10 +23,6 @@ SCOPE_REGISTRIES = {
 }
 ARRAY_EXIT_HELPERS = {"exit_actions", "drain", "_destroy_array", "_destroy_list", "_destroy_own"}
 
-# Two hand copies of the local-tracking body still write `_scope_vars` directly; the
-# scope-manager clean-up moves them behind a method. May only shrink.
-SCOPE_VARS_WRITERS = {"functions/helpers.py", "statements/initialization.py"}
-
 
 def _attribute_reads(path: Path, names: set[str]) -> list[tuple[int, str]]:
     tree = ast.parse(path.read_text(), filename=str(path))
@@ -45,18 +41,10 @@ def test_only_the_scope_manager_reads_its_cleanup_registries():
         if rel == "memory/scopes.py":
             continue
         for line, attr in _attribute_reads(path, SCOPE_REGISTRIES):
-            if attr == "_scope_vars" and rel in SCOPE_VARS_WRITERS:
-                continue
             offenders.append(f"{rel}:{line} reads {attr}")
     assert not offenders, (
         "scope exit is one walk in ScopeManager; call emit_exit_cleanup instead:\n"
         + "\n".join(offenders))
-
-
-def test_the_known_scope_vars_writers_still_exist():
-    for rel in SCOPE_VARS_WRITERS:
-        reads = _attribute_reads(BACKEND / rel, {"_scope_vars"})
-        assert reads, f"{rel} no longer writes _scope_vars; remove it from the allowlist"
 
 
 def test_only_the_walk_calls_the_array_exit_helpers():

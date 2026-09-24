@@ -14,7 +14,6 @@ from sushi_lang.semantics.typesys import (
     Type, BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, FunctionType)
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, DA_DATA_INDEX
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
-from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -157,32 +156,8 @@ def _emit_dynamic_array_destructor(
                 ZERO_I32  # len is first field
             ], name="array_len_ptr")
             array_len = builder.load(len_ptr, name="array_len")
-
-            loop_i = entry_alloca(builder, ZERO_I32.type, name="cleanup_i")
-            builder.store(ZERO_I32, loop_i)
-
-            loop_cond_bb = builder.append_basic_block(name="array_cleanup_cond")
-            loop_body_bb = builder.append_basic_block(name="array_cleanup_body")
-            loop_end_bb = builder.append_basic_block(name="array_cleanup_end")
-
-            builder.branch(loop_cond_bb)
-
-            builder.position_at_end(loop_cond_bb)
-            i_val = builder.load(loop_i, name="i_val")
-            cond = builder.icmp_unsigned("<", i_val, array_len, name="cleanup_cond")
-            builder.cbranch(cond, loop_body_bb, loop_end_bb)
-
-            builder.position_at_end(loop_body_bb)
-            i_val = builder.load(loop_i, name="i_val")
-            element_ptr = builder.gep(data_ptr, [i_val], name="element_ptr")
-
-            emit_value_destructor(codegen, element_ptr, value_type.base_type)
-
-            i_next = builder.add(i_val, ONE_I32, name="i_next")
-            builder.store(i_next, loop_i)
-            builder.branch(loop_cond_bb)
-
-            builder.position_at_end(loop_end_bb)
+            _destroy_elements(codegen, data_ptr, array_len, value_type.base_type,
+                              "array_cleanup")
 
         void_ptr = builder.bitcast(data_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
         free_func = codegen.get_free_func()
@@ -201,29 +176,18 @@ def _emit_fixed_array_destructor(
 
     count = ir.Constant(ZERO_I32.type, value_type.size)
     first_elem = builder.gep(value_ptr, [ZERO_I32, ZERO_I32], name="fixed_first_elem")
+    _destroy_elements(codegen, first_elem, count, value_type.base_type, "fixed_cleanup")
 
-    loop_i = entry_alloca(builder, ZERO_I32.type, name="fixed_cleanup_i")
-    builder.store(ZERO_I32, loop_i)
 
-    cond_bb = builder.append_basic_block(name="fixed_cleanup_cond")
-    body_bb = builder.append_basic_block(name="fixed_cleanup_body")
-    end_bb = builder.append_basic_block(name="fixed_cleanup_end")
+def _destroy_elements(codegen: LLVMCodegen, data_ptr: ir.Value, count: ir.Value,
+                      element_type: Type, prefix: str) -> None:
+    """Destroy `data_ptr[0..count)` through the one counted walk."""
+    from sushi_lang.backend.generics.container_walk import emit_container_walk
 
-    builder.branch(cond_bb)
+    def destroy_element(element_ptr: ir.Value, _index: ir.Value) -> None:
+        emit_value_destructor(codegen, element_ptr, element_type)
 
-    builder.position_at_end(cond_bb)
-    i_val = builder.load(loop_i, name="i_val")
-    cond = builder.icmp_unsigned("<", i_val, count, name="fixed_cleanup_cond")
-    builder.cbranch(cond, body_bb, end_bb)
-
-    builder.position_at_end(body_bb)
-    i_val = builder.load(loop_i, name="i_val")
-    element_ptr = builder.gep(first_elem, [i_val], name="fixed_element_ptr")
-    emit_value_destructor(codegen, element_ptr, value_type.base_type)
-    builder.store(builder.add(i_val, ONE_I32, name="i_next"), loop_i)
-    builder.branch(cond_bb)
-
-    builder.position_at_end(end_bb)
+    emit_container_walk(codegen, data_ptr, count, destroy_element, prefix=prefix)
 
 
 def _emit_struct_destructor(
@@ -293,16 +257,9 @@ def _emit_list_value_destructor(
     is_not_null = builder.icmp_unsigned("!=", data_ptr, ir.Constant(data_ptr.type, None))
     with builder.if_then(is_not_null):
         if needs_cleanup(codegen, element_type):
-            from sushi_lang.backend.generics.container_walk import emit_container_walk
-
             len_ptr = builder.gep(value_ptr, [ZERO_I32, ZERO_I32], name="list_len_field")
             list_len = builder.load(len_ptr, name="list_len")
-
-            def destroy_element(element_ptr: ir.Value, _index: ir.Value) -> None:
-                emit_value_destructor(codegen, element_ptr, element_type)
-
-            emit_container_walk(codegen, data_ptr, list_len, destroy_element,
-                                prefix="list_cleanup")
+            _destroy_elements(codegen, data_ptr, list_len, element_type, "list_cleanup")
 
         void_ptr = builder.bitcast(data_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
         free_func = codegen.get_free_func()

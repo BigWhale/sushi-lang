@@ -1,7 +1,8 @@
 """Memory management operations for the Sushi language compiler."""
 from __future__ import annotations
 import itertools
-from typing import TYPE_CHECKING, Optional
+from collections import defaultdict
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from llvmlite import ir
 from sushi_lang.semantics.type_predicates import is_instance_of
@@ -237,12 +238,14 @@ def expression_is_temporary(codegen: 'LLVMCodegen', expr) -> bool:
     return not is_container_get_call(codegen, expr)
 
 
-_PARK_SEQ = itertools.count()
+# One name counter per prefix, so the call-argument temporaries keep names of their own.
+_PARK_SEQ: defaultdict[str, Iterator[int]] = defaultdict(itertools.count)
 
 
 def own_temporary(codegen: 'LLVMCodegen', expr, value: ir.Value,
                   semantic_type: Optional[Type],
-                  slot_type: Optional[ir.Type] = None) -> Optional[ir.Value]:
+                  slot_type: Optional[ir.Type] = None,
+                  prefix: str = "__temp") -> Optional[ir.Value]:
     """Give a value NOBODY else will free an owner, and return its slot; None if it has one.
 
     THE ownership decision for a value no binding names, and `expression_is_temporary` is
@@ -265,7 +268,7 @@ def own_temporary(codegen: 'LLVMCodegen', expr, value: ir.Value,
     if not expression_is_temporary(codegen, expr):
         return None
 
-    name = f"__temp_{next(_PARK_SEQ)}"
+    name = f"{prefix}_{next(_PARK_SEQ[prefix])}"
     slot = codegen.memory.create_local(name, slot_type or value.type, value, resolved,
                                        register_cleanup=False)
     codegen.memory.register_owning_value(name, resolved, slot)

@@ -93,9 +93,6 @@ class DynamicArrayManager:
             stack.append(descriptor)
         self.codegen.memory.declare_scope_name(name)
 
-    def push_scope(self) -> None:
-        """Kept for the function entry. The scope stack lives in `ScopeManager`."""
-
     def exit_actions(self, name: str, depth: int
                      ) -> Iterator[tuple[ir.Instruction, Callable[[], None]]]:
         """(slot, emit destructor) for `name`'s live array, List or Own at `depth`.
@@ -232,7 +229,7 @@ class DynamicArrayManager:
 
     def emit_destroy_call(self, name: str) -> None:
         """Emit explicit .destroy() method call."""
-        self._emit_array_destructor(name)
+        self.emit_array_destructor(name)
         descriptor = self._array(name)
         if descriptor is not None:
             descriptor.destroyed = True
@@ -310,7 +307,7 @@ class DynamicArrayManager:
         emit_value_destructor(self.codegen, descriptor.llvm_alloca,
                               DynamicArrayType(descriptor.element_type))
 
-    def _emit_array_destructor(self, name: str) -> None:
+    def emit_array_destructor(self, name: str) -> None:
         """Emit the move-gated destructor of `name`'s innermost dynamic array."""
         descriptor = self._array(name)
         if descriptor is None or descriptor.destroyed:

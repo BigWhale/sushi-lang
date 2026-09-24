@@ -253,20 +253,22 @@ class ScopeManager:
         (they used to hold 38 verbatim-duplicated lines; 11b).
         """
         slot = self.entry_alloca(ty, name)
-
-        self._scope_vars[self._scope_depth].setdefault(name)
-
-        if name not in self._locals:
-            self._locals[name] = []
-        self._locals[name].append((self._scope_depth, slot))
-
-        if semantic_ty is not None:
-            if name not in self._types:
-                self._types[name] = []
-            self._types[name].append((self._scope_depth, semantic_ty))
-            if register_cleanup:
-                self.register_local_cleanup(name, semantic_ty, slot)
+        self.track_local(name, slot, semantic_ty)
+        if semantic_ty is not None and register_cleanup:
+            self.register_local_cleanup(name, semantic_ty, slot)
         return slot
+
+    def track_local(self, name: str, slot: ir.Instruction,
+                    semantic_ty: Optional['Type']) -> None:
+        """Track an EXISTING slot as the local `name` of the innermost scope.
+
+        The tracking half of `_enter_local`, for a slot made elsewhere: a parameter slot,
+        and the descriptor slot of a dynamic-array local. It registers no cleanup.
+        """
+        self._scope_vars[self._scope_depth].setdefault(name)
+        self._locals.setdefault(name, []).append((self._scope_depth, slot))
+        if semantic_ty is not None:
+            self._types.setdefault(name, []).append((self._scope_depth, semantic_ty))
 
     def create_local(self, name: str, ty: ir.Type, init: Optional[ir.Value] = None, semantic_ty: Optional['Type'] = None, register_cleanup: bool = True) -> ir.AllocaInstr:
         """Create local variable with optional initialization."""
@@ -344,10 +346,6 @@ class ScopeManager:
             raise_internal_error("CE0009")
         return allocas.entry_alloca(self.codegen.builder, ty, name)
 
-    def register_struct_cleanup(self, name: str, struct_type: 'StructType', slot: ir.AllocaInstr) -> None:
-        """Register a struct variable for RAII cleanup of its dynamic-array fields."""
-        self._struct_cleanup.setdefault(name, []).append((self._scope_depth, struct_type, slot))
-
     def _emit_closure_free(self, slot: ir.AllocaInstr) -> None:
         """Emit the runtime-guarded env free for a function-value local (`if drop: drop(env)`)."""
         from sushi_lang.backend.destructors import emit_function_value_destructor
@@ -358,60 +356,11 @@ class ScopeManager:
         from sushi_lang.backend.destructors import emit_string_destructor
         emit_string_destructor(self.codegen, slot)
 
-    def is_closure_registered(self, name: str) -> bool:
-        """True if `name` is a registered function-value RAII owner in the current scope."""
-        return name in self._closure_cleanup
-
-    def unregister_closure_cleanup(self, name: str) -> None:
-        """Drop the innermost `name` entry from function-value RAII tracking (no-op if absent).
-        """
-        self._stack_pop_at_depth(self._closure_cleanup, name, self._scope_depth)
-
-    def is_string_registered(self, name: str) -> bool:
-        """True if `name` is a registered owning string local in the current scope (#145)."""
-        return name in self._string_cleanup
-
-    def is_struct_registered(self, name: str) -> bool:
-        """True if `name` is a registered owning-struct local (a struct with heap-owning fields
-        tracked for RAII cleanup). Used to decide whether handing the local to a container that
-        stores it shallowly must MOVE it, so scope exit does not double-free the shared buffer
-        (#140).
-        """
-        return name in self._struct_cleanup
-
-    def is_owned_local(self, name: str) -> bool:
-        """True if `name` is a registered RAII owner in some current scope -- an owning
-        struct/enum/fixed-array, string, closure, dynamic array, List, or Own.
-        """
-        if (name in self._struct_cleanup or name in self._string_cleanup
-                or name in self._closure_cleanup):
-            return True
-        da = getattr(self.codegen, 'dynamic_arrays', None)
-        if da is not None and (name in da.arrays or name in da.lists or name in da.owned_pointers):
-            return True
-        return False
-
-    def unregister_string_cleanup(self, name: str) -> None:
-        """Drop the innermost `name` entry from string RAII tracking (no-op if absent) (#145).
-        """
-        self._stack_pop_at_depth(self._string_cleanup, name, self._scope_depth)
-
     def mark_struct_as_moved(self, var_name: str) -> None:
         """Mark a struct variable as moved (ownership transferred)."""
-        slot = self._slot_for_name(var_name)
+        slot = self.try_find_local_slot(var_name)
         if slot is not None:
             self.codegen.moves.mark(slot)
-
-    def _slot_for_name(self, name: str) -> Optional[ir.AllocaInstr]:
-        """Resolve a name to its innermost binding slot, or None if it has no local slot."""
-        if name in self._locals and self._locals[name]:
-            return self._locals[name][-1][1]
-        return None
-
-    def is_struct_moved(self, var_name: str) -> bool:
-        """Check if the innermost binding named `var_name` has been moved."""
-        slot = self._slot_for_name(var_name)
-        return slot is not None and self.codegen.moves.is_moved(slot)
 
     def reset_scope_stack(self) -> None:
         """Reset the scope stack to empty state."""
@@ -429,55 +378,3 @@ class ScopeManager:
         self._closure_temp_cleanup = []
 
         self.codegen.moves.reset()
-
-    def current_scope_size(self) -> int:
-        """Get the current scope stack depth."""
-        return self._scope_depth + 1
-
-    def get_current_scope_vars(self) -> Dict[str, ir.AllocaInstr]:
-        """Get variables in the current (innermost) scope."""
-        if self._scope_depth < 0:
-            raise IndexError("No active scopes")
-        result = {}
-        for name in self._scope_vars[self._scope_depth]:
-            if name in self._locals and self._locals[name]:
-                result[name] = self._locals[name][-1][1]
-        return result
-
-    def has_variable_in_scope(self, name: str, scope_level: int = -1) -> bool:
-        """Check if a variable exists in a specific scope level."""
-        if scope_level < 0:
-            scope_level = self._scope_depth + 1 + scope_level
-        if scope_level < 0 or scope_level > self._scope_depth:
-            raise IndexError(f"Invalid scope level: {scope_level}")
-        return name in self._scope_vars[scope_level]
-
-    @property
-    def locals(self) -> List[Dict[str, ir.AllocaInstr]]:
-        """Backward compatible access to locals (deprecated, use flat cache directly)."""
-        result = []
-        for level, scope_vars in enumerate(self._scope_vars):
-            scope_dict = {}
-            for name in scope_vars:
-                if name in self._locals:
-                    for lvl, alloca in self._locals[name]:
-                        if lvl == level:
-                            scope_dict[name] = alloca
-                            break
-            result.append(scope_dict)
-        return result
-
-    @property
-    def semantic_types(self) -> List[Dict[str, 'Type']]:
-        """Backward compatible access to semantic types (deprecated, use flat cache directly)."""
-        result = []
-        for level, scope_vars in enumerate(self._scope_vars):
-            scope_dict = {}
-            for name in scope_vars:
-                if name in self._types:
-                    for lvl, ty in self._types[name]:
-                        if lvl == level:
-                            scope_dict[name] = ty
-                            break
-            result.append(scope_dict)
-        return result

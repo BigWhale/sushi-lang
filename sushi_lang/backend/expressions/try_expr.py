@@ -50,7 +50,7 @@ def emit_try_expr(codegen: 'LLVMCodegen', expr: 'TryExpr') -> ir.Value:
     codegen.builder.position_at_end(propagate_block)
 
     from sushi_lang.backend.statements import utils
-    utils.emit_scope_cleanup(codegen, cleanup_type='all')
+    utils.emit_scope_cleanup(codegen)
 
     err_result = _construct_result_err_variant(codegen, func_return_type, error_value)
     codegen.builder.ret(err_result)

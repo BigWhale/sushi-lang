@@ -117,7 +117,7 @@ class MainFunctionWrapper:
 
         cmd_args_desc = self.codegen.dynamic_arrays._array("cmd_args")
         if cmd_args_desc is not None:
-            self.codegen.dynamic_arrays._emit_array_destructor("cmd_args")
+            self.codegen.dynamic_arrays.emit_array_destructor("cmd_args")
             cmd_args_desc.destroyed = True
 
         self.codegen.builder.ret(result)

@@ -82,7 +82,7 @@ class FunctionHelpers:
             return
 
         from sushi_lang.backend.statements import utils
-        utils.emit_scope_cleanup(self.codegen, cleanup_type='all')
+        utils.emit_scope_cleanup(self.codegen)
 
         result_type = declared_result_of(self.codegen, fn)
         err_index = result_type.get_variant_index("Err")
@@ -101,7 +101,7 @@ class FunctionHelpers:
             return
 
         from sushi_lang.backend.statements import utils
-        utils.emit_scope_cleanup(self.codegen, cleanup_type='all')
+        utils.emit_scope_cleanup(self.codegen)
 
         value_llvm_type = self.codegen.types.ll_type(ret_type)
         zero_value = self.codegen.utils.get_zero_value(value_llvm_type)
@@ -136,7 +136,6 @@ class FunctionHelpers:
 
         from sushi_lang.backend.memory.dynamic_arrays import DynamicArrayManager
         self.codegen.dynamic_arrays = DynamicArrayManager(self.codegen.builder, self.codegen)
-        self.codegen.dynamic_arrays.push_scope()
 
         ir.IRBuilder(entry).branch(start)
 
@@ -156,17 +155,7 @@ class FunctionHelpers:
             # rather than loading through it. This allows us to use the reference transparently.
             # When the parameter is used (in _emit_name), we'll load through this pointer.
             slot = self.codegen.memory.entry_alloca(arg.type, pname)
-            current_scope_level = self.codegen.memory._scope_depth
-            self.codegen.memory._scope_vars[current_scope_level].setdefault(pname)
-
-            if pname not in self.codegen.memory._locals:
-                self.codegen.memory._locals[pname] = []
-            self.codegen.memory._locals[pname].append((current_scope_level, slot))
-
-            if semantic_type is not None:
-                if pname not in self.codegen.memory._types:
-                    self.codegen.memory._types[pname] = []
-                self.codegen.memory._types[pname].append((current_scope_level, semantic_type))
+            self.codegen.memory.track_local(pname, slot, semantic_type)
 
             param_slots.append((arg, slot))
 
