@@ -392,6 +392,26 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **`min` and `max` on an unsigned integer compare as unsigned** (#817). `max(200 as u8, 3
+  as u8)` answered `3`: the emitter picked the signed callee from the LLVM width alone. It
+  now reads the signedness from the semantic type of the argument.
+- **A sleep with a duration that is not valid answers `Result.Err`** (#818). `sleep(-1)`,
+  `msleep(-1)` and a `nanosleep` with too many nanoseconds answered stack garbage inside
+  `Result.Ok`. A failure that is not EINTR is now `Result.Err(StdError.Error)`, and the
+  remaining time after an interruption saturates at the `i32` maximum.
+- **A failed `setenv` answers `Result.Err(EnvError.InvalidValue)`** (#819), not
+  `Result.Ok(-1)`. `<time>` and `<sys/env>` build their result through one seam: a negative
+  status is the `Err` arm, and the `Ok` arm comes from `build_ok_variant`, not a hand-built
+  block.
+- **An `Own@(T)` local inside a nested block compiles and is destroyed at its block's end**
+  (#820). It was a CE0055 crash in an `if`, a `while` or a `foreach` body, and a shadowing
+  `Own@(T)` leaked the inner value.
+- **Every scope exit destroys locals in reverse declaration order** (#821). A `return`, a
+  `??`, a `break` and a `continue` destroyed each registry in turn (structs, then strings,
+  then arrays), so the order depended on the kind and not on the declaration. One walk,
+  newest first, now serves the block end and all four early exits. It also closes a double
+  free: an early exit from a block that shadows a dynamic array freed the inner array twice
+  and never freed the outer one.
 - **A `Maybe` or `Result` method on a field or an element reads its own payload type**
   (#815, #769). With no stamp on a `Maybe` call, the backend chose the receiver's type by
   comparing LLVM layouts, and `Maybe@(i32)`, `Maybe@(i64)` and `Maybe@(f64)` share one: a

@@ -1,0 +1,26 @@
+# A continue destroys the loop body's owning locals in reverse declaration order,
+# a dynamic array of structs included.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "0\ndrop q0\ndrop arr0\ndrop p0\n1\ndrop q1\ndrop arr1\ndrop p1\ndone\n"
+struct Res:
+    string name
+
+extend Res with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn main() i32:
+    let i32 i = 0
+    while (i < 2):
+        let Res p = Res("p{i}")
+        let Res[] arr = from([Res("arr{i}")])
+        let Res q = Res("q{i}")
+        println(i)
+        i := i + 1
+        if (arr.len() == 1 and p.name != q.name):
+            continue
+        println("not reached")
+    println("done")
+    return Result.Ok(0)

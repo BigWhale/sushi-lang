@@ -22,7 +22,7 @@ The time module provides sleep functions with various granularities and two cloc
 - `now()` - Read the unix clock, in seconds
 - `monotonic_ns()` - Read the monotonic clock, in nanoseconds
 
-The sleep functions return `Result@(i32)` with 0 on success, or remaining microseconds if interrupted by a signal. The clock functions return `Result@(i64)`.
+The sleep functions return `Result@(i32)` with 0 on success, or remaining microseconds if interrupted by a signal. A duration that is not valid (a negative value, or nanoseconds of 1,000,000,000 or more) returns `Result.Err(StdError.Error)`. The clock functions return `Result@(i64)`.
 
 ## Functions
 
@@ -47,6 +47,7 @@ fn main() i32:
 **Returns:** `Result@(i32)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
+- `Result.Err(StdError.Error)` if the duration is not valid
 
 ### `msleep(i64 milliseconds) -> Result@(i32)`
 
@@ -69,6 +70,7 @@ fn main() i32:
 **Returns:** `Result@(i32)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
+- `Result.Err(StdError.Error)` if the duration is not valid
 
 ### `usleep(i64 microseconds) -> Result@(i32)`
 
@@ -91,6 +93,7 @@ fn main() i32:
 **Returns:** `Result@(i32)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
+- `Result.Err(StdError.Error)` if the duration is not valid
 
 ### `nanosleep(i64 seconds, i64 nanoseconds) -> Result@(i32)`
 
@@ -114,6 +117,7 @@ fn main() i32:
 **Returns:** `Result@(i32)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
+- `Result.Err(StdError.Error)` if the duration is not valid
 
 ### `now() -> Result@(i64)`
 
@@ -165,6 +169,7 @@ The actual sleep precision is limited by the OS scheduler:
 All sleep functions can be interrupted by signals (e.g., SIGINT from Ctrl+C). When interrupted:
 - The function returns early
 - Return value indicates remaining sleep time in microseconds
+- A remaining time of more than 2,147,483,647 microseconds (about 35 minutes) returns 2,147,483,647
 - Use pattern matching or `??` operator to handle interruption
 
 ```sushi
