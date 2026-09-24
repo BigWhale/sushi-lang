@@ -39,8 +39,8 @@ _add(ErrorMessage("CE0106", Severity.ERROR,
     Category.FUNC, "The main function must return an integer type to be used as a shell exit code."))
 
 _add(ErrorMessage("CE0107", Severity.ERROR,
-    "function '{name}' must return a value on all code paths",
-    Category.FUNC, "A function body must end in a return on every code path, and a `~` function is no exception: end it with `return Result.Ok(~)`. Until #824 a `~` function was exempt, and a body that reached its end answered a Result.Err that no source wrote. An extension or perk method with a bare return and a lambda body keep their own rules."))
+    "{callable} must return a value on all code paths",
+    Category.FUNC, "A body that answers a Result must end in a return on every code path, and a `~` body is no exception. A `~` function and a `~` lambda block body end with `return Result.Ok(~)`; an extension or perk-implementation method with a `| E` channel ends with `return ~`. Until #824 a `~` function was exempt, and until #845 a channel method and a lambda were exempt: a body that reached its end answered a Result.Err that no source wrote. An extension or perk method with a BARE return (no `| E`) answers no Result, so a `~` body that reaches its end is correct there. A lambda is named `lambda` and carets its own location; it named the internal symbol `__lambda_0` with no location until #846."))
 
 # Constant expression evaluation errors
 _add(ErrorMessage("CE0108", Severity.ERROR,
@@ -141,7 +141,7 @@ _add(ErrorMessage("CE0136", Severity.ERROR,
 
 _add(ErrorMessage("CE0138", Severity.ERROR,
     "main() takes one parameter, `string[] args`, or no parameter",
-    Category.FUNC, "The entry point receives the command line as `string[] args` or receives nothing. The type and the name are both part of the rule, so `fn main(string[] argv)`, `fn main(i32 x)` and `fn main(string[] args, i32 x)` are refused at the parameter that breaks it. Until #825 the entrypoint pass checked no parameter list: the back end handed argv on to a parameter named `args` and filled every other parameter with a zero value, so `argv` was always an empty array and `x` was always 0."))
+    Category.FUNC, "The entry point receives the command line as `string[] args` or receives nothing. The type and the name are both part of the rule, so `fn main(string[] argv)`, `fn main(i32 x)` and `fn main(string[] args, i32 x)` are refused at the parameter that breaks it. The parameter takes no mode: argv is a borrowed view that the runtime owns, so `nom string[] args` (main would free argv a second time at exit), `peek string[] args` and `poke string[] args` are refused too (#844). Until #825 the entrypoint pass checked no parameter list: the back end handed argv on to a parameter named `args` and filled every other parameter with a zero value, so `argv` was always an empty array and `x` was always 0."))
 
 _add(ErrorMessage("CE0134", Severity.ERROR,
     "static method '{name}' has no receiver",

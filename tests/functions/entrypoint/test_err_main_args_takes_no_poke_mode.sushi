@@ -1,0 +1,6 @@
+# The main parameter takes no mode: `string[] args` or nothing.
+# A `poke` parameter is the same fault: argv is a borrowed view.
+# EXPECT_ERROR_CODE: CE0138
+fn main(poke string[] args) i32:
+    println("n {args.len()}")
+    return Result.Ok(0)

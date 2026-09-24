@@ -1,0 +1,9 @@
+# A lambda block body with a value return that reaches its end is CE0107, at the
+# lambda.
+# EXPECT_ERROR_CODE: CE0107
+# EXPECT_STDERR_CONTAINS: "lambda must return a value on all code paths"
+fn main() i32:
+    let fn(i32) -> i32 h = |i32 x|:
+        println("h {x}")
+    println("{h(1).realise(0)}")
+    return Result.Ok(0)

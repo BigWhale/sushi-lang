@@ -995,7 +995,8 @@ class SemanticAnalyzer:
         all and set one bool.
 
         The order is the ruling's: the entry point exists, a library refuses one, the
-        return is an integer, and the parameter is `string[] args` or nothing. The last
+        return is an integer, and the parameter is `string[] args` -- with no mode, since
+        argv is a borrowed view the runtime owns (#844) -- or nothing. The last
         answers `main_expects_args`, which the back end reads to hand argv on.
         """
         from sushi_lang.internals import errors as er
@@ -1028,6 +1029,7 @@ class SemanticAnalyzer:
 
         def is_args(param) -> bool:
             return (param.name == "args"
+                    and not param.is_nom
                     and isinstance(param.ty, DynamicArrayType)
                     and param.ty.base_type == BuiltinType.STRING)
 

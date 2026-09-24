@@ -1,0 +1,15 @@
+# One path of a `~ | E` extension body reaches its end: CE0107.
+# EXPECT_ERROR_CODE: CE0107
+enum Why:
+    Bad
+
+extend i32 check() ~ | Why:
+    if (self < 0):
+        return Result.Err(Why.Bad)
+
+fn main() i32:
+    let i32 x = 5
+    match x.check():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)
