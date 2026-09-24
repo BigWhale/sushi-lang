@@ -37,15 +37,8 @@ def emit_byte_array_to_string(codegen: "LLVMCodegen", call: MethodCall, receiver
     # No UTF-8 validation: this is the zero-cost conversion, so invalid input is undefined
     # behaviour. `.to_string_checked()` is the validating twin.
 
-    from sushi_lang.backend.statements.utils import emit_copy_loop
-    emit_copy_loop(
-        codegen=codegen,
-        count=byte_count,
-        src_ptr=data_ptr,
-        dst_ptr=string_ptr,
-        element_type=codegen.types.i8,
-        name_prefix="to_string"
-    )
+    from sushi_lang.backend.expressions.memory import emit_memcpy_bytes
+    emit_memcpy_bytes(codegen, string_ptr, data_ptr, byte_count)
 
     null_term_ptr = codegen.builder.gep(string_ptr, [byte_count])
     codegen.builder.store(ZERO_I8, null_term_ptr)
