@@ -146,17 +146,14 @@ class ExpressionValidator(RecursiveVisitor):
         goes to a Reporter nobody reads: validation reports it later, for real.
         """
         from sushi_lang.internals.report import Reporter
-        from sushi_lang.semantics.passes.types import _field_values_under
+        from sushi_lang.semantics.passes.types import fields_restored_under
         tv = self.type_validator
-        saved = _field_values_under(expr)
         reporter, tv.reporter = tv.reporter, Reporter()
         try:
-            return tv.infer_expression_type(expr)
+            with fields_restored_under(expr):
+                return tv.infer_expression_type(expr)
         finally:
             tv.reporter = reporter
-            for owner, values in saved:
-                for name, value in values:
-                    setattr(owner, name, value)
 
     def _context_type_operand_from_sibling(
             self, node: BinaryOp, infer: Callable[[Expr], Optional[Type]]) -> None:

@@ -1,6 +1,7 @@
 """The typecheck pass: type validation and inference."""
 from __future__ import annotations
-from typing import Dict, List, Optional, Set, TYPE_CHECKING
+from contextlib import contextmanager
+from typing import Dict, Iterator, List, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import Binding, NamespaceTable
@@ -272,19 +273,17 @@ class ReadOnlyInferrer(TypeValidator):
     def infer_expression_type(self, expr: Expr) -> Optional[Type]:
         if self._depth:
             return super().infer_expression_type(expr)
-        saved = _field_values_under(expr)
         self._depth += 1
         try:
-            return super().infer_expression_type(expr)
+            with fields_restored_under(expr):
+                return super().infer_expression_type(expr)
         finally:
             self._depth -= 1
-            for node, values in saved:
-                for name, value in values:
-                    setattr(node, name, value)
 
 
-def _field_values_under(root: Expr) -> list:
-    """Every node under `root`, with the value of each of its declared fields."""
+@contextmanager
+def fields_restored_under(root: Expr) -> Iterator[None]:
+    """Put back every declared field of every node under `root` when the block ends."""
     from sushi_lang.semantics.ast_walk import node_fields, walk_nodes
 
     saved: list = []
@@ -294,7 +293,12 @@ def _field_values_under(root: Expr) -> list:
         return True
 
     walk_nodes(root, visit)
-    return saved
+    try:
+        yield
+    finally:
+        for node, values in saved:
+            for name, value in values:
+                setattr(node, name, value)
 
 
-__all__ = ['ReadOnlyInferrer', 'TypeValidator']
+__all__ = ['ReadOnlyInferrer', 'TypeValidator', 'fields_restored_under']
