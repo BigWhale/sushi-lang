@@ -1,0 +1,27 @@
+# A failed setenv answers Result.Err(EnvError.InvalidValue) (#819).
+# libc setenv refuses an empty name and a name with '='; the call answered Result.Ok(-1).
+# The valid name is the control: it answers Ok(0).
+# EXPECT_STDOUT_EXACT: "empty key: Err\nkey with '=': Err\nset_bad: Err\nvalid key: Ok(0)\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <sys/env>
+
+fn set_bad() i32 | EnvError:
+    let i32 v = setenv("A=B", "x")??
+    println("after ?? got {v}")
+    return Result.Ok(v)
+
+fn main() i32:
+    match setenv("", "x"):
+        Result.Ok(v) -> println("empty key: Ok({v})")
+        Result.Err(EnvError.InvalidValue) -> println("empty key: Err")
+        Result.Err(_) -> println("empty key: wrong Err")
+    match setenv("A=B", "x"):
+        Result.Ok(v) -> println("key with '=': Ok({v})")
+        Result.Err(_) -> println("key with '=': Err")
+    match set_bad():
+        Result.Ok(v) -> println("set_bad: Ok({v})")
+        Result.Err(_) -> println("set_bad: Err")
+    match setenv("SUSHI_SETENV_FAILURE_OK", "42"):
+        Result.Ok(v) -> println("valid key: Ok({v})")
+        Result.Err(_) -> println("valid key: Err")
+    return Result.Ok(0)

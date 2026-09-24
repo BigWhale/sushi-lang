@@ -89,7 +89,10 @@ def generate_getenv(module: ir.Module) -> None:
 
 
 def generate_setenv(module: ir.Module) -> None:
-    """Generate setenv function: setenv(string key, string value) -> i32"""
+    """Generate setenv function: setenv(string key, string value) -> i32
+
+    The libc answer: 0 on success, -1 on failure. The call site maps -1 to Result.Err.
+    """
     i8, i8_ptr, i32, i64 = get_basic_types()
 
     libc_setenv = _platform_env.declare_setenv(module)

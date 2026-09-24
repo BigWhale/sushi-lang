@@ -11,6 +11,7 @@ from llvmlite import ir
 from sushi_lang.backend.generics.result_builder import (
     build_err_from_return_type, build_ok_variant, intern_result,
 )
+from sushi_lang.backend.utils import require_builder
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import Type
 
@@ -45,5 +46,6 @@ def status_result(codegen: 'LLVMCodegen', status: ir.Value, ok_type: Type,
                                               ir.Constant(err_llvm_type.elements[1], None)])
     ok_value = build_ok_variant(codegen, result_enum, status)
     err_value = build_err_from_return_type(codegen, result_enum, error_value)
-    failed = codegen.builder.icmp_signed('<', status, ir.Constant(status.type, 0), name="status_failed")
-    return codegen.builder.select(failed, err_value, ok_value, name="status_result")
+    builder = require_builder(codegen)
+    failed = builder.icmp_signed('<', status, ir.Constant(status.type, 0), name="status_failed")
+    return builder.select(failed, err_value, ok_value, name="status_result")
