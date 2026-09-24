@@ -392,6 +392,15 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A fall-off is CE0107 in a `| E` method and in a lambda** (#845). A `~` extension or perk
+  method with a `| E` channel, and a `~` lambda block body, that reached their end answered
+  `Result.Err` in silence. They end with `return ~` and `return Result.Ok(~)`. A bare `~`
+  extension or perk method is unchanged. The CE0107 text now names the callable: `function
+  'f'`, `method 'm'` or `lambda`.
+- **CE0107 on a lambda has a location** (#846). It had no line and named the internal
+  `__lambda_0`; the lifted function now carries the lambda's span.
+- **`fn main(nom string[] args)` is CE0138** (#844). It compiled, and `main` freed argv, so
+  the program aborted at exit. The `main` parameter takes no mode.
 - **`.clone()` on a borrowed function value compiles** (#822). A `peek` or `poke`
   parameter, a `let peek` binding or a `foreach(poke ...)` item of function type was a
   CE0000 crash on `.clone()`. Every deep clone now enters through `copy_out`, and the gate
@@ -1130,6 +1139,22 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **The stdlib emitters read signature rows** (#827). `<time>`, `<sys/env>`, `<random>`,
+  `<math>` and `<sys/process>` call `emit_registry_call` over their rows; `exit` and `run`
+  are the two named special cases. `abs`/`min`/`max` read a family row per argument type,
+  chosen from the semantic type. A `bare_ok` row keeps the negative-status-is-`Err` contract
+  of `<time>` and `<sys/env>`. A gate checks that the LLVM type of every row is the function
+  the generator builds.
+- **One row per string method** (#828). `MethodSpec` holds each method's parameter types and
+  its return type; the return-type reader and the backend declaration read the row, and the
+  21-arm emitter ladder is gone (gate `tests/unit/test_string_method_rows_are_one.py`).
+- **The scope manager keeps its state private** (#835). Thirteen dead members are gone,
+  `track_local` registers a local, `emit_scope_cleanup` has no `cleanup_type`, and CE0062 is
+  retired (gate `tests/unit/test_scope_manager_state_is_private.py`).
+- **A `let` of an owning value goes through `register_owning_value`** (#833), and an argument
+  temporary through `own_temporary` (gate `tests/unit/test_owning_binding_uses_the_router.py`).
+- **The array destructors walk their elements with `emit_container_walk`** (#834), and
+  `u8[].to_string()` is one `memcpy`. A shrink-only gate lists the loops still written by hand.
 - **One interned generic name** (#805). `interned_name(base, args)` in
   `semantics/generics/interned.py` spells every `Base<...>` name, and "is this an instance of
   X" reads `generic_base` through `generic_base_of` / `is_instance_of` in
