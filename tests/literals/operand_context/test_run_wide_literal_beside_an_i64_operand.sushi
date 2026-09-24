@@ -1,0 +1,19 @@
+# A bare literal operand takes the type of the other operand, also when the value
+# does not fit the i32 default: every line is i64 beside i64.
+# EXPECT_STDOUT_EXACT: "i64 gt\ni64 eq\n8589934597\n4294967296\n4294967301\ntrue\n"
+struct Wide:
+    i64 w
+
+fn main() i32:
+    let i64 big = 4294967301
+    if (big > 4294967300):
+        println("i64 gt")
+    if (4294967301 == big):
+        println("i64 eq")
+    println("{big + 4294967296}")
+    println("{big & 0x1_0000_0000}")
+    let Wide s = Wide(4294967301)
+    println("{s.w}")
+    let bool c = s.w == 4294967301
+    println("{c}")
+    return Result.Ok(0)
