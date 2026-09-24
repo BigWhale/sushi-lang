@@ -135,7 +135,7 @@ def emit_registry_call(codegen: 'LLVMCodegen', expr, func_name: str, symbol: str
         if param.as_cstr:
             args.append(emit_cstr_arg(codegen, written))
         else:
-            args.append(_by_value(codegen, param, emit_borrowed_arg(codegen, written)))
+            args.append(as_param_value(codegen, param, emit_borrowed_arg(codegen, written)))
 
     function_type = llvm_function_type(sig)
     stdlib_func = declare_stdlib_function(codegen.module, symbol,
@@ -162,7 +162,7 @@ def _result_from_bare_ok(codegen: 'LLVMCodegen', sig: Signature, value: ir.Value
     return status_result(codegen, value, sig.ok, sig.error, sig.bare_ok.failure)
 
 
-def _by_value(codegen: 'LLVMCodegen', param: Param, value: ir.Value) -> ir.Value:
+def as_param_value(codegen: 'LLVMCodegen', param: Param, value: ir.Value) -> ir.Value:
     """An aggregate BY VALUE, whatever shape the argument arrived in.
 
     A named local yields the descriptor already; a `peek u8[]` parameter is a reference
