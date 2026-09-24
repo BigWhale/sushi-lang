@@ -1,0 +1,17 @@
+# A BINARY library's PRIVATE struct holds its name too, when the export closure ships
+# it: a public template body names it, so the consumer's own declaration is refused
+# where it stands, and the library that holds the name is named.
+# EXPECT_ERROR_CODE: CE3011
+# EXPECT_STDERR_CONTAINS: "private_closure_lib"
+use <lib/private_closure_lib>
+
+struct Acc:
+    string name
+    i32 a
+
+fn main() i32:
+    let Acc mine = Acc("x", 5)
+    println("{mine.a}")
+    let i32 m = compute(nom 10, nom 20).realise(99)
+    println(m)
+    return Result.Ok(0)
