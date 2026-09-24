@@ -29,7 +29,8 @@ def require_stdlib_unit(codegen: 'LLVMCodegen', module: str, call: str, span) ->
         .help(f"add `use <{module}>` above the first declaration of this unit")
 
 
-def try_emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]) -> Optional[ir.Value]:
+def try_emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                              to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as enum constructor. Returns None if not an enum constructor."""
     from sushi_lang.backend.expressions.calls.utils import get_resolved_type
 
@@ -69,13 +70,13 @@ def try_emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
     return None
 
 
-def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]) -> Optional[ir.Value]:
+def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                                to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as struct constructor (e.g., Own.alloc()). Returns None if not a struct constructor."""
     from sushi_lang.backend.expressions.calls.utils import get_resolved_type
 
     receiver = expr.receiver
     method = expr.method
-    args = expr.args
 
     if method != "alloc":
         return None
@@ -87,8 +88,7 @@ def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, 
 
         if isinstance(resolved_type, StructType) and is_instance_of(resolved_type, "Own"):
             if is_builtin_own_method(method):
-                temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-                return emit_builtin_own_method(codegen, temp_expr, None, resolved_type)
+                return emit_builtin_own_method(codegen, expr, None, resolved_type)
 
     if isinstance(receiver, Name):
         if hasattr(codegen, 'generic_structs') and receiver.id in codegen.generic_structs.by_name:
@@ -128,12 +128,12 @@ def try_emit_array_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
     if not is_builtin_array_method(expr.method):
         return None
 
-    temp_expr = MethodCall(receiver=expr.receiver, method=expr.method, args=expr.args, loc=expr.loc)
-    return emit_array_method(codegen, temp_expr, receiver_value, receiver_type, semantic_type, to_i1)
+    return emit_array_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
 
 
 def try_emit_string_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
-                            receiver_value: ir.Value, receiver_type: ir.Type, to_i1: bool) -> Optional[ir.Value]:
+                            receiver_value: ir.Value, receiver_type: ir.Type,
+                            semantic_type, to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as string method. Returns None if not a string method."""
     from sushi_lang.backend.expressions.calls.stdlib import emit_stdlib_string_call
 
@@ -212,8 +212,7 @@ def _try_emit_auto_derived(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
     if derived is None:
         return None
 
-    temp_expr = MethodCall(receiver=expr.receiver, method=expr.method, args=expr.args, loc=expr.loc)
-    return derived.llvm_emitter(codegen, temp_expr, receiver_value, receiver_type, to_i1)
+    return derived.llvm_emitter(codegen, expr, receiver_value, receiver_type, to_i1)
 
 
 def try_emit_struct_hash(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
@@ -320,8 +319,7 @@ def try_emit_primitive_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
 
         builtin_method = codegen.derived_methods.get_method(builtin_type, expr.method)
         if builtin_method is not None:
-            temp_expr = MethodCall(receiver=expr.receiver, method=expr.method, args=expr.args, loc=expr.loc)
-            return builtin_method.llvm_emitter(codegen, temp_expr, receiver_value, receiver_type, to_i1)
+            return builtin_method.llvm_emitter(codegen, expr, receiver_value, receiver_type, to_i1)
 
     return None
 
@@ -357,14 +355,8 @@ def try_emit_perk_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
         from sushi_lang.backend.expressions.calls.dispatcher import consume_receiver
         receiver_value = consume_receiver(codegen, expr, receiver_value)
 
-    from sushi_lang.backend.expressions.calls.dispatcher import settle_method_call_arguments
+    from sushi_lang.backend.expressions.calls.dispatcher import (
+        emit_checked_call, settle_method_call_arguments)
     arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
     settle_method_call_arguments(codegen, expr, arg_values)
-    emitted_args = [receiver_value, *arg_values]
-
-    params = list(llvm_fn.args)
-    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params, strict=True)]
-
-    result_value = codegen.builder.call(llvm_fn, casted)
-
-    return codegen.utils.as_i1(result_value) if to_i1 else result_value
+    return emit_checked_call(codegen, llvm_fn, [receiver_value, *arg_values], to_i1)

@@ -29,13 +29,13 @@ from .methods import (
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import StructType
-    from sushi_lang.semantics.ast import MethodCall
+    from sushi_lang.semantics.ast import DotCall, MethodCall
     import llvmlite.ir as ir
 
 
 def emit_hashmap_method(
     codegen,
-    expr: 'MethodCall',
+    expr: 'MethodCall | DotCall',
     receiver_value: Union['ir.Value', None],
     receiver_type: 'StructType',
     to_i1: bool

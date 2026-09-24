@@ -1,7 +1,7 @@
 """Built-in extension methods for Own<T> generic struct."""
 
 from typing import Any
-from sushi_lang.semantics.ast import MethodCall
+from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import StructType, Type
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
@@ -53,7 +53,7 @@ def emit_own_destroy(codegen: Any, own_value: ir.Value) -> ir.Value:
 
 def emit_builtin_own_method(
     codegen: Any,
-    call: MethodCall,
+    call: MethodCall | DotCall,
     own_value: ir.Value,
     own_type: StructType
 ) -> ir.Value:

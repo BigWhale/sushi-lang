@@ -1,7 +1,7 @@
 """Built-in extension methods for List<T> generic struct."""
 
 from typing import Any
-from sushi_lang.semantics.ast import MethodCall
+from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 
@@ -41,7 +41,7 @@ from .methods_iter import (
 
 def emit_list_method(
     codegen: Any,
-    expr: MethodCall,
+    expr: MethodCall | DotCall,
     receiver_value: ir.Value,
     receiver_type: StructType,
     to_i1: bool
