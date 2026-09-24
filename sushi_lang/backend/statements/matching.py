@@ -6,6 +6,7 @@ from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils, gep_utils
 from sushi_lang.backend.utils import require_both_initialized
+from sushi_lang.backend.statements.loops import _emit_block
 
 if TYPE_CHECKING:
     from llvmlite import ir
@@ -493,10 +494,3 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
                                             element_type, register_cleanup=False)
     elif isinstance(inner_pattern, PatternNode):
         _extract_nested_pattern(codegen, inner_pattern, unwrapped_value, element_type, next_arm_bb)
-
-
-def _emit_block(codegen: 'LLVMCodegen', block) -> None:
-    """Helper to emit a block of statements."""
-    from sushi_lang.backend.statements import StatementEmitter
-    emitter = StatementEmitter(codegen)
-    emitter.emit_block(block)

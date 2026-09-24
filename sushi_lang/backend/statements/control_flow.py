@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_both_initialized
 from sushi_lang.backend.statements import utils
+from sushi_lang.backend.statements.loops import loop_frame, _emit_block
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -70,19 +71,7 @@ def emit_while(codegen: 'LLVMCodegen', node: 'While') -> None:
     codegen.builder.cbranch(cond_val, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory.depth + 1))
-    codegen.memory.push_scope()
-    _emit_block(codegen, node.body)
-    codegen.memory.pop_scope()
-    codegen.loop_stack.pop()
-    if codegen.builder.block.terminator is None:
-        codegen.builder.branch(cond_bb)
+    with loop_frame(codegen, continue_bb=cond_bb, break_bb=end_bb, back_edge=cond_bb):
+        _emit_block(codegen, node.body)
 
     codegen.builder.position_at_end(end_bb)
-
-
-def _emit_block(codegen: 'LLVMCodegen', block) -> None:
-    """Helper to emit a block of statements."""
-    from sushi_lang.backend.statements import StatementEmitter
-    emitter = StatementEmitter(codegen)
-    emitter.emit_block(block)
