@@ -135,7 +135,11 @@ def validate_function(self, func: FuncDef) -> None:
 
     self._validate_block(func.body)
 
-    if func.ret != BuiltinType.BLANK:
+    # A `~` function returns too (#824): a body that reached its end answered a
+    # Result.Err that no source wrote. A lifted lambda carries no name span, and it
+    # keeps the old rule until it has a ruling of its own.
+    lifted_lambda = func.name_span is None
+    if func.ret != BuiltinType.BLANK or not lifted_lambda:
         if not block_always_returns(self, func.body):
             self.err.emit(er.ERR.CE0107, func.name_span, name=func.name)
 

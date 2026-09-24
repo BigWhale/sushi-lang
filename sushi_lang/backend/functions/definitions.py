@@ -60,7 +60,7 @@ class FunctionDefinitions:
         self.codegen.statements.emit_block(fn.body)
 
         if self.codegen.builder.block.terminator is None:
-            emit_default_return_fn(fn.ret)
+            emit_default_return_fn(fn)
 
         end_function_fn()
 

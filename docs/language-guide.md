@@ -39,6 +39,8 @@ Key points:
 
 The main function must return an `i32` (which the operating system uses as the exit code), and like all Sushi functions, it must explicitly wrap this value in `Result.Ok()` to indicate successful execution.
 
+To read the command line, `main` takes exactly one parameter, `string[] args`. The first element is the program name. No other parameter list is accepted: the type must be `string[]` and the name must be `args`.
+
 ## Variables and Types
 
 ### Declaration and Rebinding

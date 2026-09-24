@@ -1,0 +1,38 @@
+# A body that returns on every branch of a match or an if leaves a block that no path
+# reaches. The return the backend puts there has the DECLARED Result type, so an
+# error payload larger than the payload of StdError is accepted.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "small\n5\n5\n"
+struct Big:
+    i64 a
+    i64 b
+    i64 c
+    i64 d
+    i64 e
+
+enum BigErr:
+    Huge(Big)
+    Small
+
+fn pick(bool big) i64 | BigErr:
+    if (big):
+        return Result.Err(BigErr.Huge(Big(1, 2, 3, 4, 5)))
+    else:
+        return Result.Err(BigErr.Small)
+
+fn total(Maybe@(i64) m) i64 | BigErr:
+    match m:
+        Maybe.Some(v) -> return Result.Ok(v)
+        Maybe.None -> return Result.Err(BigErr.Small)
+
+fn main() i32:
+    match total(Maybe.None):
+        Result.Ok(_) -> println("ok")
+        Result.Err(BigErr.Huge(_)) -> println("huge")
+        Result.Err(BigErr.Small) -> println("small")
+    println("{total(Maybe.Some(5 as i64)).realise(0)}")
+    match pick(true):
+        Result.Err(BigErr.Huge(b)) -> println("{b.e}")
+        Result.Err(BigErr.Small) -> println("small")
+        Result.Ok(_) -> println("ok")
+    return Result.Ok(0)

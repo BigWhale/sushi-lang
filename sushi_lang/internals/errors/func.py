@@ -40,7 +40,7 @@ _add(ErrorMessage("CE0106", Severity.ERROR,
 
 _add(ErrorMessage("CE0107", Severity.ERROR,
     "function '{name}' must return a value on all code paths",
-    Category.FUNC, "All functions with a return type must have a return statement."))
+    Category.FUNC, "A function body must end in a return on every code path, and a `~` function is no exception: end it with `return Result.Ok(~)`. Until #824 a `~` function was exempt, and a body that reached its end answered a Result.Err that no source wrote. An extension or perk method with a bare return and a lambda body keep their own rules."))
 
 # Constant expression evaluation errors
 _add(ErrorMessage("CE0108", Severity.ERROR,
@@ -138,6 +138,10 @@ _add(ErrorMessage("CE0135", Severity.ERROR,
 _add(ErrorMessage("CE0136", Severity.ERROR,
     "internal error: the AST walk has no arm for node '{node}'",
     Category.INTERNAL, "semantics/visitors.py dispatches on a method name it BUILDS from the class name, and RecursiveVisitor.generic_visit answered a miss with a bare `pass`. A node kind that ast.py added was therefore skipped in SILENCE by every consumer -- StatementValidator, ExpressionValidator and TypeInferenceVisitor -- and a class RENAME read exactly the same way (#639). Expand and Lambda were both missing an arm. A node kind a PARENT arm reads inside itself -- an ArrayElement, a MatchArm, a Pattern -- is named in visitors.WALKED_IN_PARENT and never arrives here. tests/unit/test_visitor_dispatch_is_total.py is the CI gate; this is the runtime backstop, in the shape CE0125 gives the borrow checker and CE0130 the scope checker."))
+
+_add(ErrorMessage("CE0138", Severity.ERROR,
+    "main() takes one parameter, `string[] args`, or no parameter",
+    Category.FUNC, "The entry point receives the command line as `string[] args` or receives nothing. The type and the name are both part of the rule, so `fn main(string[] argv)`, `fn main(i32 x)` and `fn main(string[] args, i32 x)` are refused at the parameter that breaks it. Until #825 the entrypoint pass checked no parameter list: the back end handed argv on to a parameter named `args` and filled every other parameter with a zero value, so `argv` was always an empty array and `x` was always 0."))
 
 _add(ErrorMessage("CE0134", Severity.ERROR,
     "static method '{name}' has no receiver",
