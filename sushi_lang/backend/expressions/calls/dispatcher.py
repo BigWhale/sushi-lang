@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Union
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import Call, MethodCall, DotCall, Name
-from sushi_lang.backend.expressions.calls.stdlib import emit_time_function, emit_math_function, emit_env_function
+from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
 from sushi_lang.backend.expressions.calls import intrinsics, generics
 from sushi_lang.backend.expressions.calls.utils import emit_receiver_value, marshal_cstr
 from sushi_lang.backend.expressions.calls.variadic import build_variadic_array
@@ -507,25 +507,8 @@ def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -
 def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str,
                           module_and_func: tuple, to_i1: bool) -> ir.Value:
     """Emit code for a stdlib function call."""
-    module_path, stdlib_func = module_and_func
-
-    if module_path == "time":
-        return emit_time_function(codegen, expr, function_name, to_i1)
-    elif module_path == "sys/env":
-        return emit_env_function(codegen, expr, function_name, to_i1)
-    elif module_path == "sys/process":
-        from sushi_lang.backend.expressions.calls.stdlib import emit_process_function
-        return emit_process_function(codegen, expr, function_name, to_i1)
-    elif module_path == "math":
-        return emit_math_function(codegen, expr, function_name, to_i1)
-    elif module_path == "random":
-        from sushi_lang.backend.expressions.calls.stdlib import emit_random_function
-        return emit_random_function(codegen, expr, function_name, to_i1)
-    elif module_path == "io/files":
-        from sushi_lang.backend.expressions.calls.stdlib import emit_files_function
-        return emit_files_function(codegen, expr, function_name, to_i1)
-    elif module_path == "net/socket":
-        from sushi_lang.backend.expressions.calls.stdlib import emit_net_function
-        return emit_net_function(codegen, expr, function_name, to_i1)
-    else:
+    module_path, _ = module_and_func
+    emit = STDLIB_EMITTERS.get(module_path)
+    if emit is None:
         raise_internal_error("CE0055", name=f"{module_path}/{function_name}")
+    return emit(codegen, expr, function_name, to_i1)
