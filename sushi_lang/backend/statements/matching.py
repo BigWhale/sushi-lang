@@ -7,6 +7,7 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils, gep_utils
 from sushi_lang.backend.utils import require_both_initialized
 from sushi_lang.backend.statements.loops import _emit_block
+from sushi_lang.backend.statements.control_flow import close_merge_block
 
 if TYPE_CHECKING:
     from llvmlite import ir
@@ -64,14 +65,14 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
 
     _add_switch_cases(codegen, stmt, arm_blocks, switch, scrutinee_type)
 
-    _emit_match_arms(codegen, stmt, arm_blocks, scrutinee_value, scrutinee_type, end_bb,
-                     scrutinee_slot)
+    end_reached = _emit_match_arms(codegen, stmt, arm_blocks, scrutinee_value,
+                                   scrutinee_type, end_bb, scrutinee_slot)
 
     if unreachable_bb is not None:
         codegen.builder.position_at_end(unreachable_bb)
         codegen.builder.unreachable()
 
-    codegen.builder.position_at_end(end_bb)
+    close_merge_block(codegen, end_bb, end_reached)
 
     # Close the synthetic scope owning an unbound scrutinee. Emitted at match.end, this is the
     # fall-through free; the early-exit paths (return / break / ??) already freed it through the
@@ -106,14 +107,14 @@ def _emit_integer_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
             case_value = ir.Constant(scrutinee_value.type, arm.pattern.value)
             switch.add_case(case_value, arm_bb)
 
-    _emit_match_arms(codegen, stmt, arm_blocks, scrutinee_value, None, end_bb,
-                     Scrutinee())
+    end_reached = _emit_match_arms(codegen, stmt, arm_blocks, scrutinee_value, None, end_bb,
+                                   Scrutinee())
 
     if unreachable_bb is not None:
         codegen.builder.position_at_end(unreachable_bb)
         codegen.builder.unreachable()
 
-    codegen.builder.position_at_end(end_bb)
+    close_merge_block(codegen, end_bb, end_reached)
 
 
 # A counter, not a fixed name: two matches in one function would otherwise register the same
@@ -277,10 +278,11 @@ def _emit_match_arms(
     scrutinee_type: 'EnumType | None',
     end_bb: 'ir.Block',
     scrutinee: Scrutinee,
-) -> None:
-    """Emit all match arms."""
+) -> bool:
+    """Emit all match arms. Answer whether an arm branches to `end_bb`."""
     from sushi_lang.semantics.ast import Pattern, Block
 
+    end_reached = False
     for i, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks, strict=True)):
         codegen.builder.position_at_end(arm_bb)
         codegen.memory.push_scope()
@@ -322,6 +324,9 @@ def _emit_match_arms(
 
         if codegen.builder.block.terminator is None:
             codegen.builder.branch(end_bb)
+            end_reached = True
+
+    return end_reached
 
 
 def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scrutinee_value: 'ir.Value', scrutinee_type: 'EnumType', next_arm_bb: 'ir.Block | None' = None, scrutinee_expr: 'Expr | None' = None, scrutinee_slot: 'ir.Value | None' = None) -> None:

@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, List, Tuple
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, Param, ExtendDef
 from sushi_lang.semantics.typesys import Type as Ty, BuiltinType, DynamicArrayType, EnumType
-from sushi_lang.backend import enum_utils
 from sushi_lang.backend.ownership import relinquish
 from sushi_lang.internals.errors import raise_internal_error, InternalCompilerError
 
@@ -71,29 +70,14 @@ class FunctionHelpers:
                                 getattr(ext, "method_type_args", None) or ())
 
     def emit_default_return(self, fn: FuncDef) -> None:
-        """Terminate a block that the body left open, with the DECLARED Result.
+        """Refuse a function body that left its last block open (#849).
 
-        CE0107 refuses a body that reaches its end, so no path arrives here: the open
-        block is the merge block of an `if` or a `match` whose every arm returned. The
-        value still has the declared `Result@(T, E)` type, or LLVM refuses the module
-        when the payload of E is larger than the payload of StdError (#824).
+        CE0107 refuses a body that can reach its end, and the `if` and `match` emitters
+        leave no merge block that no arm branches to. So no program arrives here, and
+        there is no implicit `Result.Ok(~)` or `Result.Err` to emit.
         """
-        if fn.ret is None:
-            return
-
-        from sushi_lang.backend.statements import utils
-        utils.emit_scope_cleanup(self.codegen)
-
-        result_type = declared_result_of(self.codegen, fn)
-        err_index = result_type.get_variant_index("Err")
-        if err_index is None:
-            raise InternalCompilerError("CE0015", message=f"{result_type.name} has no Err variant")
-        err_result = enum_utils.construct_enum_variant(
-            self.codegen, self.codegen.types.ll_type(result_type),
-            variant_index=err_index,
-            data=None, name_prefix="Result_Err"
-        )
-        self.codegen.builder.ret(err_result)
+        raise InternalCompilerError(
+            "CE0015", message=f"{fn.name}: the body left its last block open with no return")
 
     def emit_default_return_for_extension(self, ret_type: Ty | None) -> None:
         """Emit default return value for extension method without explicit return."""

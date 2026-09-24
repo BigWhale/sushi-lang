@@ -7,6 +7,7 @@ from sushi_lang.backend.statements import utils
 from sushi_lang.backend.statements.loops import loop_frame, _emit_block
 
 if TYPE_CHECKING:
+    from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.ast import If, While
 
@@ -23,6 +24,9 @@ def emit_if(codegen: 'LLVMCodegen', node: 'If') -> None:
     body_bbs = [codegen.func.append_basic_block(name=f"if.{i}.body") for i in range(n)]
     else_bb = codegen.func.append_basic_block(name="if.else") if node.else_block is not None else None
     test_bbs = [codegen.func.append_basic_block(name=f"if.{i}.test") for i in range(1, n)]
+
+    # With no else, the false edge of the last test is a branch to the merge block.
+    merge_reached = else_bb is None
 
     cond0 = utils.emit_condition(codegen, arms[0][0])
     false0 = test_bbs[0] if n > 1 else (else_bb or after_bb)
@@ -41,6 +45,7 @@ def emit_if(codegen: 'LLVMCodegen', node: 'If') -> None:
         codegen.memory.pop_scope()
         if codegen.builder.block.terminator is None:
             codegen.builder.branch(after_bb)
+            merge_reached = True
 
     if else_bb is not None:
         codegen.builder.position_at_end(else_bb)
@@ -51,8 +56,22 @@ def emit_if(codegen: 'LLVMCodegen', node: 'If') -> None:
         codegen.memory.pop_scope()
         if codegen.builder.block.terminator is None:
             codegen.builder.branch(after_bb)
+            merge_reached = True
 
-    codegen.builder.position_at_end(after_bb)
+    close_merge_block(codegen, after_bb, merge_reached)
+
+
+def close_merge_block(codegen: 'LLVMCodegen', merge_bb: 'ir.Block', reached: bool) -> None:
+    """Continue at the merge block of an `if` or a `match`, or remove it when no arm reaches it.
+
+    When every arm ends in a terminator, the builder stays at the terminated block of
+    the last arm. So the enclosing block stops emitting, and an enclosing merge block is
+    not reached either (#849).
+    """
+    if reached:
+        codegen.builder.position_at_end(merge_bb)
+    else:
+        codegen.func.blocks.remove(merge_bb)
 
 
 def emit_while(codegen: 'LLVMCodegen', node: 'While') -> None:
