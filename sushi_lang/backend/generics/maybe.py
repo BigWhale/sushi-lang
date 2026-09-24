@@ -4,7 +4,7 @@ from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-from sushi_lang.semantics.ast import MethodCall
+from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
@@ -13,7 +13,7 @@ from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
 
 def emit_builtin_maybe_method(
     codegen: Any,
-    call: MethodCall,
+    call: MethodCall | DotCall,
     maybe_value: ir.Value,
     maybe_type: EnumType,
     to_i1: bool
@@ -37,7 +37,7 @@ def emit_builtin_maybe_method(
 
 def _emit_maybe_expect(
     codegen: Any,
-    call: MethodCall,
+    call: MethodCall | DotCall,
     maybe_value: ir.Value,
     maybe_type: EnumType
 ) -> ir.Value:

@@ -77,7 +77,6 @@ def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, 
 
     receiver = expr.receiver
     method = expr.method
-    args = expr.args
 
     if method != "alloc":
         return None
@@ -89,8 +88,7 @@ def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, 
 
         if isinstance(resolved_type, StructType) and is_instance_of(resolved_type, "Own"):
             if is_builtin_own_method(method):
-                temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-                return emit_builtin_own_method(codegen, temp_expr, None, resolved_type)
+                return emit_builtin_own_method(codegen, expr, None, resolved_type)
 
     if isinstance(receiver, Name):
         if hasattr(codegen, 'generic_structs') and receiver.id in codegen.generic_structs.by_name:
@@ -130,8 +128,7 @@ def try_emit_array_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
     if not is_builtin_array_method(expr.method):
         return None
 
-    temp_expr = MethodCall(receiver=expr.receiver, method=expr.method, args=expr.args, loc=expr.loc)
-    return emit_array_method(codegen, temp_expr, receiver_value, receiver_type, semantic_type, to_i1)
+    return emit_array_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
 
 
 def try_emit_string_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
@@ -215,8 +212,7 @@ def _try_emit_auto_derived(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
     if derived is None:
         return None
 
-    temp_expr = MethodCall(receiver=expr.receiver, method=expr.method, args=expr.args, loc=expr.loc)
-    return derived.llvm_emitter(codegen, temp_expr, receiver_value, receiver_type, to_i1)
+    return derived.llvm_emitter(codegen, expr, receiver_value, receiver_type, to_i1)
 
 
 def try_emit_struct_hash(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
@@ -323,8 +319,7 @@ def try_emit_primitive_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
 
         builtin_method = codegen.derived_methods.get_method(builtin_type, expr.method)
         if builtin_method is not None:
-            temp_expr = MethodCall(receiver=expr.receiver, method=expr.method, args=expr.args, loc=expr.loc)
-            return builtin_method.llvm_emitter(codegen, temp_expr, receiver_value, receiver_type, to_i1)
+            return builtin_method.llvm_emitter(codegen, expr, receiver_value, receiver_type, to_i1)
 
     return None
 

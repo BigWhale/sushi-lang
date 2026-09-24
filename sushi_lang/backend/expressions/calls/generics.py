@@ -1,6 +1,6 @@
 """Generic type method call handlers (Result, Maybe, Own, HashMap, List)."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Callable, Optional, Union
 
 from llvmlite import ir
 from sushi_lang.semantics.type_predicates import is_instance_of
@@ -33,7 +33,6 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
         return None
 
     receiver = expr.receiver
-    args = expr.args
 
     # Emit the receiver ONCE. Type inference may need the emitted value (its LLVM layout is the
     # last-resort strategy), so this cannot be deferred until after the family is known.
@@ -43,10 +42,7 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
         receiver_semantic_type = infer_semantic_type(codegen, expr, receiver_value, "Result", EnumType)
         if isinstance(receiver_semantic_type, EnumType) and is_instance_of(receiver_semantic_type, "Result"):
             from sushi_lang.backend.generics.results import emit_builtin_result_method
-            temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-            if hasattr(expr, 'resolved_enum_type'):
-                temp_expr.resolved_enum_type = expr.resolved_enum_type
-            emitted = emit_builtin_result_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
+            emitted = emit_builtin_result_method(codegen, expr, receiver_value, receiver_semantic_type, to_i1)
             if method in TAG_ONLY_METHODS:
                 destroy_enum_temp(codegen, receiver, receiver_value, receiver_semantic_type)
             return emitted
@@ -55,8 +51,7 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
         receiver_semantic_type = infer_semantic_type(codegen, expr, receiver_value, "Maybe", EnumType)
         if isinstance(receiver_semantic_type, EnumType) and is_instance_of(receiver_semantic_type, "Maybe"):
             from sushi_lang.backend.generics.maybe import emit_builtin_maybe_method
-            temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-            emitted = emit_builtin_maybe_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
+            emitted = emit_builtin_maybe_method(codegen, expr, receiver_value, receiver_semantic_type, to_i1)
             if method in TAG_ONLY_METHODS:
                 destroy_enum_temp(codegen, receiver, receiver_value, receiver_semantic_type)
             return emitted
@@ -87,65 +82,49 @@ def try_emit_own_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
         from sushi_lang.backend.expressions.memory import own_temporary
         own_value = codegen.expressions.emit_expr(expr.receiver)
         own_temporary(codegen, expr.receiver, own_value, receiver_semantic_type)
-    temp_expr = MethodCall(receiver=expr.receiver, method=method, args=expr.args, loc=expr.loc)
-    return emit_builtin_own_method(codegen, temp_expr, own_value, receiver_semantic_type)
+    return emit_builtin_own_method(codegen, expr, own_value, receiver_semantic_type)
+
+
+def _try_emit_container_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                                to_i1: bool, *, base: str, is_builtin: Callable[[str], bool],
+                                statics: frozenset[str], emit: Callable) -> Optional[ir.Value]:
+    """The ONE body behind the `HashMap@(K, V)` and `List@(T)` method emitters."""
+    from sushi_lang.backend.expressions.calls.utils import infer_semantic_type, emit_receiver_as_pointer
+
+    if not is_builtin(expr.method):
+        return None
+
+    receiver_semantic_type = infer_semantic_type(codegen, expr, None, base, StructType)
+    if not (isinstance(receiver_semantic_type, StructType)
+            and is_instance_of(receiver_semantic_type, base)):
+        return None
+
+    # A static (`List.new()`) has the type NAME as its receiver, not a value. Every
+    # other method mutates or probes the container and wants a POINTER; a receiver
+    # with no address (a call result) falls back to the value.
+    if expr.method in statics:
+        receiver_value = None
+    else:
+        receiver_value = emit_receiver_as_pointer(
+            codegen, expr.receiver, receiver_semantic_type)
+        if receiver_value is None:
+            receiver_value = codegen.expressions.emit_expr(expr.receiver)
+
+    return emit(codegen, expr, receiver_value, receiver_semantic_type, to_i1)
 
 
 def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as HashMap<K, V> method. Returns None if not a HashMap<K, V> method."""
     from sushi_lang.backend.generics.hashmap import is_builtin_hashmap_method, emit_hashmap_method
-    from sushi_lang.backend.expressions.calls.utils import infer_semantic_type, emit_receiver_as_pointer
-
-    method = expr.method
-    if not is_builtin_hashmap_method(method):
-        return None
-
-    receiver_semantic_type = infer_semantic_type(codegen, expr, None, "HashMap", StructType)
-    if not (isinstance(receiver_semantic_type, StructType)
-            and is_instance_of(receiver_semantic_type, "HashMap")):
-        return None
-
-    # `HashMap.new()` is a static call: its receiver is the type name, not a value.
-    # Every other method mutates or probes the table and wants a POINTER; a receiver
-    # with no address (a call result) falls back to the value.
-    if method == "new":
-        receiver_value = None
-    else:
-        receiver_value = emit_receiver_as_pointer(
-            codegen, expr.receiver, receiver_semantic_type)
-        if receiver_value is None:
-            receiver_value = codegen.expressions.emit_expr(expr.receiver)
-
-    temp_expr = MethodCall(receiver=expr.receiver, method=method, args=expr.args, loc=expr.loc)
-    return emit_hashmap_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
+    return _try_emit_container_method(
+        codegen, expr, to_i1, base="HashMap", is_builtin=is_builtin_hashmap_method,
+        statics=frozenset({"new"}), emit=emit_hashmap_method)
 
 
 def try_emit_list_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as List<T> method. Returns None if not a List<T> method."""
     from sushi_lang.semantics.generics.list import is_builtin_list_method
-    from sushi_lang.backend.expressions.calls.utils import infer_semantic_type, emit_receiver_as_pointer
-
     from sushi_lang.backend.generics.list import emit_list_method
-
-    method = expr.method
-    if not is_builtin_list_method(method):
-        return None
-
-    receiver_semantic_type = infer_semantic_type(codegen, expr, None, "List", StructType)
-    if not (isinstance(receiver_semantic_type, StructType)
-            and is_instance_of(receiver_semantic_type, "List")):
-        return None
-
-    # `List.new()` / `List.with_capacity()` are static calls: the receiver is the type
-    # name, not a value. Every other method wants a POINTER so it can mutate; a receiver
-    # with no address (a call result) falls back to the value.
-    if method in ("new", "with_capacity"):
-        receiver_value = None
-    else:
-        receiver_value = emit_receiver_as_pointer(
-            codegen, expr.receiver, receiver_semantic_type)
-        if receiver_value is None:
-            receiver_value = codegen.expressions.emit_expr(expr.receiver)
-
-    temp_expr = MethodCall(receiver=expr.receiver, method=method, args=expr.args, loc=expr.loc)
-    return emit_list_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
+    return _try_emit_container_method(
+        codegen, expr, to_i1, base="List", is_builtin=is_builtin_list_method,
+        statics=frozenset({"new", "with_capacity"}), emit=emit_list_method)
