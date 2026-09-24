@@ -1,0 +1,19 @@
+# `.clone()` on a function value that a `foreach(poke ...)` item holds. The item is a
+# pointer into the list slot, and the clone must load it before it copies the
+# environment.
+# EXPECT_STDOUT_EXACT: "4\n5\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+fn main() i32:
+    let string one = "a"
+    let string two = "ab"
+    let List@(fn(i32) -> i32) fs = List.new()
+    fs.push(|i32 x| x + one.len())
+    fs.push(|i32 x| x + two.len())
+    let i32 base = 3
+    foreach(poke f in fs.iter()):
+        let fn(i32) -> i32 g = f.clone()
+        println(g(base).realise(0))
+    return Result.Ok(0)

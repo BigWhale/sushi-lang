@@ -1,0 +1,16 @@
+# `.clone()` on a function value that a `peek` parameter holds. The parameter arrives
+# as a pointer, and the clone must load it before it copies the environment.
+# EXPECT_STDOUT_EXACT: "9\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+fn dup(peek fn(i32) -> i32 f) i32:
+    let fn(i32) -> i32 g = f.clone()
+    return Result.Ok(g(1).realise(0))
+
+fn main() i32:
+    let string tag = "abc {1}"
+    let fn(i32) -> i32 c = |i32 x| x + tag.len() + 3
+    println("{dup(peek c).realise(0)}")
+    return Result.Ok(0)

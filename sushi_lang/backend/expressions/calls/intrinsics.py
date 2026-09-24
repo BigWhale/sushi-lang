@@ -254,8 +254,8 @@ def try_emit_function_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     if not isinstance(resolved, FunctionType):
         return None
 
-    from sushi_lang.backend.expressions.memory import emit_value_clone
-    return emit_value_clone(codegen, receiver_value, resolved)
+    from sushi_lang.backend.ownership import copy_out
+    return copy_out(codegen, receiver_value, resolved)
 
 
 def try_emit_enum_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],

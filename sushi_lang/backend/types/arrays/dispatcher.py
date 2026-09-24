@@ -174,9 +174,8 @@ def emit_array_method(
                 # through the SAME emitter the struct-field and `let` sinks use, which is
                 # what makes it the exact structural inverse of the destructor -- the
                 # property a hand-written element loop here would be free to break.
-                from sushi_lang.backend.expressions.memory import emit_value_clone
-                array_value = codegen.builder.load(address(writable=False), name="clone_src")
-                return emit_value_clone(codegen, array_value, fixed_semantic_type)
+                from sushi_lang.backend.ownership import copy_out
+                return copy_out(codegen, address(writable=False), fixed_semantic_type)
 
             case "fill":
                 # A borrow, so an owning temporary needs an owner (#475).
