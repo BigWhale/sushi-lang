@@ -204,11 +204,13 @@ class LLVMCodegen:
 
         self.current_function_ast: Optional['FuncDef'] = None
 
-        # Recursive-destructor state, declared here rather than conjured on at first use:
-        # `_dtor_inprogress` is the stack of type keys being inlined, so a re-entry means
-        # the type is self-referential and gets a call to its out-of-line destructor.
+        # Recursive-lifecycle state, declared here rather than conjured on at first use:
+        # each `_inprogress` is the stack of type keys being inlined, so a re-entry means
+        # the type is self-referential and gets a call to its out-of-line function.
         self._dtor_inprogress: list[str] = []
         self._dtor_funcs: Dict[str, ir.Function] = {}
+        self._clone_inprogress: list[str] = []
+        self._clone_funcs: Dict[str, ir.Function] = {}
 
     def namespaces_of(self, unit_name: Optional[str]):
         """The namespace table of `unit_name`, or None for a unit the analyser never saw."""
@@ -629,8 +631,9 @@ class LLVMCodegen:
         # declaration there ('use of undefined value @__sushi_dtor_...'). First hit by
         # <encoding/msgpack>: a source-stdlib import makes every consumer multi-unit.
         saved_dtor_funcs = self._dtor_funcs
-        saved_clone_funcs = getattr(self, "_clone_funcs", {})
+        saved_clone_funcs = self._clone_funcs
         saved_dtor_inprogress = self._dtor_inprogress
+        saved_clone_inprogress = self._clone_inprogress
 
         # Same context as every other module of this compilation -- the type cache persists
         # across units, so this module must be able to declare the identified struct types
@@ -739,7 +742,7 @@ class LLVMCodegen:
         self._dtor_funcs = saved_dtor_funcs
         self._clone_funcs = saved_clone_funcs
         self._dtor_inprogress = saved_dtor_inprogress
-        self._clone_inprogress = []
+        self._clone_inprogress = saved_clone_inprogress
         self.string_manager = StringConstantManager(self)
         self.runtime = LLVMRuntime(self)
 
