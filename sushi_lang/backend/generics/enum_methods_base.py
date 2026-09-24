@@ -10,7 +10,7 @@ from sushi_lang.backend import enum_utils
 from sushi_lang.backend.destructors import (
     emit_value_destructor, needs_cleanup, resolve_named_type
 )
-from sushi_lang.backend.expressions.memory import emit_value_clone
+from sushi_lang.backend.ownership import copy_out
 from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
@@ -153,7 +153,7 @@ def emit_enum_expect(
     payload = unpacked_value
     owned_type = resolve_named_type(codegen, t_type)
     if needs_cleanup(codegen, owned_type) and _expression_is_borrow(codegen, call.receiver):
-        payload = emit_value_clone(codegen, payload, owned_type)
+        payload = copy_out(codegen, payload, owned_type)
     ok_exit_block = codegen.builder.block
     codegen.builder.branch(continue_block)
 
@@ -206,14 +206,14 @@ def _emit_owning_realise(
         with then_block:
             payload = unpacked_value
             if borrowed_receiver:
-                payload = emit_value_clone(codegen, payload, owned_type)
+                payload = copy_out(codegen, payload, owned_type)
             codegen.builder.store(payload, result_slot)
             if not borrowed_default:
                 emit_value_destructor(codegen, default_slot, owned_type)
         with else_block:
             fallback = codegen.builder.load(default_slot, name="realise_default")
             if borrowed_default:
-                fallback = emit_value_clone(codegen, fallback, owned_type)
+                fallback = copy_out(codegen, fallback, owned_type)
             codegen.builder.store(fallback, result_slot)
 
     return codegen.builder.load(result_slot, name="realise_result")

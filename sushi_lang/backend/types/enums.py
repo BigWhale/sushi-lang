@@ -150,11 +150,8 @@ def _emit_enum_clone(target_type: Type) -> Any:
     """Create a clone() emitter for an enum type (#134)."""
     def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
                 receiver_type: ir.Type, to_i1: bool) -> ir.Value:
-        from sushi_lang.backend.expressions.memory import emit_value_clone
-        value = receiver_value
-        if isinstance(value.type, ir.PointerType):
-            value = codegen.builder.load(value, name="clone_recv")
-        return emit_value_clone(codegen, value, target_type)
+        from sushi_lang.backend.ownership import copy_out
+        return copy_out(codegen, receiver_value, target_type)
 
     return emitter
 
